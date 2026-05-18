@@ -1,0 +1,559 @@
+import type { ColumnDef } from "@tanstack/react-table";
+import { Edit2, Eye, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  executeDynamicDelete,
+  executeDynamicMutation,
+  getDynamicLookup,
+  getLookupText,
+  getLookupValue,
+  LookupRow,
+} from "../../api/lookups";
+import { Button } from "../../components/ui/Button";
+import { DataTable } from "../../components/ui/DataTable";
+import { Dialog } from "../../components/ui/Dialog";
+import { Input } from "../../components/ui/Input";
+import { LookupField } from "../../components/ui/LookupField";
+import { Select } from "../../components/ui/Select";
+import { useAuth } from "../../state/AuthContext";
+
+type MasterRow = Record<string, string | number>;
+type EditorState =
+  | { mode: "create"; row?: undefined }
+  | { mode: "edit"; row: MasterRow }
+  | { mode: "view"; row: MasterRow }
+  | null;
+
+type FieldConfig = {
+  key: string;
+  label: string;
+  required?: boolean;
+  type?: "text" | "number" | "select" | "lookup";
+  maxLength?: number;
+  options?: { value: string; label: string }[];
+  lookup?: {
+    parameter: string;
+    valueField: string;
+    displayFields: string[];
+    columns: { field: string; header: string }[];
+  };
+};
+
+export type FinanceUtilityMasterConfig = {
+  title: string;
+  subtitle: string;
+  createLabel: string;
+  listParameter: string;
+  saveParameter: string;
+  deleteParameter: string;
+  keyField: string;
+  fields: FieldConfig[];
+  columns: { key: string; label: string; width?: number }[];
+  mapRow?: (row: LookupRow, companyCode: string) => MasterRow;
+  deleteKeys?: (row: MasterRow, companyCode: string) => Record<string, string>;
+  saveValues?: (form: MasterRow, companyCode: string) => Record<string, string | number>;
+};
+
+const defaultDeleteKeys = (keyField: string) => (row: MasterRow, companyCode: string) => ({
+  code1: String(row[keyField] || ""),
+  code2: companyCode,
+});
+
+export const financeUtilityConfigs = {
+  assetGroup: {
+    title: "Asset Group",
+    subtitle: "Asset Master",
+    createLabel: "Add Asset Group",
+    listParameter: "AC_ASSETS_GROUP_PAGE",
+    saveParameter: "AC_ASSETS_GROUP",
+    deleteParameter: "AC_ASSETS_delete_group",
+    keyField: "asset_group_code",
+    columns: [
+      { key: "asset_group_code", label: "Group Code", width: 150 },
+      { key: "asset_group_name", label: "Group Name" },
+      { key: "dprc_percentage", label: "Depreciation %", width: 140 },
+      { key: "dprc_required", label: "Dep. Required", width: 140 },
+      { key: "asset_ac_code", label: "Asset A/C", width: 160 },
+      { key: "dprc_ac_code", label: "Dep. A/C", width: 160 },
+      { key: "accudprc_ac_code", label: "Accum. Dep. A/C", width: 170 },
+      { key: "asset_type", label: "Asset Type", width: 130 },
+    ],
+    fields: [
+      { key: "asset_group_code", label: "Asset Group Code", required: true, maxLength: 20 },
+      { key: "asset_group_name", label: "Asset Group Name", required: true, maxLength: 150 },
+      { key: "dprc_percentage", label: "Depreciation %", type: "number" },
+      {
+        key: "dprc_required",
+        label: "Depreciation Required",
+        type: "select",
+        options: [
+          { value: "Y", label: "Yes" },
+          { value: "N", label: "No" },
+        ],
+      },
+      {
+        key: "asset_ac_code",
+        label: "Asset Account",
+        type: "lookup",
+        lookup: accountLookup("AC_ASSETS_ACCOUNT_CODE_LIST"),
+      },
+      {
+        key: "dprc_ac_code",
+        label: "Depreciation Account",
+        type: "lookup",
+        lookup: accountLookup("AC_ASSETS_DEPRECIATION_ACCOUNT_CODE_LIST"),
+      },
+      {
+        key: "accudprc_ac_code",
+        label: "Accumulated Depreciation Account",
+        type: "lookup",
+        lookup: accountLookup("AC_ASSETS_DEPRECIATION_ACCOUNT_CODE_LIST"),
+      },
+      { key: "asset_type", label: "Asset Type", maxLength: 20 },
+    ],
+    saveValues: (form, companyCode) => ({
+      val1s1: String(form.asset_group_code || ""),
+      val1s2: companyCode,
+      val1s3: String(form.asset_group_name || ""),
+      val1s4: String(form.dprc_required || "N"),
+      val1s5: String(form.asset_ac_code || ""),
+      val1s6: String(form.dprc_ac_code || ""),
+      val1s7: String(form.accudprc_ac_code || ""),
+      val1s8: String(form.asset_type || ""),
+      val1n1: Number(form.dprc_percentage || 0),
+    }),
+  },
+  assetSubgroup: {
+    title: "Asset Subgroup",
+    subtitle: "Asset Master",
+    createLabel: "Add Asset Subgroup",
+    listParameter: "AC_ASSETS_SUBGROUP_LIST",
+    saveParameter: "AC_ASSETS_SUBGROUP",
+    deleteParameter: "AC_ASSETS_delete_subgroup",
+    keyField: "asset_subgroup_code",
+    columns: [
+      { key: "asset_subgroup_code", label: "Subgroup Code", width: 170 },
+      { key: "asset_subgroup_name", label: "Subgroup Name" },
+    ],
+    fields: [
+      { key: "asset_subgroup_code", label: "Subgroup Code", required: true, maxLength: 35 },
+      { key: "asset_subgroup_name", label: "Subgroup Name", required: true, maxLength: 150 },
+    ],
+    saveValues: (form, companyCode) => ({
+      val1s1: String(form.asset_subgroup_code || ""),
+      val1s2: companyCode,
+      val1s3: String(form.asset_subgroup_name || ""),
+    }),
+  },
+  assetLocation: {
+    title: "Asset Location",
+    subtitle: "Asset Master",
+    createLabel: "Add Location",
+    listParameter: "AC_ASSETS_SITE",
+    saveParameter: "AC_ASSETS_SITE",
+    deleteParameter: "AC_ASSETS_delete_site",
+    keyField: "site_code",
+    columns: [
+      { key: "site_code", label: "Site Code", width: 150 },
+      { key: "site_name", label: "Site Name" },
+    ],
+    fields: [
+      { key: "site_code", label: "Site Code", required: true, maxLength: 5 },
+      { key: "site_name", label: "Site Name", required: true, maxLength: 150 },
+    ],
+    mapRow: (row, companyCode) => ({
+      site_code: String(getLookupValue(row, "site_code") || getLookupValue(row, "SITE_CODE") || ""),
+      site_name: String(getLookupValue(row, "site_name") || getLookupValue(row, "SITE_NAME") || ""),
+      company_code: companyCode,
+    }),
+    deleteKeys: (row, companyCode) => ({
+      code1: companyCode,
+      code2: String(row.site_code || ""),
+    }),
+    saveValues: (form, companyCode) => ({
+      val1s1: String(form.site_code || ""),
+      val1s2: companyCode,
+      val1s3: String(form.site_name || ""),
+    }),
+  },
+  prepaidGroup: {
+    title: "Prepaid Group",
+    subtitle: "Prepaid Master",
+    createLabel: "Add Prepaid Group",
+    listParameter: "AC_PREPAID_GET_GROUPING",
+    saveParameter: "AC_ASSETS_PREPAID_GROUP",
+    deleteParameter: "AC_ASSETS_PREPAID_delete_group",
+    keyField: "group_code",
+    columns: [
+      { key: "group_code", label: "Group Code", width: 150 },
+      { key: "group_desc", label: "Group Description" },
+    ],
+    fields: [
+      { key: "group_code", label: "Group Code", required: true, maxLength: 35 },
+      { key: "group_desc", label: "Group Description", required: true, maxLength: 150 },
+    ],
+    saveValues: (form, companyCode) => ({
+      val1s1: String(form.group_code || ""),
+      val1s2: companyCode,
+      val1s3: String(form.group_desc || ""),
+    }),
+  },
+} satisfies Record<string, FinanceUtilityMasterConfig>;
+
+export function FinanceUtilityMasterPage({ config }: { config: FinanceUtilityMasterConfig }) {
+  const { user } = useAuth();
+  const companyCode = user?.company_code || "";
+  const loginId = user?.loginid || "";
+  const [rows, setRows] = useState<MasterRow[]>([]);
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [editor, setEditor] = useState<EditorState>(null);
+  const [deleteTarget, setDeleteTarget] = useState<MasterRow | null>(null);
+
+  const loadRows = async () => {
+    setLoading(true);
+    setNotice(null);
+    try {
+      const data = await getDynamicLookup({
+        parameter: config.listParameter,
+        loginid: loginId,
+        code1: companyCode,
+        code2: "",
+        code3: "",
+        code4: "",
+        number1: 0,
+        number2: 0,
+        number3: 0,
+        number4: 0,
+        date1: null,
+        date2: null,
+        date3: null,
+        date4: null,
+      });
+      setRows(data.map((row) => (config.mapRow ? config.mapRow(row, companyCode) : normalizeRow(row, config.fields, companyCode))));
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to load ${config.title}` });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadRows();
+  }, [config.title]);
+
+  const filteredRows = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return rows;
+    return rows.filter((row) => Object.values(row).some((value) => String(value ?? "").toLowerCase().includes(term)));
+  }, [query, rows]);
+
+  const columns = useMemo<ColumnDef<MasterRow>[]>(() => [
+    ...config.columns.map<ColumnDef<MasterRow>>((column) => ({
+      accessorKey: column.key,
+      header: column.label,
+      size: column.width,
+      cell: ({ getValue }) => <span className={column.key === config.keyField ? "font-semibold" : ""}>{String(getValue() ?? "")}</span>,
+    })),
+    {
+      id: "actions",
+      header: "Actions",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1">
+          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "view", row: row.original })}>
+            <Eye size={15} />
+          </Button>
+          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })}>
+            <Edit2 size={15} />
+          </Button>
+          <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(row.original)}>
+            <Trash2 size={15} />
+          </Button>
+        </div>
+      ),
+    },
+  ], [config]);
+
+  const deleteRow = async () => {
+    if (!deleteTarget) return;
+    try {
+      const deleteKeys = config.deleteKeys || defaultDeleteKeys(config.keyField);
+      await executeDynamicDelete({
+        parameter: config.deleteParameter,
+        loginid: loginId,
+        ...deleteKeys(deleteTarget, companyCode),
+      });
+      setDeleteTarget(null);
+      setNotice({ type: "success", message: `${config.title} deleted successfully` });
+      await loadRows();
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to delete ${config.title}` });
+    }
+  };
+
+  return (
+    <section className="grid gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p className="eyebrow">{config.subtitle}</p>
+          <h1 className="m-0 text-2xl font-semibold tracking-tight">{config.title}</h1>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button variant="outline" onClick={() => void loadRows()}>
+            <RefreshCw size={15} /> Refresh
+          </Button>
+          <Button onClick={() => setEditor({ mode: "create" })}>
+            <Plus size={15} /> {config.createLabel}
+          </Button>
+        </div>
+      </div>
+
+      {notice && <div className={`alert ${notice.type}`}>{notice.message}</div>}
+
+      <DataTable
+        columns={columns}
+        data={filteredRows}
+        title={loading ? "Loading" : `${filteredRows.length} Records`}
+        subtitle={config.title}
+        searchValue={query}
+        onSearchChange={setQuery}
+        searchPlaceholder={`Search ${config.title.toLowerCase()}...`}
+        loading={loading}
+        emptyText={`No ${config.title.toLowerCase()} records found`}
+        height={650}
+        minWidth={Math.max(760, config.columns.reduce((total, column) => total + (column.width || 210), 120))}
+        density="grid"
+        getRowId={(row, index) => `${String(row[config.keyField] || index)}_${index}`}
+      />
+
+      {editor && (
+        <Dialog
+          open
+          wide
+          title={`${editor.mode === "create" ? "Add" : editor.mode === "edit" ? "Edit" : "View"} ${config.title}`}
+          description="Master details"
+          onClose={() => setEditor(null)}
+        >
+          <UtilityEditor
+            config={config}
+            editor={editor}
+            companyCode={companyCode}
+            loginId={loginId}
+            onClose={() => setEditor(null)}
+            onSaved={async () => {
+              setEditor(null);
+              setNotice({ type: "success", message: `${config.title} saved successfully` });
+              await loadRows();
+            }}
+          />
+        </Dialog>
+      )}
+
+      {deleteTarget && (
+        <Dialog
+          open
+          compact
+          tone="danger"
+          title={`Delete ${config.title}`}
+          description="This action cannot be undone."
+          onClose={() => setDeleteTarget(null)}
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={() => void deleteRow()}>
+                Delete
+              </Button>
+            </>
+          }
+        >
+          <p className="modal-copy">
+            Delete <strong>{String(deleteTarget[config.keyField] || "")}</strong>?
+          </p>
+        </Dialog>
+      )}
+    </section>
+  );
+}
+
+function UtilityEditor({
+  config,
+  editor,
+  companyCode,
+  loginId,
+  onClose,
+  onSaved,
+}: {
+  config: FinanceUtilityMasterConfig;
+  editor: Exclude<EditorState, null>;
+  companyCode: string;
+  loginId: string;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const readOnly = editor.mode === "view";
+  const isEdit = editor.mode === "edit";
+  const [form, setForm] = useState<MasterRow>(() => ({
+    ...Object.fromEntries(config.fields.map((field) => [field.key, field.type === "number" ? 0 : ""])),
+    company_code: companyCode,
+    ...(editor.row || {}),
+  }));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const setField = (key: string, value: string | number) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (readOnly) return;
+    const missing = config.fields.find((field) => field.required && !String(form[field.key] || "").trim());
+    if (missing) {
+      setError(`${missing.label} is required.`);
+      return;
+    }
+
+    setError("");
+    setSaving(true);
+    try {
+      await executeDynamicMutation({
+        parameter: config.saveParameter,
+        loginid: loginId,
+        ...(config.saveValues ? config.saveValues(form, companyCode) : {}),
+      });
+      await onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Unable to save ${config.title}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex min-h-[520px] flex-col">
+      <div className="border-b pb-3">
+        <p className="eyebrow">{editor.mode === "create" ? "Create" : editor.mode === "edit" ? "Modify" : "View"}</p>
+        <h2 className="m-0 text-xl font-semibold tracking-tight">{config.title}</h2>
+      </div>
+      <form className="grid flex-1 content-start gap-4 overflow-auto py-4 md:grid-cols-2" id={`${config.keyField}-form`} onSubmit={handleSubmit}>
+        {error && <div className="alert error">{error}</div>}
+        {config.fields.map((field) => (
+          <UtilityField
+            companyCode={companyCode}
+            disabled={readOnly || (isEdit && field.key === config.keyField)}
+            field={field}
+            key={field.key}
+            value={form[field.key]}
+            onChange={(value) => setField(field.key, value)}
+          />
+        ))}
+      </form>
+      <div className="flex items-center justify-end gap-2 border-t bg-card pt-4">
+        <Button variant="outline" onClick={onClose}>
+          Close
+        </Button>
+        {!readOnly && (
+          <Button disabled={saving} type="submit" form={`${config.keyField}-form`}>
+            {saving ? <span className="spinner small" /> : <Save size={15} />} Save
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function UtilityField({
+  field,
+  value,
+  disabled,
+  companyCode,
+  onChange,
+}: {
+  field: FieldConfig;
+  value: string | number | undefined;
+  disabled?: boolean;
+  companyCode: string;
+  onChange: (value: string | number) => void;
+}) {
+  if (field.type === "select") {
+    return (
+      <label className="field">
+        <span>{field.label}{field.required ? " *" : ""}</span>
+        <Select value={String(value || "")} onChange={(event) => onChange(event.target.value)} disabled={disabled}>
+          <option value="">Select</option>
+          {(field.options || []).map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </Select>
+      </label>
+    );
+  }
+
+  if (field.type === "lookup" && field.lookup) {
+    return (
+      <LookupField
+        label={`${field.label}${field.required ? " *" : ""}`}
+        value={String(value || "")}
+        displayValue={String(value || "")}
+        columns={field.lookup.columns}
+        valueField={field.lookup.valueField}
+        displayFields={field.lookup.displayFields}
+        disabled={disabled}
+        loadOptions={() =>
+          getDynamicLookup({
+            parameter: field.lookup!.parameter,
+            code1: companyCode,
+            code2: "",
+            code3: "",
+            code4: "",
+            number1: 0,
+            number2: 0,
+            number3: 0,
+            number4: 0,
+            date1: null,
+            date2: null,
+            date3: null,
+            date4: null,
+          })
+        }
+        onChange={(nextValue, row) => onChange(nextValue || (row ? getLookupText(row, field.lookup!.displayFields) : ""))}
+      />
+    );
+  }
+
+  return (
+    <label className="field">
+      <span>{field.label}{field.required ? " *" : ""}</span>
+      <Input
+        type={field.type === "number" ? "number" : "text"}
+        value={String(value ?? "")}
+        maxLength={field.maxLength}
+        onChange={(event) => onChange(field.type === "number" ? Number(event.target.value || 0) : event.target.value)}
+        disabled={disabled}
+      />
+    </label>
+  );
+}
+
+function normalizeRow(row: LookupRow, fields: FieldConfig[], companyCode: string): MasterRow {
+  return {
+    ...Object.fromEntries(fields.map((field) => [field.key, getLookupValue(row, field.key)])),
+    company_code: String(getLookupValue(row, "company_code") || companyCode),
+  };
+}
+
+function accountLookup(parameter: string) {
+  return {
+    parameter,
+    valueField: "ac_code",
+    displayFields: ["ac_code", "ac_name"],
+    columns: [
+      { field: "ac_code", header: "A/C Code" },
+      { field: "ac_name", header: "A/C Name" },
+    ],
+  };
+}
