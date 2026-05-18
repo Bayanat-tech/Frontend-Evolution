@@ -125,7 +125,7 @@ export type Division = {
   div_name: string;
 };
 
-export async function getTransactionDocuments(docType: TransactionType, fyPeriod?: string, search?: string) {
+export async function getTransactionDocuments(docType: TransactionType, fyPeriod?: string, search?: string, page = 1, limit = 100) {
   const filters: unknown[] = [[{ field_name: "doc_type", field_value: docType, operator: "exactmatch" }]];
   if (fyPeriod) filters.push([{ field_name: "fy_period", field_value: fyPeriod, operator: "exactmatch" }]);
   if (search?.trim()) {
@@ -138,13 +138,13 @@ export async function getTransactionDocuments(docType: TransactionType, fyPeriod
 
   const response = await api.get<ApiResponse<{ tableData: TransactionDocumentRow[]; count: number }>>("/api/finance/doc", {
     params: {
-      page: 1,
-      limit: 100,
+      page,
+      limit,
       filter: JSON.stringify({ search: filters }),
     },
   });
   if (!response.data.success) throw new Error(response.data.message || "Unable to load documents");
-  return response.data.data?.tableData || [];
+  return response.data.data || { tableData: [], count: 0 };
 }
 
 export async function getFyPeriods() {

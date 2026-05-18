@@ -67,6 +67,9 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
   const [fyPeriod, setFyPeriod] = useState("");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(100);
+  const [totalRows, setTotalRows] = useState(0);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<EditorState>(null);
   const [deleteTarget, setDeleteTarget] = useState<TransactionDocumentRow | null>(null);
@@ -80,12 +83,14 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
     setFyPeriod((current) => current || fyData[0]?.fy_period || "");
   };
 
-  const loadRows = async (nextFy = fyPeriod, nextQuery = query) => {
+  const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize) => {
     if (!nextFy) return;
     setLoading(true);
     setNotice(null);
     try {
-      setRows(await getTransactionDocuments(docType, nextFy, nextQuery));
+      const response = await getTransactionDocuments(docType, nextFy, nextQuery, nextPageIndex + 1, nextPageSize);
+      setRows(response.tableData);
+      setTotalRows(response.count || response.tableData.length);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load documents" });
     } finally {
@@ -102,13 +107,7 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
 
   useEffect(() => {
     void loadRows();
-  }, [fyPeriod, docType]);
-
-  const filteredRows = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) return rows;
-    return rows.filter((row) => Object.values(row).some((value) => String(value ?? "").toLowerCase().includes(term)));
-  }, [rows, query]);
+  }, [fyPeriod, docType, query, pageIndex, pageSize]);
 
   const columns = useMemo<ColumnDef<TransactionDocumentRow>[]>(() => [
     {
@@ -204,13 +203,13 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
       <div className="min-h-[650px]">
         <DataTable
           columns={columns}
-          data={filteredRows}
-          title={loading ? "Loading" : `${filteredRows.length} Documents`}
+          data={rows}
+          title={loading ? "Loading" : `${totalRows.toLocaleString()} Documents`}
           subtitle={docType}
           searchValue={query}
           onSearchChange={(value) => {
             setQuery(value);
-            if (!value.trim()) void loadRows(fyPeriod, "");
+            setPageIndex(0);
           }}
           searchPlaceholder="Search document, account, reference..."
           loading={loading}
@@ -218,6 +217,17 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
           height={620}
           minWidth={1120}
           density="grid"
+          enablePagination
+          manualPagination
+          manualFiltering
+          pageIndex={pageIndex}
+          pageSize={pageSize}
+          totalRows={totalRows}
+          onPageChange={setPageIndex}
+          onPageSizeChange={(nextPageSize) => {
+            setPageSize(nextPageSize);
+            setPageIndex(0);
+          }}
           getRowId={(row, index) => `${row.doc_no}_${index}`}
         />
       </div>

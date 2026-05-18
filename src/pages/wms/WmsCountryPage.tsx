@@ -46,7 +46,11 @@ export function WmsCountryPage() {
     setLoading(true);
     setNotice(null);
     try {
-      const response = await getWmsMaster("country", { page: nextPageIndex + 1, limit: nextPageSize });
+      const hasSearch = Boolean(query.trim());
+      const response = await getWmsMaster("country", {
+        page: hasSearch ? 1 : nextPageIndex + 1,
+        limit: hasSearch ? 100000 : nextPageSize,
+      });
       setRows(response.tableData.map(mapCountry));
       setTotalRows(response.count || response.tableData.length);
     } catch (error) {
@@ -58,7 +62,7 @@ export function WmsCountryPage() {
 
   useEffect(() => {
     void loadRows();
-  }, [pageIndex, pageSize]);
+  }, [pageIndex, pageSize, query]);
 
   const filteredRows = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -185,7 +189,7 @@ export function WmsCountryPage() {
         minWidth={900}
         density="grid"
         enablePagination
-        manualPagination
+        manualPagination={!query.trim()}
         pageIndex={pageIndex}
         pageSize={pageSize}
         totalRows={totalRows}

@@ -27,6 +27,9 @@ export function JournalVoucherPage() {
   const [fyPeriod, setFyPeriod] = useState("");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(100);
+  const [totalRows, setTotalRows] = useState(0);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<{ mode: "create"; div?: Division } | { mode: "edit"; row: TransactionDocumentRow } | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
@@ -41,7 +44,9 @@ export function JournalVoucherPage() {
     if (!fyPeriod) return;
     setLoading(true);
     try {
-      setRows(await getTransactionDocuments("JV", fyPeriod, query));
+      const response = await getTransactionDocuments("JV", fyPeriod, query, pageIndex + 1, pageSize);
+      setRows(response.tableData);
+      setTotalRows(response.count || response.tableData.length);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load vouchers" });
     } finally {
@@ -49,13 +54,7 @@ export function JournalVoucherPage() {
     }
   };
   useEffect(() => { void loadLookups(); }, []);
-  useEffect(() => { void loadRows(); }, [fyPeriod]);
-
-  const filteredRows = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) return rows;
-    return rows.filter((row) => Object.values(row).some((value) => String(value ?? "").toLowerCase().includes(term)));
-  }, [rows, query]);
+  useEffect(() => { void loadRows(); }, [fyPeriod, query, pageIndex, pageSize]);
   const columns = useMemo<ColumnDef<TransactionDocumentRow>[]>(() => [
     { accessorKey: "doc_no", header: "Doc No", cell: ({ getValue }) => <span className="font-semibold">{String(getValue() || "")}</span> },
     { accessorKey: "doc_date", header: "Date", cell: ({ getValue }) => dateInput(getValue()) },
@@ -77,7 +76,32 @@ export function JournalVoucherPage() {
       </div>
       {notice && <div className={`alert ${notice.type}`}>{notice.message}</div>}
       <div className="grid min-h-[650px] grid-cols-[minmax(0,1fr)_500px] gap-4 max-2xl:grid-cols-1">
-        <DataTable columns={columns} data={filteredRows} title={loading ? "Loading" : `${filteredRows.length} Vouchers`} subtitle="JV" searchValue={query} onSearchChange={setQuery} loading={loading} height={620} minWidth={920} density="grid" />
+        <DataTable
+          columns={columns}
+          data={rows}
+          title={loading ? "Loading" : `${totalRows.toLocaleString()} Vouchers`}
+          subtitle="JV"
+          searchValue={query}
+          onSearchChange={(value) => {
+            setQuery(value);
+            setPageIndex(0);
+          }}
+          loading={loading}
+          height={620}
+          minWidth={920}
+          density="grid"
+          enablePagination
+          manualPagination
+          manualFiltering
+          pageIndex={pageIndex}
+          pageSize={pageSize}
+          totalRows={totalRows}
+          onPageChange={setPageIndex}
+          onPageSizeChange={(nextPageSize) => {
+            setPageSize(nextPageSize);
+            setPageIndex(0);
+          }}
+        />
         <Card className="overflow-hidden">{editor ? <JvEditor editor={editor} onClose={() => setEditor(null)} onSaved={async (message) => { setEditor(null); setNotice({ type: "success", message }); await loadRows(); }} /> : <EmptyState />}</Card>
       </div>
       <Dialog open={divisionPicker} title="Select Division" description="Choose the division before opening the voucher form." onClose={() => setDivisionPicker(false)} footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}>

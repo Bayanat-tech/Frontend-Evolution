@@ -71,12 +71,15 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
     setLoading(true);
     setNotice(null);
     try {
+      const hasSearch = Boolean(query.trim() || columnFilters.some((filter) => String(filter.value ?? "").trim()));
+      const requestPageIndex = hasSearch ? 0 : nextPageIndex;
+      const requestPageSize = hasSearch ? 100000 : nextPageSize;
       const activeFilters = columnFilters
         .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
         .filter((filter) => filter.values);
       const response = await getWmsMaster(config.master, {
-        page: nextPageIndex + 1,
-        limit: nextPageSize,
+        page: requestPageIndex + 1,
+        limit: requestPageSize,
         ...(query.trim() ? { search: query.trim() } : {}),
         ...(activeFilters.length ? { filter: JSON.stringify({ search: activeFilters }) } : {}),
       });
@@ -223,8 +226,8 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
         minWidth={Math.max(900, tableFields.reduce((sum, field) => sum + (field.width || 160), 160))}
         density="grid"
         enablePagination
-        manualPagination
-        manualFiltering
+        manualPagination={!(query.trim() || columnFilters.some((filter) => String(filter.value ?? "").trim()))}
+        manualFiltering={false}
         pageIndex={pageIndex}
         pageSize={pageSize}
         totalRows={totalRows}
