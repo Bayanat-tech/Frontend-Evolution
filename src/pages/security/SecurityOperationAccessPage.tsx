@@ -1,0 +1,409 @@
+import { KeyRound, RefreshCw, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { deleteSecurityGm, getSecurityGm, getSecurityGmWithParams, getSecurityMaster, saveSecurityGm } from "../../api/security";
+import { Badge } from "../../components/ui/Badge";
+import { Button } from "../../components/ui/Button";
+import { Card, CardContent, CardHeader } from "../../components/ui/Card";
+import { Select } from "../../components/ui/Select";
+import { cn } from "../../lib/utils";
+import { useAuth } from "../../state/AuthContext";
+
+type SecurityOperationAccessPageProps = {
+  mode: "role" | "user";
+};
+
+type OptionRow = Record<string, unknown>;
+type PermissionRow = Record<string, unknown>;
+
+const permissionFields = [
+  { key: "snew", label: "New" },
+  { key: "smodify", label: "Modify" },
+  { key: "sdelete", label: "Delete" },
+  { key: "ssave", label: "Save" },
+  { key: "ssearch", label: "Search" },
+  { key: "ssaveas", label: "Save As" },
+  { key: "supload", label: "Upload" },
+  { key: "sundo", label: "Undo" },
+  { key: "sprint", label: "Print" },
+  { key: "sprintsetup", label: "Print Setup" },
+  { key: "shelp", label: "Help" },
+];
+
+export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPageProps) {
+  const { user } = useAuth();
+  const [principalOptions, setPrincipalOptions] = useState<OptionRow[]>([]);
+  const [screenOptions, setScreenOptions] = useState<OptionRow[]>([]);
+  const [selectedPrincipal, setSelectedPrincipal] = useState("");
+  const [selectedApp, setSelectedApp] = useState("");
+  const [selectedScreen, setSelectedScreen] = useState("");
+  const [permissions, setPermissions] = useState<PermissionRow | null>(null);
+  const [hasExisting, setHasExisting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [permissionLoading, setPermissionLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
+
+  const isRoleMode = mode === "role";
+  const title = isRoleMode ? "Access To Role" : "Access To User";
+  const principalLabel = isRoleMode ? "Role" : "User";
+  const principalMaster = isRoleMode ? "role_master" : "sec_login";
+  const endpoint = isRoleMode ? "accessassignrole" : "accessassignuser";
+  const Icon = isRoleMode ? ShieldCheck : KeyRound;
+
+  const appOptions = useMemo(
+    () => Array.from(new Set(screenOptions.map((screen) => String(screen.app_code ?? "")).filter(Boolean))).sort(),
+    [screenOptions],
+  );
+  const filteredScreens = useMemo(
+    () => screenOptions.filter((screen) => !selectedApp || String(screen.app_code ?? "") === selectedApp),
+    [screenOptions, selectedApp],
+  );
+  const selectedScreenRow = useMemo(
+    () => screenOptions.find((screen) => String(screen.serial_no ?? "") === selectedScreen),
+    [screenOptions, selectedScreen],
+  );
+  const selectedPrincipalRow = useMemo(
+    () => principalOptions.find((option) => String(option[isRoleMode ? "role_id" : "loginid"] ?? "") === selectedPrincipal),
+    [isRoleMode, principalOptions, selectedPrincipal],
+  );
+  const canLoadPermissions = Boolean(selectedPrincipal && selectedScreen);
+  const activePermissions = permissions || emptyPermissionRow();
+
+  const loadOptions = async () => {
+    setLoading(true);
+    setNotice(null);
+    try {
+      const [principalResponse, screenResponse] = await Promise.all([
+        getSecurityMaster(principalMaster, { page: 1, limit: 100000 }),
+        getSecurityMaster("serialno", { page: 1, limit: 100000 }),
+      ]);
+      setPrincipalOptions(principalResponse.tableData.map(normalizeRow));
+      setScreenOptions(screenResponse.tableData.map(normalizeRow));
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to load ${title}` });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadPermissions = async () => {
+    if (!canLoadPermissions) {
+      setPermissions(null);
+      setHasExisting(false);
+      return;
+    }
+    setPermissionLoading(true);
+    setNotice(null);
+    try {
+      const existing = await getExistingPermission(endpoint, mode, selectedPrincipal, selectedScreen);
+      if (existing) {
+        setPermissions(normalizePermission(existing));
+        setHasExisting(true);
+        return;
+      }
+      const template = await getSecurityGm<PermissionRow[]>(`${endpoint}/${selectedScreen}`);
+      setPermissions(normalizePermission(template?.[0] || emptyPermissionRow()));
+      setHasExisting(false);
+      setNotice({ type: "info", message: "No existing access found. Review the default screen operations and save to assign access." });
+    } catch (error) {
+      setPermissions(emptyPermissionRow());
+      setHasExisting(false);
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load operation access" });
+    } finally {
+      setPermissionLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadOptions();
+  }, [mode]);
+
+  useEffect(() => {
+    setSelectedScreen("");
+    setPermissions(null);
+    setHasExisting(false);
+  }, [selectedApp]);
+
+  useEffect(() => {
+    void loadPermissions();
+  }, [selectedPrincipal, selectedScreen]);
+
+  const togglePermission = (key: string) => {
+    setPermissions((current) => {
+      const next = normalizePermission(current || emptyPermissionRow());
+      if (String(next[key] ?? "N").toUpperCase() === "NA") return next;
+      return { ...next, [key]: String(next[key] ?? "N").toUpperCase() === "Y" ? "N" : "Y" };
+    });
+  };
+
+  const saveAccess = async () => {
+    if (!canLoadPermissions || !permissions) {
+      setNotice({ type: "error", message: `Select ${principalLabel.toLowerCase()} and screen first` });
+      return;
+    }
+    setSaving(true);
+    setNotice(null);
+    try {
+      const payload = buildPayload(mode, selectedPrincipal, selectedScreen, activePermissions, selectedScreenRow, user?.company_code);
+      await saveSecurityGm(endpoint, payload, hasExisting ? "put" : "post");
+      setHasExisting(true);
+      setNotice({ type: "success", message: `${title} saved successfully` });
+      await loadPermissions();
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to save ${title}` });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteAccess = async () => {
+    if (!canLoadPermissions || !hasExisting) return;
+    setSaving(true);
+    setNotice(null);
+    try {
+      await deleteSecurityGm(`${endpoint}/delete`, buildDeletePayload(mode, selectedPrincipal, selectedScreen));
+      setHasExisting(false);
+      setPermissions(emptyPermissionRow());
+      setNotice({ type: "success", message: `${title} deleted successfully` });
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to delete ${title}` });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="grid gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="m-0 text-2xl font-semibold text-foreground">{title}</h1>
+        </div>
+        <Button variant="outline" onClick={() => loadOptions()}>
+          <RefreshCw size={15} /> Refresh
+        </Button>
+      </div>
+
+      {notice && <div className={notice.type === "error" ? "alert error" : notice.type === "success" ? "alert success" : "alert"}>{notice.message}</div>}
+
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b bg-muted/40">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="grid h-10 w-10 place-items-center rounded-md bg-primary/10 text-primary">
+                <Icon size={20} />
+              </span>
+              <div>
+                <p className="eyebrow">Selection</p>
+                <h2 className="m-0 text-base font-semibold">Choose {principalLabel} And Screen</h2>
+              </div>
+            </div>
+            <Badge variant={hasExisting ? "default" : "secondary"}>{hasExisting ? "Existing Access" : "New Assignment"}</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-3 pt-4 md:grid-cols-3">
+          <label className="field">
+            <span>{principalLabel}</span>
+            <Select disabled={loading} value={selectedPrincipal} onChange={(event) => setSelectedPrincipal(event.target.value)}>
+              <option value="">Select {principalLabel}</option>
+              {principalOptions.map((option, index) => (
+                <option value={String(option[isRoleMode ? "role_id" : "loginid"] ?? "")} key={`${String(option[isRoleMode ? "role_id" : "loginid"] ?? "")}_${index}`}>
+                  {formatPrincipal(option, isRoleMode)}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <label className="field">
+            <span>Application</span>
+            <Select disabled={loading} value={selectedApp} onChange={(event) => setSelectedApp(event.target.value)}>
+              <option value="">All Applications</option>
+              {appOptions.map((appCode) => (
+                <option value={appCode} key={appCode}>{appCode}</option>
+              ))}
+            </Select>
+          </label>
+          <label className="field">
+            <span>Screen</span>
+            <Select disabled={loading || !filteredScreens.length} value={selectedScreen} onChange={(event) => setSelectedScreen(event.target.value)}>
+              <option value="">Select Screen</option>
+              {filteredScreens.map((screen, index) => (
+                <option value={String(screen.serial_no ?? "")} key={`${String(screen.serial_no ?? "")}_${index}`}>
+                  {[screen.serial_no, screen.level3 || screen.level2 || screen.level1].filter(Boolean).join(" - ")}
+                </option>
+              ))}
+            </Select>
+          </label>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b">
+            <div>
+              <p className="eyebrow">Operations</p>
+              <h2 className="m-0 text-base font-semibold">Permission Matrix</h2>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4">
+            {!canLoadPermissions ? (
+              <div className="grid min-h-[250px] place-items-center rounded-md border border-dashed bg-muted/20 text-sm text-muted-foreground">
+                Select {principalLabel.toLowerCase()} and screen to load permissions.
+              </div>
+            ) : permissionLoading ? (
+              <div className="grid min-h-[250px] place-items-center rounded-md border bg-muted/20 text-sm text-muted-foreground">Loading permissions...</div>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {permissionFields.map((field) => {
+                  const value = String(activePermissions[field.key] ?? "N").toUpperCase();
+                  const disabled = value === "NA";
+                  const enabled = value === "Y";
+                  return (
+                    <button
+                      type="button"
+                      disabled={disabled || saving}
+                      className={cn(
+                        "flex items-center justify-between rounded-md border px-3 py-2 text-left transition-colors",
+                        enabled && "border-primary bg-primary/10 text-primary",
+                        disabled && "cursor-not-allowed bg-muted/40 text-muted-foreground",
+                        !enabled && !disabled && "bg-background hover:bg-accent",
+                      )}
+                      onClick={() => togglePermission(field.key)}
+                      key={field.key}
+                    >
+                      <span className="text-sm font-semibold">{field.label}</span>
+                      <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", enabled ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground")}>
+                        {disabled ? "N/A" : enabled ? "Yes" : "No"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div>
+              <p className="eyebrow">Summary</p>
+              <h2 className="m-0 text-base font-semibold">Selected Access</h2>
+            </div>
+          </CardHeader>
+          <CardContent className="grid gap-3 text-sm">
+            <SummaryRow label={principalLabel} value={selectedPrincipalRow ? formatPrincipal(selectedPrincipalRow, isRoleMode) : "Not selected"} />
+            <SummaryRow label="App" value={selectedApp || String(selectedScreenRow?.app_code ?? "All")} />
+            <SummaryRow label="Screen" value={selectedScreenRow ? String(selectedScreenRow.level3 || selectedScreenRow.level2 || selectedScreenRow.level1 || selectedScreenRow.serial_no) : "Not selected"} />
+            <SummaryRow label="Company" value={String(selectedScreenRow?.company_code || user?.company_code || "")} />
+            <div className="mt-2 grid gap-2">
+              <Button disabled={!canLoadPermissions || saving || permissionLoading} onClick={saveAccess}>
+                <Save size={15} /> {saving ? "Saving..." : "Save Access"}
+              </Button>
+              <Button disabled={!hasExisting || saving} variant="destructive" onClick={deleteAccess}>
+                <Trash2 size={15} /> Delete Access
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </section>
+  );
+}
+
+async function getExistingPermission(endpoint: string, mode: "role" | "user", selectedPrincipal: string, selectedScreen: string) {
+  try {
+    const params = mode === "role"
+      ? { role_id: Number(selectedPrincipal), serial_no: Number(selectedScreen) }
+      : { loginid: selectedPrincipal, serial_no_or_role_id: Number(selectedScreen) };
+    const result = await getSecurityGmWithParams<PermissionRow | null>(endpoint, params);
+    return result ? normalizePermission(result) : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildPayload(mode: "role" | "user", selectedPrincipal: string, selectedScreen: string, permissions: PermissionRow, screen: OptionRow | undefined, userCompany?: string) {
+  const permissionValues = Object.fromEntries(permissionFields.map((field) => [field.key, String(permissions[field.key] ?? "N").toUpperCase()]));
+  const companyCode = String(permissions.company_code || screen?.company_code || userCompany || "");
+  if (mode === "role") {
+    return {
+      role_id: Number(selectedPrincipal),
+      serial_no: Number(selectedScreen),
+      ...permissionValues,
+      company_code: companyCode,
+    };
+  }
+  return {
+    loginid: selectedPrincipal,
+    serial_no_or_role_id: Number(selectedScreen),
+    ...permissionValues,
+    company_code: companyCode,
+  };
+}
+
+function buildDeletePayload(mode: "role" | "user", selectedPrincipal: string, selectedScreen: string) {
+  if (mode === "role") {
+    return { screen_details: [{ role_id: Number(selectedPrincipal), serial_no: Number(selectedScreen) }] };
+  }
+  return { screen_details: [{ loginid: selectedPrincipal, serial_no_or_role_id: Number(selectedScreen) }] };
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border bg-muted/20 p-2">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{label}</div>
+      <div className="mt-1 truncate font-semibold text-foreground" title={value}>{value}</div>
+    </div>
+  );
+}
+
+function emptyPermissionRow() {
+  return Object.fromEntries(permissionFields.map((field) => [field.key, "N"]));
+}
+
+function normalizePermission(row: PermissionRow) {
+  const normalized = normalizeRow(row);
+  return {
+    ...emptyPermissionRow(),
+    ...normalized,
+    ...Object.fromEntries(permissionFields.map((field) => [field.key, String(normalized[field.key] ?? "N").toUpperCase()])),
+  };
+}
+
+function normalizeRow(row: Record<string, unknown>) {
+  const normalized: Record<string, unknown> = { ...row };
+  Object.entries(row).forEach(([key, value]) => {
+    normalized[key.toLowerCase()] = value;
+    normalized[toSnakeCase(key)] = value;
+  });
+  alias(normalized, "role_id", ["roleid", "roleId", "ROLE_ID"]);
+  alias(normalized, "role_desc", ["roledesc", "roleDesc", "ROLE_DESC"]);
+  alias(normalized, "loginid", ["loginId", "LOGINID", "user_id", "USER_ID"]);
+  alias(normalized, "username", ["userName", "USERNAME"]);
+  alias(normalized, "serial_no", ["serialno", "serialNo", "SERIAL_NO"]);
+  alias(normalized, "serial_no_or_role_id", ["serialnoorroleid", "serialNoOrRoleId", "SERIAL_NO_OR_ROLE_ID"]);
+  alias(normalized, "app_code", ["appcode", "appCode", "APP_CODE"]);
+  alias(normalized, "level1", ["LEVEL1"]);
+  alias(normalized, "level2", ["LEVEL2"]);
+  alias(normalized, "level3", ["LEVEL3"]);
+  alias(normalized, "company_code", ["companycode", "companyCode", "COMPANY_CODE"]);
+  return normalized;
+}
+
+function toSnakeCase(value: string) {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[\s-]+/g, "_")
+    .toLowerCase();
+}
+
+function alias(row: Record<string, unknown>, target: string, sources: string[]) {
+  if (row[target] !== undefined) return;
+  const source = sources.find((key) => row[key] !== undefined);
+  if (source) row[target] = row[source];
+}
+
+function formatPrincipal(row: OptionRow, isRoleMode: boolean) {
+  if (isRoleMode) {
+    return [row.role_id, row.role_desc].filter(Boolean).join(" - ");
+  }
+  return [row.loginid, row.username].filter(Boolean).join(" - ");
+}

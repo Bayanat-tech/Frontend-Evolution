@@ -590,7 +590,7 @@ export const wmsSimpleMasterConfigs: Record<string, WmsSimpleMasterConfig> = {
     }),
     deleteConfig: { mode: "registered", payload: (row) => [{ airline_code: row.airline_code, company_code: row.company_code }] },
   },
-  
+
 };
 
 export { yesNo };

@@ -24,6 +24,9 @@ import { WmsCountryPage } from "../pages/wms/WmsCountryPage";
 import { WmsInboundPage } from "../pages/wms/WmsInboundPage";
 import { WmsSimpleMasterPage } from "../pages/wms/WmsSimpleMasterPage";
 import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
+import { SecurityAssignmentPage, securityAssignmentConfigs } from "../pages/security/SecurityAssignmentPage";
+import { SecurityMasterPage, securityMasterConfigs } from "../pages/security/SecurityMasterPage";
+import { SecurityOperationAccessPage } from "../pages/security/SecurityOperationAccessPage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -156,6 +159,21 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "WMS Simple Master",
     match: ({ pathname }) => Boolean(getWmsSimpleMasterConfig(pathname)),
     element: ({ pathname }) => <WmsSimpleMasterPage config={getWmsSimpleMasterConfig(pathname)!} />,
+  },
+  {
+    name: "Security Operation Access",
+    match: (context) => Boolean(getSecurityOperationMode(context)),
+    element: (context) => <SecurityOperationAccessPage mode={getSecurityOperationMode(context)!} />,
+  },
+  {
+    name: "Security Assignment",
+    match: (context) => Boolean(getSecurityAssignmentConfig(context)),
+    element: (context) => <SecurityAssignmentPage config={getSecurityAssignmentConfig(context)!} />,
+  },
+  {
+    name: "Security Master",
+    match: (context) => Boolean(getSecurityMasterConfig(context)),
+    element: (context) => <SecurityMasterPage config={getSecurityMasterConfig(context)!} />,
   },
 ];
 
@@ -327,4 +345,79 @@ function getWmsSimpleMasterConfig(pathname: string) {
     .flatMap((config) => (config.routeKeys || [config.master]).map((key) => ({ config, key: key.toLowerCase() })))
     .sort((a, b) => b.key.length - a.key.length);
   return matches.find(({ key }) => normalized.includes(`/${key}`) || normalized.includes(`/${key.replace(/_/g, "-")}`))?.config || null;
+}
+
+function isSecurityContext({ pathname, activeApp }: WorkspaceRouteContext) {
+  const normalized = pathname.toLowerCase();
+  const appTitle = activeApp?.title?.toLowerCase() || "";
+  return normalized.includes("/security") || normalized.includes("/secuity") || appTitle.includes("security") || appTitle.includes("secuity");
+}
+
+function getSecurityAssignmentConfig(context: WorkspaceRouteContext) {
+  const normalized = getSecurityMatchText(context);
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  if (!isSecurityContext(context)) return null;
+  const matches = Object.values(securityAssignmentConfigs)
+    .flatMap((config) => config.routeKeys.map((key) => ({ config, key: key.toLowerCase() })))
+    .sort((a, b) => b.key.length - a.key.length);
+  return matches.find(({ key }) => {
+    const keyCompact = key.replace(/[^a-z0-9]/g, "");
+    return normalized.includes(`/${key}`) || normalized.includes(`/${key.replace(/_/g, "-")}`) || normalized.includes(key) || compact.includes(keyCompact);
+  })?.config || null;
+}
+
+function getSecurityOperationMode(context: WorkspaceRouteContext) {
+  if (!isSecurityContext(context)) return null;
+  const normalized = getSecurityMatchText(context);
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  const roleKeys = [
+    "accessassignrole",
+    "accessassignroll",
+    "accessassignrole",
+    "accesstorole",
+    "accesstoroll",
+    "assignaccessrole",
+    "assignaccessroll",
+    "assignaccesstorole",
+    "assignaccesstoroll",
+  ];
+  const userKeys = ["accessassignuser", "accesstouser", "assignaccessuser", "assignaccesstouser"];
+  if (roleKeys.some((key) => compact.includes(key))) return "role" as const;
+  if (userKeys.some((key) => compact.includes(key))) return "user" as const;
+  return null;
+}
+
+function getSecurityMasterConfig(context: WorkspaceRouteContext) {
+  const normalized = getSecurityMatchText(context);
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  if (!isSecurityContext(context)) return null;
+  const matches = Object.values(securityMasterConfigs)
+    .flatMap((config) => config.routeKeys.map((key) => ({ config, key: key.toLowerCase() })))
+    .sort((a, b) => b.key.length - a.key.length);
+  return matches.find(({ key }) => {
+    const keyCompact = key.replace(/[^a-z0-9]/g, "");
+    return normalized.includes(`/${key}`) || normalized.includes(`/${key.replace(/_/g, "-")}`) || normalized.includes(key) || compact.includes(keyCompact);
+  })?.config || null;
+}
+
+function getSecurityMatchText(context: WorkspaceRouteContext) {
+  const pathname = context.pathname.toLowerCase();
+  const leaves = collectMenuLeaves(context.activeApp?.children || []);
+  const activeLeaf = leaves.find((leaf) => {
+    const path = (leaf.url_path || "").replace(/^\/+/, "").toLowerCase();
+    return path && pathname.includes(path);
+  });
+  return [pathname, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
+}
+
+function collectMenuLeaves(nodes: MenuNode[]) {
+  const leaves: MenuNode[] = [];
+  const walk = (items: MenuNode[]) => {
+    items.forEach((item) => {
+      if (item.type === "item" || item.url_path) leaves.push(item);
+      if (item.children?.length) walk(item.children);
+    });
+  };
+  walk(nodes);
+  return leaves;
 }

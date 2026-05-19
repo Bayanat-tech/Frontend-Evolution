@@ -2,6 +2,7 @@ import {
   ColumnDef,
   ColumnFiltersState,
   Column,
+  FilterFn,
   SortingState,
   VisibilityState,
   flexRender,
@@ -58,6 +59,18 @@ const densityClasses: Record<DataTableDensity, { row: string; cell: string }> = 
   large: { row: "h-14", cell: "py-3.5" },
 };
 
+const includesText: FilterFn<unknown> = (row, columnId, filterValue) => {
+  const search = String(filterValue ?? "").trim().toLowerCase();
+  if (!search) return true;
+  return String(row.getValue(columnId) ?? "").toLowerCase().includes(search);
+};
+
+const globalIncludesText: FilterFn<unknown> = (row, _columnId, filterValue) => {
+  const search = String(filterValue ?? "").trim().toLowerCase();
+  if (!search) return true;
+  return row.getAllCells().some((cell) => String(cell.getValue() ?? "").toLowerCase().includes(search));
+};
+
 export function DataTable<TData, TValue>({
   columns,
   data,
@@ -100,6 +113,13 @@ export function DataTable<TData, TValue>({
     data,
     columns,
     getRowId,
+    filterFns: {
+      includesText: includesText as FilterFn<TData>,
+    },
+    globalFilterFn: globalIncludesText as FilterFn<TData>,
+    defaultColumn: {
+      filterFn: includesText as FilterFn<TData>,
+    },
     state: {
       sorting,
       columnFilters,
@@ -135,6 +155,7 @@ export function DataTable<TData, TValue>({
   const minWidthValue = typeof minWidth === "number" ? `${minWidth}px` : minWidth;
   const pageCount = manualPagination ? Math.max(1, Math.ceil((totalRows ?? data.length) / Math.max(pageSize, 1))) : table.getPageCount() || 1;
   const currentPageIndex = manualPagination ? pageIndex : table.getState().pagination.pageIndex;
+  const displayTitle = title && !isCountTitle(title) ? title : undefined;
   const canPreviousPage = currentPageIndex > 0;
   const canNextPage = currentPageIndex < pageCount - 1;
   const goToPage = (nextPageIndex: number) => {
@@ -155,12 +176,12 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="overflow-hidden rounded-md border bg-card shadow-sm">
-      {(title || subtitle || onSearchChange || toolbar || enableColumnVisibility) && (
+      {(displayTitle || subtitle || onSearchChange || toolbar || enableColumnVisibility) && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b p-2">
-          {(title || subtitle) && (
+          {(displayTitle || subtitle) && (
             <div>
               {subtitle && <p className="eyebrow">{subtitle}</p>}
-              {title && <h2 className="m-0 text-base font-semibold">{title}</h2>}
+              {displayTitle && <h2 className="m-0 text-base font-semibold">{displayTitle}</h2>}
             </div>
           )}
           <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
@@ -264,7 +285,6 @@ export function DataTable<TData, TValue>({
             <span>
               Page {currentPageIndex + 1} of {pageCount}
             </span>
-            {typeof totalRows === "number" && <span>{totalRows.toLocaleString()} total records</span>}
           </div>
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-2 text-xs">
@@ -290,6 +310,10 @@ export function DataTable<TData, TValue>({
       )}
     </div>
   );
+}
+
+function isCountTitle(title: string) {
+  return /^(loading|[\d,]+\s+(records?|rows?|items?|documents?|vouchers?|cheques?|lines?|jobs?|countries?))$/i.test(title.trim());
 }
 
 function ColumnFilterButton<TData, TValue>({
