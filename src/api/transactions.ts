@@ -197,12 +197,17 @@ export async function getDocAccounts(docType: TransactionType, hdrDtl: "H" | "D"
 }
 
 export async function getTransactionChildren(docNo: string, divCode: string, docType: TransactionType) {
-  const response = await api.get<ApiResponse<{ invoice: Record<string, unknown>[]; job: Record<string, unknown>[]; expense: Record<string, unknown>[] }>>(
+  const response = await api.get<ApiResponse<{ invoice?: Record<string, unknown>[]; job?: Record<string, unknown>[]; expense?: Record<string, unknown>[]; invoiceDetails?: Record<string, unknown>[]; jobDetails?: Record<string, unknown>[]; expenseDetails?: Record<string, unknown>[] }>>(
     `/api/finance/transactions/children/${encodeURIComponent(docNo)}`,
     { params: { div_code: divCode, doc_type: docType } },
   );
   if (!response.data.success) throw new Error(response.data.message || "Unable to load child allocations");
-  return response.data.data || { invoice: [], job: [], expense: [] };
+  const data = response.data.data || {};
+  return {
+    invoice: data.invoice || data.invoiceDetails || [],
+    job: data.job || data.jobDetails || [],
+    expense: data.expense || data.expenseDetails || [],
+  };
 }
 
 export async function getCheque(acCode: string) {
@@ -266,7 +271,7 @@ export async function upsertBulkAccountEntryApi(payload: {
   jobDetails: Record<string, unknown>[];
   loginid: string;
 }) {
-  const response = await api.post<ApiResponse<unknown>>("/api/finance/transactions/account-entry/bulk", payload);
+  const response = await api.post<ApiResponse<unknown>>("/api/finance/procBulkAccountEntry", payload);
   const details = (response.data as ApiResponse<unknown> & { details?: string }).details;
   if (!response.data.success) throw new Error(response.data.message || details || "Unable to save transaction");
   return response.data;
@@ -287,3 +292,68 @@ export async function deleteTransactionDocument(docNos: string[], docType: Trans
   if (!response.data.success) throw new Error(response.data.message || "Unable to delete document");
   return response.data;
 }
+
+export async function getFinanceOutstanding(divCode: string, invNo: string) {
+  console.log("getFinanceOutstanding called", { divCode, invNo });
+  const response = await api.get<
+    ApiResponse<{
+      balances: {
+        inv_no: string;
+        original_amount: number;
+        paid_amount: number;
+        outstanding_amount: number;
+        payment_percentage: number;
+        is_fully_paid: boolean;
+        error?: string;
+      }[];
+      count: number;
+    }>
+  >("/api/finance/transactions/invoice_outstanding", {
+    // send both parameter names (single or multiple) to be compatible with backend
+    params: { div_code: divCode, inv_no: invNo, inv_nos: invNo },
+  });
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load defaults");
+  return response.data.data || { balances: [], count: 0 };
+}
+
+  // getInvoiceOutstandingBalance = async (inv_nos: string, div_code: string) => {
+  //   try {
+  //     const response: IApiResponse<{
+  //       balances: Array<{
+  //         inv_no: string;
+  //         original_amount: number;
+  //         paid_amount: number;
+  //         outstanding_amount: number;
+  //         payment_percentage: number;
+  //         is_fully_paid: boolean;
+  //         error?: string;
+  //       }>;
+  //       count: number;
+  //     }> = await axiosServices.get(`api/finance/transactions/invoice_outstanding`, {
+  //       params: {
+  //         inv_nos: inv_nos,
+  //         div_code: div_code
+  //       }
+  //     });
+  //     console.log('RAW API RESPONSE:', JSON.stringify(response.data, null, 2));
+
+  //     if (response.data.success === true && response.data.data) {
+  //       return response.data.data;
+  //     }
+  //   } catch (error: unknown) {
+  //     const knownError = error as { message: string };
+  //     dispatch(
+  //       openSnackbar({
+  //         open: true,
+  //         message: knownError.message,
+  //         variant: 'alert',
+  //         alert: {
+  //           color: 'error'
+  //         },
+  //         severity: 'error',
+  //         close: true
+  //       })
+  //     );
+  //     return null;
+  //   }
+  // };

@@ -25,8 +25,9 @@ import {
   TransactionHeader,
   TransactionType,
   upsertBulkAccountEntryApi,
+  getFinanceOutstanding,
 } from "../../api/transactions";
-import { getLookupValue, LookupRow } from "../../api/lookups";
+import { getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { Badge } from "../../components/ui/Badge";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
@@ -182,6 +183,7 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
     }
   };
 
+
   return (
     <section className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -326,7 +328,39 @@ function PaymentDocumentEditor({
             getTransactionChildren(editor.row.doc_no, editor.row.div_code, docType),
           ]);
           if (!mounted) return;
-          setForm(mapExistingDocument(docType, headerRaw, detailRaw, childrenRaw));
+          // map existing document first
+          const mapped = mapExistingDocument(docType, headerRaw, detailRaw, childrenRaw);
+          setForm(mapped);
+          // for invoice children, fetch outstanding balances and update child rows
+          try {
+            const updatedChildren = { ...mapped.children } as Record<string, TransactionChildRow[]>;
+            await Promise.all(
+              Object.entries(updatedChildren).map(async ([detailId, childRows]) => {
+                // find corresponding detail to know child_table
+                const detail = mapped.detail.find((d) => d.id === detailId);
+                if (!detail || detail.child_table !== "invoice") return;
+                await Promise.all(
+                  childRows.map(async (child, idx) => {
+                    const invNo = text((child as Record<string, unknown>).inv_no);
+                    if (!invNo) return;
+                    try {
+                      const resp = await getFinanceOutstanding(mapped.div_code, invNo);
+                      const balance = resp?.balances?.[0];
+                      if (balance) {
+                        childRows[idx] = { ...childRows[idx], inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount } as TransactionChildRow;
+                      }
+                    } catch {
+                      // ignore individual failures
+                    }
+                  }),
+                );
+              }),
+            );
+            // apply updated children to form
+            setForm((current) => ({ ...current, children: updatedChildren }));
+          } catch {
+            // ignore overall errors
+          }
         } else {
           const defaults = await getTransactionDefaultData(docType, false);
           if (!mounted) return;
@@ -386,13 +420,13 @@ function PaymentDocumentEditor({
         ...current.detail,
         {
           ...emptyDetailRow({
-          docType,
-          docNo: current.doc_no || "1",
-          docDate: current.doc_date,
-          divCode: current.div_code,
-          currCode: current.curr_code,
-          currName: current.curr_name,
-          companyCode: user?.company_code,
+            docType,
+            docNo: current.doc_no || "1",
+            docDate: current.doc_date,
+            divCode: current.div_code,
+            currCode: current.curr_code,
+            currName: current.curr_name,
+            companyCode: user?.company_code,
           }),
           serial_no: current.detail.length + 1,
         },
@@ -424,7 +458,26 @@ function PaymentDocumentEditor({
         extra_param3: form.doc_no || "1",
         extra_param4: String(detail.serial_no),
       });
-      const mapped = rows.map((row, index) => mapChildRow(row, detail, form, docType, user?.company_code || "", index + 1));
+      let mapped = rows.map((row, index) => mapChildRow(row, detail, form, docType, user?.company_code || "", index + 1));
+      // if invoice child rows, fetch outstanding balances for each invoice and populate amounts
+      if (detail.child_table === "invoice") {
+        mapped = await Promise.all(
+          mapped.map(async (m) => {
+            try {
+              const invNo = text((m as Record<string, unknown>).inv_no);
+              if (!invNo) return m;
+              const resp = await getFinanceOutstanding(form.div_code, invNo);
+              const balance = resp?.balances?.[0];
+              if (balance) {
+                return { ...m, inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount } as TransactionChildRow;
+              }
+              return m;
+            } catch {
+              return m;
+            }
+          }),
+        );
+      }
       setForm((current) => ({ ...current, children: { ...current.children, [detail.id]: mapped } }));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load allocations");
@@ -471,7 +524,8 @@ function PaymentDocumentEditor({
     setError("");
     try {
       const payload = buildPayload(form, docType, user?.company_code || "");
-      await upsertBulkAccountEntryApi(buildBulkAccountEntryPayload(payload, docType, user?.company_code || "", user?.loginid || user?.username || "ADMIN"));
+      console.log("detail child_table:", form.detail.map(d => ({ ac: d.ac_code, table: d.child_table, children: form.children[d.id] })));
+      await upsertBulkAccountEntryApi(buildBulkAccountEntryPayload(form, docType, user?.company_code || "", user?.loginid || ""));
       await onSaved(editMode ? "Document updated successfully" : "Document created successfully");
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to save document");
@@ -479,6 +533,43 @@ function PaymentDocumentEditor({
       setSaving(false);
     }
   };
+
+  const fetchOutstanding = async (invNo: string) => {
+    try {
+      console.log("fetchOutstanding called", { div: form.div_code, invNo });
+      const response = await getFinanceOutstanding(form.div_code, invNo);
+      return response as { balances: { inv_no: string; original_amount: number; paid_amount: number; outstanding_amount: number; payment_percentage: number; is_fully_paid: boolean; error?: string }[] };
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Unable to fetch outstanding details");
+      return { balances: [] };
+    }
+  };
+
+  const handleInvNoBlur = (childId: string, invNo: string, parentIdArg?: string) => {
+    console.log("handleInvNoBlur called", { childId, invNo, selectedDetailId, parentIdArg });
+    if (!invNo) return;
+    // prefer provided parent id (from table) else find the parent detail id that contains this child row
+    const parentDetailId = parentIdArg || Object.keys(form.children || {}).find((key) => ((form.children as Record<string, TransactionChildRow[]>)[key] || []).some((r) => r.id === childId));
+    if (!parentDetailId) {
+      console.log("handleInvNoBlur: parent detail not found for child", childId);
+      return;
+    }
+    void fetchOutstanding(invNo).then((data) => {
+      const balance = data?.balances?.[0];
+      if (!balance) return;
+      setForm((current) => {
+        const rows = ((current.children[parentDetailId] || []) as TransactionChildRow[]).map((row) =>
+          row.id === childId
+            ? { ...row, inv_amt: balance.original_amount, c_bal_amt_org: balance.outstanding_amount }
+            : row,
+        );
+        return { ...current, children: { ...current.children, [parentDetailId]: rows } };
+      });
+    });
+  };
+
+
+
 
   return (
     <form className="payment-workbench grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
@@ -525,16 +616,24 @@ function PaymentDocumentEditor({
                 label="Account"
                 value={form.ac_code}
                 displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
+                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
                 valueField="ac_code"
-                displayFields={["ac_code", "ac_name"]}
-                loadOptions={() => getDocAccounts(docType, "H", form.div_code)}
+                displayFields={["ac_code", "ac_name", 'curr_code']}
+                // loadOptions={() => getDocAccounts(docType, "H", form.div_code)}
+                loadOptions={() => getDynamicLookup({
+                  parameter: "Account_AC_CODE_Serach_HDR",
+                  code1: user?.company_code,
+                  code2: "H",
+                  code3: form.doc_type,
+                  code4: form.div_code
+                })}
                 disabled={disabled || !form.div_code}
                 onChange={async (value, row) => {
                   setForm((current) => ({
                     ...current,
                     ac_code: value,
                     ac_name: text(getLookupValue(row || {}, "ac_name")),
+                    curr_code: text(getLookupValue(row || {}, "curr_code")),
                   }));
                   if (docType !== "CR" && value) {
                     const cheque: Record<string, unknown> = await getCheque(value).catch(() => ({}));
@@ -552,9 +651,18 @@ function PaymentDocumentEditor({
                 columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
                 valueField="curr_code"
                 displayFields={["curr_code", "curr_name"]}
-                loadOptions={() => getCurrencyRows()}
+                loadOptions={() => getDynamicLookup({
+                  parameter: "Account_Currency_CODE_Serach",
+                  code1: user?.company_code,
+                  loginid: user?.loginid || user?.username || "ADMIN"
+                })}
                 disabled={disabled}
-                onChange={(value, row) => setForm((current) => ({ ...current, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")) }))}
+                onChange={(value, row) => setForm((current) => ({
+                  ...current,
+                  curr_code: value,
+                  curr_name: text(getLookupValue(row || {}, "curr_name")),
+                  ex_rate: Number(row?.ex_rate ?? 1),
+                }))}
               />
               <Field label="Exchange Rate"><Input disabled={disabled} type="number" step="0.0001" value={form.ex_rate} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} /></Field>
               {docType !== "CR" && (
@@ -562,12 +670,14 @@ function PaymentDocumentEditor({
                   label="Bank Account"
                   value={form.bank_ac_code || ""}
                   displayValue={form.bank_ac_name ? `${form.bank_ac_code} - ${form.bank_ac_name}` : form.bank_ac_code}
-                  columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
-                  valueField="ac_code"
-                  displayFields={["ac_code", "ac_name"]}
-                  loadOptions={() => getDocAccounts(docType, "D", form.div_code)}
+                  columns={[{ field: "bank_ac_code", header: "Code" }, { field: "bank_ac_name", header: "Name" }]}
+                  valueField="bank_ac_code"
+                  displayFields={["bank_ac_code", "bank_ac_name"]}
+                  loadOptions={() => getDynamicLookup({
+                    parameter: 'BANK_CODE_SETTINGS_BANK_SEARCH', code1: user?.company_code
+                  })}
                   disabled={disabled || !form.div_code}
-                  onChange={(value, row) => setForm((current) => ({ ...current, bank_ac_code: value, bank_ac_name: text(getLookupValue(row || {}, "ac_name")) }))}
+                  onChange={(value, row) => setForm((current) => ({ ...current, bank_ac_code: value, bank_ac_name: text(getLookupValue(row || {}, "bank_ac_name")) }))}
                 />
               )}
               {docType !== "CR" && <Field label="Cheque No"><Input disabled={disabled} value={form.cheque_no || ""} onChange={(event) => updateField("cheque_no", event.target.value)} /></Field>}
@@ -637,10 +747,16 @@ function PaymentDocumentEditor({
                             placeholder="A/c code"
                             value={detail.ac_code}
                             displayValue={detail.ac_name ? `${detail.ac_code} - ${detail.ac_name}` : detail.ac_code}
-                            columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
+                            columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
                             valueField="ac_code"
-                            displayFields={["ac_code", "ac_name"]}
-                            loadOptions={() => getDocAccounts(docType, "D", form.div_code)}
+                            displayFields={["ac_code", "ac_name", "curr_code"]}
+                            loadOptions={() => getDynamicLookup({
+                              parameter: "Account_AC_CODE_Serach_HDR",
+                              code1: user?.company_code,
+                              code2: "D",
+                              code3: form.doc_type,
+                              code4: form.div_code
+                            })}
                             disabled={disabled}
                             onChange={(value, row) => void selectDetailAccount(detail, value, row)}
                           />
@@ -657,9 +773,13 @@ function PaymentDocumentEditor({
                             columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
                             valueField="curr_code"
                             displayFields={["curr_code", "curr_name"]}
-                            loadOptions={() => getCurrencyRows()}
+                            loadOptions={() => getDynamicLookup({
+                              parameter: "Account_Currency_CODE_Serach",
+                              code1: user?.company_code,
+                              loginid: user?.loginid || user?.username || "ADMIN"
+                            })}
                             disabled={disabled}
-                            onChange={(value, row) => updateDetail(detail.id, { curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")) })}
+                            onChange={(value, row) => updateDetail(detail.id, { curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(row?.ex_rate ?? form.ex_rate ?? 1) })}
                           />
                         </td>
                         <td className="w-28 px-2 py-1"><Input disabled={disabled} type="number" step="0.0001" value={detail.ex_rate || form.ex_rate} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
@@ -726,11 +846,13 @@ function PaymentDocumentEditor({
               </div>
               <ChildAllocationTable
                 childTable={selectedDetail?.child_table || ""}
+                parentId={selectedDetail?.id}
                 disabled={disabled}
                 loading={childLoading}
                 rows={selectedChildren}
                 onChange={updateChildRow}
                 onRemove={removeChildRow}
+                onInvNoBlur={handleInvNoBlur}
               />
             </div>
           </div>
@@ -742,10 +864,10 @@ function PaymentDocumentEditor({
           Total Amount <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(total)}</strong>
         </div>
         <div className="flex items-center gap-2">
-        <Button disabled={saving} type="button" variant="outline" onClick={onClose}>Close</Button>
-        <Button disabled={disabled || loading || form.detail.length === 0} type="submit">
-          <Save size={15} /> {saving ? "Saving..." : "Save"}
-        </Button>
+          <Button disabled={saving} type="button" variant="outline" onClick={onClose}>Close</Button>
+          <Button disabled={disabled || loading || form.detail.length === 0} type="submit">
+            <Save size={15} /> {saving ? "Saving..." : "Save"}
+          </Button>
         </div>
       </div>
       <AttachmentDialog
@@ -808,6 +930,8 @@ function ChildAllocationTable({
   disabled,
   onChange,
   onRemove,
+  onInvNoBlur,
+  parentId,
 }: {
   childTable: TransactionDetail["child_table"];
   rows: TransactionChildRow[];
@@ -815,6 +939,9 @@ function ChildAllocationTable({
   disabled: boolean;
   onChange: (id: string, patch: Partial<TransactionChildRow>) => void;
   onRemove: (id: string) => void;
+  onInvNoBlur?: (childId: string, invNo: string, parentId?: string) => void;
+  parentId?: string;
+
 }) {
   if (!childTable) {
     return <div className="grid min-h-[120px] place-items-center p-6 text-center text-sm text-muted-foreground">This detail account has no allocation table.</div>;
@@ -843,8 +970,21 @@ function ChildAllocationTable({
               <td className="px-2 py-1 text-xs">{row.dtl_sr_no}</td>
               {childTable === "invoice" ? (
                 <>
-                  <td className="px-2 py-1"><Input disabled={disabled} value={text(row.inv_no)} onChange={(event) => onChange(row.id, { inv_no: event.target.value })} /></td>
-                  <td className="px-2 py-1"><Input disabled={disabled} type="date" value={dateInput(row.inv_date)} onChange={(event) => onChange(row.id, { inv_date: event.target.value })} /></td>
+                  <td className="px-2 py-1">
+                    <input
+                      className="h-9 w-full rounded-md border bg-background px-3 py-1 text-sm"
+                      disabled={disabled}
+                      value={text(row.inv_no)}
+                      onChange={(event) => onChange(row.id, { inv_no: event.target.value })}
+                      onBlur={(event) => {
+                        console.log("ChildAllocationTable onBlur", { childId: row.id, parentId, value: event.target.value });
+                        onInvNoBlur?.(row.id, event.target.value, parentId);
+                      }}
+                    />
+                  </td>
+                  <td className="px-2 py-1">
+                    <Input disabled={disabled} type="date" value={dateInput(row.inv_date)} onChange={(event) => onChange(row.id, { inv_date: event.target.value })} />
+                  </td>
                   <td className="px-2 py-1"><Input disabled value={text(row.inv_amt)} /></td>
                   <td className="px-2 py-1"><Input disabled value={text(row.c_bal_amt_org)} /></td>
                 </>
@@ -1060,18 +1200,18 @@ function mapExistingDocument(
       line.id,
       line.child_table
         ? ((childrenRaw[line.child_table] || [])
-            .filter((child) => Number(lowerRecord(child).serial_no) === line.serial_no)
-            .map((child, index) => mapChildRow(child, line, {
-              doc_type: docType,
-              doc_no: text(header.doc_no),
-              doc_date: dateInput(header.doc_date),
-              ac_code: text(header.ac_code),
-              curr_code: text(header.curr_code),
-              ex_rate: Number(header.ex_rate || 1),
-              div_code: text(header.div_code),
-              detail: [],
-              children: {},
-            } as TransactionHeader, docType, text(header.company_code), index + 1)))
+          .filter((child) => Number(lowerRecord(child).serial_no) === line.serial_no)
+          .map((child, index) => mapChildRow(child, line, {
+            doc_type: docType,
+            doc_no: text(header.doc_no),
+            doc_date: dateInput(header.doc_date),
+            ac_code: text(header.ac_code),
+            curr_code: text(header.curr_code),
+            ex_rate: Number(header.ex_rate || 1),
+            div_code: text(header.div_code),
+            detail: [],
+            children: {},
+          } as TransactionHeader, docType, text(header.company_code), index + 1)))
         : [],
     ]),
   );
@@ -1154,37 +1294,37 @@ function buildPayload(form: TransactionHeader, docType: TransactionType, company
   return base;
 }
 
-function buildBulkAccountEntryPayload(form: TransactionHeader, docType: TransactionType, companyCode: string, loginid: string) {
-  const docNo = form.doc_no || "0";
+function buildBulkAccountEntryPayload(originalForm: TransactionHeader, docType: TransactionType, companyCode: string, loginid: string) {
+  const docNo = originalForm.doc_no || "0";
   const header = {
-    ...form,
+    ...originalForm,
     company_code: companyCode,
     doc_type: docType,
     doc_no: docNo,
     create_user: loginid,
     edit_user: loginid,
-    canceled: form.canceled || "N",
-    last_dtl_serial_no: form.detail.length,
+    canceled: originalForm.canceled || "N",
+    last_dtl_serial_no: originalForm.detail.length,
     sys_gen: "N",
   };
   delete (header as Record<string, unknown>).detail;
   delete (header as Record<string, unknown>).children;
 
-  const details = form.detail.map((row, index) => ({
+  const details = originalForm.detail.map((row, index) => ({
     ...row,
     company_code: row.company_code || companyCode,
     doc_type: docType,
     doc_no: docNo,
     serial_no: row.serial_no || index + 1,
-    doc_date: form.doc_date,
-    header_ac_code: form.ac_code,
-    curr_code: row.curr_code || form.curr_code,
-    ex_rate: Number(row.ex_rate || form.ex_rate || 1),
-    lcur_amount: Number(row.lcur_amount ?? Math.abs(Number(row.amount || 0)) * Number(row.ex_rate || form.ex_rate || 1) * Number(row.sign_ind || 1)),
-    div_code: row.div_code || form.div_code,
+    doc_date: originalForm.doc_date,
+    header_ac_code: originalForm.ac_code,
+    curr_code: row.curr_code || originalForm.curr_code,
+    ex_rate: Number(row.ex_rate || originalForm.ex_rate || 1),
+    lcur_amount: Number(row.lcur_amount ?? Math.abs(Number(row.amount || 0)) * Number(row.ex_rate || originalForm.ex_rate || 1) * Number(row.sign_ind || 1)),
+    div_code: row.div_code || originalForm.div_code,
   }));
 
-  const children = groupChildren(form);
+  const children = groupChildren(originalForm);
   return {
     header,
     details,
@@ -1196,6 +1336,11 @@ function buildBulkAccountEntryPayload(form: TransactionHeader, docType: Transact
 }
 
 function groupChildren(form: TransactionHeader) {
+  console.log("=== groupChildren ===");
+  console.log("detail ids:", form.detail.map(d => d.id));
+  console.log("children keys:", Object.keys(form.children || {}));
+  console.log("match check:", form.detail.map(d => ({ id: d.id, hasChildren: !!form.children?.[d.id] })));
+
   const grouped: Record<"invoice" | "job" | "expense", Record<string, unknown>[]> = {
     invoice: [],
     job: [],
@@ -1203,6 +1348,7 @@ function groupChildren(form: TransactionHeader) {
   };
 
   form.detail.forEach((detail) => {
+    console.log("detail.child_table:", detail.child_table);
     if (!detail.child_table || !["invoice", "job", "expense"].includes(detail.child_table)) return;
     const table = detail.child_table as "invoice" | "job" | "expense";
     const rows = (form.children?.[detail.id] || []) as TransactionChildRow[];
