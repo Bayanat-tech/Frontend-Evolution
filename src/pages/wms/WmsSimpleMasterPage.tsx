@@ -9,14 +9,22 @@ import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
+import {WmsMasterForm} from "../../components/WmsMasterForm";
 
 export type WmsMasterField = {
   name: string;
   label: string;
   required?: boolean;
   disabledOnEdit?: boolean;
-  type?: "text" | "number" | "select" | "email";
+  type?: "text" | "number" | "select" | "email" | "textarea";
   options?: { label: string; value: string }[];
+  asyncOptions?: {
+    endpoint: string;           // e.g. "country"
+    labelKey: string;           // e.g. "country_name"
+    valueKey: string;           // e.g. "country_code"
+    dependsOn?: string;         // field name this depends on (for chained dropdowns)
+  };
+  tab?: string;                 // which tab this field belongs to
   table?: boolean;
   width?: number;
 };
@@ -25,6 +33,11 @@ export type WmsDeleteConfig = {
   mode: "registered" | "rawPost" | "rawDelete" | "disabled";
   payload: (row: Record<string, unknown>) => unknown;
   reason?: string;
+};
+
+export type WmsMasterFormTab = {
+  key: string;
+  label: string;
 };
 
 export type WmsSimpleMasterConfig = {
@@ -39,6 +52,7 @@ export type WmsSimpleMasterConfig = {
   deleteConfig?: WmsDeleteConfig;
   mapBeforeSave?: (form: Record<string, unknown>, context: { editMode: boolean; original: Record<string, unknown> | null }) => Record<string, unknown>;
   saveEndpoint?: (form: Record<string, unknown>, context: { editMode: boolean; original: Record<string, unknown> | null }) => string;
+    formTabs?: WmsMasterFormTab[];
 };
 
 export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig }) {
@@ -245,7 +259,19 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
       />
 
       <Dialog open={formOpen} title={editMode ? `Edit ${config.title}` : `Add ${config.title}`} description="Master details" compact onClose={() => setFormOpen(false)}>
-        <form className="grid gap-4" onSubmit={saveRecord}>
+      <WmsMasterForm
+          fields={editableFields}
+          key={formOpen ? (editMode ? `edit-${String(original?.[config.keyField])}` : "add") : "closed"}
+          tabs={config.formTabs}
+          form={form}
+          editMode={editMode}
+          saving={saving}
+          notice={notice}
+          onChange={(name:any, value:any) => setForm((prev) => ({ ...prev, [name]: value }))}
+          onSave={saveRecord}
+          onCancel={() => setFormOpen(false)}
+        />
+        {/* <form className="grid gap-4" onSubmit={saveRecord}>
           <Card>
             <CardHeader>
               <div>
@@ -269,7 +295,7 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
               <Save size={15} /> {saving ? "Saving..." : "Save"}
             </Button>
           </div>
-        </form>
+        </form> */}
       </Dialog>
 
       <Dialog
