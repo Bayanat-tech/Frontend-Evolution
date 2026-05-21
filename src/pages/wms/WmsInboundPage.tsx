@@ -3,6 +3,7 @@ import { ArrowLeft, Ban, CheckCircle2, Eye, PackageCheck, Plus, Printer, Refresh
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { executeWmsInboundSql, getWmsInbound, patchWmsInbound, postWmsInbound } from "../../api/wms";
+import { api } from "../../api/client";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
@@ -14,6 +15,59 @@ import { titleCase } from "../../utils/menu";
 
 type WmsRow = Record<string, unknown>;
 
+// ---------------------------------------------------------------------------
+// Generic hook — pass any raw SQL + which keys to use for value/label
+// ---------------------------------------------------------------------------
+type DropdownOption = { value: string; label: string };
+
+type UseRawSqlDropdownProps = {
+  sql: string;
+  valueKey: string;
+  labelKeys: string[];
+  enabled?: boolean;
+};
+
+function useRawSqlDropdown({ sql, valueKey, labelKeys, enabled = true }: UseRawSqlDropdownProps) {
+  const [options, setOptions] = useState<DropdownOption[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!enabled || !sql) return;
+    setLoading(true);
+    setError(null);
+
+    api
+      .post("/api/wms/inbound/executeRawSql", { raw_sql: sql })
+      .then((response) => {
+        const data = Array.isArray(response.data?.data)
+          ? response.data.data
+          : Array.isArray(response.data)
+          ? response.data
+          : [];
+
+        setOptions(
+          data.map((row: Record<string, unknown>) => {
+            // handles uppercase (Oracle default) and lowercase column names
+            const get = (key: string) =>
+              String(row[key] ?? row[key.toLowerCase()] ?? row[key.toUpperCase()] ?? "");
+            return {
+              value: get(valueKey),
+              label: labelKeys.map(get).filter(Boolean).join(" - "),
+            };
+          }),
+        );
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load options"))
+      .finally(() => setLoading(false));
+  }, [sql, enabled]);
+
+  return { options, loading, error };
+}
+
+// ---------------------------------------------------------------------------
+// Static data
+// ---------------------------------------------------------------------------
 const listingTabs = [
   { label: "In Progress", value: "in_progress" },
   { label: "Confirmed", value: "confirmed" },
@@ -51,12 +105,13 @@ type JobField = {
   label: string;
   required?: boolean;
   type?: string;
+  dropdown?: "principal" | "division" | "department";
 };
 
 const jobFields: JobField[] = [
-  { name: "prin_code", label: "Principal Code", required: true },
-  { name: "dept_code", label: "Department Code" },
-  { name: "div_code", label: "Division Code" },
+  { name: "prin_code", label: "Principal Code", required: true, dropdown: "principal" },
+  { name: "dept_code", label: "Department Code", dropdown: "department" },
+  { name: "div_code", label: "Division Code", dropdown: "division" },
   { name: "job_class", label: "Job Class", required: true },
   { name: "job_type", label: "Job Type", required: true },
   { name: "country_origin", label: "Country Origin" },
@@ -71,34 +126,80 @@ const jobFields: JobField[] = [
   { name: "remarks", label: "Remarks" },
 ];
 
+// ---------------------------------------------------------------------------
+// Page root
+// ---------------------------------------------------------------------------
 export function WmsInboundPage() {
   const location = useLocation();
   const view = parseInboundView(location.pathname);
-  return view.jobNo ? <InboundJobDetail jobNo={view.jobNo} tab={view.tab || "shipment_details"} /> : <InboundJobListing />;
+  return view.jobNo ? (
+    <InboundJobDetail jobNo={view.jobNo} tab={view.tab || "shipment_details"} />
+  ) : (
+    <InboundJobListing />
+  );
 }
 
+// ---------------------------------------------------------------------------
+// Listing
+// ---------------------------------------------------------------------------
 function InboundJobListing() {
   const { user } = useAuth();
+  const companyCode = user?.company_code || "";
   const navigate = useNavigate();
+
   const [rows, setRows] = useState<WmsRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState("in_progress");
   const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState<WmsRow>(makeEmptyJob(user?.company_code));
+  const [form, setForm] = useState<WmsRow>(makeEmptyJob(companyCode));
   const [saving, setSaving] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<WmsRow | null>(null);
   const [cancelRemarks, setCancelRemarks] = useState("");
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
+  // ---- dropdown data -------------------------------------------------------
+  const { options: principalOptions } = useRawSqlDropdown({
+    sql: `SELECT PRIN_CODE, PRIN_NAME FROM MS_PRINCIPAL WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY PRIN_NAME`,
+    valueKey: "PRIN_CODE",
+    labelKeys: ["PRIN_CODE", "PRIN_NAME"],
+    enabled: !!companyCode,
+  });
+
+  const { options: divisionOptions } = useRawSqlDropdown({
+    sql: `SELECT DIV_CODE, DIV_NAME FROM MS_HR_DIVISION WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY DIV_NAME`,
+    valueKey: "DIV_CODE",
+    labelKeys: ["DIV_CODE", "DIV_NAME"],
+    enabled: !!companyCode,
+  });
+
+  const { options: deptOptions } = useRawSqlDropdown({
+    sql: `SELECT DEPT_CODE, DEPT_NAME FROM MS_DEPARTMENT WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY DEPT_NAME`,
+    valueKey: "DEPT_CODE",
+    labelKeys: ["DEPT_CODE", "DEPT_NAME"],
+    enabled: !!companyCode,
+  });
+
+  const dropdownMap: Record<string, DropdownOption[]> = {
+    principal: principalOptions,
+    division: divisionOptions,
+    department: deptOptions,
+  };
+  // --------------------------------------------------------------------------
+
   const loadRows = async () => {
     setLoading(true);
     setNotice(null);
     try {
-      const data = await executeWmsInboundSql("SELECT * FROM VW_TI_JOB WHERE JOB_TYPE = 'IMP' ORDER BY JOB_NO DESC");
+      const data = await executeWmsInboundSql(
+        "SELECT * FROM VW_TI_JOB WHERE JOB_TYPE = 'IMP' ORDER BY JOB_NO DESC",
+      );
       setRows(data.map(normalizeRow));
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load inbound jobs" });
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to load inbound jobs",
+      });
     } finally {
       setLoading(false);
     }
@@ -108,7 +209,10 @@ function InboundJobListing() {
     void loadRows();
   }, []);
 
-  const filteredRows = useMemo(() => rows.filter((row) => filterJobByTab(row, activeTab)), [rows, activeTab]);
+  const filteredRows = useMemo(
+    () => rows.filter((row) => filterJobByTab(row, activeTab)),
+    [rows, activeTab],
+  );
 
   const columns = useMemo<ColumnDef<WmsRow>[]>(
     () => [
@@ -119,25 +223,80 @@ function InboundJobListing() {
         cell: ({ row }) => (
           <button
             className="font-semibold text-primary hover:underline"
-            onClick={() => navigate(`view/${value(row.original, "job_no")}/shipment_details?principal_code=${value(row.original, "prin_code")}`)}
+            onClick={() =>
+              navigate(
+                `view/${value(row.original, "job_no")}/shipment_details?principal_code=${value(row.original, "prin_code")}`,
+              )
+            }
           >
             {value(row.original, "job_no")}
           </button>
         ),
       },
-      { accessorKey: "job_class", header: "Job Class", size: 180, cell: ({ row }) => <JobClassPill code={value(row.original, "job_class")} /> },
-      { accessorKey: "prin_name", header: "Principal Name", size: 240, cell: ({ row }) => value(row.original, "prin_name") },
-      { accessorKey: "job_date", header: "Job Date", size: 120, cell: ({ row }) => formatDate(value(row.original, "job_date")) },
+      {
+        accessorKey: "job_class",
+        header: "Job Class",
+        size: 180,
+        cell: ({ row }) => <JobClassPill code={value(row.original, "job_class")} />,
+      },
+      {
+        accessorKey: "prin_name",
+        header: "Principal Name",
+        size: 240,
+        cell: ({ row }) => value(row.original, "prin_name"),
+      },
+      {
+        accessorKey: "job_date",
+        header: "Job Date",
+        size: 120,
+        cell: ({ row }) => formatDate(value(row.original, "job_date")),
+      },
       ...(activeTab === "confirmed"
-        ? [{ accessorKey: "confirm_date", header: "Confirm Date", size: 130, cell: ({ row }: { row: { original: WmsRow } }) => formatDate(value(row.original, "confirm_date")) }]
+        ? [
+            {
+              accessorKey: "confirm_date",
+              header: "Confirm Date",
+              size: 130,
+              cell: ({ row }: { row: { original: WmsRow } }) =>
+                formatDate(value(row.original, "confirm_date")),
+            },
+          ]
         : []),
       ...(activeTab === "cancel"
-        ? [{ accessorKey: "cancel_date", header: "Cancel Date", size: 130, cell: ({ row }: { row: { original: WmsRow } }) => formatDate(value(row.original, "cancel_date")) }]
+        ? [
+            {
+              accessorKey: "cancel_date",
+              header: "Cancel Date",
+              size: 130,
+              cell: ({ row }: { row: { original: WmsRow } }) =>
+                formatDate(value(row.original, "cancel_date")),
+            },
+          ]
         : []),
-      { accessorKey: "doc_ref", header: "Doc Ref", size: 130, cell: ({ row }) => value(row.original, "doc_ref") },
-      { accessorKey: "canceled", header: "Canceled", size: 100, cell: ({ row }) => flagBadge(value(row.original, "canceled")) },
-      { accessorKey: "invoiced", header: "Invoiced", size: 100, cell: ({ row }) => flagBadge(value(row.original, "invoiced")) },
-      { accessorKey: "invoice_date", header: "Invoice Date", size: 130, cell: ({ row }) => formatDate(value(row.original, "invoice_date")) },
+      {
+        accessorKey: "doc_ref",
+        header: "Doc Ref",
+        size: 130,
+        cell: ({ row }) => value(row.original, "doc_ref"),
+      },
+      {
+        accessorKey: "canceled",
+        header: "Canceled",
+        size: 100,
+        cell: ({ row }) => flagBadge(value(row.original, "canceled")),
+      },
+      {
+        accessorKey: "invoiced",
+        header: "Invoiced",
+        size: 100,
+        cell: ({ row }) => flagBadge(value(row.original, "invoiced")),
+      },
+      {
+        accessorKey: "invoice_date",
+        header: "Invoice Date",
+        size: 130,
+        cell: ({ row }) => formatDate(value(row.original, "invoice_date")),
+      },
       {
         id: "actions",
         header: "Actions",
@@ -145,11 +304,25 @@ function InboundJobListing() {
         enableColumnFilter: false,
         cell: ({ row }) => (
           <div className="flex items-center gap-1">
-            <Button size="icon" variant="ghost" title="Open job" onClick={() => navigate(`view/${value(row.original, "job_no")}/shipment_details?principal_code=${value(row.original, "prin_code")}`)}>
+            <Button
+              size="icon"
+              variant="ghost"
+              title="Open job"
+              onClick={() =>
+                navigate(
+                  `view/${value(row.original, "job_no")}/shipment_details?principal_code=${value(row.original, "prin_code")}`,
+                )
+              }
+            >
               <Eye size={14} />
             </Button>
             {activeTab !== "cancel" && (
-              <Button size="icon" variant="ghost" title="Cancel job" onClick={() => setCancelTarget(row.original)}>
+              <Button
+                size="icon"
+                variant="ghost"
+                title="Cancel job"
+                onClick={() => setCancelTarget(row.original)}
+              >
                 <Ban size={14} />
               </Button>
             )}
@@ -171,14 +344,17 @@ function InboundJobListing() {
     try {
       await postWmsInbound("inboundjob", {
         ...form,
-        company_code: form.company_code || user?.company_code,
+        company_code: form.company_code || companyCode,
         job_type: form.job_type || "IMP",
       });
       setFormOpen(false);
       setNotice({ type: "success", message: "Inbound job saved successfully" });
       await loadRows();
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save inbound job" });
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to save inbound job",
+      });
     } finally {
       setSaving(false);
     }
@@ -198,7 +374,10 @@ function InboundJobListing() {
       setNotice({ type: "success", message: "Inbound job cancellation submitted" });
       await loadRows();
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to cancel inbound job" });
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to cancel inbound job",
+      });
     } finally {
       setSaving(false);
     }
@@ -210,19 +389,40 @@ function InboundJobListing() {
         <div>
           <p className="eyebrow">WMS Inbound</p>
           <h1 className="m-0 text-2xl font-semibold text-foreground">Inbound Job Listing</h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Manage import jobs, shipment progress, receiving, putaway, confirmation, and activity billing.</p>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Manage import jobs, shipment progress, receiving, putaway, confirmation, and activity
+            billing.
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={loadRows}><RefreshCw size={15} /> Refresh</Button>
-          <Button onClick={() => { setForm(makeEmptyJob(user?.company_code)); setFormOpen(true); }}><Plus size={15} /> Add Job</Button>
+          <Button variant="outline" onClick={loadRows}>
+            <RefreshCw size={15} /> Refresh
+          </Button>
+          <Button
+            onClick={() => {
+              setForm(makeEmptyJob(companyCode));
+              setFormOpen(true);
+            }}
+          >
+            <Plus size={15} /> Add Job
+          </Button>
         </div>
       </div>
 
-      {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
+      {notice && (
+        <div className={notice.type === "error" ? "alert error" : "alert success"}>
+          {notice.message}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2 rounded-md border bg-card p-2">
         {listingTabs.map((tab) => (
-          <Button key={tab.value} size="sm" variant={activeTab === tab.value ? "default" : "outline"} onClick={() => setActiveTab(tab.value)}>
+          <Button
+            key={tab.value}
+            size="sm"
+            variant={activeTab === tab.value ? "default" : "outline"}
+            onClick={() => setActiveTab(tab.value)}
+          >
             {tab.label}
           </Button>
         ))}
@@ -243,33 +443,99 @@ function InboundJobListing() {
         enablePagination
         pageSize={50}
         getRowId={(row, index) => String(value(row, "job_no") || index)}
-        rowClassName={(row) => (isCanceled(row) ? "bg-red-50/70" : hasDate(value(row, "confirm_date")) ? "bg-emerald-50/70" : "bg-blue-50/50")}
+        rowClassName={(row) =>
+          isCanceled(row)
+            ? "bg-red-50/70"
+            : hasDate(value(row, "confirm_date"))
+            ? "bg-emerald-50/70"
+            : "bg-blue-50/50"
+        }
       />
 
-      <Dialog open={formOpen} title="Add Inbound Job" description="Create an import job using the existing WMS backend flow." onClose={() => setFormOpen(false)}>
+      {/* ---- Add Job Dialog ---- */}
+      <Dialog
+        open={formOpen}
+        title="Add Inbound Job"
+        description="Create an import job using the existing WMS backend flow."
+        onClose={() => setFormOpen(false)}
+        // className="sm:max-w-4xl"
+      >
         <form className="grid gap-4" onSubmit={saveJob}>
           <div className="grid gap-3 md:grid-cols-3">
-            {jobFields.map((field) => (
-              <label className={field.name === "remarks" || field.name === "description1" ? "field md:col-span-3" : "field"} key={field.name}>
-                <span>{field.label}{field.required && <strong className="text-destructive"> *</strong>}</span>
-                {field.name === "job_class" ? (
-                  <Select value={String(form[field.name] || "")} onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))}>
-                    <option value="">Select Job Class</option>
-                    {Object.entries(jobClassLabels).map(([code, label]) => <option value={code} key={code}>{code} - {label}</option>)}
-                  </Select>
-                ) : (
-                  <Input type={field.type || "text"} value={String(form[field.name] || "")} onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))} />
-                )}
-              </label>
-            ))}
+            {jobFields.map((field) => {
+              // resolve dropdown options if this field has one
+              const ddOptions = field.dropdown ? dropdownMap[field.dropdown] : null;
+
+              return (
+                <label
+                  className={
+                    field.name === "remarks" || field.name === "description1"
+                      ? "field md:col-span-3"
+                      : "field"
+                  }
+                  key={field.name}
+                >
+                  <span>
+                    {field.label}
+                    {field.required && <strong className="text-destructive"> *</strong>}
+                  </span>
+
+                  {/* Master-table dropdowns: principal / division / department */}
+                  {ddOptions ? (
+                    <Select
+                      value={String(form[field.name] || "")}
+                      onChange={(event) =>
+                        setForm((cur) => ({ ...cur, [field.name]: event.target.value }))
+                      }
+                    >
+                      {/* <option value="">Select {field.label}</option> */}
+                      {ddOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </Select>
+                  ) : field.name === "job_class" ? (
+                    /* Static job-class dropdown */
+                    <Select
+                      value={String(form[field.name] || "")}
+                      onChange={(event) =>
+                        setForm((cur) => ({ ...cur, [field.name]: event.target.value }))
+                      }
+                    >
+                      <option value="">Select Job Class</option>
+                      {Object.entries(jobClassLabels).map(([code, label]) => (
+                        <option value={code} key={code}>
+                          {code} - {label}
+                        </option>
+                      ))}
+                    </Select>
+                  ) : (
+                    /* Plain text / date input */
+                    <Input
+                      type={field.type || "text"}
+                      value={String(form[field.name] || "")}
+                      onChange={(event) =>
+                        setForm((cur) => ({ ...cur, [field.name]: event.target.value }))
+                      }
+                    />
+                  )}
+                </label>
+              );
+            })}
           </div>
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}><X size={15} /> Cancel</Button>
-            <Button disabled={saving} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save Job"}</Button>
+            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
+              <X size={15} /> Cancel
+            </Button>
+            <Button disabled={saving} type="submit">
+              <Save size={15} /> {saving ? "Saving..." : "Save Job"}
+            </Button>
           </div>
         </form>
       </Dialog>
 
+      {/* ---- Cancel Job Dialog ---- */}
       <Dialog
         open={Boolean(cancelTarget)}
         title={`Cancel Job ${cancelTarget ? value(cancelTarget, "job_no") : ""}`}
@@ -279,20 +545,35 @@ function InboundJobListing() {
         onClose={() => setCancelTarget(null)}
         footer={
           <>
-            <Button variant="outline" onClick={() => setCancelTarget(null)}>Close</Button>
-            <Button variant="destructive" disabled={saving || !cancelRemarks.trim()} onClick={confirmCancel}>Confirm Cancel</Button>
+            <Button variant="outline" onClick={() => setCancelTarget(null)}>
+              Close
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={saving || !cancelRemarks.trim()}
+              onClick={confirmCancel}
+            >
+              Confirm Cancel
+            </Button>
           </>
         }
       >
         <label className="field">
           <span>Cancel Remarks</span>
-          <Input value={cancelRemarks} onChange={(event) => setCancelRemarks(event.target.value)} placeholder="Enter reason..." />
+          <Input
+            value={cancelRemarks}
+            onChange={(event) => setCancelRemarks(event.target.value)}
+            placeholder="Enter reason..."
+          />
         </label>
       </Dialog>
     </section>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Job Detail
+// ---------------------------------------------------------------------------
 function InboundJobDetail({ jobNo, tab }: { jobNo: string; tab: string }) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -305,7 +586,9 @@ function InboundJobDetail({ jobNo, tab }: { jobNo: string; tab: string }) {
       const data = await getWmsInbound<WmsRow>(`job/${encodeURIComponent(jobNo)}`);
       setJob(normalizeRow(data || {}));
     } catch {
-      const fallback = await executeWmsInboundSql(`SELECT * FROM VW_TI_JOB WHERE JOB_NO = '${sqlEscape(jobNo)}' AND COMPANY_CODE = '${sqlEscape(user?.company_code || "")}'`);
+      const fallback = await executeWmsInboundSql(
+        `SELECT * FROM VW_TI_JOB WHERE JOB_NO = '${sqlEscape(jobNo)}' AND COMPANY_CODE = '${sqlEscape(user?.company_code || "")}'`,
+      );
       setJob(normalizeRow(fallback[0] || { job_no: jobNo }));
     } finally {
       setLoading(false);
@@ -324,7 +607,14 @@ function InboundJobDetail({ jobNo, tab }: { jobNo: string; tab: string }) {
       <div className="rounded-md border bg-card">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b p-3">
           <div className="flex min-w-0 items-center gap-3">
-            <Button size="icon" variant="outline" onClick={() => navigate("../..")} title="Back to jobs"><ArrowLeft size={16} /></Button>
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={() => navigate("../..")}
+              title="Back to jobs"
+            >
+              <ArrowLeft size={16} />
+            </Button>
             <div className="min-w-0">
               <p className="eyebrow">Inbound Job</p>
               <h1 className="m-0 truncate text-xl font-semibold">{jobNo}</h1>
@@ -332,15 +622,31 @@ function InboundJobDetail({ jobNo, tab }: { jobNo: string; tab: string }) {
             {job && <JobClassPill code={value(job, "job_class")} />}
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={loadJob}><RefreshCw size={14} /> Refresh</Button>
-            <Button size="sm" variant="outline"><Printer size={14} /> Print</Button>
+            <Button size="sm" variant="outline" onClick={loadJob}>
+              <RefreshCw size={14} /> Refresh
+            </Button>
+            <Button size="sm" variant="outline">
+              <Printer size={14} /> Print
+            </Button>
           </div>
         </div>
         <div className="grid gap-2 p-3 md:grid-cols-5">
-          <Info label="Principal" value={`${value(job || {}, "prin_code")} ${value(job || {}, "prin_name") ? `- ${value(job || {}, "prin_name")}` : ""}`} />
+          <Info
+            label="Principal"
+            value={`${value(job || {}, "prin_code")} ${value(job || {}, "prin_name") ? `- ${value(job || {}, "prin_name")}` : ""}`}
+          />
           <Info label="Job Date" value={formatDate(value(job || {}, "job_date"))} />
           <Info label="Document Ref" value={value(job || {}, "doc_ref")} />
-          <Info label="Status" value={isCanceled(job || {}) ? "Canceled" : hasDate(value(job || {}, "confirm_date")) ? "Confirmed" : "In Progress"} />
+          <Info
+            label="Status"
+            value={
+              isCanceled(job || {})
+                ? "Canceled"
+                : hasDate(value(job || {}, "confirm_date"))
+                ? "Confirmed"
+                : "In Progress"
+            }
+          />
           <Info label="Company" value={user?.company_code || ""} />
         </div>
       </div>
@@ -348,7 +654,11 @@ function InboundJobDetail({ jobNo, tab }: { jobNo: string; tab: string }) {
       <div className="flex gap-2 overflow-x-auto rounded-md border bg-card p-2">
         {availableTabs.map((item) => (
           <Link
-            className={item.value === activeTab ? "ui-button ui-button-default ui-button-sm" : "ui-button ui-button-outline ui-button-sm"}
+            className={
+              item.value === activeTab
+                ? "ui-button ui-button-default ui-button-sm"
+                : "ui-button ui-button-outline ui-button-sm"
+            }
             key={item.value}
             to={`../${item.value}${locationSearchPrincipal(job)}`}
           >
@@ -362,7 +672,20 @@ function InboundJobDetail({ jobNo, tab }: { jobNo: string; tab: string }) {
   );
 }
 
-function InboundOperationalTab({ job, jobNo, tab, loadingJob }: { job: WmsRow | null; jobNo: string; tab: string; loadingJob: boolean }) {
+// ---------------------------------------------------------------------------
+// Operational Tab
+// ---------------------------------------------------------------------------
+function InboundOperationalTab({
+  job,
+  jobNo,
+  tab,
+  loadingJob,
+}: {
+  job: WmsRow | null;
+  jobNo: string;
+  tab: string;
+  loadingJob: boolean;
+}) {
   const { user } = useAuth();
   const prinCode = value(job || {}, "prin_code");
   const [rows, setRows] = useState<WmsRow[]>([]);
@@ -371,15 +694,21 @@ function InboundOperationalTab({ job, jobNo, tab, loadingJob }: { job: WmsRow | 
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const config = getInboundTabConfig(tab);
+
   const loadRows = async () => {
     if (!config || loadingJob) return;
     setLoading(true);
     setNotice(null);
     try {
-      const data = await executeWmsInboundSql(config.sql({ companyCode: user?.company_code || "", jobNo, prinCode }));
+      const data = await executeWmsInboundSql(
+        config.sql({ companyCode: user?.company_code || "", jobNo, prinCode }),
+      );
       setRows(data.map(normalizeRow));
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to load ${config.title}` });
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : `Unable to load ${config.title}`,
+      });
     } finally {
       setLoading(false);
     }
@@ -389,18 +718,35 @@ function InboundOperationalTab({ job, jobNo, tab, loadingJob }: { job: WmsRow | 
     void loadRows();
   }, [tab, jobNo, prinCode, loadingJob]);
 
-  if (!config) return <Card><CardContent className="p-6 text-sm text-muted-foreground">This inbound tab is not configured yet.</CardContent></Card>;
+  if (!config)
+    return (
+      <Card>
+        <CardContent className="p-6 text-sm text-muted-foreground">
+          This inbound tab is not configured yet.
+        </CardContent>
+      </Card>
+    );
 
   const toolbar = (
     <div className="flex flex-wrap items-center gap-2">
-      {config.action && <Button size="sm" variant="outline" onClick={config.action.onClick}><config.action.icon size={14} /> {config.action.label}</Button>}
-      <Button size="sm" variant="outline" onClick={loadRows}><RefreshCw size={14} /> Refresh</Button>
+      {config.action && (
+        <Button size="sm" variant="outline" onClick={config.action.onClick}>
+          <config.action.icon size={14} /> {config.action.label}
+        </Button>
+      )}
+      <Button size="sm" variant="outline" onClick={loadRows}>
+        <RefreshCw size={14} /> Refresh
+      </Button>
     </div>
   );
 
   return (
     <section className="grid gap-3">
-      {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
+      {notice && (
+        <div className={notice.type === "error" ? "alert error" : "alert success"}>
+          {notice.message}
+        </div>
+      )}
       <DataTable
         columns={makeColumns(config.columns)}
         data={rows}
@@ -416,13 +762,20 @@ function InboundOperationalTab({ job, jobNo, tab, loadingJob }: { job: WmsRow | 
         enablePagination
         pageSize={75}
         toolbar={toolbar}
-        getRowId={(row, index) => `${tab}_${value(row, "packdet_no") || value(row, "container_no") || value(row, "key_number") || index}`}
+        getRowId={(row, index) =>
+          `${tab}_${value(row, "packdet_no") || value(row, "container_no") || value(row, "key_number") || index}`
+        }
       />
     </section>
   );
 }
 
-function makeColumns(columns: { key: string; label: string; size?: number }[]): ColumnDef<WmsRow>[] {
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function makeColumns(
+  columns: { key: string; label: string; size?: number }[],
+): ColumnDef<WmsRow>[] {
   return columns.map((column) => ({
     accessorKey: column.key,
     header: column.label,
@@ -432,13 +785,32 @@ function makeColumns(columns: { key: string; label: string; size?: number }[]): 
 }
 
 function getInboundTabConfig(tab: string) {
-  const packSql = ({ companyCode, jobNo, prinCode }: { companyCode: string; jobNo: string; prinCode: string }) =>
+  const packSql = ({
+    companyCode,
+    jobNo,
+    prinCode,
+  }: {
+    companyCode: string;
+    jobNo: string;
+    prinCode: string;
+  }) =>
     `SELECT * FROM VW_WM_INB_PACKDET_DETS WHERE company_code = '${sqlEscape(companyCode)}' AND job_no = '${sqlEscape(jobNo)}' AND prin_code = '${sqlEscape(prinCode)}' ORDER BY updated_at`;
-  const configs: Record<string, { title: string; minWidth: number; columns: { key: string; label: string; size?: number }[]; sql: (args: { companyCode: string; jobNo: string; prinCode: string }) => string; action?: { label: string; icon: typeof Plus; onClick: () => void } }> = {
+
+  const configs: Record<
+    string,
+    {
+      title: string;
+      minWidth: number;
+      columns: { key: string; label: string; size?: number }[];
+      sql: (args: { companyCode: string; jobNo: string; prinCode: string }) => string;
+      action?: { label: string; icon: typeof Plus; onClick: () => void };
+    }
+  > = {
     shipment_details: {
       title: "Shipment Details",
       minWidth: 1060,
-      sql: ({ jobNo, prinCode }) => `SELECT * FROM TI_CONTAINER WHERE PRIN_CODE = '${sqlEscape(prinCode)}' AND JOB_NO = '${sqlEscape(jobNo)}'`,
+      sql: ({ jobNo, prinCode }) =>
+        `SELECT * FROM TI_CONTAINER WHERE PRIN_CODE = '${sqlEscape(prinCode)}' AND JOB_NO = '${sqlEscape(jobNo)}'`,
       columns: [
         { key: "container_no", label: "Container No", size: 150 },
         { key: "vehicle_no", label: "Vehicle No", size: 130 },
@@ -553,6 +925,7 @@ function getInboundTabConfig(tab: string) {
       ],
     },
   };
+
   return configs[tab];
 }
 
@@ -586,9 +959,36 @@ function confirmationColumns() {
 }
 
 function getTabsForJob(jobClass: string) {
-  if (jobClass === "M") return detailTabs.filter((tab) => ["shipment_details", "putway_manual", "job_confirmation", "activity_billing"].includes(tab.value));
-  if (jobClass === "NP") return detailTabs.filter((tab) => ["shipment_details", "packing_details", "quality_clearance", "tally_details", "putway_hht", "job_confirmation", "activity_billing"].includes(tab.value));
-  if (jobClass === "N") return detailTabs.filter((tab) => ["shipment_details", "packing_details", "receiving_details", "quality_clearance", "putway_details", "job_confirmation", "activity_billing"].includes(tab.value));
+  if (jobClass === "M")
+    return detailTabs.filter((tab) =>
+      ["shipment_details", "putway_manual", "job_confirmation", "activity_billing"].includes(
+        tab.value,
+      ),
+    );
+  if (jobClass === "NP")
+    return detailTabs.filter((tab) =>
+      [
+        "shipment_details",
+        "packing_details",
+        "quality_clearance",
+        "tally_details",
+        "putway_hht",
+        "job_confirmation",
+        "activity_billing",
+      ].includes(tab.value),
+    );
+  if (jobClass === "N")
+    return detailTabs.filter((tab) =>
+      [
+        "shipment_details",
+        "packing_details",
+        "receiving_details",
+        "quality_clearance",
+        "putway_details",
+        "job_confirmation",
+        "activity_billing",
+      ].includes(tab.value),
+    );
   return detailTabs;
 }
 
@@ -621,13 +1021,19 @@ function makeEmptyJob(companyCode?: string) {
 
 function JobClassPill({ code }: { code: string }) {
   const label = jobClassLabels[code] || code || "N/A";
-  return <span className="inline-flex max-w-[170px] items-center rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">{label}</span>;
+  return (
+    <span className="inline-flex max-w-[170px] items-center rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+      {label}
+    </span>
+  );
 }
 
 function Info({ label, value: infoValue }: { label: string; value: string }) {
   return (
     <div className="rounded-md border bg-background px-3 py-2">
-      <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </span>
       <strong className="mt-1 block truncate text-sm">{infoValue || "-"}</strong>
     </div>
   );
@@ -635,7 +1041,11 @@ function Info({ label, value: infoValue }: { label: string; value: string }) {
 
 function flagBadge(flag: string) {
   const yes = flag === "Y" || flag.toLowerCase() === "yes";
-  return <span className={yes ? "text-emerald-700" : "text-muted-foreground"}>{yes ? "Yes" : "No"}</span>;
+  return (
+    <span className={yes ? "text-emerald-700" : "text-muted-foreground"}>
+      {yes ? "Yes" : "No"}
+    </span>
+  );
 }
 
 function normalizeRow(row: WmsRow) {
