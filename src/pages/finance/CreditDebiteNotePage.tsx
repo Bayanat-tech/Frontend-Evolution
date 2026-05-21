@@ -61,7 +61,7 @@ const DOCUMENT_META: Record<TransactionType, { title: string; subtitle: string; 
 const today = () => new Date().toISOString().slice(0, 10);
 const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
-export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
+export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) {
   const meta = DOCUMENT_META[docType];
   const [rows, setRows] = useState<TransactionDocumentRow[]>([]);
   const [fyPeriods, setFyPeriods] = useState<FyPeriod[]>([]);
@@ -121,10 +121,10 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
     },
     { accessorKey: "doc_date", header: "Date", cell: ({ getValue }) => formatDate(getValue()) },
     { accessorKey: "ac_name", header: "Account Name" },
-    ...(docType === "BP" ? [{ accessorKey: "ac_payee", header: "Account Payee" } as ColumnDef<TransactionDocumentRow>] : []),
+    ...(docType === "CN" ? [{ accessorKey: "ac_payee", header: "Account Payee" } as ColumnDef<TransactionDocumentRow>] : []),
     { accessorKey: "remarks", header: "Description" },
-    ...(docType !== "CR" ? [{ accessorKey: "cheque_no", header: "Cheque No" } as ColumnDef<TransactionDocumentRow>] : []),
-    ...(docType === "BR" ? [{ accessorKey: "cheque_bank", header: "Cheque Bank" } as ColumnDef<TransactionDocumentRow>] : []),
+    ...((docType === "CN" || docType === "DN") ? [{ accessorKey: "cheque_no", header: "Cheque No" } as ColumnDef<TransactionDocumentRow>] : []),
+    ...(docType === "DN" ? [{ accessorKey: "cheque_bank", header: "Cheque Bank" } as ColumnDef<TransactionDocumentRow>] : []),
     { accessorKey: "div_code", header: "Div" },
     {
       accessorKey: "canceled",
@@ -421,7 +421,7 @@ function PaymentDocumentEditor({
   const selectDetailAccount = async (detail: TransactionDetail, value: string, row: LookupRow | null) => {
     const acName = text(getLookupValue(row || {}, "ac_name"));
     updateDetail(detail.id, { ac_code: value, ac_name: acName, child_table: "", child_code: "" });
-    if (docType === "BP") {
+    if (docType === "CN") {
       setForm((current) => ({ ...current, ac_payee: acName }));
     }
     if (!value) return;
@@ -560,8 +560,8 @@ function PaymentDocumentEditor({
     if (!form.ac_code) return setError("Account is required");
     if (!form.curr_code) return setError("Currency is required");
     if (!form.ex_rate) return setError("Exchange Rate is required");
-    if (docType !== "CR" && !form.cheque_no?.trim()) return setError("Cheque No is required");
-    if (docType !== "CR" && !form.cheque_date) return setError("Cheque Date is required");
+    if ((docType === "CN" || docType === "DN") && !form.cheque_no?.trim()) return setError("Cheque No is required");
+    if ((docType === "CN" || docType === "DN") && !form.cheque_date) return setError("Cheque Date is required");
     setSaving(true);
     setError("");
     try {
@@ -702,7 +702,7 @@ function PaymentDocumentEditor({
                     ac_name: text(getLookupValue(row || {}, "ac_name")),
                     curr_code: text(getLookupValue(row || {}, "curr_code")),
                   }));
-                  if (docType !== "CR" && value) {
+                  if ((docType === "CN" || docType === "DN") && value) {
                     const cheque: Record<string, unknown> = await getCheque(value).catch(() => ({}));
                     setForm((current) => ({
                       ...current,
@@ -747,10 +747,10 @@ function PaymentDocumentEditor({
                   onChange={(value, row) => setForm((current) => ({ ...current, bank_ac_code: value, bank_ac_name: text(getLookupValue(row || {}, "bank_ac_name")) }))}
                 />
               )}
-              {docType !== "CR" && <Field label="Cheque No" required><Input disabled={disabled} required value={form.cheque_no || ""} onChange={(event) => updateField("cheque_no", event.target.value)} /></Field>}
-              {docType !== "CR" && <Field label="Cheque Date" required><Input disabled={disabled} required type="date" value={dateInput(form.cheque_date)} onChange={(event) => updateField("cheque_date", event.target.value)} /></Field>}
-              {docType === "BR" && <Field label="Cheque Bank"><Input disabled={disabled} value={form.cheque_bank || ""} onChange={(event) => updateField("cheque_bank", event.target.value)} /></Field>}
-              {docType === "BP" && <Field label="Account Payee"><Input disabled={disabled} value={form.ac_payee || ""} onChange={(event) => updateField("ac_payee", event.target.value)} /></Field>}
+              {(docType === "CN" || docType === "DN") && <Field label="Cheque No" required><Input disabled={disabled} required value={form.cheque_no || ""} onChange={(event) => updateField("cheque_no", event.target.value)} /></Field>}
+              {(docType === "CN" || docType === "DN") && <Field label="Cheque Date" required><Input disabled={disabled} required type="date" value={dateInput(form.cheque_date)} onChange={(event) => updateField("cheque_date", event.target.value)} /></Field>}
+              {docType === "DN" && <Field label="Cheque Bank"><Input disabled={disabled} value={form.cheque_bank || ""} onChange={(event) => updateField("cheque_bank", event.target.value)} /></Field>}
+              {docType === "CN" && <Field label="Account Payee"><Input disabled={disabled} value={form.ac_payee || ""} onChange={(event) => updateField("ac_payee", event.target.value)} /></Field>}
               <label className="field col-span-2 max-md:col-span-1">
                 <span>Remarks</span>
                 <Input disabled={disabled} value={form.remarks || ""} onChange={(event) => updateField("remarks", event.target.value)} />
@@ -1199,10 +1199,10 @@ function emptyHeader(docType: TransactionType, editor: EditorState): Transaction
     div_code: editor?.mode === "create" ? editor.divCode || "" : "",
     div_name: editor?.mode === "create" ? editor.divName || "" : "",
     remarks: "",
-    cheque_date: docType === "CR" ? undefined : today(),
+    cheque_date: (docType === "CR" || docType === "CN" || docType === "DN") ? undefined : today(),
     detail: [],
     children: {},
-    ...(docType === "BP" ? { ac_payee: "", files: [] } : {}),
+    ...(docType === "CN" ? { ac_payee: "", files: [] } : {}),
   };
 }
 
@@ -1239,7 +1239,7 @@ function emptyDetailRow({
     curr_name: currName || "",
     ex_rate: 1,
     amount: 0,
-    sign_ind: docType === "BP" || docType === "CP" ? 1 : -1,
+    sign_ind: docType === "CN" || docType === "CP" ? 1 : -1,
     tx_compntcat_code_1: "11100",
     tx_cat_code: "",
     tx_compnt_1_expmt: "N",
@@ -1350,7 +1350,7 @@ function mapExistingDocument(
       curr_name: text(nested(raw, ["Currency", "curr_name"]) ?? row.curr_name),
       ex_rate: Number(row.ex_rate || 1),
       amount: Math.abs(Number(row.amount || 0)),
-      sign_ind: Number(row.sign_ind || (docType === "BP" || docType === "CP" ? 1 : -1)) as 1 | -1,
+      sign_ind: Number(row.sign_ind || (docType === "CN" || docType === "CP" ? 1 : -1)) as 1 | -1,
       div_code: text(row.div_code),
       tx_compntcat_code_1: text(row.tx_compntcat_code_1),
       tx_cat_code: text(row.tx_cat_code),
@@ -1450,12 +1450,12 @@ function buildPayload(form: TransactionHeader, docType: TransactionType, company
   delete (base as Record<string, unknown>).div_name;
   delete (base as Record<string, unknown>).bank_ac_name;
 
-  if (docType !== "BP" && docType !== "CP") {
+  if (docType !== "CN" && docType !== "CP") {
     delete base.ac_payee;
     delete base.files;
   }
-  if (docType !== "BR") delete base.cheque_bank;
-  if (docType === "CR" || docType === "CP") {
+  if (docType !== "DN") delete base.cheque_bank;
+  if (docType === "CR" || docType === "CP" || docType === "CN" || docType === "DN") {
     delete base.bank_ac_code;
     delete base.cheque_no;
     delete base.cheque_date;

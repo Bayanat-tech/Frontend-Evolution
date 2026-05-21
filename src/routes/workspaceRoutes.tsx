@@ -27,6 +27,7 @@ import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
 import { SecurityAssignmentPage, securityAssignmentConfigs } from "../pages/security/SecurityAssignmentPage";
 import { SecurityMasterPage, securityMasterConfigs } from "../pages/security/SecurityMasterPage";
 import { SecurityOperationAccessPage } from "../pages/security/SecurityOperationAccessPage";
+import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -99,6 +100,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Finance Bank Reconciliation",
     match: ({ pathname }) => isBankReconciliationRoute(pathname),
     element: () => <BankReconciliationPage />,
+  },
+  {
+    name: "Finance Credit/Debit Notes",
+    match: ({ pathname }) => Boolean(getCreditDebitNoteDocType(pathname)),
+    element: ({ pathname }) => <CreditDebiteNotePage docType={getCreditDebitNoteDocType(pathname)!} />,
   },
   {
     name: "Finance Payment Documents",
@@ -253,13 +259,18 @@ function isAccountTreeRoute(pathname: string) {
   );
 }
 
+function getCreditDebitNoteDocType(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  if (normalized.includes("/finance/accounts/transactions/credit-note")) return "CN" as const;
+  if (normalized.includes("/finance/accounts/transactions/debit-note")) return "DN" as const;
+  return null;
+}
+
 function getTransactionDocType(pathname: string) {
   const normalized = pathname.toLowerCase();
   if (normalized.includes("/finance/accounts/transactions/cheque-payment")) return "BP" as const;
   if (normalized.includes("/finance/accounts/transactions/cheque-receipt")) return "BR" as const;
   if (normalized.includes("/finance/accounts/transactions/cash-receipt")) return "CR" as const;
-  if (normalized.includes("/finance/accounts/transactions/credit-note")) return "CN" as const;
-  if (normalized.includes("/finance/accounts/transactions/debit-note")) return "DN" as const;
   if (normalized.includes("/finance/accounts/transactions/petty_cash_payment") || normalized.includes("/finance/accounts/transactions/petty-cash-payment")) return "CP" as const;
   return null;
 }
