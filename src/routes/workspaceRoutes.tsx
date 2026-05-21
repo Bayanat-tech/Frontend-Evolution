@@ -261,8 +261,18 @@ function isAccountTreeRoute(pathname: string) {
 
 function getCreditDebitNoteDocType(pathname: string) {
   const normalized = pathname.toLowerCase();
-  if (normalized.includes("/finance/accounts/transactions/credit-note")) return "CN" as const;
-  if (normalized.includes("/finance/accounts/transactions/debit-note")) return "DN" as const;
+  if (
+    normalized.includes("/finance/accounts/transactions/credit-note") ||
+    normalized.includes("/finance/accounts/transactions/credit_note") ||
+    normalized.includes("/finance/accounts/transactions/creditnote") ||
+    normalized.includes("/finance/accounts/transactions/cn")
+  ) return "CN" as const;
+  if (
+    normalized.includes("/finance/accounts/transactions/debit-note") ||
+    normalized.includes("/finance/accounts/transactions/debit_note") ||
+    normalized.includes("/finance/accounts/transactions/debitnote") ||
+    normalized.includes("/finance/accounts/transactions/dn")
+  ) return "DN" as const;
   return null;
 }
 

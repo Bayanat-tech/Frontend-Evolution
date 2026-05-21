@@ -45,10 +45,17 @@ export type TransactionHeader = {
   cheque_date?: string;
   cheque_bank?: string;
   ac_payee?: string;
+  party_address?: string;
+  party_phone?: string;
+  party_fax?: string;
+  inv_no?: string;
+  inv_date?: string;
   files?: unknown[];
   detail: TransactionDetail[];
   children: Record<string, unknown[]>;
   canceled?: string;
+  tx_cat_code?: string;
+  tx_compnt_1_expmt?: string;
 };
 
 export type TransactionDetail = {

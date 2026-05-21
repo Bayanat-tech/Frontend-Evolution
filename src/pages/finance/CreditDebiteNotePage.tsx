@@ -560,8 +560,6 @@ function PaymentDocumentEditor({
     if (!form.ac_code) return setError("Account is required");
     if (!form.curr_code) return setError("Currency is required");
     if (!form.ex_rate) return setError("Exchange Rate is required");
-    if ((docType === "CN" || docType === "DN") && !form.cheque_no?.trim()) return setError("Cheque No is required");
-    if ((docType === "CN" || docType === "DN") && !form.cheque_date) return setError("Cheque Date is required");
     setSaving(true);
     setError("");
     try {
@@ -652,6 +650,8 @@ function PaymentDocumentEditor({
             <div className="payment-header-grid grid grid-cols-6 gap-2.5 rounded-md border bg-card p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
               {editMode && <Field label="Doc No"><Input disabled value={form.doc_no || ""} /></Field>}
               <Field label="Doc Date"><Input disabled={disabled} required type="date" value={dateInput(form.doc_date)} onChange={(event) => updateField("doc_date", event.target.value)} /></Field>
+               {(docType === "CN" || docType === "DN") && <Field label="Inv No" ><Input disabled={disabled}  value={form.inv_no || ""} onChange={(event) => updateField("inv_no", event.target.value)} /></Field>}
+              {(docType === "CN" || docType === "DN") && <Field label="Inv Date" ><Input disabled={disabled}  type="date" value={dateInput(form.inv_date)} onChange={(event) => updateField("inv_date", event.target.value)} /></Field>}
               <LookupField
 
                 label="Division *"
@@ -731,6 +731,12 @@ function PaymentDocumentEditor({
                   ex_rate: Number(row?.ex_rate ?? 1),
                 }))}
               />
+              <label className="field col-span-2 max-md:col-span-1">
+                <span>Address</span>
+                <Input disabled={disabled} value={form.party_address || ""} onChange={(event) => updateField("party_address", event.target.value)} />
+              </label>
+              <Field label="Phone"><Input disabled={disabled}  value={form.party_phone || ""} onChange={(event) => updateField("party_phone", event.target.value)} /></Field>
+              <Field label="Fax"><Input disabled={disabled}  value={form.party_fax || ""} onChange={(event) => updateField("party_fax", event.target.value)} /></Field>
               <Field label="Exchange Rate*"><Input disabled={disabled} required type="number" step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} /></Field>
               {docType !== "CR" && (
                 <LookupField
@@ -747,14 +753,14 @@ function PaymentDocumentEditor({
                   onChange={(value, row) => setForm((current) => ({ ...current, bank_ac_code: value, bank_ac_name: text(getLookupValue(row || {}, "bank_ac_name")) }))}
                 />
               )}
-              {(docType === "CN" || docType === "DN") && <Field label="Cheque No" required><Input disabled={disabled} required value={form.cheque_no || ""} onChange={(event) => updateField("cheque_no", event.target.value)} /></Field>}
-              {(docType === "CN" || docType === "DN") && <Field label="Cheque Date" required><Input disabled={disabled} required type="date" value={dateInput(form.cheque_date)} onChange={(event) => updateField("cheque_date", event.target.value)} /></Field>}
-              {docType === "DN" && <Field label="Cheque Bank"><Input disabled={disabled} value={form.cheque_bank || ""} onChange={(event) => updateField("cheque_bank", event.target.value)} /></Field>}
-              {docType === "CN" && <Field label="Account Payee"><Input disabled={disabled} value={form.ac_payee || ""} onChange={(event) => updateField("ac_payee", event.target.value)} /></Field>}
+              {(docType === "CN" || docType === "DN") && <Field label="Inv No" ><Input disabled={disabled}  value={form.cheque_no || ""} onChange={(event) => updateField("cheque_no", event.target.value)} /></Field>}
+              {(docType === "CN" || docType === "DN") && <Field label="Inv Date" ><Input disabled={disabled}  type="date" value={dateInput(form.cheque_date)} onChange={(event) => updateField("cheque_date", event.target.value)} /></Field>}
               <label className="field col-span-2 max-md:col-span-1">
                 <span>Remarks</span>
                 <Input disabled={disabled} value={form.remarks || ""} onChange={(event) => updateField("remarks", event.target.value)} />
               </label>
+
+
             </div>
 
             <div className="rounded-md border bg-card">
