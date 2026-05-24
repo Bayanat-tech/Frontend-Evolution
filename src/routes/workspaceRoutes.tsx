@@ -28,6 +28,7 @@ import { SecurityAssignmentPage, securityAssignmentConfigs } from "../pages/secu
 import { SecurityMasterPage, securityMasterConfigs } from "../pages/security/SecurityMasterPage";
 import { SecurityOperationAccessPage } from "../pages/security/SecurityOperationAccessPage";
 import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
+import { PettyCashPaymentDocumentEditor } from "../pages/finance/PettyCashPayment";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -94,7 +95,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: "Finance Journal Voucher",
     match: ({ pathname }) => isJournalVoucherRoute(pathname),
-    element: () => <JournalVoucherPage />,
+    element: () => <JournalVoucherPage  />,
   },
   {
     name: "Finance Bank Reconciliation",
@@ -110,6 +111,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Finance Payment Documents",
     match: ({ pathname }) => Boolean(getTransactionDocType(pathname)),
     element: ({ pathname }) => <PaymentDocumentPage docType={getTransactionDocType(pathname)!} />,
+  },
+  {
+    name: "Finance Payment Documents",
+    match: ({ pathname }) => Boolean(getPettyCashDocType(pathname)),
+    element: ({ pathname }) => <PettyCashPaymentDocumentEditor docType={getPettyCashDocType(pathname)!} />,
   },
   {
     name: "Finance Utility Master",
@@ -281,9 +287,15 @@ function getTransactionDocType(pathname: string) {
   if (normalized.includes("/finance/accounts/transactions/cheque-payment")) return "BP" as const;
   if (normalized.includes("/finance/accounts/transactions/cheque-receipt")) return "BR" as const;
   if (normalized.includes("/finance/accounts/transactions/cash-receipt")) return "CR" as const;
+  return null;
+}
+
+function getPettyCashDocType(pathname: string) {
+  const normalized = pathname.toLowerCase();
   if (normalized.includes("/finance/accounts/transactions/petty_cash_payment") || normalized.includes("/finance/accounts/transactions/petty-cash-payment")) return "CP" as const;
   return null;
 }
+
 
 function getCommercialDocType(pathname: string) {
   const normalized = pathname.toLowerCase();

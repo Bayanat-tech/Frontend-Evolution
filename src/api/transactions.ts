@@ -56,6 +56,7 @@ export type TransactionHeader = {
   canceled?: string;
   tx_cat_code?: string;
   tx_compnt_1_expmt?: string;
+  tx_compntcat_code_1?: string;
 };
 
 export type TransactionDetail = {
