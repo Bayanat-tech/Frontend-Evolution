@@ -1,4 +1,8 @@
 import type { WmsSimpleMasterConfig } from "./WmsSimpleMasterPage";
+import { saveDepartment } from "../../api/wms/save-update/department";
+import { saveDivision } from "../../api/wms/save-update/division";
+import { saveGroup } from "../../api/wms/save-update/group";
+import { saveBrand } from "../../api/wms/save-update/brand";
 
 const yesNo = [
   { label: "No", value: "N" },
@@ -118,6 +122,7 @@ country: {
       { name: "dept_name", label: "Department Name", required: true, width: 260 },
       { name: "div_code", label: "Division Code", type: "select", dropdownKey: "division", width: 150, required: true },
     ],
+    customSave: saveDepartment,
     deleteConfig: { mode: "rawDelete", payload: (row) => ({ ids: [row.dept_code] }) },
   },
   division: {
@@ -136,12 +141,13 @@ country: {
       { name: "fax", label: "Fax", width: 140 },
       { name: "email", label: "Email", type: "email", width: 220 },
       { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
-      { name: "div_address1", label: "Address 1", table: false },
-      { name: "div_address2", label: "Address 2", table: false },
-      { name: "div_address3", label: "Address 3", table: false },
+      { name: "div_address1", label: "Address 1", table: false, required: true },
+      { name: "div_address2", label: "Address 2", table: false, required: true },
+      { name: "div_address3", label: "Address 3", table: false, required: true },
       { name: "remarks", label: "Remarks", table: false },
     ],
     defaults: { status: "A" },
+    customSave: saveDivision,
     deleteConfig: { mode: "rawDelete", payload: (row) => [{ company_code: row.company_code, div_code: row.div_code }] },
   },
   manufacture: {
@@ -510,7 +516,7 @@ country: {
     gmEndpoint: "brand",
     keyField: "brand_code",
     fields: [
-      { name: "brand_code", label: "Brand Code", required: true, disabledOnEdit: true, width: 130 },
+      { name: "brand_code", label: "Brand Code", required: true, disabledWhen: () => true, width: 130 },
       { name: "prin_code", label: "Principal Code", required: true, type: "select", dropdownKey: "principal", width: 150 },
       { name: "group_code", label: "Group Code", required: true, type: "select", dropdownKey: "group", filterDependsOn: "prin_code", width: 150, disabledWhen: (form) => !form.prin_code },
       { name: "brand_name", label: "Brand Name", required: true, width: 230 },
@@ -527,6 +533,7 @@ country: {
           }
         : {}),
     }),
+    customSave: saveBrand,
     deleteConfig: {
       mode: "registered",
       payload: (row) => [{ company_code: row.company_code, prin_code: row.prin_code, group_code: row.group_code, brand_code: row.brand_code }],
@@ -539,10 +546,11 @@ country: {
     gmEndpoint: "group",
     keyField: "group_code",
     fields: [
-      { name: "group_code", label: "Group Code", required: true, disabledOnEdit: true, width: 140 },
+      { name: "group_code", label: "Group Code", required: true, disabledWhen: () => true, width: 140 },
       { name: "prin_code", label: "Principal Code", required: true, type: "select", dropdownKey: "principal", width: 150 },
       { name: "group_name", label: "Group Name", required: true, width: 260 },
     ],
+    customSave: saveGroup,
     deleteConfig: {
       mode: "rawDelete",
       payload: (row) => [{ group_code: row.group_code, prin_code: row.prin_code, company_code: row.company_code }],

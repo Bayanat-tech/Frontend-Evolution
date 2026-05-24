@@ -133,3 +133,64 @@ export async function postWmsStockAdjustment<TPayload extends Record<string, unk
   if (!response.data.success) throw new Error(response.data.message || `Unable to save ${endpoint}`);
   return response.data;
 }
+
+/* ============ DIVISION API ============ */
+export async function addDivision(values: Record<string, unknown>) {
+  const response = await api.post<ApiResponse<unknown>>("/api/wms/gm/division", values);
+  if (!response.data.success) throw new Error(response.data.message || "Unable to add division");
+  return response.data;
+}
+
+export async function editDivision(values: Record<string, unknown>) {
+  const response = await api.put<ApiResponse<unknown>>("/api/wms/gm/division", values);
+  if (!response.data.success) throw new Error(response.data.message || "Unable to update division");
+  return response.data;
+}
+
+export async function deleteDivision(divisionCodes: string[]) {
+  const response = await api.post<ApiResponse<unknown>>("/api/wms/gm/division/delete", divisionCodes);
+  if (!response.data.success) throw new Error(response.data.message || "Unable to delete division");
+  return response.data;
+}
+
+/* ============ GROUP API ============ */
+export async function addGroup(values: Record<string, unknown>) {
+  const { group_code: _unused, ...dataForCreate } = values;
+  const response = await api.post<ApiResponse<unknown>>("/api/wms/gm/group", dataForCreate);
+  if (!response.data.success) throw new Error(response.data.message || "Unable to add group");
+  return response.data;
+}
+
+export async function editGroup(values: Record<string, unknown>) {
+  const dataForUpdate = { ...values };
+  if ((dataForUpdate as any)._uniqueKey !== undefined) {
+    delete (dataForUpdate as any)._uniqueKey;
+  }
+  const response = await api.put<ApiResponse<unknown>>("/api/wms/gm/group", dataForUpdate);
+  if (!response.data.success) throw new Error(response.data.message || "Unable to update group");
+  return response.data;
+}
+
+/* ============ BRAND API ============ */
+export async function addBrand(values: Record<string, unknown>) {
+  const response = await api.post<ApiResponse<unknown>>("/api/wms/gm/brand", values);
+  if (!response.data.success) throw new Error(response.data.message || "Unable to add brand");
+  return response.data;
+}
+
+export async function editBrand(values: Record<string, unknown>) {
+  const response = await api.put<ApiResponse<unknown>>("/api/wms/gm/brand", values);
+  if (!response.data.success) throw new Error(response.data.message || "Unable to update brand");
+  return response.data;
+}
+
+export async function addBrandBulk(values: Record<string, unknown>[]) {
+  const response = await api.post<ApiResponse<unknown>>("/api/wms/gm/brand/bulk", values);
+  if (!response.data.success) throw new Error(response.data.message || "Unable to add bulk brands");
+  return response.data;
+}
+
+export async function exportBrand() {
+  const response = await api.get<Blob>("/api/wms/gm/brand/export", { responseType: "blob" });
+  return response.data;
+}
