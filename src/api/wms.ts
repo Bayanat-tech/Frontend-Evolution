@@ -1,5 +1,6 @@
 import { api } from "./client";
 import type { DynamicQueryParams, LookupRow } from "./lookups";
+import { fetchDropdownOptions as fetchDropdownOptionsFromRegistry } from "./dropdowns";
 
 type ApiResponse<T> = {
   success: boolean;
@@ -23,6 +24,13 @@ export async function getWmsMaster(master: string, options: WmsPagination & Reco
   });
   if (!response.data.success) throw new Error(response.data.message || `Unable to load ${master}`);
   return response.data.data || { tableData: [], count: 0 };
+}
+
+/**
+ * Fetch dropdown options by key (e.g., 'country', 'currency')
+ */
+export async function fetchDropdownOptions(key: string, filters?: Record<string, unknown>) {
+  return fetchDropdownOptionsFromRegistry(key as any, filters);
 }
 
 export async function deleteWmsMaster(master: string, ids: unknown[]) {

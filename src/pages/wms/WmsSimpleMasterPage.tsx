@@ -10,14 +10,19 @@ import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import {WmsMasterForm} from "../../components/WmsMasterForm";
+import type { DropdownKey } from "../../api/dropdowns";
 
 export type WmsMasterField = {
   name: string;
   label: string;
   required?: boolean;
   disabledOnEdit?: boolean;
+  disabledWhen?: (form: Record<string, unknown>) => boolean;
   type?: "text" | "number" | "select" | "email" | "textarea";
   options?: { label: string; value: string }[];
+  dropdownKey?: DropdownKey;          // e.g. 'country', 'currency', 'department'
+  dropdownDependsOn?: string;         // field name this dropdown depends on (for chained dropdowns)
+  filterDependsOn?: string;           // field name to filter dropdown options by (at component level)
   asyncOptions?: {
     endpoint: string;           // e.g. "country"
     labelKey: string;           // e.g. "country_name"

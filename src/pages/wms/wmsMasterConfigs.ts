@@ -116,7 +116,7 @@ country: {
     fields: [
       { name: "dept_code", label: "Department Code", required: true, disabledOnEdit: true, width: 170 },
       { name: "dept_name", label: "Department Name", required: true, width: 260 },
-      { name: "div_code", label: "Division Code", width: 150 },
+      { name: "div_code", label: "Division Code", type: "select", dropdownKey: "division", width: 150, required: true },
     ],
     deleteConfig: { mode: "rawDelete", payload: (row) => ({ ids: [row.dept_code] }) },
   },
@@ -152,9 +152,9 @@ country: {
     routeKeys: ["manufacture", "manufacturer"],
     keyField: "manu_code",
     fields: [
+      { name: "prin_code", label: "Principal Code", required: true, type: "select", dropdownKey: "principal", width: 150 },
       { name: "manu_code", label: "Manufacturer Code", required: true, disabledOnEdit: true, width: 180 },
       { name: "manu_name", label: "Manufacturer Name", required: true, width: 280 },
-      { name: "prin_code", label: "Principal Code", width: 160 },
     ],
     deleteConfig: { mode: "registered", payload: (row) => [{ manu_code: row.manu_code, prin_code: row.prin_code }] },
   },
@@ -510,13 +510,13 @@ country: {
     gmEndpoint: "brand",
     keyField: "brand_code",
     fields: [
-      { name: "brand_code", label: "Brand Code", disabledOnEdit: true, width: 130 },
-      { name: "prin_code", label: "Principal Code", required: true, width: 150 },
-      { name: "group_code", label: "Group Code", required: true, width: 150 },
+      { name: "brand_code", label: "Brand Code", required: true, disabledOnEdit: true, width: 130 },
+      { name: "prin_code", label: "Principal Code", required: true, type: "select", dropdownKey: "principal", width: 150 },
+      { name: "group_code", label: "Group Code", required: true, type: "select", dropdownKey: "group", filterDependsOn: "prin_code", width: 150, disabledWhen: (form) => !form.prin_code },
       { name: "brand_name", label: "Brand Name", required: true, width: 230 },
-      { name: "pref_site", label: "Preferred Site", width: 140 },
-      { name: "pref_loc_from", label: "Location From", width: 150 },
-      { name: "pref_loc_to", label: "Location To", width: 150 },
+      { name: "pref_site", label: "Preferred Site", required: false, width: 140 },
+      { name: "pref_loc_from", label: "Location From", required: false, width: 150 },
+      { name: "pref_loc_to", label: "Location To", required: false, width: 150 },
     ],
     mapBeforeSave: (form, { editMode, original }) => ({
       ...form,
@@ -539,11 +539,9 @@ country: {
     gmEndpoint: "group",
     keyField: "group_code",
     fields: [
-      { name: "group_code", label: "Group Code", disabledOnEdit: true, width: 140 },
-      { name: "prin_code", label: "Principal Code", required: true, width: 160 },
+      { name: "group_code", label: "Group Code", required: true, disabledOnEdit: true, width: 140 },
+      { name: "prin_code", label: "Principal Code", required: true, type: "select", dropdownKey: "principal", width: 150 },
       { name: "group_name", label: "Group Name", required: true, width: 260 },
-      { name: "pref_site", label: "Preferred Site", width: 140 },
-      { name: "expiry_cons_days", label: "Expiry Cons. Days", type: "number", width: 150 },
     ],
     deleteConfig: {
       mode: "rawDelete",
