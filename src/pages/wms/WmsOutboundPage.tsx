@@ -2,7 +2,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowLeft, Ban, CheckCircle2, Eye, FileText, FileUp, MapPin, PackageCheck, Pencil, Plus, Printer, RefreshCw, Save, Ship, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { executeWmsInboundSql, getWmsInbound, getWmsMaster, getWmsOutbound, postWmsInbound, postWmsOutbound, putWmsOutbound } from "../../api/wms";
+import { executeWmsInboundSql, getWmsInbound, getWmsMaster, getWmsOutbound, postWmsInbound, postWmsOutbound, putWmsInbound, putWmsOutbound } from "../../api/wms";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
@@ -120,20 +120,21 @@ function OutboundJobListing() {
   const [activeTab, setActiveTab] = useState("in_progress");
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
+  const [editingJobNo, setEditingJobNo] = useState("");
   const [form, setForm] = useState<WmsRow>(makeEmptyJob(user?.company_code));
   const [saving, setSaving] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<WmsRow | null>(null);
   const [cancelRemarks, setCancelRemarks] = useState("");
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  const loadRows = async () => {
+  const loadRows = async (clearNotice = true) => {
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const data = await executeWmsInboundSql(`SELECT * FROM VW_TI_JOB WHERE COMPANY_CODE = '${sqlEscape(user?.company_code || "")}' AND JOB_TYPE = 'EXP' ORDER BY JOB_DATE DESC, JOB_NO DESC`);
       setRows(data.map(normalizeRow));
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load outbound jobs" });
+      setNotice({ type: "error", message: processMessage("Unable to load outbound job listing.", error) });
     } finally {
       setLoading(false);
     }
@@ -142,6 +143,19 @@ function OutboundJobListing() {
   useEffect(() => {
     void loadRows();
   }, []);
+
+  const openEditJob = async (row: WmsRow) => {
+    const jobNo = value(row, "job_no");
+    setEditingJobNo(jobNo);
+    setNotice(null);
+    try {
+      const jobForm = await enrichOutboundJobFormNames(makeOutboundJobForm(row, user?.company_code), user?.company_code || "");
+      setForm(jobForm);
+    } catch {
+      setForm(makeOutboundJobForm(row, user?.company_code));
+    }
+    setFormOpen(true);
+  };
 
   const filteredRows = useMemo(() => rows.filter((row) => filterJobByTab(row, activeTab)), [rows, activeTab]);
   const columns = useMemo<ColumnDef<WmsRow>[]>(
@@ -179,6 +193,14 @@ function OutboundJobListing() {
             <Button size="icon" variant="ghost" title="Open job" onClick={() => navigate(outboundJobDetailPath(row.original))}>
               <Eye size={14} />
             </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              title="Edit job"
+              onClick={() => void openEditJob(row.original)}
+            >
+              <Pencil size={14} />
+            </Button>
             {canCancelOutboundJob(row.original, activeTab) && (
               <Button size="icon" variant="ghost" title="Cancel job" onClick={() => setCancelTarget(row.original)}>
                 <Ban size={14} />
@@ -188,7 +210,7 @@ function OutboundJobListing() {
         ),
       },
     ],
-    [activeTab, navigate],
+    [activeTab, navigate, openEditJob],
   );
 
   const saveJob = async (event: FormEvent) => {
@@ -200,16 +222,23 @@ function OutboundJobListing() {
     }
     setSaving(true);
     try {
-      await postWmsInbound("inboundjob", {
-        ...form,
-        company_code: form.company_code || user?.company_code,
-        job_type: "EXP",
-      });
+      const departmentOk = await validateDepartmentDivision(user?.company_code || "", String(form.dept_code || ""), String(form.div_code || ""));
+      if (!departmentOk) {
+        setNotice({ type: "error", message: "Cannot save outbound job: selected Department and Division do not exist together in MS_DEPARTMENT. Please select Department again." });
+        return;
+      }
+      const payload = buildOutboundJobPayload(form, user?.company_code || "");
+      if (editingJobNo) {
+        await putWmsInbound("inboundjob", payload);
+      } else {
+        await postWmsInbound("inboundjob", payload);
+      }
       setFormOpen(false);
-      setNotice({ type: "success", message: "Outbound job saved successfully" });
-      await loadRows();
+      setEditingJobNo("");
+      setNotice({ type: "success", message: editingJobNo ? `Outbound job ${editingJobNo} updated successfully.` : "Outbound job created successfully." });
+      await loadRows(false);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save outbound job" });
+      setNotice({ type: "error", message: processMessage(editingJobNo ? `Unable to update outbound job ${editingJobNo}.` : "Unable to create outbound job.", error) });
     } finally {
       setSaving(false);
     }
@@ -249,10 +278,10 @@ function OutboundJobListing() {
       )));
       setCancelTarget(null);
       setCancelRemarks("");
-      setNotice({ type: "success", message: "Outbound job cancellation submitted" });
-      await loadRows();
+      setNotice({ type: "success", message: `Outbound job ${value(cancelTarget, "job_no")} canceled successfully.` });
+      await loadRows(false);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to cancel outbound job" });
+      setNotice({ type: "error", message: processMessage(`Unable to cancel outbound job ${value(cancelTarget, "job_no")}.`, error) });
     } finally {
       setSaving(false);
     }
@@ -266,8 +295,8 @@ function OutboundJobListing() {
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Manage export jobs, customer orders, stock picking, cancellation, confirmation, and billing.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={loadRows}><RefreshCw size={15} /> Refresh</Button>
-          <Button onClick={() => { setForm(makeEmptyJob(user?.company_code)); setFormOpen(true); }}><Plus size={15} /> Add Job</Button>
+          <Button variant="outline" onClick={() => loadRows()}><RefreshCw size={15} /> Refresh</Button>
+          <Button onClick={() => { setEditingJobNo(""); setForm(makeEmptyJob(user?.company_code)); setFormOpen(true); }}><Plus size={15} /> Add Job</Button>
         </div>
       </div>
 
@@ -300,9 +329,9 @@ function OutboundJobListing() {
 
       <OutboundFormFrame
         open={formOpen}
-        title="Add Outbound Job"
-        onClose={() => setFormOpen(false)}
-        footer={<DialogActions formId="outbound-job-form" saving={saving} onCancel={() => setFormOpen(false)} submitText="Save Job" />}
+        title={editingJobNo ? `Edit Outbound Job ${editingJobNo}` : "Add Outbound Job"}
+        onClose={() => { setFormOpen(false); setEditingJobNo(""); }}
+        footer={<DialogActions formId="outbound-job-form" saving={saving} onCancel={() => { setFormOpen(false); setEditingJobNo(""); }} submitText={editingJobNo ? "Update Job" : "Save Job"} />}
       >
         <OutboundJobCreateForm form={form} setForm={setForm} companyCode={user?.company_code || ""} onSubmit={saveJob} />
       </OutboundFormFrame>
@@ -409,16 +438,16 @@ function OutboundOperationalTab({ job, jobNo, tab, loadingJob }: { job: WmsRow |
   const [pickOptions, setPickOptions] = useState({ preference: "job_no", min_qty: "N", exp_period: "0", confirm_date: new Date().toISOString().slice(0, 10) });
 
   const config = getOutboundTabConfig(tab);
-  const loadRows = async () => {
+  const loadRows = async (clearNotice = true) => {
     if (!config || loadingJob) return;
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     setSelection({});
     try {
       const data = await executeWmsInboundSql(config.sql({ companyCode: user?.company_code || "", jobNo, prinCode }));
       setRows(data.map(normalizeRow));
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to load ${config.title}` });
+      setNotice({ type: "error", message: processMessage(`Unable to load ${config.title}.`, error) });
     } finally {
       setLoading(false);
     }
@@ -451,7 +480,7 @@ function OutboundOperationalTab({ job, jobNo, tab, loadingJob }: { job: WmsRow |
 
   const runPickAction = async (mode: "PICK" | "CONFIRM" | "CANCEL") => {
     if (!selectedKeys.length) {
-      setNotice({ type: "error", message: "Select at least one row" });
+      setNotice({ type: "error", message: `Please select at least one row before running ${mode === "PICK" ? "picking" : mode === "CONFIRM" ? "job confirmation" : "cancel picking"}.` });
       return;
     }
     setLoading(true);
@@ -470,10 +499,10 @@ function OutboundOperationalTab({ job, jobNo, tab, loadingJob }: { job: WmsRow |
       } else {
         await putWmsOutbound(`picking_details/oubcancelPick/${encodeURIComponent(jobNo)}`, { serial_no: selectedPayloadKeys }, { prin_code: prinCode, freeze: "Y   " });
       }
-      setNotice({ type: "success", message: `${mode === "PICK" ? "Pick" : mode === "CONFIRM" ? "Confirmation" : "Cancel pick"} processed successfully` });
-      await loadRows();
+      setNotice({ type: "success", message: `${mode === "PICK" ? "Picking" : mode === "CONFIRM" ? "Job confirmation" : "Cancel picking"} completed for ${selectedKeys.length} selected row${selectedKeys.length === 1 ? "" : "s"}.` });
+      await loadRows(false);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to process selected rows" });
+      setNotice({ type: "error", message: processMessage(`Unable to process ${mode === "PICK" ? "picking" : mode === "CONFIRM" ? "job confirmation" : "cancel picking"} for selected rows.`, error) });
     } finally {
       setLoading(false);
     }
@@ -498,11 +527,11 @@ function OutboundOperationalTab({ job, jobNo, tab, loadingJob }: { job: WmsRow |
           val1n1: Number(value(deleteTarget.row, "serial_no") || 0),
         });
       }
-      setNotice({ type: "success", message: deleteTarget.kind === "order" ? "Order entry deleted successfully" : "Order detail deleted successfully" });
+      setNotice({ type: "success", message: deleteTarget.kind === "order" ? "Order entry deleted successfully." : "Order detail deleted successfully." });
       setDeleteTarget(null);
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete selected row" });
+      setNotice({ type: "error", message: processMessage(deleteTarget.kind === "order" ? "Unable to delete order entry." : "Unable to delete order detail.", error) });
     } finally {
       setLoading(false);
     }
@@ -516,7 +545,7 @@ function OutboundOperationalTab({ job, jobNo, tab, loadingJob }: { job: WmsRow |
       {tab === "picking_details" && <PickToolbar options={pickOptions} setOptions={setPickOptions} onPick={() => runPickAction("PICK")} disabled={loading} />}
       {tab === "cancel_picking" && <Button size="sm" variant="outline" onClick={() => runPickAction("CANCEL")} disabled={loading}><Ban size={14} /> Cancel Selected</Button>}
       {tab === "job_confirmation" && <ConfirmToolbar options={pickOptions} setOptions={setPickOptions} onConfirm={() => runPickAction("CONFIRM")} disabled={loading} />}
-      <Button size="sm" variant="outline" onClick={loadRows}><RefreshCw size={14} /> Refresh</Button>
+      <Button size="sm" variant="outline" onClick={() => loadRows()}><RefreshCw size={14} /> Refresh</Button>
     </div>
   );
 
@@ -954,10 +983,20 @@ function OutboundJobCreateForm({ form, setForm, companyCode, onSubmit }: { form:
               displayValue={formatLookupDisplay(form, ["prin_code", "prin_name"])}
               valueField="prin_code"
               displayFields={["prin_code", "prin_name"]}
-              columns={[{ field: "prin_code", header: "Principal Code" }, { field: "prin_name", header: "Principal Name" }, { field: "div_code", header: "Division" }]}
+              columns={[{ field: "prin_code", header: "Principal Code" }, { field: "prin_name", header: "Principal Name" }, { field: "prin_dept_code", header: "Department" }, { field: "div_code", header: "Division" }]}
               placeholder="Select principal"
-              loadOptions={() => loadWmsMasterLookup("principal")}
-              onChange={(selected, selectedRow) => setForm((current) => ({ ...current, prin_code: selected, prin_name: selectedRow ? lookupText(selectedRow, "prin_name") : "", div_code: selectedRow ? lookupText(selectedRow, "div_code") || current.div_code : current.div_code }))}
+              loadOptions={() => loadOutboundPrincipalLookup(companyCode)}
+              onChange={(selected, selectedRow) => setForm((current) => ({
+                ...current,
+                prin_code: selected,
+                prin_name: selectedRow ? lookupText(selectedRow, "prin_name") : "",
+                div_code: selectedRow ? lookupText(selectedRow, "div_code") || current.div_code : current.div_code,
+                div_name: selectedRow ? lookupText(selectedRow, "div_name") || current.div_name : current.div_name,
+                dept_code: selectedRow ? lookupText(selectedRow, "prin_dept_code") || current.dept_code : current.dept_code,
+                dept_name: selectedRow ? lookupText(selectedRow, "dept_name") || current.dept_name : current.dept_name,
+                curr_code: selectedRow ? lookupText(selectedRow, "curr_code") || current.curr_code || "OMR" : current.curr_code || "OMR",
+                ex_rate: current.ex_rate || 1,
+              }))}
             />
             <LookupField
               label="Department"
@@ -967,8 +1006,8 @@ function OutboundJobCreateForm({ form, setForm, companyCode, onSubmit }: { form:
               displayFields={["dept_code", "dept_name"]}
               columns={[{ field: "dept_code", header: "Department Code" }, { field: "dept_name", header: "Department Name" }, { field: "div_code", header: "Division" }]}
               placeholder="Select department"
-              loadOptions={() => loadWmsMasterLookup("department")}
-              onChange={(selected, selectedRow) => setForm((current) => ({ ...current, dept_code: selected, dept_name: selectedRow ? lookupText(selectedRow, "dept_name") : "", div_code: selectedRow ? lookupText(selectedRow, "div_code") || current.div_code : current.div_code }))}
+              loadOptions={() => loadDepartmentLookup(companyCode, String(form.div_code || ""))}
+              onChange={(selected, selectedRow) => setForm((current) => ({ ...current, dept_code: selected, dept_name: selectedRow ? lookupText(selectedRow, "dept_name") : "", div_code: selectedRow ? lookupText(selectedRow, "div_code") || current.div_code : current.div_code, div_name: selectedRow ? lookupText(selectedRow, "div_name") || current.div_name : current.div_name }))}
             />
             <LookupField
               label="Division"
@@ -1050,7 +1089,7 @@ function OutboundJobCreateForm({ form, setForm, companyCode, onSubmit }: { form:
             displayFields={["port_code", "port_name"]}
             columns={[{ field: "port_code", header: "Port Code" }, { field: "port_name", header: "Port Name" }, { field: "country_code", header: "Country" }]}
             placeholder="Select port"
-            loadOptions={() => loadWmsMasterLookup("port")}
+            loadOptions={loadPortLookup}
             onChange={(selected, selectedRow) => setForm((current) => ({ ...current, port_code: selected, port_name: selectedRow ? lookupText(selectedRow, "port_name") : "" }))}
           />
           <LookupField
@@ -1061,7 +1100,7 @@ function OutboundJobCreateForm({ form, setForm, companyCode, onSubmit }: { form:
             displayFields={["port_code", "port_name"]}
             columns={[{ field: "port_code", header: "Port Code" }, { field: "port_name", header: "Port Name" }, { field: "country_code", header: "Country" }]}
             placeholder="Select destination port"
-            loadOptions={() => loadWmsMasterLookup("port")}
+            loadOptions={loadPortLookup}
             onChange={(selected, selectedRow) => setForm((current) => ({ ...current, destination_port: selected, destination_port_name: selectedRow ? lookupText(selectedRow, "port_name") : "" }))}
           />
         </div>
@@ -1508,6 +1547,12 @@ function tabRequiresSelection(tab: string) {
   return ["picking_details", "cancel_picking", "job_confirmation"].includes(tab);
 }
 
+function processMessage(prefix: string, error: unknown) {
+  if (!(error instanceof Error) || !error.message) return prefix;
+  const clean = error.message.replace(/\s+/g, " ").trim();
+  return `${prefix} ${clean}`;
+}
+
 async function executeRawCommonProcedure(parameter: string, payload: Record<string, unknown>) {
   await executeCommonProcedure({ parameter, ...payload });
 }
@@ -1553,8 +1598,83 @@ function makeEmptyJob(companyCode?: string) {
     job_type: "EXP",
     job_class: "N",
     transport_mode: "S",
+    curr_code: "OMR",
+    ex_rate: 1,
     schedule_date: new Date().toISOString().slice(0, 10),
   };
+}
+
+function makeOutboundJobForm(row: WmsRow, companyCode?: string) {
+  const normalized = normalizeRow(row);
+  return {
+    ...makeEmptyJob(companyCode),
+    ...normalized,
+    company_code: value(normalized, "company_code") || companyCode || "",
+    job_no: value(normalized, "job_no"),
+    prin_code: value(normalized, "prin_code"),
+    prin_name: value(normalized, "prin_name"),
+    dept_code: value(normalized, "dept_code"),
+    dept_name: value(normalized, "dept_name"),
+    div_code: value(normalized, "div_code"),
+    div_name: value(normalized, "div_name"),
+    job_class: value(normalized, "job_class") || "N",
+    job_type: value(normalized, "job_type") || "EXP",
+    transport_mode: value(normalized, "transport_mode") || "S",
+    schedule_date: toDateInputValue(value(normalized, "schedule_date") || value(normalized, "job_date")),
+    job_date: toDateInputValue(value(normalized, "job_date") || value(normalized, "schedule_date")),
+  };
+}
+
+async function enrichOutboundJobFormNames(form: WmsRow, companyCode: string) {
+  const deptCode = value(form, "dept_code");
+  const divCode = value(form, "div_code");
+  if ((!deptCode && !divCode) || (value(form, "dept_name") && value(form, "div_name"))) return form;
+
+  const rows = await executeWmsInboundSql(`
+    SELECT d.DEPT_NAME, v.DIV_NAME
+    FROM MS_DEPARTMENT d
+    LEFT JOIN MS_HR_DIVISION v
+      ON v.COMPANY_CODE = d.COMPANY_CODE
+     AND v.DIV_CODE = d.DIV_CODE
+    WHERE d.COMPANY_CODE = '${sqlEscape(companyCode)}'
+      ${deptCode ? `AND d.DEPT_CODE = '${sqlEscape(deptCode)}'` : ""}
+      ${divCode ? `AND d.DIV_CODE = '${sqlEscape(divCode)}'` : ""}
+    FETCH FIRST 1 ROWS ONLY
+  `);
+  const names = normalizeRow(rows[0] || {});
+  return {
+    ...form,
+    dept_name: value(form, "dept_name") || value(names, "dept_name"),
+    div_name: value(form, "div_name") || value(names, "div_name"),
+  };
+}
+
+function buildOutboundJobPayload(form: WmsRow, companyCode: string) {
+  const allowedFields = new Set([
+    "company_code",
+    "job_no",
+    ...jobFields.map((field) => field.name),
+  ]);
+  const payload: WmsRow = {};
+
+  allowedFields.forEach((field) => {
+    if (field in form) payload[field] = form[field];
+  });
+
+  payload.company_code = form.company_code || companyCode;
+  payload.job_type = "EXP";
+  payload.job_class = payload.job_class || "N";
+  payload.transport_mode = payload.transport_mode || "S";
+  payload.schedule_date = payload.schedule_date || new Date().toISOString().slice(0, 10);
+  payload.job_date = payload.job_date || payload.schedule_date || new Date().toISOString().slice(0, 10);
+  payload.curr_code = payload.curr_code || "OMR";
+  payload.ex_rate = payload.ex_rate || 1;
+
+  Object.keys(payload).forEach((key) => {
+    if (payload[key] === undefined) delete payload[key];
+  });
+
+  return payload;
 }
 
 function JobClassPill({ code }: { code: string }) {
@@ -1654,7 +1774,67 @@ async function loadCurrencies() {
 }
 
 async function loadWmsMasterLookup(master: string) {
-  const response = await getWmsMaster(master, { page: 1, limit: 100000 });
+  const heavyLookupLimits: Record<string, number> = {
+    port: 500,
+    principal: 1000,
+  };
+  const response = await getWmsMaster(master, { page: 1, limit: heavyLookupLimits[master] || 100000 });
+  return normalizeLookupRows(response.tableData);
+}
+
+async function loadOutboundPrincipalLookup(companyCode: string) {
+  const rows = await executeWmsInboundSql(`
+    SELECT
+      p.PRIN_CODE,
+      p.PRIN_NAME,
+      p.PRIN_DEPT_CODE,
+      p.DIV_CODE,
+      p.CURR_CODE,
+      d.DEPT_NAME,
+      v.DIV_NAME
+    FROM MS_PRINCIPAL p
+    LEFT JOIN MS_DEPARTMENT d
+      ON d.COMPANY_CODE = p.COMPANY_CODE
+     AND d.DEPT_CODE = p.PRIN_DEPT_CODE
+     AND d.DIV_CODE = p.DIV_CODE
+    LEFT JOIN MS_HR_DIVISION v
+      ON v.COMPANY_CODE = p.COMPANY_CODE
+     AND v.DIV_CODE = p.DIV_CODE
+    WHERE p.COMPANY_CODE = '${sqlEscape(companyCode)}'
+    ORDER BY p.PRIN_CODE
+  `);
+  return normalizeLookupRows(rows);
+}
+
+async function loadDepartmentLookup(companyCode: string, divCode: string) {
+  const rows = await executeWmsInboundSql(`
+    SELECT d.DEPT_CODE, d.DEPT_NAME, d.DIV_CODE, v.DIV_NAME
+    FROM MS_DEPARTMENT d
+    LEFT JOIN MS_HR_DIVISION v
+      ON v.COMPANY_CODE = d.COMPANY_CODE
+     AND v.DIV_CODE = d.DIV_CODE
+    WHERE d.COMPANY_CODE = '${sqlEscape(companyCode)}'
+      ${divCode ? `AND d.DIV_CODE = '${sqlEscape(divCode)}'` : ""}
+    ORDER BY d.DEPT_CODE
+  `);
+  return normalizeLookupRows(rows);
+}
+
+async function validateDepartmentDivision(companyCode: string, deptCode: string, divCode: string) {
+  if (!deptCode || !divCode) return true;
+  const rows = await executeWmsInboundSql(`
+    SELECT DEPT_CODE
+    FROM MS_DEPARTMENT
+    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
+      AND DEPT_CODE = '${sqlEscape(deptCode)}'
+      AND DIV_CODE = '${sqlEscape(divCode)}'
+      FETCH FIRST 1 ROWS ONLY
+  `);
+  return rows.length > 0;
+}
+
+async function loadPortLookup() {
+  const response = await getWmsMaster("port", { page: 1, limit: 500 });
   return normalizeLookupRows(response.tableData);
 }
 
