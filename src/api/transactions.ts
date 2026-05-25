@@ -250,6 +250,69 @@ export async function getFinanceMasterRows(
   return response.data.data?.tableData || [];
 }
 
+// LPO APIs
+
+export async function getLpoDocuments(
+  fyPeriod?: string,
+  search?: string,
+  page = 1,
+  limit = 100,
+) {
+  const response = await api.get<
+    ApiResponse<TransactionDocumentRow[]>
+  >("/api/finance/transactions/lpo", {
+    params: {
+      fy_period: fyPeriod,
+      search,
+      page,
+      limit,
+    },
+  });
+
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Unable to load LPO documents");
+  }
+
+  const list = response.data.data || [];
+
+  // backend may or may not send pagination → handle safely
+  const pagination = (response as any).data?.pagination;
+
+  return {
+    tableData: list,
+    count: pagination?.total ?? list.length ?? 0,
+  };
+}
+export async function getLpoHeader(docNo: string, docType: string) {
+  const response = await api.get<ApiResponse<Record<string, unknown>>>(
+    `/api/finance/transactions/lpo/${encodeURIComponent(docNo)}`,
+    {
+      params: { doc_type: docType },
+    },
+  );
+
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Unable to load LPO header");
+  }
+
+  return response.data.data || {};
+}
+
+export async function getLpoDetail(docNo: string, docType: string) {
+  const response = await api.get<ApiResponse<Record<string, unknown>[]>>(
+    `/api/finance/transactions/lpo/${encodeURIComponent(docNo)}/detail`,
+    {
+      params: { doc_type: docType },
+    },
+  );
+
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Unable to load LPO details");
+  }
+
+  return response.data.data || [];
+}
+
 export async function saveTransactionDocument(payload: TransactionHeader, editMode: boolean) {
   const response = editMode
     ? await api.put<ApiResponse<{ doc_no: string; doc_type: TransactionType }>>("/api/finance/transactions/document", payload)
