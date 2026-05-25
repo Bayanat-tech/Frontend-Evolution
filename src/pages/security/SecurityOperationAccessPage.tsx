@@ -1,10 +1,10 @@
-import { KeyRound, RefreshCw, Save, ShieldCheck, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Check, ChevronDown, KeyRound, RefreshCw, Save, Search, ShieldCheck, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteSecurityGm, getSecurityGm, getSecurityGmWithParams, getSecurityMaster, saveSecurityGm } from "../../api/security";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
-import { Select } from "../../components/ui/Select";
+import { Input } from "../../components/ui/Input";
 import { cn } from "../../lib/utils";
 import { useAuth } from "../../state/AuthContext";
 
@@ -51,7 +51,7 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
   const Icon = isRoleMode ? ShieldCheck : KeyRound;
 
   const appOptions = useMemo(
-    () => Array.from(new Set(screenOptions.map((screen) => String(screen.app_code ?? "")).filter(Boolean))).sort(),
+    () => Array.from(new Set(screenOptions.map((screen) => String(screen.app_code ?? "")).filter(Boolean))).sort().map((appCode) => ({ app_code: appCode })),
     [screenOptions],
   );
   const filteredScreens = useMemo(
@@ -101,7 +101,7 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
         setHasExisting(true);
         return;
       }
-      const template = await getSecurityGm<PermissionRow[]>(`${endpoint}/${selectedScreen}`);
+      const template = await getOperationTemplate(endpoint, selectedScreen);
       setPermissions(normalizePermission(template?.[0] || emptyPermissionRow()));
       setHasExisting(false);
       setNotice({ type: "info", message: "No existing access found. Review the default screen operations and save to assign access." });
@@ -185,7 +185,7 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
 
       {notice && <div className={notice.type === "error" ? "alert error" : notice.type === "success" ? "alert success" : "alert"}>{notice.message}</div>}
 
-      <Card className="overflow-hidden">
+      <Card className="overflow-visible">
         <CardHeader className="border-b bg-muted/40">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -203,34 +203,43 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
         <CardContent className="grid gap-3 pt-4 md:grid-cols-3">
           <label className="field">
             <span>{principalLabel}</span>
-            <Select disabled={loading} value={selectedPrincipal} onChange={(event) => setSelectedPrincipal(event.target.value)}>
-              <option value="">Select {principalLabel}</option>
-              {principalOptions.map((option, index) => (
-                <option value={String(option[isRoleMode ? "role_id" : "loginid"] ?? "")} key={`${String(option[isRoleMode ? "role_id" : "loginid"] ?? "")}_${index}`}>
-                  {formatPrincipal(option, isRoleMode)}
-                </option>
-              ))}
-            </Select>
+            <SearchablePicker
+              disabled={loading}
+              emptyText={`No ${principalLabel.toLowerCase()} found`}
+              getLabel={(option) => formatPrincipal(option, isRoleMode)}
+              getValue={(option) => String(option[isRoleMode ? "role_id" : "loginid"] ?? "")}
+              options={principalOptions}
+              placeholder={`Search ${principalLabel.toLowerCase()}`}
+              value={selectedPrincipal}
+              onChange={setSelectedPrincipal}
+            />
           </label>
           <label className="field">
             <span>Application</span>
-            <Select disabled={loading} value={selectedApp} onChange={(event) => setSelectedApp(event.target.value)}>
-              <option value="">All Applications</option>
-              {appOptions.map((appCode) => (
-                <option value={appCode} key={appCode}>{appCode}</option>
-              ))}
-            </Select>
+            <SearchablePicker
+              disabled={loading}
+              emptyText="No application found"
+              getLabel={(option) => String(option.app_code ?? "")}
+              getValue={(option) => String(option.app_code ?? "")}
+              options={appOptions}
+              placeholder="All applications"
+              value={selectedApp}
+              onChange={setSelectedApp}
+              allowClear
+            />
           </label>
           <label className="field">
             <span>Screen</span>
-            <Select disabled={loading || !filteredScreens.length} value={selectedScreen} onChange={(event) => setSelectedScreen(event.target.value)}>
-              <option value="">Select Screen</option>
-              {filteredScreens.map((screen, index) => (
-                <option value={String(screen.serial_no ?? "")} key={`${String(screen.serial_no ?? "")}_${index}`}>
-                  {[screen.serial_no, screen.level3 || screen.level2 || screen.level1].filter(Boolean).join(" - ")}
-                </option>
-              ))}
-            </Select>
+            <SearchablePicker
+              disabled={loading || !filteredScreens.length}
+              emptyText="No screen found"
+              getLabel={formatScreen}
+              getValue={(screen) => String(screen.serial_no ?? "")}
+              options={filteredScreens}
+              placeholder="Search screen"
+              value={selectedScreen}
+              onChange={setSelectedScreen}
+            />
           </label>
         </CardContent>
       </Card>
@@ -320,6 +329,14 @@ async function getExistingPermission(endpoint: string, mode: "role" | "user", se
   }
 }
 
+async function getOperationTemplate(endpoint: string, selectedScreen: string) {
+  try {
+    return await getSecurityGm<PermissionRow[]>(`${endpoint}/${selectedScreen}`);
+  } catch {
+    return [];
+  }
+}
+
 function buildPayload(mode: "role" | "user", selectedPrincipal: string, selectedScreen: string, permissions: PermissionRow, screen: OptionRow | undefined, userCompany?: string) {
   const permissionValues = Object.fromEntries(permissionFields.map((field) => [field.key, String(permissions[field.key] ?? "N").toUpperCase()]));
   const companyCode = String(permissions.company_code || screen?.company_code || userCompany || "");
@@ -355,8 +372,142 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function SearchablePicker({
+  value,
+  options,
+  placeholder,
+  emptyText,
+  disabled,
+  allowClear,
+  getValue,
+  getLabel,
+  onChange,
+}: {
+  value: string;
+  options: OptionRow[];
+  placeholder: string;
+  emptyText: string;
+  disabled?: boolean;
+  allowClear?: boolean;
+  getValue: (item: OptionRow) => string;
+  getLabel: (item: OptionRow) => string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const rootRef = useRef<HTMLDivElement>(null);
+  const pickerId = useRef(`picker-${Math.random().toString(36).slice(2)}`);
+  const selected = options.find((item) => getValue(item) === value);
+  const query = search.trim().toLowerCase();
+  const filtered = options
+    .filter((item) => {
+      if (!query) return true;
+      return `${getValue(item)} ${getLabel(item)}`.toLowerCase().includes(query);
+    })
+    .slice(0, 100);
+
+  const close = () => {
+    setOpen(false);
+    setSearch("");
+  };
+
+  const openPicker = () => {
+    window.dispatchEvent(new CustomEvent("bayanat-picker-open", { detail: pickerId.current }));
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const handlePickerOpen = (event: Event) => {
+      if ((event as CustomEvent<string>).detail !== pickerId.current) close();
+    };
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) close();
+    };
+    window.addEventListener("bayanat-picker-open", handlePickerOpen);
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => {
+      window.removeEventListener("bayanat-picker-open", handlePickerOpen);
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative" ref={rootRef}>
+      <button
+        type="button"
+        disabled={disabled}
+        className="flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-left text-sm text-foreground shadow-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+        onClick={() => open ? close() : openPicker()}
+      >
+        <span className={selected ? "min-w-0 truncate" : "min-w-0 truncate text-muted-foreground"}>
+          {selected ? getLabel(selected) : placeholder}
+        </span>
+        <ChevronDown size={15} className="shrink-0 text-muted-foreground" />
+      </button>
+      {open && !disabled && (
+        <div
+          className="absolute left-0 right-0 top-[calc(100%+6px)] z-[1000] overflow-hidden rounded-md border border-border bg-white text-foreground shadow-2xl ring-1 ring-slate-950/10 dark:bg-slate-950"
+          onMouseDown={(event) => event.preventDefault()}
+        >
+          <label className="m-2 flex h-9 items-center gap-2 rounded-md border bg-background px-2 text-muted-foreground">
+            <Search size={14} />
+            <Input
+              autoFocus
+              className="h-8 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+              placeholder={placeholder}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") close();
+              }}
+            />
+          </label>
+          <div className="max-h-64 overflow-auto p-1">
+            {allowClear && (
+              <button
+                type="button"
+                className={!value ? "flex min-h-8 w-full items-center justify-between gap-2 rounded bg-primary/10 px-3 py-1.5 text-left text-sm font-semibold text-primary" : "flex min-h-8 w-full items-center justify-between gap-2 rounded px-3 py-1.5 text-left text-sm font-medium hover:bg-accent hover:text-accent-foreground"}
+                onClick={() => {
+                  onChange("");
+                  close();
+                }}
+              >
+                <span>{placeholder}</span>
+                {!value && <Check size={14} />}
+              </button>
+            )}
+            {filtered.length ? (
+              filtered.map((item, index) => {
+                const optionValue = getValue(item);
+                const active = optionValue === value;
+                return (
+                  <button
+                    type="button"
+                    className={active ? "flex min-h-8 w-full items-center justify-between gap-2 rounded bg-primary/10 px-3 py-1.5 text-left text-sm font-semibold text-primary" : "flex min-h-8 w-full items-center justify-between gap-2 rounded px-3 py-1.5 text-left text-sm font-medium hover:bg-accent hover:text-accent-foreground"}
+                    onClick={() => {
+                      onChange(optionValue);
+                      close();
+                    }}
+                    key={`${optionValue}_${index}`}
+                  >
+                    <span className="min-w-0 truncate">{getLabel(item)}</span>
+                    {active && <Check size={14} className="shrink-0" />}
+                  </button>
+                );
+              })
+            ) : (
+              <div className="px-3 py-4 text-center text-sm text-muted-foreground">{emptyText}</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function emptyPermissionRow() {
-  return Object.fromEntries(permissionFields.map((field) => [field.key, "N"]));
+  return Object.fromEntries(permissionFields.map((field) => [field.key, "Y"]));
 }
 
 function normalizePermission(row: PermissionRow) {
@@ -364,8 +515,13 @@ function normalizePermission(row: PermissionRow) {
   return {
     ...emptyPermissionRow(),
     ...normalized,
-    ...Object.fromEntries(permissionFields.map((field) => [field.key, String(normalized[field.key] ?? "N").toUpperCase()])),
+    ...Object.fromEntries(permissionFields.map((field) => [field.key, normalizePermissionValue(normalized[field.key])])),
   };
+}
+
+function normalizePermissionValue(value: unknown) {
+  const normalized = String(value ?? "").toUpperCase();
+  return normalized === "Y" || normalized === "N" || normalized === "NA" ? normalized : "Y";
 }
 
 function normalizeRow(row: Record<string, unknown>) {
@@ -406,4 +562,8 @@ function formatPrincipal(row: OptionRow, isRoleMode: boolean) {
     return [row.role_id, row.role_desc].filter(Boolean).join(" - ");
   }
   return [row.loginid, row.username].filter(Boolean).join(" - ");
+}
+
+function formatScreen(row: OptionRow) {
+  return [row.serial_no, row.level3 || row.level2 || row.level1].filter(Boolean).join(" - ");
 }

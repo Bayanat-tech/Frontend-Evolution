@@ -37,7 +37,7 @@ export function Dialog({ open, title, description, tone = "default", compact, wi
             <X size={16} />
           </Button>
         </div>
-        <div className="min-h-0 overflow-auto p-4">{children}</div>
+        <div className="min-h-0 overflow-y-auto overflow-x-hidden p-4">{children}</div>
         {footer && <div className="flex items-center justify-end gap-2 border-t bg-secondary/40 p-4">{footer}</div>}
       </div>
     </div>

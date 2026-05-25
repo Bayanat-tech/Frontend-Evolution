@@ -27,6 +27,7 @@ import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
 import { SecurityAssignmentPage, securityAssignmentConfigs } from "../pages/security/SecurityAssignmentPage";
 import { SecurityMasterPage, securityMasterConfigs } from "../pages/security/SecurityMasterPage";
 import { SecurityOperationAccessPage } from "../pages/security/SecurityOperationAccessPage";
+import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs } from "../pages/pams/PamsPages";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -174,6 +175,44 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Security Master",
     match: (context) => Boolean(getSecurityMasterConfig(context)),
     element: (context) => <SecurityMasterPage config={getSecurityMasterConfig(context)!} />,
+  },
+  {
+    name: "PAMS Dashboard",
+    match: ({ pathname }) => isPamsRoute(pathname) && pathname.toLowerCase().includes("/dashboard"),
+    element: () => <PamsDashboardPage />,
+  },
+  {
+    name: "PAMS Bulk Appraisal",
+    match: ({ pathname }) => isPamsRoute(pathname) && isPamsBulkAppraisalRoute(pathname),
+    element: () => <PamsBulkAppraisalPage />,
+  },
+  {
+    name: "PAMS My Task",
+    match: ({ pathname }) => isPamsRoute(pathname) && pathname.toLowerCase().includes("/my_task") && !pathname.toLowerCase().includes("/view/"),
+    element: () => <PamsTaskPage />,
+  },
+  {
+    name: "PAMS Appraisal View",
+    match: ({ pathname }) => isPamsRoute(pathname) && pathname.toLowerCase().includes("/my_task/view/"),
+    element: () => <PamsAppraisalViewPage />,
+  },
+  {
+    name: "PAMS Reports",
+    match: ({ pathname }) => isPamsRoute(pathname) && (pathname.toLowerCase().includes("appraisal_listing_summary") || pathname.toLowerCase().includes("appraisal_listing")),
+    element: ({ pathname }) => <PamsReportPage type={pathname.toLowerCase().includes("summary") ? "summary" : "listing"} />,
+  },
+  {
+    name: "PAMS Department Assignment",
+    match: ({ pathname }) => {
+      const normalized = pathname.toLowerCase();
+      return isPamsRoute(pathname) && (normalized.includes("/department_kpi") || normalized.includes("/kpi_assignment"));
+    },
+    element: () => <PamsDepartmentAssignmentPage />,
+  },
+  {
+    name: "PAMS Master",
+    match: (context) => Boolean(getPamsMasterConfig(context)),
+    element: (context) => <PamsMasterPage config={getPamsMasterConfig(context)!} />,
   },
 ];
 
@@ -420,4 +459,36 @@ function collectMenuLeaves(nodes: MenuNode[]) {
   };
   walk(nodes);
   return leaves;
+}
+
+function isPamsRoute(pathname: string) {
+  return pathname.toLowerCase().includes("/pams/");
+}
+
+function isPamsBulkAppraisalRoute(pathname: string) {
+  const normalized = pathname.toLowerCase().replace(/\/+$/, "");
+  return normalized.endsWith("/pams/masters/gm/kpi") || normalized.includes("/bulk");
+}
+
+function getPamsMasterConfig(context: WorkspaceRouteContext) {
+  if (!isPamsRoute(context.pathname)) return null;
+  const normalized = getPamsMatchText(context);
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  const matches = Object.values(pamsMasterConfigs)
+    .flatMap((config) => config.routeKeys.map((key) => ({ config, key: key.toLowerCase() })))
+    .sort((a, b) => b.key.length - a.key.length);
+  return matches.find(({ key }) => {
+    const keyCompact = key.replace(/[^a-z0-9]/g, "");
+    return normalized.includes(`/${key}`) || normalized.includes(`/${key.replace(/_/g, "-")}`) || normalized.includes(key) || compact.includes(keyCompact);
+  })?.config || null;
+}
+
+function getPamsMatchText(context: WorkspaceRouteContext) {
+  const pathname = context.pathname.toLowerCase();
+  const leaves = collectMenuLeaves(context.activeApp?.children || []);
+  const activeLeaf = leaves.find((leaf) => {
+    const path = (leaf.url_path || "").replace(/^\/+/, "").toLowerCase();
+    return path && pathname.includes(path);
+  });
+  return [pathname, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
 }

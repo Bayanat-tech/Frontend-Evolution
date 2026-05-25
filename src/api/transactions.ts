@@ -258,6 +258,20 @@ export async function saveTransactionDocument(payload: TransactionHeader, editMo
   return response.data.data;
 }
 
+export async function upsertBulkAccountEntryApi(payload: {
+  header: Record<string, unknown>;
+  details: Record<string, unknown>[];
+  invoiceDetails: Record<string, unknown>[];
+  expenseDetails: Record<string, unknown>[];
+  jobDetails: Record<string, unknown>[];
+  loginid: string;
+}) {
+  const response = await api.post<ApiResponse<unknown>>("/api/finance/transactions/account-entry/bulk", payload);
+  const details = (response.data as ApiResponse<unknown> & { details?: string }).details;
+  if (!response.data.success) throw new Error(response.data.message || details || "Unable to save transaction");
+  return response.data;
+}
+
 export async function cancelTransactionDocument(docNo: string, docType: TransactionType) {
   const response = await api.put<ApiResponse<null>>("/api/finance/transactions/cancel_cheque", null, {
     params: { doc_no: docNo, doc_type: docType },
