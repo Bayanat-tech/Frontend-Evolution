@@ -11,7 +11,6 @@ import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import {WmsMasterForm} from "../../components/WmsMasterForm";
 import type { DropdownKey } from "../../api/dropdowns";
-import type { UserProfile } from "../../types/auth";
 
 export type WmsMasterField = {
   name: string;
@@ -58,8 +57,7 @@ export type WmsSimpleMasterConfig = {
   deleteConfig?: WmsDeleteConfig;
   mapBeforeSave?: (form: Record<string, unknown>, context: { editMode: boolean; original: Record<string, unknown> | null }) => Record<string, unknown>;
   saveEndpoint?: (form: Record<string, unknown>, context: { editMode: boolean; original: Record<string, unknown> | null }) => string;
-  customSave?: (form: Record<string, unknown>, context: { editMode: boolean; original: Record<string, unknown> | null; user: UserProfile | null }) => Promise<void>;
-  formTabs?: WmsMasterFormTab[];
+    formTabs?: WmsMasterFormTab[];
 };
 
 export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig }) {
@@ -177,14 +175,8 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
     setNotice(null);
     try {
       const mapped = config.mapBeforeSave?.(form, { editMode, original }) || form;
-      
-      if (config.customSave) {
-        await config.customSave(mapped, { editMode, original, user });
-      } else {
-        const endpoint = config.saveEndpoint?.(mapped, { editMode, original }) || config.gmEndpoint;
-        await saveWmsGm(endpoint, { ...mapped, company_code: mapped.company_code || user?.company_code || "" }, editMode ? "put" : "post");
-      }
-      
+      const endpoint = config.saveEndpoint?.(mapped, { editMode, original }) || config.gmEndpoint;
+      await saveWmsGm(endpoint, { ...mapped, company_code: mapped.company_code || user?.company_code || "" }, editMode ? "put" : "post");
       setFormOpen(false);
       setNotice({ type: "success", message: `${config.title} ${editMode ? "updated" : "added"} successfully` });
       await loadRows(pageIndex, pageSize);
