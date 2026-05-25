@@ -44,6 +44,12 @@ export type DynamicMutationParams = {
   val1s8?: string;
   val1s9?: string;
   val1s10?: string;
+  val1s11?: string;
+  val1s12?: string;
+  val1s13?: string;
+  val1s14?: string;
+  val1s15?: string;
+  val1s16?: string;
   val1n1?: number;
   val1n2?: number;
   val1n3?: number;
@@ -105,6 +111,12 @@ export async function getDynamicLookup(params: DynamicQueryParams) {
 
 export async function executeDynamicMutation(params: DynamicMutationParams) {
   const response = await api.post<ApiResponse<unknown>>("/api/wms/common/proc_build_dynamic_ins_upd_common", params);
+  if (!response.data.success) throw new Error(response.data.message || "Unable to save record");
+  return response.data;
+}
+
+export async function executeDynamicMutationColumn90(params: DynamicMutationParams) {
+  const response = await api.post<ApiResponse<unknown>>("/api/wms/common/proc_build_dynamic_ins_upd_column90", params);
   if (!response.data.success) throw new Error(response.data.message || "Unable to save record");
   return response.data;
 }
