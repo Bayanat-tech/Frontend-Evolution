@@ -100,6 +100,8 @@ const detailTabs = [
   { label: "Activity Billing", value: "activity_billing" },
 ];
 
+const inboundJobsPath = "/workspace/wms/wms/transactions/inbound/jobs";
+
 type JobField = {
   name: string;
   label: string;
@@ -223,11 +225,7 @@ function InboundJobListing() {
         cell: ({ row }) => (
           <button
             className="font-semibold text-primary hover:underline"
-            onClick={() =>
-              navigate(
-                `view/${value(row.original, "job_no")}/shipment_details?principal_code=${value(row.original, "prin_code")}`,
-              )
-            }
+            onClick={() => navigate(inboundJobDetailPath(row.original))}
           >
             {value(row.original, "job_no")}
           </button>
@@ -310,7 +308,7 @@ function InboundJobListing() {
               title="Open job"
               onClick={() =>
                 navigate(
-                  `view/${value(row.original, "job_no")}/shipment_details?principal_code=${value(row.original, "prin_code")}`,
+                  inboundJobDetailPath(row.original),
                 )
               }
             >
@@ -607,14 +605,7 @@ function InboundJobDetail({ jobNo, tab }: { jobNo: string; tab: string }) {
       <div className="rounded-md border bg-card">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b p-3">
           <div className="flex min-w-0 items-center gap-3">
-            <Button
-              size="icon"
-              variant="outline"
-              onClick={() => navigate("../..")}
-              title="Back to jobs"
-            >
-              <ArrowLeft size={16} />
-            </Button>
+            <Button size="icon" variant="outline" onClick={() => navigate(inboundJobsPath)} title="Back to jobs"><ArrowLeft size={16} /></Button>
             <div className="min-w-0">
               <p className="eyebrow">Inbound Job</p>
               <h1 className="m-0 truncate text-xl font-semibold">{jobNo}</h1>
@@ -660,7 +651,7 @@ function InboundJobDetail({ jobNo, tab }: { jobNo: string; tab: string }) {
                 : "ui-button ui-button-outline ui-button-sm"
             }
             key={item.value}
-            to={`../${item.value}${locationSearchPrincipal(job)}`}
+            to={inboundJobTabPath(jobNo, item.value, job)}
           >
             {item.label}
           </Link>
@@ -999,6 +990,18 @@ function parseInboundView(pathname: string) {
     jobNo: viewIndex >= 0 ? parts[viewIndex + 1] : "",
     tab: viewIndex >= 0 ? parts[viewIndex + 2] : "",
   };
+}
+
+function inboundJobDetailPath(row: WmsRow) {
+  const jobNo = encodeURIComponent(value(row, "job_no"));
+  const principalCode = encodeURIComponent(value(row, "prin_code"));
+  return `${inboundJobsPath}/view/${jobNo}/shipment_details${principalCode ? `?principal_code=${principalCode}` : ""}`;
+}
+
+function inboundJobTabPath(jobNo: string, tab: string, job: WmsRow | null) {
+  const encodedJobNo = encodeURIComponent(jobNo);
+  const prin = value(job || {}, "prin_code");
+  return `${inboundJobsPath}/view/${encodedJobNo}/${tab}${prin ? `?principal_code=${encodeURIComponent(prin)}` : ""}`;
 }
 
 function filterJobByTab(row: WmsRow, tab: string) {

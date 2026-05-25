@@ -98,6 +98,16 @@ export async function executeWmsInboundSql(rawSql: string) {
   return response.data.data || [];
 }
 
+export async function executeWmsInboundSqlBody(query_parameter: string, query_where: string, query_updatevalues: string) {
+  const response = await api.post<ApiResponse<LookupRow[]> & { data?: LookupRow[]; totalCount?: number; error?: string; details?: string }>("/api/wms/inbound/executeRawSqlbody", {
+    query_parameter,
+    query_where,
+    query_updatevalues,
+  });
+  if (!response.data.success) throw new Error(response.data.message || response.data.details || response.data.error || "Unable to execute WMS update");
+  return response.data.data || [];
+}
+
 export async function getWmsOutbound<T = unknown>(endpoint: string, params: Record<string, unknown> = {}) {
   const response = await api.get<ApiResponse<T>>(`/api/wms/outbound/${endpoint}`, { params });
   if (!response.data.success) throw new Error(response.data.message || `Unable to load ${endpoint}`);
@@ -108,6 +118,12 @@ export async function postWmsOutbound<TPayload extends Record<string, unknown>>(
   const response = await api.post<ApiResponse<unknown>>(`/api/wms/outbound/${endpoint}`, payload);
   if (!response.data.success) throw new Error(response.data.message || `Unable to save ${endpoint}`);
   return response.data; 
+}
+
+export async function putWmsOutbound<TPayload extends Record<string, unknown> | unknown[]>(endpoint: string, payload: TPayload, params: Record<string, unknown> = {}) {
+  const response = await api.put<ApiResponse<unknown>>(`/api/wms/outbound/${endpoint}`, payload, { params });
+  if (!response.data.success) throw new Error(response.data.message || `Unable to update ${endpoint}`);
+  return response.data;
 }
 
 export async function getWmsStockTransfer<T = unknown>(endpoint: string, params: Record<string, unknown> = {}) {

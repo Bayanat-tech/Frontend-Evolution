@@ -22,6 +22,7 @@ import { PLSetupPage } from "../pages/finance/PLSetupPage";
 import { PrepaidRegisterPage } from "../pages/finance/PrepaidRegisterPage";
 import { WmsCountryPage } from "../pages/wms/WmsCountryPage";
 import { WmsInboundPage } from "../pages/wms/WmsInboundPage";
+import { WmsOutboundPage } from "../pages/wms/WmsOutboundPage";
 import { WmsSimpleMasterPage } from "../pages/wms/WmsSimpleMasterPage";
 import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
 import { SecurityAssignmentPage, securityAssignmentConfigs } from "../pages/security/SecurityAssignmentPage";
@@ -150,6 +151,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "WMS Inbound",
     match: ({ pathname }) => isWmsInboundRoute(pathname),
     element: () => <WmsInboundPage />,
+  },
+  {
+    name: "WMS Outbound",
+    match: ({ pathname }) => isWmsOutboundRoute(pathname),
+    element: () => <WmsOutboundPage />,
   },
   {
     name: "WMS Country Master",
@@ -375,6 +381,11 @@ function isWmsCountryRoute(pathname: string) {
 function isWmsInboundRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/wms/") && normalized.includes("/inbound") && (normalized.includes("/jobs") || normalized.includes("/job") || normalized.includes("/inboundjob"));
+}
+
+function isWmsOutboundRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/wms/") && normalized.includes("/outbound") && (normalized.includes("/jobs") || normalized.includes("/job") || normalized.includes("jobs_oub"));
 }
 
 function getWmsSimpleMasterConfig(pathname: string) {
