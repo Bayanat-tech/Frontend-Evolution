@@ -67,8 +67,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
 
   const leaves = useMemo(() => flattenLeaves(activeApp?.children || []), [activeApp]);
   const activeLeaf = leaves.find((leaf) => {
-    const path = cleanPath(leaf.url_path);
-    return path && location.pathname.toLowerCase().includes(path.toLowerCase());
+    return isPathActive(cleanPath(leaf.url_path), location.pathname);
   });
 
   const handleLogout = () => {
@@ -278,6 +277,20 @@ function getMenuIcon(item: MenuNode): LucideIcon {
 
 function isMenuNodeActive(item: MenuNode, pathname: string): boolean {
   const path = cleanPath(item.url_path);
-  if (path && pathname.toLowerCase().includes(path.toLowerCase())) return true;
+  if (isPathActive(path, pathname)) return true;
   return Boolean(item.children?.some((child) => isMenuNodeActive(child, pathname)));
+}
+
+function isPathActive(menuPath: string, pathname: string): boolean {
+  if (!menuPath) return false;
+  const path = normalizeRoutePath(menuPath);
+  const current = normalizeRoutePath(pathname);
+  return current === path || current.endsWith(`/${path}`);
+}
+
+function normalizeRoutePath(path: string) {
+  return path
+    .replace(/^\/+|\/+$/g, "")
+    .replace(/^workspace\/[^/]+\//i, "")
+    .toLowerCase();
 }
