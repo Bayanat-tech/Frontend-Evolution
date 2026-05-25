@@ -335,7 +335,19 @@ function isWmsCountryRoute(pathname: string) {
 
 function isWmsInboundRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  return normalized.includes("/wms/") && normalized.includes("/inbound") && (normalized.includes("/jobs") || normalized.includes("/job") || normalized.includes("/inboundjob"));
+  if (!normalized.includes("/wms/")) return false;
+ 
+  // Case 1: listing page — /wms/.../inbound/jobs (any depth)
+  const isListing =
+    normalized.includes("/inbound") &&
+    (normalized.includes("/jobs") || normalized.includes("/inboundjob"));
+ 
+  // Case 2: detail page — /wms/.../view/{jobNo}/{tab}
+  // The navigate() call in WmsInboundPage does `navigate("view/IB.../shipment_details")`
+  // which resolves relative to the listing, producing /workspace/wms/.../view/IB.../...
+  const isDetail = normalized.includes("/view/");
+ 
+  return isListing || isDetail;
 }
 
 function getWmsSimpleMasterConfig(pathname: string) {

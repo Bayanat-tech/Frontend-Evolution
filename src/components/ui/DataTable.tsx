@@ -3,6 +3,7 @@ import {
   ColumnFiltersState,
   Column,
   FilterFn,
+  RowSelectionState,
   SortingState,
   VisibilityState,
   flexRender,
@@ -50,6 +51,8 @@ export type DataTableProps<TData, TValue> = {
   enableColumnVisibility?: boolean;
   rowClassName?: (row: TData) => string;
   getRowId?: (row: TData, index: number) => string;
+  /** Called whenever row selection changes. Receives the array of selected row originals. */
+  onRowSelectionChange?: (selectedRows: TData[]) => void;
 };
 
 const densityClasses: Record<DataTableDensity, { row: string; cell: string }> = {
@@ -99,10 +102,12 @@ export function DataTable<TData, TValue>({
   enableColumnVisibility = false,
   rowClassName,
   getRowId,
+  onRowSelectionChange,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [internalColumnFilters, setInternalColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [activeFilterColumn, setActiveFilterColumn] = useState<string | null>(null);
   const [internalSearch, setInternalSearch] = useState("");
   const globalFilter = searchValue ?? internalSearch;
@@ -125,9 +130,15 @@ export function DataTable<TData, TValue>({
       columnFilters,
       columnVisibility,
       globalFilter,
+      rowSelection,
     },
     initialState: {
       pagination: { pageIndex: 0, pageSize },
+    },
+    enableRowSelection: !!onRowSelectionChange,
+    onRowSelectionChange: (updater) => {
+      const next = typeof updater === "function" ? updater(rowSelection) : updater;
+      setRowSelection(next);
     },
     onSortingChange: setSorting,
     onColumnFiltersChange: (updater) => {
@@ -146,18 +157,42 @@ export function DataTable<TData, TValue>({
     getPaginationRowModel: getPaginationRowModel(),
     manualPagination,
     manualFiltering,
-    pageCount: manualPagination ? Math.max(1, Math.ceil((totalRows ?? data.length) / Math.max(pageSize, 1))) : undefined,
+    pageCount: manualPagination
+      ? Math.max(1, Math.ceil((totalRows ?? data.length) / Math.max(pageSize, 1)))
+      : undefined,
   });
 
-  const visibleRows = manualFiltering ? table.getCoreRowModel().rows : manualPagination ? table.getFilteredRowModel().rows : enablePagination ? table.getRowModel().rows : table.getFilteredRowModel().rows;
+  // Fire onRowSelectionChange whenever selection changes
+  useEffect(() => {
+    if (!onRowSelectionChange) return;
+    const selected = table.getSelectedRowModel().rows.map((r) => r.original);
+    onRowSelectionChange(selected);
+  }, [rowSelection]);
+
+  // Reset selection when data changes (e.g. tab switch)
+  useEffect(() => {
+    setRowSelection({});
+  }, [data]);
+
+  const visibleRows = manualFiltering
+    ? table.getCoreRowModel().rows
+    : manualPagination
+    ? table.getFilteredRowModel().rows
+    : enablePagination
+    ? table.getRowModel().rows
+    : table.getFilteredRowModel().rows;
+
   const skeletonRows = useMemo(() => Array.from({ length: Math.min(pageSize, 10) }), [pageSize]);
   const heightValue = typeof height === "number" ? `${height}px` : height;
   const minWidthValue = typeof minWidth === "number" ? `${minWidth}px` : minWidth;
-  const pageCount = manualPagination ? Math.max(1, Math.ceil((totalRows ?? data.length) / Math.max(pageSize, 1))) : table.getPageCount() || 1;
+  const pageCount = manualPagination
+    ? Math.max(1, Math.ceil((totalRows ?? data.length) / Math.max(pageSize, 1)))
+    : table.getPageCount() || 1;
   const currentPageIndex = manualPagination ? pageIndex : table.getState().pagination.pageIndex;
   const displayTitle = title && !isCountTitle(title) ? title : undefined;
   const canPreviousPage = currentPageIndex > 0;
   const canNextPage = currentPageIndex < pageCount - 1;
+
   const goToPage = (nextPageIndex: number) => {
     const boundedPageIndex = Math.min(Math.max(nextPageIndex, 0), Math.max(pageCount - 1, 0));
     if (manualPagination) {
@@ -166,6 +201,7 @@ export function DataTable<TData, TValue>({
       table.setPageIndex(boundedPageIndex);
     }
   };
+
   const changePageSize = (nextPageSize: number) => {
     if (manualPagination) {
       onPageSizeChange?.(nextPageSize);
@@ -174,14 +210,32 @@ export function DataTable<TData, TValue>({
     }
   };
 
+  const selectedCount = Object.keys(rowSelection).length;
+
   return (
     <div className="overflow-hidden rounded-md border bg-card shadow-sm">
       {(displayTitle || subtitle || onSearchChange || toolbar || enableColumnVisibility) && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b p-2">
           {(displayTitle || subtitle) && (
-            <div>
-              {subtitle && <p className="eyebrow">{subtitle}</p>}
-              {displayTitle && <h2 className="m-0 text-base font-semibold">{displayTitle}</h2>}
+            <div className="flex items-center gap-3">
+              <div>
+                {subtitle && <p className="eyebrow">{subtitle}</p>}
+                {displayTitle && <h2 className="m-0 text-base font-semibold">{displayTitle}</h2>}
+              </div>
+              {/* Selection badge */}
+              {onRowSelectionChange && selectedCount > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                  {selectedCount} selected
+                  <button
+                    type="button"
+                    className="ml-0.5 rounded hover:text-destructive"
+                    onClick={() => setRowSelection({})}
+                    title="Clear selection"
+                  >
+                    <X size={10} />
+                  </button>
+                </span>
+              )}
             </div>
           )}
           <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
@@ -235,8 +289,12 @@ export function DataTable<TData, TValue>({
                     <div className="flex min-h-7 items-center justify-between gap-1">
                       <span className="min-w-0 truncate">
                         {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                        {header.column.getIsSorted() === "asc" && <span className="ml-1 text-[10px] normal-case text-primary">Asc</span>}
-                        {header.column.getIsSorted() === "desc" && <span className="ml-1 text-[10px] normal-case text-primary">Desc</span>}
+                        {header.column.getIsSorted() === "asc" && (
+                          <span className="ml-1 text-[10px] normal-case text-primary">Asc</span>
+                        )}
+                        {header.column.getIsSorted() === "desc" && (
+                          <span className="ml-1 text-[10px] normal-case text-primary">Desc</span>
+                        )}
                       </span>
                       {enableColumnFilters && header.column.getCanFilter() && (
                         <ColumnFilterButton
@@ -255,12 +313,23 @@ export function DataTable<TData, TValue>({
             {loading ? (
               skeletonRows.map((_, index) => (
                 <TableRow className={rowStyle.row} key={index}>
-                  <TableCell className={rowStyle.cell} colSpan={columns.length}><Skeleton /></TableCell>
+                  <TableCell className={rowStyle.cell} colSpan={columns.length}>
+                    <Skeleton />
+                  </TableCell>
                 </TableRow>
               ))
             ) : visibleRows.length ? (
               visibleRows.map((row) => (
-                <TableRow className={cn(rowStyle.row, rowClassName?.(row.original))} data-state={row.getIsSelected() && "selected"} key={row.id}>
+                <TableRow
+                  className={cn(
+                    rowStyle.row,
+                    rowClassName?.(row.original),
+                    // highlight selected rows
+                    onRowSelectionChange && row.getIsSelected() && "bg-primary/5 outline outline-1 outline-primary/20",
+                  )}
+                  data-state={row.getIsSelected() ? "selected" : undefined}
+                  key={row.id}
+                >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell className={rowStyle.cell} key={cell.id}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -300,10 +369,18 @@ export function DataTable<TData, TValue>({
               </select>
             </label>
             <div className="flex items-center gap-1">
-              <Button size="icon" variant="outline" disabled={!canPreviousPage} onClick={() => goToPage(0)}><ChevronsLeft size={15} /></Button>
-              <Button size="icon" variant="outline" disabled={!canPreviousPage} onClick={() => goToPage(currentPageIndex - 1)}><ChevronLeft size={15} /></Button>
-              <Button size="icon" variant="outline" disabled={!canNextPage} onClick={() => goToPage(currentPageIndex + 1)}><ChevronRight size={15} /></Button>
-              <Button size="icon" variant="outline" disabled={!canNextPage} onClick={() => goToPage(pageCount - 1)}><ChevronsRight size={15} /></Button>
+              <Button size="icon" variant="outline" disabled={!canPreviousPage} onClick={() => goToPage(0)}>
+                <ChevronsLeft size={15} />
+              </Button>
+              <Button size="icon" variant="outline" disabled={!canPreviousPage} onClick={() => goToPage(currentPageIndex - 1)}>
+                <ChevronLeft size={15} />
+              </Button>
+              <Button size="icon" variant="outline" disabled={!canNextPage} onClick={() => goToPage(currentPageIndex + 1)}>
+                <ChevronRight size={15} />
+              </Button>
+              <Button size="icon" variant="outline" disabled={!canNextPage} onClick={() => goToPage(pageCount - 1)}>
+                <ChevronsRight size={15} />
+              </Button>
             </div>
           </div>
         </div>
@@ -313,7 +390,9 @@ export function DataTable<TData, TValue>({
 }
 
 function isCountTitle(title: string) {
-  return /^(loading|[\d,]+\s+(records?|rows?|items?|documents?|vouchers?|cheques?|lines?|jobs?|countries?))$/i.test(title.trim());
+  return /^(loading|[\d,]+\s+(records?|rows?|items?|documents?|vouchers?|cheques?|lines?|jobs?|countries?))$/i.test(
+    title.trim(),
+  );
 }
 
 function ColumnFilterButton<TData, TValue>({
@@ -328,6 +407,7 @@ function ColumnFilterButton<TData, TValue>({
   const value = String(column.getFilterValue() ?? "");
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [position, setPosition] = useState({ left: 12, top: 12 });
+
   const updatePosition = () => {
     const rect = buttonRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -407,7 +487,12 @@ function ColumnFilterPopup({
     >
       <div className="flex items-center justify-between gap-2">
         <span className="font-semibold leading-none text-foreground">Filter</span>
-        <button type="button" className="grid h-5 w-5 place-items-center rounded hover:bg-accent" onClick={onClose} aria-label="Close filter">
+        <button
+          type="button"
+          className="grid h-5 w-5 place-items-center rounded hover:bg-accent"
+          onClick={onClose}
+          aria-label="Close filter"
+        >
           <X size={12} />
         </button>
       </div>
@@ -422,8 +507,12 @@ function ColumnFilterPopup({
         />
       </label>
       <div className="flex justify-end gap-1">
-        <Button size="sm" variant="ghost" type="button" onClick={() => onChange("")}>Clear</Button>
-        <Button size="sm" type="button" onClick={onClose}>Done</Button>
+        <Button size="sm" variant="ghost" type="button" onClick={() => onChange("")}>
+          Clear
+        </Button>
+        <Button size="sm" type="button" onClick={onClose}>
+          Done
+        </Button>
       </div>
     </div>
   );

@@ -1,68 +1,143 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowLeft, Ban, CheckCircle2, Eye, PackageCheck, Plus, Printer, RefreshCw, Save, Settings2, Truck, X } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft, Ban, CheckCircle2, Eye, PackageCheck, Plus, Printer,
+  RefreshCw, Save, Settings2, Truck, X, ChevronDown
+} from "lucide-react";
+import { FormEvent, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { executeWmsInboundSql, getWmsInbound, patchWmsInbound, postWmsInbound } from "../../api/wms";
 import { api } from "../../api/client";
 import { Button } from "../../components/ui/Button";
-import { Card, CardContent, CardHeader } from "../../components/ui/Card";
+import { Card, CardContent } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
-import { titleCase } from "../../utils/menu";
-
+import { cn } from "../../lib/utils";
+import { LookupField } from "../../components/ui/LookupField";
 type WmsRow = Record<string, unknown>;
-
-// ---------------------------------------------------------------------------
-// Generic hook — pass any raw SQL + which keys to use for value/label
-// ---------------------------------------------------------------------------
 type DropdownOption = { value: string; label: string };
 
-type UseRawSqlDropdownProps = {
-  sql: string;
-  valueKey: string;
-  labelKeys: string[];
-  enabled?: boolean;
-};
+// ---------------------------------------------------------------------------
+// SearchableSelect
+// ---------------------------------------------------------------------------
+function SearchableSelect({
+  value: currentValue, options, placeholder, onChange, onClear, hasValue,
+}: {
+  value: string; options: DropdownOption[]; placeholder: string;
+  onChange: (val: string) => void; onClear: () => void; hasValue: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
 
-function useRawSqlDropdown({ sql, valueKey, labelKeys, enabled = true }: UseRawSqlDropdownProps) {
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filtered = useMemo(
+    () => search.trim()
+      ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase())).slice(0, 50)
+      : options.slice(0, 50),
+    [options, search],
+  );
+
+  const selectedLabel = options.find((o) => o.value === currentValue)?.label || "";
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => { setOpen((v) => !v); setSearch(""); }}
+        className={cn(
+          "flex w-full items-center justify-between rounded-md border px-3 py-2 text-sm transition-all duration-200",
+          hasValue
+            ? "border-primary bg-primary/10 font-medium text-primary ring-1 ring-primary/30"
+            : "border-input bg-background text-muted-foreground",
+        )}
+      >
+        <span className="truncate">{hasValue ? selectedLabel : placeholder}</span>
+        <ChevronDown size={14} className="ml-2 shrink-0 opacity-50" />
+      </button>
+      {hasValue && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onClear(); setOpen(false); }}
+          className="absolute right-7 top-1/2 -translate-y-1/2 flex h-4 w-4 items-center justify-center rounded-full bg-muted-foreground/30 text-foreground hover:bg-destructive hover:text-white transition-colors"
+        >
+          <X size={10} />
+        </button>
+      )}
+      {open && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg">
+          <div className="p-2 border-b">
+            <input
+              autoFocus
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search..."
+              className="w-full rounded border border-input bg-background px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <ul className="max-h-52 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <li className="px-3 py-2 text-sm text-muted-foreground">No results</li>
+            ) : (
+              filtered.map((opt) => (
+                <li
+                  key={opt.value}
+                  className={cn(
+                    "cursor-pointer px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground",
+                    opt.value === currentValue && "bg-primary/10 font-medium text-primary",
+                  )}
+                  onMouseDown={() => { onChange(opt.value); setOpen(false); setSearch(""); }}
+                >
+                  {opt.label}
+                </li>
+              ))
+            )}
+          </ul>
+          {options.length > 50 && (
+            <p className="border-t px-3 py-1.5 text-[11px] text-muted-foreground">
+              Showing 50 of {options.length} — type to filter
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// useRawSqlDropdown
+// ---------------------------------------------------------------------------
+function useRawSqlDropdown({ sql, valueKey, labelKeys, enabled = true }: {
+  sql: string; valueKey: string; labelKeys: string[]; enabled?: boolean;
+}) {
   const [options, setOptions] = useState<DropdownOption[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!enabled || !sql) return;
-    setLoading(true);
-    setError(null);
-
-    api
-      .post("/api/wms/inbound/executeRawSql", { raw_sql: sql })
+    api.post("/api/wms/inbound/executeRawSql", { raw_sql: sql })
       .then((response) => {
-        const data = Array.isArray(response.data?.data)
-          ? response.data.data
-          : Array.isArray(response.data)
-          ? response.data
-          : [];
-
-        setOptions(
-          data.map((row: Record<string, unknown>) => {
-            // handles uppercase (Oracle default) and lowercase column names
-            const get = (key: string) =>
-              String(row[key] ?? row[key.toLowerCase()] ?? row[key.toUpperCase()] ?? "");
-            return {
-              value: get(valueKey),
-              label: labelKeys.map(get).filter(Boolean).join(" - "),
-            };
-          }),
-        );
+        const data = Array.isArray(response.data?.data) ? response.data.data
+          : Array.isArray(response.data) ? response.data : [];
+        setOptions(data.map((row: Record<string, unknown>) => {
+          const get = (key: string) =>
+            String(row[key] ?? row[key.toLowerCase()] ?? row[key.toUpperCase()] ?? "");
+          return { value: get(valueKey), label: labelKeys.map(get).filter(Boolean).join(" - ") };
+        }));
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load options"))
-      .finally(() => setLoading(false));
+      .catch(() => {});
   }, [sql, enabled]);
 
-  return { options, loading, error };
+  return { options };
 }
 
 // ---------------------------------------------------------------------------
@@ -75,16 +150,9 @@ const listingTabs = [
 ];
 
 const jobClassLabels: Record<string, string> = {
-  N: "Normal",
-  NP: "Normal HHT/RFID/AR",
-  M: "Manual Putaway",
-  S: "Sales Return",
-  SP: "Sales Return HHT/RFID/AR",
-  NI: "Non-Inventory",
-  CP: "Co-Packing",
-  MR: "Misc Receipts",
-  IWT: "Inter Warehouse Transfer",
-  CD: "Cross Docking",
+  N: "Normal", NP: "Normal HHT/RFID/AR", M: "Manual Putaway", S: "Sales Return",
+  SP: "Sales Return HHT/RFID/AR", NI: "Non-Inventory", CP: "Co-Packing",
+  MR: "Misc Receipts", IWT: "Inter Warehouse Transfer", CD: "Cross Docking",
 };
 
 const detailTabs = [
@@ -101,11 +169,8 @@ const detailTabs = [
 ];
 
 type JobField = {
-  name: string;
-  label: string;
-  required?: boolean;
-  type?: string;
-  dropdown?: "principal" | "division" | "department";
+  name: string; label: string; required?: boolean; type?: string;
+  dropdown?: "principal" | "division" | "department" | "port" | "country";
 };
 
 const jobFields: JobField[] = [
@@ -114,16 +179,97 @@ const jobFields: JobField[] = [
   { name: "div_code", label: "Division Code", dropdown: "division" },
   { name: "job_class", label: "Job Class", required: true },
   { name: "job_type", label: "Job Type", required: true },
-  { name: "country_origin", label: "Country Origin" },
-  { name: "country_destination", label: "Country Destination" },
-  { name: "port_code", label: "Port Code" },
-  { name: "destination_port", label: "Destination Port" },
+  { name: "country_origin", label: "Country Origin", dropdown: "country" },
+  { name: "country_destination", label: "Country Destination", dropdown: "country" },
+  { name: "port_code", label: "Port Code", dropdown: "port" },
+  { name: "destination_port", label: "Destination Port", dropdown: "port" },
   { name: "transport_mode", label: "Transport Mode" },
   { name: "schedule_date", label: "Schedule Date", type: "date" },
   { name: "doc_ref", label: "Doc Ref" },
   { name: "prin_ref2", label: "Principal Ref 2" },
   { name: "description1", label: "Description" },
   { name: "remarks", label: "Remarks" },
+];
+
+// ---------------------------------------------------------------------------
+// Add form field configs per tab
+
+const shipmentFormFields: FormField[] = [
+  { name: "container_no", label: "Container No", required: true },
+  { name: "vehicle_no", label: "Vehicle No" },
+  { name: "vessel_name", label: "Vessel Name" },
+  { name: "voyage_no", label: "Voyage No" },
+  { name: "seal_no", label: "Seal No" },
+  { name: "po_no", label: "PO No" },
+  { name: "bl_no", label: "BL No" },
+  { name: "arrival_date", label: "Arrival Date", type: "date" },
+  { name: "remarks", label: "Remarks" },
+];
+
+// Add a new type to FormField
+type FormField = {
+  name: string; label: string; required?: boolean; type?: string;
+  dropdown?: DropdownOption[];
+  lookup?: "product"; // ← add this
+};
+
+const packingFormFields: FormField[] = [
+  { name: "prod_code", label: "Product / SKU", required: true, lookup: "product" }, // ← changed
+  { name: "qty", label: "Quantity (Primary)", required: true, type: "number" },
+  { name: "uom", label: "UOM" },
+  { name: "batch_no", label: "Batch No" },
+  { name: "lot_no", label: "Lot No" },
+  { name: "container_no", label: "Container No" },
+  { name: "po_no", label: "PO No" },
+  { name: "doc_ref", label: "Doc Ref" },
+  { name: "mfg_date", label: "Mfg Date", type: "date" },
+  { name: "exp_date", label: "Exp Date", type: "date" },
+];
+
+const receivingFormFields: FormField[] = [
+  { name: "prod_code", label: "Product Code", required: true },
+  { name: "qty_arrived", label: "Arrived Qty", required: true, type: "number" },
+  { name: "uom", label: "UOM" },
+  { name: "batch_no", label: "Batch No" },
+  { name: "lot_no", label: "Lot No" },
+  { name: "po_no", label: "PO No" },
+  { name: "doc_ref", label: "Doc Ref" },
+];
+
+const qualityFormFields: FormField[] = [
+  { name: "prod_code", label: "Product Code", required: true },
+  { name: "clearance", label: "Clearance Status", required: true },
+  { name: "remarks", label: "Remarks" },
+];
+
+const tallyFormFields: FormField[] = [
+  { name: "prod_code", label: "Product Code", required: true },
+  { name: "qty_tally", label: "Tally Qty", required: true, type: "number" },
+  { name: "uom", label: "UOM" },
+  { name: "batch_no", label: "Batch No" },
+  { name: "lot_no", label: "Lot No" },
+  { name: "container_no", label: "Container No" },
+  { name: "po_no", label: "PO No" },
+];
+
+const putawayFormFields: FormField[] = [
+  { name: "prod_code", label: "Product Code", required: true },
+  { name: "site_to", label: "Site To", required: true },
+  { name: "location_to", label: "Location To", required: true },
+  { name: "qty_confirm", label: "Confirm Qty", required: true, type: "number" },
+  { name: "batch_no", label: "Batch No" },
+  { name: "lot_no", label: "Lot No" },
+];
+
+const manualPutawayFormFields: FormField[] = [
+  { name: "prod_code", label: "Product Code", required: true },
+  { name: "site_from", label: "Site From", required: true },
+  { name: "location_from", label: "Location From", required: true },
+  { name: "site_to", label: "Site To", required: true },
+  { name: "location_to", label: "Location To", required: true },
+  { name: "qty", label: "Quantity", required: true, type: "number" },
+  { name: "batch_no", label: "Batch No" },
+  { name: "lot_no", label: "Lot No" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -158,34 +304,31 @@ function InboundJobListing() {
   const [cancelRemarks, setCancelRemarks] = useState("");
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  // ---- dropdown data -------------------------------------------------------
   const { options: principalOptions } = useRawSqlDropdown({
     sql: `SELECT PRIN_CODE, PRIN_NAME FROM MS_PRINCIPAL WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY PRIN_NAME`,
-    valueKey: "PRIN_CODE",
-    labelKeys: ["PRIN_CODE", "PRIN_NAME"],
-    enabled: !!companyCode,
+    valueKey: "PRIN_CODE", labelKeys: ["PRIN_CODE", "PRIN_NAME"], enabled: !!companyCode,
   });
-
   const { options: divisionOptions } = useRawSqlDropdown({
     sql: `SELECT DIV_CODE, DIV_NAME FROM MS_HR_DIVISION WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY DIV_NAME`,
-    valueKey: "DIV_CODE",
-    labelKeys: ["DIV_CODE", "DIV_NAME"],
-    enabled: !!companyCode,
+    valueKey: "DIV_CODE", labelKeys: ["DIV_CODE", "DIV_NAME"], enabled: !!companyCode,
   });
-
   const { options: deptOptions } = useRawSqlDropdown({
     sql: `SELECT DEPT_CODE, DEPT_NAME FROM MS_DEPARTMENT WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY DEPT_NAME`,
-    valueKey: "DEPT_CODE",
-    labelKeys: ["DEPT_CODE", "DEPT_NAME"],
-    enabled: !!companyCode,
+    valueKey: "DEPT_CODE", labelKeys: ["DEPT_CODE", "DEPT_NAME"], enabled: !!companyCode,
+  });
+  const { options: portOptions } = useRawSqlDropdown({
+    sql: `SELECT PORT_CODE, PORT_NAME FROM MS_PORT ORDER BY PORT_NAME`,
+    valueKey: "PORT_CODE", labelKeys: ["PORT_CODE", "PORT_NAME"], enabled: true,
+  });
+  const { options: countryOptions } = useRawSqlDropdown({
+    sql: `SELECT COUNTRY_CODE, COUNTRY_NAME FROM MS_COUNTRY ORDER BY COUNTRY_NAME`,
+    valueKey: "COUNTRY_CODE", labelKeys: ["COUNTRY_CODE", "COUNTRY_NAME"], enabled: true,
   });
 
   const dropdownMap: Record<string, DropdownOption[]> = {
-    principal: principalOptions,
-    division: divisionOptions,
-    department: deptOptions,
+    principal: principalOptions, division: divisionOptions,
+    department: deptOptions, port: portOptions, country: countryOptions,
   };
-  // --------------------------------------------------------------------------
 
   const loadRows = async () => {
     setLoading(true);
@@ -196,18 +339,13 @@ function InboundJobListing() {
       );
       setRows(data.map(normalizeRow));
     } catch (error) {
-      setNotice({
-        type: "error",
-        message: error instanceof Error ? error.message : "Unable to load inbound jobs",
-      });
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load inbound jobs" });
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    void loadRows();
-  }, []);
+  useEffect(() => { void loadRows(); }, []);
 
   const filteredRows = useMemo(
     () => rows.filter((row) => filterJobByTab(row, activeTab)),
@@ -217,112 +355,53 @@ function InboundJobListing() {
   const columns = useMemo<ColumnDef<WmsRow>[]>(
     () => [
       {
-        accessorKey: "job_no",
-        header: "Job No",
-        size: 130,
+        accessorKey: "job_no", header: "Job No", size: 130,
         cell: ({ row }) => (
           <button
             className="font-semibold text-primary hover:underline"
-            onClick={() =>
-              navigate(
-                `view/${value(row.original, "job_no")}/shipment_details?principal_code=${value(row.original, "prin_code")}`,
-              )
-            }
+            onClick={() => navigate(`view/${value(row.original, "job_no")}/shipment_details?principal_code=${value(row.original, "prin_code")}`)}
           >
             {value(row.original, "job_no")}
           </button>
         ),
       },
       {
-        accessorKey: "job_class",
-        header: "Job Class",
-        size: 180,
+        accessorKey: "job_class", header: "Job Class", size: 180,
         cell: ({ row }) => <JobClassPill code={value(row.original, "job_class")} />,
       },
       {
-        accessorKey: "prin_name",
-        header: "Principal Name",
-        size: 240,
+        accessorKey: "prin_name", header: "Principal Name", size: 240,
         cell: ({ row }) => value(row.original, "prin_name"),
       },
       {
-        accessorKey: "job_date",
-        header: "Job Date",
-        size: 120,
+        accessorKey: "job_date", header: "Job Date", size: 120,
         cell: ({ row }) => formatDate(value(row.original, "job_date")),
       },
-      ...(activeTab === "confirmed"
-        ? [
-            {
-              accessorKey: "confirm_date",
-              header: "Confirm Date",
-              size: 130,
-              cell: ({ row }: { row: { original: WmsRow } }) =>
-                formatDate(value(row.original, "confirm_date")),
-            },
-          ]
-        : []),
-      ...(activeTab === "cancel"
-        ? [
-            {
-              accessorKey: "cancel_date",
-              header: "Cancel Date",
-              size: 130,
-              cell: ({ row }: { row: { original: WmsRow } }) =>
-                formatDate(value(row.original, "cancel_date")),
-            },
-          ]
-        : []),
+      ...(activeTab === "confirmed" ? [{
+        accessorKey: "confirm_date", header: "Confirm Date", size: 130,
+        cell: ({ row }: { row: { original: WmsRow } }) => formatDate(value(row.original, "confirm_date")),
+      }] : []),
+      ...(activeTab === "cancel" ? [{
+        accessorKey: "cancel_date", header: "Cancel Date", size: 130,
+        cell: ({ row }: { row: { original: WmsRow } }) => formatDate(value(row.original, "cancel_date")),
+      }] : []),
+      { accessorKey: "doc_ref", header: "Doc Ref", size: 130, cell: ({ row }) => value(row.original, "doc_ref") },
+      { accessorKey: "canceled", header: "Canceled", size: 100, cell: ({ row }) => flagBadge(value(row.original, "canceled")) },
+      { accessorKey: "invoiced", header: "Invoiced", size: 100, cell: ({ row }) => flagBadge(value(row.original, "invoiced")) },
       {
-        accessorKey: "doc_ref",
-        header: "Doc Ref",
-        size: 130,
-        cell: ({ row }) => value(row.original, "doc_ref"),
-      },
-      {
-        accessorKey: "canceled",
-        header: "Canceled",
-        size: 100,
-        cell: ({ row }) => flagBadge(value(row.original, "canceled")),
-      },
-      {
-        accessorKey: "invoiced",
-        header: "Invoiced",
-        size: 100,
-        cell: ({ row }) => flagBadge(value(row.original, "invoiced")),
-      },
-      {
-        accessorKey: "invoice_date",
-        header: "Invoice Date",
-        size: 130,
+        accessorKey: "invoice_date", header: "Invoice Date", size: 130,
         cell: ({ row }) => formatDate(value(row.original, "invoice_date")),
       },
       {
-        id: "actions",
-        header: "Actions",
-        size: 120,
-        enableColumnFilter: false,
+        id: "actions", header: "Actions", size: 120, enableColumnFilter: false,
         cell: ({ row }) => (
           <div className="flex items-center gap-1">
-            <Button
-              size="icon"
-              variant="ghost"
-              title="Open job"
-              onClick={() =>
-                navigate(
-                  `view/${value(row.original, "job_no")}/shipment_details?principal_code=${value(row.original, "prin_code")}`,
-                )
-              }
-            >
+            <Button size="icon" variant="ghost" title="Open job"
+              onClick={() => navigate(`view/${value(row.original, "job_no")}/shipment_details?principal_code=${value(row.original, "prin_code")}`)}>
               <Eye size={14} />
             </Button>
             {activeTab !== "cancel" && (
-              <Button
-                size="icon"
-                variant="ghost"
-                title="Cancel job"
-                onClick={() => setCancelTarget(row.original)}
-              >
+              <Button size="icon" variant="ghost" title="Cancel job" onClick={() => setCancelTarget(row.original)}>
                 <Ban size={14} />
               </Button>
             )}
@@ -336,28 +415,16 @@ function InboundJobListing() {
   const saveJob = async (event: FormEvent) => {
     event.preventDefault();
     const missing = jobFields.find((field) => field.required && !String(form[field.name] || "").trim());
-    if (missing) {
-      setNotice({ type: "error", message: `${missing.label} is required` });
-      return;
-    }
+    if (missing) { setNotice({ type: "error", message: `${missing.label} is required` }); return; }
     setSaving(true);
     try {
-      await postWmsInbound("inboundjob", {
-        ...form,
-        company_code: form.company_code || companyCode,
-        job_type: form.job_type || "IMP",
-      });
+      await postWmsInbound("inboundjob", { ...form, company_code: form.company_code || companyCode, job_type: form.job_type || "IMP" });
       setFormOpen(false);
       setNotice({ type: "success", message: "Inbound job saved successfully" });
       await loadRows();
     } catch (error) {
-      setNotice({
-        type: "error",
-        message: error instanceof Error ? error.message : "Unable to save inbound job",
-      });
-    } finally {
-      setSaving(false);
-    }
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save inbound job" });
+    } finally { setSaving(false); }
   };
 
   const confirmCancel = async () => {
@@ -365,22 +432,14 @@ function InboundJobListing() {
     setSaving(true);
     try {
       await patchWmsInbound("canceljob", {
-        job_no: value(cancelTarget, "job_no"),
-        prin_code: value(cancelTarget, "prin_code"),
-        remarks: cancelRemarks,
+        job_no: value(cancelTarget, "job_no"), prin_code: value(cancelTarget, "prin_code"), remarks: cancelRemarks,
       });
-      setCancelTarget(null);
-      setCancelRemarks("");
+      setCancelTarget(null); setCancelRemarks("");
       setNotice({ type: "success", message: "Inbound job cancellation submitted" });
       await loadRows();
     } catch (error) {
-      setNotice({
-        type: "error",
-        message: error instanceof Error ? error.message : "Unable to cancel inbound job",
-      });
-    } finally {
-      setSaving(false);
-    }
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to cancel inbound job" });
+    } finally { setSaving(false); }
   };
 
   return (
@@ -390,181 +449,133 @@ function InboundJobListing() {
           <p className="eyebrow">WMS Inbound</p>
           <h1 className="m-0 text-2xl font-semibold text-foreground">Inbound Job Listing</h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Manage import jobs, shipment progress, receiving, putaway, confirmation, and activity
-            billing.
+            Manage import jobs, shipment progress, receiving, putaway, confirmation, and activity billing.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={loadRows}>
-            <RefreshCw size={15} /> Refresh
-          </Button>
-          <Button
-            onClick={() => {
-              setForm(makeEmptyJob(companyCode));
-              setFormOpen(true);
-            }}
-          >
+          <Button variant="outline" onClick={loadRows}><RefreshCw size={15} /> Refresh</Button>
+          <Button onClick={() => { setForm(makeEmptyJob(companyCode)); setFormOpen(true); }}>
             <Plus size={15} /> Add Job
           </Button>
         </div>
       </div>
 
-      {notice && (
-        <div className={notice.type === "error" ? "alert error" : "alert success"}>
-          {notice.message}
-        </div>
-      )}
+      {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
 
       <div className="flex flex-wrap gap-2 rounded-md border bg-card p-2">
         {listingTabs.map((tab) => (
-          <Button
-            key={tab.value}
-            size="sm"
-            variant={activeTab === tab.value ? "default" : "outline"}
-            onClick={() => setActiveTab(tab.value)}
-          >
+          <Button key={tab.value} size="sm" variant={activeTab === tab.value ? "default" : "outline"}
+            onClick={() => setActiveTab(tab.value)}>
             {tab.label}
           </Button>
         ))}
       </div>
 
       <DataTable
-        columns={columns}
-        data={filteredRows}
+        columns={columns} data={filteredRows}
         title={loading ? "Loading" : `${filteredRows.length} Jobs`}
-        subtitle="Inbound Jobs"
-        searchValue={query}
-        onSearchChange={setQuery}
+        subtitle="Inbound Jobs" searchValue={query} onSearchChange={setQuery}
         searchPlaceholder="Search job, principal, reference..."
-        loading={loading}
-        height="calc(100vh - 310px)"
-        minWidth={1380}
-        density="grid"
-        enablePagination
-        pageSize={50}
+        loading={loading} height="calc(100vh - 310px)" minWidth={1380} density="grid"
+        enablePagination pageSize={50}
         getRowId={(row, index) => String(value(row, "job_no") || index)}
         rowClassName={(row) =>
-          isCanceled(row)
-            ? "bg-red-50/70"
-            : hasDate(value(row, "confirm_date"))
-            ? "bg-emerald-50/70"
+          isCanceled(row) ? "bg-red-50/70"
+            : hasDate(value(row, "confirm_date")) ? "bg-emerald-50/70"
             : "bg-blue-50/50"
         }
       />
 
-      {/* ---- Add Job Dialog ---- */}
-      <Dialog
-        open={formOpen}
-        title="Add Inbound Job"
+      {/* Add Job Dialog */}
+      <Dialog wide open={formOpen} title="Add Inbound Job"
         description="Create an import job using the existing WMS backend flow."
-        onClose={() => setFormOpen(false)}
-        // className="sm:max-w-4xl"
-      >
-        <form className="grid gap-4" onSubmit={saveJob}>
-          <div className="grid gap-3 md:grid-cols-3">
+        onClose={() => setFormOpen(false)}>
+        <form className="grid gap-2" onSubmit={saveJob}>
+          <div className="grid gap-2 grid-cols-2 md:grid-cols-3">
             {jobFields.map((field) => {
-              // resolve dropdown options if this field has one
               const ddOptions = field.dropdown ? dropdownMap[field.dropdown] : null;
-
+              const isFullRow = field.name === "remarks" || field.name === "description1";
               return (
-                <label
-                  className={
-                    field.name === "remarks" || field.name === "description1"
-                      ? "field md:col-span-3"
-                      : "field"
-                  }
-                  key={field.name}
-                >
-                  <span>
-                    {field.label}
-                    {field.required && <strong className="text-destructive"> *</strong>}
+                <label className={isFullRow ? "field col-span-2 md:col-span-3" : "field"} key={field.name}>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {field.label}{field.required && <strong className="text-destructive"> *</strong>}
                   </span>
-
-                  {/* Master-table dropdowns: principal / division / department */}
                   {ddOptions ? (
-                    <Select
-                      value={String(form[field.name] || "")}
-                      onChange={(event) =>
-                        setForm((cur) => ({ ...cur, [field.name]: event.target.value }))
-                      }
-                    >
-                      {/* <option value="">Select {field.label}</option> */}
-                      {ddOptions.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </Select>
+                    field.dropdown === "port" || field.dropdown === "country" ? (
+                      <SearchableSelect
+                        value={String(form[field.name] || "")} options={ddOptions}
+                        placeholder={`— Select ${field.label} —`} hasValue={!!form[field.name]}
+                        onChange={(val) => setForm((cur) => ({ ...cur, [field.name]: val }))}
+                        onClear={() => setForm((cur) => ({ ...cur, [field.name]: "" }))}
+                      />
+                    ) : (
+                      <div className="relative">
+                        <Select value={String(form[field.name] || "")}
+                          onChange={(e) => setForm((cur) => ({ ...cur, [field.name]: e.target.value }))}
+                          className={cn("pr-8 transition-all duration-200",
+                            form[field.name] ? "border-primary bg-primary/10 font-medium text-primary ring-1 ring-primary/30" : "")}>
+                          <option value="">— Select {field.label} —</option>
+                          {ddOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                        </Select>
+                        {Boolean(form[field.name]) && (
+                          <button type="button"
+                            className="absolute right-7 top-1/2 -translate-y-1/2 flex h-4 w-4 items-center justify-center rounded-full bg-muted-foreground/30 text-foreground hover:bg-destructive hover:text-white transition-colors"
+                            onClick={() => setForm((cur) => ({ ...cur, [field.name]: "" }))}>
+                            <X size={10} />
+                          </button>
+                        )}
+                      </div>
+                    )
                   ) : field.name === "job_class" ? (
-                    /* Static job-class dropdown */
-                    <Select
-                      value={String(form[field.name] || "")}
-                      onChange={(event) =>
-                        setForm((cur) => ({ ...cur, [field.name]: event.target.value }))
-                      }
-                    >
-                      <option value="">Select Job Class</option>
-                      {Object.entries(jobClassLabels).map(([code, label]) => (
-                        <option value={code} key={code}>
-                          {code} - {label}
-                        </option>
-                      ))}
-                    </Select>
+                    <div className="relative">
+                      <Select value={String(form[field.name] || "")}
+                        onChange={(e) => setForm((cur) => ({ ...cur, [field.name]: e.target.value }))}
+                        className={cn("pr-8 transition-all duration-200",
+                          form[field.name] ? "border-primary bg-primary/10 font-medium text-primary ring-1 ring-primary/30" : "")}>
+                        <option value="">— Select Job Class —</option>
+                        {Object.entries(jobClassLabels).map(([code, label]) => (
+                          <option value={code} key={code}>{code} - {label}</option>
+                        ))}
+                      </Select>
+                      {Boolean(form[field.name]) && (
+                        <button type="button"
+                          className="absolute right-7 top-1/2 -translate-y-1/2 flex h-4 w-4 items-center justify-center rounded-full bg-muted-foreground/30 text-foreground hover:bg-destructive hover:text-white transition-colors"
+                          onClick={() => setForm((cur) => ({ ...cur, [field.name]: "" }))}>
+                          <X size={10} />
+                        </button>
+                      )}
+                    </div>
                   ) : (
-                    /* Plain text / date input */
-                    <Input
-                      type={field.type || "text"}
-                      value={String(form[field.name] || "")}
-                      onChange={(event) =>
-                        setForm((cur) => ({ ...cur, [field.name]: event.target.value }))
-                      }
-                    />
+                    <Input type={field.type || "text"} value={String(form[field.name] || "")}
+                      onChange={(e) => setForm((cur) => ({ ...cur, [field.name]: e.target.value }))} />
                   )}
                 </label>
               );
             })}
           </div>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
-              <X size={15} /> Cancel
-            </Button>
-            <Button disabled={saving} type="submit">
-              <Save size={15} /> {saving ? "Saving..." : "Save Job"}
-            </Button>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}><X size={15} /> Cancel</Button>
+            <Button disabled={saving} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save Job"}</Button>
           </div>
         </form>
       </Dialog>
 
-      {/* ---- Cancel Job Dialog ---- */}
-      <Dialog
-        open={Boolean(cancelTarget)}
+      {/* Cancel Job Dialog */}
+      <Dialog open={Boolean(cancelTarget)}
         title={`Cancel Job ${cancelTarget ? value(cancelTarget, "job_no") : ""}`}
         description="Please enter cancellation remarks before submitting."
-        compact
-        tone="danger"
-        onClose={() => setCancelTarget(null)}
+        compact tone="danger" onClose={() => setCancelTarget(null)}
         footer={
           <>
-            <Button variant="outline" onClick={() => setCancelTarget(null)}>
-              Close
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={saving || !cancelRemarks.trim()}
-              onClick={confirmCancel}
-            >
+            <Button variant="outline" onClick={() => setCancelTarget(null)}>Close</Button>
+            <Button variant="destructive" disabled={saving || !cancelRemarks.trim()} onClick={confirmCancel}>
               Confirm Cancel
             </Button>
           </>
-        }
-      >
+        }>
         <label className="field">
           <span>Cancel Remarks</span>
-          <Input
-            value={cancelRemarks}
-            onChange={(event) => setCancelRemarks(event.target.value)}
-            placeholder="Enter reason..."
-          />
+          <Input value={cancelRemarks} onChange={(event) => setCancelRemarks(event.target.value)} placeholder="Enter reason..." />
         </label>
       </Dialog>
     </section>
@@ -579,6 +590,9 @@ function InboundJobDetail({ jobNo, tab }: { jobNo: string; tab: string }) {
   const navigate = useNavigate();
   const [job, setJob] = useState<WmsRow | null>(null);
   const [loading, setLoading] = useState(true);
+ const location = useLocation();
+
+   const basePath = location.pathname.split("/").slice(0, -1).join("/");
 
   const loadJob = async () => {
     setLoading(true);
@@ -586,33 +600,36 @@ function InboundJobDetail({ jobNo, tab }: { jobNo: string; tab: string }) {
       const data = await getWmsInbound<WmsRow>(`job/${encodeURIComponent(jobNo)}`);
       setJob(normalizeRow(data || {}));
     } catch {
-      const fallback = await executeWmsInboundSql(
-        `SELECT * FROM VW_TI_JOB WHERE JOB_NO = '${sqlEscape(jobNo)}' AND COMPANY_CODE = '${sqlEscape(user?.company_code || "")}'`,
-      );
-      setJob(normalizeRow(fallback[0] || { job_no: jobNo }));
-    } finally {
-      setLoading(false);
-    }
+      try {
+        const fallback = await executeWmsInboundSql(
+          `SELECT * FROM VW_TI_JOB WHERE JOB_NO = '${sqlEscape(jobNo)}' AND COMPANY_CODE = '${sqlEscape(user?.company_code || "")}'`,
+        );
+        setJob(normalizeRow(fallback[0] || { job_no: jobNo }));
+      } catch {
+        setJob(normalizeRow({ job_no: jobNo }));
+      }
+    } finally { setLoading(false); }
   };
 
-  useEffect(() => {
-    void loadJob();
-  }, [jobNo]);
+  useEffect(() => { void loadJob(); }, [jobNo]);
 
   const availableTabs = getTabsForJob(value(job || {}, "job_class"));
   const activeTab = availableTabs.some((item) => item.value === tab) ? tab : "shipment_details";
 
+  const jobStatus = isCanceled(job || {}) ? "Canceled"
+    : hasDate(value(job || {}, "confirm_date")) ? "Confirmed" : "In Progress";
+
+  const statusColor = jobStatus === "Canceled" ? "text-red-600 bg-red-50 border-red-200"
+    : jobStatus === "Confirmed" ? "text-emerald-600 bg-emerald-50 border-emerald-200"
+    : "text-blue-600 bg-blue-50 border-blue-200";
+
   return (
     <section className="grid gap-3">
+      {/* Header */}
       <div className="rounded-md border bg-card">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b p-3">
           <div className="flex min-w-0 items-center gap-3">
-            <Button
-              size="icon"
-              variant="outline"
-              onClick={() => navigate("../..")}
-              title="Back to jobs"
-            >
+            <Button size="icon" variant="outline" onClick={() => navigate("../..")} title="Back to jobs">
               <ArrowLeft size={16} />
             </Button>
             <div className="min-w-0">
@@ -620,195 +637,309 @@ function InboundJobDetail({ jobNo, tab }: { jobNo: string; tab: string }) {
               <h1 className="m-0 truncate text-xl font-semibold">{jobNo}</h1>
             </div>
             {job && <JobClassPill code={value(job, "job_class")} />}
+            <span className={cn("inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold", statusColor)}>
+              {jobStatus}
+            </span>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={loadJob}>
-              <RefreshCw size={14} /> Refresh
-            </Button>
-            <Button size="sm" variant="outline">
-              <Printer size={14} /> Print
-            </Button>
+            <Button size="sm" variant="outline" onClick={loadJob}><RefreshCw size={14} /> Refresh</Button>
+            <Button size="sm" variant="outline"><Printer size={14} /> Print</Button>
           </div>
         </div>
+
+        {/* Job info cards */}
         <div className="grid gap-2 p-3 md:grid-cols-5">
-          <Info
-            label="Principal"
-            value={`${value(job || {}, "prin_code")} ${value(job || {}, "prin_name") ? `- ${value(job || {}, "prin_name")}` : ""}`}
-          />
+          <Info label="Principal"
+            value={`${value(job || {}, "prin_code")}${value(job || {}, "prin_name") ? ` - ${value(job || {}, "prin_name")}` : ""}`} />
           <Info label="Job Date" value={formatDate(value(job || {}, "job_date"))} />
           <Info label="Document Ref" value={value(job || {}, "doc_ref")} />
-          <Info
-            label="Status"
-            value={
-              isCanceled(job || {})
-                ? "Canceled"
-                : hasDate(value(job || {}, "confirm_date"))
-                ? "Confirmed"
-                : "In Progress"
-            }
-          />
+          <Info label="Job Type" value={value(job || {}, "job_type")} />
           <Info label="Company" value={user?.company_code || ""} />
         </div>
       </div>
 
+      {/* Tabs */}
       <div className="flex gap-2 overflow-x-auto rounded-md border bg-card p-2">
         {availableTabs.map((item) => (
           <Link
-            className={
-              item.value === activeTab
-                ? "ui-button ui-button-default ui-button-sm"
-                : "ui-button ui-button-outline ui-button-sm"
-            }
+            className={item.value === activeTab
+              ? "ui-button ui-button-default ui-button-sm whitespace-nowrap"
+              : "ui-button ui-button-outline ui-button-sm whitespace-nowrap"}
             key={item.value}
-            to={`../${item.value}${locationSearchPrincipal(job)}`}
+         to={`${basePath}/${item.value}${locationSearchPrincipal(job)}`}
           >
             {item.label}
           </Link>
         ))}
       </div>
 
+      {/* Tab content */}
       <InboundOperationalTab job={job} jobNo={jobNo} tab={activeTab} loadingJob={loading} />
     </section>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Operational Tab
+// Operational Tab — with per-tab Add modal
 // ---------------------------------------------------------------------------
 function InboundOperationalTab({
-  job,
-  jobNo,
-  tab,
-  loadingJob,
-}: {
-  job: WmsRow | null;
-  jobNo: string;
-  tab: string;
-  loadingJob: boolean;
-}) {
+  job, jobNo, tab, loadingJob,
+}: { job: WmsRow | null; jobNo: string; tab: string; loadingJob: boolean; }) {
   const { user } = useAuth();
   const prinCode = value(job || {}, "prin_code");
+  const companyCode = user?.company_code || "";
+
   const [rows, setRows] = useState<WmsRow[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addForm, setAddForm] = useState<WmsRow>({});
+  const [saving, setSaving] = useState(false);
+  // For Quality Clearance process modal
+  const [processOpen, setProcessOpen] = useState(false);
+  const [selectedRows, setSelectedRows] = useState<WmsRow[]>([]);
 
   const config = getInboundTabConfig(tab);
 
-  const loadRows = async () => {
-    if (!config || loadingJob) return;
+  const loadRows = useCallback(async () => {
+    if (!config || loadingJob || !prinCode) return;
     setLoading(true);
     setNotice(null);
     try {
       const data = await executeWmsInboundSql(
-        config.sql({ companyCode: user?.company_code || "", jobNo, prinCode }),
+        config.sql({ companyCode, jobNo, prinCode }),
       );
       setRows(data.map(normalizeRow));
     } catch (error) {
-      setNotice({
-        type: "error",
-        message: error instanceof Error ? error.message : `Unable to load ${config.title}`,
-      });
-    } finally {
-      setLoading(false);
+      setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to load ${config?.title}` });
+    } finally { setLoading(false); }
+  }, [tab, jobNo, prinCode, loadingJob, companyCode]);
+
+  useEffect(() => { void loadRows(); }, [loadRows]);
+
+  // Reset form when opening
+  const openAddModal = () => {
+    setAddForm({ job_no: jobNo, prin_code: prinCode, company_code: companyCode });
+    setAddOpen(true);
+  };
+
+  const saveAdd = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!config?.addEndpoint) return;
+    const fields = config?.addFields || [];
+    const missing = fields.find((f) => f.required && !String(addForm[f.name] || "").trim());
+    if (missing) { setNotice({ type: "error", message: `${missing.label} is required` }); return; }
+    setSaving(true);
+    try {
+      await postWmsInbound(config.addEndpoint, { ...addForm, job_no: jobNo, prin_code: prinCode, company_code: companyCode });
+      setAddOpen(false);
+      setNotice({ type: "success", message: `${config.title} added successfully` });
+      await loadRows();
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to add ${config?.title}` });
+    } finally { setSaving(false); }
+  };
+
+  if (!config) return (
+    <Card><CardContent className="p-6 text-sm text-muted-foreground">This tab is not configured yet.</CardContent></Card>
+  );
+
+  // Action button per tab
+  const getActionButton = () => {
+    switch (tab) {
+      case "quality_clearance":
+        return (
+          <Button size="sm" variant="outline"
+            onClick={() => setProcessOpen(true)}
+            disabled={selectedRows.length === 0}>
+            <Settings2 size={14} /> Process Clearance
+          </Button>
+        );
+      case "putway_details":
+        return (
+          <Button size="sm" variant="outline"
+            onClick={() => setProcessOpen(true)}
+            disabled={selectedRows.length === 0}>
+            <Truck size={14} /> Process Putaway
+          </Button>
+        );
+      case "job_confirmation":
+        return (
+          <Button size="sm" variant="outline"
+            onClick={() => setProcessOpen(true)}
+            disabled={selectedRows.length === 0}>
+            <CheckCircle2 size={14} /> Process Confirm Selected
+          </Button>
+        );
+      case "receiving_details":
+        return (
+          <Button size="sm" variant="outline" onClick={openAddModal}>
+            <PackageCheck size={14} /> Add Receiving
+          </Button>
+        );
+      default:
+        if (config.addFields && config.addEndpoint) {
+          return (
+            <Button size="sm" variant="outline" onClick={openAddModal}>
+              <Plus size={14} /> {config.addLabel || `Add ${config.title}`}
+            </Button>
+          );
+        }
+        return null;
     }
   };
 
-  useEffect(() => {
-    void loadRows();
-  }, [tab, jobNo, prinCode, loadingJob]);
-
-  if (!config)
-    return (
-      <Card>
-        <CardContent className="p-6 text-sm text-muted-foreground">
-          This inbound tab is not configured yet.
-        </CardContent>
-      </Card>
-    );
-
   const toolbar = (
     <div className="flex flex-wrap items-center gap-2">
-      {config.action && (
-        <Button size="sm" variant="outline" onClick={config.action.onClick}>
-          <config.action.icon size={14} /> {config.action.label}
-        </Button>
-      )}
-      <Button size="sm" variant="outline" onClick={loadRows}>
-        <RefreshCw size={14} /> Refresh
-      </Button>
+      {getActionButton()}
+      <Button size="sm" variant="outline" onClick={loadRows}><RefreshCw size={14} /> Refresh</Button>
     </div>
   );
 
+  const columns = makeColumns(config.columns, tab === "quality_clearance" || tab === "putway_details" || tab === "job_confirmation");
+
   return (
     <section className="grid gap-3">
-      {notice && (
-        <div className={notice.type === "error" ? "alert error" : "alert success"}>
-          {notice.message}
-        </div>
-      )}
+      {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
+
       <DataTable
-        columns={makeColumns(config.columns)}
-        data={rows}
+        columns={columns} data={rows}
         title={loading ? "Loading" : `${rows.length} Rows`}
-        subtitle={config.title}
-        searchValue={query}
-        onSearchChange={setQuery}
+        subtitle={config.title} searchValue={query} onSearchChange={setQuery}
         searchPlaceholder={`Search ${config.title.toLowerCase()}...`}
-        loading={loading || loadingJob}
-        height="calc(100vh - 365px)"
-        minWidth={config.minWidth}
-        density="grid"
-        enablePagination
-        pageSize={75}
+        loading={loading || loadingJob} height="calc(100vh - 365px)"
+        minWidth={config.minWidth} density="grid" enablePagination pageSize={75}
         toolbar={toolbar}
         getRowId={(row, index) =>
           `${tab}_${value(row, "packdet_no") || value(row, "container_no") || value(row, "key_number") || index}`
         }
+        onRowSelectionChange={
+          (tab === "quality_clearance" || tab === "putway_details" || tab === "job_confirmation")
+            ? (sel) => setSelectedRows(sel)
+            : undefined
+        }
       />
+
+      {/* Add Modal */}
+{(config.addFields ?? []).map((field) => (  <label key={field.name}
+    className={field.name === "remarks" || field.name === "description1"
+      ? "field col-span-2 md:col-span-3" : "field"}>
+    <span className="text-xs font-medium text-muted-foreground">
+      {field.label}{field.required && <strong className="text-destructive"> *</strong>}
+    </span>
+
+    {/* ── NEW: Lookup field ── */}
+    {field.lookup === "product" ? (
+      <LookupField
+        label={field.label}
+        compact
+        value={String(addForm[field.name] || "")}
+        displayValue={String(addForm[`${field.name}_display`] || "")}
+        valueField="PROD_CODE"
+        displayFields={["PROD_CODE", "PROD_NAME"]}
+        columns={[
+          { field: "PROD_CODE", header: "Product Code" },
+          { field: "PROD_NAME", header: "Product Name" },
+          { field: "UOM_CODE",  header: "UOM" },
+        ]}
+        loadOptions={async () => {
+          const res = await api.post("/api/wms/inbound/executeRawSql", {
+            raw_sql: `SELECT PROD_CODE, PROD_NAME, UOM_CODE 
+                      FROM MS_PRODUCT 
+                      WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' 
+                      ORDER BY PROD_NAME`,
+          });
+          const data = Array.isArray(res.data?.data) ? res.data.data
+            : Array.isArray(res.data) ? res.data : [];
+          return data;
+        }}
+        onChange={(val, row) =>
+          setAddForm((cur) => ({
+            ...cur,
+            [field.name]: val,
+            [`${field.name}_display`]: row
+              ? `${row["PROD_CODE"] ?? row["prod_code"] ?? ""} - ${row["PROD_NAME"] ?? row["prod_name"] ?? ""}`
+              : "",
+            // auto-fill UOM if present
+            uom: row ? String(row["UOM_CODE"] ?? row["uom_code"] ?? cur.uom ?? "") : String(cur.uom ?? ""),
+          }))
+        }
+      />
+    ) : field.dropdown && field.dropdown.length > 0 ? (
+      <Select value={String(addForm[field.name] || "")}
+        onChange={(e) => setAddForm((cur) => ({ ...cur, [field.name]: e.target.value }))}>
+        <option value="">— Select {field.label} —</option>
+        {field.dropdown.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+      </Select>
+    ) : (
+      <Input type={field.type || "text"} value={String(addForm[field.name] || "")}
+        onChange={(e) => setAddForm((cur) => ({ ...cur, [field.name]: e.target.value }))} />
+    )}
+  </label>
+))}
+
+      {/* Process Modal (Quality Clearance / Putaway / Confirmation) */}
+      <Dialog open={processOpen} compact
+        title={
+          tab === "quality_clearance" ? "Process Quality Clearance"
+          : tab === "putway_details" ? "Process Putaway"
+          : "Process Job Confirmation"
+        }
+        description={`Processing ${selectedRows.length} selected row(s)`}
+        onClose={() => setProcessOpen(false)}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setProcessOpen(false)}>Close</Button>
+            <Button onClick={async () => {
+              setSaving(true);
+              try {
+                // call the appropriate process API
+                const endpoint = tab === "quality_clearance" ? "processquality"
+                  : tab === "putway_details" ? "processputaway"
+                  : "processjobconfirm";
+                await postWmsInbound(endpoint, {
+                  job_no: jobNo, prin_code: prinCode, company_code: companyCode,
+                  rows: selectedRows.map((r) => value(r, "packdet_no")),
+                });
+                setProcessOpen(false);
+                setSelectedRows([]);
+                setNotice({ type: "success", message: "Processed successfully" });
+                await loadRows();
+              } catch (error) {
+                setNotice({ type: "error", message: error instanceof Error ? error.message : "Process failed" });
+              } finally { setSaving(false); }
+            }} disabled={saving}>
+              <CheckCircle2 size={15} /> {saving ? "Processing..." : "Confirm"}
+            </Button>
+          </>
+        }>
+        <div className="text-sm text-muted-foreground">
+          {selectedRows.length === 0
+            ? "No rows selected. Close and select rows from the table."
+            : `You are about to process ${selectedRows.length} row(s). This action cannot be undone.`}
+        </div>
+      </Dialog>
     </section>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Tab config
 // ---------------------------------------------------------------------------
-function makeColumns(
-  columns: { key: string; label: string; size?: number }[],
-): ColumnDef<WmsRow>[] {
-  return columns.map((column) => ({
-    accessorKey: column.key,
-    header: column.label,
-    size: column.size || 140,
-    cell: ({ row }) => formatCellValue(row.original, column.key),
-  }));
-}
-
 function getInboundTabConfig(tab: string) {
-  const packSql = ({
-    companyCode,
-    jobNo,
-    prinCode,
-  }: {
-    companyCode: string;
-    jobNo: string;
-    prinCode: string;
-  }) =>
+  const packSql = ({ companyCode, jobNo, prinCode }: { companyCode: string; jobNo: string; prinCode: string }) =>
     `SELECT * FROM VW_WM_INB_PACKDET_DETS WHERE company_code = '${sqlEscape(companyCode)}' AND job_no = '${sqlEscape(jobNo)}' AND prin_code = '${sqlEscape(prinCode)}' ORDER BY updated_at`;
 
-  const configs: Record<
-    string,
-    {
-      title: string;
-      minWidth: number;
-      columns: { key: string; label: string; size?: number }[];
-      sql: (args: { companyCode: string; jobNo: string; prinCode: string }) => string;
-      action?: { label: string; icon: typeof Plus; onClick: () => void };
-    }
-  > = {
+  const configs: Record<string, {
+    title: string; minWidth: number; addLabel?: string; addEndpoint?: string;
+    addFields?: FormField[];
+    columns: { key: string; label: string; size?: number }[];
+    sql: (args: { companyCode: string; jobNo: string; prinCode: string }) => string;
+  }> = {
     shipment_details: {
-      title: "Shipment Details",
-      minWidth: 1060,
+      title: "Shipment Details", minWidth: 1060,
+      addLabel: "Add Shipment", addEndpoint: "shipment", addFields: shipmentFormFields,
       sql: ({ jobNo, prinCode }) =>
         `SELECT * FROM TI_CONTAINER WHERE PRIN_CODE = '${sqlEscape(prinCode)}' AND JOB_NO = '${sqlEscape(jobNo)}'`,
       columns: [
@@ -819,19 +950,17 @@ function getInboundTabConfig(tab: string) {
         { key: "seal_no", label: "Seal No", size: 130 },
         { key: "po_no", label: "PO No", size: 130 },
         { key: "bl_no", label: "BL No", size: 130 },
+        { key: "arrival_date", label: "Arrival Date", size: 130 },
       ],
-      action: { label: "Add Shipment", icon: Plus, onClick: () => undefined },
     },
     packing_details: {
-      title: "Packing Details",
-      minWidth: 1280,
-      sql: packSql,
-      columns: packingColumns(),
-      action: { label: "Add Packing", icon: Plus, onClick: () => undefined },
+      title: "Packing Details", minWidth: 1280,
+      addLabel: "Add Packing", addEndpoint: "packing", addFields: packingFormFields,
+      sql: packSql, columns: packingColumns(),
     },
     receiving_details: {
-      title: "Receiving Details",
-      minWidth: 1320,
+      title: "Receiving Details", minWidth: 1320,
+      addLabel: "Add Receiving", addEndpoint: "receiving", addFields: receivingFormFields,
       sql: packSql,
       columns: [
         { key: "prod_name", label: "Product", size: 320 },
@@ -844,11 +973,9 @@ function getInboundTabConfig(tab: string) {
         { key: "po_no", label: "PO No", size: 120 },
         { key: "doc_ref", label: "Doc Ref", size: 140 },
       ],
-      action: { label: "Receive All", icon: PackageCheck, onClick: () => undefined },
     },
     quality_clearance: {
-      title: "Quality Clearance",
-      minWidth: 1200,
+      title: "Quality Clearance", minWidth: 1200,
       sql: packSql,
       columns: [
         { key: "prod_name", label: "Product", size: 320 },
@@ -860,11 +987,10 @@ function getInboundTabConfig(tab: string) {
         { key: "po_no", label: "PO No", size: 120 },
         { key: "doc_ref", label: "Doc Ref", size: 140 },
       ],
-      action: { label: "Process Clearance", icon: Settings2, onClick: () => undefined },
     },
     tally_details: {
-      title: "Tally Details",
-      minWidth: 1260,
+      title: "Tally Details", minWidth: 1260,
+      addLabel: "Add Tally", addEndpoint: "tally", addFields: tallyFormFields,
       sql: ({ companyCode, jobNo, prinCode }) =>
         `SELECT * FROM VW_WM_INB_TT_TALLY_DETS WHERE company_code = '${sqlEscape(companyCode)}' AND job_no = '${sqlEscape(jobNo)}' AND prin_code = '${sqlEscape(prinCode)}' ORDER BY updated_at`,
       columns: [
@@ -876,43 +1002,36 @@ function getInboundTabConfig(tab: string) {
         { key: "container_no", label: "Container", size: 140 },
         { key: "po_no", label: "PO No", size: 120 },
       ],
-      action: { label: "Add Tally", icon: Plus, onClick: () => undefined },
     },
     putway_details: {
-      title: "Putaway Details",
-      minWidth: 1280,
+      title: "Putaway Details", minWidth: 1280,
+      addLabel: "Process Putaway", addEndpoint: "putaway", addFields: putawayFormFields,
       sql: ({ companyCode, jobNo, prinCode }) =>
         `SELECT * FROM VW_WM_INB_TT_BATCH_DETS WHERE company_code = '${sqlEscape(companyCode)}' AND job_no = '${sqlEscape(jobNo)}' AND prin_code = '${sqlEscape(prinCode)}' ORDER BY updated_at`,
       columns: confirmationColumns(),
-      action: { label: "Process Putaway", icon: Truck, onClick: () => undefined },
     },
     putway_manual: {
-      title: "Putaway Manual",
-      minWidth: 1280,
+      title: "Putaway Manual", minWidth: 1280,
+      addLabel: "Add Manual Putaway", addEndpoint: "manualputaway", addFields: manualPutawayFormFields,
       sql: ({ companyCode, jobNo, prinCode }) =>
         `SELECT * FROM VW_WM_INB_TT_BATCH_DETS WHERE company_code = '${sqlEscape(companyCode)}' AND job_no = '${sqlEscape(jobNo)}' AND prin_code = '${sqlEscape(prinCode)}' ORDER BY updated_at`,
       columns: confirmationColumns(),
-      action: { label: "Add Manual Putaway", icon: Plus, onClick: () => undefined },
     },
     putway_hht: {
-      title: "Putaway HHT/RFID/AR",
-      minWidth: 1280,
+      title: "Putaway HHT/RFID/AR", minWidth: 1280,
+      addLabel: "Process HHT Putaway", addEndpoint: "hhtputaway", addFields: putawayFormFields,
       sql: ({ companyCode, jobNo, prinCode }) =>
         `SELECT * FROM VW_WM_INB_TT_BATCH_DETS WHERE company_code = '${sqlEscape(companyCode)}' AND job_no = '${sqlEscape(jobNo)}' AND prin_code = '${sqlEscape(prinCode)}' ORDER BY updated_at`,
       columns: confirmationColumns(),
-      action: { label: "Process HHT Putaway", icon: Settings2, onClick: () => undefined },
     },
     job_confirmation: {
-      title: "Job Confirmation",
-      minWidth: 1380,
+      title: "Job Confirmation", minWidth: 1380,
       sql: ({ companyCode, jobNo, prinCode }) =>
         `SELECT * FROM VW_WM_INB_TT_BATCH_DETS WHERE confirmed = 'N' AND company_code = '${sqlEscape(companyCode)}' AND job_no = '${sqlEscape(jobNo)}' AND prin_code = '${sqlEscape(prinCode)}' ORDER BY updated_at`,
       columns: confirmationColumns(),
-      action: { label: "Process Confirm Selected", icon: CheckCircle2, onClick: () => undefined },
     },
     activity_billing: {
-      title: "Activity Billing",
-      minWidth: 1180,
+      title: "Activity Billing", minWidth: 1180,
       sql: ({ companyCode, jobNo, prinCode }) =>
         `SELECT * FROM VW_WM_INB_ACTIVITY_BILLING WHERE company_code = '${sqlEscape(companyCode)}' AND job_no = '${sqlEscape(jobNo)}' AND prin_code = '${sqlEscape(prinCode)}'`,
       columns: [
@@ -961,40 +1080,52 @@ function confirmationColumns() {
 function getTabsForJob(jobClass: string) {
   if (jobClass === "M")
     return detailTabs.filter((tab) =>
-      ["shipment_details", "putway_manual", "job_confirmation", "activity_billing"].includes(
-        tab.value,
-      ),
-    );
+      ["shipment_details", "putway_manual", "job_confirmation", "activity_billing"].includes(tab.value));
   if (jobClass === "NP")
     return detailTabs.filter((tab) =>
-      [
-        "shipment_details",
-        "packing_details",
-        "quality_clearance",
-        "tally_details",
-        "putway_hht",
-        "job_confirmation",
-        "activity_billing",
-      ].includes(tab.value),
-    );
+      ["shipment_details", "packing_details", "quality_clearance", "tally_details", "putway_hht", "job_confirmation", "activity_billing"].includes(tab.value));
   if (jobClass === "N")
     return detailTabs.filter((tab) =>
-      [
-        "shipment_details",
-        "packing_details",
-        "receiving_details",
-        "quality_clearance",
-        "putway_details",
-        "job_confirmation",
-        "activity_billing",
-      ].includes(tab.value),
-    );
+      ["shipment_details", "packing_details", "receiving_details", "quality_clearance", "putway_details", "job_confirmation", "activity_billing"].includes(tab.value));
   return detailTabs;
 }
 
+// ---------------------------------------------------------------------------
+// Column factory — optional checkbox column for selectable tabs
+// ---------------------------------------------------------------------------
+function makeColumns(
+  columns: { key: string; label: string; size?: number }[],
+  selectable = false,
+): ColumnDef<WmsRow>[] {
+  const cols: ColumnDef<WmsRow>[] = columns.map((col) => ({
+    accessorKey: col.key, header: col.label, size: col.size || 140,
+    cell: ({ row }) => formatCellValue(row.original, col.key),
+  }));
+
+  if (selectable) {
+    cols.unshift({
+      id: "select", header: ({ table }) => (
+        <input type="checkbox" className="rounded border-input"
+          checked={table.getIsAllPageRowsSelected()}
+          onChange={table.getToggleAllPageRowsSelectedHandler()} />
+      ),
+      size: 40, enableColumnFilter: false,
+      cell: ({ row }) => (
+        <input type="checkbox" className="rounded border-input"
+          checked={row.getIsSelected()}
+          onChange={row.getToggleSelectedHandler()} />
+      ),
+    });
+  }
+  return cols;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 function parseInboundView(pathname: string) {
   const parts = pathname.split("/").filter(Boolean);
-  const viewIndex = parts.findIndex((part) => part.toLowerCase() === "view");
+  const viewIndex = parts.findIndex((p) => p.toLowerCase() === "view");
   return {
     jobNo: viewIndex >= 0 ? parts[viewIndex + 1] : "",
     tab: viewIndex >= 0 ? parts[viewIndex + 2] : "",
@@ -1011,11 +1142,8 @@ function filterJobByTab(row: WmsRow, tab: string) {
 
 function makeEmptyJob(companyCode?: string) {
   return {
-    company_code: companyCode || "",
-    job_type: "IMP",
-    job_class: "N",
-    transport_mode: "S",
-    schedule_date: new Date().toISOString().slice(0, 10),
+    company_code: companyCode || "", job_type: "IMP", job_class: "N",
+    transport_mode: "S", schedule_date: new Date().toISOString().slice(0, 10),
   };
 }
 
@@ -1031,9 +1159,7 @@ function JobClassPill({ code }: { code: string }) {
 function Info({ label, value: infoValue }: { label: string; value: string }) {
   return (
     <div className="rounded-md border bg-background px-3 py-2">
-      <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        {label}
-      </span>
+      <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
       <strong className="mt-1 block truncate text-sm">{infoValue || "-"}</strong>
     </div>
   );
@@ -1041,18 +1167,12 @@ function Info({ label, value: infoValue }: { label: string; value: string }) {
 
 function flagBadge(flag: string) {
   const yes = flag === "Y" || flag.toLowerCase() === "yes";
-  return (
-    <span className={yes ? "text-emerald-700" : "text-muted-foreground"}>
-      {yes ? "Yes" : "No"}
-    </span>
-  );
+  return <span className={yes ? "text-emerald-700" : "text-muted-foreground"}>{yes ? "Yes" : "No"}</span>;
 }
 
 function normalizeRow(row: WmsRow) {
   const normalized: WmsRow = { ...row };
-  Object.entries(row || {}).forEach(([key, rowValue]) => {
-    normalized[key.toLowerCase()] = rowValue;
-  });
+  Object.entries(row || {}).forEach(([key, v]) => { normalized[key.toLowerCase()] = v; });
   return normalized;
 }
 
