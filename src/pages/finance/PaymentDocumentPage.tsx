@@ -405,7 +405,7 @@ function PaymentDocumentEditor({
   const disabled = form.canceled === "Y" || saving;
   const total = form.detail.reduce((sum, row) => sum + (Number(row.amount) || 0) * row.sign_ind, 0);
 
-  const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0), 0);
+  const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0) * row.sign_ind, 0);
 
   const updateField = (field: keyof TransactionHeader, value: string | number) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -904,7 +904,7 @@ function PaymentDocumentEditor({
                         <td className="w-28 px-2 py-1"><Input disabled={disabled} type="number" value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                         <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
                         <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
-                        <td className="w-32 px-2 py-1"><Input disabled value={formatNumber((Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1)))} /></td>
+                        <td className="w-32 px-2 py-1"><Input disabled value={formatNumber(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) ))} /></td>
                         <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
                       </tr>
                     ))}
@@ -921,7 +921,7 @@ function PaymentDocumentEditor({
               </div>
               <div className="flex items-center justify-end gap-8 border-t px-3 py-1.5 text-sm">
                 <span className="text-muted-foreground">Net Total</span>
-                <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(total + totalTax)}</strong>
+                <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{(formatAmount(total + totalTax))}</strong>
               </div>
             </div>
 

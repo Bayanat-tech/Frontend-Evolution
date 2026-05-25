@@ -25,6 +25,8 @@ export type TransactionDocumentRow = {
   amount?: number;
   canceled?: string;
   fy_period?: string;
+  ref_no?: string;
+  ref_date?: string;
 };
 
 export type TransactionHeader = {
@@ -57,6 +59,8 @@ export type TransactionHeader = {
   tx_cat_code?: string;
   tx_compnt_1_expmt?: string;
   tx_compntcat_code_1?: string;
+  ref_no?: string;
+  ref_date?: string;
 };
 
 export type TransactionDetail = {
@@ -133,7 +137,7 @@ export type Division = {
   div_name: string;
 };
 
-export async function getTransactionDocuments(docType: TransactionType, fyPeriod?: string, search?: string, page = 1, limit = 100) {
+export async function getTransactionDocuments(docType: TransactionType, fyPeriod?: string, search?: string, page = 1, limit = 500) {
   const filters: unknown[] = [[{ field_name: "doc_type", field_value: docType, operator: "exactmatch" }]];
   if (fyPeriod) filters.push([{ field_name: "fy_period", field_value: fyPeriod, operator: "exactmatch" }]);
   if (search?.trim()) {
@@ -165,7 +169,7 @@ export async function getFyPeriods() {
 
 export async function getDivisions() {
   const response = await api.get<ApiResponse<{ tableData: Division[]; count: number }>>("/api/wms/division", {
-    params: { page: 1, limit: 1000 },
+    params: { page: 1, limit: 5000 },
   });
   if (!response.data.success) throw new Error(response.data.message || "Unable to load divisions");
   return response.data.data?.tableData || [];
@@ -250,7 +254,7 @@ export async function getFinanceMasterRows(
   const response = await api.get<ApiResponse<{ tableData: Record<string, unknown>[]; count: number }>>(`/api/finance/${master}`, {
     params: {
       page: options.page || 1,
-      limit: options.limit || 100,
+      limit: options.limit || 500,
       ...(options.filter && { filter: JSON.stringify(options.filter) }),
       ...(options.code && { code: options.code }),
       ...(options.extra_param1 && { extra_param1: options.extra_param1 }),

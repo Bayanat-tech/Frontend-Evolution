@@ -220,8 +220,8 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
           height={620}
           minWidth={1120}
           density="grid"
-          enablePagination
-          manualPagination
+          enablePagination ={true}
+          manualPagination ={true}
           manualFiltering
           pageIndex={pageIndex}
           pageSize={pageSize}
@@ -401,7 +401,7 @@ function PaymentDocumentEditor({
   const disabled = form.canceled === "Y" || saving;
   const total = form.detail.reduce((sum, row) => sum + (Number(row.amount) || 0) * row.sign_ind, 0);
 
-  const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0), 0);
+  const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0) * row.sign_ind, 0);
 
   const updateField = (field: keyof TransactionHeader, value: string | number) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -880,6 +880,7 @@ function PaymentDocumentEditor({
                             })}
                             disabled={disabled}
                             onChange={(value, row) => void selectDetailAccount(detail, value, row)}
+
                           />
                         </td>
                         <td className="w-[220px] px-2 py-1"><Input disabled value={detail.ac_name || ""} /></td>
@@ -958,7 +959,7 @@ function PaymentDocumentEditor({
                         <td className="w-28 px-2 py-1"><Input disabled={disabled} type="number" value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                         <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
                         <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
-                        <td className="w-32 px-2 py-1"><Input disabled value={formatNumber((Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1)))} /></td>
+                        <td className="w-32 px-2 py-1"><Input disabled value={formatNumber((Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) ))} /></td>
                         <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
                       </tr>
                     ))}
@@ -1455,8 +1456,8 @@ function mapExistingDocument(
     div_code: text(header.div_code),
     div_name: text(nested(headerRaw, ["Division", "div_name"]) ?? header.div_name),
     remarks: text(header.remarks),
-    cheque_no: text(header.cheque_no),
-    cheque_date: dateInput(header.cheque_date),
+    inv_no: text(header.ref_no),
+    inv_date: dateInput(header.ref_date),
     cheque_bank: text(header.cheque_bank),
     ac_payee: text(header.ac_payee),
     canceled: text(header.canceled),
