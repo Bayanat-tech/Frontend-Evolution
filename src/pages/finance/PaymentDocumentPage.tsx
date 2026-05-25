@@ -24,6 +24,7 @@ import {
   TransactionDocumentRow,
   TransactionHeader,
   TransactionType,
+  upsertBulkAccountEntryApi,
 } from "../../api/transactions";
 import { getLookupValue, LookupRow } from "../../api/lookups";
 import { Badge } from "../../components/ui/Badge";
@@ -470,7 +471,7 @@ function PaymentDocumentEditor({
     setError("");
     try {
       const payload = buildPayload(form, docType, user?.company_code || "");
-      await saveTransactionDocument(payload, editMode);
+      await upsertBulkAccountEntryApi(buildBulkAccountEntryPayload(payload, docType, user?.company_code || "", user?.loginid || user?.username || "ADMIN"));
       await onSaved(editMode ? "Document updated successfully" : "Document created successfully");
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to save document");
@@ -1151,6 +1152,47 @@ function buildPayload(form: TransactionHeader, docType: TransactionType, company
   }
 
   return base;
+}
+
+function buildBulkAccountEntryPayload(form: TransactionHeader, docType: TransactionType, companyCode: string, loginid: string) {
+  const docNo = form.doc_no || "0";
+  const header = {
+    ...form,
+    company_code: companyCode,
+    doc_type: docType,
+    doc_no: docNo,
+    create_user: loginid,
+    edit_user: loginid,
+    canceled: form.canceled || "N",
+    last_dtl_serial_no: form.detail.length,
+    sys_gen: "N",
+  };
+  delete (header as Record<string, unknown>).detail;
+  delete (header as Record<string, unknown>).children;
+
+  const details = form.detail.map((row, index) => ({
+    ...row,
+    company_code: row.company_code || companyCode,
+    doc_type: docType,
+    doc_no: docNo,
+    serial_no: row.serial_no || index + 1,
+    doc_date: form.doc_date,
+    header_ac_code: form.ac_code,
+    curr_code: row.curr_code || form.curr_code,
+    ex_rate: Number(row.ex_rate || form.ex_rate || 1),
+    lcur_amount: Number(row.lcur_amount ?? Math.abs(Number(row.amount || 0)) * Number(row.ex_rate || form.ex_rate || 1) * Number(row.sign_ind || 1)),
+    div_code: row.div_code || form.div_code,
+  }));
+
+  const children = groupChildren(form);
+  return {
+    header,
+    details,
+    invoiceDetails: children.invoice,
+    expenseDetails: children.expense,
+    jobDetails: children.job,
+    loginid,
+  };
 }
 
 function groupChildren(form: TransactionHeader) {
