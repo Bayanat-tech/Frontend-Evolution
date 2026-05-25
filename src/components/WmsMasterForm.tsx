@@ -8,8 +8,9 @@ import { Input } from "./ui/Input";
 import { Select } from "./ui/Select";
 import { LookupField } from "./ui/LookupField";
 import type { WmsMasterField, WmsMasterFormTab } from "../pages/wms/WmsSimpleMasterPage";
-import type { DropdownOption } from "../api/dropdowns";
+
 import type { LookupRow } from "../api/lookups";
+import { DropdownOption } from "../pages/wms/dropdowns";
 
 type Props = {
   fields: WmsMasterField[];

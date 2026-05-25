@@ -1,6 +1,6 @@
 import { api } from "./client";
 import type { DynamicQueryParams, LookupRow } from "./lookups";
-import { fetchDropdownOptions as fetchDropdownOptionsFromRegistry } from "./dropdowns";
+import { fetchDropdownOptions as fetchDropdownOptionsFromRegistry } from "../pages/wms/dropdowns";
 
 type ApiResponse<T> = {
   success: boolean;

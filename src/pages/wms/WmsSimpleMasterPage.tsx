@@ -10,7 +10,8 @@ import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import {WmsMasterForm} from "../../components/WmsMasterForm";
-import type { DropdownKey } from "../../api/dropdowns";
+import { DropdownKey } from "./dropdowns";
+
 
 export type WmsMasterField = {
   name: string;
