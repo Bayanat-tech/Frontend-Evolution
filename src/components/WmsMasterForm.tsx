@@ -6,8 +6,10 @@ import { Button } from "./ui/Button";
 import { Card, CardContent, CardHeader } from "./ui/Card";
 import { Input } from "./ui/Input";
 import { Select } from "./ui/Select";
+import { LookupField } from "./ui/LookupField";
 import type { WmsMasterField, WmsMasterFormTab } from "../pages/wms/WmsSimpleMasterPage";
 import type { DropdownOption } from "../api/dropdowns";
+import type { LookupRow } from "../api/lookups";
 
 type Props = {
   fields: WmsMasterField[];
@@ -232,18 +234,31 @@ function renderInput(
   isLoading: boolean,
 ) {
   if (field.type === "select" || field.asyncOptions || field.dropdownKey) {
+    // Convert dropdown options to LookupRow format
+    const lookupRows: LookupRow[] = options.map((opt) => ({
+      value: opt.value,
+      label: opt.label,
+    }));
+
     return (
-      <Select
-        disabled={disabled || isLoading}
-        value={String(value ?? "")}
+      <div
+        onClick={onDropdownFocus}
         onFocus={onDropdownFocus}
-        onChange={(e) => onChange(field.name, e.target.value)}
+        role="presentation"
       >
-        <option value="">-- Select --</option>
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>{opt.label}</option>
-        ))}
-      </Select>
+        <LookupField
+          label={field.label}
+          value={String(value ?? "")}
+          displayValue={options.find((opt) => opt.value === String(value))?.label}
+          columns={[{ field: "label", header: "Label" }]}
+          valueField="value"
+          displayFields={["label"]}
+          loadOptions={async () => lookupRows}
+          onChange={(val) => onChange(field.name, val)}
+          disabled={disabled || isLoading}
+          placeholder={`Select ${field.label}`}
+        />
+      </div>
     );
   }
   if (field.type === "textarea") {
