@@ -715,6 +715,9 @@ function CommercialEditor({
         let header: Record<string, unknown> = {};
         try {
           header = await getPurchaseHeader(docNo, srcType);
+          if (!hasRecordData(header)) {
+            header = await getLpoHeader(docNo, srcType);
+          }
         } catch {
           header = await getLpoHeader(docNo, srcType);
         }
@@ -750,6 +753,7 @@ function CommercialEditor({
 
       } catch (err) {
         console.error("Failed to load ref doc", err);
+        setError(err instanceof Error ? err.message : "Unable to load reference document");
       }
     }}
   />
@@ -1295,6 +1299,10 @@ function nested(source: Record<string, unknown>, path: string[]) {
 function text(value: unknown) {
   if (value === null || value === undefined) return "";
   return String(value);
+}
+
+function hasRecordData(record: Record<string, unknown> | null | undefined) {
+  return Boolean(record && Object.keys(record).length > 0);
 }
 
 function dateInput(value: unknown) {
