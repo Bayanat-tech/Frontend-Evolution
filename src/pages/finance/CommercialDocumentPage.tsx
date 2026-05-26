@@ -1,10 +1,12 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Edit2, Paperclip, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Edit2, Paperclip, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import {
   Division,
   FyPeriod,
+  getCompanyInfo,
+  getDefaultFyPeriod,
   getDivisions,
   getDocAccounts,
   getFyPeriods,
@@ -127,10 +129,10 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
   const [divisionPicker, setDivisionPicker] = useState(false);
 
   const loadLookups = async () => {
-    const [fyData, divisionData] = await Promise.all([getFyPeriods(), getDivisions()]);
+    const [fyData, divisionData, companyInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
     setFyPeriods(fyData);
     setDivisions(divisionData);
-    setFyPeriod((current) => current || fyData[0]?.fy_period || "");
+    setFyPeriod((current) => current || getDefaultFyPeriod(fyData, companyInfo));
   };
 
   const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize) => {
@@ -298,6 +300,7 @@ function CommercialEditor({
   const [saving, setSaving] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [error, setError] = useState("");
+  const [showHeaderDetails, setShowHeaderDetails] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -385,28 +388,28 @@ function CommercialEditor({
   };
 
   return (
-    <form className="payment-workbench grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
-      <CardHeader className="border-b bg-primary px-5 py-2.5 text-primary-foreground shadow-sm">
-        <div className="flex min-h-12 items-center justify-between gap-4">
+    <form className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
+      <CardHeader className="border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
+        <div className="flex min-h-10 items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
             <div>
               <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
                 {editMode ? "Edit Document" : "New Document"}
               </p>
-              <h2 className="m-0 text-lg font-semibold leading-tight text-primary-foreground">{META[docType].title}</h2>
+              <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">{META[docType].title}</h2>
             </div>
-            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1">
+            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
               <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
-              <strong className="block text-sm leading-tight text-primary-foreground">{form.doc_no || "New"}</strong>
+              <strong className="block text-xs leading-tight text-primary-foreground">{form.doc_no || "New"}</strong>
             </div>
-            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1">
+            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
               <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
-              <strong className="block text-sm leading-tight text-primary-foreground">{formatAmount(total)}</strong>
+              <strong className="block text-xs leading-tight text-primary-foreground">{formatAmount(total)}</strong>
             </div>
             {form.div_code && (
-              <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1">
+              <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Division</span>
-                <strong className="block max-w-[220px] truncate text-sm leading-tight text-primary-foreground">{form.div_code}{form.div_name ? ` - ${form.div_name}` : ""}</strong>
+                <strong className="block max-w-[220px] truncate text-xs leading-tight text-primary-foreground">{form.div_code}{form.div_name ? ` - ${form.div_name}` : ""}</strong>
               </div>
             )}
           </div>
@@ -418,11 +421,11 @@ function CommercialEditor({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="min-h-0 overflow-auto p-3">
+      <CardContent className="min-h-0 overflow-y-auto overflow-x-hidden p-3">
         {loading ? (
           <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
         ) : (
-          <div className="grid gap-3">
+          <div className="grid min-w-0 gap-3">
             {error && <div className="alert error">{error}</div>}
 
             {/* <div className="payment-header-grid grid grid-cols-6 gap-2.5 rounded-md border bg-card p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
@@ -460,7 +463,8 @@ function CommercialEditor({
             </div> */}
 
 
-       <div className="payment-header-grid grid grid-cols-6 gap-2.5 rounded-md border bg-card p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
+       <div className="commercial-header-shell rounded-md border bg-card">
+       <div className={`commercial-header-panel payment-header-grid relative grid grid-cols-6 gap-2.5 p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1 ${showHeaderDetails ? "is-expanded" : "is-collapsed"}`}>
 
   {/* ── Doc No (edit only) — ALL ── */}
   {editMode && (
@@ -820,7 +824,26 @@ function CommercialEditor({
   )} */}
 
 </div>
-            <div className="rounded-md border bg-card">
+<div className="commercial-header-footer flex items-center justify-between gap-3 border-t bg-secondary/30 px-3 py-2">
+  <div className="min-w-0 text-xs text-muted-foreground">
+    <span className="font-semibold text-foreground">{isSales ? "Customer" : "Supplier"}:</span>{" "}
+    <span className="truncate">{form.ac_name || form.ac_code || "Not selected"}</span>
+    <span className="mx-2 text-border">|</span>
+    <span className="font-semibold text-foreground">Currency:</span>{" "}
+    <span>{form.curr_code || "-"}</span>
+  </div>
+  <Button
+    type="button"
+    size="sm"
+    variant="ghost"
+    onClick={() => setShowHeaderDetails((value) => !value)}
+  >
+    {showHeaderDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+    {showHeaderDetails ? "Compact header" : "Show all header fields"}
+  </Button>
+</div>
+</div>
+            <div className="min-w-0 rounded-md border bg-card">
               <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
                 <div>
                   <p className="eyebrow m-0">Details</p>
@@ -828,8 +851,8 @@ function CommercialEditor({
                 </div>
                 <Button size="sm" type="button" variant="outline" onClick={addLine}><Plus size={14} /> Add Line</Button>
               </div>
-              <div className="max-h-[54vh] overflow-auto">
-                <table className="w-full min-w-[1760px] text-sm">
+              <div className="commercial-lines-scroll overflow-auto">
+                <table className="w-full min-w-[2140px] text-[12px]">
                   <thead className="sticky top-0 bg-primary text-xs text-primary-foreground">
                     <tr>
                       <th className="px-2 py-2 text-left">No</th>
@@ -873,8 +896,15 @@ function CommercialEditor({
                             onChange={(value, row) => updateLine(line.id, { ac_code: value, ac_name: text(getLookupValue(row || {}, "ac_name")) })}
                           />
                         </td>
-                        <td className="w-[220px] px-2 py-1"><Input disabled value={line.ac_name || ""} /></td>
-                        <td className="w-[220px] px-2 py-1"><Input value={line.remarks || ""} onChange={(event) => updateLine(line.id, { remarks: event.target.value })} /></td>
+                        <td className="w-[240px] px-2 py-1"><Input disabled value={line.ac_name || ""} /></td>
+                        <td className="w-[360px] px-2 py-1">
+                          <textarea
+                            className="commercial-line-description"
+                            value={line.remarks || ""}
+                            onChange={(event) => updateLine(line.id, { remarks: event.target.value })}
+                            placeholder="Description"
+                          />
+                        </td>
                         <td className="w-[210px] px-2 py-1">
                           <LookupField
                             label="Currency"
@@ -889,10 +919,10 @@ function CommercialEditor({
                             onChange={(value, row) => setForm((current) => ({ ...current, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")) }))}
                           />
                         </td>
-                        <td className="w-28 px-2 py-1"><Input type="number" step="0.0001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></td>
-                        <td className="w-28 px-2 py-1"><Input type="number" value={line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
-                        <td className="w-32 px-2 py-1"><Input type="number" step="0.001" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
-                        <td className="w-32 px-2 py-1"><Input type="number" step="0.001" value={line.amount} onChange={(event) => updateLine(line.id, { amount: Number(event.target.value || 0) })} /></td>
+                        <td className="w-40 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" step="0.0001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></td>
+                        <td className="w-36 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" value={line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
+                        <td className="w-44 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" step="0.001" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
+                        <td className="w-56 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" step="0.001" value={line.amount} onChange={(event) => updateLine(line.id, { amount: Number(event.target.value || 0) })} /></td>
                         <td className="w-28 px-2 py-1">
                           <Select className="h-9" value={line.sign_ind} onChange={(event) => updateLine(line.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
                             <option value={1}>Cr</option>
@@ -908,12 +938,12 @@ function CommercialEditor({
                             <option value="E">Exempt</option>
                           </Select>
                         </td>
-                        <td className="w-40 px-2 py-1"><Input type="number" value={line.tx_compnt_perc_1 ?? 0} onChange={(event) => updateLine(line.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
-                        <td className="w-40 px-2 py-1"><Input type="number" value={line.tx_compnt_amt_1 ?? 0} onChange={(event) => updateLine(line.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
+                        <td className="w-36 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" value={line.tx_compnt_perc_1 ?? 0} onChange={(event) => updateLine(line.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
+                        <td className="w-52 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" value={line.tx_compnt_amt_1 ?? 0} onChange={(event) => updateLine(line.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                         <td className="w-40 px-2 py-1"><Input value={line.job_no || ""} onChange={(event) => updateLine(line.id, { job_no: event.target.value })} /></td>
-                        <td className="w-32 px-2 py-1">
+                        <td className="w-56 px-2 py-1">
                           {/* <Input disabled value={formatAmount(Number(line.amount || 0) * Number(form.ex_rate || 1) * Number(line.sign_ind || 1))} /> */}
-                          <Input disabled value={formatAmount(Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1))} />
+                          <Input className="commercial-number-input text-right tabular-nums" disabled value={formatAmount(Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1))} />
                           </td>
                         <td className="px-2 py-1"><Button size="icon" type="button" variant="ghost" onClick={() => removeLine(line.id)}><X size={14} /></Button></td>
                       </tr>

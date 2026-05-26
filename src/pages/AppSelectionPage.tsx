@@ -38,7 +38,7 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
           <span className="brand-logo-shell">
             <img src="/bayanat-logo.png" alt="Bayanat Technology" className="brand-logo" />
           </span>
-          <div className="brand-wordmark">
+          <div className="brand-wordmark">  
             <strong>Bayanat</strong>
             <span>Technology</span>
           </div>
