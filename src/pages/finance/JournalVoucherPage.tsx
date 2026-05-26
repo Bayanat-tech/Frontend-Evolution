@@ -3,7 +3,7 @@ import { Edit2, Paperclip, Plus, RefreshCw, Save, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import { getLookupValue, LookupRow } from "../../api/lookups";
-import { Division, getDivisions, getDocAccounts, getFyPeriods, getTransactionDetail, getTransactionDocuments, getTransactionHeader, TransactionDocumentRow } from "../../api/transactions";
+import { Division, getCompanyInfo, getDefaultFyPeriod, getDivisions, getDocAccounts, getFyPeriods, getTransactionDetail, getTransactionDocuments, getTransactionHeader, TransactionDocumentRow } from "../../api/transactions";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
@@ -35,10 +35,10 @@ export function JournalVoucherPage() {
   const [divisionPicker, setDivisionPicker] = useState(false);
 
   const loadLookups = async () => {
-    const [fyData, divisionData] = await Promise.all([getFyPeriods(), getDivisions()]);
+    const [fyData, divisionData, companyInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
     setFyPeriods(fyData);
     setDivisions(divisionData);
-    setFyPeriod((current) => current || fyData[0]?.fy_period || "");
+    setFyPeriod((current) => current || getDefaultFyPeriod(fyData, companyInfo));
   };
   const loadRows = async () => {
     if (!fyPeriod) return;
