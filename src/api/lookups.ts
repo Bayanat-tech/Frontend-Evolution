@@ -103,6 +103,12 @@ export async function getDynamicLookup(params: DynamicQueryParams) {
   return response.data.data || [];
 }
 
+export async function getDynamicFinanceLookup(params: DynamicQueryParams) {
+  const response = await api.post<ApiResponse<LookupRow[]>>("api/finance/proc_common_sql_finance", params);
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load Financelookup data");
+  return response.data.data || [];
+}
+
 export async function executeDynamicMutation(params: DynamicMutationParams) {
   const response = await api.post<ApiResponse<unknown>>("/api/wms/common/proc_build_dynamic_ins_upd_common", params);
   if (!response.data.success) throw new Error(response.data.message || "Unable to save record");

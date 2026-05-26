@@ -17,7 +17,7 @@ import {
   getLpoHeader,
   getLpoDetail
 } from "../../api/transactions";
-import { getLookupValue, LookupRow } from "../../api/lookups";
+import { getDynamicFinanceLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
 import { CardContent, CardHeader } from "../../components/ui/Card";
@@ -75,17 +75,16 @@ type FormState = {
   party_fax?: string;
   payment_terms?: string;
   delivery_info?: string;
-  delivery_term?: string;
-  contact?: string;
-  mobile?: string;
-  email?: string;
+  dlvr_term?: string;  
+  // contact?: string;
+  // mobile?: string;
+  // email?: string;
   tax_category?: string;
   tax_cat_code?: string;
   tax_type?: string;
   hse_compliance?: string;
   app_ref_no?: string;
 pdo_type?: string;
-dlvr_term?: string;       // PO table uses dlvr_term (not delivery_term)
 delivery_to?: string;
 dlvr_mobile?: string;
 dlvr_email?: string;
@@ -651,14 +650,21 @@ function CommercialEditor({
 
   {/* ── Delivery Term  ── */}
   {/* PO table field: dlvr_term | PI/SI/SV table field: delivery_term ── */}
-  <Field label="Delivery Term">
+  {/* <Field label="Delivery Term">
     <Input
       value={(isPO ? form.dlvr_term : form.delivery_term) || ""}
       onChange={(e) =>
         update(isPO ? "dlvr_term" : "delivery_term", e.target.value)
       }
     />
-  </Field>
+  </Field> */}
+
+  <Field label="Delivery Term">
+  <Input
+    value={form.dlvr_term || ""}
+    onChange={(e) => update("dlvr_term", e.target.value)}
+  />
+</Field>
 
   {/* ── Delivery To — PO only ── */}
   {isPO && (
@@ -678,23 +684,70 @@ function CommercialEditor({
 
   {/* ── Salesman Code + Name — SI / SV only ── */}
   {isSales && (
-    <Field label="Salesman">
-      <Input value={form.salesman_code || ""}
-        onChange={(e) => update("salesman_code", e.target.value)} />
-    </Field>
+  <LookupField
+    label="Salesman"
+    value={form.salesman_code ?? ""}
+    displayValue={form.salesman_name ? `${form.salesman_code} - ${form.salesman_name}` : form.salesman_code ?? ""}
+    columns={[
+      { field: "salesman_code", header: "Code" },
+      { field: "salesman_name", header: "Name" },
+    ]}
+    valueField="salesman_code"
+    displayFields={["salesman_code", "salesman_name"]}
+    loadOptions={() =>
+      getDynamicFinanceLookup({
+        parameter: "Salesman_Search",
+        code1: user?.company_code || "",
+      })
+    }
+    onChange={(value, row) =>
+      setForm((c) => ({
+        ...c,
+        salesman_code: value,
+        salesman_name: text(getLookupValue(row || {}, "salesman_name")),
+      }))
+    }
+  />
   )}
   {isSales && (
-    <Field label="Salesman Name">
-      <Input disabled value={form.salesman_name || ""} />
-    </Field>
-  )}
+  <Field label="Salesman Name">
+    <Input disabled value={form.salesman_name || ""} />
+  </Field>
+ )}
 
   {/* ── Sector Code + Name — SI / SV only ── */}
-  {isSales && (
+  {/* {isSales && (
     <Field label="Sector">
       <Input value={form.sector_code || ""}
         onChange={(e) => update("sector_code", e.target.value)} />
     </Field>
+  )} */}
+
+   {isSales && (
+  <LookupField
+    label="Sector"
+    value={form.sector_code ?? ""}
+    displayValue={form.sector_name ? `${form.sector_code} - ${form.sector_name}` : form.sector_code ?? ""}
+    columns={[
+      { field: "sector_code", header: "Code" },
+      { field: "sector_name", header: "Name" },
+    ]}
+    valueField="sector_code"
+    displayFields={["sector_code", "sector_name"]}
+    loadOptions={() =>
+      getDynamicFinanceLookup({
+        parameter: "Sector_Search",
+        code1: user?.company_code || "",
+      })
+    }
+    onChange={(value, row) =>
+      setForm((c) => ({
+        ...c,
+        sector_code: value,
+        sector_name: text(getLookupValue(row || {}, "sector_name")),
+      }))
+    }
+  />
   )}
   {isSales && (
     <Field label="Sector Name">
@@ -767,8 +820,6 @@ function CommercialEditor({
   )} */}
 
 </div>
-
-
             <div className="rounded-md border bg-card">
               <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
                 <div>
@@ -1012,6 +1063,7 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
     company_code: companyCode,
     ex_rate: Number(form.ex_rate || 1),
     ref_doc_no: form.ref_doc_no || form.ref_no || form.doc_no || "",
+    
     detail: form.detail.map((line) => ({
       company_code: companyCode,
       doc_type: form.doc_type,
