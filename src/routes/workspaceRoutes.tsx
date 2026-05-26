@@ -22,12 +22,15 @@ import { PLSetupPage } from "../pages/finance/PLSetupPage";
 import { PrepaidRegisterPage } from "../pages/finance/PrepaidRegisterPage";
 import { WmsCountryPage } from "../pages/wms/WmsCountryPage";
 import { WmsInboundPage } from "../pages/wms/WmsInboundPage";
+import { WmsOutboundPage } from "../pages/wms/WmsOutboundPage";
 import { WmsSimpleMasterPage } from "../pages/wms/WmsSimpleMasterPage";
 import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
 import { SecurityAssignmentPage, securityAssignmentConfigs } from "../pages/security/SecurityAssignmentPage";
 import { SecurityMasterPage, securityMasterConfigs } from "../pages/security/SecurityMasterPage";
 import { SecurityOperationAccessPage } from "../pages/security/SecurityOperationAccessPage";
 import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs } from "../pages/pams/PamsPages";
+import { HrMasterPage } from "../pages/hr/HrMasterPage";
+import { hrMasterConfigs } from "../pages/hr/hrMasterConfigs";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -152,6 +155,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <WmsInboundPage />,
   },
   {
+    name: "WMS Outbound",
+    match: ({ pathname }) => isWmsOutboundRoute(pathname),
+    element: () => <WmsOutboundPage />,
+  },
+  {
     name: "WMS Country Master",
     match: ({ pathname }) => isWmsCountryRoute(pathname),
     element: () => <WmsCountryPage />,
@@ -213,6 +221,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "PAMS Master",
     match: (context) => Boolean(getPamsMasterConfig(context)),
     element: (context) => <PamsMasterPage config={getPamsMasterConfig(context)!} />,
+  },
+  {
+    name: "HR Master",
+    match: (context) => Boolean(getHrMasterConfig(context)),
+    element: (context) => <HrMasterPage config={getHrMasterConfig(context)!} />,
   },
 ];
 
@@ -377,6 +390,11 @@ function isWmsInboundRoute(pathname: string) {
   return normalized.includes("/wms/") && normalized.includes("/inbound") && (normalized.includes("/jobs") || normalized.includes("/job") || normalized.includes("/inboundjob"));
 }
 
+function isWmsOutboundRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/wms/") && normalized.includes("/outbound") && (normalized.includes("/jobs") || normalized.includes("/job") || normalized.includes("jobs_oub"));
+}
+
 function getWmsSimpleMasterConfig(pathname: string) {
   const normalized = pathname.toLowerCase();
   if (!normalized.includes("/wms/")) return null;
@@ -484,6 +502,29 @@ function getPamsMasterConfig(context: WorkspaceRouteContext) {
 }
 
 function getPamsMatchText(context: WorkspaceRouteContext) {
+  const pathname = context.pathname.toLowerCase();
+  const leaves = collectMenuLeaves(context.activeApp?.children || []);
+  const activeLeaf = leaves.find((leaf) => {
+    const path = (leaf.url_path || "").replace(/^\/+/, "").toLowerCase();
+    return path && pathname.includes(path);
+  });
+  return [pathname, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
+}
+
+function getHrMasterConfig(context: WorkspaceRouteContext) {
+  const matchText = getHrMatchText(context);
+  if (!matchText.includes("/hr/") && !matchText.includes(" hr ") && !matchText.includes("human")) return null;
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  const matches = Object.values(hrMasterConfigs)
+    .flatMap((config) => (config.routeKeys || [config.master]).map((key) => ({ config, key: key.toLowerCase() })))
+    .sort((a, b) => b.key.length - a.key.length);
+  return matches.find(({ key }) => {
+    const keyCompact = key.replace(/[^a-z0-9]/g, "");
+    return matchText.includes(`/${key}`) || matchText.includes(`/${key.replace(/_/g, "-")}`) || matchText.includes(key) || compact.includes(keyCompact);
+  })?.config || null;
+}
+
+function getHrMatchText(context: WorkspaceRouteContext) {
   const pathname = context.pathname.toLowerCase();
   const leaves = collectMenuLeaves(context.activeApp?.children || []);
   const activeLeaf = leaves.find((leaf) => {
