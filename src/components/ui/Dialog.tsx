@@ -31,7 +31,7 @@ export function Dialog({
   return (
     <div
       className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-5 backdrop-blur-[1px]"
-      onMouseDown={onClose}
+      onClick={onClose}
     >
       <div
         className={cn(
@@ -40,7 +40,7 @@ export function Dialog({
           compact && "w-[min(94vw,460px)]",
           wide && "w-[min(96vw,1040px)]",
         )}
-        onMouseDown={(e) => e.stopPropagation()}
+onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div
@@ -60,9 +60,10 @@ export function Dialog({
           </Button>
         </div>
 
-        {/* Body — scrollable so content never bleeds outside the modal */}
-        <div className="min-h-0 overflow-y-auto p-4">{children}</div>
-
+{/* Body — scrollable so content never bleeds outside the modal */}
+<div className="min-h-0 overflow-y-auto p-4" onClick={(e) => e.stopPropagation()}>
+  {children}
+</div>
         {/* Footer */}
         {footer && (
           <div className="flex items-center justify-end gap-2 border-t bg-secondary/40 p-4">

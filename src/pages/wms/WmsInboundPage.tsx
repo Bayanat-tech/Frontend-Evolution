@@ -210,20 +210,26 @@ const shipmentFormFields: FormField[] = [
 type FormField = {
   name: string; label: string; required?: boolean; type?: string;
   dropdown?: DropdownOption[];
-  lookup?: "product"; // ← add this
+  lookup?: "product" | "container" | "country" | "manufacturer";
 };
 
 const packingFormFields: FormField[] = [
-  { name: "prod_code", label: "Product / SKU", required: true, lookup: "product" }, // ← changed
-  { name: "qty", label: "Quantity (Primary)", required: true, type: "number" },
-  { name: "uom", label: "UOM" },
-  { name: "batch_no", label: "Batch No" },
-  { name: "lot_no", label: "Lot No" },
-  { name: "container_no", label: "Container No" },
-  { name: "po_no", label: "PO No" },
-  { name: "doc_ref", label: "Doc Ref" },
-  { name: "mfg_date", label: "Mfg Date", type: "date" },
-  { name: "exp_date", label: "Exp Date", type: "date" },
+  { name: "container_no",     label: "Container No",        required: true,  lookup: "container" },
+  { name: "prod_code",        label: "Product / SKU",       required: true,  lookup: "product" },
+  { name: "qty",              label: "Quantity (Primary)",   required: true,  type: "number" },
+  { name: "qty_lowest",       label: "Quantity (Lowest)",    required: true,  type: "number" },
+  { name: "qty_total",        label: "Total Quantity",       required: true,  type: "number" },
+  { name: "uom",              label: "UOM" },
+  { name: "batch_no",         label: "Batch No" },
+  { name: "lot_no",           label: "Lot No" },
+  { name: "po_no",            label: "PO No" },
+  { name: "doc_ref",          label: "Doc Ref" },
+  { name: "mfg_date",         label: "Production Date",     type: "date" },
+  { name: "exp_date",         label: "Expiry Date",         type: "date" },
+  { name: "country_origin",   label: "Country of Origin",   lookup: "country" },
+  { name: "manufacturer",     label: "Manufacturer",        lookup: "manufacturer" },
+  { name: "shelf_life_date",  label: "Shelf Life (Date)",   type: "date" },
+  { name: "shelf_life_days",  label: "Shelf Life Days",     type: "number" },
 ];
 
 const receivingFormFields: FormField[] = [
@@ -626,37 +632,62 @@ function InboundJobDetail({ jobNo, tab }: { jobNo: string; tab: string }) {
   return (
     <section className="grid gap-3">
       {/* Header */}
-      <div className="rounded-md border bg-card">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b p-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <Button size="icon" variant="outline" onClick={() => navigate("../..")} title="Back to jobs">
-              <ArrowLeft size={16} />
-            </Button>
-            <div className="min-w-0">
-              <p className="eyebrow">Inbound Job</p>
-              <h1 className="m-0 truncate text-xl font-semibold">{jobNo}</h1>
-            </div>
-            {job && <JobClassPill code={value(job, "job_class")} />}
-            <span className={cn("inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold", statusColor)}>
-              {jobStatus}
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={loadJob}><RefreshCw size={14} /> Refresh</Button>
-            <Button size="sm" variant="outline"><Printer size={14} /> Print</Button>
-          </div>
-        </div>
+{/* Header */}
+<div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card px-4 py-3">
+  <div className="flex min-w-0 items-center gap-3">
+    <Button size="icon" variant="outline" onClick={() => navigate("../..")} title="Back to jobs">
+      <ArrowLeft size={16} />
+    </Button>
 
-        {/* Job info cards */}
-        <div className="grid gap-2 p-3 md:grid-cols-5">
-          <Info label="Principal"
-            value={`${value(job || {}, "prin_code")}${value(job || {}, "prin_name") ? ` - ${value(job || {}, "prin_name")}` : ""}`} />
-          <Info label="Job Date" value={formatDate(value(job || {}, "job_date"))} />
-          <Info label="Document Ref" value={value(job || {}, "doc_ref")} />
-          <Info label="Job Type" value={value(job || {}, "job_type")} />
-          <Info label="Company" value={user?.company_code || ""} />
-        </div>
+    <div className="min-w-0">
+      <p className="eyebrow mb-0.5">Inbound Job</p>
+      <h1 className="m-0 truncate text-xl font-semibold leading-tight">{jobNo}</h1>
+    </div>
+
+    {/* Divider */}
+    <div className="hidden h-8 w-px bg-border sm:block" />
+
+    {/* Principal pill */}
+    {job && value(job, "prin_code") && (
+      <div className="flex flex-col gap-0.5">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Principal</span>
+        <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">
+          {value(job, "prin_code")}
+          {value(job, "prin_name") ? ` · ${value(job, "prin_name")}` : ""}
+        </span>
       </div>
+    )}
+
+    {/* Job Date pill */}
+    {job && value(job, "job_date") && (
+      <div className="flex flex-col gap-0.5">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Job Date</span>
+        <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">
+          {formatDate(value(job, "job_date"))}
+        </span>
+      </div>
+    )}
+
+    {/* Divider */}
+    <div className="hidden h-8 w-px bg-border sm:block" />
+
+    {/* Job Class pill */}
+    {job && <JobClassPill code={value(job, "job_class")} />}
+
+    {/* Status pill */}
+    <span className={cn(
+      "inline-flex items-center rounded-md border px-2.5 py-0.5 text-[11px] font-semibold",
+      statusColor
+    )}>
+      {jobStatus}
+    </span>
+  </div>
+
+  <div className="flex flex-wrap gap-2">
+    <Button size="sm" variant="outline" onClick={loadJob}><RefreshCw size={14} /> Refresh</Button>
+    <Button size="sm" variant="outline"><Printer size={14} /> Print</Button>
+  </div>
+</div>
 
       {/* Tabs */}
       <div className="flex gap-2 overflow-x-auto rounded-md border bg-card p-2">
@@ -701,6 +732,130 @@ function InboundOperationalTab({
   const [selectedRows, setSelectedRows] = useState<WmsRow[]>([]);
 
   const config = getInboundTabConfig(tab);
+  // Put this inside InboundOperationalTab, after the existing state declarations
+const getLookupProps = (field: FormField) => {
+  switch (field.lookup) {
+    case "product":
+      return {
+        valueField: "PROD_CODE",
+        displayFields: ["PROD_CODE", "PROD_NAME"],
+        columns: [
+          { field: "PROD_CODE", header: "Product Code" },
+          { field: "PROD_NAME", header: "Product Name" },
+          { field: "UOM_CODE",  header: "UOM" },
+        ],
+        loadOptions: async () => {
+          const res = await api.post("/api/wms/inbound/executeRawSql", {
+            raw_sql: `SELECT *
+                      FROM MS_PRODUCT 
+                      WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' 
+                      ORDER BY PROD_NAME`,
+          });
+          return Array.isArray(res.data?.data) ? res.data.data
+               : Array.isArray(res.data)       ? res.data : [];
+        },
+        onChange: (val: string, row: Record<string, unknown> | null) =>
+          setAddForm((cur) => ({
+            ...cur,
+            prod_code: val,
+            prod_code_display: row
+              ? `${row["PROD_CODE"] ?? ""} - ${row["PROD_NAME"] ?? ""}` : "",
+            uom: row ? String(row["UOM_CODE"] ?? cur.uom ?? "") : String(cur.uom ?? ""),
+          })),
+      };
+
+    case "container": {
+      // Cache key per job so switching jobs re-fetches
+      const cacheKey = `wms_containers_${jobNo}`;
+      return {
+        valueField: "CONTAINER_NO",
+        displayFields: ["CONTAINER_NO"],
+        columns: [
+          { field: "CONTAINER_NO", header: "Container No" },
+          { field: "VEHICLE_NO",   header: "Vehicle No" },
+          { field: "VESSEL_NAME",  header: "Vessel Name" },
+          { field: "SEAL_NO",      header: "Seal No" },
+        ],
+        loadOptions: async () => {
+          // Try sessionStorage first
+          const cached = sessionStorage.getItem(cacheKey);
+          if (cached) {
+            try { return JSON.parse(cached); } catch { /* fall through */ }
+          }
+          const res = await api.post("/api/wms/inbound/executeRawSql", {
+            raw_sql: `SELECT CONTAINER_NO, VEHICLE_NO, VESSEL_NAME, SEAL_NO 
+                      FROM TI_CONTAINER 
+                      WHERE JOB_NO = '${sqlEscape(jobNo)}' 
+                        AND PRIN_CODE = '${sqlEscape(prinCode)}' 
+                      ORDER BY CONTAINER_NO`,
+          });
+          const data = Array.isArray(res.data?.data) ? res.data.data
+                     : Array.isArray(res.data)       ? res.data : [];
+          sessionStorage.setItem(cacheKey, JSON.stringify(data));
+          return data;
+        },
+        onChange: (val: string, _row: Record<string, unknown> | null) =>
+          setAddForm((cur) => ({ ...cur, container_no: val })),
+      };
+    }
+
+    case "country":
+      return {
+        valueField: "COUNTRY_CODE",
+        displayFields: ["COUNTRY_CODE", "COUNTRY_NAME"],
+        columns: [
+          { field: "COUNTRY_CODE", header: "Code" },
+          { field: "COUNTRY_NAME", header: "Country" },
+        ],
+        loadOptions: async () => {
+          const res = await api.post("/api/wms/inbound/executeRawSql", {
+            raw_sql: `SELECT COUNTRY_CODE, COUNTRY_NAME 
+                      FROM MS_COUNTRY 
+                      ORDER BY COUNTRY_NAME`,
+          });
+          return Array.isArray(res.data?.data) ? res.data.data
+               : Array.isArray(res.data)       ? res.data : [];
+        },
+        onChange: (val: string, row: Record<string, unknown> | null) =>
+          setAddForm((cur) => ({
+            ...cur,
+            country_origin: val,
+            country_origin_display: row
+              ? `${row["COUNTRY_CODE"] ?? ""} - ${row["COUNTRY_NAME"] ?? ""}` : "",
+          })),
+      };
+
+    case "manufacturer":
+      return {
+        valueField: "MANU_CODE",
+        displayFields: ["MANU_CODE", "MANU_NAME"],
+        columns: [
+          { field: "MANU_CODE", header: "Code" },
+          { field: "MANU_NAME", header: "Manufacturer" },
+        ],
+        loadOptions: async () => {
+          const res = await api.post("/api/wms/inbound/executeRawSql", {
+            raw_sql: `SELECT MANU_CODE, MANU_NAME 
+                      FROM MS_MANUFACTURER 
+                      WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' 
+                      ORDER BY MANU_NAME`,
+          });
+          return Array.isArray(res.data?.data) ? res.data.data
+               : Array.isArray(res.data)       ? res.data : [];
+        },
+        onChange: (val: string, row: Record<string, unknown> | null) =>
+          setAddForm((cur) => ({
+            ...cur,
+            manufacturer: val,
+            manufacturer_display: row
+              ? `${row["MANU_CODE"] ?? ""} - ${row["MANU_NAME"] ?? ""}` : "",
+          })),
+      };
+
+    default:
+      return null;
+  }
+};
 
   const loadRows = useCallback(async () => {
     if (!config || loadingJob || !prinCode) return;
@@ -732,6 +887,9 @@ function InboundOperationalTab({
     if (missing) { setNotice({ type: "error", message: `${missing.label} is required` }); return; }
     setSaving(true);
     try {
+if (config.addEndpoint === "shipment") {
+  sessionStorage.removeItem(`wms_containers_${jobNo}`);
+}
       await postWmsInbound(config.addEndpoint, { ...addForm, job_no: jobNo, prin_code: prinCode, company_code: companyCode });
       setAddOpen(false);
       setNotice({ type: "success", message: `${config.title} added successfully` });
@@ -821,63 +979,76 @@ function InboundOperationalTab({
         }
       />
 
-      {/* Add Modal */}
-{(config.addFields ?? []).map((field) => (  <label key={field.name}
-    className={field.name === "remarks" || field.name === "description1"
-      ? "field col-span-2 md:col-span-3" : "field"}>
-    <span className="text-xs font-medium text-muted-foreground">
-      {field.label}{field.required && <strong className="text-destructive"> *</strong>}
-    </span>
+{/* Add Modal */}
+<Dialog
+  wide
+  open={addOpen}
+  title={config.addLabel || `Add ${config.title}`}
+  description={`Fill in the details to add a new ${config.title.toLowerCase()} record.`}
+  onClose={() => setAddOpen(false)}
+>
+  <form className="grid gap-2" onSubmit={saveAdd}>
+    <div className="grid gap-2 grid-cols-2 md:grid-cols-3">
+      {(config.addFields ?? []).map((field) => (
+        <label
+          key={field.name}
+          className={
+            field.name === "remarks" || field.name === "description1"
+              ? "field col-span-2 md:col-span-3"
+              : "field"
+          }
+        >
+          <span className="text-xs font-medium text-muted-foreground">
+            {field.label}
+            {field.required && <strong className="text-destructive"> *</strong>}
+          </span>
 
-    {/* ── NEW: Lookup field ── */}
-    {field.lookup === "product" ? (
-      <LookupField
-        label={field.label}
-        compact
-        value={String(addForm[field.name] || "")}
-        displayValue={String(addForm[`${field.name}_display`] || "")}
-        valueField="PROD_CODE"
-        displayFields={["PROD_CODE", "PROD_NAME"]}
-        columns={[
-          { field: "PROD_CODE", header: "Product Code" },
-          { field: "PROD_NAME", header: "Product Name" },
-          { field: "UOM_CODE",  header: "UOM" },
-        ]}
-        loadOptions={async () => {
-          const res = await api.post("/api/wms/inbound/executeRawSql", {
-            raw_sql: `SELECT PROD_CODE, PROD_NAME, UOM_CODE 
-                      FROM MS_PRODUCT 
-                      WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' 
-                      ORDER BY PROD_NAME`,
-          });
-          const data = Array.isArray(res.data?.data) ? res.data.data
-            : Array.isArray(res.data) ? res.data : [];
-          return data;
-        }}
-        onChange={(val, row) =>
-          setAddForm((cur) => ({
-            ...cur,
-            [field.name]: val,
-            [`${field.name}_display`]: row
-              ? `${row["PROD_CODE"] ?? row["prod_code"] ?? ""} - ${row["PROD_NAME"] ?? row["prod_name"] ?? ""}`
-              : "",
-            // auto-fill UOM if present
-            uom: row ? String(row["UOM_CODE"] ?? row["uom_code"] ?? cur.uom ?? "") : String(cur.uom ?? ""),
-          }))
-        }
-      />
-    ) : field.dropdown && field.dropdown.length > 0 ? (
-      <Select value={String(addForm[field.name] || "")}
-        onChange={(e) => setAddForm((cur) => ({ ...cur, [field.name]: e.target.value }))}>
-        <option value="">— Select {field.label} —</option>
-        {field.dropdown.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-      </Select>
-    ) : (
-      <Input type={field.type || "text"} value={String(addForm[field.name] || "")}
-        onChange={(e) => setAddForm((cur) => ({ ...cur, [field.name]: e.target.value }))} />
-    )}
-  </label>
-))}
+{field.lookup ? (() => {
+  const lp = getLookupProps(field);
+  if (!lp) return null;
+  return (
+    <LookupField
+      label={field.label}
+      compact
+      value={String(addForm[field.name] || "")}
+      displayValue={String(addForm[`${field.name}_display`] || "")}
+      valueField={lp.valueField}
+      displayFields={lp.displayFields}
+      columns={lp.columns}
+      loadOptions={lp.loadOptions}
+      onChange={lp.onChange}
+    />
+  );
+})() : field.dropdown && field.dropdown.length > 0 ? (
+  <Select
+    value={String(addForm[field.name] || "")}
+    onChange={(e) => setAddForm((cur) => ({ ...cur, [field.name]: e.target.value }))}
+  >
+    <option value="">— Select {field.label} —</option>
+    {field.dropdown.map((opt) => (
+      <option key={opt.value} value={opt.value}>{opt.label}</option>
+    ))}
+  </Select>
+) : (
+  <Input
+    type={field.type || "text"}
+    value={String(addForm[field.name] || "")}
+    onChange={(e) => setAddForm((cur) => ({ ...cur, [field.name]: e.target.value }))}
+  />
+)}
+        </label>
+      ))}
+    </div>
+    <div className="flex justify-end gap-2 pt-1">
+      <Button type="button" variant="outline" onClick={() => setAddOpen(false)}>
+        <X size={15} /> Cancel
+      </Button>
+      <Button disabled={saving} type="submit">
+        <Save size={15} /> {saving ? "Saving..." : "Save"}
+      </Button>
+    </div>
+  </form>
+</Dialog>
 
       {/* Process Modal (Quality Clearance / Putaway / Confirmation) */}
       <Dialog open={processOpen} compact
@@ -955,7 +1126,7 @@ function getInboundTabConfig(tab: string) {
     },
     packing_details: {
       title: "Packing Details", minWidth: 1280,
-      addLabel: "Add Packing", addEndpoint: "packing", addFields: packingFormFields,
+      addLabel: "Add Packing Details", addEndpoint: "packing", addFields: packingFormFields,
       sql: packSql, columns: packingColumns(),
     },
     receiving_details: {
