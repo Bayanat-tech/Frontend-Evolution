@@ -250,8 +250,6 @@ export async function getFinanceMasterRows(
   return response.data.data?.tableData || [];
 }
 
-// LPO APIs
-
 export async function getLpoDocuments(
   fyPeriod?: string,
   search?: string,
@@ -311,6 +309,25 @@ export async function getLpoDetail(docNo: string, docType: string) {
   }
 
   return response.data.data || [];
+}
+
+export async function getLpoRefDocSearch(divCode: string, companyCode: string) {
+  const { getDynamicFinanceLookup } = await import("./lookups");
+  return getDynamicFinanceLookup({
+    parameter: "Account_LPO_REF_DOC",
+    code1: companyCode,
+    number1: Number(divCode) || undefined,
+  });
+}
+
+// Get lpo (Ref_Doc) in PI
+export async function getPurchaseHeader(docNo: string, docType: string) {
+  const response = await api.get<ApiResponse<Record<string, unknown>>>(
+    `/api/finance/transactions/purchaseheader/${encodeURIComponent(docNo)}`,
+    { params: { doc_type: docType } }
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load purchase header");
+  return response.data.data || {};
 }
 
 export async function saveTransactionDocument(payload: TransactionHeader, editMode: boolean) {

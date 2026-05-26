@@ -15,7 +15,8 @@ import {
   TransactionType,
   getLpoDocuments,
   getLpoHeader,
-  getLpoDetail
+  getLpoDetail,
+  getPurchaseHeader
 } from "../../api/transactions";
 import { getDynamicFinanceLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
@@ -573,20 +574,24 @@ function CommercialEditor({
     <Input disabled value={form.ac_name || ""} />
   </Field>
 
-  {/* ── Currency — ALL (field: curr_code / curr_name) ── */}
-  <LookupField
+  {/* ── Currency ── */}
+   <LookupField
     label="Currency"
-    value={form.curr_code}
-    displayValue={form.curr_name
-      ? `${form.curr_code} - ${form.curr_name}`
-      : form.curr_code}
+    value={form.curr_code ?? ""}
+    displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
     columns={[
       { field: "curr_code", header: "Code" },
       { field: "curr_name", header: "Name" },
+      { field: "ex_rate",   header: "Ex Rate" },
     ]}
     valueField="curr_code"
-    displayFields={["curr_code", "curr_name"]}
-    loadOptions={() => getCurrencyRows()}
+    displayFields={["curr_code", "curr_name", "ex_rate"]}
+    loadOptions={() =>
+      getDynamicFinanceLookup({
+        parameter: "Account_Currency_CODE_Search",
+        code1: user?.company_code || "",
+      })
+    }
     onChange={(value, row) =>
       setForm((c) => ({
         ...c,
@@ -597,26 +602,26 @@ function CommercialEditor({
     }
   />
 
-  {/* ── Ex Rate — ALL (field: ex_rate) ── */}
+  {/* ── Ex Rate ── */}
   <Field label="Ex Rate">
     <Input type="number" step="0.0001" value={form.ex_rate}
       onChange={(e) => update("ex_rate", Number(e.target.value || 1))} />
   </Field>
 
-  {/* ── Address — ALL (field: party_address) ── */}
+  {/* ── Address  ── */}
   <label className="field col-span-2 max-md:col-span-1">
     <span>Address</span>
     <Input value={form.party_address || ""}
       onChange={(e) => update("party_address", e.target.value)} />
   </label>
 
-  {/* ── Phone — ALL (field: party_phone) ── */}
+  {/* ── Phone ── */}
   <Field label="Phone">
     <Input value={form.party_phone || ""}
       onChange={(e) => update("party_phone", e.target.value)} />
   </Field>
 
-  {/* ── Fax — ── */}
+  {/* ── Fax ── */}
   <Field label="Fax">
     <Input value={form.party_fax || ""}
       onChange={(e) => update("party_fax", e.target.value)} />
@@ -649,16 +654,6 @@ function CommercialEditor({
   </Field>
 
   {/* ── Delivery Term  ── */}
-  {/* PO table field: dlvr_term | PI/SI/SV table field: delivery_term ── */}
-  {/* <Field label="Delivery Term">
-    <Input
-      value={(isPO ? form.dlvr_term : form.delivery_term) || ""}
-      onChange={(e) =>
-        update(isPO ? "dlvr_term" : "delivery_term", e.target.value)
-      }
-    />
-  </Field> */}
-
   <Field label="Delivery Term">
   <Input
     value={form.dlvr_term || ""}
@@ -675,12 +670,86 @@ function CommercialEditor({
   )}
 
   {/* ── Ref Doc — PI / SI / SV (field: ref_doc_no) ── */}
-  {!isPO && (
+  {/* {!isPO && (
     <Field label="Ref Doc">
       <Input value={form.ref_doc_no || ""}
         onChange={(e) => update("ref_doc_no", e.target.value)} />
     </Field>
-  )}
+  )} */}
+   
+   {!isPO && (
+  <LookupField
+    label="Ref Doc"
+    value={form.ref_doc_no || ""}
+    displayValue={form.ref_doc_no || ""}
+    columns={[
+      { field: "DOC_NO",   header: "Doc No"  },
+      { field: "DOC_DATE", header: "Date"    },
+      { field: "REF_NO",   header: "Ref No"  },
+      { field: "REMARKS",  header: "Remarks" },
+    ]}
+    valueField="DOC_NO"
+    displayFields={["DOC_NO"]}
+    loadOptions={() =>
+      getDynamicFinanceLookup({
+        parameter: "Account_LPO_REF_DOC",
+        code1: user?.company_code || "",
+        number1: form.div_code ? Number(form.div_code) : undefined,
+      })
+    }
+    onChange={async (value, row) => {
+      if (!value || !row) return;
+
+      const r       = row as Record<string, unknown>;
+      const docNo   = String(r["DOC_NO"]   ?? r["doc_no"]   ?? value);
+      const srcType = String(r["DOC_TYPE"] ?? r["doc_type"] ?? "PO");
+
+      // Show selection immediately
+      setForm((c) => ({ ...c, ref_doc_no: docNo }));
+
+      try {
+        let header: Record<string, unknown> = {};
+        try {
+          header = await getPurchaseHeader(docNo, srcType);
+        } catch {
+          header = await getLpoHeader(docNo, srcType);
+        }
+
+        let rawDetail: Record<string, unknown>[] = [];
+        try {
+          const res = await getTransactionDetail(docNo, form.div_code, srcType as TransactionType);
+          if (res.length) rawDetail = res;
+        } catch { /* ignore, try LPO below */ }
+
+        if (!rawDetail.length) {
+          try {
+            rawDetail = await getLpoDetail(docNo, srcType);
+          } catch { /* ignore */ }
+        }
+
+        // Force PI when source doc is a PO
+        const targetDocType: CommercialType =
+          srcType.toUpperCase() === "PO" ? "PI" : (srcType as CommercialType);
+
+        const mapped = mapForm(targetDocType, header, rawDetail);
+
+        setForm((c) => ({
+          ...c,
+          ...mapped,
+          doc_type:   targetDocType,
+          doc_no:     c.doc_no,     // preserve existing doc_no in edit mode
+          div_code:   c.div_code,   // never overwrite user's chosen division
+          div_name:   c.div_name,
+          ref_doc_no: docNo,        // always keep the ref
+          detail:     mapped.detail,
+        }));
+
+      } catch (err) {
+        console.error("Failed to load ref doc", err);
+      }
+    }}
+  />
+ )}
 
   {/* ── Salesman Code + Name — SI / SV only ── */}
   {isSales && (
@@ -716,15 +785,8 @@ function CommercialEditor({
  )}
 
   {/* ── Sector Code + Name — SI / SV only ── */}
-  {/* {isSales && (
-    <Field label="Sector">
-      <Input value={form.sector_code || ""}
-        onChange={(e) => update("sector_code", e.target.value)} />
-    </Field>
-  )} */}
-
    {isSales && (
-  <LookupField
+   <LookupField
     label="Sector"
     value={form.sector_code ?? ""}
     displayValue={form.sector_name ? `${form.sector_code} - ${form.sector_name}` : form.sector_code ?? ""}
@@ -756,15 +818,40 @@ function CommercialEditor({
   )}
 
   {/* ── Tax Category — ── */}
-  <Field label="Tax Category">
-    <Input value={form.tx_compntcat_code_1 || ""}
-      onChange={(e) => update("tx_compntcat_code_1", e.target.value)} />
-  </Field>
+  <LookupField
+  label="Tax Category"
+  value={form.tx_compntcat_code_1 ?? ""}
+  displayValue={form.tx_compntcat_code_1 ?? ""}
+  columns={[
+    { field: "tx_compntcat_code",  header: "Category Code" },
+    { field: "tx_compntcat_name",  header: "Category Name" },
+    { field: "tx_cat_code",        header: "Tax Code"      },
+    { field: "tx_percnt",          header: "Tax %"         },
+  ]}
+  valueField="tx_compntcat_code"
+  displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
+  loadOptions={() =>
+    getDynamicFinanceLookup({
+      parameter: "Account_Tax_Search",
+      code1: user?.company_code || "",
+    })
+  }
+  onChange={(value, row) => {
+    const r = row || {} as Record<string, unknown>;
+    setForm((c) => ({
+      ...c,
+      tx_compntcat_code_1: value,
+      tx_cat_code:         text(getLookupValue(r, "tx_cat_code")),
+      tx_compnt_perc_1:    Number(getLookupValue(r, "tx_percnt") || 0),
+    }));
+  }}
+/>
 
   {/* ── Tax Code ── */}
   <Field label="Tax Code">
-    <Input value={form.tx_cat_code || ""}
-      onChange={(e) => update("tx_cat_code", e.target.value)} />
+    <Input disabled value={form.tx_cat_code || ""}
+      onChange={(e) => update("tx_cat_code", e.target.value)} 
+      />
   </Field>
 
   {/* ── Tax Type  ── */}
@@ -876,7 +963,7 @@ function CommercialEditor({
                         <td className="w-[220px] px-2 py-1"><Input disabled value={line.ac_name || ""} /></td>
                         <td className="w-[220px] px-2 py-1"><Input value={line.remarks || ""} onChange={(event) => updateLine(line.id, { remarks: event.target.value })} /></td>
                         <td className="w-[210px] px-2 py-1">
-                          <LookupField
+                          {/* <LookupField
                             label="Currency"
                             compact
                             placeholder="Currency"
@@ -887,7 +974,32 @@ function CommercialEditor({
                             displayFields={["curr_code", "curr_name"]}
                             loadOptions={() => getCurrencyRows()}
                             onChange={(value, row) => setForm((current) => ({ ...current, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")) }))}
-                          />
+                          /> */}
+                          <LookupField
+    label="Currency"
+    value={form.curr_code ?? ""}
+    displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
+    columns={[
+      { field: "curr_code", header: "Code" },
+      { field: "curr_name", header: "Name" },
+    ]}
+    valueField="curr_code"
+    displayFields={["curr_code", "curr_name", "ex_rate"]}
+    loadOptions={() =>
+      getDynamicFinanceLookup({
+        parameter: "Account_Currency_CODE_Search",
+        code1: user?.company_code || "",
+      })
+    }
+    onChange={(value, row) =>
+      setForm((c) => ({
+        ...c,
+        curr_code: value,
+        curr_name: text(getLookupValue(row || {}, "curr_name")),
+      }))
+    }
+  />
+  
                         </td>
                         <td className="w-28 px-2 py-1"><Input type="number" step="0.0001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></td>
                         <td className="w-28 px-2 py-1"><Input type="number" value={line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
