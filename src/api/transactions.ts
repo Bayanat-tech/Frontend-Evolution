@@ -162,7 +162,7 @@ export async function getTransactionDocuments(docType: TransactionType, fyPeriod
   if (search?.trim()) {
     filters.push([
       { field_name: "doc_no", field_value: search.trim(), operator: "contains" },
-      { field_name: "ac_code", field_value: search.trim(), operator: "contains" },
+      { field_name: "ac_name", field_value: search.trim(), operator: "contains" },
       { field_name: "ref_no", field_value: search.trim(), operator: "contains" },
     ]);
   }
