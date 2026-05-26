@@ -125,6 +125,37 @@ export type Division = {
   div_name: string;
 };
 
+export type CompanyInfo = {
+  company_code?: string;
+  ac_fy_period?: string;
+};
+
+export async function getCompanyInfo() {
+  const response = await api.get<ApiResponse<CompanyInfo>>("/api/finance/transactions/company_info");
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load company settings");
+  return response.data.data || {};
+}
+
+export function getDefaultFyPeriod(periods: FyPeriod[], companyInfo?: CompanyInfo) {
+  const companyPeriod = String(companyInfo?.ac_fy_period || "").trim();
+  if (companyPeriod && periods.some((period) => String(period.fy_period) === companyPeriod)) {
+    return companyPeriod;
+  }
+
+  const today = new Date();
+  const currentPeriod = periods.find((period) => {
+    if (!period.date_from || !period.date_to) return false;
+    const from = new Date(period.date_from);
+    const to = new Date(period.date_to);
+    return !Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime()) && today >= from && today <= to;
+  });
+  if (currentPeriod?.fy_period) return currentPeriod.fy_period;
+
+  const yearSuffix = String(today.getFullYear()).slice(-2);
+  const matchingYear = periods.find((period) => String(period.fy_period).endsWith(yearSuffix));
+  return matchingYear?.fy_period || periods[periods.length - 1]?.fy_period || periods[0]?.fy_period || "";
+}
+
 export async function getTransactionDocuments(docType: TransactionType, fyPeriod?: string, search?: string, page = 1, limit = 100) {
   const filters: unknown[] = [[{ field_name: "doc_type", field_value: docType, operator: "exactmatch" }]];
   if (fyPeriod) filters.push([{ field_name: "fy_period", field_value: fyPeriod, operator: "exactmatch" }]);
@@ -248,6 +279,69 @@ export async function getFinanceMasterRows(
   });
   if (!response.data.success) throw new Error(response.data.message || `Unable to load ${master}`);
   return response.data.data?.tableData || [];
+}
+
+// LPO APIs
+
+export async function getLpoDocuments(
+  fyPeriod?: string,
+  search?: string,
+  page = 1,
+  limit = 100,
+) {
+  const response = await api.get<
+    ApiResponse<TransactionDocumentRow[]>
+  >("/api/finance/transactions/lpo", {
+    params: {
+      fy_period: fyPeriod,
+      search,
+      page,
+      limit,
+    },
+  });
+
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Unable to load LPO documents");
+  }
+
+  const list = response.data.data || [];
+
+  // backend may or may not send pagination → handle safely
+  const pagination = (response as any).data?.pagination;
+
+  return {
+    tableData: list,
+    count: pagination?.total ?? list.length ?? 0,
+  };
+}
+export async function getLpoHeader(docNo: string, docType: string) {
+  const response = await api.get<ApiResponse<Record<string, unknown>>>(
+    `/api/finance/transactions/lpo/${encodeURIComponent(docNo)}`,
+    {
+      params: { doc_type: docType },
+    },
+  );
+
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Unable to load LPO header");
+  }
+
+  return response.data.data || {};
+}
+
+export async function getLpoDetail(docNo: string, docType: string) {
+  const response = await api.get<ApiResponse<Record<string, unknown>[]>>(
+    `/api/finance/transactions/lpo/${encodeURIComponent(docNo)}/detail`,
+    {
+      params: { doc_type: docType },
+    },
+  );
+
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Unable to load LPO details");
+  }
+
+  return response.data.data || [];
 }
 
 export async function saveTransactionDocument(payload: TransactionHeader, editMode: boolean) {

@@ -1632,6 +1632,123 @@ a {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
+.commercial-header-shell {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.commercial-header-panel {
+  min-width: 0;
+  transition: max-height 160ms ease;
+}
+
+.commercial-header-panel.is-collapsed {
+  max-height: none;
+  overflow: visible;
+}
+
+.commercial-header-panel.is-expanded {
+  max-height: 520px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.commercial-header-panel.is-collapsed > :nth-child(n+13) {
+  display: none;
+}
+
+.commercial-header-footer {
+  min-height: 42px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.commercial-lines-scroll {
+  width: 100%;
+  max-width: 100%;
+  min-height: 320px;
+  max-height: calc(100vh - 330px);
+}
+
+.commercial-editor {
+  overflow-x: hidden;
+}
+
+.commercial-editor .field,
+.commercial-editor .ui-input,
+.commercial-editor .ui-select,
+.commercial-editor .field > div {
+  min-width: 0;
+}
+
+.commercial-editor .ui-input,
+.commercial-editor .ui-select {
+  max-width: 100%;
+}
+
+.commercial-editor .field > span {
+  color: #64748b;
+}
+
+.commercial-editor table tbody tr {
+  height: 36px;
+}
+
+.commercial-editor table .ui-input,
+.commercial-editor table .ui-select,
+.commercial-editor table .field > div {
+  height: 30px;
+  min-height: 30px;
+}
+
+.commercial-editor .commercial-number-input {
+  padding-right: 12px;
+  padding-left: 12px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.commercial-line-description {
+  width: 100%;
+  min-height: 30px;
+  max-height: 74px;
+  padding: 6px 10px;
+  overflow: auto;
+  resize: vertical;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid var(--input);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.commercial-line-description:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+@media (max-width: 1535px) {
+  .commercial-header-panel.is-collapsed > :nth-child(n+9) {
+    display: none;
+  }
+}
+
+@media (max-width: 1279px) {
+  .commercial-header-panel.is-collapsed > :nth-child(n+7) {
+    display: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .commercial-header-panel.is-collapsed > :nth-child(n+5) {
+    display: none;
+  }
+}
+
 .field-wide {
   grid-column: span 2;
 }
