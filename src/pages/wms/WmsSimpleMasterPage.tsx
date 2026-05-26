@@ -19,7 +19,7 @@ export type WmsMasterField = {
   required?: boolean;
   disabledOnEdit?: boolean;
   disabledWhen?: (form: Record<string, unknown>) => boolean;
-  type?: "text" | "number" | "select" | "email" | "textarea";
+  type?: "text" | "number" | "select" | "email" | "textarea" | "checkbox";
   options?: { label: string; value: string }[];
   dropdownKey?: DropdownKey;          // e.g. 'country', 'currency', 'department'
   dropdownDependsOn?: string;         // field name this dropdown depends on (for chained dropdowns)
@@ -31,8 +31,10 @@ export type WmsMasterField = {
     dependsOn?: string;         // field name this depends on (for chained dropdowns)
   };
   tab?: string;                 // which tab this field belongs to
+  section?: string;             // section header for grouping fields
   table?: boolean;
   width?: number;
+  colSpan?: number;             // number of columns to span (1-2)
 };
 
 export type WmsDeleteConfig = {
@@ -55,6 +57,7 @@ export type WmsSimpleMasterConfig = {
   keyField: string;
   fields: WmsMasterField[];
   defaults?: Record<string, unknown>;
+  fieldsPerRow?: number;  // Number of fields per row (default: 2)
   deleteConfig?: WmsDeleteConfig;
   mapBeforeSave?: (form: Record<string, unknown>, context: { editMode: boolean; original: Record<string, unknown> | null }) => Record<string, unknown>;
   saveEndpoint?: (form: Record<string, unknown>, context: { editMode: boolean; original: Record<string, unknown> | null }) => string;
@@ -264,11 +267,13 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
         getRowId={(row, index) => String(row[config.keyField] || `${config.master}_${index}`)}
       />
 
-      <Dialog open={formOpen} title={editMode ? `Edit ${config.title}` : `Add ${config.title}`} description="Master details" compact onClose={() => setFormOpen(false)}>
+      <Dialog open={formOpen} title={editMode ? `Edit ${config.title}` : `Add ${config.title}`} description="Master details" compact wide onClose={() => setFormOpen(false)} >
+      <div style={{ maxHeight: 'calc(90vh - 180px)', overflowY: 'auto', width: '100%' }}>
       <WmsMasterForm
           fields={editableFields}
           key={formOpen ? (editMode ? `edit-${String(original?.[config.keyField])}` : "add") : "closed"}
           tabs={config.formTabs}
+          fieldsPerRow={config.fieldsPerRow}
           form={form}
           editMode={editMode}
           saving={saving}
@@ -277,6 +282,7 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
           onSave={saveRecord}
           onCancel={() => setFormOpen(false)}
         />
+      </div>
         {/* <form className="grid gap-4" onSubmit={saveRecord}>
           <Card>
             <CardHeader>

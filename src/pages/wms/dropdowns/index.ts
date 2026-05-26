@@ -54,8 +54,8 @@ export async function fetchDepartments(
       ...(filters ? { filter: JSON.stringify(filters) } : {}),
     });
     return (response.tableData as Record<string, unknown>[]).map((row) => ({
-      label: String(row.department_name ?? ""),
-      value: String(row.department_code ?? ""),
+      label: `${String(row.dept_code ?? "")} - ${String(row.dept_name ?? "")}`,
+      value: String(row.dept_code ?? ""),
     }));
   } catch (error) {
     console.error("Error fetching departments:", error);
