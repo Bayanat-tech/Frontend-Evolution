@@ -33,56 +33,15 @@ type Props = {
 export function WmsMasterForm({
   fields, tabs, fieldsPerRow = 2, form, editMode, saving, notice, user, onChange, onSave, onCancel,
 }: Props) {
-  console.log("Rendering WmsMasterForm with form data:", form);
-  console.log("Fields configuration:", fields);
-  console.log("edit mode", editMode);
   const [activeTab, setActiveTab] = useState(tabs?.[0]?.key ?? "__default");
 
   useEffect(() => {
     setActiveTab(tabs?.[0]?.key ?? "__default");
   }, [tabs]);
 
-  const [dropdownCache, setDropdownCache] = useState<Record<string, DropdownOption[]>>({});
-  const [asyncCache, setAsyncCache] = useState<Record<string, { label: string; value: string }[]>>({});
-  const [dropdownLoading, setDropdownLoading] = useState<Record<string, boolean>>({});
-
-  useEffect(() => {
-    fields.forEach((field) => {
-      if (!field.asyncOptions) return;
-      const { endpoint, labelKey, valueKey, dependsOn } = field.asyncOptions;
-      if (dependsOn && !form[dependsOn]) return;
-
-      const cacheKey = dependsOn
-        ? `${field.name}__${form[dependsOn]}`
-        : field.name;
-
-      if (asyncCache[cacheKey]) return;
-
-      void getWmsMaster(endpoint, {
-        page: 1,
-        limit: 10000,
-        ...(dependsOn ? { filter: JSON.stringify({ [dependsOn]: form[dependsOn] }) } : {}),
-      }).then((res) => {
-        const options = (res.tableData as Record<string, unknown>[]).map((row) => ({
-          label: String(row[labelKey] ?? ""),
-          value: String(row[valueKey] ?? ""),
-        }));
-        setAsyncCache((prev) => ({ ...prev, [cacheKey]: options }));
-      });
-    });
-  }, [fields, form, asyncCache]);
-
 const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOption[]> => {
   if (!field.dropdownParam) return [];
 
-  const cacheKey = field.dropdownParam;
-  if (dropdownCache[cacheKey]) return dropdownCache[cacheKey];
-  if (dropdownLoading[cacheKey]) {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    return dropdownCache[cacheKey] || [];
-  }
-
-  setDropdownLoading((prev) => ({ ...prev, [cacheKey]: true }));
   try {
     const params: Record<string, unknown> = { parameter: field.dropdownParam };
 
@@ -94,7 +53,7 @@ const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOptio
 
     if (field.dropdownCodeMap) {
       let codeIndex = 2;
-      for (const [fieldName, _codeParam] of Object.entries(field.dropdownCodeMap)) {
+      for (const [fieldName] of Object.entries(field.dropdownCodeMap)) {
         if (fieldName === "company_code") continue;
         const value = form[fieldName];
         if (value) params[`code${codeIndex}`] = value;
@@ -107,7 +66,7 @@ const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOptio
     const valueKey = field.dropdownValueKey || "value";
     const separator = field.dropdownDisplaySeparator || " - ";
 
-    const options = results.map((row) => {
+    return results.map((row) => {
       const displayLabel = field.dropdownDisplayFields?.length
         ? field.dropdownDisplayFields
             .map((f) => String(row[f] || ""))
@@ -120,32 +79,10 @@ const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOptio
         value: String(row[valueKey] || row.value || row.code || row.id || ""),
       };
     });
-
-    setDropdownCache((prev) => ({ ...prev, [cacheKey]: options }));
-    return options;
   } catch (error) {
     console.error(`Error loading dropdown for ${field.name}:`, error);
     return [];
-  } finally {
-    setDropdownLoading((prev) => ({ ...prev, [cacheKey]: false }));
   }
-};
-
-
-const getOptions = (field: WmsMasterField): DropdownOption[] => {
-  if (field.options) return field.options;
-
-  if (field.dropdownParam) {
-    return dropdownCache[field.dropdownParam] ?? [];
-  }
-
-  if (field.asyncOptions) {
-    const { dependsOn } = field.asyncOptions;
-    const cacheKey = dependsOn ? `${field.name}__${form[dependsOn]}` : field.name;
-    return asyncCache[cacheKey] ?? [];
-  }
-
-  return [];
 };
 
   const hasTabs = tabs && tabs.length > 0;
@@ -224,13 +161,10 @@ const getOptions = (field: WmsMasterField): DropdownOption[] => {
                     className={`flex items-center py-1 ${spanClass}`}
                   >
                     {renderInput(
-                      field,
-                      form[field.name],
+                      field, form[field.name],
                       Boolean(editMode && field.disabledOnEdit) || Boolean(field.disabledWhen?.(form)),
-                      getOptions(field),
+                      form,
                       onChange,
-                      () => loadDropdownOptions(field),
-                      dropdownLoading[field.name] || false,
                       loadDropdownOptions
                     )}
                   </div>
@@ -243,13 +177,10 @@ const getOptions = (field: WmsMasterField): DropdownOption[] => {
                       )}
                     </span>
                     {renderInput(
-                      field,
-                      form[field.name],
+                      field, form[field.name],
                       Boolean(editMode && field.disabledOnEdit) || Boolean(field.disabledWhen?.(form)),
-                      getOptions(field),
+                      form,
                       onChange,
-                      () => loadDropdownOptions(field),
-                      dropdownLoading[field.name] || false,
                       loadDropdownOptions
                     )}
                   </label>
@@ -433,6 +364,28 @@ const getOptions = (field: WmsMasterField): DropdownOption[] => {
   );
 }
 
+function getFieldDependencyKey(field: WmsMasterField, form: Record<string, unknown>): string {
+  const deps: string[] = [];
+
+  if (field.filterDependsOn) {
+    deps.push(String(form[field.filterDependsOn] ?? ""));
+  }
+
+  if (field.dropdownCodeMap) {
+    for (const [fieldName] of Object.entries(field.dropdownCodeMap)) {
+      if (fieldName === "company_code") continue;
+      deps.push(String(form[fieldName] ?? ""));
+    }
+  }
+
+  if (field.asyncOptions?.dependsOn) {
+    deps.push(String(form[field.asyncOptions.dependsOn] ?? ""));
+  }
+
+  // If no dependencies, use a timestamp so it always remounts on open
+  return deps.length > 0 ? deps.join("__") : Date.now().toString();
+}
+
 /* ─────────────────────────────────────────────
    renderInput — field-level renderer
 ───────────────────────────────────────────── */
@@ -440,75 +393,48 @@ function renderInput(
   field: WmsMasterField,
   value: unknown,
   disabled: boolean,
-  options: DropdownOption[],
+  form: Record<string, unknown>,
   onChange: (name: string, value: unknown) => void,
-  onDropdownFocus: () => void,
-  isLoading: boolean,
   loadDropdownOptions: (field: WmsMasterField) => Promise<DropdownOption[]>,
 ) {
   const baseInputClass =
     "h-6 w-full rounded border border-input bg-background px-2 text-[11px] text-foreground placeholder:text-muted-foreground/50 transition-colors focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed";
 
 if (field.type === "select" || field.asyncOptions || field.dropdownParam) {
-  const hasApiOptions = field.asyncOptions || field.dropdownParam;
-
-    if (!hasApiOptions && field.options) {
-      return (
-        <Select
-          disabled={disabled}
-          value={String(value ?? "")}
-          onChange={(event) => onChange(field.name, event.target.value)}
-          className={baseInputClass}
-        >
-          <option value="">— Select {field.label} —</option>
-          {options.map((option) => (
-            <option value={option.value} key={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </Select>
-      );
-    }
-
-    const lookupRows: LookupRow[] = options.map((opt) => ({
-      value: opt.value,
-      label: opt.label,
-    }));
-
+  if (!field.asyncOptions && !field.dropdownParam && field.options) {
     return (
-      <div
-        className={`[&_input]:h-6 [&_input]:text-[11px] [&_input]:py-0 [&_input]:px-2 [&_button]:h-6 ${isLoading ? "opacity-60 pointer-events-none" : ""}`}
+      <Select
+        disabled={disabled}
+        value={String(value ?? "")}
+        onChange={(event) => onChange(field.name, event.target.value)}
       >
-        <LookupField
-          label=""
-          value={String(value ?? "")}
-          displayValue={options.find((opt) => opt.value === String(value))?.label}
-          columns={[{ field: "label", header: "Label" }]}
-          valueField="value"
-          displayFields={["label"]}
-          // loadOptions={async () => {
-          //   // Load fresh data or get from cache
-          //   const dropdownOptions = await (loadDropdownAsync?.(field) || Promise.resolve([]));
-          //   return dropdownOptions.map((opt: DropdownOption) => ({
-          //     value: opt.value,
-          //     label: opt.label,
-          //   }));
-          // }}
-          // AFTER — loadOptions IS the single source of truth; no separate onFocus/onClick trigger needed
-          loadOptions={async () => {
-            const dropdownOptions = await loadDropdownOptions(field); // call the real loader directly
-            return dropdownOptions.map((opt: DropdownOption) => ({
-              value: opt.value,
-              label: opt.label,
-            }));
-          }}
-          onChange={(val) => onChange(field.name, val)}
-          disabled={disabled || isLoading}
-          placeholder={isLoading ? "Loading…" : `Search ${field.label}…`}
-        />
-      </div>
+        <option value="">— Select {field.label} —</option>
+        {field.options.map((option) => (
+          <option value={option.value} key={option.value}>{option.label}</option>
+        ))}
+      </Select>
     );
   }
+
+  return (
+    <LookupField
+      label=""
+      key={`${field.name}__${getFieldDependencyKey(field, form)}`}
+      value={String(value ?? "")}
+      displayValue={undefined}  // no cache to read display value from
+      columns={[{ field: "label", header: "Label" }]}
+      valueField="value"
+      displayFields={["label"]}
+      loadOptions={async () => {
+        const options = await loadDropdownOptions(field);
+        return options.map((opt) => ({ value: opt.value, label: opt.label }));
+      }}
+      onChange={(val) => onChange(field.name, val)}
+      disabled={disabled}
+      placeholder={`Search ${field.label}…`}
+    />
+  );
+}
 
   if (field.type === "textarea") {
     return (

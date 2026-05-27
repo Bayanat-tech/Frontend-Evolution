@@ -308,7 +308,8 @@ country: {
       { name: "prin_name", label: "Principal Name", required: true, width: 280, tab: "basic-info", section: "COMPANY DETAILS", colSpan: 2 },
       { name: "status", label: "Status", required: true, type: "select", options: [{ label: "Active", value: "A" }, { label: "Inactive", value: "I" }], tab: "basic-info", section: "COMPANY DETAILS" },
       { name: "prin_city", label: "City", width: 280, tab: "basic-info", section: "COMPANY DETAILS" },
-      { name: "country_code", label: "Country", required: true, dropdownParam: "DROP_DOWN_COUNTRY", tab: "basic-info", section: "COMPANY DETAILS" },
+      { name: "country_code", label: "Country", required: true, dropdownParam: "DROP_DOWN_COUNTRY",dropdownDisplayFields: ["country_code", "country_name"], dropdownValueKey: "country_code",
+      dropdownDisplaySeparator: " - ", tab: "basic-info", section: "COMPANY DETAILS" },
       { name: "prin_addr1", label: "Address 1", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS", colSpan: 2 },
       { name: "prin_addr2", label: "Address 2", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS", colSpan: 2 },
       { name: "prin_addr3", label: "Address 3", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS" },
@@ -340,7 +341,7 @@ country: {
       { name: "comm_expiry_date", label: "Commercial Reg. Expiry", type: "date", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
       { name: "license_no", label: "License No.", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
       { name: "license_type", label: "License Type", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
-      { name: "curr_code", label: "Default Currency", dropdownParam: "DROP_DOWN_CURRENCY", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
+      { name: "curr_code", label: "Default Currency", dropdownParam: "DROP_DOWN_CURRENCY", dropdownDisplayFields: ["curr_code", "curr_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "curr_code", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
       { name: "in_designated_zone", label: "In Designated Zone", type: "checkbox", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
 
       // Account Info Tab - Account and Credit Information
@@ -355,7 +356,7 @@ country: {
       { name: "last_invoice_date", label: "Last Invoice Date", type: "date", tab: "account-info", section: "INVOICE AND TRANSACTION HISTORY" },
 
       // Settings Tab - Pick Rules
-      { name: "pick_wave", label: "Pick Wave", type: "select", options: [{ label: "Wave 1", value: "1" }], tab: "settings", section: "PICK RULES" },
+      { name: "pick_wave", label: "Pick Wave", dropdownParam:"DROP_DOWN_PICK_WAVE", dropdownDisplayFields: [ "wave_code","wave_name"],dropdownDisplaySeparator: " - ", dropdownValueKey: "wave_code", tab: "settings", section: "PICK RULES" },
       { name: "pick_wave_min_exp", label: "Pick Wave (Minimum Exp)", type: "checkbox", tab: "settings", section: "PICK RULES" },
       { name: "pick_wave_least_qty", label: "Pick Wave (Least Quantity)", type: "checkbox", tab: "settings", section: "PICK RULES" },
 
