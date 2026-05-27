@@ -211,26 +211,28 @@ type FormField = {
   name: string; label: string; required?: boolean; type?: string;
   dropdown?: DropdownOption[];
   lookup?: "product" | "container" | "country" | "manufacturer";
+  disabled?: boolean;  // ADD this
 };
 
 const packingFormFields: FormField[] = [
-  { name: "container_no",     label: "Container No",        required: true,  lookup: "container" },
-  { name: "prod_code",        label: "Product / SKU",       required: true,  lookup: "product" },
-  { name: "qty",              label: "Quantity (Primary)",   required: true,  type: "number" },
-  { name: "qty_lowest",       label: "Quantity (Lowest)",    required: true,  type: "number" },
-  { name: "qty_total",        label: "Total Quantity",       required: true,  type: "number" },
-  { name: "uom",              label: "UOM" },
-  { name: "batch_no",         label: "Batch No" },
-  { name: "lot_no",           label: "Lot No" },
-  { name: "po_no",            label: "PO No" },
-  { name: "doc_ref",          label: "Doc Ref" },
-  { name: "mfg_date",         label: "Production Date",     type: "date" },
-  { name: "exp_date",         label: "Expiry Date",         type: "date" },
-  { name: "country_origin",   label: "Country of Origin",   lookup: "country" },
-  { name: "manufacturer",     label: "Manufacturer",        lookup: "manufacturer" },
-  { name: "shelf_life_date",  label: "Shelf Life (Date)",   type: "date" },
-  { name: "shelf_life_days",  label: "Shelf Life Days",     type: "number" },
+  { name: "container_no",    label: "Container No",       required: true,  lookup: "container" },
+  { name: "prod_code",       label: "Product / SKU",      required: true,  lookup: "product" },
+  { name: "qty_puom",        label: "Quantity (Primary)",  required: true,  type: "number" },
+  { name: "qty_luom",        label: "Quantity (Lowest)",   required: true,  type: "number" },
+  { name: "quantity",        label: "Total Quantity",      type: "number",  disabled: true },  // auto-calculated
+  { name: "batch_no",        label: "Batch No" },
+  { name: "lot_no",          label: "Lot No" },
+  { name: "po_no",           label: "PO No" },
+  { name: "bl_no",           label: "BL No" },
+  { name: "doc_ref",         label: "Doc Ref" },
+  { name: "mfg_date",        label: "Production Date",    type: "date" },
+  { name: "exp_date",        label: "Expiry Date",        type: "date" },
+  { name: "country_origin",  label: "Country of Origin",  lookup: "country" },
+  { name: "manufacturer",    label: "Manufacturer",       lookup: "manufacturer" },
+  { name: "shelf_life_date", label: "Shelf Life (Date)",  type: "date" },
+  { name: "shelf_life_days", label: "Shelf Life Days",    type: "number" },
 ];
+
 
 const receivingFormFields: FormField[] = [
   { name: "prod_code", label: "Product Code", required: true },
@@ -719,7 +721,10 @@ function InboundOperationalTab({
   const { user } = useAuth();
   const prinCode = value(job || {}, "prin_code");
   const companyCode = user?.company_code || "";
-
+// ADD after existing useState declarations
+const [editOpen, setEditOpen] = useState(false);
+const [editForm, setEditForm] = useState<WmsRow>({});
+const [editSaving, setEditSaving] = useState(false);
   const [rows, setRows] = useState<WmsRow[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
@@ -730,10 +735,16 @@ function InboundOperationalTab({
   // For Quality Clearance process modal
   const [processOpen, setProcessOpen] = useState(false);
   const [selectedRows, setSelectedRows] = useState<WmsRow[]>([]);
-
+// ADD alongside the existing notice state:
+const [modalNotice, setModalNotice] = useState<string | null>(null);
   const config = getInboundTabConfig(tab);
-  // Put this inside InboundOperationalTab, after the existing state declarations
-const getLookupProps = (field: FormField) => {
+
+// REPLACE the getLookupProps function signature and product case:
+
+const getLookupProps = (field: FormField, isEditMode = false) => {
+  const formData = isEditMode ? editForm : addForm;
+  const setFormData = isEditMode ? setEditForm : setAddForm;
+
   switch (field.lookup) {
     case "product":
       return {
@@ -745,6 +756,9 @@ const getLookupProps = (field: FormField) => {
           { field: "UOM_CODE",  header: "UOM" },
         ],
         loadOptions: async () => {
+          if (tab === "packing_details" && !formData.container_no) {
+            throw new Error("Please select a Container No. first before selecting a product.");
+          }
           const res = await api.post("/api/wms/inbound/executeRawSql", {
             raw_sql: `SELECT *
                       FROM MS_PRODUCT 
@@ -752,52 +766,71 @@ const getLookupProps = (field: FormField) => {
                       ORDER BY PROD_NAME`,
           });
           return Array.isArray(res.data?.data) ? res.data.data
-               : Array.isArray(res.data)       ? res.data : [];
+               : Array.isArray(res.data) ? res.data : [];
         },
-        onChange: (val: string, row: Record<string, unknown> | null) =>
-          setAddForm((cur) => ({
-            ...cur,
-            prod_code: val,
-            prod_code_display: row
-              ? `${row["PROD_CODE"] ?? ""} - ${row["PROD_NAME"] ?? ""}` : "",
-            uom: row ? String(row["UOM_CODE"] ?? cur.uom ?? "") : String(cur.uom ?? ""),
-          })),
+        onChange: (val: string, row: Record<string, unknown> | null) => {
+          const uppp   = Number(row?.["UPPP"]      ?? row?.["uppp"]      ?? 1);
+          const uomCount = Number(row?.["UOM_COUNT"] ?? row?.["uom_count"] ?? 1);
+          const pUom   = String(row?.["UOM_CODE"]  ?? row?.["uom_code"]  ?? "");
+          const lUom   = String(row?.["L_UOM"]     ?? row?.["l_uom"]     ?? "");
+
+          setFormData((cur) => {
+            const qtyPuom = Number(cur.qty_puom ?? 0);
+            const qtyLuom = uomCount <= 1 ? 0 : Number(cur.qty_luom ?? 0);
+            const quantity = uomCount <= 1
+              ? qtyPuom + qtyLuom
+              : qtyPuom * uppp + qtyLuom;
+
+            return {
+              ...cur,
+              prod_code: val,
+              // prod_code_display: row ? `${row["PROD_CODE"] ?? ""} - ${row["PROD_NAME"] ?? ""}` : "",
+              p_uom: pUom,
+              l_uom: lUom,
+              uppp,
+              uom_count: uomCount,
+              qty_luom: uomCount <= 1 ? 0 : cur.qty_luom,
+              quantity,
+            };
+          });
+        },
       };
 
-    case "container": {
-      // Cache key per job so switching jobs re-fetches
-      const cacheKey = `wms_containers_${jobNo}`;
-      return {
-        valueField: "CONTAINER_NO",
-        displayFields: ["CONTAINER_NO"],
-        columns: [
-          { field: "CONTAINER_NO", header: "Container No" },
-          { field: "VEHICLE_NO",   header: "Vehicle No" },
-          { field: "VESSEL_NAME",  header: "Vessel Name" },
-          { field: "SEAL_NO",      header: "Seal No" },
-        ],
-        loadOptions: async () => {
-          // Try sessionStorage first
-          const cached = sessionStorage.getItem(cacheKey);
-          if (cached) {
-            try { return JSON.parse(cached); } catch { /* fall through */ }
-          }
-          const res = await api.post("/api/wms/inbound/executeRawSql", {
-            raw_sql: `SELECT CONTAINER_NO, VEHICLE_NO, VESSEL_NAME, SEAL_NO 
-                      FROM TI_CONTAINER 
-                      WHERE JOB_NO = '${sqlEscape(jobNo)}' 
-                        AND PRIN_CODE = '${sqlEscape(prinCode)}' 
-                      ORDER BY CONTAINER_NO`,
-          });
-          const data = Array.isArray(res.data?.data) ? res.data.data
-                     : Array.isArray(res.data)       ? res.data : [];
-          sessionStorage.setItem(cacheKey, JSON.stringify(data));
-          return data;
-        },
-        onChange: (val: string, _row: Record<string, unknown> | null) =>
-          setAddForm((cur) => ({ ...cur, container_no: val })),
-      };
-    }
+case "container": {
+const cacheKey = `wms_containers_${jobNo}_v2`;
+  return {
+    valueField: "CONTAINER_NO",
+    displayFields: ["CONTAINER_NO"],
+    columns: [
+      { field: "CONTAINER_NO", header: "Container No" },
+      { field: "VEHICLE_NO",   header: "Vehicle No" },
+      { field: "VESSEL_NAME",  header: "Vessel Name" },
+      { field: "SEAL_NO",      header: "Seal No" },
+      { field: "PO_NO",        header: "PO No" },   // ← ADD to display column too
+    ],
+    loadOptions: async () => {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) { try { return JSON.parse(cached); } catch { /* fall through */ } }
+      const res = await api.post("/api/wms/inbound/executeRawSql", {
+        raw_sql: `SELECT CONTAINER_NO, VEHICLE_NO, VESSEL_NAME, SEAL_NO, PO_NO  
+                  FROM TI_CONTAINER 
+                  WHERE JOB_NO = '${sqlEscape(jobNo)}' 
+                    AND PRIN_CODE = '${sqlEscape(prinCode)}' 
+                  ORDER BY CONTAINER_NO`,  // ← PO_NO added here
+      });
+      const data = Array.isArray(res.data?.data) ? res.data.data
+                 : Array.isArray(res.data) ? res.data : [];
+      sessionStorage.setItem(cacheKey, JSON.stringify(data));
+      return data;
+    },
+    onChange: (val: string, row: Record<string, unknown> | null) =>
+      setFormData((cur) => ({
+        ...cur,
+        container_no: val,
+        po_no: String(row?.["PO_NO"] ?? row?.["po_no"] ?? ""),  // ← auto-set po_no
+      })),
+  };
+}
 
     case "country":
       return {
@@ -809,19 +842,16 @@ const getLookupProps = (field: FormField) => {
         ],
         loadOptions: async () => {
           const res = await api.post("/api/wms/inbound/executeRawSql", {
-            raw_sql: `SELECT COUNTRY_CODE, COUNTRY_NAME 
-                      FROM MS_COUNTRY 
-                      ORDER BY COUNTRY_NAME`,
+            raw_sql: `SELECT COUNTRY_CODE, COUNTRY_NAME FROM MS_COUNTRY ORDER BY COUNTRY_NAME`,
           });
           return Array.isArray(res.data?.data) ? res.data.data
-               : Array.isArray(res.data)       ? res.data : [];
+               : Array.isArray(res.data) ? res.data : [];
         },
         onChange: (val: string, row: Record<string, unknown> | null) =>
-          setAddForm((cur) => ({
+          setFormData((cur) => ({
             ...cur,
             country_origin: val,
-            country_origin_display: row
-              ? `${row["COUNTRY_CODE"] ?? ""} - ${row["COUNTRY_NAME"] ?? ""}` : "",
+            country_origin_display: row ? `${row["COUNTRY_CODE"] ?? ""} - ${row["COUNTRY_NAME"] ?? ""}` : "",
           })),
       };
 
@@ -835,20 +865,17 @@ const getLookupProps = (field: FormField) => {
         ],
         loadOptions: async () => {
           const res = await api.post("/api/wms/inbound/executeRawSql", {
-            raw_sql: `SELECT MANU_CODE, MANU_NAME 
-                      FROM MS_MANUFACTURER 
-                      WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' 
-                      ORDER BY MANU_NAME`,
+            raw_sql: `SELECT MANU_CODE, MANU_NAME FROM MS_MANUFACTURER 
+                      WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY MANU_NAME`,
           });
           return Array.isArray(res.data?.data) ? res.data.data
-               : Array.isArray(res.data)       ? res.data : [];
+               : Array.isArray(res.data) ? res.data : [];
         },
         onChange: (val: string, row: Record<string, unknown> | null) =>
-          setAddForm((cur) => ({
+          setFormData((cur) => ({
             ...cur,
             manufacturer: val,
-            manufacturer_display: row
-              ? `${row["MANU_CODE"] ?? ""} - ${row["MANU_NAME"] ?? ""}` : "",
+            manufacturer_display: row ? `${row["MANU_CODE"] ?? ""} - ${row["MANU_NAME"] ?? ""}` : "",
           })),
       };
 
@@ -856,7 +883,20 @@ const getLookupProps = (field: FormField) => {
       return null;
   }
 };
-
+// Add this helper inside InboundOperationalTab, after getLookupProps
+const recalcQuantity = (
+  formData: WmsRow,
+  field: "qty_puom" | "qty_luom",
+  rawValue: string,
+): Partial<WmsRow> => {
+  const val = rawValue.charAt(0) === "-" ? "" : rawValue;
+  const uppp     = Number(formData.uppp     ?? 1);
+  const uomCount = Number(formData.uom_count ?? 1);
+  const qtyPuom  = field === "qty_puom" ? Number(val) : Number(formData.qty_puom ?? 0);
+  const qtyLuom  = field === "qty_luom" ? Number(val) : Number(formData.qty_luom ?? 0);
+  const quantity  = uomCount <= 1 ? qtyPuom + qtyLuom : qtyPuom * uppp + qtyLuom;
+  return { [field]: val, quantity };
+};
   const loadRows = useCallback(async () => {
     if (!config || loadingJob || !prinCode) return;
     setLoading(true);
@@ -878,27 +918,101 @@ const getLookupProps = (field: FormField) => {
     setAddForm({ job_no: jobNo, prin_code: prinCode, company_code: companyCode });
     setAddOpen(true);
   };
+// Add this helper just above saveAdd:
+const stripUiFields = (form: WmsRow): WmsRow => {
+  const {
+    uom_count,           // UI-only (controls qty_luom disabled state)
+    prod_code_display,   // UI-only (display label)
+    country_origin_display,
+    manufacturer_display,
+    ...payload
+  } = form;
+  return payload;
+};
+const saveAdd = async (e: FormEvent) => {
+  e.preventDefault();
+  if (!config?.addEndpoint) return;
+  setModalNotice(null);  // ← clear on each attempt
 
-  const saveAdd = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!config?.addEndpoint) return;
+  if (tab === "packing_details") {
+    if (!addForm.container_no) {
+      setModalNotice("Container No. is required. Please select a container first.");
+      return;
+    }
+    if (!addForm.prod_code) {
+      setModalNotice("Product / SKU is required.");
+      return;
+    }
+    if (!addForm.qty_puom || Number(addForm.qty_puom) <= 0) {
+      setModalNotice("Quantity (Primary) is required and must be greater than 0.");
+      return;
+    }
+    if (addForm.qty_luom === undefined || addForm.qty_luom === "") {
+      setModalNotice("Quantity (Lowest) is required.");
+      return;
+    }
+  } else {
     const fields = config?.addFields || [];
     const missing = fields.find((f) => f.required && !String(addForm[f.name] || "").trim());
-    if (missing) { setNotice({ type: "error", message: `${missing.label} is required` }); return; }
-    setSaving(true);
-    try {
-if (config.addEndpoint === "shipment") {
-  sessionStorage.removeItem(`wms_containers_${jobNo}`);
-}
-      await postWmsInbound(config.addEndpoint, { ...addForm, job_no: jobNo, prin_code: prinCode, company_code: companyCode });
-      setAddOpen(false);
-      setNotice({ type: "success", message: `${config.title} added successfully` });
-      await loadRows();
-    } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to add ${config?.title}` });
-    } finally { setSaving(false); }
-  };
+    if (missing) {
+      setModalNotice(`${missing.label} is required`);
+      return;
+    }
+  }
 
+  setSaving(true);
+  try {
+    if (config.addEndpoint === "shipment") {
+      sessionStorage.removeItem(`wms_containers_${jobNo}_v2`);
+    }
+    await postWmsInbound(config.addEndpoint, {
+  ...stripUiFields(addForm),   // ← was: ...addForm
+      job_no: jobNo,
+      prin_code: prinCode,
+      company_code: companyCode,
+    });
+    setAddOpen(false);
+    setModalNotice(null);
+    setNotice({ type: "success", message: `${config.title} added successfully` });
+    await loadRows();
+  } catch (error) {
+    setModalNotice(error instanceof Error ? error.message : `Unable to add ${config?.title}`);
+  } finally {
+    setSaving(false);
+  }
+};
+
+const saveEdit = async (e: FormEvent) => {
+  e.preventDefault();
+  if (tab !== "packing_details") return;
+  setModalNotice(null);
+
+  if (!editForm.container_no) { setModalNotice("Container No. is required."); return; }
+  if (!editForm.prod_code)    { setModalNotice("Product / SKU is required."); return; }
+  if (!editForm.qty_puom || Number(editForm.qty_puom) <= 0) {
+    setModalNotice("Quantity (Primary) is required.");
+    return;
+  }
+
+  setEditSaving(true);
+  try {
+    await patchWmsInbound("packing_details", {   // ← also fix endpoint here
+  ...stripUiFields(editForm),  // ← was: ...editForm
+      job_no: jobNo,
+      prin_code: prinCode,
+      company_code: companyCode,
+      packdet_no: String(editForm.packdet_no || ""),
+    });
+    setEditOpen(false);
+    setModalNotice(null);
+    setNotice({ type: "success", message: "Packing detail updated successfully" });
+    await loadRows();
+  } catch (error) {
+    setModalNotice(error instanceof Error ? error.message : "Unable to update packing detail");
+  } finally {
+    setEditSaving(false);
+  }
+};
   if (!config) return (
     <Card><CardContent className="p-6 text-sm text-muted-foreground">This tab is not configured yet.</CardContent></Card>
   );
@@ -955,8 +1069,24 @@ if (config.addEndpoint === "shipment") {
     </div>
   );
 
-  const columns = makeColumns(config.columns, tab === "quality_clearance" || tab === "putway_details" || tab === "job_confirmation");
-
+const columns = makeColumns(
+  config.columns,
+  tab === "quality_clearance" || tab === "putway_details" || tab === "job_confirmation",
+tab === "packing_details"
+  ? (row) => {
+      setEditForm({
+        ...row,
+        // Ensure these are numbers so recalcQuantity works correctly
+        uom_count: Number(row.uom_count ?? 1),
+        uppp: Number(row.uppp ?? 1),
+        qty_puom: Number(row.qty_puom ?? 0),
+        qty_luom: Number(row.qty_luom ?? 0),
+        quantity: Number(row.quantity ?? 0),
+      });
+      setEditOpen(true);
+    }
+  : undefined,
+);
   return (
     <section className="grid gap-3">
       {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
@@ -988,6 +1118,11 @@ if (config.addEndpoint === "shipment") {
   onClose={() => setAddOpen(false)}
 >
   <form className="grid gap-2" onSubmit={saveAdd}>
+        {modalNotice && (
+      <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        {modalNotice}
+      </div>
+    )}
     <div className="grid gap-2 grid-cols-2 md:grid-cols-3">
       {(config.addFields ?? []).map((field) => (
         <label
@@ -1029,13 +1164,41 @@ if (config.addEndpoint === "shipment") {
       <option key={opt.value} value={opt.value}>{opt.label}</option>
     ))}
   </Select>
+// REPLACE the Input render at the bottom of the Add Modal's field map:
+) : field.name === "qty_puom" ? (
+  <Input
+    type="number"
+    min="0"
+    value={String(addForm.qty_puom ?? "")}
+    onChange={(e) =>
+      setAddForm((cur) => ({ ...cur, ...recalcQuantity(cur, "qty_puom", e.target.value) }))
+    }
+  />
+) : field.name === "qty_luom" ? (
+  <Input
+    type="number"
+    min="0"
+    disabled={Number(addForm.uom_count ?? 1) <= 1}
+    value={String(addForm.qty_luom ?? "")}
+    onChange={(e) =>
+      setAddForm((cur) => ({ ...cur, ...recalcQuantity(cur, "qty_luom", e.target.value) }))
+    }
+  />
+) : field.disabled || field.name === "quantity" ? (
+  <Input
+    type="number"
+    disabled
+    value={String(addForm.quantity ?? 0)}
+    className="bg-muted text-muted-foreground"
+  />
 ) : (
   <Input
     type={field.type || "text"}
     value={String(addForm[field.name] || "")}
     onChange={(e) => setAddForm((cur) => ({ ...cur, [field.name]: e.target.value }))}
   />
-)}
+)
+}
         </label>
       ))}
     </div>
@@ -1049,7 +1212,140 @@ if (config.addEndpoint === "shipment") {
     </div>
   </form>
 </Dialog>
+{/* Edit Packing Modal */}
+{tab === "packing_details" && (
+  <Dialog
+    wide
+    open={editOpen}
+    title="Edit Packing Details"
+    description="Update the packing detail record."
+    onClose={() => { setEditOpen(false); setModalNotice(null); }}  // ← clear on close
+  >
+    <form className="grid gap-2" onSubmit={saveEdit}>
+            {modalNotice && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {modalNotice}
+        </div>
+      )}
 
+      <div className="grid gap-2 grid-cols-2 md:grid-cols-3">
+        {(config.addFields ?? []).map((field) => (
+          <label
+            key={field.name}
+            className={
+              field.name === "remarks" || field.name === "description1"
+                ? "field col-span-2 md:col-span-3"
+                : "field"
+            }
+          >
+            <span className="text-xs font-medium text-muted-foreground">
+              {field.label}
+              {field.required && <strong className="text-destructive"> *</strong>}
+            </span>
+
+            {field.lookup ? (() => {
+const lp = getLookupProps(field, true);
+              if (!lp) return null;
+              return (
+                <LookupField
+                  label={field.label}
+                  compact
+                  value={String(editForm[field.name] || "")}
+                  displayValue={String(editForm[`${field.name}_display`] || "")}
+                  valueField={lp.valueField}
+                  displayFields={lp.displayFields}
+                  columns={lp.columns}
+                  loadOptions={lp.loadOptions}
+                  onChange={(val, row) => {
+                    // Use editForm setter instead of addForm
+                    const syntheticEvent = { val, row };
+                    if (field.name === "prod_code") {
+                      setEditForm((cur) => ({
+                        ...cur,
+                        prod_code: val,
+                        // prod_code_display: row
+                        //   ? `${row["PROD_CODE"] ?? ""} - ${row["PROD_NAME"] ?? ""}` : "",
+                        uom: row ? String(row["UOM_CODE"] ?? cur.uom ?? "") : String(cur.uom ?? ""),
+                      }));
+                    } else if (field.name === "container_no") {
+                      setEditForm((cur) => ({ ...cur, container_no: val }));
+                    } else if (field.name === "country_origin") {
+                      setEditForm((cur) => ({
+                        ...cur,
+                        country_origin: val,
+                        country_origin_display: row
+                          ? `${row["COUNTRY_CODE"] ?? ""} - ${row["COUNTRY_NAME"] ?? ""}` : "",
+                      }));
+                    } else if (field.name === "manufacturer") {
+                      setEditForm((cur) => ({
+                        ...cur,
+                        manufacturer: val,
+                        manufacturer_display: row
+                          ? `${row["MANU_CODE"] ?? ""} - ${row["MANU_NAME"] ?? ""}` : "",
+                      }));
+                    }
+                  }}
+                />
+              );
+            })() : field.dropdown && field.dropdown.length > 0 ? (
+              <Select
+                value={String(editForm[field.name] || "")}
+                onChange={(e) => setEditForm((cur) => ({ ...cur, [field.name]: e.target.value }))}
+              >
+                <option value="">— Select {field.label} —</option>
+                {field.dropdown.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </Select>
+          ) : field.name === "qty_puom" ? (
+  <Input
+    type="number"
+    min="0"
+    value={String(editForm.qty_puom ?? "")}
+    onChange={(e) =>
+      setEditForm((cur) => ({ ...cur, ...recalcQuantity(cur, "qty_puom", e.target.value) }))
+    }
+  />
+) : field.name === "qty_luom" ? (
+  <Input
+    type="number"
+    min="0"
+    disabled={Number(editForm.uom_count ?? 1) <= 1}
+    value={String(editForm.qty_luom ?? "")}
+    onChange={(e) =>
+      setEditForm((cur) => ({ ...cur, ...recalcQuantity(cur, "qty_luom", e.target.value) }))
+    }
+  />
+) : field.disabled || field.name === "quantity" ? (
+  <Input
+    type="number"
+    disabled
+    value={String(editForm.quantity ?? 0)}
+    className="bg-muted text-muted-foreground"
+  />
+) : (
+  <Input
+    type={field.type || "text"}
+    value={String(editForm[field.name] || "")}
+    onChange={(e) => setEditForm((cur) => ({ ...cur, [field.name]: e.target.value }))}
+  />
+)
+
+            }
+          </label>
+        ))}
+      </div>
+      <div className="flex justify-end gap-2 pt-1">
+        <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
+          <X size={15} /> Cancel
+        </Button>
+        <Button disabled={editSaving} type="submit">
+          <Save size={15} /> {editSaving ? "Saving..." : "Update"}
+        </Button>
+      </div>
+    </form>
+  </Dialog>
+)}
       {/* Process Modal (Quality Clearance / Putaway / Confirmation) */}
       <Dialog open={processOpen} compact
         title={
@@ -1126,7 +1422,7 @@ function getInboundTabConfig(tab: string) {
     },
     packing_details: {
       title: "Packing Details", minWidth: 1280,
-      addLabel: "Add Packing Details", addEndpoint: "packing", addFields: packingFormFields,
+      addLabel: "Add Packing Details", addEndpoint: "packing_details", addFields: packingFormFields,
       sql: packSql, columns: packingColumns(),
     },
     receiving_details: {
@@ -1267,27 +1563,57 @@ function getTabsForJob(jobClass: string) {
 function makeColumns(
   columns: { key: string; label: string; size?: number }[],
   selectable = false,
+  onEdit?: (row: WmsRow) => void,  // ADD this parameter
 ): ColumnDef<WmsRow>[] {
   const cols: ColumnDef<WmsRow>[] = columns.map((col) => ({
-    accessorKey: col.key, header: col.label, size: col.size || 140,
+    accessorKey: col.key,
+    header: col.label,
+    size: col.size || 140,
     cell: ({ row }) => formatCellValue(row.original, col.key),
   }));
 
-  if (selectable) {
-    cols.unshift({
-      id: "select", header: ({ table }) => (
-        <input type="checkbox" className="rounded border-input"
-          checked={table.getIsAllPageRowsSelected()}
-          onChange={table.getToggleAllPageRowsSelectedHandler()} />
-      ),
-      size: 40, enableColumnFilter: false,
+  // ADD edit actions column when onEdit is provided
+  if (onEdit) {
+    cols.push({
+      id: "actions",
+      header: "",
+      size: 60,
+      enableColumnFilter: false,
       cell: ({ row }) => (
-        <input type="checkbox" className="rounded border-input"
-          checked={row.getIsSelected()}
-          onChange={row.getToggleSelectedHandler()} />
+        <button
+          className="rounded px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
+          onClick={() => onEdit(row.original)}
+        >
+          Edit
+        </button>
       ),
     });
   }
+
+  if (selectable) {
+    cols.unshift({
+      id: "select",
+      header: ({ table }) => (
+        <input
+          type="checkbox"
+          className="rounded border-input"
+          checked={table.getIsAllPageRowsSelected()}
+          onChange={table.getToggleAllPageRowsSelectedHandler()}
+        />
+      ),
+      size: 40,
+      enableColumnFilter: false,
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          className="rounded border-input"
+          checked={row.getIsSelected()}
+          onChange={row.getToggleSelectedHandler()}
+        />
+      ),
+    });
+  }
+
   return cols;
 }
 
