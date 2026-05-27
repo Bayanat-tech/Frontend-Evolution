@@ -195,7 +195,15 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
     { accessorKey: "ac_name", header: "Party" },
     { accessorKey: "remarks", header: "Description" },
     { accessorKey: "div_code", header: "Div" },
-    { accessorKey: "net_amount", header: "Amount", cell: ({ getValue }) => formatAmount(Number(getValue() || 0)) },
+    {
+     id: "amount",
+     header: "Amount",
+     accessorFn: (row) => row.net_amount ?? row.amount ?? 0,
+     cell: ({ row }) =>
+     formatAmount(
+      Number(row.original.net_amount ?? row.original.amount ?? 0)
+    ),
+},
     {
       id: "actions",
       header: "Actions",
@@ -490,41 +498,6 @@ function CommercialEditor({
           <div className="grid min-w-0 gap-3">
             {error && <div className="alert error">{error}</div>}
 
-            {/* <div className="payment-header-grid grid grid-cols-6 gap-2.5 rounded-md border bg-card p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
-              {editMode && <Field label="Doc No"><Input disabled value={form.doc_no || ""} /></Field>}
-              <Field label="Doc Date"><Input type="date" value={dateInput(form.doc_date)} onChange={(event) => update("doc_date", event.target.value)} /></Field>
-              <Field label="Division"><Input disabled value={`${form.div_code}${form.div_name ? ` - ${form.div_name}` : ""}`} /></Field>
-              <LookupField
-                label={docType === "SI" || docType === "SV" ? "Customer" : "Supplier"}
-                value={form.ac_code}
-                displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
-                valueField="ac_code"
-                displayFields={["ac_code", "ac_name"]}
-                loadOptions={() => getDocAccounts(docType, "H", form.div_code)}
-                onChange={(value, row) => setForm((current) => ({ ...current, ac_code: value, ac_name: text(getLookupValue(row || {}, "ac_name")) }))}
-              />
-              <LookupField
-                label="Currency"
-                value={form.curr_code}
-                displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
-                columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
-                valueField="curr_code"
-                displayFields={["curr_code", "curr_name"]}
-                loadOptions={() => getCurrencyRows()}
-                onChange={(value, row) => setForm((current) => ({ ...current, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")) }))}
-              />
-              <Field label="Exchange Rate"><Input type="number" step="0.0001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></Field>
-              <Field label="Invoice No"><Input value={form.inv_no || ""} onChange={(event) => update("inv_no", event.target.value)} /></Field>
-              <Field label="Invoice Date"><Input type="date" value={dateInput(form.inv_date)} onChange={(event) => update("inv_date", event.target.value)} /></Field>
-              <Field label="Reference"><Input value={form.ref_doc_no || ""} onChange={(event) => update("ref_doc_no", event.target.value)} /></Field>
-              <Field label="Payment Terms"><Input value={form.payment_terms || ""} onChange={(event) => update("payment_terms", event.target.value)} /></Field>
-              <Field label="Delivery Term"><Input value={form.delivery_term || ""} onChange={(event) => update("delivery_term", event.target.value)} /></Field>
-              <Field label="Contact"><Input value={form.contact || ""} onChange={(event) => update("contact", event.target.value)} /></Field>
-              <label className="field col-span-2 max-md:col-span-1"><span>Remarks</span><Input value={form.remarks || ""} onChange={(event) => update("remarks", event.target.value)} /></label>
-            </div> */}
-
-
        <div className="commercial-header-shell rounded-md border bg-card">
        <div className={`commercial-header-panel payment-header-grid relative grid grid-cols-6 gap-2.5 p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1 ${showHeaderDetails ? "is-expanded" : "is-collapsed"}`}>
 
@@ -599,8 +572,7 @@ function CommercialEditor({
       value={`${form.div_code}${form.div_name ? ` - ${form.div_name}` : ""}`} />
   </Field>
 
-  {/* ── Supplier Code + Name — PO / PI ── */}
-  {/* ── Customer Code + Name — SI / SV ── */}
+  {/* ── Supplier Code + Name — PO / PI  & ── Customer Code + Name — SI / SV ──── */}
   {/* field: ac_code / ac_name — same in all tables ── */}
   <LookupField
     label={isSales ? "Customer" : "Supplier"}
@@ -630,7 +602,7 @@ function CommercialEditor({
         dlvr_contact:  get("contact_person"),
         dlvr_mobile:   get("mobile_no"),
         dlvr_email:    get("e_mail"),
-        remarks:       get("l4_description"),  // remarks from l4_description
+        remarks:       get("l4_description"), 
       }));
     }}
   />
@@ -789,12 +761,12 @@ function CommercialEditor({
         try {
           const res = await getTransactionDetail(docNo, form.div_code, srcType as TransactionType);
           if (res.length) rawDetail = res;
-        } catch { /* ignore, try LPO below */ }
+        } catch {}
 
         if (!rawDetail.length) {
           try {
             rawDetail = await getLpoDetail(docNo, srcType);
-          } catch { /* ignore */ }
+          } catch {}
         }
 
         // Force PI when source doc is a PO
@@ -810,7 +782,7 @@ function CommercialEditor({
           doc_no:     c.doc_no,     // preserve existing doc_no in edit mode
           div_code:   c.div_code,   // never overwrite user's chosen division
           div_name:   c.div_name,
-          ref_doc_no: docNo,        // always keep the ref
+          ref_doc_no: docNo,        
           detail:     mapped.detail,
         }));
 
@@ -888,7 +860,7 @@ function CommercialEditor({
     </Field>
   )}
 
-  {/* ── Tax Category — ── */}
+  {/* ── Tax Category  ── */}
   <LookupField
   label="Tax Category"
   value={form.tx_compntcat_code_1 ?? ""}
@@ -929,7 +901,6 @@ function CommercialEditor({
   }));
   const nextTaxType = form.tx_compnt_1_expmt || "N";
   syncLineTax(value, nextTaxType, perc);
-  // syncLineTax(value, form.tx_compnt_1_expmt || "", perc);
  }}
  />
 
@@ -944,18 +915,6 @@ function CommercialEditor({
   <Field label="Tax Type">
     <Select
       value={form.tax_type || ""}  // field: tax_type in UI, maps to tx_compnt_1_expmt in table
-      
-      // onChange={(e) => {
-      //   const v = e.target.value;
-      //   setForm((c) => ({
-      //     ...c,
-      //     tax_type:          v,
-      //     tx_compnt_1_expmt: v,                // actual table field
-      //     tx_compnt_perc_1:  v === "S" ? 5 : 0, // auto-set % when Std Tax
-      //   }));
-      //   syncLineTax(form.tx_compntcat_code_1 || "", v, perc);
-      // }}
-
       onChange={(e) => {
   const v    = e.target.value;
   const perc = v === "S" ? 5 : 0;
@@ -966,7 +925,6 @@ function CommercialEditor({
     tx_compnt_perc_1: perc,
   }));
   syncLineTax(form.tx_compntcat_code_1 || "",v,perc);
-  // syncLineTax(form.tx_compntcat_code_1 || "", v, perc);
  }}
     >
       <option value="" />
@@ -1062,7 +1020,7 @@ function CommercialEditor({
                   <tbody>
                     {form.detail.length === 0 ? (
                       <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={18}>No lines yet</td></tr>
-                    ) : form.detail.map((line) => (
+                     ) : form.detail.filter((line) => Number(line.serial_no) < 9000).map((line) => (
                       <tr className="border-t odd:bg-muted/20" key={line.id}>
                         <td className="px-2 py-1 text-xs">{line.serial_no}</td>
                         <td className="w-32 px-2 py-1"><Input disabled value={form.div_code} /></td>
@@ -1090,18 +1048,6 @@ function CommercialEditor({
                           />
                         </td>
                         <td className="w-[210px] px-2 py-1">
-                          {/* <LookupField
-                            label="Currency"
-                            compact
-                            placeholder="Currency"
-                            value={form.curr_code}
-                            displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
-                            columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
-                            valueField="curr_code"
-                            displayFields={["curr_code", "curr_name"]}
-                            loadOptions={() => getCurrencyRows()}
-                            onChange={(value, row) => setForm((current) => ({ ...current, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")) }))}
-                          /> */}
                           <LookupField
     label="Currency"
     value={form.curr_code ?? ""}
