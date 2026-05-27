@@ -23,6 +23,7 @@ export type TransactionDocumentRow = {
   cheque_date?: string;
   cheque_bank?: string;
   amount?: number;
+  net_amount?: number;
   canceled?: string;
   fy_period?: string;
 };
@@ -430,4 +431,43 @@ export async function deleteTransactionDocument(docNos: string[], docType: Trans
   });
   if (!response.data.success) throw new Error(response.data.message || "Unable to delete document");
   return response.data;
+}
+
+export function getDocumentReportUrl(docType: TransactionType | string, docNo: string, format: "pdf" | "excel" = "pdf") {
+  const baseUrl = String(api.defaults.baseURL || "").replace(/\/$/, "");
+  const encodedType = encodeURIComponent(docType);
+  const encodedNo = encodeURIComponent(docNo);
+  if (format === "excel") {
+    return `${baseUrl}/api/finance/transactions/report/${encodedType}/${encodedNo}/excel`;
+  }
+  return `${baseUrl}/api/finance/transactions/report/${encodedType}/${encodedNo}`;
+}
+
+export async function openDocumentReport(docType: TransactionType | string, docNo: string) {
+  if (!docNo) return;
+  const response = await api.get(`/api/finance/transactions/report/${encodeURIComponent(docType)}/${encodeURIComponent(docNo)}`, {
+    responseType: "blob",
+  });
+  const blob = new Blob([response.data], { type: "text/html;charset=utf-8" });
+  const url = window.URL.createObjectURL(blob);
+  window.open(url, "_blank", "noopener,noreferrer");
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+}
+
+export async function downloadDocumentReportExcel(docType: TransactionType | string, docNo: string) {
+  if (!docNo) return;
+  const response = await api.get(`/api/finance/transactions/report/${encodeURIComponent(docType)}/${encodeURIComponent(docNo)}/excel`, {
+    responseType: "blob",
+  });
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${docType}_${docNo}_report.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }
