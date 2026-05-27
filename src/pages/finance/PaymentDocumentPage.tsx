@@ -1,4 +1,4 @@
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { Ban, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
@@ -79,6 +79,7 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
   const [deleteTarget, setDeleteTarget] = useState<TransactionDocumentRow | null>(null);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
   const loadLookups = async () => {
     const [fyData, divisionData, companyInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
@@ -87,12 +88,21 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
     setFyPeriod((current) => current || getDefaultFyPeriod(fyData, companyInfo));
   };
 
-  const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize) => {
+  const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize,nextColumnFilters = columnFilters ) => {
     if (!nextFy) return;
     setLoading(true);
     setNotice(null);
     try {
-      const response = await getTransactionDocuments(docType, nextFy, nextQuery, nextPageIndex + 1, nextPageSize);
+      const hasSearch = Boolean(query.trim() || nextColumnFilters.some((filter) => String(filter.value ?? "").trim()));
+      const requestPageIndex = hasSearch ? 0 : nextPageIndex;
+      const requestPageSize = hasSearch ? 100000 : nextPageSize;
+      const activeFilters = nextColumnFilters
+        .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
+        .filter((filter) => filter.values);
+      const params: Record<string, any> = {};
+      if (query.trim()) params.search = query.trim();
+      if (activeFilters.length) params.filter = JSON.stringify({ search: activeFilters });
+      const response = await getTransactionDocuments(docType, nextFy, nextQuery, requestPageIndex + 1, requestPageSize, activeFilters);
       setRows(response.tableData);
       setTotalRows(response.count || response.tableData.length);
     } catch (error) {
@@ -111,7 +121,7 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
 
   useEffect(() => {
     void loadRows();
-  }, [fyPeriod, docType, query, pageIndex, pageSize]);
+  }, [fyPeriod, docType, query, pageIndex, pageSize,columnFilters]);
 
 
 
@@ -230,6 +240,11 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
           pageIndex={pageIndex}
           pageSize={pageSize}
           totalRows={totalRows}
+          columnFilters={columnFilters}
+          onColumnFiltersChange={(filters) => {
+            setColumnFilters(filters);
+            setPageIndex(0);
+          }}
           onPageChange={setPageIndex}
           onPageSizeChange={(nextPageSize) => {
             setPageSize(nextPageSize);
@@ -420,62 +435,62 @@ function PaymentDocumentEditor({
     }));
   };
 
-// REPLACE WITH:
-const selectDetailAccount = async (detail: TransactionDetail, value: string, row: LookupRow | null) => {
-  const acName = text(getLookupValue(row || {}, "ac_name"));
-  updateDetail(detail.id, { ac_code: value, ac_name: acName, child_table: "", child_code: "" });
-  if (docType === "BP") {
-    setForm((current) => ({ ...current, ac_payee: acName }));
-  }
-  if (!value) return;
-  setSelectedDetailId(detail.id);
-  try {
-    const child = await getChildTableName(value);
-    const childTable = child?.table || "";
-    const childCode  = child?.code  || "";
-    updateDetail(detail.id, { child_table: childTable, child_code: childCode });
-
-    if (childTable === "expense" && childCode) {
-      setForm((current) => {
-        const updatedDetail = current.detail.find((d) => d.id === detail.id);
-        if (!updatedDetail) return current;
-        const existingRows = (current.children[detail.id] || []) as TransactionChildRow[];
-        const shouldAutoFill =
-          existingRows.length === 0 ||
-          (existingRows.length === 1 && !text((existingRows[0] as Record<string, unknown>).exp_type_code));
-        if (!shouldAutoFill) return current;
-        const autoRow: TransactionChildRow = {
-          id: newId(),
-          dtl_sr_no: 1,
-          serial_no: updatedDetail.serial_no,
-          doc_no: current.doc_no || "1",
-          doc_type: docType,
-          div_code: current.div_code,
-          doc_date: current.doc_date,
-          company_code: updatedDetail.company_code || "",
-          ac_code: value,
-          sign_ind: updatedDetail.sign_ind,
-          amount: 0,
-          lcur_amount: 0,
-          curr_code: current.curr_code,
-          ex_rate: current.ex_rate,
-          isEditMode: false,
-          exp_type_code: childCode,
-          exp_subtype_code: "",
-          exp_code: childCode,
-          exp_type_description: "",
-          job_no: "",
-        };
-        return {
-          ...current,
-          children: { ...current.children, [detail.id]: [autoRow] },
-        };
-      });
+  // REPLACE WITH:
+  const selectDetailAccount = async (detail: TransactionDetail, value: string, row: LookupRow | null) => {
+    const acName = text(getLookupValue(row || {}, "ac_name"));
+    updateDetail(detail.id, { ac_code: value, ac_name: acName, child_table: "", child_code: "" });
+    if (docType === "BP") {
+      setForm((current) => ({ ...current, ac_payee: acName }));
     }
-  } catch {
-    updateDetail(detail.id, { child_table: "", child_code: "" });
-  }
-};
+    if (!value) return;
+    setSelectedDetailId(detail.id);
+    try {
+      const child = await getChildTableName(value);
+      const childTable = child?.table || "";
+      const childCode = child?.code || "";
+      updateDetail(detail.id, { child_table: childTable, child_code: childCode });
+
+      if (childTable === "expense" && childCode) {
+        setForm((current) => {
+          const updatedDetail = current.detail.find((d) => d.id === detail.id);
+          if (!updatedDetail) return current;
+          const existingRows = (current.children[detail.id] || []) as TransactionChildRow[];
+          const shouldAutoFill =
+            existingRows.length === 0 ||
+            (existingRows.length === 1 && !text((existingRows[0] as Record<string, unknown>).exp_type_code));
+          if (!shouldAutoFill) return current;
+          const autoRow: TransactionChildRow = {
+            id: newId(),
+            dtl_sr_no: 1,
+            serial_no: updatedDetail.serial_no,
+            doc_no: current.doc_no || "1",
+            doc_type: docType,
+            div_code: current.div_code,
+            doc_date: current.doc_date,
+            company_code: updatedDetail.company_code || "",
+            ac_code: value,
+            sign_ind: updatedDetail.sign_ind,
+            amount: 0,
+            lcur_amount: 0,
+            curr_code: current.curr_code,
+            ex_rate: current.ex_rate,
+            isEditMode: false,
+            exp_type_code: childCode,
+            exp_subtype_code: "",
+            exp_code: childCode,
+            exp_type_description: "",
+            job_no: "",
+          };
+          return {
+            ...current,
+            children: { ...current.children, [detail.id]: [autoRow] },
+          };
+        });
+      }
+    } catch {
+      updateDetail(detail.id, { child_table: "", child_code: "" });
+    }
+  };
 
   const addDetailRow = () => {
     setForm((current) => ({
@@ -947,7 +962,7 @@ const selectDetailAccount = async (detail: TransactionDetail, value: string, row
                         <td className="w-28 px-2 py-1"><Input disabled={disabled} type="number" value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                         <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
                         <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
-                        <td className="w-32 px-2 py-1"><Input disabled value={formatNumber(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) ))} /></td>
+                        <td className="w-32 px-2 py-1"><Input disabled value={formatNumber(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1)))} /></td>
                         <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
                       </tr>
                     ))}
@@ -1143,6 +1158,32 @@ function ChildAllocationTable({
                   </td>
                   <td className="px-2 py-1"><Input disabled value={text(row.inv_amt)} /></td>
                   <td className="px-2 py-1"><Input disabled value={text(row.c_bal_amt_org)} /></td>
+                  <td className="w-32 px-2 py-1">
+                    <div className="flex flex-col gap-1">
+                      <Input
+                        disabled={disabled}
+                        type="number"
+                        step="0.001"
+                        value={Number(row.amount || 0)}
+                        onChange={(event) =>
+                          onChange(row.id, {
+                            amount: Number(event.target.value || 0),
+                          })
+                        }
+                        color={
+                          Number(row.amount || 0) > Number(row.c_bal_amt_org || 0)
+                            ? "danger"
+                            : "neutral"
+                        }
+                      />
+
+                      {Number(row.amount || 0) > Number(row.c_bal_amt_org || 0) && (
+                        <span className="text-xs text-red-500">
+                          Amount exceeds available balance
+                        </span>
+                      )}
+                    </div>
+                  </td>
                 </>
               ) : childTable === "job" ? (
                 <>
@@ -1170,7 +1211,7 @@ function ChildAllocationTable({
                 </>
               ) : (
                 <>
-                    <td className="px-2 py-1">
+                  <td className="px-2 py-1">
                     <LookupField
                       label="Expense type"
                       compact
@@ -1262,7 +1303,8 @@ function ChildAllocationTable({
                   <td className="px-2 py-1"><Input disabled={disabled} value={text(row.job_no)} onChange={(event) => onChange(row.id, { job_no: event.target.value })} /></td>
                 </>
               )}
-              <td className="w-32 px-2 py-1"><Input disabled={disabled} type="number" step="0.001" value={Number(row.amount || 0)} onChange={(event) => onChange(row.id, { amount: Number(event.target.value || 0) })} /></td>
+
+              {childTable !== "invoice" && <td className="w-32 px-2 py-1"><Input disabled={disabled} type="number" step="0.001" value={Number(row.amount || 0)} onChange={(event) => onChange(row.id, { amount: Number(event.target.value || 0) })} /></td>}
               {childTable === "invoice" && <td className="w-32 px-2 py-1"><Input disabled value={Number(row.paid_amt || 0)} /></td>}
               <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => onRemove(row.id)}><X size={14} /></Button></td>
             </tr>

@@ -1,4 +1,4 @@
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { Ban, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
@@ -77,6 +77,7 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
   const [deleteTarget, setDeleteTarget] = useState<TransactionDocumentRow | null>(null);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
+    const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
   const loadLookups = async () => {
     const [fyData, divisionData] = await Promise.all([getFyPeriods(), getDivisions()]);
@@ -85,12 +86,21 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
     setFyPeriod((current) => current || fyData[0]?.fy_period || "");
   };
 
-  const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize) => {
+    const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize,nextColumnFilters = columnFilters ) => {
     if (!nextFy) return;
     setLoading(true);
     setNotice(null);
     try {
-      const response = await getTransactionDocuments(docType, nextFy, nextQuery, nextPageIndex + 1, nextPageSize);
+      const hasSearch = Boolean(query.trim() || nextColumnFilters.some((filter) => String(filter.value ?? "").trim()));
+      const requestPageIndex = hasSearch ? 0 : nextPageIndex;
+      const requestPageSize = hasSearch ? 100000 : nextPageSize;
+      const activeFilters = nextColumnFilters
+        .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
+        .filter((filter) => filter.values);
+      const params: Record<string, any> = {};
+      if (query.trim()) params.search = query.trim();
+      if (activeFilters.length) params.filter = JSON.stringify({ search: activeFilters });
+      const response = await getTransactionDocuments(docType, nextFy, nextQuery, requestPageIndex + 1, requestPageSize, activeFilters);
       setRows(response.tableData);
       setTotalRows(response.count || response.tableData.length);
     } catch (error) {
@@ -109,7 +119,7 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
 
   useEffect(() => {
     void loadRows();
-  }, [fyPeriod, docType, query, pageIndex, pageSize]);
+  }, [fyPeriod, docType, query, pageIndex, pageSize, columnFilters]);
 
   const columns = useMemo<ColumnDef<TransactionDocumentRow>[]>(() => [
     {
@@ -152,7 +162,7 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
         </div>
       ),
     },
-  ], [docType]);
+  ], [docType, columnFilters]);
 
   const openCreateForDivision = (division: Division) => {
     setDivisionPicker(false);
@@ -204,7 +214,7 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
       {notice && <div className={`alert ${notice.type}`}>{notice.message}</div>}
 
       <div className="min-h-[650px]">
-        <DataTable
+               <DataTable
           columns={columns}
           data={rows}
           title={loading ? "Loading" : `${totalRows.toLocaleString()} Documents`}
@@ -220,12 +230,17 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
           height={620}
           minWidth={1120}
           density="grid"
-          enablePagination={true}
-          manualPagination={true}
+          enablePagination
+          manualPagination
           manualFiltering
           pageIndex={pageIndex}
           pageSize={pageSize}
           totalRows={totalRows}
+          columnFilters={columnFilters}
+          onColumnFiltersChange={(filters) => {
+            setColumnFilters(filters);
+            setPageIndex(0);
+          }}
           onPageChange={setPageIndex}
           onPageSizeChange={(nextPageSize) => {
             setPageSize(nextPageSize);

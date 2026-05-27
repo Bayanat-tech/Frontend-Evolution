@@ -175,15 +175,23 @@ export function getDefaultFyPeriod(periods: FyPeriod[], companyInfo?: CompanyInf
   return matchingYear?.fy_period || periods[periods.length - 1]?.fy_period || periods[0]?.fy_period || "";
 }
 
-export async function getTransactionDocuments(docType: TransactionType, fyPeriod?: string, search?: string, page = 1, limit = 100) {
+export async function getTransactionDocuments(docType: TransactionType, fyPeriod?: string, search?: string, page = 1, limit = 100,columnFilters?: { field: string; values: string }[]) {
   const filters: unknown[] = [[{ field_name: "doc_type", field_value: docType, operator: "exactmatch" }]];
   if (fyPeriod) filters.push([{ field_name: "fy_period", field_value: fyPeriod, operator: "exactmatch" }]);
   if (search?.trim()) {
     filters.push([
       { field_name: "doc_no", field_value: search.trim(), operator: "contains" },
-      { field_name: "ac_code", field_value: search.trim(), operator: "contains" },
+      { field_name: "ac_name", field_value: search.trim(), operator: "contains" },
       { field_name: "ref_no", field_value: search.trim(), operator: "contains" },
     ]);
+  }
+
+   if (columnFilters?.length) {
+    columnFilters.forEach(({ field, values }) => {
+      if (values.trim()) {
+        filters.push([{ field_name: field, field_value: values.trim(), operator: "contains" }]);
+      }
+    });
   }
 
   const response = await api.get<ApiResponse<{ tableData: TransactionDocumentRow[]; count: number }>>("/api/finance/doc", {

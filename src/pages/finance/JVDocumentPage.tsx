@@ -1,4 +1,4 @@
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { Ban, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
@@ -77,6 +77,7 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
   const [deleteTarget, setDeleteTarget] = useState<TransactionDocumentRow | null>(null);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
   const loadLookups = async () => {
     const [fyData, divisionData] = await Promise.all([getFyPeriods(), getDivisions()]);
@@ -85,12 +86,21 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
     setFyPeriod((current) => current || fyData[0]?.fy_period || "");
   };
 
-  const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize) => {
+   const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize,nextColumnFilters = columnFilters ) => {
     if (!nextFy) return;
     setLoading(true);
     setNotice(null);
     try {
-      const response = await getTransactionDocuments(docType, nextFy, nextQuery, nextPageIndex + 1, nextPageSize);
+      const hasSearch = Boolean(query.trim() || nextColumnFilters.some((filter) => String(filter.value ?? "").trim()));
+      const requestPageIndex = hasSearch ? 0 : nextPageIndex;
+      const requestPageSize = hasSearch ? 100000 : nextPageSize;
+      const activeFilters = nextColumnFilters
+        .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
+        .filter((filter) => filter.values);
+      const params: Record<string, any> = {};
+      if (query.trim()) params.search = query.trim();
+      if (activeFilters.length) params.filter = JSON.stringify({ search: activeFilters });
+      const response = await getTransactionDocuments(docType, nextFy, nextQuery, requestPageIndex + 1, requestPageSize, activeFilters);
       setRows(response.tableData);
       setTotalRows(response.count || response.tableData.length);
     } catch (error) {
@@ -109,7 +119,7 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
 
   useEffect(() => {
     void loadRows();
-  }, [fyPeriod, docType, query, pageIndex, pageSize]);
+  }, [fyPeriod, docType, query, pageIndex, pageSize, columnFilters]);
 
 
 
@@ -154,7 +164,7 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
         </div>
       ),
     },
-  ], [docType]);
+  ], [docType, columnFilters]);
 
   const openCreateForDivision = (division: Division) => {
     setDivisionPicker(false);
@@ -228,6 +238,11 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
           pageIndex={pageIndex}
           pageSize={pageSize}
           totalRows={totalRows}
+          columnFilters={columnFilters}
+          onColumnFiltersChange={(filters) => {
+            setColumnFilters(filters);
+            setPageIndex(0);
+          }}
           onPageChange={setPageIndex}
           onPageSizeChange={(nextPageSize) => {
             setPageSize(nextPageSize);
@@ -746,101 +761,101 @@ function JVDocument({
                   <Plus size={14} /> Add Line
                 </Button>
               </div>
-             <div className="max-h-[43vh] overflow-auto">
-                             <table className="w-full min-w-[2200px] text-sm">
-                               <thead className="sticky top-0 bg-primary text-xs text-primary-foreground">
-                                 <tr>
-                                   <th className="px-2 py-2 text-left">No</th>
-                                   <th className="px-2 py-2 text-left">Select</th>
-                                   <th className="px-2 py-2 text-left">Division</th>
-                                   <th className="px-2 py-2 text-left">Account</th>
-                                   <th className="px-2 py-2 text-left">A/c Name</th>
-                                   <th className="px-2 py-2 text-left">Description</th>
-                                   <th className="px-2 py-2 text-left">Currency</th>
-                                   <th className="px-2 py-2 text-left">Ex Rate</th>
-                                   <th className="px-2 py-2 text-left">Amount</th>
-                                   <th className="px-2 py-2 text-left">Cr/Dr</th>
-                                   <th className="px-2 py-2 text-left">Job No</th>
-                                   <th className="px-2 py-2 text-left">Dept</th>
-                                   <th className="px-2 py-2 text-left">Base Amount</th>
-                                   <th className="px-2 py-2 text-left">Action</th>
-                                 </tr>
-                               </thead>
-                               <tbody>
-                                 {form.detail.length === 0 ? (
-                                   <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={18}>No detail lines yet</td></tr>
-                                 ) : form.detail.map((detail) => (
-                                   <tr className={selectedDetail?.id === detail.id ? "border-t bg-primary/5" : "border-t odd:bg-muted/20"} key={detail.id}>
-                                     <td className="px-2 py-1 text-xs">{detail.serial_no}</td>
-                                     <td className="px-2 py-1 text-center">
-                                       <input
-                                         checked={selectedDetail?.id === detail.id}
-                                         className="h-4 w-4 accent-[var(--primary)]"
-                                         disabled={!detail.ac_code}
-                                         onChange={() => setSelectedDetailId(detail.id)}
-                                         type="radio"
-                                       />
-                                     </td>
-                                     <td className="w-32 px-2 py-1"><Input disabled value={detail.div_code || form.div_code} /></td>
-                                     <td className="w-[260px] px-2 py-1">
-                                       <LookupField
-                                         label="Detail Account"
-                                         compact
-                                         placeholder="A/c code"
-                                         value={detail.ac_code}
-                                         displayValue={detail.ac_name ? `${detail.ac_code} - ${detail.ac_name}` : detail.ac_code}
-                                         columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
-                                         valueField="ac_code"
-                                         displayFields={["ac_code", "ac_name", "curr_code"]}
-                                         loadOptions={() => getDynamicLookup({
-                                           parameter: "Account_AC_CODE_Serach_HDR",
-                                           code1: user?.company_code,
-                                           code2: "D",
-                                           code3: form.doc_type,
-                                           code4: form.div_code
-                                         })}
-                                         disabled={disabled}
-                                         onChange={(value, row) => void selectDetailAccount(detail, value, row)}
-                                       />
-                                     </td>
-                                     <td className="w-[220px] px-2 py-1"><Input disabled value={detail.ac_name || ""} /></td>
-                                     <td className="w-[220px] px-2 py-1"><Input disabled={disabled} value={detail.remarks || ""} onChange={(event) => updateDetail(detail.id, { remarks: event.target.value })} /></td>
-                                     <td className="w-[210px] px-2 py-1">
-                                       <LookupField
-                                         label="Currency"
-                                         compact
-                                         placeholder="Currency"
-                                         value={detail.curr_code || form.curr_code}
-                                         displayValue={detail.curr_name ? `${detail.curr_code} - ${detail.curr_name}` : detail.curr_code || form.curr_code}
-                                         columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
-                                         valueField="curr_code"
-                                         displayFields={["curr_code", "curr_name"]}
-                                         loadOptions={() => getDynamicLookup({
-                                           parameter: "Account_Currency_CODE_Serach",
-                                           code1: user?.company_code,
-                                           loginid: user?.loginid || user?.username || "ADMIN"
-                                         })}
-                                         disabled={disabled}
-                                         onChange={(value, row) => updateDetail(detail.id, { curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(row?.ex_rate ?? form.ex_rate ?? 1) })}
-                                       />
-                                     </td>
-                                     <td className="w-28 px-2 py-1"><Input disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
-                                     <td className="w-32 px-2 py-1"><Input disabled={disabled} type="number" step="0.001" value={formatNumber(detail.amount)} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
-                                     <td className="w-28 px-2 py-1">
-                                       <Select className="h-9" disabled={disabled} value={detail.sign_ind} onChange={(event) => updateDetail(detail.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
-                                         <option value={1}>Dr</option>
-                                         <option value={-1}>Cr</option>
-                                       </Select>
-                                     </td>
-                                     <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
-                                     <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
-                                     <td className="w-32 px-2 py-1"><Input disabled value={formatNumber((Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1)))} /></td>
-                                     <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
-                                   </tr>
-                                 ))}
-                               </tbody>
-                             </table>
-                           </div>
+              <div className="max-h-[43vh] overflow-auto">
+                <table className="w-full min-w-[2200px] text-sm">
+                  <thead className="sticky top-0 bg-primary text-xs text-primary-foreground">
+                    <tr>
+                      <th className="px-2 py-2 text-left">No</th>
+                      <th className="px-2 py-2 text-left">Select</th>
+                      <th className="px-2 py-2 text-left">Division</th>
+                      <th className="px-2 py-2 text-left">Account</th>
+                      <th className="px-2 py-2 text-left">A/c Name</th>
+                      <th className="px-2 py-2 text-left">Description</th>
+                      <th className="px-2 py-2 text-left">Currency</th>
+                      <th className="px-2 py-2 text-left">Ex Rate</th>
+                      <th className="px-2 py-2 text-left">Amount</th>
+                      <th className="px-2 py-2 text-left">Cr/Dr</th>
+                      <th className="px-2 py-2 text-left">Job No</th>
+                      <th className="px-2 py-2 text-left">Dept</th>
+                      <th className="px-2 py-2 text-left">Base Amount</th>
+                      <th className="px-2 py-2 text-left">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {form.detail.length === 0 ? (
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={18}>No detail lines yet</td></tr>
+                    ) : form.detail.map((detail) => (
+                      <tr className={selectedDetail?.id === detail.id ? "border-t bg-primary/5" : "border-t odd:bg-muted/20"} key={detail.id}>
+                        <td className="px-2 py-1 text-xs">{detail.serial_no}</td>
+                        <td className="px-2 py-1 text-center">
+                          <input
+                            checked={selectedDetail?.id === detail.id}
+                            className="h-4 w-4 accent-[var(--primary)]"
+                            disabled={!detail.ac_code}
+                            onChange={() => setSelectedDetailId(detail.id)}
+                            type="radio"
+                          />
+                        </td>
+                        <td className="w-32 px-2 py-1"><Input disabled value={detail.div_code || form.div_code} /></td>
+                        <td className="w-[260px] px-2 py-1">
+                          <LookupField
+                            label="Detail Account"
+                            compact
+                            placeholder="A/c code"
+                            value={detail.ac_code}
+                            displayValue={detail.ac_name ? `${detail.ac_code} - ${detail.ac_name}` : detail.ac_code}
+                            columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
+                            valueField="ac_code"
+                            displayFields={["ac_code", "ac_name", "curr_code"]}
+                            loadOptions={() => getDynamicLookup({
+                              parameter: "Account_AC_CODE_Serach_HDR",
+                              code1: user?.company_code,
+                              code2: "D",
+                              code3: form.doc_type,
+                              code4: form.div_code
+                            })}
+                            disabled={disabled}
+                            onChange={(value, row) => void selectDetailAccount(detail, value, row)}
+                          />
+                        </td>
+                        <td className="w-[220px] px-2 py-1"><Input disabled value={detail.ac_name || ""} /></td>
+                        <td className="w-[220px] px-2 py-1"><Input disabled={disabled} value={detail.remarks || ""} onChange={(event) => updateDetail(detail.id, { remarks: event.target.value })} /></td>
+                        <td className="w-[210px] px-2 py-1">
+                          <LookupField
+                            label="Currency"
+                            compact
+                            placeholder="Currency"
+                            value={detail.curr_code || form.curr_code}
+                            displayValue={detail.curr_name ? `${detail.curr_code} - ${detail.curr_name}` : detail.curr_code || form.curr_code}
+                            columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
+                            valueField="curr_code"
+                            displayFields={["curr_code", "curr_name"]}
+                            loadOptions={() => getDynamicLookup({
+                              parameter: "Account_Currency_CODE_Serach",
+                              code1: user?.company_code,
+                              loginid: user?.loginid || user?.username || "ADMIN"
+                            })}
+                            disabled={disabled}
+                            onChange={(value, row) => updateDetail(detail.id, { curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(row?.ex_rate ?? form.ex_rate ?? 1) })}
+                          />
+                        </td>
+                        <td className="w-28 px-2 py-1"><Input disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
+                        <td className="w-32 px-2 py-1"><Input disabled={disabled} type="number" step="0.001" value={formatNumber(detail.amount)} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
+                        <td className="w-28 px-2 py-1">
+                          <Select className="h-9" disabled={disabled} value={detail.sign_ind} onChange={(event) => updateDetail(detail.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
+                            <option value={1}>Dr</option>
+                            <option value={-1}>Cr</option>
+                          </Select>
+                        </td>
+                        <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
+                        <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
+                        <td className="w-32 px-2 py-1"><Input disabled value={formatNumber((Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1)))} /></td>
+                        <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
               <div className="flex items-center justify-between border-t px-3 py-2 text-sm">
                 <span className="text-muted-foreground">Balance</span>
                 <strong className={Math.abs(total) > 0.001 ? "text-destructive" : "text-emerald-600"}>
@@ -1023,6 +1038,32 @@ function ChildAllocationTable({
                   </td>
                   <td className="px-2 py-1"><Input disabled value={text(row.inv_amt)} /></td>
                   <td className="px-2 py-1"><Input disabled value={text(row.c_bal_amt_org)} /></td>
+                  <td className="w-32 px-2 py-1">
+                    <div className="flex flex-col gap-1">
+                      <Input
+                        disabled={disabled}
+                        type="number"
+                        step="0.001"
+                        value={Number(row.amount || 0)}
+                        onChange={(event) =>
+                          onChange(row.id, {
+                            amount: Number(event.target.value || 0),
+                          })
+                        }
+                        color={
+                          Number(row.amount || 0) > Number(row.c_bal_amt_org || 0)
+                            ? "danger"
+                            : "neutral"
+                        }
+                      />
+
+                      {Number(row.amount || 0) > Number(row.c_bal_amt_org || 0) && (
+                        <span className="text-xs text-red-500">
+                          Amount exceeds available balance
+                        </span>
+                      )}
+                    </div>
+                  </td>
                 </>
               ) : childTable === "job" ? (
                 <>
@@ -1139,10 +1180,12 @@ function ChildAllocationTable({
                     />
                   </td>
                   <td className="px-2 py-1"><Input disabled={disabled} value={text(row.exp_description)} onChange={(event) => onChange(row.id, { exp_description: event.target.value })} /></td>
+
                   <td className="px-2 py-1"><Input disabled={disabled} value={text(row.job_no)} onChange={(event) => onChange(row.id, { job_no: event.target.value })} /></td>
                 </>
               )}
-              <td className="w-32 px-2 py-1"><Input disabled={disabled} type="number" step="0.001" value={Number(row.amount || 0)} onChange={(event) => onChange(row.id, { amount: Number(event.target.value || 0) })} /></td>
+
+              {childTable !== "invoice" && <td className="w-32 px-2 py-1"><Input disabled={disabled} type="number" step="0.001" value={Number(row.amount || 0)} onChange={(event) => onChange(row.id, { amount: Number(event.target.value || 0) })} /></td>}
               {childTable === "invoice" && <td className="w-32 px-2 py-1"><Input disabled value={Number(row.paid_amt || 0)} /></td>}
               <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => onRemove(row.id)}><X size={14} /></Button></td>
             </tr>
