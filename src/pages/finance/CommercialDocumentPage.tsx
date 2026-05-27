@@ -18,7 +18,8 @@ import {
   getLpoDocuments,
   getLpoHeader,
   getLpoDetail,
-  getPurchaseHeader
+  getPurchaseHeader,
+  upsertBulkAccountEntryApi
 } from "../../api/transactions";
 import { getDynamicFinanceLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
@@ -113,6 +114,18 @@ const META: Record<CommercialType, { title: string;  addLabel: string }> = {
 
 const today = () => new Date().toISOString().slice(0, 10);
 const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+const commercialDetailSign = (docType: CommercialType, value?: unknown): 1 | -1 => {
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "cr" || normalized === "credit") return 1;
+    if (normalized === "dr" || normalized === "debit") return -1;
+  }
+  const numeric = Number(value);
+  if (numeric === 1 || numeric === -1) return numeric as 1 | -1;
+  return docType === "PI" || docType === "PO" ? 1 : -1;
+};
+const commercialInvoiceSign = (docType: CommercialType): 1 | -1 =>
+  docType === "PI" || docType === "PO" ? -1 : 1;
 
 export function CommercialDocumentPage({ docType }: { docType: CommercialType }) {
   const meta = META[docType];
@@ -410,15 +423,24 @@ function CommercialEditor({
   };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (!form.doc_date) return setError("Doc Date is required");
+    if (!form.div_code) return setError("Division is required");
+    if (!form.ac_code) return setError(docType === "PI" || docType === "PO" ? "Supplier is required" : "Customer is required");
+    if (!form.curr_code) return setError("Currency is required");
+    if (!form.ex_rate) return setError("Exchange Rate is required");
+    if (!form.detail.length) return setError("Add at least one detail line");
     setSaving(true);
     setError("");
     try {
-      const payload = buildCommercialPayload(form, user?.company_code || "");
-      const endpoint = docType === "PO"
-        ? editMode ? "/api/finance/transactions/lpo-update" : "/api/finance/transactions/lpo-document"
-        : editMode ? "/api/finance/transactions/purchase-document" : docType === "SI" || docType === "SV" ? "/api/finance/transactions/sales-document" : "/api/finance/transactions/purchase-document";
-      const response = editMode ? await api.put(endpoint, payload) : await api.post(endpoint, payload);
-      if (!response.data?.success) throw new Error(response.data?.message || "Unable to save document");
+      if (docType === "PO") {
+        const payload = buildCommercialPayload(form, user?.company_code || "");
+        const endpoint = editMode ? "/api/finance/transactions/lpo-update" : "/api/finance/transactions/lpo-document";
+        const response = editMode ? await api.put(endpoint, payload) : await api.post(endpoint, payload);
+        if (!response.data?.success) throw new Error(response.data?.message || "Unable to save LPO document");
+      } else {
+        const bulkPayload = buildCommercialBulkAccountEntryPayload(form, user?.company_code || "", user?.loginid || "");
+        await upsertBulkAccountEntryApi(bulkPayload);
+      }
       await onSaved(editMode ? "Document updated successfully" : "Document created successfully");
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to save document");
@@ -1211,7 +1233,7 @@ function emptyLine(docType: CommercialType, serialNo: number): Line {
     qty: 1,
     price: 0,
     amount: 0,
-    sign_ind: docType === "PI" || docType === "PO" ? 1 : -1,
+    sign_ind: commercialDetailSign(docType),
     tx_compntcat_code_1: "",
     tx_cat_code: "",
     tx_compnt_1_expmt: "N",
@@ -1274,7 +1296,7 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
         qty: Number(row.qty || 1),
         price: Number(row.price || row.amount || 0),
         amount: Math.abs(Number(row.amount || 0)),
-        sign_ind: Number(row.sign_ind || (docType === "PI" || docType === "PO" ? 1 : -1)) as 1 | -1,
+        sign_ind: commercialDetailSign(docType, row.sign_ind),
         job_no: text(row.job_no),
         dept_code: text(row.dept_code),
         tx_compntcat_code_1: text(row.tx_compntcat_code_1),
@@ -1295,6 +1317,9 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
     company_code: companyCode,
     ex_rate: Number(form.ex_rate || 1),
     ref_doc_no: form.ref_doc_no || form.ref_no || form.doc_no || "",
+    party_name: form.ac_name || "",
+    invoice_no: form.inv_no || "",
+    invoice_date: form.inv_date || "",
     
     detail: form.detail.map((line) => ({
       company_code: companyCode,
@@ -1309,7 +1334,7 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
       price: Number(line.price || 0),
       qty: Number(line.qty || 1),
       amount: Math.abs(Number(line.amount || 0)),
-      sign_ind: line.sign_ind,
+      sign_ind: commercialDetailSign(form.doc_type, line.sign_ind),
       tx_compntcat_code_1: line.tx_compntcat_code_1 || "",
       tx_cat_code: line.tx_cat_code || "",
       tx_compnt_1_expmt: line.tx_compnt_1_expmt || "N",
@@ -1361,6 +1386,106 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
   // : {},
 
   };
+}
+
+function buildCommercialBulkAccountEntryPayload(form: FormState, companyCode: string, loginid: string) {
+  const prepared = buildCommercialPayload(form, companyCode);
+  const docNo = form.doc_no || "0";
+  const header: Record<string, unknown> = {
+    ...prepared,
+    company_code: companyCode,
+    doc_type: form.doc_type,
+    doc_no: docNo,
+    doc_date: form.doc_date,
+    inv_no: form.inv_no || form.ref_no || "",
+    inv_date: form.inv_date || form.ref_date || form.doc_date,
+    ref_no: form.ref_no || form.inv_no || "",
+    ref_date: form.ref_date || form.inv_date || form.doc_date,
+    ac_code: form.ac_code,
+    remarks: form.remarks || "",
+    curr_code: form.curr_code,
+    ex_rate: Number(form.ex_rate || 1),
+    div_code: form.div_code,
+    create_user: loginid,
+    edit_user: loginid,
+    canceled: "N",
+    last_dtl_serial_no: form.detail.length,
+    sys_gen: "N",
+    tx_compntcat_code_1: form.tx_compntcat_code_1 || "",
+    tx_compnt_1_expmt: form.tx_compnt_1_expmt || form.tax_type || "N",
+    tx_compnt_perc_1: Number(form.tx_compnt_perc_1 || 0),
+  };
+  delete header.detail;
+
+  const details = prepared.detail.map((line: Record<string, unknown>, index: number) => ({
+    ...line,
+    company_code: companyCode,
+    doc_type: form.doc_type,
+    doc_no: docNo,
+    serial_no: Number(line.serial_no || index + 1),
+    doc_date: form.doc_date,
+    header_ac_code: form.ac_code,
+    curr_code: String(line.curr_code || form.curr_code),
+    ex_rate: Number(line.ex_rate || form.ex_rate || 1),
+    div_code: String(line.div_code || form.div_code),
+    amount: Math.abs(Number(line.amount || 0)),
+    lcur_amount: Number(line.lcur_amount ?? Math.abs(Number(line.amount || 0)) * Number(line.ex_rate || form.ex_rate || 1)),
+    sign_ind: commercialDetailSign(form.doc_type, line.sign_ind),
+  }));
+
+  return {
+    header,
+    details,
+    invoiceDetails: buildCommercialInvoiceDetails(form, companyCode, docNo),
+    expenseDetails: [],
+    jobDetails: buildCommercialJobDetails(form, companyCode, docNo),
+    loginid,
+  };
+}
+
+function buildCommercialInvoiceDetails(form: FormState, companyCode: string, docNo: string) {
+  if (form.doc_type === "PO") return [];
+  const invNo = form.inv_no || form.ref_no;
+  if (!invNo) return [];
+  return form.detail
+    .filter((line) => Number(line.amount || 0) !== 0)
+    .map((line, index) => ({
+      company_code: companyCode,
+      doc_type: form.doc_type,
+      doc_no: docNo,
+      serial_no: line.serial_no || index + 1,
+      dtl_sr_no: 1,
+      doc_date: form.doc_date,
+      ac_code: line.ac_code,
+      inv_no: invNo,
+      amount: Math.abs(Number(line.amount || 0)),
+      lcur_amount: Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1),
+      sign_ind: commercialInvoiceSign(form.doc_type),
+      curr_code: form.curr_code,
+      ex_rate: Number(form.ex_rate || 1),
+      div_code: form.div_code,
+    }));
+}
+
+function buildCommercialJobDetails(form: FormState, companyCode: string, docNo: string) {
+  return form.detail
+    .filter((line) => String(line.job_no || "").trim())
+    .map((line, index) => ({
+      company_code: companyCode,
+      doc_type: form.doc_type,
+      doc_no: docNo,
+      serial_no: line.serial_no || index + 1,
+      dtl_sr_no: 1,
+      doc_date: form.doc_date,
+      ac_code: line.ac_code,
+      job_no: line.job_no || "",
+      amount: Math.abs(Number(line.amount || 0)),
+      lcur_amount: Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1),
+      sign_ind: commercialDetailSign(form.doc_type, line.sign_ind),
+      curr_code: form.curr_code,
+      ex_rate: Number(form.ex_rate || 1),
+      div_code: form.div_code,
+    }));
 }
 
 async function getCurrencyRows(): Promise<LookupRow[]> {
