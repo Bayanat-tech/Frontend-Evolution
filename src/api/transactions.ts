@@ -23,6 +23,7 @@ export type TransactionDocumentRow = {
   cheque_date?: string;
   cheque_bank?: string;
   amount?: number;
+  net_amount?: number;
   canceled?: string;
   fy_period?: string;
 };
