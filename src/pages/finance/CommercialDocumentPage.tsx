@@ -1458,6 +1458,7 @@ function buildCommercialInvoiceDetails(form: FormState, companyCode: string, doc
       doc_date: form.doc_date,
       ac_code: line.ac_code,
       inv_no: invNo,
+      inv_date: form.inv_date || form.ref_date || form.doc_date,
       amount: Math.abs(Number(line.amount || 0)),
       lcur_amount: Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1),
       sign_ind: commercialInvoiceSign(form.doc_type),
