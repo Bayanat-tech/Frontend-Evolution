@@ -10,8 +10,6 @@ import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import {WmsMasterForm} from "../../components/WmsMasterForm";
-import { DropdownKey } from "./dropdowns";
-
 
 export type WmsMasterField = {
   name: string;
@@ -21,26 +19,24 @@ export type WmsMasterField = {
   disabledWhen?: (form: Record<string, unknown>) => boolean;
   type?: "text" | "number" | "select" | "email" | "textarea" | "checkbox" | "date";
   options?: { label: string; value: string }[];
-  dropdownKey?: DropdownKey;          // DEPRECATED: use dropdownParam instead
-  dropdownParam?: string;             // procedure parameter name (e.g. 'DROP_DOWN_DIVISION')
-  dropdownLabelKey?: string;          // field name from dropdown data to display as label (default: 'label')
-  dropdownValueKey?: string;          // field name from dropdown data to use as value (default: 'value')
-  dropdownDisplayFields?: string[];   // multiple fields to combine for display (e.g. ['code', 'name'] shows "CODE - NAME")
-  dropdownDisplaySeparator?: string;  // separator for combining fields (default: ' - ')
-  dropdownDependsOn?: string;         // field name this dropdown depends on (for chained dropdowns)
-  dropdownCodeMap?: Record<string, string>;  // map field names to code params (e.g. { company_code: 'code1', div_code: 'code2' })
-  filterDependsOn?: string;           // field name to filter dropdown options by (at component level)
+  dropdownParam?: string;
+  dropdownLabelKey?: string;
+  dropdownValueKey?: string;
+  dropdownDisplayFields?: string[];
+  dropdownDisplaySeparator?: string;
+  dropdownCodeMap?: Record<string, string>;
+  filterDependsOn?: string;
   asyncOptions?: {
-    endpoint: string;           // e.g. "country"
-    labelKey: string;           // e.g. "country_name"
-    valueKey: string;           // e.g. "country_code"
-    dependsOn?: string;         // field name this depends on (for chained dropdowns)
+    endpoint: string;
+    labelKey: string;
+    valueKey: string;
+    dependsOn?: string;
   };
-  tab?: string;                 // which tab this field belongs to
-  section?: string;             // section header for grouping fields
+  tab?: string;
+  section?: string;
   table?: boolean;
   width?: number;
-  colSpan?: number;             // number of columns to span (1-2)
+  colSpan?: number;
 };
 
 export type WmsDeleteConfig = {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Save, X, CheckCircle2, ChevronRight, AlertCircle, Loader2, Plus, RefreshCw } from "lucide-react";
 import type { FormEvent } from "react";
-import { getWmsMaster, fetchDropdownOptions } from "../api/wms";
+import { getWmsMaster } from "../api/wms";
 import { getDynamicLookup } from "../api/lookups";
 import { Button } from "./ui/Button";
 import { Card, CardContent, CardHeader } from "./ui/Card";
@@ -11,7 +11,10 @@ import { LookupField } from "./ui/LookupField";
 import type { WmsMasterField, WmsMasterFormTab } from "../pages/wms/WmsSimpleMasterPage";
 import type { LookupRow } from "../api/lookups";
 import type { UserProfile } from "../types/auth";
-import { DropdownOption } from "../pages/wms/dropdowns";
+interface DropdownOption {
+  label: string;
+  value: string;
+}
 
 type Props = {
   fields: WmsMasterField[];
@@ -69,141 +72,81 @@ export function WmsMasterForm({
     });
   }, [fields, form, asyncCache]);
 
-  const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOption[]> => {
-    // Support both old dropdownKey and new dropdownParam
-    if (!field.dropdownKey && !field.dropdownParam) return [];
-    
-    const cacheKey = field.dropdownParam || field.name;
-    
-    // Return cached data if available
-    if (dropdownCache[cacheKey]) {
-      return dropdownCache[cacheKey];
-    }
+const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOption[]> => {
+  if (!field.dropdownParam) return [];
 
-    // If already loading, wait a bit and return
-    if (dropdownLoading[cacheKey]) {
-      // Wait for loading to complete and return from cache
-      await new Promise(resolve => setTimeout(resolve, 100));
-      return dropdownCache[cacheKey] || [];
-    }
+  const cacheKey = field.dropdownParam;
+  if (dropdownCache[cacheKey]) return dropdownCache[cacheKey];
+  if (dropdownLoading[cacheKey]) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    return dropdownCache[cacheKey] || [];
+  }
 
-    setDropdownLoading((prev) => ({ ...prev, [cacheKey]: true }));
-    try {
-      let options: DropdownOption[] = [];
+  setDropdownLoading((prev) => ({ ...prev, [cacheKey]: true }));
+  try {
+    const params: Record<string, unknown> = { parameter: field.dropdownParam };
 
-      // New parameter-based dropdown system
-      if (field.dropdownParam) {
-        const params: Record<string, unknown> = {
-          parameter: field.dropdownParam,
-        };
+    const loginId = user?.loginid || user?.LOGINID;
+    if (loginId) params.loginid = loginId;
 
-        // Always add user login ID
-        const loginId = user?.loginid || user?.LOGINID;
-        if (loginId) {
-          params.loginid = loginId;
-          console.log(`[Dropdown ${field.dropdownParam}] Sending loginid:`, loginId);
-        } else {
-          console.log(`[Dropdown ${field.dropdownParam}] No loginid available`, { user });
-        }
-        
-        // Always send company_code as code1
-        const companyCode = form.company_code || user?.company_code || user?.COMPANY_CODE;
-        if (companyCode) {
-          params.code1 = companyCode;
-          console.log(`[Dropdown ${field.dropdownParam}] Sending code1 (company_code):`, companyCode);
-        } else {
-          console.log(`[Dropdown ${field.dropdownParam}] No company_code available`, { form, user });
-        }
+    const companyCode = form.company_code || user?.company_code || user?.COMPANY_CODE;
+    if (companyCode) params.code1 = companyCode;
 
-        // Map dependent field values to code parameters starting from code2
-        if (field.dropdownCodeMap) {
-          let codeIndex = 2;  // Start from code2 (code1 is reserved for company_code)
-          for (const [fieldName, codeParam] of Object.entries(field.dropdownCodeMap)) {
-            // Skip company_code as it's already sent as code1
-            if (fieldName === "company_code") continue;
-            
-            const value = form[fieldName];
-            if (value) {
-              params[`code${codeIndex}`] = value;
-              console.log(`[Dropdown ${field.dropdownParam}] Sending code${codeIndex}:`, value);
-            }
-            codeIndex++;
-          }
-        }
-
-        console.log(`[Dropdown ${field.dropdownParam}] Final params:`, params);
-        const results = await getDynamicLookup(params as any);
-        const labelKey = field.dropdownLabelKey || "label";
-        const valueKey = field.dropdownValueKey || "value";
-        const separator = field.dropdownDisplaySeparator || " - ";
-        
-        options = results.map((row) => {
-          let displayLabel: string;
-          
-          // If dropdownDisplayFields specified, combine multiple fields
-          if (field.dropdownDisplayFields && field.dropdownDisplayFields.length > 0) {
-            displayLabel = field.dropdownDisplayFields
-              .map((fieldName) => String(row[fieldName] || ""))
-              .filter((val) => val !== "")
-              .join(separator);
-          } else {
-            // Use single label field
-            displayLabel = String(row[labelKey] || row.label || row.name || row.description || "");
-          }
-          
-          return {
-            label: displayLabel,
-            value: String(row[valueKey] || row.value || row.code || row.id || ""),
-          };
-        });
-      } else if (field.dropdownKey) {
-        // Old system for backward compatibility
-        options = await fetchDropdownOptions(field.dropdownKey);
+    if (field.dropdownCodeMap) {
+      let codeIndex = 2;
+      for (const [fieldName, _codeParam] of Object.entries(field.dropdownCodeMap)) {
+        if (fieldName === "company_code") continue;
+        const value = form[fieldName];
+        if (value) params[`code${codeIndex}`] = value;
+        codeIndex++;
       }
-
-      setDropdownCache((prev) => ({ ...prev, [cacheKey]: options }));
-      return options;
-    } catch (error) {
-      console.error(`Error loading dropdown for ${field.name}:`, error);
-      return [];
-    } finally {
-      setDropdownLoading((prev) => ({ ...prev, [cacheKey]: false }));
-    }
-  };
-
-
-  const getOptions = (field: WmsMasterField): DropdownOption[] => {
-    if (field.options) return field.options;
-
-    // New parameter-based dropdown system
-    if (field.dropdownParam) {
-      const cacheKey = field.dropdownParam;
-      return dropdownCache[cacheKey] ?? [];
     }
 
-    // Old dropdownKey system for backward compatibility
-    if (field.dropdownKey) {
-      const cacheKey = field.dropdownDependsOn
-        ? `${field.name}__${form[field.dropdownDependsOn]}`
-        : field.name;
-      let options = dropdownCache[cacheKey] ?? [];
-      if (field.filterDependsOn) {
-        const filterValue = form[field.filterDependsOn];
-        options = options.filter(
-          (opt) => opt[field.filterDependsOn as string] === filterValue
-        );
-      }
-      return options;
-    }
+    const results = await getDynamicLookup(params as any);
+    const labelKey = field.dropdownLabelKey || "label";
+    const valueKey = field.dropdownValueKey || "value";
+    const separator = field.dropdownDisplaySeparator || " - ";
 
-    if (field.asyncOptions) {
-      const { dependsOn } = field.asyncOptions;
-      const cacheKey = dependsOn ? `${field.name}__${form[dependsOn]}` : field.name;
-      return asyncCache[cacheKey] ?? [];
-    }
+    const options = results.map((row) => {
+      const displayLabel = field.dropdownDisplayFields?.length
+        ? field.dropdownDisplayFields
+            .map((f) => String(row[f] || ""))
+            .filter(Boolean)
+            .join(separator)
+        : String(row[labelKey] || row.label || row.name || row.description || "");
 
+      return {
+        label: displayLabel,
+        value: String(row[valueKey] || row.value || row.code || row.id || ""),
+      };
+    });
+
+    setDropdownCache((prev) => ({ ...prev, [cacheKey]: options }));
+    return options;
+  } catch (error) {
+    console.error(`Error loading dropdown for ${field.name}:`, error);
     return [];
-  };
+  } finally {
+    setDropdownLoading((prev) => ({ ...prev, [cacheKey]: false }));
+  }
+};
+
+
+const getOptions = (field: WmsMasterField): DropdownOption[] => {
+  if (field.options) return field.options;
+
+  if (field.dropdownParam) {
+    return dropdownCache[field.dropdownParam] ?? [];
+  }
+
+  if (field.asyncOptions) {
+    const { dependsOn } = field.asyncOptions;
+    const cacheKey = dependsOn ? `${field.name}__${form[dependsOn]}` : field.name;
+    return asyncCache[cacheKey] ?? [];
+  }
+
+  return [];
+};
 
   const hasTabs = tabs && tabs.length > 0;
 
@@ -506,8 +449,8 @@ function renderInput(
   const baseInputClass =
     "h-6 w-full rounded border border-input bg-background px-2 text-[11px] text-foreground placeholder:text-muted-foreground/50 transition-colors focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed";
 
-  if (field.type === "select" || field.asyncOptions || field.dropdownKey || field.dropdownParam) {
-    const hasApiOptions = field.asyncOptions || field.dropdownKey || field.dropdownParam;
+if (field.type === "select" || field.asyncOptions || field.dropdownParam) {
+  const hasApiOptions = field.asyncOptions || field.dropdownParam;
 
     if (!hasApiOptions && field.options) {
       return (
