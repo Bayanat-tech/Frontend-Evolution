@@ -1,4 +1,5 @@
 import { api } from "./client";
+import { LookupRow } from "./lookups";
 
 type ApiResponse<T> = {
   success: boolean;
@@ -34,5 +35,30 @@ export async function deleteHrMaster(master: string, ids: unknown[]) {
 export async function deleteHrGm(endpoint: string, ids: unknown[]) {
   const response = await api.post<ApiResponse<unknown>>(`/api/hr/gm/${endpoint}/delete`, ids);
   if (!response.data.success) throw new Error(response.data.message || `Unable to delete ${endpoint}`);
+  return response.data;
+}
+
+export type HrLeaveFlowResponse = {
+  tableData: LookupRow[];
+  count: number;
+};
+
+export async function getHrLeaveCancel(loginid: string, page = 1, limit = 100) {
+  const response = await api.get<ApiResponse<HrLeaveFlowResponse>>("/api/hr/Pg_leave_flow_cancel", {
+    params: { code: loginid, page, limit },
+  });
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load leave cancel requests");
+  return response.data.data || { tableData: [], count: 0 };
+}
+
+export async function saveHrPayComponent(payload: { header: Record<string, unknown>; details: Record<string, unknown>[] }) {
+  const response = await api.post<ApiResponse<unknown>>("/api/finance/insUpdHrPayComponent", payload);
+  if (!response.data.success) throw new Error(response.data.message || "Unable to save pay unit");
+  return response.data;
+}
+
+export async function saveHrPayCompDepend(payload: { header: Record<string, unknown>[]; details: Record<string, unknown>[] }) {
+  const response = await api.post<ApiResponse<unknown>>("/api/finance/insUpdHrPayCompDepend", payload);
+  if (!response.data.success) throw new Error(response.data.message || "Unable to save pay units dependant");
   return response.data;
 }
