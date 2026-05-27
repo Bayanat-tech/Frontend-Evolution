@@ -16,7 +16,7 @@ import { CommercialDocumentPage } from "../pages/finance/CommercialDocumentPage"
 import { DocumentSetupPage } from "../pages/finance/DocumentSetupPage";
 import { ExpenseTypePage } from "../pages/finance/ExpenseTypePage";
 import { FinanceUtilityMasterPage, financeUtilityConfigs } from "../pages/finance/FinanceUtilityMasterPage";
-import { JournalVoucherPage } from "../pages/finance/JournalVoucherPage";
+// import { JournalVoucherPage } from "../pages/finance/JournalVoucherPage";
 import { PaymentDocumentPage } from "../pages/finance/PaymentDocumentPage";
 import { PLSetupPage } from "../pages/finance/PLSetupPage";
 import { PrepaidRegisterPage } from "../pages/finance/PrepaidRegisterPage";
@@ -31,6 +31,7 @@ import { SecurityOperationAccessPage } from "../pages/security/SecurityOperation
 import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
 import { PettyCashPaymentDocumentEditor } from "../pages/finance/PettyCashPayment";
 import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDepartmentAssignmentPage, pamsMasterConfigs, PamsMasterPage, PamsReportPage, PamsTaskPage } from "../pages/pams/PamsPages";
+import { JVDocumentEditor } from "../pages/finance/JVDocumentPage";
 
 
 type WorkspaceRouteContext = {
@@ -98,7 +99,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: "Finance Journal Voucher",
     match: ({ pathname }) => isJournalVoucherRoute(pathname),
-    element: () => <JournalVoucherPage  />,
+    element: () => <JVDocumentEditor docType={"JV"}  />,
   },
   {
     name: "Finance Bank Reconciliation",
