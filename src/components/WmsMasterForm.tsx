@@ -444,7 +444,7 @@ function renderInput(
   onChange: (name: string, value: unknown) => void,
   onDropdownFocus: () => void,
   isLoading: boolean,
-  loadDropdownAsync?: (field: WmsMasterField) => Promise<DropdownOption[]>,
+  loadDropdownOptions: (field: WmsMasterField) => Promise<DropdownOption[]>,
 ) {
   const baseInputClass =
     "h-6 w-full rounded border border-input bg-background px-2 text-[11px] text-foreground placeholder:text-muted-foreground/50 transition-colors focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed";
@@ -477,9 +477,6 @@ if (field.type === "select" || field.asyncOptions || field.dropdownParam) {
 
     return (
       <div
-        onClick={() => loadDropdownAsync?.(field)}
-        onFocus={() => loadDropdownAsync?.(field)}
-        role="presentation"
         className={`[&_input]:h-6 [&_input]:text-[11px] [&_input]:py-0 [&_input]:px-2 [&_button]:h-6 ${isLoading ? "opacity-60 pointer-events-none" : ""}`}
       >
         <LookupField
@@ -489,9 +486,17 @@ if (field.type === "select" || field.asyncOptions || field.dropdownParam) {
           columns={[{ field: "label", header: "Label" }]}
           valueField="value"
           displayFields={["label"]}
+          // loadOptions={async () => {
+          //   // Load fresh data or get from cache
+          //   const dropdownOptions = await (loadDropdownAsync?.(field) || Promise.resolve([]));
+          //   return dropdownOptions.map((opt: DropdownOption) => ({
+          //     value: opt.value,
+          //     label: opt.label,
+          //   }));
+          // }}
+          // AFTER — loadOptions IS the single source of truth; no separate onFocus/onClick trigger needed
           loadOptions={async () => {
-            // Load fresh data or get from cache
-            const dropdownOptions = await (loadDropdownAsync?.(field) || Promise.resolve([]));
+            const dropdownOptions = await loadDropdownOptions(field); // call the real loader directly
             return dropdownOptions.map((opt: DropdownOption) => ({
               value: opt.value,
               label: opt.label,
