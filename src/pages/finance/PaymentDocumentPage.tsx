@@ -226,7 +226,7 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
           density="grid"
           enablePagination
           manualPagination
-          manualFiltering
+          initialSorting={[{ id: "doc_date", desc: true }]}
           pageIndex={pageIndex}
           pageSize={pageSize}
           totalRows={totalRows}

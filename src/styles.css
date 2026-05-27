@@ -1581,7 +1581,7 @@ a {
 }
 
 .payment-workbench {
-  background: #f7f9fc;
+  background: #f5f7fb;
 }
 
 .payment-workbench .field {
@@ -1597,14 +1597,14 @@ a {
 
 .payment-workbench .ui-input,
 .payment-workbench .ui-select {
-  height: 33px;
-  border-radius: 8px;
+  height: 31px;
+  border-radius: 7px;
   padding: 0 9px;
   font-size: 13px;
   font-weight: 400;
-  border-color: #d7e1ef;
+  border-color: #b8c5d8;
   background: #fbfdff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.025);
+  box-shadow: inset 0 1px 1px rgba(15, 23, 42, 0.03);
 }
 
 .payment-workbench .ui-button {
@@ -1629,7 +1629,7 @@ a {
 }
 
 .payment-workbench table tbody tr {
-  height: 42px;
+  height: 35px;
 }
 
 .payment-workbench table tbody tr:hover {
@@ -1641,7 +1641,7 @@ a {
 }
 
 .commercial-command-header {
-  background: linear-gradient(180deg, #06469f 0%, #00378c 100%);
+  background: #003f98;
 }
 
 .commercial-summary-chip {
@@ -1657,18 +1657,18 @@ a {
   min-width: 0;
   max-width: 100%;
   overflow-x: hidden;
-  border-color: #d7e1ef;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.045);
+  border-color: #aebbd0;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.055);
 }
 
 .commercial-section-title {
-  min-height: 39px;
+  min-height: 35px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 12px;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 6px 12px;
+  border-bottom: 1px solid #c7d2e3;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
 
@@ -1715,14 +1715,14 @@ a {
 .commercial-lines-scroll {
   width: 100%;
   max-width: 100%;
-  min-height: 390px;
+  min-height: 430px;
   max-height: calc(100vh - 360px);
   background: #ffffff;
 }
 
 .commercial-lines-card {
-  border-color: #d7e1ef;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.045);
+  border-color: #aebbd0;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.055);
 }
 
 .commercial-editor {
@@ -1750,7 +1750,7 @@ a {
 }
 
 .commercial-editor table tbody tr {
-  height: 36px;
+  height: 32px;
 }
 
 .commercial-editor table .ui-input,
@@ -1773,19 +1773,19 @@ a {
 }
 
 .commercial-editor table th {
-  height: 32px;
-  font-size: 12px;
-  font-weight: 700;
+  height: 30px;
+  font-size: 11px;
+  font-weight: 800;
   letter-spacing: 0;
   padding-top: 6px;
   padding-bottom: 6px;
 }
 
 .commercial-editor table td {
-  border-color: #eef2f7;
+  border-color: #dfe7f2;
   font-size: 13px;
-  padding-top: 3px;
-  padding-bottom: 3px;
+  padding-top: 2px;
+  padding-bottom: 2px;
 }
 
 .commercial-line-description {
@@ -1800,7 +1800,7 @@ a {
   line-height: 1.25;
   color: var(--foreground);
   background: #fbfdff;
-  border: 1px solid #d7e1ef;
+  border: 1px solid #b8c5d8;
   border-radius: 7px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
 }
