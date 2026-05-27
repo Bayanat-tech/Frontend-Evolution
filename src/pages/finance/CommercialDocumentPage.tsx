@@ -1,10 +1,12 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Edit2, Paperclip, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Edit2, Paperclip, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import {
   Division,
   FyPeriod,
+  getCompanyInfo,
+  getDefaultFyPeriod,
   getDivisions,
   getDocAccounts,
   getFyPeriods,
@@ -13,8 +15,12 @@ import {
   getTransactionHeader,
   TransactionDocumentRow,
   TransactionType,
+  getLpoDocuments,
+  getLpoHeader,
+  getLpoDetail,
+  getPurchaseHeader
 } from "../../api/transactions";
-import { getLookupValue, LookupRow } from "../../api/lookups";
+import { getDynamicFinanceLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
 import { CardContent, CardHeader } from "../../components/ui/Card";
@@ -33,6 +39,7 @@ type Line = {
   ac_code: string;
   ac_name?: string;
   remarks?: string;
+  l4_description?: string;
   qty: number;
   price: number;
   amount: number;
@@ -44,6 +51,8 @@ type Line = {
   tx_compnt_1_expmt?: string;
   tx_compnt_perc_1?: number;
   tx_compnt_amt_1?: number;
+  prod_code?: string;
+  other_remarks?: string;
 };
 
 type FormState = {
@@ -60,6 +69,7 @@ type FormState = {
   curr_name?: string;
   ex_rate: number;
   remarks?: string;
+  l4_description?: string;
   ref_doc_no?: string;
   ref_no?: string;
   ref_date?: string;
@@ -68,22 +78,37 @@ type FormState = {
   party_fax?: string;
   payment_terms?: string;
   delivery_info?: string;
-  delivery_term?: string;
-  contact?: string;
-  mobile?: string;
-  email?: string;
+  dlvr_term?: string;  
+  // contact?: string;
+  // mobile?: string;
+  // email?: string;
   tax_category?: string;
-  tax_code?: string;
+  tax_cat_code?: string;
   tax_type?: string;
   hse_compliance?: string;
+  app_ref_no?: string;
+pdo_type?: string;
+delivery_to?: string;
+dlvr_mobile?: string;
+dlvr_email?: string;
+dlvr_contact?: string;
+salesman_code?: string;
+salesman_name?: string;
+sector_code?: string;
+sector_name?: string;
+tx_compntcat_code_1?: string;
+tx_cat_code?: string;
+tx_compnt_1_expmt?: string;
+tx_compnt_perc_1?: number;
+print_letter_head?: boolean;
   detail: Line[];
 };
 
-const META: Record<CommercialType, { title: string; subtitle: string; addLabel: string }> = {
-  PO: { title: "LPO", subtitle: "Local purchase order", addLabel: "Add LPO" },
-  PI: { title: "Purchase", subtitle: "Purchase invoice document", addLabel: "Add Purchase" },
-  SI: { title: "Sales", subtitle: "Sales invoice document", addLabel: "Add Sales" },
-  SV: { title: "Service Invoice", subtitle: "Service billing document", addLabel: "Add Service" },
+const META: Record<CommercialType, { title: string;  addLabel: string }> = {
+  PO: { title: "LPO",  addLabel: "Add LPO" },
+  PI: { title: "Purchase", addLabel: "Add Purchase" },
+  SI: { title: "Sales", addLabel: "Add Sales" },
+  SV: { title: "Service Invoice", addLabel: "Add Service" },
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -105,17 +130,32 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
   const [divisionPicker, setDivisionPicker] = useState(false);
 
   const loadLookups = async () => {
-    const [fyData, divisionData] = await Promise.all([getFyPeriods(), getDivisions()]);
+    const [fyData, divisionData, companyInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
     setFyPeriods(fyData);
     setDivisions(divisionData);
-    setFyPeriod((current) => current || fyData[0]?.fy_period || "");
+    setFyPeriod((current) => current || getDefaultFyPeriod(fyData, companyInfo));
   };
 
   const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize) => {
     if (!fyPeriod) return;
     setLoading(true);
     try {
-      const response = await getTransactionDocuments(docType, fyPeriod, query, nextPageIndex + 1, nextPageSize);
+      // const response = await getTransactionDocuments(docType, fyPeriod, query, nextPageIndex + 1, nextPageSize);
+      const response =
+         docType === "PO"
+             ? await getLpoDocuments(
+        fyPeriod,
+        query,
+        nextPageIndex + 1,
+        nextPageSize,
+      )
+         : await getTransactionDocuments(
+        docType,
+        fyPeriod,
+        query,
+        nextPageIndex + 1,
+        nextPageSize,
+      );
       setRows(response.tableData);
       setTotalRows(response.count || response.tableData.length);
     } catch (error) {
@@ -142,7 +182,7 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
     { accessorKey: "ac_name", header: "Party" },
     { accessorKey: "remarks", header: "Description" },
     { accessorKey: "div_code", header: "Div" },
-    { accessorKey: "amount", header: "Amount", cell: ({ getValue }) => formatAmount(Number(getValue() || 0)) },
+    { accessorKey: "net_amount", header: "Amount", cell: ({ getValue }) => formatAmount(Number(getValue() || 0)) },
     {
       id: "actions",
       header: "Actions",
@@ -161,7 +201,6 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
         <div>
           <p className="eyebrow">Finance Transaction</p>
           <h1 className="m-0 text-2xl font-semibold tracking-tight">{meta.title}</h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">{meta.subtitle}</p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Select className="w-44" value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
@@ -178,7 +217,6 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
         columns={columns}
         data={rows}
         title={loading ? "Loading" : `${totalRows.toLocaleString()} Documents`}
-        subtitle={docType}
         searchValue={query}
         onSearchChange={(value) => {
           setQuery(value);
@@ -263,6 +301,7 @@ function CommercialEditor({
   const [saving, setSaving] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [error, setError] = useState("");
+  const [showHeaderDetails, setShowHeaderDetails] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -271,9 +310,22 @@ function CommercialEditor({
       setLoading(true);
       try {
         const [header, detail] = await Promise.all([
-          getTransactionHeader(editor.row.doc_no, docType),
-          getTransactionDetail(editor.row.doc_no, editor.row.div_code, docType),
-        ]);
+          // getTransactionHeader(editor.row.doc_no, docType),
+          // getTransactionDetail(editor.row.doc_no, editor.row.div_code, docType),
+
+          docType === "PO"
+            ? getLpoHeader(editor.row.doc_no, docType)
+            : getTransactionHeader(editor.row.doc_no, docType),
+
+            docType === "PO"
+             ? getLpoDetail(editor.row.doc_no, docType)
+             : getTransactionDetail(
+                 editor.row.doc_no,
+                 editor.row.div_code,
+                 docType,
+             ),
+         ]);
+        
         if (mounted) setForm(mapForm(docType, header, detail));
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Unable to load document");
@@ -287,19 +339,75 @@ function CommercialEditor({
     };
   }, [docType, editMode, editor]);
 
+   const isPO    = docType === "PO";
+   const isPI    = docType === "PI";
+   const isSales = docType === "SI" || docType === "SV";
+
   const total = form.detail.reduce((sum, line) => sum + Number(line.amount || 0) * line.sign_ind, 0);
 
   const update = (field: keyof FormState, value: string | number) => setForm((current) => ({ ...current, [field]: value }));
   const updateLine = (id: string, patch: Partial<Line>) => {
     setForm((current) => ({ ...current, detail: current.detail.map((line) => line.id === id ? { ...line, ...patch } : line) }));
   };
+  // const addLine = () => {
+  //   setForm((current) => ({ ...current, detail: [...current.detail, emptyLine(docType, current.detail.length + 1)] }));
+  // };
+
   const addLine = () => {
-    setForm((current) => ({ ...current, detail: [...current.detail, emptyLine(docType, current.detail.length + 1)] }));
-  };
+  setForm((current) => {
+    const newLine = emptyLine(docType, current.detail.length + 1);
+    const withTax = {
+      ...newLine,
+      tx_compntcat_code_1: current.tx_compntcat_code_1 || (isSales ? "11100" : "10100"),
+      tx_compnt_1_expmt:   current.tx_compnt_1_expmt || current.tax_type || "S",
+      tx_compnt_perc_1:    current.tx_compnt_perc_1 ?? 0,
+    };
+    return { ...current, detail: [...current.detail, withTax] };
+  });
+};
   const removeLine = (id: string) => {
     setForm((current) => ({ ...current, detail: current.detail.filter((line) => line.id !== id).map((line, index) => ({ ...line, serial_no: index + 1 })) }));
   };
 
+//   const syncLineTax = (taxCode: string, taxExpmt: string, taxPerc: number) => {
+//   setForm((c) => ({
+//     ...c,
+//     detail: c.detail.map((line) => ({
+//       ...line,
+//       tx_compntcat_code_1: taxCode  || line.tx_compntcat_code_1,
+//       tx_compnt_1_expmt:   taxExpmt || line.tx_compnt_1_expmt,
+//       tx_compnt_perc_1:    taxPerc,
+//       tx_compnt_amt_1:     (Number(line.amount || 0) * taxPerc) / 100,
+//     })),
+//   }));
+//  };
+
+  const syncLineTax = (
+  taxCode: string,
+  taxExpmt: string,
+  taxPerc: number
+) => {
+  setForm((c) => {
+    const updatedDetail = c.detail.map((line) => ({
+      ...line,
+      tx_compntcat_code_1:
+        taxCode || line.tx_compntcat_code_1,
+
+      tx_compnt_1_expmt:
+        taxExpmt || line.tx_compnt_1_expmt,
+
+      tx_compnt_perc_1: taxPerc,
+
+      tx_compnt_amt_1:
+        (Number(line.amount || 0) * taxPerc) / 100,
+    }));
+
+    return {
+      ...c,
+      detail: updatedDetail,
+    };
+  });
+  };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setSaving(true);
@@ -320,28 +428,28 @@ function CommercialEditor({
   };
 
   return (
-    <form className="payment-workbench grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
-      <CardHeader className="border-b bg-primary px-5 py-2.5 text-primary-foreground shadow-sm">
-        <div className="flex min-h-12 items-center justify-between gap-4">
+    <form className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
+      <CardHeader className="border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
+        <div className="flex min-h-10 items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
             <div>
               <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
                 {editMode ? "Edit Document" : "New Document"}
               </p>
-              <h2 className="m-0 text-lg font-semibold leading-tight text-primary-foreground">{META[docType].title}</h2>
+              <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">{META[docType].title}</h2>
             </div>
-            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1">
+            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
               <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
-              <strong className="block text-sm leading-tight text-primary-foreground">{form.doc_no || "New"}</strong>
+              <strong className="block text-xs leading-tight text-primary-foreground">{form.doc_no || "New"}</strong>
             </div>
-            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1">
+            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
               <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
-              <strong className="block text-sm leading-tight text-primary-foreground">{formatAmount(total)}</strong>
+              <strong className="block text-xs leading-tight text-primary-foreground">{formatAmount(total)}</strong>
             </div>
             {form.div_code && (
-              <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1">
+              <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Division</span>
-                <strong className="block max-w-[220px] truncate text-sm leading-tight text-primary-foreground">{form.div_code}{form.div_name ? ` - ${form.div_name}` : ""}</strong>
+                <strong className="block max-w-[220px] truncate text-xs leading-tight text-primary-foreground">{form.div_code}{form.div_name ? ` - ${form.div_name}` : ""}</strong>
               </div>
             )}
           </div>
@@ -353,13 +461,14 @@ function CommercialEditor({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="min-h-0 overflow-auto p-3">
+      <CardContent className="min-h-0 overflow-y-auto overflow-x-hidden p-3">
         {loading ? (
           <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
         ) : (
-          <div className="grid gap-3">
+          <div className="grid min-w-0 gap-3">
             {error && <div className="alert error">{error}</div>}
-            <div className="payment-header-grid grid grid-cols-6 gap-2.5 rounded-md border bg-card p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
+
+            {/* <div className="payment-header-grid grid grid-cols-6 gap-2.5 rounded-md border bg-card p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
               {editMode && <Field label="Doc No"><Input disabled value={form.doc_no || ""} /></Field>}
               <Field label="Doc Date"><Input type="date" value={dateInput(form.doc_date)} onChange={(event) => update("doc_date", event.target.value)} /></Field>
               <Field label="Division"><Input disabled value={`${form.div_code}${form.div_name ? ` - ${form.div_name}` : ""}`} /></Field>
@@ -391,9 +500,512 @@ function CommercialEditor({
               <Field label="Delivery Term"><Input value={form.delivery_term || ""} onChange={(event) => update("delivery_term", event.target.value)} /></Field>
               <Field label="Contact"><Input value={form.contact || ""} onChange={(event) => update("contact", event.target.value)} /></Field>
               <label className="field col-span-2 max-md:col-span-1"><span>Remarks</span><Input value={form.remarks || ""} onChange={(event) => update("remarks", event.target.value)} /></label>
-            </div>
+            </div> */}
 
-            <div className="rounded-md border bg-card">
+
+       <div className="commercial-header-shell rounded-md border bg-card">
+       <div className={`commercial-header-panel payment-header-grid relative grid grid-cols-6 gap-2.5 p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1 ${showHeaderDetails ? "is-expanded" : "is-collapsed"}`}>
+
+  {/* ── Doc No (edit only) — ALL ── */}
+  {editMode && (
+    <Field label="Doc No"><Input disabled value={form.doc_no || ""} /></Field>
+  )}
+
+  {/* ── Doc Date — ALL ── */}
+  <Field label="Doc Date">
+    <Input type="date" value={dateInput(form.doc_date)}
+      onChange={(e) => update("doc_date", e.target.value)} />
+  </Field>
+
+  {/* ── INV Date — PI / SI / SV only (field: inv_date) ── */}
+  {!isPO && (
+    <Field label="INV Date">
+      <Input type="date" value={dateInput(form.inv_date)}
+        onChange={(e) => update("inv_date", e.target.value)} />
+    </Field>
+  )}
+
+  {/* ── Invoice No — PI / SI / SV only (field: ref_no in PI, inv_no in SI/SV) ── */}
+  {isPI && (
+    <Field label="Invoice No">
+      <Input value={form.ref_no || ""}
+        onChange={(e) => update("ref_no", e.target.value)} />
+    </Field>
+  )}
+  {isSales && (
+    <Field label="Invoice No">
+      <Input value={form.inv_no || ""}
+        onChange={(e) => update("inv_no", e.target.value)} />
+    </Field>
+  )}
+
+  {/* ── PO-only: Ref No / Ref Date / APP Ref No / LPO Category ── */}
+  {isPO && (
+    <Field label="Ref No">
+      <Input value={form.ref_no || ""}
+        onChange={(e) => update("ref_no", e.target.value)} />
+    </Field>
+  )}
+  {isPO && (
+    <Field label="Ref Date">
+      <Input type="date" value={dateInput(form.ref_date)}
+        onChange={(e) => update("ref_date", e.target.value)} />
+    </Field>
+  )}
+  {isPO && (
+    <Field label="APP Ref No">
+      <Input value={form.app_ref_no || ""}
+        onChange={(e) => update("app_ref_no", e.target.value)} />
+    </Field>
+  )}
+  {isPO && (
+    <Field label="LPO Category">
+      {/* field name: pdo_type in LPO table */}
+      <Select value={form.pdo_type || ""}
+        onChange={(e) => update("pdo_type", e.target.value)}>
+        <option value="" />
+        <option value="PDO-OTO">PDO-OTO</option>
+        <option value="PDO-NON-OTO">PDO-NON-OTO</option>
+        <option value="NON-PDO">NON-PDO</option>
+      </Select>
+    </Field>
+  )}
+
+  {/* ── Division — ALL (disabled, pre-selected before opening editor) ── */}
+  <Field label="Division">
+    <Input disabled
+      value={`${form.div_code}${form.div_name ? ` - ${form.div_name}` : ""}`} />
+  </Field>
+
+  {/* ── Supplier Code + Name — PO / PI ── */}
+  {/* ── Customer Code + Name — SI / SV ── */}
+  {/* field: ac_code / ac_name — same in all tables ── */}
+  <LookupField
+    label={isSales ? "Customer" : "Supplier"}
+    value={form.ac_code}
+    displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
+    columns={[
+      { field: "ac_code",        header: "Code"     },
+      { field: "ac_name",        header: "Name"     },
+      { field: "curr_code",      header: "Currency" },
+      { field: "l4_description", header: "Remarks"  },
+    ]}
+    valueField="ac_code"
+    displayFields={["ac_code", "ac_name"]}
+    loadOptions={() => getDocAccounts(docType, "H", form.div_code)}
+    onChange={(value, row) => {
+      const r   = row || {} as Record<string, unknown>;
+      const get = (k: string) =>
+        text(r[k] ?? r[k.toUpperCase()] ?? r[k.toLowerCase()] ?? "");
+      setForm((c) => ({
+        ...c,
+        ac_code:       value,
+        ac_name:       get("ac_name"),
+        curr_code:     get("curr_code"),
+        party_address: get("address"),
+        party_phone:   get("phone"),
+        party_fax:     get("fax"),
+        dlvr_contact:  get("contact_person"),
+        dlvr_mobile:   get("mobile_no"),
+        dlvr_email:    get("e_mail"),
+        remarks:       get("l4_description"),  // remarks from l4_description
+      }));
+    }}
+  />
+  {/* Supplier/Customer Name — read-only display */}
+  <Field label={isSales ? "Customer Name" : "Supplier Name"}>
+    <Input disabled value={form.ac_name || ""} />
+  </Field>
+
+  {/* ── Currency ── */}
+   <LookupField
+    label="Currency"
+    value={form.curr_code ?? ""}
+    displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
+    columns={[
+      { field: "curr_code", header: "Code" },
+      { field: "curr_name", header: "Name" },
+      { field: "ex_rate",   header: "Ex Rate" },
+    ]}
+    valueField="curr_code"
+    displayFields={["curr_code", "curr_name", "ex_rate"]}
+    loadOptions={() =>
+      getDynamicFinanceLookup({
+        parameter: "Account_Currency_CODE_Search",
+        code1: user?.company_code || "",
+      })
+    }
+    onChange={(value, row) =>
+      setForm((c) => ({
+        ...c,
+        curr_code: value,
+        curr_name: text(getLookupValue(row || {}, "curr_name")),
+        ex_rate:   Number(getLookupValue(row || {}, "ex_rate") || c.ex_rate || 1),
+      }))
+    }
+  />
+
+  {/* ── Ex Rate ── */}
+  <Field label="Ex Rate">
+    <Input type="number" step="0.0001" value={form.ex_rate}
+      onChange={(e) => update("ex_rate", Number(e.target.value || 1))} />
+  </Field>
+
+  {/* ── Address  ── */}
+  <label className="field col-span-2 max-md:col-span-1">
+    <span>Address</span>
+    <Input value={form.party_address || ""}
+      onChange={(e) => update("party_address", e.target.value)} />
+  </label>
+
+  {/* ── Phone ── */}
+  <Field label="Phone">
+    <Input value={form.party_phone || ""}
+      onChange={(e) => update("party_phone", e.target.value)} />
+  </Field>
+
+  {/* ── Fax ── */}
+  <Field label="Fax">
+    <Input value={form.party_fax || ""}
+      onChange={(e) => update("party_fax", e.target.value)} />
+  </Field>
+
+  {/* ── Mobile / Email / Contact — PO only ── */}
+  {isPO && (
+    <Field label="Mobile">
+      <Input value={form.dlvr_mobile || ""}
+        onChange={(e) => update("dlvr_mobile", e.target.value)} />
+    </Field>
+  )}
+  {isPO && (
+    <Field label="Email">
+      <Input value={form.dlvr_email || ""}
+        onChange={(e) => update("dlvr_email", e.target.value)} />
+    </Field>
+  )}
+  {isPO && (
+    <Field label="Contact">
+      <Input value={form.dlvr_contact || ""}
+        onChange={(e) => update("dlvr_contact", e.target.value)} />
+    </Field>
+  )}
+
+  {/* ── Payment Terms ── */}
+  <Field label="Payment Terms">
+    <Input value={form.payment_terms || ""}
+      onChange={(e) => update("payment_terms", e.target.value)} />
+  </Field>
+
+  {/* ── Delivery Term  ── */}
+  {isPO && (
+    <Field label="Delivery Term">
+      <Input
+        value={form.dlvr_term || ""}
+        onChange={(e) => update("dlvr_term", e.target.value)}
+      />
+    </Field>
+  )}
+
+  {/* ── Delivery To — PO only ── */}
+  {isPO && (
+    <Field label="Delivery To">
+      <Input value={form.delivery_to || ""}
+        onChange={(e) => update("delivery_to", e.target.value)} />
+    </Field>
+  )}
+
+  {/* ── Ref Doc — PI / SI / SV (field: ref_doc_no) ── */}
+  {/* {!isPO && (
+    <Field label="Ref Doc">
+      <Input value={form.ref_doc_no || ""}
+        onChange={(e) => update("ref_doc_no", e.target.value)} />
+    </Field>
+  )} */}
+   
+   {!isPO && (
+  <LookupField
+    label="Ref Doc"
+    value={form.ref_doc_no || ""}
+    displayValue={form.ref_doc_no || ""}
+    columns={[
+      { field: "DOC_NO",   header: "Doc No"  },
+      { field: "DOC_DATE", header: "Date"    },
+      { field: "REF_NO",   header: "Ref No"  },
+      { field: "REMARKS",  header: "Remarks" },
+    ]}
+    valueField="DOC_NO"
+    displayFields={["DOC_NO"]}
+    loadOptions={() =>
+      getDynamicFinanceLookup({
+        parameter: "Account_LPO_REF_DOC",
+        code1: user?.company_code || "",
+        number1: form.div_code ? Number(form.div_code) : undefined,
+      })
+    }
+    onChange={async (value, row) => {
+      if (!value || !row) return;
+
+      const r       = row as Record<string, unknown>;
+      const docNo   = String(r["DOC_NO"]   ?? r["doc_no"]   ?? value);
+      const srcType = String(r["DOC_TYPE"] ?? r["doc_type"] ?? "PO");
+
+      // Show selection immediately
+      setForm((c) => ({ ...c, ref_doc_no: docNo }));
+
+      try {
+        let header: Record<string, unknown> = {};
+        try {
+          header = await getPurchaseHeader(docNo, srcType);
+          if (!hasRecordData(header)) {
+            header = await getLpoHeader(docNo, srcType);
+          }
+        } catch {
+          header = await getLpoHeader(docNo, srcType);
+        }
+
+        let rawDetail: Record<string, unknown>[] = [];
+        try {
+          const res = await getTransactionDetail(docNo, form.div_code, srcType as TransactionType);
+          if (res.length) rawDetail = res;
+        } catch { /* ignore, try LPO below */ }
+
+        if (!rawDetail.length) {
+          try {
+            rawDetail = await getLpoDetail(docNo, srcType);
+          } catch { /* ignore */ }
+        }
+
+        // Force PI when source doc is a PO
+        const targetDocType: CommercialType =
+          srcType.toUpperCase() === "PO" ? "PI" : (srcType as CommercialType);
+
+        const mapped = mapForm(targetDocType, header, rawDetail);
+
+        setForm((c) => ({
+          ...c,
+          ...mapped,
+          doc_type:   targetDocType,
+          doc_no:     c.doc_no,     // preserve existing doc_no in edit mode
+          div_code:   c.div_code,   // never overwrite user's chosen division
+          div_name:   c.div_name,
+          ref_doc_no: docNo,        // always keep the ref
+          detail:     mapped.detail,
+        }));
+
+      } catch (err) {
+        console.error("Failed to load ref doc", err);
+        setError(err instanceof Error ? err.message : "Unable to load reference document");
+      }
+    }}
+  />
+ )}
+
+  {/* ── Salesman Code + Name — SI / SV only ── */}
+  {isSales && (
+  <LookupField
+    label="Salesman"
+    value={form.salesman_code ?? ""}
+    displayValue={form.salesman_name ? `${form.salesman_code} - ${form.salesman_name}` : form.salesman_code ?? ""}
+    columns={[
+      { field: "salesman_code", header: "Code" },
+      { field: "salesman_name", header: "Name" },
+    ]}
+    valueField="salesman_code"
+    displayFields={["salesman_code", "salesman_name"]}
+    loadOptions={() =>
+      getDynamicFinanceLookup({
+        parameter: "Salesman_Search",
+        code1: user?.company_code || "",
+      })
+    }
+    onChange={(value, row) =>
+      setForm((c) => ({
+        ...c,
+        salesman_code: value,
+        salesman_name: text(getLookupValue(row || {}, "salesman_name")),
+      }))
+    }
+  />
+  )}
+  {isSales && (
+  <Field label="Salesman Name">
+    <Input disabled value={form.salesman_name || ""} />
+  </Field>
+ )}
+
+  {/* ── Sector Code + Name — SI / SV only ── */}
+   {isSales && (
+   <LookupField
+    label="Sector"
+    value={form.sector_code ?? ""}
+    displayValue={form.sector_name ? `${form.sector_code} - ${form.sector_name}` : form.sector_code ?? ""}
+    columns={[
+      { field: "sector_code", header: "Code" },
+      { field: "sector_name", header: "Name" },
+    ]}
+    valueField="sector_code"
+    displayFields={["sector_code", "sector_name"]}
+    loadOptions={() =>
+      getDynamicFinanceLookup({
+        parameter: "Sector_Search",
+        code1: user?.company_code || "",
+      })
+    }
+    onChange={(value, row) =>
+      setForm((c) => ({
+        ...c,
+        sector_code: value,
+        sector_name: text(getLookupValue(row || {}, "sector_name")),
+      }))
+    }
+  />
+  )}
+  {isSales && (
+    <Field label="Sector Name">
+      <Input disabled value={form.sector_name || ""} />
+    </Field>
+  )}
+
+  {/* ── Tax Category — ── */}
+  <LookupField
+  label="Tax Category"
+  value={form.tx_compntcat_code_1 ?? ""}
+  displayValue={form.tx_compntcat_code_1 ?? ""}
+  columns={[
+    { field: "tx_compntcat_code",  header: "Category Code" },
+    { field: "tx_compntcat_name",  header: "Category Name" },
+    { field: "tx_cat_code",        header: "Tax Code"      },
+    { field: "tx_percnt",          header: "Tax %"         },
+  ]}
+  valueField="tx_compntcat_code"
+  displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
+  loadOptions={() =>
+    getDynamicFinanceLookup({
+      parameter: "Account_Tax_Search",
+      code1: user?.company_code || "",
+    })
+  }
+  // onChange={(value, row) => {
+  //   const r = row || {} as Record<string, unknown>;
+  //   setForm((c) => ({
+  //     ...c,
+  //     tx_compntcat_code_1: value,
+  //     tx_cat_code:         text(getLookupValue(r, "tx_cat_code")),
+  //     tx_compnt_perc_1:    Number(getLookupValue(r, "tx_percnt") || 0),
+  //   }));
+  // }}
+
+  onChange={(value, row) => {
+  const r    = row || {} as Record<string, unknown>;
+  const perc = Number(getLookupValue(r, "tx_percnt") || 0);
+  const code = text(getLookupValue(r, "tx_cat_code"));
+  setForm((c) => ({
+    ...c,
+    tx_compntcat_code_1: value,
+    tx_cat_code: code,
+    tx_compnt_perc_1: perc,
+  }));
+  const nextTaxType = form.tx_compnt_1_expmt || "N";
+  syncLineTax(value, nextTaxType, perc);
+  // syncLineTax(value, form.tx_compnt_1_expmt || "", perc);
+ }}
+ />
+
+  {/* ── Tax Code ── */}
+  <Field label="Tax Code">
+    <Input disabled value={form.tx_cat_code || ""}
+      onChange={(e) => update("tx_cat_code", e.target.value)} 
+      />
+  </Field>
+
+  {/* ── Tax Type  ── */}
+  <Field label="Tax Type">
+    <Select
+      value={form.tax_type || ""}  // field: tax_type in UI, maps to tx_compnt_1_expmt in table
+      
+      // onChange={(e) => {
+      //   const v = e.target.value;
+      //   setForm((c) => ({
+      //     ...c,
+      //     tax_type:          v,
+      //     tx_compnt_1_expmt: v,                // actual table field
+      //     tx_compnt_perc_1:  v === "S" ? 5 : 0, // auto-set % when Std Tax
+      //   }));
+      //   syncLineTax(form.tx_compntcat_code_1 || "", v, perc);
+      // }}
+
+      onChange={(e) => {
+  const v    = e.target.value;
+  const perc = v === "S" ? 5 : 0;
+  setForm((c) => ({
+    ...c,
+    tax_type: v,
+    tx_compnt_1_expmt: v,
+    tx_compnt_perc_1: perc,
+  }));
+  syncLineTax(form.tx_compntcat_code_1 || "",v,perc);
+  // syncLineTax(form.tx_compntcat_code_1 || "", v, perc);
+ }}
+    >
+      <option value="" />
+      <option value="S">Std. Tax</option>
+      <option value="Z">Zero</option>
+      <option value="E">Expmt</option>
+      <option value="N">No Tax</option>
+    </Select>
+  </Field>
+
+  {/* ── Remarks ) ── */}
+  <label className="field col-span-2 max-md:col-span-1">
+    <span>Remarks</span>
+    <Input value={form.remarks || ""}
+      onChange={(e) => update("remarks", e.target.value)} />
+  </label>
+
+  {/* ── HSE Compliant + Letter Head checkboxes — PO only ── */}
+  {/* PO table fields: hse_compliance (Y/N) / print_letter_head (bool) ── */}
+  {/* {isPO && (
+    <label className="field flex-row items-center gap-2">
+      <input
+        type="checkbox"
+        checked={form.hse_compliance === "Y"}
+        onChange={(e) => update("hse_compliance", e.target.checked ? "Y" : "N")}
+      />
+      <span>HSE Compliant</span>
+    </label>
+  )}
+  {isPO && (
+    <label className="field flex-row items-center gap-2">
+      <input
+        type="checkbox"
+        checked={!!form.print_letter_head}
+        onChange={(e) => update("print_letter_head", e.target.checked)}
+      />
+      <span>Letter Head</span>
+    </label>
+  )} */}
+
+</div>
+<div className="commercial-header-footer flex items-center justify-between gap-3 border-t bg-secondary/30 px-3 py-2">
+  <div className="min-w-0 text-xs text-muted-foreground">
+    <span className="font-semibold text-foreground">{isSales ? "Customer" : "Supplier"}:</span>{" "}
+    <span className="truncate">{form.ac_name || form.ac_code || "Not selected"}</span>
+    <span className="mx-2 text-border">|</span>
+    <span className="font-semibold text-foreground">Currency:</span>{" "}
+    <span>{form.curr_code || "-"}</span>
+  </div>
+  <Button
+    type="button"
+    size="sm"
+    variant="ghost"
+    onClick={() => setShowHeaderDetails((value) => !value)}
+  >
+    {showHeaderDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+    {showHeaderDetails ? "Compact header" : "Show all header fields"}
+  </Button>
+</div>
+</div>
+            <div className="min-w-0 rounded-md border bg-card">
               <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
                 <div>
                   <p className="eyebrow m-0">Details</p>
@@ -401,8 +1013,8 @@ function CommercialEditor({
                 </div>
                 <Button size="sm" type="button" variant="outline" onClick={addLine}><Plus size={14} /> Add Line</Button>
               </div>
-              <div className="max-h-[54vh] overflow-auto">
-                <table className="w-full min-w-[1760px] text-sm">
+              <div className="commercial-lines-scroll overflow-auto">
+                <table className="w-full min-w-[2140px] text-[12px]">
                   <thead className="sticky top-0 bg-primary text-xs text-primary-foreground">
                     <tr>
                       <th className="px-2 py-2 text-left">No</th>
@@ -439,17 +1051,24 @@ function CommercialEditor({
                             placeholder="A/c code"
                             value={line.ac_code}
                             displayValue={line.ac_name ? `${line.ac_code} - ${line.ac_name}` : line.ac_code}
-                            columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
+                            columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
                             valueField="ac_code"
                             displayFields={["ac_code", "ac_name"]}
                             loadOptions={() => getDocAccounts(docType, "D", form.div_code)}
                             onChange={(value, row) => updateLine(line.id, { ac_code: value, ac_name: text(getLookupValue(row || {}, "ac_name")) })}
                           />
                         </td>
-                        <td className="w-[220px] px-2 py-1"><Input disabled value={line.ac_name || ""} /></td>
-                        <td className="w-[220px] px-2 py-1"><Input value={line.remarks || ""} onChange={(event) => updateLine(line.id, { remarks: event.target.value })} /></td>
+                        <td className="w-[240px] px-2 py-1"><Input disabled value={line.ac_name || ""} /></td>
+                        <td className="w-[360px] px-2 py-1">
+                          <textarea
+                            className="commercial-line-description"
+                            value={line.remarks || ""}
+                            onChange={(event) => updateLine(line.id, { remarks: event.target.value })}
+                            placeholder="Description"
+                          />
+                        </td>
                         <td className="w-[210px] px-2 py-1">
-                          <LookupField
+                          {/* <LookupField
                             label="Currency"
                             compact
                             placeholder="Currency"
@@ -460,20 +1079,51 @@ function CommercialEditor({
                             displayFields={["curr_code", "curr_name"]}
                             loadOptions={() => getCurrencyRows()}
                             onChange={(value, row) => setForm((current) => ({ ...current, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")) }))}
-                          />
+                          /> */}
+                          <LookupField
+    label="Currency"
+    value={form.curr_code ?? ""}
+    displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
+    columns={[
+      { field: "curr_code", header: "Code" },
+      { field: "curr_name", header: "Name" },
+    ]}
+    valueField="curr_code"
+    displayFields={["curr_code", "curr_name", "ex_rate"]}
+    loadOptions={() =>
+      getDynamicFinanceLookup({
+        parameter: "Account_Currency_CODE_Search",
+        code1: user?.company_code || "",
+      })
+    }
+    onChange={(value, row) =>
+      setForm((c) => ({
+        ...c,
+        curr_code: value,
+        curr_name: text(getLookupValue(row || {}, "curr_name")),
+      }))
+    }
+  />
+  
                         </td>
-                        <td className="w-28 px-2 py-1"><Input type="number" step="0.0001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></td>
-                        <td className="w-24 px-2 py-1"><Input type="number" value={line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
-                        <td className="w-28 px-2 py-1"><Input type="number" step="0.001" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
-                        <td className="w-32 px-2 py-1"><Input type="number" step="0.001" value={line.amount} onChange={(event) => updateLine(line.id, { amount: Number(event.target.value || 0) })} /></td>
+                        <td className="w-40 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" step="0.0001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></td>
+                        <td className="w-36 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" value={line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
+                        <td className="w-44 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" step="0.001" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
+                        <td className="w-56 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" step="0.001" value={line.amount} 
+                        // onChange={(event) => updateLine(line.id, { amount: Number(event.target.value || 0) })} /></td>
+                        onChange={(e) => {
+    const amount = Number(e.target.value || 0);
+    const taxperc   = Number(line.tx_compnt_perc_1 || 0);
+    updateLine(line.id, { amount, tx_compnt_amt_1: (amount * taxperc) / 100 });
+  }} /></td>
                         <td className="w-28 px-2 py-1">
                           <Select className="h-9" value={line.sign_ind} onChange={(event) => updateLine(line.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
                             <option value={1}>Cr</option>
                             <option value={-1}>Dr</option>
                           </Select>
                         </td>
-                        <td className="w-32 px-2 py-1"><Input value={line.tx_compntcat_code_1 || ""} onChange={(event) => updateLine(line.id, { tx_compntcat_code_1: event.target.value })} /></td>
-                        <td className="w-28 px-2 py-1">
+                        <td className="w-40 px-2 py-1"><Input value={line.tx_compntcat_code_1 || ""} onChange={(event) => updateLine(line.id, { tx_compntcat_code_1: event.target.value })} /></td>
+                        <td className="w-40 px-2 py-1">
                           <Select value={line.tx_compnt_1_expmt || "N"} onChange={(event) => updateLine(line.id, { tx_compnt_1_expmt: event.target.value })}>
                             <option value="N">No Tax</option>
                             <option value="S">Std Tax</option>
@@ -481,10 +1131,21 @@ function CommercialEditor({
                             <option value="E">Exempt</option>
                           </Select>
                         </td>
-                        <td className="w-24 px-2 py-1"><Input type="number" value={line.tx_compnt_perc_1 ?? 0} onChange={(event) => updateLine(line.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
-                        <td className="w-28 px-2 py-1"><Input type="number" value={line.tx_compnt_amt_1 ?? 0} onChange={(event) => updateLine(line.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
-                        <td className="w-32 px-2 py-1"><Input value={line.job_no || ""} onChange={(event) => updateLine(line.id, { job_no: event.target.value })} /></td>
-                        <td className="w-32 px-2 py-1"><Input disabled value={formatAmount(Number(line.amount || 0) * Number(form.ex_rate || 1) * Number(line.sign_ind || 1))} /></td>
+                        <td className="w-36 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" value={line.tx_compnt_perc_1 ?? 0} 
+                        // onChange={(event) => updateLine(line.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
+                        onChange={(e) => {
+    const perc   = Number(e.target.value || 0);
+    const taxAmt = (Number(line.amount || 0) * perc) / 100;
+    updateLine(line.id, { tx_compnt_perc_1: perc, tx_compnt_amt_1: taxAmt });
+  }} /></td>
+                        <td className="w-52 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" 
+                        // value={line.tx_compnt_amt_1 ?? 0}  onChange={(event) => updateLine(line.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
+                        value={((Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100).toFixed(3)} /></td>
+                        <td className="w-40 px-2 py-1"><Input value={line.job_no || ""} onChange={(event) => updateLine(line.id, { job_no: event.target.value })} /></td>
+                        <td className="w-56 px-2 py-1">
+                          {/* <Input disabled value={formatAmount(Number(line.amount || 0) * Number(form.ex_rate || 1) * Number(line.sign_ind || 1))} /> */}
+                          <Input className="commercial-number-input text-right tabular-nums" disabled value={formatAmount(Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1))} />
+                          </td>
                         <td className="px-2 py-1"><Button size="icon" type="button" variant="ghost" onClick={() => removeLine(line.id)}><X size={14} /></Button></td>
                       </tr>
                     ))}
@@ -556,6 +1217,8 @@ function emptyLine(docType: CommercialType, serialNo: number): Line {
     tx_compnt_1_expmt: "N",
     tx_compnt_perc_1: 0,
     tx_compnt_amt_1: 0,
+    prod_code: docType==="PO" ? "" : undefined,    // only required for PO
+    other_remarks: docType === "PO" ? "" : undefined,
   };
 }
 
@@ -566,7 +1229,9 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
     doc_type: docType,
     doc_date: dateInput(header.doc_date),
     inv_no: text(header.inv_no ?? header.invoice_number),
-    inv_date: dateInput(header.inv_date ?? header.invoice_date),
+    inv_date: dateInput(header.inv_date ?? header.invoice_date ?? header.ref_date),
+    ref_date: dateInput(header.ref_date),
+    app_ref_no: text(header.app_ref_no),
     ac_code: text(header.ac_code),
     ac_name: text(nested(headerRaw, ["Account", "ac_name"]) ?? header.ac_name),
     div_code: text(header.div_code),
@@ -575,8 +1240,29 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
     curr_name: text(nested(headerRaw, ["Currency", "curr_name"]) ?? header.curr_name),
     ex_rate: Number(header.ex_rate || 1),
     remarks: text(header.remarks),
-    ref_doc_no: text(header.ref_doc_no ?? header.ref_no),
     payment_terms: text(header.payment_terms ?? header.terms),
+    delivery_to: text(header.delivery_to),
+    dlvr_term: text(header.dlvr_term?? header.delivery_term),
+    party_address: text(header.party_address ?? header.address),
+    party_phone:   text(header.party_phone ?? header.phone),
+    party_fax:     text(header.party_fax ?? header.fax),
+    dlvr_contact:       text(header.dlvr_contact ?? header.contact_person),
+    dlvr_mobile:        text(header.dlvr_mobile ?? header.mobile_no),
+    dlvr_email:         text(header.dlvr_email ?? header.e_mail),
+    pdo_type:      text(header.pdo_type),
+    salesman_code: text(header.salesman_code),
+    salesman_name: text(nested(headerRaw, ["Salesman", "salesman_name"]) ?? header.salesman_name),
+    sector_code:   text(header.sector_code),
+    sector_name:   text(nested(headerRaw, ["Sector", "sector_name"]) ?? header.sector_name),
+    ref_no:     text(header.ref_no),
+    ref_doc_no: text(header.ref_doc_no),
+    tax_type: text(header.tx_compnt_1_expmt),
+    tx_compnt_1_expmt: text(header.tx_compnt_1_expmt),
+    tx_compntcat_code_1: text(header.tx_compntcat_code_1),
+    // tx_cat_code:         text(header.tx_cat_code),
+    tx_cat_code: text(nested(headerRaw, ["Tax Category", "tx_cat_code"]) ?? header.tx_cat_code),
+    tx_compnt_perc_1:    Number(header.tx_compnt_perc_1 || 0),
+    print_letter_head: !!header.print_letter_head,
     detail: detailRaw.map((raw, index) => {
       const row = lowerRecord(raw);
       return {
@@ -596,6 +1282,8 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
         tx_compnt_1_expmt: text(row.tx_compnt_1_expmt),
         tx_compnt_perc_1: Number(row.tx_compnt_perc_1 || 0),
         tx_compnt_amt_1: Number(row.tx_compnt_amt_1 || 0),
+        prod_code:     docType === "PO" ? text(row.prod_code) : undefined,
+        other_remarks: docType === "PO" ? text(row.other_remarks) : undefined,
       };
     }),
   };
@@ -607,6 +1295,7 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
     company_code: companyCode,
     ex_rate: Number(form.ex_rate || 1),
     ref_doc_no: form.ref_doc_no || form.ref_no || form.doc_no || "",
+    
     detail: form.detail.map((line) => ({
       company_code: companyCode,
       doc_type: form.doc_type,
@@ -625,13 +1314,52 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
       tx_cat_code: line.tx_cat_code || "",
       tx_compnt_1_expmt: line.tx_compnt_1_expmt || "N",
       tx_compnt_perc_1: Number(line.tx_compnt_perc_1 || 0),
-      tx_compnt_amt_1: Number(line.tx_compnt_amt_1 || 0),
+      // tx_compnt_amt_1: Number(line.tx_compnt_amt_1 || 0),
+      //  tx_compnt_amt_1: Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100,   //correct 
       job_no: line.job_no || "",
       dept_code: line.dept_code || "",
       div_code: form.div_code,
-      lcur_amount: Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1) * Number(line.sign_ind || 1),
+      // lcur_amount: Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1) * Number(line.sign_ind || 1),
+      // lcur_amount: Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1),
+
+      tx_compnt_amt_1:      Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100,
+      tx_compnt_lcuramt_1:  (Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100) * Number(form.ex_rate || 1),
+      lcur_amount: Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1),
+      prod_code: line.prod_code || "",
+      other_remarks: line.other_remarks || "",
+      // tx_compnt_lcuramt_1: (Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100) * Number(form.ex_rate || 1),
+      header_ac_code: form.ac_code,
+
     })),
-    children: {},
+    // children: {},
+
+    // for child 
+  //   children: form.doc_type !== "PO"
+  // ? Object.fromEntries(
+  //     form.detail.map((line) => [
+  //       line.id,
+  //       [{
+  //         company_code:  companyCode,
+  //         doc_type:      form.doc_type,
+  //         doc_no:        form.doc_no || "",
+  //         serial_no:     line.serial_no,
+  //         dtl_sr_no:     1,
+  //         doc_date:      form.doc_date,
+  //         ac_code:       line.ac_code,
+  //         inv_no:        form.inv_no || form.ref_no || "",
+  //         inv_date:      form.inv_date || form.doc_date,
+  //         amount:        Math.abs(Number(line.amount || 0)),
+  //         lcur_amount:   Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1),
+  //         sign_ind:      line.sign_ind,
+  //         curr_code:     form.curr_code,
+  //         ex_rate:       Number(form.ex_rate || 1),
+  //         div_code:      form.div_code,
+  //         job_no:        line.job_no || "",
+  //       }]
+  //     ])
+  //   )
+  // : {},
+
   };
 }
 
@@ -641,8 +1369,14 @@ async function getCurrencyRows(): Promise<LookupRow[]> {
   return response.data.data?.tableData || response.data.data || [];
 }
 
-function recalc(line: Line) {
-  return { qty: line.qty, price: line.price, amount: Number(line.qty || 0) * Number(line.price || 0) };
+function recalc(line: Line): Partial<Line> {
+  const qty    = Number(line.qty    || 0);
+  const price  = Number(line.price  || 0);
+  const amount = qty * price;
+  const perc   = Number(line.tx_compnt_perc_1 || 0);
+  const taxAmt = (amount * perc) / 100;
+
+  return { qty: line.qty, price: line.price, amount, tx_compnt_amt_1: taxAmt };
 }
 
 function lowerRecord(raw: Record<string, unknown>) {
@@ -659,6 +1393,10 @@ function nested(source: Record<string, unknown>, path: string[]) {
 function text(value: unknown) {
   if (value === null || value === undefined) return "";
   return String(value);
+}
+
+function hasRecordData(record: Record<string, unknown> | null | undefined) {
+  return Boolean(record && Object.keys(record).length > 0);
 }
 
 function dateInput(value: unknown) {

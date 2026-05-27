@@ -7,6 +7,8 @@ import {
   deleteTransactionDocument,
   Division,
   FyPeriod,
+  getCompanyInfo,
+  getDefaultFyPeriod,
   getCheque,
   getChildTableName,
   getDivisions,
@@ -79,10 +81,10 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
   const [divisionPicker, setDivisionPicker] = useState(false);
 
   const loadLookups = async () => {
-    const [fyData, divisionData] = await Promise.all([getFyPeriods(), getDivisions()]);
+    const [fyData, divisionData, companyInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
     setFyPeriods(fyData);
     setDivisions(divisionData);
-    setFyPeriod((current) => current || fyData[0]?.fy_period || "");
+    setFyPeriod((current) => current || getDefaultFyPeriod(fyData, companyInfo));
   };
 
   const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize) => {

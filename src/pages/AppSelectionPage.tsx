@@ -38,7 +38,7 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
           <span className="brand-logo-shell">
             <img src="/bayanat-logo.png" alt="Bayanat Technology" className="brand-logo" />
           </span>
-          <div className="brand-wordmark">
+          <div className="brand-wordmark">  
             <strong>Bayanat</strong>
             <span>Technology</span>
           </div>
@@ -60,12 +60,9 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
       </header>
 
       <main className="selection-main">
-        <nav className="breadcrumb">Home / Application Selection</nav>
         <section className="selection-hero">
           <div className="section-title">
-            <p>Select Application</p>
-            <h1>Choose where you want to work</h1>
-            <span>Welcome back, {user?.username || user?.loginid || "User"}. Your permitted modules are ready.</span>
+            {/* <span>Welcome back, {user?.username || user?.loginid || "User"}. Your permitted modules are ready.</span> */}
           </div>
         </section>
 

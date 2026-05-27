@@ -49,6 +49,7 @@ export type DataTableProps<TData, TValue> = {
   enableColumnFilters?: boolean;
   enableColumnVisibility?: boolean;
   rowClassName?: (row: TData) => string;
+  onRowClick?: (row: TData) => void;
   getRowId?: (row: TData, index: number) => string;
 };
 
@@ -98,6 +99,7 @@ export function DataTable<TData, TValue>({
   enableColumnFilters = true,
   enableColumnVisibility = false,
   rowClassName,
+  onRowClick,
   getRowId,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -262,7 +264,12 @@ export function DataTable<TData, TValue>({
               ))
             ) : visibleRows.length ? (
               visibleRows.map((row) => (
-                <TableRow className={cn(rowStyle.row, rowClassName?.(row.original))} data-state={row.getIsSelected() && "selected"} key={row.id}>
+                <TableRow
+                  className={cn(rowStyle.row, onRowClick && "cursor-pointer", rowClassName?.(row.original))}
+                  data-state={row.getIsSelected() && "selected"}
+                  key={row.id}
+                  onClick={() => onRowClick?.(row.original)}
+                >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell className={rowStyle.cell} key={cell.id}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
