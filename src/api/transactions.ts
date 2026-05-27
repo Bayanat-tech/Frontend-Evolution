@@ -31,8 +31,15 @@ export type TransactionHeader = {
   doc_no?: string;
   doc_type: TransactionType;
   doc_date: string;
+  inv_no?: string;
+  inv_date?: string;
+  ref_no?: string;
+  ref_date?: string;
   ac_code: string;
   ac_name?: string;
+  party_address?: string;
+  party_phone?: string;
+  party_fax?: string;
   bank_ac_code?: string;
   bank_ac_name?: string;
   curr_code: string;
@@ -45,6 +52,8 @@ export type TransactionHeader = {
   cheque_date?: string;
   cheque_bank?: string;
   ac_payee?: string;
+  tx_compntcat_code_1?: string;
+  tx_compnt_1_expmt?: string;
   files?: unknown[];
   detail: TransactionDetail[];
   children: Record<string, unknown[]>;
@@ -128,6 +137,16 @@ export type Division = {
 export type CompanyInfo = {
   company_code?: string;
   ac_fy_period?: string;
+};
+
+export type FinanceOutstandingBalance = {
+  inv_no: string;
+  original_amount: number;
+  paid_amount: number;
+  outstanding_amount: number;
+  payment_percentage: number;
+  is_fully_paid: boolean;
+  error?: string;
 };
 
 export async function getCompanyInfo() {
@@ -236,6 +255,20 @@ export async function getTransactionChildren(docNo: string, divCode: string, doc
   return response.data.data || { invoice: [], job: [], expense: [] };
 }
 
+export async function getFinanceOutstanding(divCode: string, invNos: string | string[]) {
+  const response = await api.get<ApiResponse<{ balances: FinanceOutstandingBalance[]; count: number }>>(
+    "/api/finance/transactions/invoice_outstanding",
+    {
+      params: {
+        div_code: divCode,
+        inv_nos: Array.isArray(invNos) ? invNos.join(",") : invNos,
+      },
+    },
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load invoice outstanding balances");
+  return response.data.data || { balances: [], count: 0 };
+}
+
 export async function getCheque(acCode: string) {
   const response = await api.get<ApiResponse<Record<string, unknown>>>("/api/finance/transactions/cheque_detail", {
     params: { ac_code: acCode },
@@ -280,8 +313,6 @@ export async function getFinanceMasterRows(
   if (!response.data.success) throw new Error(response.data.message || `Unable to load ${master}`);
   return response.data.data?.tableData || [];
 }
-
-// LPO APIs
 
 export async function getLpoDocuments(
   fyPeriod?: string,
@@ -342,6 +373,25 @@ export async function getLpoDetail(docNo: string, docType: string) {
   }
 
   return response.data.data || [];
+}
+
+export async function getLpoRefDocSearch(divCode: string, companyCode: string) {
+  const { getDynamicFinanceLookup } = await import("./lookups");
+  return getDynamicFinanceLookup({
+    parameter: "Account_LPO_REF_DOC",
+    code1: companyCode,
+    number1: Number(divCode) || undefined,
+  });
+}
+
+// Get lpo (Ref_Doc) in PI
+export async function getPurchaseHeader(docNo: string, docType: string) {
+  const response = await api.get<ApiResponse<Record<string, unknown>>>(
+    `/api/finance/transactions/purchaseheader/${encodeURIComponent(docNo)}`,
+    { params: { doc_type: docType } }
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load purchase header");
+  return response.data.data || {};
 }
 
 export async function saveTransactionDocument(payload: TransactionHeader, editMode: boolean) {

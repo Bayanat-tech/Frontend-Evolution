@@ -28,9 +28,12 @@ import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
 import { SecurityAssignmentPage, securityAssignmentConfigs } from "../pages/security/SecurityAssignmentPage";
 import { SecurityMasterPage, securityMasterConfigs } from "../pages/security/SecurityMasterPage";
 import { SecurityOperationAccessPage } from "../pages/security/SecurityOperationAccessPage";
+import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
+import { PettyCashPaymentDocumentEditor } from "../pages/finance/PettyCashPayment";
 import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs } from "../pages/pams/PamsPages";
 import { HrMasterPage } from "../pages/hr/HrMasterPage";
 import { hrMasterConfigs } from "../pages/hr/hrMasterConfigs";
+import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrPayUnitsPage } from "../pages/hr/HrProcessPages";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -97,7 +100,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: "Finance Journal Voucher",
     match: ({ pathname }) => isJournalVoucherRoute(pathname),
-    element: () => <JournalVoucherPage />,
+    element: () => <JournalVoucherPage  />,
   },
   {
     name: "Finance Bank Reconciliation",
@@ -105,9 +108,19 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <BankReconciliationPage />,
   },
   {
+    name: "Finance Credit/Debit Notes",
+    match: ({ pathname }) => Boolean(getCreditDebitNoteDocType(pathname)),
+    element: ({ pathname }) => <CreditDebiteNotePage docType={getCreditDebitNoteDocType(pathname)!} />,
+  },
+  {
     name: "Finance Payment Documents",
     match: ({ pathname }) => Boolean(getTransactionDocType(pathname)),
     element: ({ pathname }) => <PaymentDocumentPage docType={getTransactionDocType(pathname)!} />,
+  },
+  {
+    name: "Finance Payment Documents",
+    match: ({ pathname }) => Boolean(getPettyCashDocType(pathname)),
+    element: ({ pathname }) => <PettyCashPaymentDocumentEditor docType={getPettyCashDocType(pathname)!} />,
   },
   {
     name: "Finance Utility Master",
@@ -223,6 +236,31 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: (context) => <PamsMasterPage config={getPamsMasterConfig(context)!} />,
   },
   {
+    name: "HR Pay Units",
+    match: (context) => isHrRoute(context) && isHrPayUnitsRoute(context),
+    element: () => <HrPayUnitsPage mode="units" />,
+  },
+  {
+    name: "HR Pay Units Dependant",
+    match: (context) => isHrRoute(context) && isHrPayUnitsDependantRoute(context),
+    element: () => <HrPayUnitsPage mode="dependant" />,
+  },
+  {
+    name: "HR Payroll Process",
+    match: (context) => isHrRoute(context) && isHrPayrollProcessRoute(context),
+    element: () => <HrPayrollProcessPage />,
+  },
+  {
+    name: "HR Leave Cancel",
+    match: (context) => isHrRoute(context) && isHrLeaveCancelRoute(context),
+    element: () => <HrLeaveCancelPage />,
+  },
+  {
+    name: "HR Payroll Account Setup",
+    match: (context) => isHrRoute(context) && isHrPayrollAccountSetupRoute(context),
+    element: () => <HrPayrollAccountSetupPage />,
+  },
+  {
     name: "HR Master",
     match: (context) => Boolean(getHrMasterConfig(context)),
     element: (context) => <HrMasterPage config={getHrMasterConfig(context)!} />,
@@ -305,16 +343,37 @@ function isAccountTreeRoute(pathname: string) {
   );
 }
 
+function getCreditDebitNoteDocType(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  if (
+    normalized.includes("/finance/accounts/transactions/credit-note") ||
+    normalized.includes("/finance/accounts/transactions/credit_note") ||
+    normalized.includes("/finance/accounts/transactions/creditnote") ||
+    normalized.includes("/finance/accounts/transactions/cn")
+  ) return "CN" as const;
+  if (
+    normalized.includes("/finance/accounts/transactions/debit-note") ||
+    normalized.includes("/finance/accounts/transactions/debit_note") ||
+    normalized.includes("/finance/accounts/transactions/debitnote") ||
+    normalized.includes("/finance/accounts/transactions/dn")
+  ) return "DN" as const;
+  return null;
+}
+
 function getTransactionDocType(pathname: string) {
   const normalized = pathname.toLowerCase();
   if (normalized.includes("/finance/accounts/transactions/cheque-payment")) return "BP" as const;
   if (normalized.includes("/finance/accounts/transactions/cheque-receipt")) return "BR" as const;
   if (normalized.includes("/finance/accounts/transactions/cash-receipt")) return "CR" as const;
-  if (normalized.includes("/finance/accounts/transactions/credit-note")) return "CN" as const;
-  if (normalized.includes("/finance/accounts/transactions/debit-note")) return "DN" as const;
+  return null;
+}
+
+function getPettyCashDocType(pathname: string) {
+  const normalized = pathname.toLowerCase();
   if (normalized.includes("/finance/accounts/transactions/petty_cash_payment") || normalized.includes("/finance/accounts/transactions/petty-cash-payment")) return "CP" as const;
   return null;
 }
+
 
 function getCommercialDocType(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -513,7 +572,7 @@ function getPamsMatchText(context: WorkspaceRouteContext) {
 
 function getHrMasterConfig(context: WorkspaceRouteContext) {
   const matchText = getHrMatchText(context);
-  if (!matchText.includes("/hr/") && !matchText.includes(" hr ") && !matchText.includes("human")) return null;
+  if (!isHrRoute(context)) return null;
   const compact = matchText.replace(/[^a-z0-9]/g, "");
   const matches = Object.values(hrMasterConfigs)
     .flatMap((config) => (config.routeKeys || [config.master]).map((key) => ({ config, key: key.toLowerCase() })))
@@ -532,4 +591,34 @@ function getHrMatchText(context: WorkspaceRouteContext) {
     return path && pathname.includes(path);
   });
   return [pathname, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
+}
+
+function isHrRoute(context: WorkspaceRouteContext) {
+  const matchText = getHrMatchText(context);
+  return matchText.includes("/hr/") || matchText.includes(" hr ") || matchText.includes("human");
+}
+
+function isHrPayrollProcessRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("payrollprocessing") || compact.includes("payrollprocess") || compact.includes("payrollprocesspage");
+}
+
+function isHrPayUnitsRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return (compact.includes("payunits") || compact.includes("payunit")) && !compact.includes("depend");
+}
+
+function isHrPayUnitsDependantRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("payunitsdependant") || compact.includes("payunitdependant") || compact.includes("payunitsdependent") || compact.includes("payunitdependent");
+}
+
+function isHrLeaveCancelRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("leavecancel") || compact.includes("leavecancellation") || compact.includes("pgleaveflowcancel");
+}
+
+function isHrPayrollAccountSetupRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("payrollaccountsetup") || compact.includes("payrollaccountssetup") || compact.includes("payrollacsetup");
 }
