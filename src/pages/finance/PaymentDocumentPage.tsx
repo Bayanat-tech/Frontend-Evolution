@@ -1,5 +1,5 @@
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { Ban, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { Ban, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import {
@@ -26,6 +26,8 @@ import {
   TransactionDocumentRow,
   TransactionHeader,
   TransactionType,
+  downloadDocumentReportExcel,
+  openDocumentReport,
   upsertBulkAccountEntryApi,
   getFinanceOutstanding,
 } from "../../api/transactions";
@@ -152,8 +154,11 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
           <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })} title="Edit">
             <Edit2 size={15} />
           </Button>
-          <Button size="icon" variant="ghost" onClick={() => window.print()} title="Print">
+          <Button size="icon" variant="ghost" onClick={() => void openDocumentReport(row.original.doc_type || docType, row.original.doc_no)} title="Print / PDF">
             <Printer size={15} />
+          </Button>
+          <Button size="icon" variant="ghost" onClick={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)} title="Excel">
+            <Download size={15} />
           </Button>
           {row.original.canceled !== "Y" && (
             <Button size="icon" variant="ghost" onClick={() => setCancelTarget(row.original)} title="Cancel">
@@ -692,6 +697,16 @@ function PaymentDocumentEditor({
           </div>
           <div className="flex items-center gap-2">
             {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
+            {form.doc_no && form.doc_no !== "0" && (
+              <>
+                <Button type="button" variant="secondary" onClick={() => void openDocumentReport(form.doc_type, form.doc_no || "")}>
+                  <Printer size={15} /> Print
+                </Button>
+                <Button aria-label="Excel" type="button" variant="secondary" size="icon" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
+                  <Download size={15} />
+                </Button>
+              </>
+            )}
             <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
               <Paperclip size={15} /> Files
             </Button>
