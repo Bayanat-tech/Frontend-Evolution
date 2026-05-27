@@ -25,8 +25,6 @@ export type TransactionDocumentRow = {
   amount?: number;
   canceled?: string;
   fy_period?: string;
-  ref_no?: string;
-  ref_date?: string;
 };
 
 export type TransactionHeader = {
@@ -47,20 +45,10 @@ export type TransactionHeader = {
   cheque_date?: string;
   cheque_bank?: string;
   ac_payee?: string;
-  party_address?: string;
-  party_phone?: string;
-  party_fax?: string;
-  inv_no?: string;
-  inv_date?: string;
   files?: unknown[];
   detail: TransactionDetail[];
   children: Record<string, unknown[]>;
   canceled?: string;
-  tx_cat_code?: string;
-  tx_compnt_1_expmt?: string;
-  tx_compntcat_code_1?: string;
-  ref_no?: string;
-  ref_date?: string;
 };
 
 export type TransactionDetail = {
@@ -137,7 +125,38 @@ export type Division = {
   div_name: string;
 };
 
-export async function getTransactionDocuments(docType: TransactionType, fyPeriod?: string, search?: string, page = 1, limit = 500) {
+export type CompanyInfo = {
+  company_code?: string;
+  ac_fy_period?: string;
+};
+
+export async function getCompanyInfo() {
+  const response = await api.get<ApiResponse<CompanyInfo>>("/api/finance/transactions/company_info");
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load company settings");
+  return response.data.data || {};
+}
+
+export function getDefaultFyPeriod(periods: FyPeriod[], companyInfo?: CompanyInfo) {
+  const companyPeriod = String(companyInfo?.ac_fy_period || "").trim();
+  if (companyPeriod && periods.some((period) => String(period.fy_period) === companyPeriod)) {
+    return companyPeriod;
+  }
+
+  const today = new Date();
+  const currentPeriod = periods.find((period) => {
+    if (!period.date_from || !period.date_to) return false;
+    const from = new Date(period.date_from);
+    const to = new Date(period.date_to);
+    return !Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime()) && today >= from && today <= to;
+  });
+  if (currentPeriod?.fy_period) return currentPeriod.fy_period;
+
+  const yearSuffix = String(today.getFullYear()).slice(-2);
+  const matchingYear = periods.find((period) => String(period.fy_period).endsWith(yearSuffix));
+  return matchingYear?.fy_period || periods[periods.length - 1]?.fy_period || periods[0]?.fy_period || "";
+}
+
+export async function getTransactionDocuments(docType: TransactionType, fyPeriod?: string, search?: string, page = 1, limit = 100) {
   const filters: unknown[] = [[{ field_name: "doc_type", field_value: docType, operator: "exactmatch" }]];
   if (fyPeriod) filters.push([{ field_name: "fy_period", field_value: fyPeriod, operator: "exactmatch" }]);
   if (search?.trim()) {
@@ -169,7 +188,7 @@ export async function getFyPeriods() {
 
 export async function getDivisions() {
   const response = await api.get<ApiResponse<{ tableData: Division[]; count: number }>>("/api/wms/division", {
-    params: { page: 1, limit: 5000 },
+    params: { page: 1, limit: 1000 },
   });
   if (!response.data.success) throw new Error(response.data.message || "Unable to load divisions");
   return response.data.data?.tableData || [];
@@ -209,17 +228,12 @@ export async function getDocAccounts(docType: TransactionType, hdrDtl: "H" | "D"
 }
 
 export async function getTransactionChildren(docNo: string, divCode: string, docType: TransactionType) {
-  const response = await api.get<ApiResponse<{ invoice?: Record<string, unknown>[]; job?: Record<string, unknown>[]; expense?: Record<string, unknown>[]; invoiceDetails?: Record<string, unknown>[]; jobDetails?: Record<string, unknown>[]; expenseDetails?: Record<string, unknown>[] }>>(
+  const response = await api.get<ApiResponse<{ invoice: Record<string, unknown>[]; job: Record<string, unknown>[]; expense: Record<string, unknown>[] }>>(
     `/api/finance/transactions/children/${encodeURIComponent(docNo)}`,
     { params: { div_code: divCode, doc_type: docType } },
   );
   if (!response.data.success) throw new Error(response.data.message || "Unable to load child allocations");
-  const data = response.data.data || {};
-  return {
-    invoice: data.invoice || data.invoiceDetails || [],
-    job: data.job || data.jobDetails || [],
-    expense: data.expense || data.expenseDetails || [],
-  };
+  return response.data.data || { invoice: [], job: [], expense: [] };
 }
 
 export async function getCheque(acCode: string) {
@@ -254,7 +268,7 @@ export async function getFinanceMasterRows(
   const response = await api.get<ApiResponse<{ tableData: Record<string, unknown>[]; count: number }>>(`/api/finance/${master}`, {
     params: {
       page: options.page || 1,
-      limit: options.limit || 500,
+      limit: options.limit || 100,
       ...(options.filter && { filter: JSON.stringify(options.filter) }),
       ...(options.code && { code: options.code }),
       ...(options.extra_param1 && { extra_param1: options.extra_param1 }),
@@ -265,6 +279,86 @@ export async function getFinanceMasterRows(
   });
   if (!response.data.success) throw new Error(response.data.message || `Unable to load ${master}`);
   return response.data.data?.tableData || [];
+}
+
+export async function getLpoDocuments(
+  fyPeriod?: string,
+  search?: string,
+  page = 1,
+  limit = 100,
+) {
+  const response = await api.get<
+    ApiResponse<TransactionDocumentRow[]>
+  >("/api/finance/transactions/lpo", {
+    params: {
+      fy_period: fyPeriod,
+      search,
+      page,
+      limit,
+    },
+  });
+
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Unable to load LPO documents");
+  }
+
+  const list = response.data.data || [];
+
+  // backend may or may not send pagination → handle safely
+  const pagination = (response as any).data?.pagination;
+
+  return {
+    tableData: list,
+    count: pagination?.total ?? list.length ?? 0,
+  };
+}
+export async function getLpoHeader(docNo: string, docType: string) {
+  const response = await api.get<ApiResponse<Record<string, unknown>>>(
+    `/api/finance/transactions/lpo/${encodeURIComponent(docNo)}`,
+    {
+      params: { doc_type: docType },
+    },
+  );
+
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Unable to load LPO header");
+  }
+
+  return response.data.data || {};
+}
+
+export async function getLpoDetail(docNo: string, docType: string) {
+  const response = await api.get<ApiResponse<Record<string, unknown>[]>>(
+    `/api/finance/transactions/lpo/${encodeURIComponent(docNo)}/detail`,
+    {
+      params: { doc_type: docType },
+    },
+  );
+
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Unable to load LPO details");
+  }
+
+  return response.data.data || [];
+}
+
+export async function getLpoRefDocSearch(divCode: string, companyCode: string) {
+  const { getDynamicFinanceLookup } = await import("./lookups");
+  return getDynamicFinanceLookup({
+    parameter: "Account_LPO_REF_DOC",
+    code1: companyCode,
+    number1: Number(divCode) || undefined,
+  });
+}
+
+// Get lpo (Ref_Doc) in PI
+export async function getPurchaseHeader(docNo: string, docType: string) {
+  const response = await api.get<ApiResponse<Record<string, unknown>>>(
+    `/api/finance/transactions/purchaseheader/${encodeURIComponent(docNo)}`,
+    { params: { doc_type: docType } }
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load purchase header");
+  return response.data.data || {};
 }
 
 export async function saveTransactionDocument(payload: TransactionHeader, editMode: boolean) {
@@ -283,7 +377,7 @@ export async function upsertBulkAccountEntryApi(payload: {
   jobDetails: Record<string, unknown>[];
   loginid: string;
 }) {
-  const response = await api.post<ApiResponse<unknown>>("/api/finance/procBulkAccountEntry", payload);
+  const response = await api.post<ApiResponse<unknown>>("/api/finance/transactions/account-entry/bulk", payload);
   const details = (response.data as ApiResponse<unknown> & { details?: string }).details;
   if (!response.data.success) throw new Error(response.data.message || details || "Unable to save transaction");
   return response.data;
@@ -304,68 +398,3 @@ export async function deleteTransactionDocument(docNos: string[], docType: Trans
   if (!response.data.success) throw new Error(response.data.message || "Unable to delete document");
   return response.data;
 }
-
-export async function getFinanceOutstanding(divCode: string, invNo: string) {
-  console.log("getFinanceOutstanding called", { divCode, invNo });
-  const response = await api.get<
-    ApiResponse<{
-      balances: {
-        inv_no: string;
-        original_amount: number;
-        paid_amount: number;
-        outstanding_amount: number;
-        payment_percentage: number;
-        is_fully_paid: boolean;
-        error?: string;
-      }[];
-      count: number;
-    }>
-  >("/api/finance/transactions/invoice_outstanding", {
-    // send both parameter names (single or multiple) to be compatible with backend
-    params: { div_code: divCode, inv_no: invNo, inv_nos: invNo },
-  });
-  if (!response.data.success) throw new Error(response.data.message || "Unable to load defaults");
-  return response.data.data || { balances: [], count: 0 };
-}
-
-  // getInvoiceOutstandingBalance = async (inv_nos: string, div_code: string) => {
-  //   try {
-  //     const response: IApiResponse<{
-  //       balances: Array<{
-  //         inv_no: string;
-  //         original_amount: number;
-  //         paid_amount: number;
-  //         outstanding_amount: number;
-  //         payment_percentage: number;
-  //         is_fully_paid: boolean;
-  //         error?: string;
-  //       }>;
-  //       count: number;
-  //     }> = await axiosServices.get(`api/finance/transactions/invoice_outstanding`, {
-  //       params: {
-  //         inv_nos: inv_nos,
-  //         div_code: div_code
-  //       }
-  //     });
-  //     console.log('RAW API RESPONSE:', JSON.stringify(response.data, null, 2));
-
-  //     if (response.data.success === true && response.data.data) {
-  //       return response.data.data;
-  //     }
-  //   } catch (error: unknown) {
-  //     const knownError = error as { message: string };
-  //     dispatch(
-  //       openSnackbar({
-  //         open: true,
-  //         message: knownError.message,
-  //         variant: 'alert',
-  //         alert: {
-  //           color: 'error'
-  //         },
-  //         severity: 'error',
-  //         close: true
-  //       })
-  //     );
-  //     return null;
-  //   }
-  // };

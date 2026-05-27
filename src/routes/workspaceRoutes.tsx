@@ -30,8 +30,10 @@ import { SecurityMasterPage, securityMasterConfigs } from "../pages/security/Sec
 import { SecurityOperationAccessPage } from "../pages/security/SecurityOperationAccessPage";
 import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
 import { PettyCashPaymentDocumentEditor } from "../pages/finance/PettyCashPayment";
-import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDepartmentAssignmentPage, pamsMasterConfigs, PamsMasterPage, PamsReportPage, PamsTaskPage } from "../pages/pams/PamsPages";
-
+import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs } from "../pages/pams/PamsPages";
+import { HrMasterPage } from "../pages/hr/HrMasterPage";
+import { hrMasterConfigs } from "../pages/hr/hrMasterConfigs";
+import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrPayUnitsPage } from "../pages/hr/HrProcessPages";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -232,6 +234,36 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "PAMS Master",
     match: (context) => Boolean(getPamsMasterConfig(context)),
     element: (context) => <PamsMasterPage config={getPamsMasterConfig(context)!} />,
+  },
+  {
+    name: "HR Pay Units",
+    match: (context) => isHrRoute(context) && isHrPayUnitsRoute(context),
+    element: () => <HrPayUnitsPage mode="units" />,
+  },
+  {
+    name: "HR Pay Units Dependant",
+    match: (context) => isHrRoute(context) && isHrPayUnitsDependantRoute(context),
+    element: () => <HrPayUnitsPage mode="dependant" />,
+  },
+  {
+    name: "HR Payroll Process",
+    match: (context) => isHrRoute(context) && isHrPayrollProcessRoute(context),
+    element: () => <HrPayrollProcessPage />,
+  },
+  {
+    name: "HR Leave Cancel",
+    match: (context) => isHrRoute(context) && isHrLeaveCancelRoute(context),
+    element: () => <HrLeaveCancelPage />,
+  },
+  {
+    name: "HR Payroll Account Setup",
+    match: (context) => isHrRoute(context) && isHrPayrollAccountSetupRoute(context),
+    element: () => <HrPayrollAccountSetupPage />,
+  },
+  {
+    name: "HR Master",
+    match: (context) => Boolean(getHrMasterConfig(context)),
+    element: (context) => <HrMasterPage config={getHrMasterConfig(context)!} />,
   },
 ];
 
@@ -536,4 +568,57 @@ function getPamsMatchText(context: WorkspaceRouteContext) {
     return path && pathname.includes(path);
   });
   return [pathname, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
+}
+
+function getHrMasterConfig(context: WorkspaceRouteContext) {
+  const matchText = getHrMatchText(context);
+  if (!isHrRoute(context)) return null;
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  const matches = Object.values(hrMasterConfigs)
+    .flatMap((config) => (config.routeKeys || [config.master]).map((key) => ({ config, key: key.toLowerCase() })))
+    .sort((a, b) => b.key.length - a.key.length);
+  return matches.find(({ key }) => {
+    const keyCompact = key.replace(/[^a-z0-9]/g, "");
+    return matchText.includes(`/${key}`) || matchText.includes(`/${key.replace(/_/g, "-")}`) || matchText.includes(key) || compact.includes(keyCompact);
+  })?.config || null;
+}
+
+function getHrMatchText(context: WorkspaceRouteContext) {
+  const pathname = context.pathname.toLowerCase();
+  const leaves = collectMenuLeaves(context.activeApp?.children || []);
+  const activeLeaf = leaves.find((leaf) => {
+    const path = (leaf.url_path || "").replace(/^\/+/, "").toLowerCase();
+    return path && pathname.includes(path);
+  });
+  return [pathname, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
+}
+
+function isHrRoute(context: WorkspaceRouteContext) {
+  const matchText = getHrMatchText(context);
+  return matchText.includes("/hr/") || matchText.includes(" hr ") || matchText.includes("human");
+}
+
+function isHrPayrollProcessRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("payrollprocessing") || compact.includes("payrollprocess") || compact.includes("payrollprocesspage");
+}
+
+function isHrPayUnitsRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return (compact.includes("payunits") || compact.includes("payunit")) && !compact.includes("depend");
+}
+
+function isHrPayUnitsDependantRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("payunitsdependant") || compact.includes("payunitdependant") || compact.includes("payunitsdependent") || compact.includes("payunitdependent");
+}
+
+function isHrLeaveCancelRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("leavecancel") || compact.includes("leavecancellation") || compact.includes("pgleaveflowcancel");
+}
+
+function isHrPayrollAccountSetupRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("payrollaccountsetup") || compact.includes("payrollaccountssetup") || compact.includes("payrollacsetup");
 }
