@@ -1,385 +1,8 @@
-// import { useEffect, useState } from "react";
-// import { Save, X, CheckCircle2 } from "lucide-react";
-// import type { FormEvent } from "react";
-// import { getWmsMaster, fetchDropdownOptions } from "../api/wms";
-// import { Button } from "./ui/Button";
-// import { Card, CardContent, CardHeader } from "./ui/Card";
-// import { Input } from "./ui/Input";
-// import { Select } from "./ui/Select";
-// import { LookupField } from "./ui/LookupField";
-// import type { WmsMasterField, WmsMasterFormTab } from "../pages/wms/WmsSimpleMasterPage";
-// import type { LookupRow } from "../api/lookups";
-// import { DropdownOption } from "../pages/wms/dropdowns";
-
-// type Props = {
-//   fields: WmsMasterField[];
-//   tabs?: WmsMasterFormTab[];
-//   fieldsPerRow?: number;
-//   form: Record<string, unknown>;
-//   editMode: boolean;
-//   saving: boolean;
-//   notice: { type: "success" | "error"; message: string } | null;
-//   onChange: (name: string, value: unknown) => void;
-//   onSave: (e: FormEvent) => void;
-//   onCancel: () => void;
-// };
-
-// export function WmsMasterForm({
-//   fields, tabs, fieldsPerRow = 2, form, editMode, saving, notice, onChange, onSave, onCancel,
-// }: Props) {
-//   const [activeTab, setActiveTab] = useState(tabs?.[0]?.key ?? "__default");
-
-//   useEffect(() => {
-//     setActiveTab(tabs?.[0]?.key ?? "__default");
-//   }, [tabs]);
-
-//   const [dropdownCache, setDropdownCache] = useState<Record<string, DropdownOption[]>>({});
-//   const [asyncCache, setAsyncCache] = useState<Record<string, { label: string; value: string }[]>>({});
-//   const [dropdownLoading, setDropdownLoading] = useState<Record<string, boolean>>({});
-
-//   useEffect(() => {
-//     fields.forEach((field) => {
-//       if (!field.asyncOptions) return;
-//       const { endpoint, labelKey, valueKey, dependsOn } = field.asyncOptions;
-//       if (dependsOn && !form[dependsOn]) return;
-
-//       const cacheKey = dependsOn
-//         ? `${field.name}__${form[dependsOn]}`
-//         : field.name;
-
-//       if (asyncCache[cacheKey]) return;
-
-//       void getWmsMaster(endpoint, {
-//         page: 1,
-//         limit: 10000,
-//         ...(dependsOn ? { filter: JSON.stringify({ [dependsOn]: form[dependsOn] }) } : {}),
-//       }).then((res) => {
-//         const options = (res.tableData as Record<string, unknown>[]).map((row) => ({
-//           label: String(row[labelKey] ?? ""),
-//           value: String(row[valueKey] ?? ""),
-//         }));
-//         setAsyncCache((prev) => ({ ...prev, [cacheKey]: options }));
-//       });
-//     });
-//   }, [fields, form, asyncCache]);
-
-//   const loadDropdownOptions = async (field: WmsMasterField) => {
-//     if (!field.dropdownKey) return;
-//     const cacheKey = field.name;
-//     if (dropdownCache[cacheKey]) return;
-//     if (dropdownLoading[cacheKey]) return;
-
-//     setDropdownLoading((prev) => ({ ...prev, [cacheKey]: true }));
-//     try {
-//       const options = await fetchDropdownOptions(field.dropdownKey);
-//       setDropdownCache((prev) => ({ ...prev, [cacheKey]: options }));
-//     } catch (error) {
-//       console.error(`Error loading dropdown for ${field.name}:`, error);
-//     } finally {
-//       setDropdownLoading((prev) => ({ ...prev, [cacheKey]: false }));
-//     }
-//   };
-
-//   const getOptions = (field: WmsMasterField): DropdownOption[] => {
-//     if (field.options) return field.options;
-
-//     if (field.dropdownKey) {
-//       const cacheKey = field.dropdownDependsOn
-//         ? `${field.name}__${form[field.dropdownDependsOn]}`
-//         : field.name;
-//       let options = dropdownCache[cacheKey] ?? [];
-//       if (field.filterDependsOn) {
-//         const filterValue = form[field.filterDependsOn];
-//         options = options.filter(
-//           (opt) => opt[field.filterDependsOn as string] === filterValue
-//         );
-//       }
-//       return options;
-//     }
-
-//     if (field.asyncOptions) {
-//       const { dependsOn } = field.asyncOptions;
-//       const cacheKey = dependsOn ? `${field.name}__${form[dependsOn]}` : field.name;
-//       return asyncCache[cacheKey] ?? [];
-//     }
-
-//     return [];
-//   };
-
-//   const hasTabs = tabs && tabs.length > 0;
-
-//   const isTabCompleted = (tabKey: string): boolean => {
-//     const tabFields = fields.filter((f) => (f.tab ?? tabs![0].key) === tabKey);
-//     const requiredFields = tabFields.filter((f) => f.required === true);
-//     if (requiredFields.length === 0) return false;
-//     return requiredFields.every((f) => {
-//       const value = form[f.name];
-//       return value !== "" && value !== null && value !== undefined && value !== 0;
-//     });
-//   };
-
-//   const renderFields = (tabKey?: string) => {
-//     const visible = hasTabs
-//       ? fields.filter((f) => (f.tab ?? tabs![0].key) === tabKey)
-//       : fields;
-
-//     const filtered = visible;
-
-//     const sections: Record<string, typeof filtered> = {};
-//     filtered.forEach((field) => {
-//       const sectionKey = field.section || "__default";
-//       if (!sections[sectionKey]) sections[sectionKey] = [];
-//       sections[sectionKey].push(field);
-//     });
-
-//     return (
-//       <div className="grid gap-0.5">
-//         {Object.entries(sections).map(([sectionKey, sectionFields]) => (
-//           <div key={sectionKey} className="grid gap-0.5">
-//             {sectionKey !== "__default" && (
-//               <h3 className="text-[10px] font-semibold text-primary uppercase tracking-wide mt-0 mb-0.5">
-//                 {sectionKey}
-//               </h3>
-//             )}
-//             <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${fieldsPerRow}, minmax(0, 1fr))` }}>
-//               {sectionFields.map((field) => {
-//                 const spanClass = field.colSpan === 1 ? "md:col-span-1" : field.type === "textarea" ? "col-span-full" : "";
-//                 const isCheckbox = field.type === "checkbox";
-
-//                 return isCheckbox ? (
-//                   <div
-//                     key={field.name}
-//                     className={`field text-[10px] ${spanClass} flex items-center`}
-//                   >
-//                     {renderInput(
-//                       field,
-//                       form[field.name],
-//                       Boolean(editMode && field.disabledOnEdit) || Boolean(field.disabledWhen?.(form)),
-//                       getOptions(field),
-//                       onChange,
-//                       () => loadDropdownOptions(field),
-//                       dropdownLoading[field.name] || false
-//                     )}
-//                   </div>
-//                 ) : (
-//                   <label
-//                     key={field.name}
-//                     className={`field text-[10px] ${spanClass}`}
-//                   >
-//                     <span className="text-[10px]">
-//                       {field.label}
-//                       {field.required === true && <strong className="text-destructive"> *</strong>}
-//                     </span>
-//                     {renderInput(
-//                       field,
-//                       form[field.name],
-//                       Boolean(editMode && field.disabledOnEdit) || Boolean(field.disabledWhen?.(form)),
-//                       getOptions(field),
-//                       onChange,
-//                       () => loadDropdownOptions(field),
-//                       dropdownLoading[field.name] || false
-//                     )}
-//                   </label>
-//                 );
-//               })}
-//             </div>
-//           </div>
-//         ))}
-//       </div>
-//     );
-//   };
-
-//   return (
-//     <form className="grid gap-0.5" onSubmit={onSave}>
-//       {notice && (
-//         <div className={`${notice.type === "error" ? "alert error" : "alert success"} text-[10px] py-0.5 px-2`}>
-//           {notice.message}
-//         </div>
-//       )}
-
-//       {hasTabs ? (
-//         <Card>
-//           <div className="flex items-center border-b border-border px-2 gap-0.5">
-//             {tabs!.map((tab, index) => {
-//               const isCompleted = isTabCompleted(tab.key);
-//               const isCurrent = activeTab === tab.key;
-//               return (
-//                 <div key={tab.key} className="flex items-center">
-//                   <button
-//                     type="button"
-//                     onClick={() => setActiveTab(tab.key)}
-//                     className={`flex items-center gap-1 px-2 py-1.5 text-[10px] font-medium border-b-2 transition-colors ${
-//                       isCurrent
-//                         ? "border-primary text-primary"
-//                         : "border-transparent text-muted-foreground hover:text-foreground"
-//                     }`}
-//                   >
-//                     <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-semibold ${
-//                       isCompleted
-//                         ? "bg-green-500 text-white"
-//                         : isCurrent
-//                         ? "bg-blue-600 text-white"
-//                         : "bg-gray-300 text-gray-600"
-//                     }`}>
-//                       {isCompleted ? (
-//                         <CheckCircle2 size={10} />
-//                       ) : (
-//                         <span className="text-[10px]">{index + 1}</span>
-//                       )}
-//                     </span>
-//                     <span className="text-[10px]">{tab.label}</span>
-//                   </button>
-//                   {index < tabs!.length - 1 && (
-//                     <div className={`h-0.5 w-4 ${isCompleted ? "bg-green-500" : "bg-gray-300"}`} />
-//                   )}
-//                 </div>
-//               );
-//             })}
-//           </div>
-//           <CardContent className="pt-1 pb-1 px-2">
-//             {renderFields(activeTab)}
-//           </CardContent>
-//         </Card>
-//       ) : (
-//         <Card>
-//           <CardHeader className="pb-1 pt-1.5 px-2">
-//             <div>
-//               <p className="eyebrow text-[10px]">Details</p>
-//               <h2 className="m-0 text-[10px] font-semibold">Basic Information</h2>
-//             </div>
-//           </CardHeader>
-//           <CardContent className="pt-1 pb-1 px-2">{renderFields()}</CardContent>
-//         </Card>
-//       )}
-
-//       <div className="flex justify-between gap-1 mt-1">
-//         <Button type="button" variant="ghost" onClick={onCancel} size="sm" className="h-5 text-[10px] px-2 text-primary">
-//           Back
-//         </Button>
-//         <Button disabled={saving} type="submit" size="sm" className="h-5 text-[10px] px-3 bg-blue-700 hover:bg-blue-800">
-//           {saving ? "Saving..." : "Next"}
-//         </Button>
-//       </div>
-//     </form>
-//   );
-// }
-
-// function renderInput(
-//   field: WmsMasterField,
-//   value: unknown,
-//   disabled: boolean,
-//   options: DropdownOption[],
-//   onChange: (name: string, value: unknown) => void,
-//   onDropdownFocus: () => void,
-//   isLoading: boolean,
-// ) {
-//   if (field.type === "select" || field.asyncOptions || field.dropdownKey) {
-//     const hasApiOptions = field.asyncOptions || field.dropdownKey;
-
-//     if (!hasApiOptions && field.options) {
-//       return (
-//         <Select
-//           disabled={disabled}
-//           value={String(value ?? "")}
-//           onChange={(event) => onChange(field.name, event.target.value)}
-//           className="text-[10px] py-0 px-1.5 h-5 w-full"
-//         >
-//           <option value="">Select {field.label}</option>
-//           {options.map((option) => (
-//             <option value={option.value} key={option.value}>
-//               {option.label}
-//             </option>
-//           ))}
-//         </Select>
-//       );
-//     }
-
-//     const lookupRows: LookupRow[] = options.map((opt) => ({
-//       value: opt.value,
-//       label: opt.label,
-//     }));
-
-//     return (
-//       <div
-//         onClick={onDropdownFocus}
-//         onFocus={onDropdownFocus}
-//         role="presentation"
-//         className="[&_input]:h-5 [&_input]:text-[10px] [&_input]:py-0 [&_input]:px-1.5 [&_button]:h-5 [&_button]:w-4"
-//       >
-//         <LookupField
-//           label=""
-//           value={String(value ?? "")}
-//           displayValue={options.find((opt) => opt.value === String(value))?.label}
-//           columns={[{ field: "label", header: "Label" }]}
-//           valueField="value"
-//           displayFields={["label"]}
-//           loadOptions={async () => lookupRows}
-//           onChange={(val) => onChange(field.name, val)}
-//           disabled={disabled || isLoading}
-//           placeholder={`Select ${field.label}`}
-//         />
-//       </div>
-//     );
-//   }
-
-//   if (field.type === "textarea") {
-//     return (
-//       <textarea
-//         className="input text-[10px] py-0.5 px-1.5 h-8 w-full"
-//         disabled={disabled}
-//         rows={2}
-//         value={String(value ?? "")}
-//         onChange={(e) => onChange(field.name, e.target.value)}
-//       />
-//     );
-//   }
-
-//   if (field.type === "checkbox") {
-//     const isChecked = value === true || value === "true" || value === "Y";
-//     return (
-//       <label className="inline-flex items-center gap-1 cursor-pointer">
-//         <input
-//           type="checkbox"
-//           checked={isChecked}
-//           disabled={disabled}
-//           onChange={(e) => onChange(field.name, e.target.checked)}
-//           className="sr-only"
-//         />
-//         <div className={`w-2.5 h-2.5 flex-shrink-0 rounded-sm border flex items-center justify-center transition-colors ${
-//           isChecked
-//             ? "bg-blue-600 border-blue-600"
-//             : "bg-white border-gray-300"
-//         } ${disabled ? "opacity-50" : ""}`}>
-//           {isChecked && (
-//             <svg className="w-2 h-2 text-white" viewBox="0 0 12 12" fill="none">
-//               <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-//             </svg>
-//           )}
-//         </div>
-//         <span className="text-[10px] text-gray-700 select-none whitespace-nowrap">
-//           {field.label}
-//           {field.required === true && <strong className="text-destructive"> *</strong>}
-//         </span>
-//       </label>
-//     );
-//   }
-
-//   return (
-//     <Input
-//       disabled={disabled}
-//       type={field.type === "number" ? "number" : field.type === "email" ? "email" : "text"}
-//       value={String(value ?? "")}
-//       onChange={(e) =>
-//         onChange(field.name, field.type === "number" ? Number(e.target.value || 0) : e.target.value)
-//       }
-//       className="text-[10px] py-0 px-1.5 h-5 w-full"
-//     />
-//   );
-// }
 import { useEffect, useState } from "react";
 import { Save, X, CheckCircle2, ChevronRight, AlertCircle, Loader2, Plus, RefreshCw } from "lucide-react";
 import type { FormEvent } from "react";
 import { getWmsMaster, fetchDropdownOptions } from "../api/wms";
+import { getDynamicLookup } from "../api/lookups";
 import { Button } from "./ui/Button";
 import { Card, CardContent, CardHeader } from "./ui/Card";
 import { Input } from "./ui/Input";
@@ -387,6 +10,7 @@ import { Select } from "./ui/Select";
 import { LookupField } from "./ui/LookupField";
 import type { WmsMasterField, WmsMasterFormTab } from "../pages/wms/WmsSimpleMasterPage";
 import type { LookupRow } from "../api/lookups";
+import type { UserProfile } from "../types/auth";
 import { DropdownOption } from "../pages/wms/dropdowns";
 
 type Props = {
@@ -397,14 +21,18 @@ type Props = {
   editMode: boolean;
   saving: boolean;
   notice: { type: "success" | "error"; message: string } | null;
+  user?: UserProfile | null;
   onChange: (name: string, value: unknown) => void;
   onSave: (e: FormEvent) => void;
   onCancel: () => void;
 };
 
 export function WmsMasterForm({
-  fields, tabs, fieldsPerRow = 2, form, editMode, saving, notice, onChange, onSave, onCancel,
+  fields, tabs, fieldsPerRow = 2, form, editMode, saving, notice, user, onChange, onSave, onCancel,
 }: Props) {
+  console.log("Rendering WmsMasterForm with form data:", form);
+  console.log("Fields configuration:", fields);
+  console.log("edit mode", editMode);
   const [activeTab, setActiveTab] = useState(tabs?.[0]?.key ?? "__default");
 
   useEffect(() => {
@@ -441,26 +69,119 @@ export function WmsMasterForm({
     });
   }, [fields, form, asyncCache]);
 
-  const loadDropdownOptions = async (field: WmsMasterField) => {
-    if (!field.dropdownKey) return;
-    const cacheKey = field.name;
-    if (dropdownCache[cacheKey]) return;
-    if (dropdownLoading[cacheKey]) return;
+  const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOption[]> => {
+    // Support both old dropdownKey and new dropdownParam
+    if (!field.dropdownKey && !field.dropdownParam) return [];
+    
+    const cacheKey = field.dropdownParam || field.name;
+    
+    // Return cached data if available
+    if (dropdownCache[cacheKey]) {
+      return dropdownCache[cacheKey];
+    }
+
+    // If already loading, wait a bit and return
+    if (dropdownLoading[cacheKey]) {
+      // Wait for loading to complete and return from cache
+      await new Promise(resolve => setTimeout(resolve, 100));
+      return dropdownCache[cacheKey] || [];
+    }
 
     setDropdownLoading((prev) => ({ ...prev, [cacheKey]: true }));
     try {
-      const options = await fetchDropdownOptions(field.dropdownKey);
+      let options: DropdownOption[] = [];
+
+      // New parameter-based dropdown system
+      if (field.dropdownParam) {
+        const params: Record<string, unknown> = {
+          parameter: field.dropdownParam,
+        };
+
+        // Always add user login ID
+        const loginId = user?.loginid || user?.LOGINID;
+        if (loginId) {
+          params.loginid = loginId;
+          console.log(`[Dropdown ${field.dropdownParam}] Sending loginid:`, loginId);
+        } else {
+          console.log(`[Dropdown ${field.dropdownParam}] No loginid available`, { user });
+        }
+        
+        // Always send company_code as code1
+        const companyCode = form.company_code || user?.company_code || user?.COMPANY_CODE;
+        if (companyCode) {
+          params.code1 = companyCode;
+          console.log(`[Dropdown ${field.dropdownParam}] Sending code1 (company_code):`, companyCode);
+        } else {
+          console.log(`[Dropdown ${field.dropdownParam}] No company_code available`, { form, user });
+        }
+
+        // Map dependent field values to code parameters starting from code2
+        if (field.dropdownCodeMap) {
+          let codeIndex = 2;  // Start from code2 (code1 is reserved for company_code)
+          for (const [fieldName, codeParam] of Object.entries(field.dropdownCodeMap)) {
+            // Skip company_code as it's already sent as code1
+            if (fieldName === "company_code") continue;
+            
+            const value = form[fieldName];
+            if (value) {
+              params[`code${codeIndex}`] = value;
+              console.log(`[Dropdown ${field.dropdownParam}] Sending code${codeIndex}:`, value);
+            }
+            codeIndex++;
+          }
+        }
+
+        console.log(`[Dropdown ${field.dropdownParam}] Final params:`, params);
+        const results = await getDynamicLookup(params as any);
+        const labelKey = field.dropdownLabelKey || "label";
+        const valueKey = field.dropdownValueKey || "value";
+        const separator = field.dropdownDisplaySeparator || " - ";
+        
+        options = results.map((row) => {
+          let displayLabel: string;
+          
+          // If dropdownDisplayFields specified, combine multiple fields
+          if (field.dropdownDisplayFields && field.dropdownDisplayFields.length > 0) {
+            displayLabel = field.dropdownDisplayFields
+              .map((fieldName) => String(row[fieldName] || ""))
+              .filter((val) => val !== "")
+              .join(separator);
+          } else {
+            // Use single label field
+            displayLabel = String(row[labelKey] || row.label || row.name || row.description || "");
+          }
+          
+          return {
+            label: displayLabel,
+            value: String(row[valueKey] || row.value || row.code || row.id || ""),
+          };
+        });
+      } else if (field.dropdownKey) {
+        // Old system for backward compatibility
+        options = await fetchDropdownOptions(field.dropdownKey);
+      }
+
       setDropdownCache((prev) => ({ ...prev, [cacheKey]: options }));
+      return options;
     } catch (error) {
       console.error(`Error loading dropdown for ${field.name}:`, error);
+      return [];
     } finally {
       setDropdownLoading((prev) => ({ ...prev, [cacheKey]: false }));
     }
   };
 
+
   const getOptions = (field: WmsMasterField): DropdownOption[] => {
     if (field.options) return field.options;
 
+    // New parameter-based dropdown system
+    if (field.dropdownParam) {
+      const cacheKey = field.dropdownParam;
+      return dropdownCache[cacheKey] ?? [];
+    }
+
+    // Old dropdownKey system for backward compatibility
     if (field.dropdownKey) {
       const cacheKey = field.dropdownDependsOn
         ? `${field.name}__${form[field.dropdownDependsOn]}`
@@ -566,7 +287,8 @@ export function WmsMasterForm({
                       getOptions(field),
                       onChange,
                       () => loadDropdownOptions(field),
-                      dropdownLoading[field.name] || false
+                      dropdownLoading[field.name] || false,
+                      loadDropdownOptions
                     )}
                   </div>
                 ) : (
@@ -584,7 +306,8 @@ export function WmsMasterForm({
                       getOptions(field),
                       onChange,
                       () => loadDropdownOptions(field),
-                      dropdownLoading[field.name] || false
+                      dropdownLoading[field.name] || false,
+                      loadDropdownOptions
                     )}
                   </label>
                 );
@@ -778,12 +501,13 @@ function renderInput(
   onChange: (name: string, value: unknown) => void,
   onDropdownFocus: () => void,
   isLoading: boolean,
+  loadDropdownAsync?: (field: WmsMasterField) => Promise<DropdownOption[]>,
 ) {
   const baseInputClass =
     "h-6 w-full rounded border border-input bg-background px-2 text-[11px] text-foreground placeholder:text-muted-foreground/50 transition-colors focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed";
 
-  if (field.type === "select" || field.asyncOptions || field.dropdownKey) {
-    const hasApiOptions = field.asyncOptions || field.dropdownKey;
+  if (field.type === "select" || field.asyncOptions || field.dropdownKey || field.dropdownParam) {
+    const hasApiOptions = field.asyncOptions || field.dropdownKey || field.dropdownParam;
 
     if (!hasApiOptions && field.options) {
       return (
@@ -810,8 +534,8 @@ function renderInput(
 
     return (
       <div
-        onClick={onDropdownFocus}
-        onFocus={onDropdownFocus}
+        onClick={() => loadDropdownAsync?.(field)}
+        onFocus={() => loadDropdownAsync?.(field)}
         role="presentation"
         className={`[&_input]:h-6 [&_input]:text-[11px] [&_input]:py-0 [&_input]:px-2 [&_button]:h-6 ${isLoading ? "opacity-60 pointer-events-none" : ""}`}
       >
@@ -822,7 +546,14 @@ function renderInput(
           columns={[{ field: "label", header: "Label" }]}
           valueField="value"
           displayFields={["label"]}
-          loadOptions={async () => lookupRows}
+          loadOptions={async () => {
+            // Load fresh data or get from cache
+            const dropdownOptions = await (loadDropdownAsync?.(field) || Promise.resolve([]));
+            return dropdownOptions.map((opt: DropdownOption) => ({
+              value: opt.value,
+              label: opt.label,
+            }));
+          }}
           onChange={(val) => onChange(field.name, val)}
           disabled={disabled || isLoading}
           placeholder={isLoading ? "Loading…" : `Search ${field.label}…`}
@@ -890,6 +621,7 @@ function renderInput(
       type={
         field.type === "number" ? "number"
         : field.type === "email" ? "email"
+        : field.type === "date" ? "date"
         : "text"
       }
       value={String(value ?? "")}

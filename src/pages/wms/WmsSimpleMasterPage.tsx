@@ -19,10 +19,16 @@ export type WmsMasterField = {
   required?: boolean;
   disabledOnEdit?: boolean;
   disabledWhen?: (form: Record<string, unknown>) => boolean;
-  type?: "text" | "number" | "select" | "email" | "textarea" | "checkbox";
+  type?: "text" | "number" | "select" | "email" | "textarea" | "checkbox" | "date";
   options?: { label: string; value: string }[];
-  dropdownKey?: DropdownKey;          // e.g. 'country', 'currency', 'department'
+  dropdownKey?: DropdownKey;          // DEPRECATED: use dropdownParam instead
+  dropdownParam?: string;             // procedure parameter name (e.g. 'DROP_DOWN_DIVISION')
+  dropdownLabelKey?: string;          // field name from dropdown data to display as label (default: 'label')
+  dropdownValueKey?: string;          // field name from dropdown data to use as value (default: 'value')
+  dropdownDisplayFields?: string[];   // multiple fields to combine for display (e.g. ['code', 'name'] shows "CODE - NAME")
+  dropdownDisplaySeparator?: string;  // separator for combining fields (default: ' - ')
   dropdownDependsOn?: string;         // field name this dropdown depends on (for chained dropdowns)
+  dropdownCodeMap?: Record<string, string>;  // map field names to code params (e.g. { company_code: 'code1', div_code: 'code2' })
   filterDependsOn?: string;           // field name to filter dropdown options by (at component level)
   asyncOptions?: {
     endpoint: string;           // e.g. "country"
@@ -60,6 +66,7 @@ export type WmsSimpleMasterConfig = {
   fieldsPerRow?: number;  // Number of fields per row (default: 2)
   deleteConfig?: WmsDeleteConfig;
   mapBeforeSave?: (form: Record<string, unknown>, context: { editMode: boolean; original: Record<string, unknown> | null }) => Record<string, unknown>;
+  mapAfterLoad?: (data: Record<string, unknown>) => Record<string, unknown>;
   saveEndpoint?: (form: Record<string, unknown>, context: { editMode: boolean; original: Record<string, unknown> | null }) => string;
     formTabs?: WmsMasterFormTab[];
 };
@@ -121,12 +128,6 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
 
   const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(
     () => [
-      ...tableFields.map((field) => ({
-        accessorKey: field.name,
-        header: field.label,
-        size: field.width || 160,
-        cell: ({ row }: { row: { original: Record<string, unknown> } }) => formatValue(row.original[field.name]),
-      })),
       {
         id: "actions",
         header: "Actions",
@@ -148,6 +149,12 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
         ),
         size: 90,
       },
+      ...tableFields.map((field) => ({
+        accessorKey: field.name,
+        header: field.label,
+        size: field.width || 160,
+        cell: ({ row }: { row: { original: Record<string, unknown> } }) => formatValue(row.original[field.name]),
+      })),
     ],
     [config, tableFields],
   );
@@ -163,7 +170,8 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
   const openEdit = (row: Record<string, unknown>) => {
     setEditMode(true);
     setOriginal(row);
-    setForm({ ...makeEmpty(), ...row });
+    const mappedData = config.mapAfterLoad ? config.mapAfterLoad(row) : row;
+    setForm({ ...makeEmpty(), ...mappedData });
     setFormOpen(true);
     setNotice(null);
   };
@@ -178,7 +186,25 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
     setSaving(true);
     setNotice(null);
     try {
-      const mapped = config.mapBeforeSave?.(form, { editMode, original }) || form;
+      // Transform form data: convert checkboxes and filter out empty non-required fields
+      const transformedForm = editableFields.reduce((acc, field) => {
+        let value = form[field.name];
+        
+        // Convert checkbox values: true → "Y", false/empty → ""
+        if (field.type === "checkbox") {
+          value = value === true || value === "Y" ? "Y" : "N";
+        }
+        
+        // // Skip empty values for non-required fields (especially date/text fields)
+        // if (!field.required && (value === "" || value === null || value === undefined)) {
+        //   return acc;
+        // }
+        
+        acc[field.name] = value;
+        return acc;
+      }, {} as Record<string, unknown>);
+
+      const mapped = config.mapBeforeSave?.(transformedForm, { editMode, original }) || transformedForm;
       const endpoint = config.saveEndpoint?.(mapped, { editMode, original }) || config.gmEndpoint;
       await saveWmsGm(endpoint, { ...mapped, company_code: mapped.company_code || user?.company_code || "" }, editMode ? "put" : "post");
       setFormOpen(false);
@@ -278,6 +304,7 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
           editMode={editMode}
           saving={saving}
           notice={notice}
+          user={user}
           onChange={(name:any, value:any) => setForm((prev) => ({ ...prev, [name]: value }))}
           onSave={saveRecord}
           onCancel={() => setFormOpen(false)}

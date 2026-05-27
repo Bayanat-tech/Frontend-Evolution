@@ -116,7 +116,7 @@ country: {
     fields: [
       { name: "dept_code", label: "Department Code", required: true, disabledOnEdit: true, width: 170 },
       { name: "dept_name", label: "Department Name", required: true, width: 260 },
-      { name: "div_code", label: "Division Code", asyncOptions: { endpoint: "division", labelKey: "div_name", valueKey: "div_code" }, width: 150, required: true },
+      { name: "div_code", label: "Division Code", dropdownParam: "DROP_DOWN_DIVISION", width: 150, required: true },
     ],
     deleteConfig: { mode: "rawDelete", payload: (row) => ({ ids: [row.dept_code] }) },
   },
@@ -306,56 +306,56 @@ country: {
       // Basic Info Tab - Company Details
       { name: "prin_code", label: "Principal Code", disabledOnEdit: true, width: 160, tab: "basic-info", section: "COMPANY DETAILS" },
       { name: "prin_name", label: "Principal Name", required: true, width: 280, tab: "basic-info", section: "COMPANY DETAILS", colSpan: 2 },
-      { name: "status", label: "Status", required: true, type: "select", options: [{ label: "Active", value: "Active" }, { label: "Inactive", value: "Inactive" }], tab: "basic-info", section: "COMPANY DETAILS" },
-      { name: "prin_city", label: "City", required: true, width: 280, tab: "basic-info", section: "COMPANY DETAILS" },
-      { name: "country_code", label: "Country", required: true, asyncOptions: { endpoint: "country", labelKey: "country_name", valueKey: "country_code" }, tab: "basic-info", section: "COMPANY DETAILS" },
-      { name: "prin_addr1", label: "Address 1", required: true, type: "textarea", tab: "basic-info", section: "COMPANY DETAILS", colSpan: 2 },
+      { name: "status", label: "Status", required: true, type: "select", options: [{ label: "Active", value: "A" }, { label: "Inactive", value: "I" }], tab: "basic-info", section: "COMPANY DETAILS" },
+      { name: "prin_city", label: "City", width: 280, tab: "basic-info", section: "COMPANY DETAILS" },
+      { name: "country_code", label: "Country", required: true, dropdownParam: "DROP_DOWN_COUNTRY", tab: "basic-info", section: "COMPANY DETAILS" },
+      { name: "prin_addr1", label: "Address 1", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS", colSpan: 2 },
       { name: "prin_addr2", label: "Address 2", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS", colSpan: 2 },
       { name: "prin_addr3", label: "Address 3", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS" },
       { name: "prin_addr4", label: "Address 4", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS" },
-      { name: "territory_code", label: "Territory", asyncOptions: { endpoint: "territory", labelKey: "territory_name", valueKey: "territory_code" }, tab: "basic-info", section: "COMPANY DETAILS" },
-      { name: "sector", label: "Sector", required: true, tab: "basic-info", section: "COMPANY DETAILS" },
+      { name: "territory_code", label: "Territory", dropdownParam: "DROP_DOWN_TERRITORY", dropdownCodeMap: { country_code: "code1" }, tab: "basic-info", section: "COMPANY DETAILS" },
+      { name: "sector", label: "Sector", tab: "basic-info", section: "COMPANY DETAILS" },
       
       // Basic Info Tab - Contact Information
-      { name: "email_account", label: "Email Account", required: true, type: "email", tab: "contact-info", section: "CONTACT INFORMATION" },
-      { name: "prin_email1", label: "Email 1", required: true, type: "email", tab: "contact-info", section: "CONTACT INFORMATION" },
+      { name: "email_account", label: "Email Account", type: "email", tab: "contact-info", section: "CONTACT INFORMATION" },
+      { name: "prin_email1", label: "Email 1", type: "email", tab: "contact-info", section: "CONTACT INFORMATION" },
       { name: "email2", label: "Email 2", type: "email", tab: "contact-info", section: "CONTACT INFORMATION" },
       { name: "email3", label: "Email 3", type: "email", tab: "contact-info", section: "CONTACT INFORMATION" },
-      { name: "company_fax1", label: "Company Fax 1", required: true, tab: "contact-info", section: "CONTACT INFORMATION" },
+      { name: "company_fax1", label: "Company Fax 1", tab: "contact-info", section: "CONTACT INFORMATION" },
       { name: "company_fax2", label: "Company Fax 2", tab: "contact-info", section: "CONTACT INFORMATION" },
       { name: "company_fax3", label: "Company Fax 3", tab: "contact-info", section: "CONTACT INFORMATION" },
-      { name: "prin_contact1", label: "Contact Person", required: true, tab: "contact-info", section: "CONTACT INFORMATION" },
-      { name: "prin_telno1", label: "Telephone", required: true, tab: "contact-info", section: "CONTACT INFORMATION" },
+      { name: "prin_contact1", label: "Contact Person", tab: "contact-info", section: "CONTACT INFORMATION" },
+      { name: "prin_telno1", label: "Telephone", tab: "contact-info", section: "CONTACT INFORMATION" },
       
       // Basic Info Tab - Organization
-      { name: "div_code", label: "Division", required: true, asyncOptions: { endpoint: "division", labelKey: "div_name", valueKey: "div_code" }, tab: "organization", section: "ORGANIZATION" },
-      { name: "dept_code", label: "Department", required: true, asyncOptions: { endpoint: "department", labelKey: "dept_name", valueKey: "dept_code" }, tab: "organization", section: "ORGANIZATION" },
-      { name: "reference", label: "Reference", required: true, tab: "organization", section: "ORGANIZATION" },
+      { name: "div_code", label: "Division", required: true, dropdownParam: "DROP_DOWN_DIVISION", dropdownDisplayFields: ["div_code", "div_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "div_code", dropdownCodeMap: { company_code: "code1" }, tab: "organization", section: "ORGANIZATION" },
+      { name: "dept_code", label: "Department", required: true, dropdownParam: "DROP_DOWN_DEPT_BASED_ON_DIV", dropdownDisplayFields: ["dept_code", "dept_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "dept_code", dropdownCodeMap: { div_code: "code1" }, tab: "organization", section: "ORGANIZATION" },
+      { name: "reference", label: "Reference", tab: "organization", section: "ORGANIZATION" },
       { name: "auto_generate_product_code", label: "Auto Generate Product Code", type: "checkbox", tab: "organization", section: "ORGANIZATION" },
 
       // Account Info Tab - Company Registration Information
-      { name: "tax_reg_no", label: "Tax Registered No.", required: true, tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
-      { name: "tax_expiry_date", label: "Tax Reg. Expiry Date", required: true, type: "text", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
-      { name: "comm_reg_no", label: "Commercial Reg. No.", required: true, tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
-      { name: "comm_expiry_date", label: "Commercial Reg. Expiry", required: true, type: "text", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
-      { name: "license_no", label: "License No.", required: true, tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
-      { name: "license_type", label: "License Type", required: true, tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
-      { name: "curr_code", label: "Default Currency", required: true, asyncOptions: { endpoint: "currency", labelKey: "curr_name", valueKey: "curr_code" }, tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
+      { name: "tax_reg_no", label: "Tax Registered No.",type: "number", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
+      { name: "tax_expiry_date", label: "Tax Reg. Expiry Date", type: "date", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
+      { name: "comm_reg_no", type:"number", label: "Commercial Reg. No.", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
+      { name: "comm_expiry_date", label: "Commercial Reg. Expiry", type: "date", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
+      { name: "license_no", label: "License No.", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
+      { name: "license_type", label: "License Type", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
+      { name: "curr_code", label: "Default Currency", dropdownParam: "DROP_DOWN_CURRENCY", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
       { name: "in_designated_zone", label: "In Designated Zone", type: "checkbox", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
 
       // Account Info Tab - Account and Credit Information
-      { name: "ac_reference", label: "A/C Reference", required: true, tab: "account-info", section: "ACCOUNT AND CREDIT INFORMATION" },
-      { name: "credit_limit", label: "Credit Limit", required: true, type: "number", tab: "account-info", section: "ACCOUNT AND CREDIT INFORMATION" },
-      { name: "credit_period_wms", label: "Credit Period (WMS)", required: true, type: "number", tab: "account-info", section: "ACCOUNT AND CREDIT INFORMATION" },
-      { name: "credit_freight", label: "Credit Freight", required: true, type: "number", tab: "account-info", section: "ACCOUNT AND CREDIT INFORMATION" },
+      { name: "ac_reference", label: "A/C Reference", tab: "account-info", section: "ACCOUNT AND CREDIT INFORMATION" },
+      { name: "credit_limit", label: "Credit Limit", type: "number", tab: "account-info", section: "ACCOUNT AND CREDIT INFORMATION" },
+      { name: "credit_period_wms", label: "Credit Period (WMS)", type: "number", tab: "account-info", section: "ACCOUNT AND CREDIT INFORMATION" },
+      { name: "credit_freight", label: "Credit Freight", type: "number", tab: "account-info", section: "ACCOUNT AND CREDIT INFORMATION" },
 
       // Account Info Tab - Invoice and Transaction History
-      { name: "import_code", label: "Import Code", required: true, tab: "account-info", section: "INVOICE AND TRANSACTION HISTORY" },
+      { name: "import_code", label: "Import Code", tab: "account-info", section: "INVOICE AND TRANSACTION HISTORY" },
       { name: "parent_prin_code", label: "Parent Principal Code", tab: "account-info", section: "INVOICE AND TRANSACTION HISTORY" },
-      { name: "last_invoice_date", label: "Last Invoice Date", type: "text", tab: "account-info", section: "INVOICE AND TRANSACTION HISTORY" },
+      { name: "last_invoice_date", label: "Last Invoice Date", type: "date", tab: "account-info", section: "INVOICE AND TRANSACTION HISTORY" },
 
       // Settings Tab - Pick Rules
-      { name: "pick_wave", label: "Pick Wave", required: true, type: "select", options: [{ label: "Wave 1", value: "1" }], tab: "settings", section: "PICK RULES" },
+      { name: "pick_wave", label: "Pick Wave", type: "select", options: [{ label: "Wave 1", value: "1" }], tab: "settings", section: "PICK RULES" },
       { name: "pick_wave_min_exp", label: "Pick Wave (Minimum Exp)", type: "checkbox", tab: "settings", section: "PICK RULES" },
       { name: "pick_wave_least_qty", label: "Pick Wave (Least Quantity)", type: "checkbox", tab: "settings", section: "PICK RULES" },
 
@@ -378,22 +378,244 @@ country: {
       { name: "inbound_exp_limit_days", label: "Inbound Exp Limit (days)", type: "number", tab: "settings", section: "PRODUCT AND SHIPMENT SETTINGS" },
 
       // Storage Info Tab - Location
-      { name: "preferred_site", label: "Preferred Site", required: true, type: "select", tab: "storage-info", section: "LOCATION" },
-      { name: "location_from", label: "Location From", required: true, type: "select", tab: "storage-info", section: "LOCATION" },
-      { name: "location_to", label: "Location To", required: true, type: "select", tab: "storage-info", section: "LOCATION" },
-      { name: "aisle_from", label: "Aisle From", required: true, tab: "storage-info", section: "LOCATION" },
-      { name: "aisle_to", label: "Aisle To", required: true, tab: "storage-info", section: "LOCATION" },
-      { name: "column_from", label: "Column From", required: true, tab: "storage-info", section: "LOCATION" },
-      { name: "column_to", label: "Column To", required: true, tab: "storage-info", section: "LOCATION" },
+      { name: "preferred_site", label: "Preferred Site", type: "select", tab: "storage-info", section: "LOCATION" },
+      { name: "location_from", label: "Location From", type: "select", tab: "storage-info", section: "LOCATION" },
+      { name: "location_to", label: "Location To", type: "select", tab: "storage-info", section: "LOCATION" },
+      { name: "aisle_from", label: "Aisle From", tab: "storage-info", section: "LOCATION" },
+      { name: "aisle_to", label: "Aisle To", tab: "storage-info", section: "LOCATION" },
+      { name: "column_from", label: "Column From", tab: "storage-info", section: "LOCATION" },
+      { name: "column_to", label: "Column To", tab: "storage-info", section: "LOCATION" },
 
       // Storage Info Tab - Site, Service and Storage Details
-      { name: "height_from", label: "Height From", required: true, type: "number", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
-      { name: "height_to", label: "Height To", required: true, type: "number", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
-      { name: "default_site_ind", label: "Default Site Ind", required: true, type: "select", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
-      { name: "service_date", label: "Service Date", type: "text", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
-      { name: "storage_type", label: "Storage Type", required: true, type: "select", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
-      { name: "default_foc", label: "Default Foc", required: true, type: "select", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "height_from", label: "Height From", type: "number", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "height_to", label: "Height To", type: "number", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "default_site_ind", label: "Default Site Ind", type: "select", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "service_date", label: "Service Date", type: "date", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "storage_type", label: "Storage Type", type: "select", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "default_foc", label: "Default Foc", type: "select", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
     ],
+    mapBeforeSave: (form) => ({
+      // Basic Info
+      prin_code: form.prin_code,
+      prin_name: form.prin_name,
+      prin_status: form.status,
+      prin_city: form.prin_city,
+      country_code: form.country_code,
+      tax_country_code: form.tax_country_code || "",
+      tax_country_sn: form.tax_country_sn || "",
+      prin_addr1: form.prin_addr1,
+      prin_addr2: form.prin_addr2,
+      prin_addr3: form.prin_addr3,
+      prin_addr4: form.prin_addr4,
+      territory_code: form.territory_code,
+      sector_code: form.sector,
+      
+      // Contact Info - Primary
+      acc_email: form.email_account,
+      prin_email1: form.prin_email1,
+      prin_email2: form.email2,
+      prin_email3: form.email3,
+      prin_faxno1: form.company_fax1,
+      prin_faxno2: form.company_fax2,
+      prin_faxno3: form.company_fax3,
+      
+      // Contact Info - Secondary (Additional contacts)
+      prin_cont1: form.prin_contact1 || "",
+      prin_cont2: form.prin_contact2 || "",
+      prin_cont3: form.prin_contact3 || "",
+      prin_cont_email1: form.prin_contact_email1 || "",
+      prin_cont_email2: form.prin_contact_email2 || "",
+      prin_cont_email3: form.prin_contact_email3 || "",
+      prin_cont_telno1: form.prin_telno1 || "",
+      prin_cont_telno2: form.prin_telno2 || "",
+      prin_cont_telno3: form.prin_telno3 || "",
+      prin_cont_faxno1: form.prin_contact_fax1 || "",
+      prin_cont_faxno2: form.prin_contact_fax2 || "",
+      prin_cont_faxno3: form.prin_contact_fax3 || "",
+      prin_cont_ref1: form.prin_contact_ref1 || "",
+      
+      // Organization
+      div_code: form.div_code,
+      prin_dept_code: form.dept_code,
+      prin_ref1: form.reference,
+      auto_generate_product_code: form.auto_generate_product_code,
+      
+      // Account Info - Company Registration
+      trn_no: form.tax_reg_no || null,
+      trn_exp_date: form.tax_expiry_date || null,
+      comm_reg_no: form.comm_reg_no || null,
+      comm_reg_exp_date: form.comm_expiry_date || null,
+      prin_lic_no: form.license_no || null,
+      prin_lic_type: form.license_type,
+      curr_code: form.curr_code,
+      prin_infze: form.in_designated_zone,
+      
+      // Account Info - Credit
+      prin_acref: form.ac_reference,
+      credit_limit: form.credit_limit || null,
+      creditdays: form.credit_period_wms || null,
+      creditdays_freight: form.credit_freight || null,
+      
+      // Account Info - Transaction
+      prin_imp_code: form.import_code,
+      parent_prin_code: form.parent_prin_code,
+      prin_invdate: form.last_invoice_date || null,
+      
+      // Files (for document upload if needed)
+      files: form.files || [],
+      
+      // Settings - Pick Rules
+      pick_wave: form.pick_wave,
+      pick_wave_ign_min_exp: form.pick_wave_min_exp,
+      pick_wave_qty_sort: form.pick_wave_least_qty,
+      
+      // Settings - General
+      under_value: form.allow_undervalue,
+      auto_insert_billactivity: form.auto_populate_bill,
+      prin_charge: form.chargeable,
+      prin_pricechk: form.export_price_check,
+      prin_landedpr: form.compute_landed_cost,
+      auto_job: form.auto_job_no_generate,
+      validate_lotno: form.validate_lot_no,
+      
+      // Settings - Product and Shipment
+      storage_productwise: form.product_wise_storage,
+      dir_shpmnt: form.direct_shipment,
+      perpectual_confirm_allow: form.perpetual_confirm_allow,
+      validate_expdate: form.outbound_validate_exp_date || null,
+      minperiod_exppick: form.outbound_min_exp_period || null,
+      rcpt_exp_limit: form.inbound_exp_limit_days || null,
+      
+      // Storage
+      pref_site: form.preferred_site,
+      pref_loc_from: form.location_from,
+      pref_loc_to: form.location_to,
+      pref_aisle_from: form.aisle_from || null,
+      pref_aisle_to: form.aisle_to || null,
+      pref_col_from: form.column_from || null,
+      pref_col_to: form.column_to || null,
+      pref_ht_from: form.height_from || null,
+      pref_ht_to: form.height_to || null,
+      prin_siteind: form.default_site_ind,
+      service_date: form.service_date || null,
+      storage_type: form.storage_type,
+      default_foc: form.default_foc,
+      automate_activity: form.automate_activity,
+      
+      // Company code (handled separately in saveRecord)
+      company_code: form.company_code,
+    }),
+    mapAfterLoad: (data) => ({
+      // Basic Info
+      prin_code: data.prin_code,
+      prin_name: data.prin_name,
+      status: data.prin_status,
+      prin_city: data.prin_city,
+      country_code: data.country_code,
+      tax_country_code: data.tax_country_code || "",
+      tax_country_sn: data.tax_country_sn || "",
+      prin_addr1: data.prin_addr1,
+      prin_addr2: data.prin_addr2,
+      prin_addr3: data.prin_addr3,
+      prin_addr4: data.prin_addr4,
+      territory_code: data.territory_code,
+      sector: data.sector_code,
+      
+      // Contact Info - Primary
+      email_account: data.acc_email,
+      prin_email1: data.prin_email1,
+      email2: data.prin_email2,
+      email3: data.prin_email3,
+      company_fax1: data.prin_faxno1,
+      company_fax2: data.prin_faxno2,
+      company_fax3: data.prin_faxno3,
+      
+      // Contact Info - Secondary (Additional contacts)
+      prin_contact1: data.prin_cont1 || "",
+      prin_contact2: data.prin_cont2 || "",
+      prin_contact3: data.prin_cont3 || "",
+      prin_contact_email1: data.prin_cont_email1 || "",
+      prin_contact_email2: data.prin_cont_email2 || "",
+      prin_contact_email3: data.prin_cont_email3 || "",
+      prin_telno1: data.prin_cont_telno1 || "",
+      prin_telno2: data.prin_cont_telno2 || "",
+      prin_telno3: data.prin_cont_telno3 || "",
+      prin_contact_fax1: data.prin_cont_faxno1 || "",
+      prin_contact_fax2: data.prin_cont_faxno2 || "",
+      prin_contact_fax3: data.prin_cont_faxno3 || "",
+      prin_contact_ref1: data.prin_cont_ref1 || "",
+      
+      // Organization
+      div_code: data.div_code,
+      dept_code: data.prin_dept_code,
+      reference: data.prin_ref1,
+      auto_generate_product_code: data.auto_generate_product_code,
+      
+      // Account Info - Company Registration
+      tax_reg_no: data.trn_no || null,
+      tax_expiry_date: data.trn_exp_date || null,
+      comm_reg_no: data.comm_reg_no || null,
+      comm_expiry_date: data.comm_reg_exp_date || null,
+      license_no: data.prin_lic_no || null,
+      license_type: data.prin_lic_type,
+      curr_code: data.curr_code,
+      in_designated_zone: data.prin_infze,
+      
+      // Account Info - Credit
+      ac_reference: data.prin_acref,
+      credit_limit: data.credit_limit || null,
+      credit_period_wms: data.creditdays || null,
+      credit_freight: data.creditdays_freight || null,
+      
+      // Account Info - Transaction
+      import_code: data.prin_imp_code,
+      parent_prin_code: data.parent_prin_code,
+      last_invoice_date: data.prin_invdate || null,
+      
+      // Files
+      files: data.files || [],
+      
+      // Settings - Pick Rules
+      pick_wave: data.pick_wave,
+      pick_wave_min_exp: data.pick_wave_ign_min_exp,
+      pick_wave_least_qty: data.pick_wave_qty_sort,
+      
+      // Settings - General
+      allow_undervalue: data.under_value,
+      auto_populate_bill: data.auto_insert_billactivity,
+      chargeable: data.prin_charge,
+      export_price_check: data.prin_pricechk,
+      compute_landed_cost: data.prin_landedpr,
+      auto_job_no_generate: data.auto_job,
+      validate_lot_no: data.validate_lotno,
+      
+      // Settings - Product and Shipment
+      product_wise_storage: data.storage_productwise,
+      direct_shipment: data.dir_shpmnt,
+      perpetual_confirm_allow: data.perpectual_confirm_allow,
+      outbound_validate_exp_date: data.validate_expdate || null,
+      outbound_min_exp_period: data.minperiod_exppick || null,
+      inbound_exp_limit_days: data.rcpt_exp_limit || null,
+      
+      // Storage
+      preferred_site: data.pref_site,
+      location_from: data.pref_loc_from,
+      location_to: data.pref_loc_to,
+      aisle_from: data.pref_aisle_from || null,
+      aisle_to: data.pref_aisle_to || null,
+      column_from: data.pref_col_from || null,
+      column_to: data.pref_col_to || null,
+      height_from: data.pref_ht_from || null,
+      height_to: data.pref_ht_to || null,
+      default_site_ind: data.prin_siteind,
+      service_date: data.service_date || null,
+      storage_type: data.storage_type,
+      default_foc: data.default_foc,
+      automate_activity: data.automate_activity,
+      
+      // Company code
+      company_code: data.company_code,
+    }),
     saveEndpoint: (form, { editMode, original }) => (editMode ? `principal/${original?.prin_code || form.prin_code}` : "principal"),
     deleteConfig: { mode: "disabled", payload: () => null, reason: "Delete endpoint is not registered in the existing backend" },
   },
@@ -480,9 +702,9 @@ product: {
   ],
   fields: [
     // Product Details Tab - Principal Info
-    { name: "prin_code", label: "Principal Code", required: true, asyncOptions: { endpoint: "principal", labelKey: "prin_name", valueKey: "prin_code" }, width: 150, tab: "product-details", section: "PRINCIPAL INFO" },
-    { name: "group_code", label: "Group Code", required: true, asyncOptions: { endpoint: "group", labelKey: "group_name", valueKey: "group_code" }, width: 140, tab: "product-details", section: "PRINCIPAL INFO" },
-    { name: "brand_code", label: "Brand Code", required: true, asyncOptions: { endpoint: "brand", labelKey: "brand_name", valueKey: "brand_code" }, width: 140, tab: "product-details", section: "PRINCIPAL INFO" },
+    { name: "prin_code", label: "Principal Code", required: true, dropdownParam: "DROP_DOWN_PRINCIPAL", width: 150, tab: "product-details", section: "PRINCIPAL INFO" },
+    { name: "group_code", label: "Group Code", required: true, dropdownParam: "DROP_DOWN_GROUP", dropdownCodeMap: { prin_code: "code1" }, width: 140, tab: "product-details", section: "PRINCIPAL INFO" },
+    { name: "brand_code", label: "Brand Code", required: true, dropdownParam: "DROP_DOWN_BRAND", dropdownCodeMap: { prin_code: "code1", group_code: "code2" }, width: 140, tab: "product-details", section: "PRINCIPAL INFO" },
 
     // Product Details Tab - Product Info
     { name: "prod_code", label: "Product Code", disabledOnEdit: true, width: 160, tab: "product-details", section: "PRODUCT INFO" },
@@ -492,8 +714,8 @@ product: {
 
     // UOM & Volume Tab - Unit of Measurement
     { name: "no_of_uoms", label: "No. of UOMs", type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-    { name: "p_uom", label: "Primary UOM", required: true, asyncOptions: { endpoint: "uom", labelKey: "uom_name", valueKey: "uom_code" }, width: 140, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-    { name: "l_uom", label: "Lowest UOM", required: true, asyncOptions: { endpoint: "uom", labelKey: "uom_name", valueKey: "uom_code" }, width: 130, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
+    { name: "p_uom", label: "Primary UOM", required: true, dropdownParam: "DROP_DOWN_UOM", width: 140, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
+    { name: "l_uom", label: "Lowest UOM", required: true, dropdownParam: "DROP_DOWN_UOM", width: 130, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
     { name: "units_prim_pack", label: "Units/Prim Pack", required: true, type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
     { name: "def_units_palette", label: "Def. Units/Pallette", required: true, type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
     { name: "qty_as_wt", label: "Qty As Wt", type: "checkbox", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
@@ -509,11 +731,11 @@ product: {
     { name: "carton_layer", label: "Carton / Layer", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
 
     // Manufacture & Validation Tab - Manufacturer
-    { name: "harmonize_code", label: "Harmonize Code", asyncOptions: { endpoint: "harmonize", labelKey: "harm_desc", valueKey: "harm_code" }, tab: "manufacture-validation", section: "MANUFACTURER" },
+    { name: "harmonize_code", label: "Harmonize Code", dropdownParam: "DROP_DOWN_HARMONIZE", dropdownCodeMap: { prin_code: "code1", group_code: "code2", brand_code: "code3" }, tab: "manufacture-validation", section: "MANUFACTURER" },
     { name: "imco_code", label: "IMCO Code", tab: "manufacture-validation", section: "MANUFACTURER" },
-    { name: "manufacturer", label: "Manufacturer", asyncOptions: { endpoint: "manufacturer", labelKey: "manu_name", valueKey: "manu_code" }, tab: "manufacture-validation", section: "MANUFACTURER" },
+    { name: "manufacturer", label: "Manufacturer", dropdownParam: "DROP_DOWN_MANUFACTURER", dropdownCodeMap: { prin_code: "code1" }, tab: "manufacture-validation", section: "MANUFACTURER" },
     { name: "alt_prod_code", label: "Alternate Prod Code", tab: "manufacture-validation", section: "MANUFACTURER" },
-    { name: "default_site_ind", label: "Default Site Ind", required: true, asyncOptions: { endpoint: "site", labelKey: "site_name", valueKey: "site_code" }, tab: "manufacture-validation", section: "MANUFACTURER" },
+    { name: "default_site_ind", label: "Default Site Ind", required: true, dropdownParam: "DROP_DOWN_SITE", tab: "manufacture-validation", section: "MANUFACTURER" },
     { name: "batch_type", label: "Batch Type", type: "number", tab: "manufacture-validation", section: "MANUFACTURER" },
 
     // Manufacture & Validation Tab - Validation
@@ -527,8 +749,8 @@ product: {
 
     // Category & Product Tab - Category
     { name: "category_abc", label: "Category ABC", type: "select", options: [{ label: "A", value: "A" }, { label: "B", value: "B" }, { label: "C", value: "C" }], tab: "category-product", section: "CATEGORY" },
-    { name: "status", label: "Status", required: true, type: "select", options: [{ label: "Active", value: "Active" }, { label: "Inactive", value: "Inactive" }], tab: "category-product", section: "CATEGORY" },
-    { name: "prod_type", label: "Product Type", asyncOptions: { endpoint: "producttype", labelKey: "prodtype_desc", valueKey: "prodtype_code" }, tab: "category-product", section: "CATEGORY" },
+    { name: "prod_status", label: "Status", required: true, type: "select", options: [{ label: "Active", value: "Active" }, { label: "Inactive", value: "Inactive" }], tab: "category-product", section: "CATEGORY" },
+    { name: "prod_type", label: "Product Type", dropdownParam: "DROP_DOWN_PRODUCT_TYPE", tab: "category-product", section: "CATEGORY" },
     { name: "prod_stage", label: "Product Stage", tab: "category-product", section: "CATEGORY" },
     { name: "base_price", label: "Base Price", type: "number", tab: "category-product", section: "CATEGORY" },
     { name: "def_pick_wave", label: "Def. Pick Wave", type: "select", options: [{ label: "Wave 1", value: "1" }, { label: "Wave 2", value: "2" }, { label: "Wave 3", value: "3" }], tab: "category-product", section: "CATEGORY" },
@@ -685,8 +907,8 @@ product: {
     keyField: "brand_code",
     fields: [
       { name: "brand_code", label: "Brand Code", required: true, disabledOnEdit: true, width: 130 },
-      { name: "prin_code", label: "Principal Code", required: true, asyncOptions: { endpoint: "principal", labelKey: "prin_name", valueKey: "prin_code" }, width: 150 },
-      { name: "group_code", label: "Group Code", required: true, asyncOptions: { endpoint: "group", labelKey: "group_name", valueKey: "group_code", dependsOn: "prin_code" }, width: 150, disabledWhen: (form) => !form.prin_code },
+      { name: "prin_code", label: "Principal Code", required: true, dropdownParam: "DROP_DOWN_PRINCIPAL", width: 150 },
+      { name: "group_code", label: "Group Code", required: true, dropdownParam: "DROP_DOWN_GROUP", dropdownCodeMap: { prin_code: "code1" }, width: 150, disabledWhen: (form) => !form.prin_code },
       { name: "brand_name", label: "Brand Name", required: true, width: 230 },
       { name: "pref_site", label: "Preferred Site", required: false, width: 140 },
       { name: "pref_loc_from", label: "Location From", required: false, width: 150 },
@@ -714,7 +936,7 @@ product: {
     keyField: "group_code",
     fields: [
       { name: "group_code", label: "Group Code", required: true, disabledOnEdit: true, width: 140 },
-      { name: "prin_code", label: "Principal Code", required: true, asyncOptions: { endpoint: "principal", labelKey: "prin_name", valueKey: "prin_code" }, width: 150 },
+      { name: "prin_code", label: "Principal Code", required: true, dropdownParam: "DROP_DOWN_PRINCIPAL", width: 150 },
       { name: "group_name", label: "Group Name", required: true, width: 260 },
     ],
     deleteConfig: {
