@@ -17,7 +17,8 @@ import {
   TransactionType,
   getLpoDocuments,
   getLpoHeader,
-  getLpoDetail
+  getLpoDetail,
+  getPurchaseHeader
 } from "../../api/transactions";
 import { getDynamicFinanceLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
@@ -368,6 +369,45 @@ function CommercialEditor({
     setForm((current) => ({ ...current, detail: current.detail.filter((line) => line.id !== id).map((line, index) => ({ ...line, serial_no: index + 1 })) }));
   };
 
+//   const syncLineTax = (taxCode: string, taxExpmt: string, taxPerc: number) => {
+//   setForm((c) => ({
+//     ...c,
+//     detail: c.detail.map((line) => ({
+//       ...line,
+//       tx_compntcat_code_1: taxCode  || line.tx_compntcat_code_1,
+//       tx_compnt_1_expmt:   taxExpmt || line.tx_compnt_1_expmt,
+//       tx_compnt_perc_1:    taxPerc,
+//       tx_compnt_amt_1:     (Number(line.amount || 0) * taxPerc) / 100,
+//     })),
+//   }));
+//  };
+
+  const syncLineTax = (
+  taxCode: string,
+  taxExpmt: string,
+  taxPerc: number
+) => {
+  setForm((c) => {
+    const updatedDetail = c.detail.map((line) => ({
+      ...line,
+      tx_compntcat_code_1:
+        taxCode || line.tx_compntcat_code_1,
+
+      tx_compnt_1_expmt:
+        taxExpmt || line.tx_compnt_1_expmt,
+
+      tx_compnt_perc_1: taxPerc,
+
+      tx_compnt_amt_1:
+        (Number(line.amount || 0) * taxPerc) / 100,
+    }));
+
+    return {
+      ...c,
+      detail: updatedDetail,
+    };
+  });
+  };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setSaving(true);
@@ -577,20 +617,24 @@ function CommercialEditor({
     <Input disabled value={form.ac_name || ""} />
   </Field>
 
-  {/* ── Currency — ALL (field: curr_code / curr_name) ── */}
-  <LookupField
+  {/* ── Currency ── */}
+   <LookupField
     label="Currency"
-    value={form.curr_code}
-    displayValue={form.curr_name
-      ? `${form.curr_code} - ${form.curr_name}`
-      : form.curr_code}
+    value={form.curr_code ?? ""}
+    displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
     columns={[
       { field: "curr_code", header: "Code" },
       { field: "curr_name", header: "Name" },
+      { field: "ex_rate",   header: "Ex Rate" },
     ]}
     valueField="curr_code"
-    displayFields={["curr_code", "curr_name"]}
-    loadOptions={() => getCurrencyRows()}
+    displayFields={["curr_code", "curr_name", "ex_rate"]}
+    loadOptions={() =>
+      getDynamicFinanceLookup({
+        parameter: "Account_Currency_CODE_Search",
+        code1: user?.company_code || "",
+      })
+    }
     onChange={(value, row) =>
       setForm((c) => ({
         ...c,
@@ -601,26 +645,26 @@ function CommercialEditor({
     }
   />
 
-  {/* ── Ex Rate — ALL (field: ex_rate) ── */}
+  {/* ── Ex Rate ── */}
   <Field label="Ex Rate">
     <Input type="number" step="0.0001" value={form.ex_rate}
       onChange={(e) => update("ex_rate", Number(e.target.value || 1))} />
   </Field>
 
-  {/* ── Address — ALL (field: party_address) ── */}
+  {/* ── Address  ── */}
   <label className="field col-span-2 max-md:col-span-1">
     <span>Address</span>
     <Input value={form.party_address || ""}
       onChange={(e) => update("party_address", e.target.value)} />
   </label>
 
-  {/* ── Phone — ALL (field: party_phone) ── */}
+  {/* ── Phone ── */}
   <Field label="Phone">
     <Input value={form.party_phone || ""}
       onChange={(e) => update("party_phone", e.target.value)} />
   </Field>
 
-  {/* ── Fax — ── */}
+  {/* ── Fax ── */}
   <Field label="Fax">
     <Input value={form.party_fax || ""}
       onChange={(e) => update("party_fax", e.target.value)} />
@@ -653,22 +697,14 @@ function CommercialEditor({
   </Field>
 
   {/* ── Delivery Term  ── */}
-  {/* PO table field: dlvr_term | PI/SI/SV table field: delivery_term ── */}
-  {/* <Field label="Delivery Term">
-    <Input
-      value={(isPO ? form.dlvr_term : form.delivery_term) || ""}
-      onChange={(e) =>
-        update(isPO ? "dlvr_term" : "delivery_term", e.target.value)
-      }
-    />
-  </Field> */}
-
-  <Field label="Delivery Term">
-  <Input
-    value={form.dlvr_term || ""}
-    onChange={(e) => update("dlvr_term", e.target.value)}
-  />
-</Field>
+  {isPO && (
+    <Field label="Delivery Term">
+      <Input
+        value={form.dlvr_term || ""}
+        onChange={(e) => update("dlvr_term", e.target.value)}
+      />
+    </Field>
+  )}
 
   {/* ── Delivery To — PO only ── */}
   {isPO && (
@@ -679,12 +715,90 @@ function CommercialEditor({
   )}
 
   {/* ── Ref Doc — PI / SI / SV (field: ref_doc_no) ── */}
-  {!isPO && (
+  {/* {!isPO && (
     <Field label="Ref Doc">
       <Input value={form.ref_doc_no || ""}
         onChange={(e) => update("ref_doc_no", e.target.value)} />
     </Field>
-  )}
+  )} */}
+   
+   {!isPO && (
+  <LookupField
+    label="Ref Doc"
+    value={form.ref_doc_no || ""}
+    displayValue={form.ref_doc_no || ""}
+    columns={[
+      { field: "DOC_NO",   header: "Doc No"  },
+      { field: "DOC_DATE", header: "Date"    },
+      { field: "REF_NO",   header: "Ref No"  },
+      { field: "REMARKS",  header: "Remarks" },
+    ]}
+    valueField="DOC_NO"
+    displayFields={["DOC_NO"]}
+    loadOptions={() =>
+      getDynamicFinanceLookup({
+        parameter: "Account_LPO_REF_DOC",
+        code1: user?.company_code || "",
+        number1: form.div_code ? Number(form.div_code) : undefined,
+      })
+    }
+    onChange={async (value, row) => {
+      if (!value || !row) return;
+
+      const r       = row as Record<string, unknown>;
+      const docNo   = String(r["DOC_NO"]   ?? r["doc_no"]   ?? value);
+      const srcType = String(r["DOC_TYPE"] ?? r["doc_type"] ?? "PO");
+
+      // Show selection immediately
+      setForm((c) => ({ ...c, ref_doc_no: docNo }));
+
+      try {
+        let header: Record<string, unknown> = {};
+        try {
+          header = await getPurchaseHeader(docNo, srcType);
+          if (!hasRecordData(header)) {
+            header = await getLpoHeader(docNo, srcType);
+          }
+        } catch {
+          header = await getLpoHeader(docNo, srcType);
+        }
+
+        let rawDetail: Record<string, unknown>[] = [];
+        try {
+          const res = await getTransactionDetail(docNo, form.div_code, srcType as TransactionType);
+          if (res.length) rawDetail = res;
+        } catch { /* ignore, try LPO below */ }
+
+        if (!rawDetail.length) {
+          try {
+            rawDetail = await getLpoDetail(docNo, srcType);
+          } catch { /* ignore */ }
+        }
+
+        // Force PI when source doc is a PO
+        const targetDocType: CommercialType =
+          srcType.toUpperCase() === "PO" ? "PI" : (srcType as CommercialType);
+
+        const mapped = mapForm(targetDocType, header, rawDetail);
+
+        setForm((c) => ({
+          ...c,
+          ...mapped,
+          doc_type:   targetDocType,
+          doc_no:     c.doc_no,     // preserve existing doc_no in edit mode
+          div_code:   c.div_code,   // never overwrite user's chosen division
+          div_name:   c.div_name,
+          ref_doc_no: docNo,        // always keep the ref
+          detail:     mapped.detail,
+        }));
+
+      } catch (err) {
+        console.error("Failed to load ref doc", err);
+        setError(err instanceof Error ? err.message : "Unable to load reference document");
+      }
+    }}
+  />
+ )}
 
   {/* ── Salesman Code + Name — SI / SV only ── */}
   {isSales && (
@@ -720,15 +834,8 @@ function CommercialEditor({
  )}
 
   {/* ── Sector Code + Name — SI / SV only ── */}
-  {/* {isSales && (
-    <Field label="Sector">
-      <Input value={form.sector_code || ""}
-        onChange={(e) => update("sector_code", e.target.value)} />
-    </Field>
-  )} */}
-
    {isSales && (
-  <LookupField
+   <LookupField
     label="Sector"
     value={form.sector_code ?? ""}
     displayValue={form.sector_name ? `${form.sector_code} - ${form.sector_name}` : form.sector_code ?? ""}
@@ -760,30 +867,85 @@ function CommercialEditor({
   )}
 
   {/* ── Tax Category — ── */}
-  <Field label="Tax Category">
-    <Input value={form.tx_compntcat_code_1 || ""}
-      onChange={(e) => update("tx_compntcat_code_1", e.target.value)} />
-  </Field>
+  <LookupField
+  label="Tax Category"
+  value={form.tx_compntcat_code_1 ?? ""}
+  displayValue={form.tx_compntcat_code_1 ?? ""}
+  columns={[
+    { field: "tx_compntcat_code",  header: "Category Code" },
+    { field: "tx_compntcat_name",  header: "Category Name" },
+    { field: "tx_cat_code",        header: "Tax Code"      },
+    { field: "tx_percnt",          header: "Tax %"         },
+  ]}
+  valueField="tx_compntcat_code"
+  displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
+  loadOptions={() =>
+    getDynamicFinanceLookup({
+      parameter: "Account_Tax_Search",
+      code1: user?.company_code || "",
+    })
+  }
+  // onChange={(value, row) => {
+  //   const r = row || {} as Record<string, unknown>;
+  //   setForm((c) => ({
+  //     ...c,
+  //     tx_compntcat_code_1: value,
+  //     tx_cat_code:         text(getLookupValue(r, "tx_cat_code")),
+  //     tx_compnt_perc_1:    Number(getLookupValue(r, "tx_percnt") || 0),
+  //   }));
+  // }}
+
+  onChange={(value, row) => {
+  const r    = row || {} as Record<string, unknown>;
+  const perc = Number(getLookupValue(r, "tx_percnt") || 0);
+  const code = text(getLookupValue(r, "tx_cat_code"));
+  setForm((c) => ({
+    ...c,
+    tx_compntcat_code_1: value,
+    tx_cat_code: code,
+    tx_compnt_perc_1: perc,
+  }));
+  const nextTaxType = form.tx_compnt_1_expmt || "N";
+  syncLineTax(value, nextTaxType, perc);
+  // syncLineTax(value, form.tx_compnt_1_expmt || "", perc);
+ }}
+ />
 
   {/* ── Tax Code ── */}
   <Field label="Tax Code">
-    <Input value={form.tx_cat_code || ""}
-      onChange={(e) => update("tx_cat_code", e.target.value)} />
+    <Input disabled value={form.tx_cat_code || ""}
+      onChange={(e) => update("tx_cat_code", e.target.value)} 
+      />
   </Field>
 
   {/* ── Tax Type  ── */}
   <Field label="Tax Type">
     <Select
       value={form.tax_type || ""}  // field: tax_type in UI, maps to tx_compnt_1_expmt in table
+      
+      // onChange={(e) => {
+      //   const v = e.target.value;
+      //   setForm((c) => ({
+      //     ...c,
+      //     tax_type:          v,
+      //     tx_compnt_1_expmt: v,                // actual table field
+      //     tx_compnt_perc_1:  v === "S" ? 5 : 0, // auto-set % when Std Tax
+      //   }));
+      //   syncLineTax(form.tx_compntcat_code_1 || "", v, perc);
+      // }}
+
       onChange={(e) => {
-        const v = e.target.value;
-        setForm((c) => ({
-          ...c,
-          tax_type:          v,
-          tx_compnt_1_expmt: v,                // actual table field
-          tx_compnt_perc_1:  v === "S" ? 5 : 0, // auto-set % when Std Tax
-        }));
-      }}
+  const v    = e.target.value;
+  const perc = v === "S" ? 5 : 0;
+  setForm((c) => ({
+    ...c,
+    tax_type: v,
+    tx_compnt_1_expmt: v,
+    tx_compnt_perc_1: perc,
+  }));
+  syncLineTax(form.tx_compntcat_code_1 || "",v,perc);
+  // syncLineTax(form.tx_compntcat_code_1 || "", v, perc);
+ }}
     >
       <option value="" />
       <option value="S">Std. Tax</option>
@@ -906,7 +1068,7 @@ function CommercialEditor({
                           />
                         </td>
                         <td className="w-[210px] px-2 py-1">
-                          <LookupField
+                          {/* <LookupField
                             label="Currency"
                             compact
                             placeholder="Currency"
@@ -917,12 +1079,43 @@ function CommercialEditor({
                             displayFields={["curr_code", "curr_name"]}
                             loadOptions={() => getCurrencyRows()}
                             onChange={(value, row) => setForm((current) => ({ ...current, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")) }))}
-                          />
+                          /> */}
+                          <LookupField
+    label="Currency"
+    value={form.curr_code ?? ""}
+    displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
+    columns={[
+      { field: "curr_code", header: "Code" },
+      { field: "curr_name", header: "Name" },
+    ]}
+    valueField="curr_code"
+    displayFields={["curr_code", "curr_name", "ex_rate"]}
+    loadOptions={() =>
+      getDynamicFinanceLookup({
+        parameter: "Account_Currency_CODE_Search",
+        code1: user?.company_code || "",
+      })
+    }
+    onChange={(value, row) =>
+      setForm((c) => ({
+        ...c,
+        curr_code: value,
+        curr_name: text(getLookupValue(row || {}, "curr_name")),
+      }))
+    }
+  />
+  
                         </td>
                         <td className="w-40 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" step="0.0001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></td>
                         <td className="w-36 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" value={line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
                         <td className="w-44 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" step="0.001" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
-                        <td className="w-56 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" step="0.001" value={line.amount} onChange={(event) => updateLine(line.id, { amount: Number(event.target.value || 0) })} /></td>
+                        <td className="w-56 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" step="0.001" value={line.amount} 
+                        // onChange={(event) => updateLine(line.id, { amount: Number(event.target.value || 0) })} /></td>
+                        onChange={(e) => {
+    const amount = Number(e.target.value || 0);
+    const taxperc   = Number(line.tx_compnt_perc_1 || 0);
+    updateLine(line.id, { amount, tx_compnt_amt_1: (amount * taxperc) / 100 });
+  }} /></td>
                         <td className="w-28 px-2 py-1">
                           <Select className="h-9" value={line.sign_ind} onChange={(event) => updateLine(line.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
                             <option value={1}>Cr</option>
@@ -938,8 +1131,16 @@ function CommercialEditor({
                             <option value="E">Exempt</option>
                           </Select>
                         </td>
-                        <td className="w-36 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" value={line.tx_compnt_perc_1 ?? 0} onChange={(event) => updateLine(line.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
-                        <td className="w-52 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" value={line.tx_compnt_amt_1 ?? 0} onChange={(event) => updateLine(line.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
+                        <td className="w-36 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" value={line.tx_compnt_perc_1 ?? 0} 
+                        // onChange={(event) => updateLine(line.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
+                        onChange={(e) => {
+    const perc   = Number(e.target.value || 0);
+    const taxAmt = (Number(line.amount || 0) * perc) / 100;
+    updateLine(line.id, { tx_compnt_perc_1: perc, tx_compnt_amt_1: taxAmt });
+  }} /></td>
+                        <td className="w-52 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" 
+                        // value={line.tx_compnt_amt_1 ?? 0}  onChange={(event) => updateLine(line.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
+                        value={((Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100).toFixed(3)} /></td>
                         <td className="w-40 px-2 py-1"><Input value={line.job_no || ""} onChange={(event) => updateLine(line.id, { job_no: event.target.value })} /></td>
                         <td className="w-56 px-2 py-1">
                           {/* <Input disabled value={formatAmount(Number(line.amount || 0) * Number(form.ex_rate || 1) * Number(line.sign_ind || 1))} /> */}
@@ -1058,7 +1259,8 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
     tax_type: text(header.tx_compnt_1_expmt),
     tx_compnt_1_expmt: text(header.tx_compnt_1_expmt),
     tx_compntcat_code_1: text(header.tx_compntcat_code_1),
-    tx_cat_code:         text(header.tx_cat_code),
+    // tx_cat_code:         text(header.tx_cat_code),
+    tx_cat_code: text(nested(headerRaw, ["Tax Category", "tx_cat_code"]) ?? header.tx_cat_code),
     tx_compnt_perc_1:    Number(header.tx_compnt_perc_1 || 0),
     print_letter_head: !!header.print_letter_head,
     detail: detailRaw.map((raw, index) => {
@@ -1112,16 +1314,20 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
       tx_cat_code: line.tx_cat_code || "",
       tx_compnt_1_expmt: line.tx_compnt_1_expmt || "N",
       tx_compnt_perc_1: Number(line.tx_compnt_perc_1 || 0),
-      tx_compnt_amt_1: Number(line.tx_compnt_amt_1 || 0),
+      // tx_compnt_amt_1: Number(line.tx_compnt_amt_1 || 0),
       //  tx_compnt_amt_1: Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100,   //correct 
       job_no: line.job_no || "",
       dept_code: line.dept_code || "",
       div_code: form.div_code,
       // lcur_amount: Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1) * Number(line.sign_ind || 1),
+      // lcur_amount: Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1),
+
+      tx_compnt_amt_1:      Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100,
+      tx_compnt_lcuramt_1:  (Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100) * Number(form.ex_rate || 1),
       lcur_amount: Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1),
       prod_code: line.prod_code || "",
       other_remarks: line.other_remarks || "",
-      tx_compnt_lcuramt_1: (Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100) * Number(form.ex_rate || 1),
+      // tx_compnt_lcuramt_1: (Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100) * Number(form.ex_rate || 1),
       header_ac_code: form.ac_code,
 
     })),
@@ -1153,8 +1359,6 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
   //     ])
   //   )
   // : {},
-    
-
 
   };
 }
@@ -1165,8 +1369,14 @@ async function getCurrencyRows(): Promise<LookupRow[]> {
   return response.data.data?.tableData || response.data.data || [];
 }
 
-function recalc(line: Line) {
-  return { qty: line.qty, price: line.price, amount: Number(line.qty || 0) * Number(line.price || 0) };
+function recalc(line: Line): Partial<Line> {
+  const qty    = Number(line.qty    || 0);
+  const price  = Number(line.price  || 0);
+  const amount = qty * price;
+  const perc   = Number(line.tx_compnt_perc_1 || 0);
+  const taxAmt = (amount * perc) / 100;
+
+  return { qty: line.qty, price: line.price, amount, tx_compnt_amt_1: taxAmt };
 }
 
 function lowerRecord(raw: Record<string, unknown>) {
@@ -1183,6 +1393,10 @@ function nested(source: Record<string, unknown>, path: string[]) {
 function text(value: unknown) {
   if (value === null || value === undefined) return "";
   return String(value);
+}
+
+function hasRecordData(record: Record<string, unknown> | null | undefined) {
+  return Boolean(record && Object.keys(record).length > 0);
 }
 
 function dateInput(value: unknown) {

@@ -86,7 +86,7 @@ export function DataTable<TData, TValue>({
   height = 590,
   minWidth,
   density = "comfortable",
-  pageSize = 25,
+  pageSize = 500,
   enablePagination = false,
   manualPagination = false,
   pageIndex = 0,
@@ -129,7 +129,7 @@ export function DataTable<TData, TValue>({
       globalFilter,
     },
     initialState: {
-      pagination: { pageIndex: 0, pageSize },
+      pagination: { pageIndex: 0, pageSize:8 },
     },
     onSortingChange: setSorting,
     onColumnFiltersChange: (updater) => {
@@ -152,7 +152,7 @@ export function DataTable<TData, TValue>({
   });
 
   const visibleRows = manualFiltering ? table.getCoreRowModel().rows : manualPagination ? table.getFilteredRowModel().rows : enablePagination ? table.getRowModel().rows : table.getFilteredRowModel().rows;
-  const skeletonRows = useMemo(() => Array.from({ length: Math.min(pageSize, 10) }), [pageSize]);
+  const skeletonRows = useMemo(() => Array.from({ length: Math.min(pageSize, 100) }), [pageSize]);
   const heightValue = typeof height === "number" ? `${height}px` : height;
   const minWidthValue = typeof minWidth === "number" ? `${minWidth}px` : minWidth;
   const pageCount = manualPagination ? Math.max(1, Math.ceil((totalRows ?? data.length) / Math.max(pageSize, 1))) : table.getPageCount() || 1;
@@ -175,6 +175,8 @@ export function DataTable<TData, TValue>({
       table.setPageSize(nextPageSize);
     }
   };
+
+  console.log("enablePagination", enablePagination);
 
   return (
     <div className="overflow-hidden rounded-md border bg-card shadow-sm">
