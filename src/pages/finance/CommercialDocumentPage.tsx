@@ -339,9 +339,7 @@ function CommercialEditor({
       setLoading(true);
       try {
         const [header, detail] = await Promise.all([
-          // getTransactionHeader(editor.row.doc_no, docType),
-          // getTransactionDetail(editor.row.doc_no, editor.row.div_code, docType),
-
+          
           docType === "PO"
             ? getLpoHeader(editor.row.doc_no, docType)
             : getTransactionHeader(editor.row.doc_no, docType),
@@ -372,7 +370,9 @@ function CommercialEditor({
    const isPI    = docType === "PI";
    const isSales = docType === "SI" || docType === "SV";
 
-  const total = form.detail.reduce((sum, line) => sum + Number(line.amount || 0) * line.sign_ind, 0);
+  // const total = form.detail.reduce((sum, line) => sum + Number(line.amount || 0) * line.sign_ind, 0);
+  const total = form.detail.filter((line) => Number(line.serial_no) < 9000).reduce((sum, line) => sum + Number(line.amount || 0), 0);
+  const taxTotal = form.detail.filter((line) => Number(line.serial_no) < 9000).reduce((sum, line) => sum + (Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100, 0);
 
   const update = (field: keyof FormState, value: string | number) => setForm((current) => ({ ...current, [field]: value }));
   const updateLine = (id: string, patch: Partial<Line>) => {
@@ -397,19 +397,6 @@ function CommercialEditor({
   const removeLine = (id: string) => {
     setForm((current) => ({ ...current, detail: current.detail.filter((line) => line.id !== id).map((line, index) => ({ ...line, serial_no: index + 1 })) }));
   };
-
-//   const syncLineTax = (taxCode: string, taxExpmt: string, taxPerc: number) => {
-//   setForm((c) => ({
-//     ...c,
-//     detail: c.detail.map((line) => ({
-//       ...line,
-//       tx_compntcat_code_1: taxCode  || line.tx_compntcat_code_1,
-//       tx_compnt_1_expmt:   taxExpmt || line.tx_compnt_1_expmt,
-//       tx_compnt_perc_1:    taxPerc,
-//       tx_compnt_amt_1:     (Number(line.amount || 0) * taxPerc) / 100,
-//     })),
-//   }));
-//  };
 
   const syncLineTax = (
   taxCode: string,
@@ -482,7 +469,7 @@ function CommercialEditor({
             </div>
             <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
               <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
-              <strong className="block text-xs leading-tight text-primary-foreground">{formatAmount(total)}</strong>
+              <strong className="block text-xs leading-tight text-primary-foreground">{formatAmount(total + taxTotal)}</strong>
             </div>
             {form.div_code && (
               <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
@@ -519,12 +506,12 @@ function CommercialEditor({
        <div className="commercial-header-shell rounded-md border bg-card">
        <div className={`commercial-header-panel payment-header-grid relative grid grid-cols-6 gap-2.5 p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1 ${showHeaderDetails ? "is-expanded" : "is-collapsed"}`}>
 
-  {/* ── Doc No (edit only) — ALL ── */}
+  {/* ── Doc No (edit only) ── */}
   {editMode && (
     <Field label="Doc No"><Input disabled value={form.doc_no || ""} /></Field>
   )}
 
-  {/* ── Doc Date — ALL ── */}
+  {/* ── Doc Date ── */}
   <Field label="Doc Date">
     <Input type="date" value={dateInput(form.doc_date)}
       onChange={(e) => update("doc_date", e.target.value)} />
@@ -573,7 +560,6 @@ function CommercialEditor({
   )}
   {isPO && (
     <Field label="LPO Category">
-      {/* field name: pdo_type in LPO table */}
       <Select value={form.pdo_type || ""}
         onChange={(e) => update("pdo_type", e.target.value)}>
         <option value="" />
@@ -584,7 +570,7 @@ function CommercialEditor({
     </Field>
   )}
 
-  {/* ── Division — ALL (disabled, pre-selected before opening editor) ── */}
+  {/* ── Division ── */}
   <Field label="Division">
     <Input disabled
       value={`${form.div_code}${form.div_name ? ` - ${form.div_name}` : ""}`} />
@@ -609,11 +595,30 @@ function CommercialEditor({
       const r   = row || {} as Record<string, unknown>;
       const get = (k: string) =>
         text(r[k] ?? r[k.toUpperCase()] ?? r[k.toLowerCase()] ?? "");
+
+      const newCurrCode = get("curr_code"); //change currency acc to curr
+
+      void (async () => {
+      let newExRate = form.ex_rate;
+      if (newCurrCode) {
+      const currRows = await getDynamicFinanceLookup({
+        parameter: "Account_Currency_CODE_Search",
+        code1: user?.company_code || "",
+      });
+      const match = currRows.find(
+        (r: Record<string, unknown>) =>
+          String(r["curr_code"] ?? "").toUpperCase() === newCurrCode.toUpperCase()
+      );
+      newExRate = Number(match?.["ex_rate"] ?? 1) || 1;
+    }
+
       setForm((c) => ({
         ...c,
         ac_code:       value,
         ac_name:       get("ac_name"),
         curr_code:     get("curr_code"),
+        ex_rate:       newExRate,
+        // ex_rate: Number(get("ex_rate") || c.ex_rate ),
         party_address: get("address"),
         party_phone:   get("phone"),
         party_fax:     get("fax"),
@@ -622,8 +627,10 @@ function CommercialEditor({
         dlvr_email:    get("e_mail"),
         remarks:       get("l4_description"), 
       }));
+    }) ();
     }}
   />
+
   {/* Supplier/Customer Name — read-only display */}
   <Field label={isSales ? "Customer Name" : "Supplier Name"}>
     <Input disabled value={form.ac_name || ""} />
@@ -897,16 +904,6 @@ function CommercialEditor({
       code1: user?.company_code || "",
     })
   }
-  // onChange={(value, row) => {
-  //   const r = row || {} as Record<string, unknown>;
-  //   setForm((c) => ({
-  //     ...c,
-  //     tx_compntcat_code_1: value,
-  //     tx_cat_code:         text(getLookupValue(r, "tx_cat_code")),
-  //     tx_compnt_perc_1:    Number(getLookupValue(r, "tx_percnt") || 0),
-  //   }));
-  // }}
-
   onChange={(value, row) => {
   const r    = row || {} as Record<string, unknown>;
   const perc = Number(getLookupValue(r, "tx_percnt") || 0);
@@ -1087,6 +1084,7 @@ function CommercialEditor({
         ...c,
         curr_code: value,
         curr_name: text(getLookupValue(row || {}, "curr_name")),
+        ex_rate: Number(getLookupValue(row || {}, "ex_rate") || 1),
       }))
     }
   />
@@ -1138,9 +1136,24 @@ function CommercialEditor({
                   </tbody>
                 </table>
               </div>
-              <div className="flex items-center justify-between border-t px-3 py-2 text-sm">
+              
+              <div className="border-t px-3 py-2 text-sm">
+  <div className="flex items-center justify-between">
+    <span className="text-muted-foreground">Total Amount</span>
+    <strong className="text-emerald-600">{formatAmount(total)}</strong>
+  </div>
+  <div className="flex items-center justify-between">
+    <span className="text-muted-foreground">Tax Amount</span>
+    <strong className="text-emerald-600">{formatAmount(taxTotal)}</strong>
+  </div>
+  <div className="flex items-center justify-between border-t mt-1 pt-1">
+    <span className="font-semibold">Net Total</span>
+    <strong className="text-emerald-600">{formatAmount(total + taxTotal)}</strong>
+  </div>
+
+              {/* <div className="flex items-center justify-between border-t px-3 py-2 text-sm">
                 <span className="text-muted-foreground">Total</span>
-                <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(total)}</strong>
+                <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(total+ taxTotal)}</strong> */}
               </div>
             </div>
           </div>
@@ -1148,8 +1161,14 @@ function CommercialEditor({
       </CardContent>
       <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
         <div className="text-sm text-muted-foreground">
-          Total Amount <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(total)}</strong>
+          Total Amount <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(total + taxTotal)}</strong>
         </div>
+
+        {/* <div className="text-sm text-muted-foreground flex items-center gap-4">
+  <span>Total Amt <strong className="text-emerald-600">{formatAmount(total)}</strong></span>
+  <span>Tax <strong className="text-emerald-600">{formatAmount(taxTotal)}</strong></span>
+  <span>Net Total <strong className="text-emerald-600">{formatAmount(total + taxTotal)}</strong></span>
+</div> */}
         <div className="flex items-center gap-2">
         <Button disabled={saving} type="button" variant="outline" onClick={onClose}>Close</Button>
         <Button disabled={saving || loading || form.detail.length === 0} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save"}</Button>
@@ -1321,33 +1340,6 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
 
     })),
     // children: {},
-
-    // for child 
-  //   children: form.doc_type !== "PO"
-  // ? Object.fromEntries(
-  //     form.detail.map((line) => [
-  //       line.id,
-  //       [{
-  //         company_code:  companyCode,
-  //         doc_type:      form.doc_type,
-  //         doc_no:        form.doc_no || "",
-  //         serial_no:     line.serial_no,
-  //         dtl_sr_no:     1,
-  //         doc_date:      form.doc_date,
-  //         ac_code:       line.ac_code,
-  //         inv_no:        form.inv_no || form.ref_no || "",
-  //         inv_date:      form.inv_date || form.doc_date,
-  //         amount:        Math.abs(Number(line.amount || 0)),
-  //         lcur_amount:   Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1),
-  //         sign_ind:      line.sign_ind,
-  //         curr_code:     form.curr_code,
-  //         ex_rate:       Number(form.ex_rate || 1),
-  //         div_code:      form.div_code,
-  //         job_no:        line.job_no || "",
-  //       }]
-  //     ])
-  //   )
-  // : {},
 
   };
 }
