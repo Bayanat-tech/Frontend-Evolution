@@ -1103,8 +1103,8 @@ function CommercialEditor({
   }} /></td>
                         <td className="w-28 px-2 py-1">
                           <Select className="h-9" value={line.sign_ind} onChange={(event) => updateLine(line.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
-                            <option value={1}>Cr</option>
-                            <option value={-1}>Dr</option>
+                            <option value={-1}>Cr</option>
+                            <option value={1}>Dr</option>
                           </Select>
                         </td>
                         <td className="w-40 px-2 py-1"><Input value={line.tx_compntcat_code_1 || ""} onChange={(event) => updateLine(line.id, { tx_compntcat_code_1: event.target.value })} /></td>
