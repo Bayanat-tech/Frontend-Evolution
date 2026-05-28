@@ -5,6 +5,7 @@ import { AppSelectionPage } from "./pages/AppSelectionPage";
 import { WorkspacePage } from "./pages/WorkspacePage";
 import { ProtectedRoute } from "./routes/ProtectedRoute";
 import { useAuth } from "./state/AuthContext";
+import { ToastProvider } from "./components/ui/AlertToast";
 
 export function App() {
   const { isBooting } = useAuth();
@@ -27,10 +28,11 @@ export function App() {
 
   return (
     <div className={dark ? "app dark" : "app"}>
-      <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="/login" element={<LoginPage dark={dark} onToggleTheme={toggleTheme} />} />
-        <Route
+      <ToastProvider>
+        <Routes>
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/login" element={<LoginPage dark={dark} onToggleTheme={toggleTheme} />} />
+          <Route
           path="/apps"
           element={
             <ProtectedRoute>
@@ -48,6 +50,7 @@ export function App() {
         />
         <Route path="*" element={<Navigate to="/apps" replace />} />
       </Routes>
+    </ToastProvider>
     </div>
   );
 }

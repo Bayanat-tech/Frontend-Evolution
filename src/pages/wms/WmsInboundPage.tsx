@@ -1,7 +1,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import {
-  ArrowLeft, Ban, CheckCircle2, Eye, PackageCheck, Plus, Printer,
-  RefreshCw, Save, Settings2, Truck, X, ChevronDown
+  ArrowLeft, Ban, CheckCircle2, Eye, FileText, PackageCheck, Plus,
+  Printer, RefreshCw, Save, Settings2, Ship, Truck, X, ChevronDown,MapPin
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -16,107 +16,435 @@ import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { cn } from "../../lib/utils";
 import { LookupField } from "../../components/ui/LookupField";
+import { useToast, ToastProvider } from "../../components/ui/AlertToast";
+
 type WmsRow = Record<string, unknown>;
 type DropdownOption = { value: string; label: string };
 
-// ---------------------------------------------------------------------------
-// SearchableSelect
-// ---------------------------------------------------------------------------
-function SearchableSelect({
-  value: currentValue, options, placeholder, onChange, onClear, hasValue,
+function InboundFormFrame({
+  open, title, children, footer, onClose,
 }: {
-  value: string; options: DropdownOption[]; placeholder: string;
-  onChange: (val: string) => void; onClear: () => void; hasValue: boolean;
+  open: boolean; title: string; children: React.ReactNode;
+  footer: React.ReactNode; onClose: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const filtered = useMemo(
-    () => search.trim()
-      ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase())).slice(0, 50)
-      : options.slice(0, 50),
-    [options, search],
-  );
-
-  const selectedLabel = options.find((o) => o.value === currentValue)?.label || "";
-
+  if (!open) return null;
   return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => { setOpen((v) => !v); setSearch(""); }}
-        className={cn(
-          "flex w-full items-center justify-between rounded-md border px-3 py-2 text-sm transition-all duration-200",
-          hasValue
-            ? "border-primary bg-primary/10 font-medium text-primary ring-1 ring-primary/30"
-            : "border-input bg-background text-muted-foreground",
-        )}
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-[1px]"
+      onMouseDown={onClose}
+    >
+      <div
+        className="grid max-h-[92vh] w-[min(96vw,1280px)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-md border bg-card text-card-foreground shadow-2xl"
+        onMouseDown={(e) => e.stopPropagation()}
       >
-        <span className="truncate">{hasValue ? selectedLabel : placeholder}</span>
-        <ChevronDown size={14} className="ml-2 shrink-0 opacity-50" />
-      </button>
-      {hasValue && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onClear(); setOpen(false); }}
-          className="absolute right-7 top-1/2 -translate-y-1/2 flex h-4 w-4 items-center justify-center rounded-full bg-muted-foreground/30 text-foreground hover:bg-destructive hover:text-white transition-colors"
-        >
-          <X size={10} />
-        </button>
-      )}
-      {open && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg">
-          <div className="p-2 border-b">
-            <input
-              autoFocus
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search..."
-              className="w-full rounded border border-input bg-background px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-primary"
-            />
+        <div className="flex items-center justify-between border-b bg-card px-5 py-3.5">
+          <div className="flex items-center gap-3">
+            <span className="h-7 w-1 rounded-full bg-primary" />
+            <div>
+              <p className="m-0 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">
+                Inbound Job
+              </p>
+              <h2 className="m-0 text-lg font-bold text-foreground">{title}</h2>
+            </div>
           </div>
-          <ul className="max-h-52 overflow-y-auto">
-            {filtered.length === 0 ? (
-              <li className="px-3 py-2 text-sm text-muted-foreground">No results</li>
-            ) : (
-              filtered.map((opt) => (
-                <li
-                  key={opt.value}
-                  className={cn(
-                    "cursor-pointer px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground",
-                    opt.value === currentValue && "bg-primary/10 font-medium text-primary",
-                  )}
-                  onMouseDown={() => { onChange(opt.value); setOpen(false); setSearch(""); }}
-                >
-                  {opt.label}
-                </li>
-              ))
-            )}
-          </ul>
-          {options.length > 50 && (
-            <p className="border-t px-3 py-1.5 text-[11px] text-muted-foreground">
-              Showing 50 of {options.length} — type to filter
-            </p>
-          )}
+          <button
+            aria-label="Close"
+            type="button"
+            onClick={onClose}
+            className="grid h-8 w-8 place-items-center rounded-md border bg-background text-muted-foreground transition hover:bg-accent hover:text-foreground"
+          >
+            <X size={16} />
+          </button>
         </div>
-      )}
+        <div className="min-h-0 overflow-y-auto overflow-x-hidden bg-muted/20 p-3 text-sm">
+          {children}
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t bg-card px-5 py-3">
+          {footer}
+        </div>
+      </div>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// useRawSqlDropdown
-// ---------------------------------------------------------------------------
+async function loadInboundPrincipalLookup(companyCode: string) {
+  const data = await executeWmsInboundSql(`
+    SELECT p.PRIN_CODE, p.PRIN_NAME, p.PRIN_DEPT_CODE, p.DIV_CODE,
+           d.DEPT_NAME, v.DIV_NAME
+    FROM MS_PRINCIPAL p
+    LEFT JOIN MS_DEPARTMENT d
+      ON d.COMPANY_CODE = p.COMPANY_CODE
+     AND d.DEPT_CODE = p.PRIN_DEPT_CODE
+     AND d.DIV_CODE = p.DIV_CODE
+    LEFT JOIN MS_HR_DIVISION v
+      ON v.COMPANY_CODE = p.COMPANY_CODE
+     AND v.DIV_CODE = p.DIV_CODE
+    WHERE p.COMPANY_CODE = '${sqlEscape(companyCode)}'
+    ORDER BY p.PRIN_CODE
+  `);
+  return data.map(normalizeRow);
+}
+
+async function loadInboundDepartmentLookup(companyCode: string, divCode = "") {
+  const data = await executeWmsInboundSql(`
+    SELECT d.DEPT_CODE, d.DEPT_NAME, d.DIV_CODE, v.DIV_NAME
+    FROM MS_DEPARTMENT d
+    LEFT JOIN MS_HR_DIVISION v
+      ON v.COMPANY_CODE = d.COMPANY_CODE
+     AND v.DIV_CODE = d.DIV_CODE
+    WHERE d.COMPANY_CODE = '${sqlEscape(companyCode)}'
+    ${divCode ? `AND d.DIV_CODE = '${sqlEscape(divCode)}'` : ""}
+    ORDER BY d.DEPT_CODE
+  `);
+  return data.map(normalizeRow);
+}
+
+async function loadInboundDivisionLookup(companyCode: string) {
+  const data = await executeWmsInboundSql(`
+    SELECT DIV_CODE, DIV_NAME FROM MS_HR_DIVISION
+    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
+    ORDER BY DIV_CODE
+  `);
+  return data.map(normalizeRow);
+}
+
+async function loadInboundCountryLookup() {
+  const data = await executeWmsInboundSql(
+    `SELECT COUNTRY_CODE, COUNTRY_NAME FROM MS_COUNTRY ORDER BY COUNTRY_NAME`
+  );
+  return data.map(normalizeRow);
+}
+
+async function loadInboundPortLookup(countryCode = "") {
+  const data = await executeWmsInboundSql(`
+    SELECT PORT_CODE, PORT_NAME, COUNTRY_CODE FROM MS_PORT
+    ${countryCode ? `WHERE COUNTRY_CODE = '${sqlEscape(countryCode)}'` : ""}
+    ORDER BY PORT_NAME
+  `);
+  return data.map(normalizeRow);
+}
+function InboundJobCreateForm({
+  form, setForm, companyCode, onSubmit,
+}: {
+  form: WmsRow;
+  setForm: (updater: (cur: WmsRow) => WmsRow) => void;
+  companyCode: string;
+  onSubmit: (e: FormEvent) => void;
+}) {
+  const set = (name: string, val: unknown) =>
+    setForm((cur) => ({ ...cur, [name]: val }));
+ 
+  return (
+    <form id="inbound-job-form" className="grid gap-2.5" onSubmit={onSubmit}>
+ 
+      {/* ── Section 1: Job Information ── */}
+      <section className="rounded-md border bg-card shadow-sm">
+        <div className="flex items-center justify-between gap-3 border-b px-3 py-2">
+          <div className="flex items-center gap-2.5">
+            <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary">
+              <Ship size={16} />
+            </div>
+            <div>
+              <p className="eyebrow m-0">Job Information</p>
+              <h3 className="m-0 text-sm font-semibold">Inbound Job Creation</h3>
+            </div>
+          </div>
+          {/* <span className="rounded-full border bg-muted/40 px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+            {companyCode || "Company"}
+          </span> */}
+        </div>
+ 
+        <div className="grid gap-2.5 p-3 md:grid-cols-4">
+          {/* Principal */}
+          <LookupField
+            label="Principal"
+            value={String(form.prin_code || "")}
+            displayValue={[form.prin_code, form.prin_name].filter(Boolean).join(" - ")}
+            valueField="prin_code"
+            displayFields={["prin_code", "prin_name"]}
+            columns={[
+              { field: "prin_code",      header: "Code" },
+              { field: "prin_name",      header: "Principal Name" },
+              { field: "prin_dept_code", header: "Department" },
+              { field: "div_code",       header: "Division" },
+            ]}
+            placeholder="Select principal"
+            loadOptions={() => loadInboundPrincipalLookup(companyCode)}
+            onChange={(val, row) =>
+              setForm((cur) => ({
+                ...cur,
+                prin_code:  val,
+                prin_name:  row ? String(row["prin_name"]      ?? row["PRIN_NAME"]      ?? "") : cur.prin_name,
+                dept_code:  row ? String(row["prin_dept_code"] ?? row["PRIN_DEPT_CODE"] ?? cur.dept_code ?? "") : cur.dept_code,
+                dept_name:  row ? String(row["dept_name"]      ?? row["DEPT_NAME"]      ?? cur.dept_name ?? "") : cur.dept_name,
+                div_code:   row ? String(row["div_code"]       ?? row["DIV_CODE"]       ?? cur.div_code  ?? "") : cur.div_code,
+                div_name:   row ? String(row["div_name"]       ?? row["DIV_NAME"]       ?? cur.div_name  ?? "") : cur.div_name,
+              }))
+            }
+          />
+ 
+          {/* Department */}
+          <LookupField
+            label="Department"
+            value={String(form.dept_code || "")}
+            displayValue={[form.dept_code, form.dept_name].filter(Boolean).join(" - ")}
+            valueField="dept_code"
+            displayFields={["dept_code", "dept_name"]}
+            columns={[
+              { field: "dept_code", header: "Code" },
+              { field: "dept_name", header: "Department Name" },
+              { field: "div_code",  header: "Division" },
+            ]}
+            placeholder="Select department"
+            loadOptions={() => loadInboundDepartmentLookup(companyCode, String(form.div_code || ""))}
+            onChange={(val, row) =>
+              setForm((cur) => ({
+                ...cur,
+                dept_code: val,
+                dept_name: row ? String(row["dept_name"] ?? row["DEPT_NAME"] ?? "") : cur.dept_name,
+                div_code:  row ? String(row["div_code"]  ?? row["DIV_CODE"]  ?? cur.div_code ?? "") : cur.div_code,
+                div_name:  row ? String(row["div_name"]  ?? row["DIV_NAME"]  ?? cur.div_name ?? "") : cur.div_name,
+              }))
+            }
+          />
+ 
+          {/* Division */}
+          <LookupField
+            label="Division"
+            value={String(form.div_code || "")}
+            displayValue={[form.div_code, form.div_name].filter(Boolean).join(" - ")}
+            valueField="div_code"
+            displayFields={["div_code", "div_name"]}
+            columns={[
+              { field: "div_code", header: "Code" },
+              { field: "div_name", header: "Division Name" },
+            ]}
+            placeholder="Select division"
+            loadOptions={() => loadInboundDivisionLookup(companyCode)}
+            onChange={(val, row) =>
+              setForm((cur) => ({
+                ...cur,
+                div_code: val,
+                div_name: row ? String(row["div_name"] ?? row["DIV_NAME"] ?? "") : cur.div_name,
+              }))
+            }
+          />
+ 
+          {/* Job Classification */}
+          <label className="field">
+<span className="text-xs font-medium text-muted-foreground">
+  Job Classification <strong className="text-destructive">*</strong>
+</span>
+            <Select
+              value={String(form.job_class || "")}
+              onChange={(e) => set("job_class", e.target.value)}
+            >
+              <option value="">Select Job Classification</option>
+              {Object.entries(jobClassLabels).map(([code, label]) => (
+                <option key={code} value={code}>{code} - {label}</option>
+              ))}
+            </Select>
+          </label>
+ 
+          {/* Job Type */}
+          <label className="field">
+  <span className="text-xs font-medium text-muted-foreground">
+    Job Type <strong className="text-destructive">*</strong>
+  </span>
+              <Select
+              value={String(form.job_type || "IMP")}
+              onChange={(e) => set("job_type", e.target.value)}
+            >
+              <option value="IMP">IMP - Inbound</option>
+            </Select>
+          </label>
+ 
+          {/* Transport Mode */}
+          <label className="field">
+            <span className="text-xs font-medium text-muted-foreground">
+              Transport Mode
+            </span>
+            <Select
+              value={String(form.transport_mode || "S")}
+              onChange={(e) => set("transport_mode", e.target.value)}
+            >
+              <option value="S">S - Sea</option>
+              <option value="A">A - Air</option>
+              <option value="R">R - Road\Land</option>
+              <option value="C">C - Courier</option>
+            </Select>
+          </label>
+ 
+          {/* Schedule Date */}
+          <label className="field">
+          <span className="text-xs font-medium text-muted-foreground">
+            Schedule Date
+          </span>
+            <Input
+              type="date"
+              value={String(form.schedule_date || "")}
+              onChange={(e) => set("schedule_date", e.target.value)}
+            />
+          </label>
+        </div>
+      </section>
+ 
+      {/* ── Section 2: Routing ── */}
+      <section className="rounded-md border bg-card shadow-sm">
+        <div className="flex items-center gap-2.5 border-b px-3 py-2">
+          <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary">
+            <MapPin size={16} />
+          </div>
+          <div>
+            <p className="eyebrow m-0">Routing</p>
+            <h3 className="m-0 text-sm font-semibold">Origin, Destination And Ports</h3>
+          </div>
+        </div>
+ 
+        <div className="grid gap-2.5 p-3 md:grid-cols-4">
+          {/* Origin Country */}
+          <LookupField
+            label="Origin Country"
+            value={String(form.country_origin || "")}
+            displayValue={[form.country_origin, form.country_origin_name].filter(Boolean).join(" - ")}
+            valueField="country_code"
+            displayFields={["country_code", "country_name"]}
+            columns={[
+              { field: "country_code", header: "Code" },
+              { field: "country_name", header: "Country" },
+            ]}
+            placeholder="Select origin country"
+            loadOptions={loadInboundCountryLookup}
+            onChange={(val, row) =>
+              setForm((cur) => ({
+                ...cur,
+                country_origin:      val,
+                country_origin_name: row ? String(row["country_name"] ?? row["COUNTRY_NAME"] ?? "") : "",
+                port_code:           "",
+                port_name:           "",
+              }))
+            }
+          />
+ 
+          {/* Destination Country */}
+          <LookupField
+            label="Destination Country"
+            value={String(form.country_destination || "")}
+            displayValue={[form.country_destination, form.country_destination_name].filter(Boolean).join(" - ")}
+            valueField="country_code"
+            displayFields={["country_code", "country_name"]}
+            columns={[
+              { field: "country_code", header: "Code" },
+              { field: "country_name", header: "Country" },
+            ]}
+            placeholder="Select destination country"
+            loadOptions={loadInboundCountryLookup}
+            onChange={(val, row) =>
+              setForm((cur) => ({
+                ...cur,
+                country_destination:      val,
+                country_destination_name: row ? String(row["country_name"] ?? row["COUNTRY_NAME"] ?? "") : "",
+                destination_port:         "",
+                destination_port_name:    "",
+              }))
+            }
+          />
+ 
+          {/* Port Of Loading */}
+          <LookupField
+            label="Port Of Loading"
+            value={String(form.port_code || "")}
+            displayValue={[form.port_code, form.port_name].filter(Boolean).join(" - ")}
+            valueField="port_code"
+            displayFields={["port_code", "port_name"]}
+            columns={[
+              { field: "port_code",    header: "Port Code" },
+              { field: "port_name",    header: "Port Name" },
+              { field: "country_code", header: "Country" },
+            ]}
+            placeholder="Select port of loading"
+            loadOptions={() => loadInboundPortLookup(String(form.country_origin || ""))}
+            onChange={(val, row) =>
+              setForm((cur) => ({
+                ...cur,
+                port_code: val,
+                port_name: row ? String(row["port_name"] ?? row["PORT_NAME"] ?? "") : "",
+              }))
+            }
+          />
+ 
+          {/* Port Of Destination */}
+          <LookupField
+            label="Port Of Destination"
+            value={String(form.destination_port || "")}
+            displayValue={[form.destination_port, form.destination_port_name].filter(Boolean).join(" - ")}
+            valueField="port_code"
+            displayFields={["port_code", "port_name"]}
+            columns={[
+              { field: "port_code",    header: "Port Code" },
+              { field: "port_name",    header: "Port Name" },
+              { field: "country_code", header: "Country" },
+            ]}
+            placeholder="Select port of destination"
+            loadOptions={() => loadInboundPortLookup(String(form.country_destination || ""))}
+            onChange={(val, row) =>
+              setForm((cur) => ({
+                ...cur,
+                destination_port:      val,
+                destination_port_name: row ? String(row["port_name"] ?? row["PORT_NAME"] ?? "") : "",
+              }))
+            }
+          />
+        </div>
+      </section>
+ 
+      {/* ── Section 3: References ── */}
+      <section className="rounded-md border bg-card shadow-sm">
+        <div className="flex items-center gap-2.5 border-b px-3 py-2">
+          <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary">
+            <FileText size={16} />
+          </div>
+          <div>
+            <p className="eyebrow m-0">References</p>
+            <h3 className="m-0 text-sm font-semibold">Description And Remarks</h3>
+          </div>
+        </div>
+ 
+        <div className="grid gap-2.5 p-3 md:grid-cols-3">
+          <label className="field">
+<span className="text-xs font-medium text-muted-foreground">Job Description</span>
+            <textarea
+              className="ui-textarea min-h-[72px] rounded-md"
+              value={String(form.description1 || "")}
+              onChange={(e) => set("description1", e.target.value)}
+              placeholder="Job description"
+            />
+          </label>
+          <label className="field">
+<span className="text-xs font-medium text-muted-foreground">Job Remarks</span>
+            <textarea
+              className="ui-textarea min-h-[72px] rounded-md"
+              value={String(form.remarks || "")}
+              onChange={(e) => set("remarks", e.target.value)}
+              placeholder="Job remarks"
+            />
+          </label>
+          <label className="field">
+<span className="text-xs font-medium text-muted-foreground">GRN Remarks</span>
+            <textarea
+              className="ui-textarea min-h-[72px] rounded-md"
+              value={String(form.grn_remarks || "")}
+              onChange={(e) => set("grn_remarks", e.target.value)}
+              placeholder="GRN remarks"
+            />
+          </label>
+        </div>
+      </section>
+ 
+    </form>
+  );
+}
+
 function useRawSqlDropdown({ sql, valueKey, labelKeys, enabled = true }: {
   sql: string; valueKey: string; labelKeys: string[]; enabled?: boolean;
 }) {
@@ -300,6 +628,7 @@ export function WmsInboundPage() {
 // ---------------------------------------------------------------------------
 function InboundJobListing() {
   const { user } = useAuth();
+  const { toast } = useToast(); // Add this line
   const companyCode = user?.company_code || "";
   const navigate = useNavigate();
 
@@ -312,7 +641,8 @@ function InboundJobListing() {
   const [saving, setSaving] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<WmsRow | null>(null);
   const [cancelRemarks, setCancelRemarks] = useState("");
-  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  // Remove the notice state since we're using toast
+  // const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const { options: principalOptions } = useRawSqlDropdown({
     sql: `SELECT PRIN_CODE, PRIN_NAME FROM MS_PRINCIPAL WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY PRIN_NAME`,
@@ -342,14 +672,13 @@ function InboundJobListing() {
 
   const loadRows = async () => {
     setLoading(true);
-    setNotice(null);
     try {
       const data = await executeWmsInboundSql(
         "SELECT * FROM VW_TI_JOB WHERE JOB_TYPE = 'IMP' ORDER BY JOB_NO DESC",
       );
       setRows(data.map(normalizeRow));
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load inbound jobs" });
+      toast.error(error instanceof Error ? error.message : "Unable to load inbound jobs");
     } finally {
       setLoading(false);
     }
@@ -424,32 +753,138 @@ function InboundJobListing() {
 
   const saveJob = async (event: FormEvent) => {
     event.preventDefault();
-    const missing = jobFields.find((field) => field.required && !String(form[field.name] || "").trim());
-    if (missing) { setNotice({ type: "error", message: `${missing.label} is required` }); return; }
+    if (!String(form.prin_code || "").trim()) {
+      toast.warning("Principal is required");
+      return;
+    }
+    if (!String(form.job_class || "").trim()) {
+      toast.warning("Job Classification is required");
+      return;
+    }
     setSaving(true);
     try {
-      await postWmsInbound("inboundjob", { ...form, company_code: form.company_code || companyCode, job_type: form.job_type || "IMP" });
+      const now = new Date().toISOString();
+      const today = now.slice(0, 10);
+
+      const payload = {
+        job_type:            form.job_type || "IMP",
+        company_code:        form.company_code || companyCode,
+        job_date:            now,
+        job_class:           form.job_class || "N",
+        dept_code:           String(form.dept_code || ""),
+        transport_mode:      String(form.transport_mode || "S"),
+        doc_ref:             String(form.doc_ref || ""),
+        port_code:           String(form.port_code || ""),
+        description1:        String(form.description1 || ""),
+        description2:        "",
+        prin_ref1:           "",
+        prin_ref2:           String(form.prin_ref2 || ""),
+        remarks:             String(form.remarks || ""),
+        eta:                 null,
+        ata:                 null,
+        etd:                 null,
+        payment_terms:       "",
+        curr_code:           "OMR",
+        ex_rate:             1,
+        frieght_value:       0,
+        insurance_value:     0,
+        cust_code:           "",
+        container_flag:      "",
+        container:           "",
+        packdet:             "N",
+        allocated:           "N",
+        canceled:            "N",
+        confirmed:           "N",
+        grn_no:              null,
+        invoiced:            "N",
+        completed:           "",
+        exp_jobno:           "",
+        picked:              "N",
+        ordered:             "N",
+        destination_port:    String(form.destination_port || ""),
+        vessel_name:         "",
+        voyage_no:           "",
+        payableat:           "",
+        place_receipt:       "",
+        place_delivery:      "",
+        no_of_original_bl:   null,
+        broker_code:         "",
+        quotation_ref:       "",
+        be_deposits:         "",
+        ind_freight:         "",
+        country_origin:      String(form.country_origin || ""),
+        country_destination: String(form.country_destination || ""),
+        custom_recno:        "",
+        doc_ref2:            "",
+        hawb:                "",
+        reexport:            "",
+        ref_jobno:           "",
+        combined_jobno:      "",
+        carrier:             "",
+        job_lock:            "",
+        courier_code:        "",
+        delivery_point:      "",
+        div_code:            String(form.div_code || ""),
+        salesman_code:       "",
+        transit_time:        "",
+        document_check:      "",
+        delivery_remarks:    "",
+        cargo_received:      "",
+        delivered_by:        "",
+        canceled_by:         "",
+        cancel_remarks:      "",
+        send_mail:           "",
+        backlog_mail:        "",
+        dplan_flag:          "",
+        trans_batch_id:      "",
+        send_mail_dn:        "",
+        kpi_inc:             "",
+        kpi_exc_remark:      "",
+        job_category:        "N/A",
+        edit_user:           "",
+        tx_cat_code:         "",
+        bcf_code:            "",
+        request_category:    "",
+        load_point:          "",
+        updated_by:          user?.loginid || "Admin",
+        created_by:          user?.loginid || "Admin",
+        created_at:          now,
+        prin_code:           String(form.prin_code || ""),
+        schedule_date:       String(form.schedule_date || today),
+      };
+
+      await postWmsInbound("inboundjob", payload);
       setFormOpen(false);
-      setNotice({ type: "success", message: "Inbound job saved successfully" });
+      toast.success("Inbound job saved successfully");
       await loadRows();
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save inbound job" });
-    } finally { setSaving(false); }
+      toast.error(error instanceof Error ? error.message : "Unable to save inbound job");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const confirmCancel = async () => {
-    if (!cancelTarget || !cancelRemarks.trim()) return;
+    if (!cancelTarget || !cancelRemarks.trim()) {
+      toast.warning("Please enter cancellation remarks");
+      return;
+    }
     setSaving(true);
     try {
       await patchWmsInbound("canceljob", {
-        job_no: value(cancelTarget, "job_no"), prin_code: value(cancelTarget, "prin_code"), remarks: cancelRemarks,
+        job_no: value(cancelTarget, "job_no"), 
+        prin_code: value(cancelTarget, "prin_code"), 
+        remarks: cancelRemarks,
       });
-      setCancelTarget(null); setCancelRemarks("");
-      setNotice({ type: "success", message: "Inbound job cancellation submitted" });
+      setCancelTarget(null); 
+      setCancelRemarks("");
+      toast.success("Inbound job cancellation submitted");
       await loadRows();
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to cancel inbound job" });
-    } finally { setSaving(false); }
+      toast.error(error instanceof Error ? error.message : "Unable to cancel inbound job");
+    } finally { 
+      setSaving(false); 
+    }
   };
 
   return (
@@ -470,8 +905,8 @@ function InboundJobListing() {
         </div>
       </div>
 
-      {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
-
+      {/* Remove the notice div since we're using toasts now */}
+      
       <div className="flex flex-wrap gap-2 rounded-md border bg-card p-2">
         {listingTabs.map((tab) => (
           <Button key={tab.value} size="sm" variant={activeTab === tab.value ? "default" : "outline"}
@@ -497,79 +932,29 @@ function InboundJobListing() {
       />
 
       {/* Add Job Dialog */}
-      <Dialog wide open={formOpen} title="Add Inbound Job"
-        description="Create an import job using the existing WMS backend flow."
-        onClose={() => setFormOpen(false)}>
-        <form className="grid gap-2" onSubmit={saveJob}>
-          <div className="grid gap-2 grid-cols-2 md:grid-cols-3">
-            {jobFields.map((field) => {
-              const ddOptions = field.dropdown ? dropdownMap[field.dropdown] : null;
-              const isFullRow = field.name === "remarks" || field.name === "description1";
-              return (
-                <label className={isFullRow ? "field col-span-2 md:col-span-3" : "field"} key={field.name}>
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {field.label}{field.required && <strong className="text-destructive"> *</strong>}
-                  </span>
-                  {ddOptions ? (
-                    field.dropdown === "port" || field.dropdown === "country" ? (
-                      <SearchableSelect
-                        value={String(form[field.name] || "")} options={ddOptions}
-                        placeholder={`— Select ${field.label} —`} hasValue={!!form[field.name]}
-                        onChange={(val) => setForm((cur) => ({ ...cur, [field.name]: val }))}
-                        onClear={() => setForm((cur) => ({ ...cur, [field.name]: "" }))}
-                      />
-                    ) : (
-                      <div className="relative">
-                        <Select value={String(form[field.name] || "")}
-                          onChange={(e) => setForm((cur) => ({ ...cur, [field.name]: e.target.value }))}
-                          className={cn("pr-8 transition-all duration-200",
-                            form[field.name] ? "border-primary bg-primary/10 font-medium text-primary ring-1 ring-primary/30" : "")}>
-                          <option value="">— Select {field.label} —</option>
-                          {ddOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                        </Select>
-                        {Boolean(form[field.name]) && (
-                          <button type="button"
-                            className="absolute right-7 top-1/2 -translate-y-1/2 flex h-4 w-4 items-center justify-center rounded-full bg-muted-foreground/30 text-foreground hover:bg-destructive hover:text-white transition-colors"
-                            onClick={() => setForm((cur) => ({ ...cur, [field.name]: "" }))}>
-                            <X size={10} />
-                          </button>
-                        )}
-                      </div>
-                    )
-                  ) : field.name === "job_class" ? (
-                    <div className="relative">
-                      <Select value={String(form[field.name] || "")}
-                        onChange={(e) => setForm((cur) => ({ ...cur, [field.name]: e.target.value }))}
-                        className={cn("pr-8 transition-all duration-200",
-                          form[field.name] ? "border-primary bg-primary/10 font-medium text-primary ring-1 ring-primary/30" : "")}>
-                        <option value="">— Select Job Class —</option>
-                        {Object.entries(jobClassLabels).map(([code, label]) => (
-                          <option value={code} key={code}>{code} - {label}</option>
-                        ))}
-                      </Select>
-                      {Boolean(form[field.name]) && (
-                        <button type="button"
-                          className="absolute right-7 top-1/2 -translate-y-1/2 flex h-4 w-4 items-center justify-center rounded-full bg-muted-foreground/30 text-foreground hover:bg-destructive hover:text-white transition-colors"
-                          onClick={() => setForm((cur) => ({ ...cur, [field.name]: "" }))}>
-                          <X size={10} />
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <Input type={field.type || "text"} value={String(form[field.name] || "")}
-                      onChange={(e) => setForm((cur) => ({ ...cur, [field.name]: e.target.value }))} />
-                  )}
-                </label>
-              );
-            })}
-          </div>
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}><X size={15} /> Cancel</Button>
-            <Button disabled={saving} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save Job"}</Button>
-          </div>
-        </form>
-      </Dialog>
-
+      <InboundFormFrame
+        open={formOpen}
+        title="Add Inbound Job"
+        onClose={() => setFormOpen(false)}
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
+              <X size={15} /> Cancel
+            </Button>
+            <Button disabled={saving} form="inbound-job-form" type="submit">
+              <Save size={15} /> {saving ? "Saving..." : "Save Job"}
+            </Button>
+          </>
+        }
+      >
+        <InboundJobCreateForm
+          form={form}
+          setForm={setForm}
+          companyCode={companyCode}
+          onSubmit={saveJob}
+        />
+      </InboundFormFrame>
+      
       {/* Cancel Job Dialog */}
       <Dialog open={Boolean(cancelTarget)}
         title={`Cancel Job ${cancelTarget ? value(cancelTarget, "job_no") : ""}`}
@@ -986,31 +1371,55 @@ const saveAdd = async (e: FormEvent) => {
 
 const saveEdit = async (e: FormEvent) => {
   e.preventDefault();
-  if (tab !== "packing_details") return;
   setModalNotice(null);
 
-  if (!editForm.container_no) { setModalNotice("Container No. is required."); return; }
-  if (!editForm.prod_code)    { setModalNotice("Product / SKU is required."); return; }
-  if (!editForm.qty_puom || Number(editForm.qty_puom) <= 0) {
-    setModalNotice("Quantity (Primary) is required.");
+  if (tab === "packing_details") {
+    if (!editForm.container_no) { setModalNotice("Container No. is required."); return; }
+    if (!editForm.prod_code)    { setModalNotice("Product / SKU is required."); return; }
+    if (!editForm.qty_puom || Number(editForm.qty_puom) <= 0) {
+      setModalNotice("Quantity (Primary) is required.");
+      return;
+    }
+  } else if (tab === "receiving_details") {
+    // Validate at least one quantity is positive
+    const q1 = Number(editForm.qty1_arrived);
+    const q2 = Number(editForm.qty2_arrived);
+    if (isNaN(q1) || isNaN(q2)) {
+      setModalNotice("Both quantity fields must be numbers.");
+      return;
+    }
+    if (q1 <= 0 && q2 <= 0) {
+      setModalNotice("At least one quantity must be greater than zero.");
+      return;
+    }
+  } else {
     return;
   }
 
   setEditSaving(true);
   try {
-    await patchWmsInbound("packing_details", {   // ← also fix endpoint here
-  ...stripUiFields(editForm),  // ← was: ...editForm
-      job_no: jobNo,
-      prin_code: prinCode,
-      company_code: companyCode,
-      packdet_no: String(editForm.packdet_no || ""),
-    });
+    if (tab === "packing_details") {
+      await patchWmsInbound("packing_details", {
+        ...stripUiFields(editForm),
+        job_no: jobNo,
+        prin_code: prinCode,
+        company_code: companyCode,
+        packdet_no: String(editForm.packdet_no || ""),
+      });
+    } else if (tab === "receiving_details") {
+  const url = `/api/wms/inbound/packing_details/receiving?prin_code=${encodeURIComponent(prinCode)}&job_no=${encodeURIComponent(jobNo)}&packdet_no=${encodeURIComponent(String(editForm.packdet_no))}`;
+  const payload = {
+    qty1_arrived: Number(editForm.qty1_arrived),
+    qty2_arrived: Number(editForm.qty2_arrived),
+  };
+  await api.put(url, payload);
+}
     setEditOpen(false);
     setModalNotice(null);
-    setNotice({ type: "success", message: "Packing detail updated successfully" });
+    setNotice({ type: "success", message: `${tab === "packing_details" ? "Packing detail" : "Receiving detail"} updated successfully` });
     await loadRows();
   } catch (error) {
-    setModalNotice(error instanceof Error ? error.message : "Unable to update packing detail");
+    setModalNotice(error instanceof Error ? error.message : "Unable to update record");
   } finally {
     setEditSaving(false);
   }
@@ -1047,11 +1456,12 @@ const saveEdit = async (e: FormEvent) => {
           </Button>
         );
       case "receiving_details":
-        return (
-          <Button size="sm" variant="outline" onClick={openAddModal}>
-            <PackageCheck size={14} /> Add Receiving
-          </Button>
-        );
+        return null
+        // return (
+        //   <Button size="sm" variant="outline" onClick={openAddModal}>
+        //     <PackageCheck size={14} /> Add Receiving
+        //   </Button>
+        // );
       default:
         if (config.addFields && config.addEndpoint) {
           return (
@@ -1074,20 +1484,33 @@ const saveEdit = async (e: FormEvent) => {
 const columns = makeColumns(
   config.columns,
   tab === "quality_clearance" || tab === "putway_details" || tab === "job_confirmation",
-tab === "packing_details"
-  ? (row) => {
-      setEditForm({
-        ...row,
-        // Ensure these are numbers so recalcQuantity works correctly
-        uom_count: Number(row.uom_count ?? 1),
-        uppp: Number(row.uppp ?? 1),
-        qty_puom: Number(row.qty_puom ?? 0),
-        qty_luom: Number(row.qty_luom ?? 0),
-        quantity: Number(row.quantity ?? 0),
-      });
-      setEditOpen(true);
-    }
-  : undefined,
+  (tab === "packing_details" || tab === "receiving_details")
+    ? (row) => {
+        if (tab === "packing_details") {
+          setEditForm({
+            ...row,
+            uom_count: Number(row.uom_count ?? 1),
+            uppp: Number(row.uppp ?? 1),
+            qty_puom: Number(row.qty_puom ?? 0),
+            qty_luom: Number(row.qty_luom ?? 0),
+            quantity: Number(row.quantity ?? 0),
+          });
+        } else if (tab === "receiving_details") {
+          // Map backend fields to editForm
+          setEditForm({
+            packdet_no: row.packdet_no,
+            prod_name: row.prod_name,
+            batch_no: row.batch_no,
+            lot_no: row.lot_no,
+            po_no: row.po_no,
+            doc_ref: row.doc_ref,
+            qty1_arrived: Number(row.qty1_arrived ?? row.qty_arrived ?? 0),
+            qty2_arrived: Number(row.qty2_arrived ?? 0),
+          });
+        }
+        setEditOpen(true);
+      }
+    : undefined
 );
   return (
     <section className="grid gap-3">
@@ -1215,128 +1638,213 @@ tab === "packing_details"
   </form>
 </Dialog>
 {/* Edit Packing Modal */}
-{tab === "packing_details" && (
+{(tab === "packing_details" || tab === "receiving_details") && (
   <Dialog
     wide
     open={editOpen}
-    title="Edit Packing Details"
-    description="Update the packing detail record."
-    onClose={() => { setEditOpen(false); setModalNotice(null); }}  // ← clear on close
+    title={tab === "packing_details" ? "Edit Packing Details" : "Edit Receiving Quantity"}
+    description={
+      tab === "packing_details"
+        ? "Update the packing detail record."
+        : "Update the arrived quantities for this product."
+    }
+    onClose={() => {
+      setEditOpen(false);
+      setModalNotice(null);
+    }}
   >
     <form className="grid gap-2" onSubmit={saveEdit}>
-            {modalNotice && (
+      {modalNotice && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {modalNotice}
         </div>
       )}
 
-      <div className="grid gap-2 grid-cols-2 md:grid-cols-3">
-        {(config.addFields ?? []).map((field) => (
-          <label
-            key={field.name}
-            className={
-              field.name === "remarks" || field.name === "description1"
-                ? "field col-span-2 md:col-span-3"
-                : "field"
-            }
-          >
-            <span className="text-xs font-medium text-muted-foreground">
-              {field.label}
-              {field.required && <strong className="text-destructive"> *</strong>}
-            </span>
+      {tab === "packing_details" ? (
+        // ---------- PACKING DETAILS (existing generic fields) ----------
+        <div className="grid gap-2 grid-cols-2 md:grid-cols-3">
+          {(config.addFields ?? []).map((field) => (
+            <label
+              key={field.name}
+              className={
+                field.name === "remarks" || field.name === "description1"
+                  ? "field col-span-2 md:col-span-3"
+                  : "field"
+              }
+            >
+              <span className="text-xs font-medium text-muted-foreground">
+                {field.label}
+                {field.required && <strong className="text-destructive"> *</strong>}
+              </span>
 
-            {field.lookup ? (() => {
-const lp = getLookupProps(field, true);
-              if (!lp) return null;
-              return (
-                <LookupField
-                  label={field.label}
-                  compact
+              {field.lookup ? (() => {
+                const lp = getLookupProps(field, true);
+                if (!lp) return null;
+                return (
+                  <LookupField
+                    label={field.label}
+                    compact
+                    value={String(editForm[field.name] || "")}
+                    displayValue={String(editForm[`${field.name}_display`] || "")}
+                    valueField={lp.valueField}
+                    displayFields={lp.displayFields}
+                    columns={lp.columns}
+                    loadOptions={lp.loadOptions}
+                    onChange={(val, row) => {
+                      if (field.name === "prod_code") {
+                        setEditForm((cur) => ({
+                          ...cur,
+                          prod_code: val,
+                          uom: row ? String(row["UOM_CODE"] ?? cur.uom ?? "") : String(cur.uom ?? ""),
+                        }));
+                      } else if (field.name === "container_no") {
+                        setEditForm((cur) => ({ ...cur, container_no: val }));
+                      } else if (field.name === "country_origin") {
+                        setEditForm((cur) => ({
+                          ...cur,
+                          country_origin: val,
+                          country_origin_display: row
+                            ? `${row["COUNTRY_CODE"] ?? ""} - ${row["COUNTRY_NAME"] ?? ""}`
+                            : "",
+                        }));
+                      } else if (field.name === "manufacturer") {
+                        setEditForm((cur) => ({
+                          ...cur,
+                          manufacturer: val,
+                          manufacturer_display: row
+                            ? `${row["MANU_CODE"] ?? ""} - ${row["MANU_NAME"] ?? ""}`
+                            : "",
+                        }));
+                      }
+                    }}
+                  />
+                );
+              })() : field.dropdown && field.dropdown.length > 0 ? (
+                <Select
                   value={String(editForm[field.name] || "")}
-                  displayValue={String(editForm[`${field.name}_display`] || "")}
-                  valueField={lp.valueField}
-                  displayFields={lp.displayFields}
-                  columns={lp.columns}
-                  loadOptions={lp.loadOptions}
-                  onChange={(val, row) => {
-                    // Use editForm setter instead of addForm
-                    const syntheticEvent = { val, row };
-                    if (field.name === "prod_code") {
-                      setEditForm((cur) => ({
-                        ...cur,
-                        prod_code: val,
-                        // prod_code_display: row
-                        //   ? `${row["PROD_CODE"] ?? ""} - ${row["PROD_NAME"] ?? ""}` : "",
-                        uom: row ? String(row["UOM_CODE"] ?? cur.uom ?? "") : String(cur.uom ?? ""),
-                      }));
-                    } else if (field.name === "container_no") {
-                      setEditForm((cur) => ({ ...cur, container_no: val }));
-                    } else if (field.name === "country_origin") {
-                      setEditForm((cur) => ({
-                        ...cur,
-                        country_origin: val,
-                        country_origin_display: row
-                          ? `${row["COUNTRY_CODE"] ?? ""} - ${row["COUNTRY_NAME"] ?? ""}` : "",
-                      }));
-                    } else if (field.name === "manufacturer") {
-                      setEditForm((cur) => ({
-                        ...cur,
-                        manufacturer: val,
-                        manufacturer_display: row
-                          ? `${row["MANU_CODE"] ?? ""} - ${row["MANU_NAME"] ?? ""}` : "",
-                      }));
-                    }
-                  }}
+                  onChange={(e) =>
+                    setEditForm((cur) => ({ ...cur, [field.name]: e.target.value }))
+                  }
+                >
+                  <option value="">— Select {field.label} —</option>
+                  {field.dropdown.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </Select>
+              ) : field.name === "qty_puom" ? (
+                <Input
+                  type="number"
+                  min="0"
+                  value={String(editForm.qty_puom ?? "")}
+                  onChange={(e) =>
+                    setEditForm((cur) => ({
+                      ...cur,
+                      ...recalcQuantity(cur, "qty_puom", e.target.value),
+                    }))
+                  }
                 />
-              );
-            })() : field.dropdown && field.dropdown.length > 0 ? (
-              <Select
-                value={String(editForm[field.name] || "")}
-                onChange={(e) => setEditForm((cur) => ({ ...cur, [field.name]: e.target.value }))}
-              >
-                <option value="">— Select {field.label} —</option>
-                {field.dropdown.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </Select>
-          ) : field.name === "qty_puom" ? (
-  <Input
-    type="number"
-    min="0"
-    value={String(editForm.qty_puom ?? "")}
-    onChange={(e) =>
-      setEditForm((cur) => ({ ...cur, ...recalcQuantity(cur, "qty_puom", e.target.value) }))
-    }
-  />
-) : field.name === "qty_luom" ? (
-  <Input
-    type="number"
-    min="0"
-    disabled={Number(editForm.uom_count ?? 1) <= 1}
-    value={String(editForm.qty_luom ?? "")}
-    onChange={(e) =>
-      setEditForm((cur) => ({ ...cur, ...recalcQuantity(cur, "qty_luom", e.target.value) }))
-    }
-  />
-) : field.disabled || field.name === "quantity" ? (
-  <Input
-    type="number"
-    disabled
-    value={String(editForm.quantity ?? 0)}
-    className="bg-muted text-muted-foreground"
-  />
-) : (
-  <Input
-    type={field.type || "text"}
-    value={String(editForm[field.name] || "")}
-    onChange={(e) => setEditForm((cur) => ({ ...cur, [field.name]: e.target.value }))}
-  />
-)
+              ) : field.name === "qty_luom" ? (
+                <Input
+                  type="number"
+                  min="0"
+                  disabled={Number(editForm.uom_count ?? 1) <= 1}
+                  value={String(editForm.qty_luom ?? "")}
+                  onChange={(e) =>
+                    setEditForm((cur) => ({
+                      ...cur,
+                      ...recalcQuantity(cur, "qty_luom", e.target.value),
+                    }))
+                  }
+                />
+              ) : field.disabled || field.name === "quantity" ? (
+                <Input
+                  type="number"
+                  disabled
+                  value={String(editForm.quantity ?? 0)}
+                  className="bg-muted text-muted-foreground"
+                />
+              ) : (
+                <Input
+                  type={field.type || "text"}
+                  value={String(editForm[field.name] || "")}
+                  onChange={(e) =>
+                    setEditForm((cur) => ({ ...cur, [field.name]: e.target.value }))
+                  }
+                />
+              )}
+            </label>
+          ))}
+        </div>
+      ) : (
+        // ---------- RECEIVING DETAILS (custom layout) ----------
+        <div className="grid gap-4">
+          {/* Read-only product information */}
+          <div className="rounded-md border bg-muted/30 p-3 grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <span className="block text-xs text-muted-foreground">Product</span>
+              <span className="font-medium">{String(editForm.prod_name ?? "-")}</span>
+            </div>
+            <div>
+              <span className="block text-xs text-muted-foreground">Batch No</span>
+              <span className="font-medium">{String(editForm.batch_no ?? "-")}</span>
+            </div>
+            <div>
+              <span className="block text-xs text-muted-foreground">Lot No</span>
+              <span className="font-medium">{String(editForm.lot_no ?? "-")}</span>
+            </div>
+            <div>
+              <span className="block text-xs text-muted-foreground">PO No</span>
+              <span className="font-medium">{String(editForm.po_no ?? "-")}</span>
+            </div>
+            <div>
+              <span className="block text-xs text-muted-foreground">Doc Ref</span>
+              <span className="font-medium">{String(editForm.doc_ref ?? "-")}</span>
+            </div>
+          </div>
 
-            }
-          </label>
-        ))}
-      </div>
+          {/* Editable quantity fields */}
+          <div className="grid grid-cols-2 gap-3">
+            <label className="field">
+              <span className="text-xs font-medium text-muted-foreground">
+                Quantity (Primary) <strong className="text-destructive">*</strong>
+              </span>
+              <Input
+                type="number"
+                min="0"
+                step="1"
+                value={Number(editForm.qty1_arrived ?? 0)}
+                onChange={(e) => {
+                  const val = e.target.value === "" ? 0 : Number(e.target.value);
+                  setEditForm((cur) => ({ ...cur, qty1_arrived: val }));
+                }}
+              />
+            </label>
+            <label className="field">
+              <span className="text-xs font-medium text-muted-foreground">
+                Quantity (Secondary)
+              </span>
+              <Input
+                type="number"
+                min="0"
+                step="1"
+                value={Number(editForm.qty2_arrived ?? 0)}
+                onChange={(e) => {
+                  const val = e.target.value === "" ? 0 : Number(e.target.value);
+                  setEditForm((cur) => ({ ...cur, qty2_arrived: val }));
+                }}
+              />
+            </label>
+          </div>
+
+          <div className="text-sm text-muted-foreground">
+            Total Quantity:{" "}
+            {(Number(editForm.qty1_arrived) + Number(editForm.qty2_arrived)).toFixed(0)}
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-end gap-2 pt-1">
         <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
           <X size={15} /> Cancel
@@ -1408,7 +1916,7 @@ function getInboundTabConfig(tab: string) {
   }> = {
     shipment_details: {
       title: "Shipment Details", minWidth: 1060,
-      addLabel: "Add Shipment", addEndpoint: "shipment", addFields: shipmentFormFields,
+      addLabel: "Add Shipment", addEndpoint: "shipment_details", addFields: shipmentFormFields,
       sql: ({ jobNo, prinCode }) =>
         `SELECT * FROM TI_CONTAINER WHERE PRIN_CODE = '${sqlEscape(prinCode)}' AND JOB_NO = '${sqlEscape(jobNo)}'`,
       columns: [

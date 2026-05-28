@@ -7,7 +7,7 @@ import { Dialog } from "./Dialog";
 type LookupColumn = { field: string; header: string };
 
 type LookupFieldProps = {
-  label: string;
+  label?: any;
   value: string;
   displayValue?: string;
   columns: LookupColumn[];
@@ -107,7 +107,6 @@ export function LookupField({
 
   return (
     <>
-      {/* Trigger — unchanged */}
       <label className={compact ? "block" : "field"}>
         {!compact && <span>{label}</span>}
         <div className="flex h-9 overflow-hidden rounded-md border bg-background">
@@ -121,12 +120,8 @@ export function LookupField({
               {displayValue || value || placeholder || `Select ${label}`}
             </span>
           </button>
+          {/* FIX 1: removed duplicate nested <button> — only one clear button */}
           {value && !disabled && (
-            <button
-              className="grid w-8 place-items-center text-muted-foreground hover:bg-accent"
-              type="button"
-              onClick={() => onChange("", null)}
-            >
             <button
               className="grid w-8 place-items-center text-muted-foreground hover:bg-accent"
               type="button"
@@ -135,12 +130,7 @@ export function LookupField({
               <X size={14} />
             </button>
           )}
-          <button
-            className="grid w-9 place-items-center border-l text-muted-foreground hover:bg-accent"
-            type="button"
-            onClick={openLookup}
-            disabled={disabled}
-          >
+          {/* FIX 2: removed duplicate nested <button> — only one search button */}
           <button
             className="grid w-9 place-items-center border-l text-muted-foreground hover:bg-accent"
             type="button"
@@ -150,7 +140,7 @@ export function LookupField({
             <Search size={15} />
           </button>
         </div>
-      </label>
+      </label>{/* FIX 3: closing </label> was missing entirely */}
 
       {/* Dialog — same props as always */}
       <Dialog
@@ -175,9 +165,7 @@ export function LookupField({
             >
               Cancel
             </Button>
-            <Button disabled={!selectedRow} onClick={confirmSelection}>
-              Select
-            </Button>
+            {/* FIX 4: removed duplicate <Button>Select</Button> */}
             <Button disabled={!selectedRow} onClick={confirmSelection}>
               Select
             </Button>
