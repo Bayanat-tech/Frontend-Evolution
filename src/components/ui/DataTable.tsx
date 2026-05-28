@@ -249,9 +249,9 @@ export function DataTable<TData, TValue>({
                 {displayTitle && <h2 className="m-0 text-base font-semibold">{displayTitle}</h2>}
               </div>
               {/* Selection badge */}
-              {onRowSelectionChange && selectedCount > 0 && (
+              {onRowSelectionChange && (
                 <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                  {selectedCount} selected
+                  {/* {selectedCount} selected */}
                   <button
                     type="button"
                     className="ml-0.5 rounded hover:text-destructive"
