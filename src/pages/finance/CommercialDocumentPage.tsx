@@ -1318,6 +1318,7 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
       qty: Number(line.qty || 1),
       amount: Math.abs(Number(line.amount || 0)),
       sign_ind: commercialDetailSign(form.doc_type, line.sign_ind),
+      sign_code: commercialDetailSign(form.doc_type, line.sign_ind) === 1 ? "CR" : "DR",
       tx_compntcat_code_1: line.tx_compntcat_code_1 || "",
       tx_cat_code: line.tx_cat_code || "",
       tx_compnt_1_expmt: line.tx_compnt_1_expmt || "N",
@@ -1387,6 +1388,7 @@ function buildCommercialBulkAccountEntryPayload(form: FormState, companyCode: st
     amount: Math.abs(Number(line.amount || 0)),
     lcur_amount: Number(line.lcur_amount ?? Math.abs(Number(line.amount || 0)) * Number(line.ex_rate || form.ex_rate || 1)),
     sign_ind: commercialDetailSign(form.doc_type, line.sign_ind),
+    sign_code: commercialDetailSign(form.doc_type, line.sign_ind) === 1 ? "CR" : "DR",
   }));
 
   return {
@@ -1418,6 +1420,7 @@ function buildCommercialInvoiceDetails(form: FormState, companyCode: string, doc
       amount: Math.abs(Number(line.amount || 0)),
       lcur_amount: Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1),
       sign_ind: commercialInvoiceSign(form.doc_type),
+      sign_code: commercialInvoiceSign(form.doc_type) === 1 ? "CR" : "DR",
       curr_code: form.curr_code,
       ex_rate: Number(form.ex_rate || 1),
       div_code: form.div_code,
@@ -1439,6 +1442,7 @@ function buildCommercialJobDetails(form: FormState, companyCode: string, docNo: 
       amount: Math.abs(Number(line.amount || 0)),
       lcur_amount: Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1),
       sign_ind: commercialDetailSign(form.doc_type, line.sign_ind),
+      sign_code: commercialDetailSign(form.doc_type, line.sign_ind) === 1 ? "CR" : "DR",
       curr_code: form.curr_code,
       ex_rate: Number(form.ex_rate || 1),
       div_code: form.div_code,
