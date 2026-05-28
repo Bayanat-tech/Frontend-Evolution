@@ -51,15 +51,24 @@ const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOptio
     const companyCode = form.company_code || user?.company_code || user?.COMPANY_CODE;
     if (companyCode) params.code1 = companyCode;
 
+    console.log(`Loading dropdown options for ${field.name} with params:`, params);
+    console.log("Current form state:", form);
+    console.log("Dropdown code map:", field.dropdownCodeMap);
     if (field.dropdownCodeMap) {
       let codeIndex = 2;
       for (const [fieldName] of Object.entries(field.dropdownCodeMap)) {
+        console.log(`Processing dropdown code map entry: ${fieldName} -> code${codeIndex}`);
         if (fieldName === "company_code") continue;
         const value = form[fieldName];
-        if (value) params[`code${codeIndex}`] = value;
+        console.log(`Value for ${fieldName}:`, value);
+        if (value) {
+          console.log(`Adding to params: code${codeIndex} = ${value}`);
+          params[`code${codeIndex}`] = value;
+        }
         codeIndex++;
       }
     }
+    console.log("Final params for dropdown lookup:", params);
 
     const results = await getDynamicLookup(params as any);
     const labelKey = field.dropdownLabelKey || "label";
