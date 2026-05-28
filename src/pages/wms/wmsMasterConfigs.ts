@@ -30,6 +30,27 @@ export const wmsSimpleMasterConfigs: Record<string, WmsSimpleMasterConfig> = {
     ],
     deleteConfig: { mode: "registered", payload: (row) => [row.prodtype_code] },
   },
+country: {
+  title: "Country Master",
+  subtitle: "Maintain country code, country name, GCC flag, short description, and nationality.",
+  master: "country",
+  gmEndpoint: "country",
+  routeKeys: ["country"],
+  keyField: "country_code",
+  formTabs: [
+    { key: "basic", label: "Basic Info" },
+    { key: "extra", label: "Extra Details" },
+  ],
+  fields: [
+    { name: "country_code", label: "Country Code", required: true, disabledOnEdit: true, width: 150, tab: "basic" },
+    { name: "country_name", label: "Country Name", required: true, width: 260, tab: "basic" },
+    { name: "gcc_flag",     label: "GCC",           type: "select", options: yesNo, width: 100, tab: "basic" },
+    { name: "short_desc",   label: "Short Description", width: 200, tab: "extra" },
+    { name: "nationality",  label: "Nationality",   width: 180, tab: "extra" },
+  ],
+  defaults: { gcc_flag: "N" },
+  deleteConfig: { mode: "registered", payload: (row) => [row.country_code] },
+},
   activitygroup: {
     title: "Activity Group Master",
     subtitle: "Maintain WMS activity groups, validation behavior, accounting links, and reporting group.",
