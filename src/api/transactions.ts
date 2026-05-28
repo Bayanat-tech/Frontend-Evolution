@@ -414,7 +414,7 @@ export async function saveTransactionDocument(payload: TransactionHeader, editMo
 export async function upsertBulkAccountEntryApi(payload: {
   header: Record<string, unknown>;
   details: Record<string, unknown>[];
-  invoiceDetails: Record<string, unknown>[];
+  invoiceDetails?: Record<string, unknown>[];
   expenseDetails: Record<string, unknown>[];
   jobDetails: Record<string, unknown>[];
   loginid: string;
