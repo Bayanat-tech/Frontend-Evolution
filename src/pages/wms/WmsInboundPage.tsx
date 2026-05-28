@@ -762,7 +762,7 @@ const getLookupProps = (field: FormField, isEditMode = false) => {
           const res = await api.post("/api/wms/inbound/executeRawSql", {
             raw_sql: `SELECT *
                       FROM MS_PRODUCT 
-                      WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' 
+                      WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' AND PRIN_CODE = '${sqlEscape(prinCode)}'
                       ORDER BY PROD_NAME`,
           });
           return Array.isArray(res.data?.data) ? res.data.data
@@ -827,7 +827,7 @@ const cacheKey = `wms_containers_${jobNo}_v2`;
       setFormData((cur) => ({
         ...cur,
         container_no: val,
-        po_no: String(row?.["PO_NO"] ?? row?.["po_no"] ?? ""),  // ← auto-set po_no
+        po_no: String(row?.["PO_NO"] ?? row?.["po_no"] ?? null),  // ← auto-set po_no
       })),
   };
 }
