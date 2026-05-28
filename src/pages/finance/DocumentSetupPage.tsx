@@ -6,6 +6,7 @@ import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
+import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
 import { useAuth } from "../../state/AuthContext";
 
@@ -259,7 +260,7 @@ export function DocumentSetupPage() {
         </div>
       </div>
 
-      {notice && <div className={`alert ${notice.type}`}>{notice.message}</div>}
+      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
       <form id="document-setup-form" onSubmit={(event) => void saveChanges(event)} />
 

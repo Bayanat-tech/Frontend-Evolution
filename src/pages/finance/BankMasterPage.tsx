@@ -8,6 +8,7 @@ import { Card } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
+import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { useAuth } from "../../state/AuthContext";
 
 type BankRow = {
@@ -130,7 +131,7 @@ export function BankMasterPage() {
         </div>
       </div>
 
-      {notice && <div className={`alert ${notice.type}`}>{notice.message}</div>}
+      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
       <div className="grid min-h-[620px] grid-cols-[minmax(0,1fr)_410px] gap-4 max-xl:grid-cols-1">
         <DataTable
