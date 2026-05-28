@@ -19,6 +19,7 @@ import { Button } from "./Button";
 import { Input } from "./Input";
 import { Skeleton } from "./Skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./Table";
+import ExportCSVButton from "./ExportCSVButton";
 
 export type DataTableDensity = "grid" | "compact" | "comfortable" | "large";
 
@@ -51,6 +52,9 @@ export type DataTableProps<TData, TValue> = {
   rowClassName?: (row: TData) => string;
   onRowClick?: (row: TData) => void;
   getRowId?: (row: TData, index: number) => string;
+  exportScope?: "all" | "filtered" | "page";
+  /** Optional: explicit dataset to use for export (useful for server-side pagination) */
+  exportData?: TData[];
 };
 
 const densityClasses: Record<DataTableDensity, { row: string; cell: string }> = {
@@ -101,6 +105,8 @@ export function DataTable<TData, TValue>({
   rowClassName,
   onRowClick,
   getRowId,
+  exportScope = "filtered",
+  exportData: providedExportData,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [internalColumnFilters, setInternalColumnFilters] = useState<ColumnFiltersState>([]);
@@ -176,6 +182,24 @@ export function DataTable<TData, TValue>({
     }
   };
 
+  // determine export data based on exportScope or explicit providedExportData
+  let exportData: TData[] = providedExportData ?? data;
+  try {
+    if (!providedExportData) {
+      if (exportScope === "all") {
+        exportData = data;
+      } else if (exportScope === "page") {
+        exportData = table.getRowModel().rows.map((r) => r.original as TData);
+      } else {
+        // 'filtered' scope: prefer client-side filtered rows; if manualFiltering is enabled
+        // assume `data` already represents filtered results from server
+        exportData = manualFiltering ? data : table.getFilteredRowModel().rows.map((r) => r.original as TData);
+      }
+    }
+  } catch (err) {
+    exportData = data;
+  }
+
   console.log("enablePagination", enablePagination);
 
   return (
@@ -219,6 +243,8 @@ export function DataTable<TData, TValue>({
                 </div>
               </details>
             )}
+            {/** Export button appears before any custom toolbar controls */}
+            <ExportCSVButton data={exportData} columns={columns as any} filename={`${displayTitle ?? "export"}.csv`} />
             {toolbar}
           </div>
         </div>
