@@ -1,5 +1,5 @@
 import { Search, X } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getLookupText, getLookupValue, LookupRow } from "../../api/lookups";
 import { Button } from "./Button";
 import { Dialog } from "./Dialog";
@@ -43,6 +43,15 @@ export function LookupField({
   const [selectedKey, setSelectedKey] = useState<string>("");
   const pendingCommit = useRef<LookupRow | null>(null);
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  // Reset to page 1 when search query changes
+  useEffect(() => {
+    setPage(1);
+  }, [query]);
+
   const filteredRows = useMemo(() => {
     const term = query.trim().toLowerCase();
     if (!term) return rows;
@@ -81,6 +90,7 @@ export function LookupField({
     setOpen(false);
     setQuery("");
     setSelectedRow(null);
+    setPage(1);
     setSelectedKey("");
   };
 
@@ -117,9 +127,20 @@ export function LookupField({
               type="button"
               onClick={() => onChange("", null)}
             >
+            <button
+              className="grid w-8 place-items-center text-muted-foreground hover:bg-accent"
+              type="button"
+              onClick={() => onChange("", null)}
+            >
               <X size={14} />
             </button>
           )}
+          <button
+            className="grid w-9 place-items-center border-l text-muted-foreground hover:bg-accent"
+            type="button"
+            onClick={openLookup}
+            disabled={disabled}
+          >
           <button
             className="grid w-9 place-items-center border-l text-muted-foreground hover:bg-accent"
             type="button"
@@ -153,6 +174,9 @@ export function LookupField({
               }}
             >
               Cancel
+            </Button>
+            <Button disabled={!selectedRow} onClick={confirmSelection}>
+              Select
             </Button>
             <Button disabled={!selectedRow} onClick={confirmSelection}>
               Select

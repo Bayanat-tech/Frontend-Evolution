@@ -50,6 +50,7 @@ export type DataTableProps<TData, TValue> = {
   enableColumnFilters?: boolean;
   enableColumnVisibility?: boolean;
   rowClassName?: (row: TData) => string;
+  onRowClick?: (row: TData) => void;
   getRowId?: (row: TData, index: number) => string;
   /** Called whenever row selection changes. Receives the array of selected row originals. */
   onRowSelectionChange?: (selectedRows: TData[]) => void;
@@ -88,7 +89,7 @@ export function DataTable<TData, TValue>({
   height = 590,
   minWidth,
   density = "comfortable",
-  pageSize = 25,
+  pageSize = 500,
   enablePagination = false,
   manualPagination = false,
   pageIndex = 0,
@@ -101,6 +102,7 @@ export function DataTable<TData, TValue>({
   enableColumnFilters = true,
   enableColumnVisibility = false,
   rowClassName,
+  onRowClick,
   getRowId,
   onRowSelectionChange,
 }: DataTableProps<TData, TValue>) {

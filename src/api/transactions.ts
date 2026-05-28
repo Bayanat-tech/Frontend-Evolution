@@ -23,6 +23,7 @@ export type TransactionDocumentRow = {
   cheque_date?: string;
   cheque_bank?: string;
   amount?: number;
+  net_amount?: number;
   canceled?: string;
   fy_period?: string;
 };
@@ -31,8 +32,15 @@ export type TransactionHeader = {
   doc_no?: string;
   doc_type: TransactionType;
   doc_date: string;
+  inv_no?: string;
+  inv_date?: string;
+  ref_no?: string;
+  ref_date?: string;
   ac_code: string;
   ac_name?: string;
+  party_address?: string;
+  party_phone?: string;
+  party_fax?: string;
   bank_ac_code?: string;
   bank_ac_name?: string;
   curr_code: string;
@@ -45,6 +53,8 @@ export type TransactionHeader = {
   cheque_date?: string;
   cheque_bank?: string;
   ac_payee?: string;
+  tx_compntcat_code_1?: string;
+  tx_compnt_1_expmt?: string;
   files?: unknown[];
   detail: TransactionDetail[];
   children: Record<string, unknown[]>;
@@ -125,15 +135,64 @@ export type Division = {
   div_name: string;
 };
 
-export async function getTransactionDocuments(docType: TransactionType, fyPeriod?: string, search?: string, page = 1, limit = 100) {
+export type CompanyInfo = {
+  company_code?: string;
+  ac_fy_period?: string;
+};
+
+export type FinanceOutstandingBalance = {
+  inv_no: string;
+  original_amount: number;
+  paid_amount: number;
+  outstanding_amount: number;
+  payment_percentage: number;
+  is_fully_paid: boolean;
+  error?: string;
+};
+
+export async function getCompanyInfo() {
+  const response = await api.get<ApiResponse<CompanyInfo>>("/api/finance/transactions/company_info");
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load company settings");
+  return response.data.data || {};
+}
+
+export function getDefaultFyPeriod(periods: FyPeriod[], companyInfo?: CompanyInfo) {
+  const companyPeriod = String(companyInfo?.ac_fy_period || "").trim();
+  if (companyPeriod && periods.some((period) => String(period.fy_period) === companyPeriod)) {
+    return companyPeriod;
+  }
+
+  const today = new Date();
+  const currentPeriod = periods.find((period) => {
+    if (!period.date_from || !period.date_to) return false;
+    const from = new Date(period.date_from);
+    const to = new Date(period.date_to);
+    return !Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime()) && today >= from && today <= to;
+  });
+  if (currentPeriod?.fy_period) return currentPeriod.fy_period;
+
+  const yearSuffix = String(today.getFullYear()).slice(-2);
+  const matchingYear = periods.find((period) => String(period.fy_period).endsWith(yearSuffix));
+  return matchingYear?.fy_period || periods[periods.length - 1]?.fy_period || periods[0]?.fy_period || "";
+}
+
+export async function getTransactionDocuments(docType: TransactionType, fyPeriod?: string, search?: string, page = 1, limit = 100,columnFilters?: { field: string; values: string }[]) {
   const filters: unknown[] = [[{ field_name: "doc_type", field_value: docType, operator: "exactmatch" }]];
   if (fyPeriod) filters.push([{ field_name: "fy_period", field_value: fyPeriod, operator: "exactmatch" }]);
   if (search?.trim()) {
     filters.push([
       { field_name: "doc_no", field_value: search.trim(), operator: "contains" },
-      { field_name: "ac_code", field_value: search.trim(), operator: "contains" },
+      { field_name: "ac_name", field_value: search.trim(), operator: "contains" },
       { field_name: "ref_no", field_value: search.trim(), operator: "contains" },
     ]);
+  }
+
+   if (columnFilters?.length) {
+    columnFilters.forEach(({ field, values }) => {
+      if (values.trim()) {
+        filters.push([{ field_name: field, field_value: values.trim(), operator: "contains" }]);
+      }
+    });
   }
 
   const response = await api.get<ApiResponse<{ tableData: TransactionDocumentRow[]; count: number }>>("/api/finance/doc", {
@@ -205,6 +264,20 @@ export async function getTransactionChildren(docNo: string, divCode: string, doc
   return response.data.data || { invoice: [], job: [], expense: [] };
 }
 
+export async function getFinanceOutstanding(divCode: string, invNos: string | string[]) {
+  const response = await api.get<ApiResponse<{ balances: FinanceOutstandingBalance[]; count: number }>>(
+    "/api/finance/transactions/invoice_outstanding",
+    {
+      params: {
+        div_code: divCode,
+        inv_nos: Array.isArray(invNos) ? invNos.join(",") : invNos,
+      },
+    },
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load invoice outstanding balances");
+  return response.data.data || { balances: [], count: 0 };
+}
+
 export async function getCheque(acCode: string) {
   const response = await api.get<ApiResponse<Record<string, unknown>>>("/api/finance/transactions/cheque_detail", {
     params: { ac_code: acCode },
@@ -250,12 +323,106 @@ export async function getFinanceMasterRows(
   return response.data.data?.tableData || [];
 }
 
+export async function getLpoDocuments(
+  fyPeriod?: string,
+  search?: string,
+  page = 1,
+  limit = 100,
+) {
+  const response = await api.get<
+    ApiResponse<TransactionDocumentRow[]>
+  >("/api/finance/transactions/lpo", {
+    params: {
+      fy_period: fyPeriod,
+      search,
+      page,
+      limit,
+    },
+  });
+
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Unable to load LPO documents");
+  }
+
+  const list = response.data.data || [];
+
+  // backend may or may not send pagination → handle safely
+  const pagination = (response as any).data?.pagination;
+
+  return {
+    tableData: list,
+    count: pagination?.total ?? list.length ?? 0,
+  };
+}
+export async function getLpoHeader(docNo: string, docType: string) {
+  const response = await api.get<ApiResponse<Record<string, unknown>>>(
+    `/api/finance/transactions/lpo/${encodeURIComponent(docNo)}`,
+    {
+      params: { doc_type: docType },
+    },
+  );
+
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Unable to load LPO header");
+  }
+
+  return response.data.data || {};
+}
+
+export async function getLpoDetail(docNo: string, docType: string) {
+  const response = await api.get<ApiResponse<Record<string, unknown>[]>>(
+    `/api/finance/transactions/lpo/${encodeURIComponent(docNo)}/detail`,
+    {
+      params: { doc_type: docType },
+    },
+  );
+
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Unable to load LPO details");
+  }
+
+  return response.data.data || [];
+}
+
+export async function getLpoRefDocSearch(divCode: string, companyCode: string) {
+  const { getDynamicFinanceLookup } = await import("./lookups");
+  return getDynamicFinanceLookup({
+    parameter: "Account_LPO_REF_DOC",
+    code1: companyCode,
+    number1: Number(divCode) || undefined,
+  });
+}
+
+// Get lpo (Ref_Doc) in PI
+export async function getPurchaseHeader(docNo: string, docType: string) {
+  const response = await api.get<ApiResponse<Record<string, unknown>>>(
+    `/api/finance/transactions/purchaseheader/${encodeURIComponent(docNo)}`,
+    { params: { doc_type: docType } }
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load purchase header");
+  return response.data.data || {};
+}
+
 export async function saveTransactionDocument(payload: TransactionHeader, editMode: boolean) {
   const response = editMode
     ? await api.put<ApiResponse<{ doc_no: string; doc_type: TransactionType }>>("/api/finance/transactions/document", payload)
     : await api.post<ApiResponse<{ doc_no: string; doc_type: TransactionType }>>("/api/finance/transactions/document", payload);
   if (!response.data.success) throw new Error(response.data.message || "Unable to save document");
   return response.data.data;
+}
+
+export async function upsertBulkAccountEntryApi(payload: {
+  header: Record<string, unknown>;
+  details: Record<string, unknown>[];
+  invoiceDetails: Record<string, unknown>[];
+  expenseDetails: Record<string, unknown>[];
+  jobDetails: Record<string, unknown>[];
+  loginid: string;
+}) {
+  const response = await api.post<ApiResponse<unknown>>("/api/finance/transactions/account-entry/bulk", payload);
+  const details = (response.data as ApiResponse<unknown> & { details?: string }).details;
+  if (!response.data.success) throw new Error(response.data.message || details || "Unable to save transaction");
+  return response.data;
 }
 
 export async function cancelTransactionDocument(docNo: string, docType: TransactionType) {
@@ -272,4 +439,43 @@ export async function deleteTransactionDocument(docNos: string[], docType: Trans
   });
   if (!response.data.success) throw new Error(response.data.message || "Unable to delete document");
   return response.data;
+}
+
+export function getDocumentReportUrl(docType: TransactionType | string, docNo: string, format: "pdf" | "excel" = "pdf") {
+  const baseUrl = String(api.defaults.baseURL || "").replace(/\/$/, "");
+  const encodedType = encodeURIComponent(docType);
+  const encodedNo = encodeURIComponent(docNo);
+  if (format === "excel") {
+    return `${baseUrl}/api/finance/transactions/report/${encodedType}/${encodedNo}/excel`;
+  }
+  return `${baseUrl}/api/finance/transactions/report/${encodedType}/${encodedNo}`;
+}
+
+export async function openDocumentReport(docType: TransactionType | string, docNo: string) {
+  if (!docNo) return;
+  const response = await api.get(`/api/finance/transactions/report/${encodeURIComponent(docType)}/${encodeURIComponent(docNo)}`, {
+    responseType: "blob",
+  });
+  const blob = new Blob([response.data], { type: "text/html;charset=utf-8" });
+  const url = window.URL.createObjectURL(blob);
+  window.open(url, "_blank", "noopener,noreferrer");
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+}
+
+export async function downloadDocumentReportExcel(docType: TransactionType | string, docNo: string) {
+  if (!docNo) return;
+  const response = await api.get(`/api/finance/transactions/report/${encodeURIComponent(docType)}/${encodeURIComponent(docNo)}/excel`, {
+    responseType: "blob",
+  });
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${docType}_${docNo}_report.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }
