@@ -3,6 +3,7 @@ import { Plus, Save, Send, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
+import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Input } from "../../components/ui/Input";
@@ -81,7 +82,7 @@ export function AllocatedInvoicePage() {
         </div>
       </div>
 
-      {notice && <div className={`alert ${notice.type}`}>{notice.message}</div>}
+      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
       <Card>
         <CardHeader className="border-b">

@@ -32,6 +32,7 @@ import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
+import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { useAuth } from "../../state/AuthContext";
 
 type CommercialType = "PO" | "PI" | "SI" | "SV";
@@ -240,7 +241,7 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
         </div>
       </div>
 
-      {notice && <div className={`alert ${notice.type}`}>{notice.message}</div>}
+      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
       <DataTable
         columns={columns}

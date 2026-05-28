@@ -7,6 +7,7 @@ import { Card } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
+import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
 import { useAuth } from "../../state/AuthContext";
 
@@ -160,7 +161,7 @@ export function AssetTransferPage() {
         </div>
       </div>
 
-      {notice && <div className={`alert ${notice.type}`}>{notice.message}</div>}
+      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
       <div className="grid min-h-[690px] grid-cols-[minmax(0,1fr)_560px] gap-4 max-2xl:grid-cols-1">
         <DataTable columns={columns} data={filteredRows} title={loading ? "Loading" : `${filteredRows.length} Records`} subtitle="Transfers" searchValue={query} onSearchChange={setQuery} searchPlaceholder="Search transfer..." loading={loading} emptyText="No asset transfers found" height={650} minWidth={1120} density="grid" getRowId={(row, index) => `${row.doc_no || "new"}_${index}`} />
