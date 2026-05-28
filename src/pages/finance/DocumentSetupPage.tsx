@@ -1,14 +1,13 @@
-import { Edit2, Plus, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
+import { Edit2, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { getDynamicLookup, getLookupText, getLookupValue, LookupRow, postFinance } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
-import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
+import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
-import { Skeleton } from "../../components/ui/Skeleton";
 import { useAuth } from "../../state/AuthContext";
 
 type DocumentRow = {
@@ -54,6 +53,7 @@ type DocAccountRow = {
 
 type ActiveGrid = "header" | "detail" | null;
 type DeleteTarget = { type: "header" | "detail"; row: DocAccountRow } | null;
+type AddTarget = "header" | "detail" | null;
 
 export function DocumentSetupPage() {
   const { user } = useAuth();
@@ -71,6 +71,7 @@ export function DocumentSetupPage() {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
+  const [addTarget, setAddTarget] = useState<AddTarget>(null);
 
   const companyCode = user?.company_code || "";
   const loginId = user?.loginid || "";
@@ -141,25 +142,32 @@ export function DocumentSetupPage() {
 
   const addAccount = (type: "header" | "detail") => {
     if (!selected) return;
+    setAddTarget(type);
+  };
+
+  const commitAccount = (type: "header" | "detail", patch: Pick<DocAccountRow, "ac_code" | "ac_name" | "div_code" | "div_name">) => {
+    if (!selected) return;
     const row: DocAccountRow = {
       id: `${type}_new_${Date.now()}`,
       company_code: selected.company_code || companyCode,
       doc_id: selected.doc_id,
       hdr_dtl: type === "header" ? "H" : "D",
-      ac_code: "",
-      ac_name: "",
-      div_code: "",
-      div_name: "",
+      ac_code: patch.ac_code,
+      ac_name: patch.ac_name,
+      div_code: patch.div_code,
+      div_name: patch.div_name,
     };
     if (type === "header") {
       setHeaderRows((prev) => [row, ...prev]);
       setDirtyHeader((prev) => ({ ...prev, [row.id]: row }));
       setActiveGrid("header");
+      setAddTarget(null);
       return;
     }
     setDetailRows((prev) => [row, ...prev]);
     setDirtyDetail((prev) => ({ ...prev, [row.id]: row }));
     setActiveGrid("detail");
+    setAddTarget(null);
   };
 
   const saveChanges = async (event?: FormEvent) => {
@@ -223,6 +231,21 @@ export function DocumentSetupPage() {
     }
   };
 
+  const docColumns = useMemo<ColumnDef<DocumentRow>[]>(() => [
+    {
+      accessorKey: "doc_shortname",
+      header: "ID",
+      size: 90,
+      cell: ({ row }) => <span className="font-semibold text-primary">{row.original.doc_shortname || row.original.doc_id}</span>,
+    },
+    { accessorKey: "doc_name", header: "Doc Name", size: 260 },
+    { accessorKey: "doc_object", header: "Object", size: 160 },
+    { accessorKey: "seq_no", header: "Seq No", size: 90 },
+    { accessorKey: "default_sign", header: "Sign", size: 80 },
+    { accessorKey: "default_h_ac", header: "Default H A/C", size: 150 },
+    { accessorKey: "default_d_ac", header: "Default D A/C", size: 150 },
+  ], []);
+
   return (
     <section className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -237,105 +260,51 @@ export function DocumentSetupPage() {
         </div>
       </div>
 
-      {notice && <div className={`alert ${notice.type}`}>{notice.message}</div>}
+      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-      <div className="grid min-h-[700px] grid-cols-[380px_minmax(0,1fr)] gap-4 max-xl:grid-cols-1">
-        <Card className="overflow-hidden">
-          <CardHeader className="gap-3 border-b">
-            <div>
-              <p className="eyebrow">Documents</p>
-              <h2 className="m-0 text-base font-semibold">{loadingDocs ? "Loading" : `${filteredDocs.length} Records`}</h2>
-            </div>
-            <label className="flex h-9 items-center gap-2 rounded-md border bg-background px-3 text-muted-foreground">
-              <Search size={15} />
-              <Input className="h-8 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search document..." />
-            </label>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="max-h-[640px] overflow-auto">
-              {loadingDocs ? (
-                <div className="grid gap-2 p-3">{Array.from({ length: 12 }).map((_, index) => <Skeleton key={index} />)}</div>
-              ) : filteredDocs.length === 0 ? (
-                <div className="px-3 py-12 text-center text-sm text-muted-foreground">No documents found</div>
-              ) : (
-                <div className="divide-y">
-                  {filteredDocs.map((doc) => {
-                    const active = doc.doc_id === selected?.doc_id;
-                    return (
-                      <button className={`flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-accent ${active ? "bg-[#eaf2ff]" : ""}`} key={doc.doc_id} onClick={() => void loadDetails(doc)}>
-                        <span className="rounded-md bg-[#eef3fb] px-2 py-1 text-xs font-bold text-[#17345f]">{doc.doc_shortname || doc.doc_id}</span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-semibold">{doc.doc_name || "Untitled"}</span>
-                          <span className="block truncate text-xs text-muted-foreground">{doc.doc_object || "No object"} | Seq {doc.seq_no || "0"}</span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+      <form id="document-setup-form" onSubmit={(event) => void saveChanges(event)} />
 
-        <div className="grid min-h-[700px] grid-rows-[auto_1fr_1fr] gap-4">
-          <Card className="overflow-hidden">
-            {docForm ? (
-              <form className="grid gap-3 p-4" id="document-setup-form" onSubmit={(event) => void saveChanges(event)}>
-                <div className="grid grid-cols-4 gap-3 max-lg:grid-cols-2 max-sm:grid-cols-1">
-                  <Field label="Short Name" value={docForm.doc_shortname} onChange={(value) => setDocForm({ ...docForm, doc_shortname: value })} />
-                  <Field label="Document Name" value={docForm.doc_name} onChange={(value) => setDocForm({ ...docForm, doc_name: value })} />
-                  <Field label="Object" value={docForm.doc_object} onChange={(value) => setDocForm({ ...docForm, doc_object: value })} />
-                  <Field label="Sequence No" value={docForm.seq_no} onChange={(value) => setDocForm({ ...docForm, seq_no: value })} />
-                  <AccountLookup label="Default Header A/C" value={docForm.default_h_ac} name={docForm.default_h_ac_name} onChange={(value, name) => setDocForm({ ...docForm, default_h_ac: value, default_h_ac_name: name })} />
-                  <AccountLookup label="Default Detail A/C" value={docForm.default_d_ac} name={docForm.default_d_ac_name} onChange={(value, name) => setDocForm({ ...docForm, default_d_ac: value, default_d_ac_name: name })} />
-                  <Field label="Default Sign" value={docForm.default_sign} onChange={(value) => setDocForm({ ...docForm, default_sign: value })} />
-                  <Field label="Sign Editable" value={docForm.sign_editable} onChange={(value) => setDocForm({ ...docForm, sign_editable: value })} />
-                  <Field label="Last Doc No" value={docForm.last_doc_no} onChange={(value) => setDocForm({ ...docForm, last_doc_no: value })} />
-                  <Field label="Prepared" value={docForm.prepared} onChange={(value) => setDocForm({ ...docForm, prepared: value })} />
-                  <Field label="Verified" value={docForm.verified} onChange={(value) => setDocForm({ ...docForm, verified: value })} />
-                  <Field label="Approved" value={docForm.approved} onChange={(value) => setDocForm({ ...docForm, approved: value })} />
-                  <Field label="Received" value={docForm.received} onChange={(value) => setDocForm({ ...docForm, received: value })} />
-                  <Field label="Back Date" value={docForm.back_date} onChange={(value) => setDocForm({ ...docForm, back_date: value })} />
-                  <Field label="Print On Save" value={docForm.prin_on_save} onChange={(value) => setDocForm({ ...docForm, prin_on_save: value })} />
-                  <LookupField
-                    label="Default Division"
-                    value={docForm.default_div_code}
-                    displayValue={docForm.default_div_code ? `${docForm.default_div_code}${docForm.default_div_name ? ` - ${docForm.default_div_name}` : ""}` : ""}
-                    columns={[{ field: "div_code", header: "Division" }, { field: "div_name", header: "Name" }]}
-                    valueField="div_code"
-                    displayFields={["div_code", "div_name"]}
-                    loadOptions={() => getDynamicLookup({ parameter: "Account_division", loginid: loginId, code1: companyCode })}
-                    onChange={(value, row) => setDocForm({ ...docForm, default_div_code: value, default_div_name: row ? getLookupText(row, ["div_name", "DIV_NAME"]) : "" })}
-                  />
-                  <Field label="Transaction Type" value={docForm.trans_type} onChange={(value) => setDocForm({ ...docForm, trans_type: value })} />
-                  <Field label="Document Code" value={docForm.doc_code} onChange={(value) => setDocForm({ ...docForm, doc_code: value })} />
-                  <Field label="Doc No Prefix" value={docForm.docno_prefix} onChange={(value) => setDocForm({ ...docForm, docno_prefix: value })} />
-                  <Field label="Default H Code Co" value={docForm.default_h_code_co} onChange={(value) => setDocForm({ ...docForm, default_h_code_co: value })} />
-                  <LookupField
-                    label="Currency"
-                    value={docForm.curr_code}
-                    displayValue={docForm.curr_code ? `${docForm.curr_code}${docForm.curr_name ? ` - ${docForm.curr_name}` : ""}` : ""}
-                    columns={[{ field: "curr_code", header: "Currency" }, { field: "curr_name", header: "Name" }]}
-                    valueField="curr_code"
-                    displayFields={["curr_code", "curr_name"]}
-                    loadOptions={() => getDynamicLookup({ parameter: "Currency_code", loginid: loginId, code1: companyCode })}
-                    onChange={(value, row) => setDocForm({ ...docForm, curr_code: value, curr_name: row ? getLookupText(row, ["curr_name", "CURR_NAME", "curr_desc"]) : "" })}
-                  />
-                  <Field label="Document ID" value={docForm.doc_id} onChange={() => undefined} disabled />
-                </div>
-              </form>
-            ) : (
-              <div className="grid min-h-[132px] place-items-center p-4 text-center text-muted-foreground">
-                <div>
-                  <p className="eyebrow">No Document Selected</p>
-                  <h2 className="m-0 text-base font-semibold text-foreground">Select a document to manage accounts</h2>
-                </div>
+      <div className="grid gap-4">
+        <DataTable
+          columns={docColumns}
+          data={filteredDocs}
+          title={loadingDocs ? "Loading" : `${filteredDocs.length} Documents`}
+          subtitle="Documents"
+          searchValue={query}
+          onSearchChange={setQuery}
+          searchPlaceholder="Search document..."
+          loading={loadingDocs}
+          height={280}
+          minWidth={980}
+          density="grid"
+          getRowId={(row) => row.doc_id}
+          onRowClick={(doc) => void loadDetails(doc)}
+          rowClassName={(doc) => doc.doc_id === selected?.doc_id ? "bg-[#eaf2ff] font-semibold" : ""}
+        />
+
+        {selected ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card px-4 py-3 shadow-sm">
+            <div className="min-w-0">
+              <p className="eyebrow m-0">Selected Document</p>
+              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
+                <span className="rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground">{selected.doc_shortname || selected.doc_id}</span>
+                <h2 className="m-0 truncate text-base font-semibold">{selected.doc_name || "Untitled document"}</h2>
               </div>
-            )}
-          </Card>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span className="rounded-full border bg-secondary px-2.5 py-1">Header {headerRows.length}</span>
+              <span className="rounded-full border bg-secondary px-2.5 py-1">Detail {detailRows.length}</span>
+              {dirtyCount > 0 && <span className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 font-semibold text-amber-800">{dirtyCount} Unsaved</span>}
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-md border bg-secondary/30 px-3 py-2 text-sm text-muted-foreground">Select a document to manage header and detail accounts.</div>
+        )}
 
+        <div className="grid min-h-[360px] grid-cols-2 gap-4 max-xl:grid-cols-1">
           <DocAccountTable
             title="Header Accounts"
+            description="Accounts allowed at document header level"
             type="header"
             rows={headerRows}
             loading={loadingDetails}
@@ -348,6 +317,7 @@ export function DocumentSetupPage() {
           />
           <DocAccountTable
             title="Detail Accounts"
+            description="Accounts allowed at document line level"
             type="detail"
             rows={detailRows}
             loading={loadingDetails}
@@ -379,12 +349,22 @@ export function DocumentSetupPage() {
           <p className="modal-copy">Delete <strong>{deleteTarget.row.ac_code || "this row"}</strong>?</p>
         </Dialog>
       )}
+
+      {addTarget && (
+        <AddAccountDialog
+          open
+          type={addTarget}
+          onClose={() => setAddTarget(null)}
+          onAdd={(row) => commitAccount(addTarget, row)}
+        />
+      )}
     </section>
   );
 }
 
 function DocAccountTable({
   title,
+  description,
   type,
   rows,
   loading,
@@ -396,6 +376,7 @@ function DocAccountTable({
   onDelete,
 }: {
   title: string;
+  description: string;
   type: "header" | "detail";
   rows: DocAccountRow[];
   loading: boolean;
@@ -492,8 +473,9 @@ function DocAccountTable({
         getRowId={(row) => row.id}
         toolbar={
           <>
-          <Button size="sm" variant="outline" disabled={disabled || !active} onClick={onAdd}><Plus size={14} /> Add</Button>
-          <Button size="sm" variant={active ? "secondary" : "outline"} disabled={disabled} onClick={onEdit}>{active ? <X size={14} /> : <Edit2 size={14} />} {active ? "Cancel" : "Edit"}</Button>
+          <span className="hidden max-w-[260px] truncate text-xs text-muted-foreground xl:inline">{description}</span>
+          <Button size="sm" variant="outline" disabled={disabled} onClick={onAdd}><Plus size={14} /> Add</Button>
+          <Button size="sm" variant={active ? "secondary" : "outline"} disabled={disabled} onClick={onEdit}>{active ? <X size={14} /> : <Edit2 size={14} />} {active ? "Done" : "Edit"}</Button>
           </>
         }
       />
@@ -526,6 +508,72 @@ function AccountLookup({ label, value, name, onChange }: { label: string; value:
       loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach", loginid: user?.loginid || "", code1: user?.company_code || "" })}
       onChange={(nextValue, row) => onChange(nextValue, row ? getLookupText(row, ["ac_name", "AC_NAME", "account_name"]) : "")}
     />
+  );
+}
+
+function AddAccountDialog({
+  open,
+  type,
+  onClose,
+  onAdd,
+}: {
+  open: boolean;
+  type: "header" | "detail";
+  onClose: () => void;
+  onAdd: (row: Pick<DocAccountRow, "ac_code" | "ac_name" | "div_code" | "div_name">) => void;
+}) {
+  const { user } = useAuth();
+  const [division, setDivision] = useState({ div_code: "", div_name: "" });
+  const [account, setAccount] = useState({ ac_code: "", ac_name: "" });
+  const canAdd = Boolean(division.div_code && account.ac_code);
+
+  return (
+    <Dialog
+      open={open}
+      title={`Add ${type === "header" ? "Header" : "Detail"} Account`}
+      description="Select the division first, then choose the account code."
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            disabled={!canAdd}
+            onClick={() => onAdd({ ...division, ...account })}
+          >
+            <Plus size={15} /> Add Account
+          </Button>
+        </>
+      }
+    >
+      <div className="grid gap-4">
+        <LookupField
+          label="Division"
+          value={division.div_code}
+          displayValue={division.div_code ? `${division.div_code}${division.div_name ? ` - ${division.div_name}` : ""}` : ""}
+          columns={[
+            { field: "div_code", header: "Division Code" },
+            { field: "div_name", header: "Division Name" },
+          ]}
+          valueField="div_code"
+          displayFields={["div_code", "div_name"]}
+          loadOptions={() => getDynamicLookup({ parameter: "Account_division", loginid: user?.loginid || "", code1: user?.company_code || "" })}
+          onChange={(value, row) => setDivision({ div_code: value, div_name: row ? getLookupText(row, ["div_name", "DIV_NAME", "division_name"]) : "" })}
+        />
+        <LookupField
+          label="Account"
+          value={account.ac_code}
+          displayValue={account.ac_code ? `${account.ac_code}${account.ac_name ? ` - ${account.ac_name}` : ""}` : ""}
+          columns={[
+            { field: "ac_code", header: "Account Code" },
+            { field: "ac_name", header: "Account Name" },
+          ]}
+          valueField="ac_code"
+          displayFields={["ac_code", "ac_name"]}
+          loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach", loginid: user?.loginid || "", code1: user?.company_code || "" })}
+          onChange={(value, row) => setAccount({ ac_code: value, ac_name: row ? getLookupText(row, ["ac_name", "AC_NAME", "account_name"]) : "" })}
+        />
+      </div>
+    </Dialog>
   );
 }
 

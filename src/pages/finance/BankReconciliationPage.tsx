@@ -7,6 +7,7 @@ import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Input } from "../../components/ui/Input";
+import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
@@ -150,7 +151,6 @@ export function BankReconciliationPage() {
     <section className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="eyebrow">Finance Transaction</p>
           <h1 className="m-0 text-2xl font-semibold tracking-tight">Bank Reconciliation</h1>
           <p className="m-0 mt-1 text-sm text-muted-foreground">Retrieve cheque transactions and update reconciliation status.</p>
         </div>
@@ -160,7 +160,7 @@ export function BankReconciliationPage() {
         </div>
       </div>
 
-      {notice && <div className={`alert ${notice.type}`}>{notice.message}</div>}
+      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
       <Card className="p-4">
         <form className="grid grid-cols-4 gap-3 max-xl:grid-cols-2 max-md:grid-cols-1" onSubmit={retrieve}>
