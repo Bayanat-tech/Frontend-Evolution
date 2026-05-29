@@ -3,6 +3,7 @@ import {
   ColumnFiltersState,
   Column,
   FilterFn,
+  RowSelectionState,
   SortingState,
   VisibilityState,
   flexRender,
@@ -51,6 +52,8 @@ export type DataTableProps<TData, TValue> = {
   rowClassName?: (row: TData) => string;
   onRowClick?: (row: TData) => void;
   getRowId?: (row: TData, index: number) => string;
+  /** Called whenever row selection changes; receives array of selected row originals */
+  onRowSelectionChange?: (selectedRows: TData[]) => void;
   initialSorting?: SortingState;
 };
 
@@ -112,11 +115,13 @@ export function DataTable<TData, TValue>({
   rowClassName,
   onRowClick,
   getRowId,
+  onRowSelectionChange,
   initialSorting = [],
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>(initialSorting);
   const [internalColumnFilters, setInternalColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [activeFilterColumn, setActiveFilterColumn] = useState<string | null>(null);
   const [internalSearch, setInternalSearch] = useState("");
   const globalFilter = searchValue ?? internalSearch;
@@ -147,9 +152,15 @@ export function DataTable<TData, TValue>({
       columnFilters,
       columnVisibility,
       globalFilter,
+      rowSelection,
     },
     initialState: {
       pagination: { pageIndex: 0, pageSize },
+    },
+    enableRowSelection: !!onRowSelectionChange,
+    onRowSelectionChange: (updater) => {
+      const next = typeof updater === "function" ? updater(rowSelection) : updater;
+      setRowSelection(next);
     },
     onSortingChange: setSorting,
     onColumnFiltersChange: (updater) => {
@@ -202,6 +213,14 @@ export function DataTable<TData, TValue>({
   useEffect(() => {
     if (!manualPagination) table.setPageSize(pageSize);
   }, [manualPagination, pageSize, table]);
+
+  // notify parent of selection changes
+  useEffect(() => {
+    if (!onRowSelectionChange) return;
+    const selected = table.getSelectedRowModel().rows.map((r) => r.original as TData);
+    onRowSelectionChange(selected);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowSelection]);
 
   return (
     <div className="overflow-hidden rounded-lg border border-[#aebbd0] bg-card shadow-[0_8px_22px_rgba(15,23,42,0.07)]">
