@@ -7,6 +7,8 @@ import {
   BarChart3,
   Boxes,
   Building2,
+  BriefcaseBusiness,
+  CalendarDays,
   CircleDot,
   ChevronDown,
   ChevronRight,
@@ -16,9 +18,11 @@ import {
   FileText,
   FolderCog,
   Globe2,
+  GraduationCap,
   Home,
   Landmark,
   Layers,
+  Languages,
   LayoutGrid,
   LogOut,
   Map,
@@ -39,6 +43,7 @@ import {
   Sun,
   Tags,
   Truck,
+  UserRoundCheck,
   UserCog,
   Users,
   Warehouse,
@@ -67,8 +72,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
 
   const leaves = useMemo(() => flattenLeaves(activeApp?.children || []), [activeApp]);
   const activeLeaf = leaves.find((leaf) => {
-    const path = cleanPath(leaf.url_path);
-    return path && location.pathname.toLowerCase().includes(path.toLowerCase());
+    return isPathActive(cleanPath(leaf.url_path), location.pathname);
   });
 
   const handleLogout = () => {
@@ -241,6 +245,22 @@ function MenuIcon({ item, level, className }: { item: MenuNode; level: number; c
 function getMenuIcon(item: MenuNode): LucideIcon {
   const text = `${item.title || ""} ${item.url_path || ""}`.toLowerCase();
   if (text.includes("country")) return Globe2;
+  if (text.includes("division")) return Building2;
+  if (text.includes("department") || text.includes("section")) return Archive;
+  if (text.includes("transaction")) return Receipt;
+  if (text.includes("employee")) return Users;
+  if (text.includes("paycomponent") || text.includes("pay component") || text.includes("payroll")) return BadgeDollarSign;
+  if (text.includes("main bank") || text.includes("main_bank") || text.includes("bank")) return Landmark;
+  if (text.includes("document type") || text.includes("document_type") || text.includes("doctype") || text.includes("doc type")) return FileText;
+  if (text.includes("holiday") || text.includes("calendar")) return CalendarDays;
+  if (text.includes("category")) return Tags;
+  if (text.includes("sponsor")) return UserRoundCheck;
+  if (text.includes("contract")) return BriefcaseBusiness;
+  if (text.includes("education") || text.includes("discipline") || text.includes("grade")) return GraduationCap;
+  if (text.includes("language")) return Languages;
+  if (text.includes("skill")) return BadgeDollarSign;
+  if (text.includes("designation")) return ClipboardCheck;
+  if (text.includes("airport")) return Plane;
   if (text.includes("currency")) return BadgeDollarSign;
   if (text.includes("uom") || text.includes("uoc") || text.includes("unit")) return Ruler;
   if (text.includes("brand")) return Tags;
@@ -278,6 +298,20 @@ function getMenuIcon(item: MenuNode): LucideIcon {
 
 function isMenuNodeActive(item: MenuNode, pathname: string): boolean {
   const path = cleanPath(item.url_path);
-  if (path && pathname.toLowerCase().includes(path.toLowerCase())) return true;
+  if (isPathActive(path, pathname)) return true;
   return Boolean(item.children?.some((child) => isMenuNodeActive(child, pathname)));
+}
+
+function isPathActive(menuPath: string, pathname: string): boolean {
+  if (!menuPath) return false;
+  const path = normalizeRoutePath(menuPath);
+  const current = normalizeRoutePath(pathname);
+  return current === path || current.endsWith(`/${path}`);
+}
+
+function normalizeRoutePath(path: string) {
+  return path
+    .replace(/^\/+|\/+$/g, "")
+    .replace(/^workspace\/[^/]+\//i, "")
+    .toLowerCase();
 }
