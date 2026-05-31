@@ -37,6 +37,7 @@ import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDe
 import { HrMasterPage } from "../pages/hr/HrMasterPage";
 import { hrMasterConfigs } from "../pages/hr/hrMasterConfigs";
 import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrPayUnitsPage } from "../pages/hr/HrProcessPages";
+import { SalaryAdvancePage } from "../pages/hr/SalaryAdvancePage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -257,6 +258,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "HR Leave Cancel",
     match: (context) => isHrRoute(context) && isHrLeaveCancelRoute(context),
     element: () => <HrLeaveCancelPage />,
+  },
+  {
+    name: "HR Warning Letter",
+    match: (context) => isHrRoute(context) && isHrMemosAndFormsWarningLetterRoute(context),
+    element: () => <SalaryAdvancePage />,
   },
   {
     name: "HR Payroll Account Setup",
@@ -624,4 +630,13 @@ function isHrLeaveCancelRoute(context: WorkspaceRouteContext) {
 function isHrPayrollAccountSetupRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
   return compact.includes("payrollaccountsetup") || compact.includes("payrollaccountssetup") || compact.includes("payrollacsetup");
+}
+
+function isHrMemosAndFormsWarningLetterRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  return (
+    (normalized.includes("memos") || normalized.includes("memo_and_forms") || normalized.includes("memo-and-forms") || normalized.includes("memosandforms") || normalized.includes("memo and forms")) &&
+    (normalized.includes("forms") || normalized.includes("memo_and_forms") || normalized.includes("memo-and-forms") || normalized.includes("memo and forms")) &&
+    (normalized.includes("warning letter") || normalized.includes("warning-letter") || normalized.includes("warning_letter") || normalized.includes("warning"))
+  );
 }
