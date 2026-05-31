@@ -12,7 +12,7 @@ import {
   getFyPeriods,
   getTransactionDetail,
   getTransactionDocuments,
-  getTransactionHeader,
+  // getTransactionHeader,
   TransactionDocumentRow,
   TransactionType,
   getLpoDocuments,
@@ -120,8 +120,8 @@ const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 const commercialDetailSign = (docType: CommercialType, value?: unknown): 1 | -1 => {
   if (typeof value === "string") {
     const normalized = value.trim().toLowerCase();
-    if (normalized === "cr" || normalized === "credit") return 1;
-    if (normalized === "dr" || normalized === "debit") return -1;
+    if (normalized === "cr" || normalized === "credit") return -1;
+    if (normalized === "dr" || normalized === "debit") return 1;
   }
   const numeric = Number(value);
   if (numeric === 1 || numeric === -1) return numeric as 1 | -1;
@@ -342,7 +342,8 @@ function CommercialEditor({
           
           docType === "PO"
             ? getLpoHeader(editor.row.doc_no, docType)
-            : getTransactionHeader(editor.row.doc_no, docType),
+            // : getTransactionHeader
+            :getPurchaseHeader(editor.row.doc_no, docType),
 
             docType === "PO"
              ? getLpoDetail(editor.row.doc_no, docType)
@@ -904,18 +905,45 @@ function CommercialEditor({
       code1: user?.company_code || "",
     })
   }
-  onChange={(value, row) => {
+//   onChange={(value, row) => {
+//   const r    = row || {} as Record<string, unknown>;
+//   const perc = Number(getLookupValue(r, "tx_percnt") || 0);
+//   const code = text(getLookupValue(r, "tx_cat_code"));
+//   setForm((c) => ({
+//     ...c,
+//     tx_compntcat_code_1: value,
+//     tx_cat_code: code,
+//     tx_compnt_perc_1: perc,
+//   }));
+//   const nextTaxType = form.tx_compnt_1_expmt || "N";
+//   syncLineTax(value, nextTaxType, perc);
+//  }}
+
+ onChange={(value, row) => {
   const r    = row || {} as Record<string, unknown>;
   const perc = Number(getLookupValue(r, "tx_percnt") || 0);
   const code = text(getLookupValue(r, "tx_cat_code"));
-  setForm((c) => ({
-    ...c,
-    tx_compntcat_code_1: value,
-    tx_cat_code: code,
-    tx_compnt_perc_1: perc,
-  }));
-  const nextTaxType = form.tx_compnt_1_expmt || "N";
-  syncLineTax(value, nextTaxType, perc);
+
+  setForm((c) => {
+    const resolvedPerc  = perc !== 0 ? perc : (c.tx_compnt_perc_1 ?? 0);
+    const resolvedExpmt = c.tx_compnt_1_expmt || c.tax_type || "N";
+
+    const updatedDetail = c.detail.map((line) => ({
+      ...line,
+      tx_compntcat_code_1: value || line.tx_compntcat_code_1,
+      tx_compnt_1_expmt:   resolvedExpmt,
+      tx_compnt_perc_1:    resolvedPerc,
+      tx_compnt_amt_1:     (Number(line.amount || 0) * resolvedPerc) / 100,
+    }));
+
+    return {
+      ...c,
+      tx_compntcat_code_1: value,
+      tx_cat_code:         code,
+      tx_compnt_perc_1:    resolvedPerc,
+      detail:              updatedDetail,
+    };
+  });
  }}
  />
 
@@ -930,16 +958,41 @@ function CommercialEditor({
   <Field label="Tax Type">
     <Select
       value={form.tax_type || ""}  // field: tax_type in UI, maps to tx_compnt_1_expmt in table
-      onChange={(e) => {
+//       onChange={(e) => {
+//   const v    = e.target.value;
+//   const perc = v === "S" ? 5 : 0;
+//   setForm((c) => ({
+//     ...c,
+//     tax_type: v,
+//     tx_compnt_1_expmt: v,
+//     tx_compnt_perc_1: perc,
+//   }));
+//   syncLineTax(form.tx_compntcat_code_1 || "",v,perc);
+//  }}
+
+ onChange={(e) => {
   const v    = e.target.value;
   const perc = v === "S" ? 5 : 0;
-  setForm((c) => ({
-    ...c,
-    tax_type: v,
-    tx_compnt_1_expmt: v,
-    tx_compnt_perc_1: perc,
-  }));
-  syncLineTax(form.tx_compntcat_code_1 || "",v,perc);
+
+  setForm((c) => {
+    const catCode = c.tx_compntcat_code_1 || "";
+
+    const updatedDetail = c.detail.map((line) => ({
+      ...line,
+      tx_compntcat_code_1: catCode || line.tx_compntcat_code_1,
+      tx_compnt_1_expmt:   v,
+      tx_compnt_perc_1:    perc,
+      tx_compnt_amt_1:     (Number(line.amount || 0) * perc) / 100,
+    }));
+
+    return {
+      ...c,
+      tax_type:          v,
+      tx_compnt_1_expmt: v,
+      tx_compnt_perc_1:  perc,
+      detail:            updatedDetail,
+    };
+  });
  }}
     >
       <option value="" />
@@ -1108,12 +1161,27 @@ function CommercialEditor({
                         </td>
                         <td className="w-40 px-2 py-1"><Input value={line.tx_compntcat_code_1 || ""} onChange={(event) => updateLine(line.id, { tx_compntcat_code_1: event.target.value })} /></td>
                         <td className="w-40 px-2 py-1">
-                          <Select value={line.tx_compnt_1_expmt || "N"} onChange={(event) => updateLine(line.id, { tx_compnt_1_expmt: event.target.value })}>
+                          {/* <Select value={line.tx_compnt_1_expmt || "N"} onChange={(event) => updateLine(line.id, { tx_compnt_1_expmt: event.target.value })}>
                             <option value="N">No Tax</option>
                             <option value="S">Std Tax</option>
                             <option value="Z">Zero</option>
                             <option value="E">Exempt</option>
-                          </Select>
+                          </Select> */}
+                          <Select value={line.tx_compnt_1_expmt || "N"} onChange={(event) => {
+  const v    = event.target.value;
+  const perc = v === "S" ? 5 : 0;
+  const taxAmt = (Number(line.amount || 0) * perc) / 100;
+  updateLine(line.id, {
+    tx_compnt_1_expmt:   v,
+    tx_compnt_perc_1:    perc,
+    tx_compnt_amt_1:     taxAmt,
+  });
+}}>
+  <option value="N">No Tax</option>
+  <option value="S">Std Tax</option>
+  <option value="Z">Zero</option>
+  <option value="E">Exempt</option>
+</Select>
                         </td>
                         <td className="w-36 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" value={line.tx_compnt_perc_1 ?? 0} 
                         // onChange={(event) => updateLine(line.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
@@ -1299,7 +1367,8 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
     ...form,
     company_code: companyCode,
     ex_rate: Number(form.ex_rate || 1),
-    ref_doc_no: form.ref_doc_no || form.ref_no || form.doc_no || "",
+    // ref_doc_no: form.ref_doc_no || form.ref_no || form.doc_no || "",
+    ref_doc_no: form.doc_type === "PI" ? (form.ref_doc_no || "") : (form.ref_doc_no || form.ref_no || form.doc_no || ""),
     party_name: form.ac_name || "",
     invoice_no: form.inv_no || "",
     invoice_date: form.inv_date || "",
@@ -1318,7 +1387,7 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
       qty: Number(line.qty || 1),
       amount: Math.abs(Number(line.amount || 0)),
       sign_ind: commercialDetailSign(form.doc_type, line.sign_ind),
-      sign_code: commercialDetailSign(form.doc_type, line.sign_ind) === 1 ? "CR" : "DR",
+      sign_code: commercialDetailSign(form.doc_type, line.sign_ind) === 1 ? "DR" : "CR",
       tx_compntcat_code_1: line.tx_compntcat_code_1 || "",
       tx_cat_code: line.tx_cat_code || "",
       tx_compnt_1_expmt: line.tx_compnt_1_expmt || "N",
@@ -1356,7 +1425,8 @@ function buildCommercialBulkAccountEntryPayload(form: FormState, companyCode: st
     doc_date: form.doc_date,
     inv_no: form.inv_no || form.ref_no || "",
     inv_date: form.inv_date || form.ref_date || form.doc_date,
-    ref_no: form.ref_no || form.inv_no || "",
+    // ref_no: form.ref_no || form.inv_no || "",
+    ref_no: form.doc_type === "PI" ? (form.ref_no || "") : (form.ref_no || form.inv_no || ""),
     ref_date: form.ref_date || form.inv_date || form.doc_date,
     ac_code: form.ac_code,
     remarks: form.remarks || "",
@@ -1388,7 +1458,7 @@ function buildCommercialBulkAccountEntryPayload(form: FormState, companyCode: st
     amount: Math.abs(Number(line.amount || 0)),
     lcur_amount: Number(line.lcur_amount ?? Math.abs(Number(line.amount || 0)) * Number(line.ex_rate || form.ex_rate || 1)),
     sign_ind: commercialDetailSign(form.doc_type, line.sign_ind),
-    sign_code: commercialDetailSign(form.doc_type, line.sign_ind) === 1 ? "CR" : "DR",
+    sign_code: commercialDetailSign(form.doc_type, line.sign_ind) === 1 ? "DR" : "CR",
   }));
 
   return {
