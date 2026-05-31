@@ -223,18 +223,18 @@ export function DataTable<TData, TValue>({
   }, [rowSelection]);
 
   return (
-    <div className="overflow-hidden rounded-lg border border-[#aebbd0] bg-card shadow-[0_8px_22px_rgba(15,23,42,0.07)]">
+    <div className="data-table-shell overflow-hidden rounded-lg border border-[#aebbd0] bg-card shadow-[0_8px_22px_rgba(15,23,42,0.07)]">
       {(displayTitle || subtitle || onSearchChange || toolbar || enableColumnVisibility) && (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#c7d2e3] bg-white px-3 py-2">
+        <div className="data-table-header flex flex-wrap items-center justify-between gap-2 border-b border-[#c7d2e3] bg-white px-3 py-2">
           {(displayTitle || subtitle) && (
             <div>
               {subtitle && <p className="eyebrow">{subtitle}</p>}
               {displayTitle && <h2 className="m-0 text-base font-semibold">{displayTitle}</h2>}
             </div>
           )}
-          <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
+          <div className="data-table-actions flex flex-1 flex-wrap items-center justify-end gap-2">
             {onSearchChange && (
-              <label className="flex h-9 w-[min(390px,100%)] items-center gap-2 rounded-full border border-[#aebbd0] bg-[#fbfdff] px-3 text-muted-foreground shadow-inner">
+              <label className="data-table-search flex h-9 w-[min(390px,100%)] items-center gap-2 rounded-full border border-[#aebbd0] bg-[#fbfdff] px-3 text-muted-foreground shadow-inner">
                 <Search size={15} />
                 <Input
                   className="h-7 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
@@ -268,7 +268,7 @@ export function DataTable<TData, TValue>({
         </div>
       )}
 
-      <div className="overflow-auto bg-white" style={{ maxHeight: heightValue }}>
+      <div className="data-table-scroll overflow-auto bg-white" style={{ maxHeight: heightValue }}>
         <Table style={{ minWidth: minWidthValue }}>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -334,13 +334,13 @@ export function DataTable<TData, TValue>({
       </div>
 
       {enablePagination && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#c7d2e3] bg-white px-3 py-2 text-sm text-muted-foreground">
+        <div className="data-table-pagination flex flex-wrap items-center justify-between gap-3 border-t border-[#c7d2e3] bg-white px-3 py-2 text-sm text-muted-foreground">
           <div className="flex flex-wrap items-center gap-3">
             <span>
               Showing <strong className="text-foreground">{firstVisibleRow}-{lastVisibleRow}</strong> of <strong className="text-foreground">{effectiveTotalRows.toLocaleString()}</strong>
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="data-table-pager flex items-center gap-2">
             <label className="flex items-center gap-2 text-xs">
               Show
               <select
@@ -457,7 +457,7 @@ function ColumnFilterPopup({
   const dateValue = (typeof value === "object" && value ? value : {}) as { from?: string; to?: string };
   return (
     <div
-      className="fixed z-[90] grid w-[228px] gap-2 rounded-lg border border-[#9fb0c8] bg-white p-3 text-xs normal-case text-foreground shadow-[0_18px_42px_rgba(15,23,42,0.22)] ring-1 ring-slate-900/5"
+      className="data-table-filter-popover fixed z-[90] grid w-[228px] gap-2 rounded-lg border border-[#9fb0c8] bg-white p-3 text-xs normal-case text-foreground shadow-[0_18px_42px_rgba(15,23,42,0.22)] ring-1 ring-slate-900/5"
       style={{ left: position.left, top: position.top }}
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => {

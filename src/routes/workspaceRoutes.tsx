@@ -36,8 +36,6 @@ import AppraisalSummaryReportDesign from "../pages/pams/AppraisalSummaryReportDe
 import AppraisalDivisionSummaryReport from "../pages/pams/AppraisalDivisionSummaryReport";
 
 import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
-import { PettyCashPaymentDocumentEditor } from "../pages/finance/PettyCashPayment";
-
 import { JVDocumentEditor } from "../pages/finance/JVDocumentPage";
 
 import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs } from "../pages/pams/PamsPages";
@@ -126,11 +124,6 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Finance Payment Documents",
     match: ({ pathname }) => Boolean(getTransactionDocType(pathname)),
     element: ({ pathname }) => <PaymentDocumentPage docType={getTransactionDocType(pathname)!} />,
-  },
-  {
-    name: "Finance Payment Documents",
-    match: ({ pathname }) => Boolean(getPettyCashDocType(pathname)),
-    element: ({ pathname }) => <PettyCashPaymentDocumentEditor docType={getPettyCashDocType(pathname)!} />,
   },
   {
     name: "Finance Utility Master",
@@ -491,12 +484,10 @@ function getTransactionDocType(pathname: string) {
   if (normalized.includes("/finance/accounts/transactions/cheque-payment")) return "BP" as const;
   if (normalized.includes("/finance/accounts/transactions/cheque-receipt")) return "BR" as const;
   if (normalized.includes("/finance/accounts/transactions/cash-receipt")) return "CR" as const;
-  return null;
-}
-
-function getPettyCashDocType(pathname: string) {
-  const normalized = pathname.toLowerCase();
-  if (normalized.includes("/finance/accounts/transactions/petty_cash_payment") || normalized.includes("/finance/accounts/transactions/petty-cash-payment")) return "CP" as const;
+  if (
+    normalized.includes("/finance/accounts/transactions/petty_cash_payment") ||
+    normalized.includes("/finance/accounts/transactions/petty-cash-payment")
+  ) return "CP" as const;
   return null;
 }
 

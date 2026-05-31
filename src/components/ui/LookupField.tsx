@@ -274,11 +274,11 @@ export function LookupField({
               </Table>
             </div>
 
-            <div className="flex flex-none items-center justify-between border-t bg-[#fafbfd] px-3 py-2 text-xs text-muted-foreground">
+            <div className="lookup-footer flex flex-none items-center justify-between border-t bg-[#fafbfd] px-3 py-2 text-xs text-muted-foreground">
               <span>
                 Page {page} of {totalPages}
               </span>
-              <div className="flex items-center gap-1.5">
+              <div className="lookup-pager flex items-center gap-1.5">
                 <span>Rows</span>
                 <select
                   className="rounded border border-[#d7e1f1] bg-white px-1.5 py-0.5 text-xs text-[#17345f] focus:outline-none"
