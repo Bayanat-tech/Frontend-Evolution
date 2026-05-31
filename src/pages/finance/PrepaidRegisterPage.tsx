@@ -3,7 +3,7 @@ import { Edit2, Eye, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { executeDynamicDelete, getDynamicLookup, getLookupValue, LookupRow, postFinance } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
+// Card removed: editor will open in modal Dialog like asset group
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
@@ -198,47 +198,43 @@ export function PrepaidRegisterPage() {
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-      <div className="grid min-h-[690px] grid-cols-[minmax(0,1fr)_520px] gap-4 max-2xl:grid-cols-1">
-        <DataTable
-          columns={columns}
-          data={filteredRows}
-          title={loading ? "Loading" : `${filteredRows.length} Records`}
-          subtitle="Prepaid Records"
-          searchValue={query}
-          onSearchChange={setQuery}
-          searchPlaceholder="Search document, account, description..."
-          loading={loading}
-          emptyText="No prepaid records found"
-          height={650}
-          minWidth={1500}
-          density="grid"
-          getRowId={(row, index) => `${row.doc_no || "new"}_${index}`}
-        />
+      <DataTable
+        columns={columns}
+        data={filteredRows}
+        title={loading ? "Loading" : `${filteredRows.length} Records`}
+        subtitle="Prepaid Records"
+        searchValue={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="Search document, account, description..."
+        loading={loading}
+        emptyText="No prepaid records found"
+        height={650}
+        minWidth={1500}
+        density="grid"
+        getRowId={(row, index) => `${row.doc_no || "new"}_${index}`}
+      />
 
-        <Card className="overflow-hidden">
-          {editor ? (
-            <PrepaidEditor
-              editor={editor}
-              companyCode={companyCode}
-              loginId={loginId}
-              onClose={() => setEditor(null)}
-              onSaved={async () => {
-                setEditor(null);
-                setNotice({ type: "success", message: "Prepaid record saved successfully" });
-                await loadRows();
-              }}
-            />
-          ) : (
-            <div className="grid min-h-[690px] place-items-center p-8 text-center text-muted-foreground">
-              <div>
-                <p className="eyebrow">No Form Open</p>
-                <h2 className="m-0 text-lg font-semibold text-foreground">Select a prepaid record or create one</h2>
-                <p className="mt-2 text-sm">The editor opens here with compact finance controls.</p>
-              </div>
-            </div>
-          )}
-        </Card>
-      </div>
+      {editor && (
+        <Dialog
+          open
+          wide
+          title={`${editor.mode === "create" ? "Create" : editor.mode === "edit" ? "Edit" : "View"} Prepaid Record`}
+          description="Prepaid details"
+          onClose={() => setEditor(null)}
+        >
+          <PrepaidEditor
+            editor={editor}
+            companyCode={companyCode}
+            loginId={loginId}
+            onClose={() => setEditor(null)}
+            onSaved={async () => {
+              setEditor(null);
+              setNotice({ type: "success", message: "Prepaid record saved successfully" });
+              await loadRows();
+            }}
+          />
+        </Dialog>
+      )}
 
       {deleteTarget && (
         <Dialog
