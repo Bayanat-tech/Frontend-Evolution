@@ -37,6 +37,8 @@ import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDe
 import { HrMasterPage } from "../pages/hr/HrMasterPage";
 import { hrMasterConfigs } from "../pages/hr/hrMasterConfigs";
 import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrPayUnitsPage } from "../pages/hr/HrProcessPages";
+import { Leaf } from "lucide-react";
+import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -59,6 +61,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Finance Account Tree",
     match: ({ pathname }) => isAccountTreeRoute(pathname),
     element: () => <AccountTreePage />,
+  },
+  {
+    name: "Finance Account Report",
+    match: ({ pathname }) => isAccountReportRoute(pathname),
+    element: () => <LedgerBasics />,
   },
   {
     name: "Finance Bank Master",
@@ -344,6 +351,11 @@ function isAccountTreeRoute(pathname: string) {
     normalized.includes("/finance/accounts/masters/ac_tree") ||
     normalized.includes("/finance/accounts/masters/a/c_tree")
   );
+}
+
+function isAccountReportRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts/reports/account-report/detailed-reports/ledger-basic");
 }
 
 function getCreditDebitNoteDocType(pathname: string) {

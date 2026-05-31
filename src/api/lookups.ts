@@ -109,6 +109,12 @@ export async function getDynamicLookup(params: DynamicQueryParams) {
   return response.data.data || [];
 }
 
+export async function getDynamicLookupaccount(params: DynamicQueryParams) {
+  const response = await api.post<ApiResponse<LookupRow[]>>("/api/wms/common/proc_build_dynamic_sql_common20", params);
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load lookup data");
+  return response.data.data || [];
+}
+
 export async function getDynamicFinanceLookup(params: DynamicQueryParams) {
   const response = await api.post<ApiResponse<LookupRow[]>>("api/finance/proc_common_sql_finance", params);
   if (!response.data.success) throw new Error(response.data.message || "Unable to load Financelookup data");
