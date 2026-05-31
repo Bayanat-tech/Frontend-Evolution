@@ -67,6 +67,7 @@ export type WmsSimpleMasterConfig = {
   saveEndpoint?: (form: Record<string, unknown>, context: { editMode: boolean; original: Record<string, unknown> | null }) => string;
     formTabs?: WmsMasterFormTab[];
 
+  customLoad?: (user: unknown) => Promise<{ tableData: Record<string, unknown>[]; count?: number }>;
   customSave?: (form: Record<string, unknown>, context: { editMode: boolean; original: Record<string, unknown> | null; user: unknown }) => Promise<void>;
   customDelete?: (row: Record<string, unknown>, user: unknown) => Promise<void>;
 };
@@ -97,31 +98,60 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
     company_code: user?.company_code || "",
   });
 
+  // const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize) => {
+  //   setLoading(true);
+  //   setNotice(null);
+  //   try {
+  //     const hasSearch = Boolean(query.trim() || columnFilters.some((filter) => String(filter.value ?? "").trim()));
+  //     const requestPageIndex = hasSearch ? 0 : nextPageIndex;
+  //     const requestPageSize = hasSearch ? 100000 : nextPageSize;
+  //     const activeFilters = columnFilters
+  //       .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
+  //       .filter((filter) => filter.values);
+  //     const response = await getWmsMaster(config.master, {
+  //       page: requestPageIndex + 1,
+  //       limit: requestPageSize,
+  //       ...(query.trim() ? { search: query.trim() } : {}),
+  //       ...(activeFilters.length ? { filter: JSON.stringify({ search: activeFilters }) } : {}),
+  //     });
+  //     setRows(response.tableData.map(normalizeRow));
+  //     setTotalRows(response.count || response.tableData.length);
+  //   } catch (error) {
+  //     setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to load ${config.title}` });
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
   const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize) => {
     setLoading(true);
     setNotice(null);
     try {
-      const hasSearch = Boolean(query.trim() || columnFilters.some((filter) => String(filter.value ?? "").trim()));
-      const requestPageIndex = hasSearch ? 0 : nextPageIndex;
-      const requestPageSize = hasSearch ? 100000 : nextPageSize;
-      const activeFilters = columnFilters
-        .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
-        .filter((filter) => filter.values);
-      const response = await getWmsMaster(config.master, {
-        page: requestPageIndex + 1,
-        limit: requestPageSize,
-        ...(query.trim() ? { search: query.trim() } : {}),
-        ...(activeFilters.length ? { filter: JSON.stringify({ search: activeFilters }) } : {}),
-      });
-      setRows(response.tableData.map(normalizeRow));
-      setTotalRows(response.count || response.tableData.length);
+      if (config.customLoad) {
+        const response = await config.customLoad(user);
+        setRows(response.tableData.map(normalizeRow));
+        setTotalRows(response.count || response.tableData.length);
+      } else {
+        const hasSearch = Boolean(query.trim() || columnFilters.some((filter) => String(filter.value ?? "").trim()));
+        const requestPageIndex = hasSearch ? 0 : nextPageIndex;
+        const requestPageSize = hasSearch ? 100000 : nextPageSize;
+        const activeFilters = columnFilters
+          .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
+          .filter((filter) => filter.values);
+        const response = await getWmsMaster(config.master, {
+          page: requestPageIndex + 1,
+          limit: requestPageSize,
+          ...(query.trim() ? { search: query.trim() } : {}),
+          ...(activeFilters.length ? { filter: JSON.stringify({ search: activeFilters }) } : {}),
+        });
+        setRows(response.tableData.map(normalizeRow));
+        setTotalRows(response.count || response.tableData.length);
+      }
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to load ${config.title}` });
     } finally {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     void loadRows();
   }, [config.master, pageIndex, pageSize, query, columnFilters]);
@@ -145,9 +175,13 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
             <Button
               size="icon"
               variant="ghost"
-              disabled={config.deleteConfig?.mode === "disabled"}
+              disabled={!config.customDelete && config.deleteConfig?.mode === "disabled"}
               onClick={() => setDeleteTarget(row.original)}
-              title={config.deleteConfig?.mode === "disabled" ? config.deleteConfig.reason || "Delete endpoint is not registered" : `Delete ${config.title}`}
+              title={
+                !config.customDelete && config.deleteConfig?.mode === "disabled"
+                  ? config.deleteConfig.reason || "Delete endpoint is not registered"
+                  : `Delete ${config.title}`
+              }
             >
               <Trash2 size={14} />
             </Button>
@@ -250,16 +284,41 @@ const saveRecord = async (event: FormEvent) => {
     setSaving(false);
   }
 };
+  // const confirmDelete = async () => {
+  //   if (!deleteTarget || !config.deleteConfig || config.deleteConfig.mode === "disabled") return;
+  //   setSaving(true);
+  //   setNotice(null);
+  //   try {
+  //     const payload = config.deleteConfig.payload(deleteTarget);
+  //     if (config.deleteConfig.mode === "registered") {
+  //       await deleteWmsGm(config.gmEndpoint, payload);
+  //     } else {
+  //       await deleteWmsGmRaw(config.gmEndpoint, payload, config.deleteConfig.mode === "rawDelete" ? "delete" : "post");
+  //     }
+  //     setDeleteTarget(null);
+  //     setNotice({ type: "success", message: `${config.title} deleted successfully` });
+  //     await loadRows(pageIndex, pageSize);
+  //   } catch (error) {
+  //     setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to delete ${config.title}` });
+  //   } finally {
+  //     setSaving(false);
+  //   }
+  // };
   const confirmDelete = async () => {
-    if (!deleteTarget || !config.deleteConfig || config.deleteConfig.mode === "disabled") return;
+    if (!deleteTarget) return;
     setSaving(true);
     setNotice(null);
     try {
-      const payload = config.deleteConfig.payload(deleteTarget);
-      if (config.deleteConfig.mode === "registered") {
-        await deleteWmsGm(config.gmEndpoint, payload);
+      if (config.customDelete) {
+        await config.customDelete(deleteTarget, user);
       } else {
-        await deleteWmsGmRaw(config.gmEndpoint, payload, config.deleteConfig.mode === "rawDelete" ? "delete" : "post");
+        if (!config.deleteConfig || config.deleteConfig.mode === "disabled") return;
+        const payload = config.deleteConfig.payload(deleteTarget);
+        if (config.deleteConfig.mode === "registered") {
+          await deleteWmsGm(config.gmEndpoint, payload);
+        } else {
+          await deleteWmsGmRaw(config.gmEndpoint, payload, config.deleteConfig.mode === "rawDelete" ? "delete" : "post");
+        }
       }
       setDeleteTarget(null);
       setNotice({ type: "success", message: `${config.title} deleted successfully` });
@@ -270,7 +329,6 @@ const saveRecord = async (event: FormEvent) => {
       setSaving(false);
     }
   };
-
   return (
     <section className="grid gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">

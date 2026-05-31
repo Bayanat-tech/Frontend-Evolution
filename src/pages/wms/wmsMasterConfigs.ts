@@ -1,4 +1,5 @@
 import { executeDynamicMutation } from "../../api/lookups";
+import { executeWmsInboundSql } from "../../api/wms";
 import type { WmsSimpleMasterConfig } from "./WmsSimpleMasterPage";
 
 const yesNo = [
@@ -438,93 +439,188 @@ country: {
     ],
     deleteConfig: { mode: "registered", payload: (row) => [row.supp_code] },
   },
- product: {
-  title: "Product Master",
-  subtitle: "Maintain product identity, principal, group, brand, UOM, and packing setup.",
-  master: "product",
-  gmEndpoint: "product",
-  routeKeys: ["product"],
-  keyField: "prod_code",
-  fieldsPerRow: 5,
-  formTabs: [
-    { key: "product-details", label: "Product Details" },
-    { key: "uom-volume", label: "UOM & Volume" },
-    { key: "manufacture-validation", label: "Manufacture & Validation" },
-    { key: "category-product", label: "Category & Product" },
-  ],
-  fields: [
-    // Product Details Tab - Principal Info
-    { name: "prin_code", label: "Principal Code", required: true, dropdownParam: "DROP_DOWN_PRINCIPAL", dropdownDisplayFields:["prin_code","prin_name"],dropdownDisplaySeparator: " - ",dropdownValueKey: "prin_code", width: 150, tab: "product-details", section: "PRINCIPAL INFO" },
-    { name: "group_code", label: "Group Code", required: true, dropdownParam: "DROP_DOWN_GROUP", dropdownCodeMap: { prin_code: "code1" },dropdownDisplayFields: ["group_code", "group_name"],dropdownDisplaySeparator: " - ",dropdownValueKey: "group_code", width: 140, tab: "product-details", section: "PRINCIPAL INFO" },
-    { name: "brand_code", label: "Brand Code", required: true, dropdownParam: "DROP_DOWN_BRAND", dropdownCodeMap: { prin_code: "code1", group_code: "code2" },dropdownDisplayFields: ["brand_code", "brand_name"],dropdownDisplaySeparator: " - ",dropdownValueKey: "brand_code", width: 140, tab: "product-details", section: "PRINCIPAL INFO" },
+  product: {
+    title: "Product Master",
+    subtitle: "Maintain product identity, principal, group, brand, UOM, and packing setup.",
+    master: "product",
+    gmEndpoint: "product",
+    routeKeys: ["product"],
+    keyField: "prod_code",
+    fieldsPerRow: 5,
+    formTabs: [
+      { key: "product-details", label: "Product Details" },
+      { key: "uom-volume", label: "UOM & Volume" },
+      { key: "manufacture-validation", label: "Manufacture & Validation" },
+      { key: "category-product", label: "Category & Product" },
+    ],
+    // fields: [
+    //   // Product Details Tab - Principal Info
+    //   { name: "prin_code", label: "Principal Code", required: true, dropdownParam: "DROP_DOWN_PRINCIPAL", dropdownDisplayFields:["prin_code","prin_name"],dropdownDisplaySeparator: " - ",dropdownValueKey: "prin_code", width: 150, tab: "product-details", section: "PRINCIPAL INFO" },
+    //   { name: "group_code", label: "Group Code", required: true, dropdownParam: "DROP_DOWN_GROUP", dropdownCodeMap: { prin_code: "code1" },dropdownDisplayFields: ["group_code", "group_name"],dropdownDisplaySeparator: " - ",dropdownValueKey: "group_code", width: 140, tab: "product-details", section: "PRINCIPAL INFO" },
+    //   { name: "brand_code", label: "Brand Code", required: true, dropdownParam: "DROP_DOWN_BRAND", dropdownCodeMap: { prin_code: "code1", group_code: "code2" },dropdownDisplayFields: ["brand_code", "brand_name"],dropdownDisplaySeparator: " - ",dropdownValueKey: "brand_code", width: 140, tab: "product-details", section: "PRINCIPAL INFO" },
 
-    // Product Details Tab - Product Info
-    { name: "prod_code", label: "Product Code", disabledOnEdit: true, width: 160, tab: "product-details", section: "PRODUCT INFO" },
-    { name: "prod_name", label: "Product Name", required: true, width: 320, tab: "product-details", section: "PRODUCT INFO", colSpan: 2 },
-    { name: "model", label: "Model #", tab: "product-details", section: "PRODUCT INFO" },
-    { name: "variant", label: "Variant", tab: "product-details", section: "PRODUCT INFO" },
+    //   // Product Details Tab - Product Info
+    //   { name: "prod_code", label: "Product Code", disabledOnEdit: true, width: 160, tab: "product-details", section: "PRODUCT INFO" },
+    //   { name: "prod_name", label: "Product Name", required: true, width: 320, tab: "product-details", section: "PRODUCT INFO", colSpan: 2 },
+    //   { name: "model", label: "Model #", tab: "product-details", section: "PRODUCT INFO" },
+    //   { name: "variant", label: "Variant", tab: "product-details", section: "PRODUCT INFO" },
 
-    // UOM & Volume Tab - Unit of Measurement
-    { name: "no_of_uoms", label: "No. of UOMs", type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-    { name: "p_uom", label: "Primary UOM", required: true, dropdownParam: "DROP_DOWN_UOM", width: 140, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-    { name: "l_uom", label: "Lowest UOM", required: true, dropdownParam: "DROP_DOWN_UOM", width: 130, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-    { name: "units_prim_pack", label: "Units/Prim Pack", required: true, type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-    { name: "def_units_palette", label: "Def. Units/Pallette", required: true, type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-    { name: "qty_as_wt", label: "Qty As Wt", type: "checkbox", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
+    //   // UOM & Volume Tab - Unit of Measurement
+    //   { name: "no_of_uoms", label: "No. of UOMs", type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
+    //   { name: "p_uom", label: "Primary UOM", required: true, dropdownParam: "DROP_DOWN_UOM", width: 140, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
+    //   { name: "l_uom", label: "Lowest UOM", required: true, dropdownParam: "DROP_DOWN_UOM", width: 130, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
+    //   { name: "units_prim_pack", label: "Units/Prim Pack", required: true, type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
+    //   { name: "def_units_palette", label: "Def. Units/Pallette", required: true, type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
+    //   { name: "qty_as_wt", label: "Qty As Wt", type: "checkbox", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
 
-    // UOM & Volume Tab - Volume
-    { name: "length", label: "Length", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-    { name: "width", label: "Width", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-    { name: "height", label: "Height", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-    { name: "volume", label: "Volume", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-    { name: "gross_weight", label: "Gross Weight", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-    { name: "net_weight", label: "Net Weight", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-    { name: "layers", label: "Layers", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-    { name: "carton_layer", label: "Carton / Layer", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+    //   // UOM & Volume Tab - Volume
+    //   { name: "length", label: "Length", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+    //   { name: "width", label: "Width", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+    //   { name: "height", label: "Height", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+    //   { name: "volume", label: "Volume", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+    //   { name: "gross_weight", label: "Gross Weight", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+    //   { name: "net_weight", label: "Net Weight", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+    //   { name: "layers", label: "Layers", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+    //   { name: "carton_layer", label: "Carton / Layer", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
 
-    // Manufacture & Validation Tab - Manufacturer
-    { name: "harmonize_code", label: "Harmonize Code", dropdownParam: "DROP_DOWN_HARMONIZE", dropdownCodeMap: { prin_code: "code1", group_code: "code2", brand_code: "code3" }, tab: "manufacture-validation", section: "MANUFACTURER" },
-    { name: "imco_code", label: "IMCO Code", tab: "manufacture-validation", section: "MANUFACTURER" },
-    { name: "manufacturer", label: "Manufacturer", dropdownParam: "DROP_DOWN_MANUFACTURER", dropdownCodeMap: { prin_code: "code1" }, tab: "manufacture-validation", section: "MANUFACTURER" },
-    { name: "alt_prod_code", label: "Alternate Prod Code", tab: "manufacture-validation", section: "MANUFACTURER" },
-    { name: "default_site_ind", label: "Default Site Ind", required: true, dropdownParam: "DROP_DOWN_SITE", tab: "manufacture-validation", section: "MANUFACTURER" },
-    { name: "batch_type", label: "Batch Type", type: "number", tab: "manufacture-validation", section: "MANUFACTURER" },
+    //   // Manufacture & Validation Tab - Manufacturer
+    //   { name: "harmonize_code", label: "Harmonize Code", dropdownParam: "DROP_DOWN_HARMONIZE", dropdownCodeMap: { prin_code: "code1", group_code: "code2", brand_code: "code3" }, tab: "manufacture-validation", section: "MANUFACTURER" },
+    //   { name: "imco_code", label: "IMCO Code", tab: "manufacture-validation", section: "MANUFACTURER" },
+    //   { name: "manufacturer", label: "Manufacturer", dropdownParam: "DROP_DOWN_MANUFACTURER", dropdownCodeMap: { prin_code: "code1" }, tab: "manufacture-validation", section: "MANUFACTURER" },
+    //   { name: "alt_prod_code", label: "Alternate Prod Code", tab: "manufacture-validation", section: "MANUFACTURER" },
+    //   { name: "default_site_ind", label: "Default Site Ind", required: true, dropdownParam: "DROP_DOWN_SITE", tab: "manufacture-validation", section: "MANUFACTURER" },
+    //   { name: "batch_type", label: "Batch Type", type: "number", tab: "manufacture-validation", section: "MANUFACTURER" },
 
-    // Manufacture & Validation Tab - Validation
-    { name: "mfg_exp_dt", label: "Mfg/Exp Dt", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
-    { name: "supp_cd", label: "Supp. cd", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
-    { name: "lot_no", label: "Lot No", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
-    { name: "kitting", label: "Kitting", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
-    { name: "serialize", label: "Serialize", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
-    { name: "receipt_exp_limit", label: "Receipt Exp Limit", type: "number", tab: "manufacture-validation", section: "VALIDATION" },
-    { name: "min_period_exp_pick", label: "Min Period Exp Pick", type: "number", tab: "manufacture-validation", section: "VALIDATION" },
+    //   // Manufacture & Validation Tab - Validation
+    //   { name: "mfg_exp_dt", label: "Mfg/Exp Dt", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
+    //   { name: "supp_cd", label: "Supp. cd", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
+    //   { name: "lot_no", label: "Lot No", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
+    //   { name: "kitting", label: "Kitting", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
+    //   { name: "serialize", label: "Serialize", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
+    //   { name: "receipt_exp_limit", label: "Receipt Exp Limit", type: "number", tab: "manufacture-validation", section: "VALIDATION" },
+    //   { name: "min_period_exp_pick", label: "Min Period Exp Pick", type: "number", tab: "manufacture-validation", section: "VALIDATION" },
 
-    // Category & Product Tab - Category
-    { name: "category_abc", label: "Category ABC", type: "select", options: [{ label: "A", value: "A" }, { label: "B", value: "B" }, { label: "C", value: "C" }], tab: "category-product", section: "CATEGORY" },
-    { name: "prod_status", label: "Status", required: true, type: "select", options: [{ label: "Active", value: "Active" }, { label: "Inactive", value: "Inactive" }], tab: "category-product", section: "CATEGORY" },
-    { name: "prod_type", label: "Product Type", dropdownParam: "DROP_DOWN_PRODUCT_TYPE", tab: "category-product", section: "CATEGORY" },
-    { name: "prod_stage", label: "Product Stage", tab: "category-product", section: "CATEGORY" },
-    { name: "base_price", label: "Base Price", type: "number", tab: "category-product", section: "CATEGORY" },
-    { name: "def_pick_wave", label: "Def. Pick Wave", type: "select", options: [{ label: "Wave 1", value: "1" }, { label: "Wave 2", value: "2" }, { label: "Wave 3", value: "3" }], tab: "category-product", section: "CATEGORY" },
-    { name: "shelf_life_days", label: "Shelf Life (Days)", type: "number", tab: "category-product", section: "CATEGORY" },
+    //   // Category & Product Tab - Category
+    //   { name: "category_abc", label: "Category ABC", type: "select", options: [{ label: "A", value: "A" }, { label: "B", value: "B" }, { label: "C", value: "C" }], tab: "category-product", section: "CATEGORY" },
+    //   { name: "prod_status", label: "Status", required: true, type: "select", options: [{ label: "Active", value: "Active" }, { label: "Inactive", value: "Inactive" }], tab: "category-product", section: "CATEGORY" },
+    //   { name: "prod_type", label: "Product Type", dropdownParam: "DROP_DOWN_PRODUCT_TYPE", tab: "category-product", section: "CATEGORY" },
+    //   { name: "prod_stage", label: "Product Stage", tab: "category-product", section: "CATEGORY" },
+    //   { name: "base_price", label: "Base Price", type: "number", tab: "category-product", section: "CATEGORY" },
+    //   { name: "def_pick_wave", label: "Def. Pick Wave", type: "select", options: [{ label: "Wave 1", value: "1" }, { label: "Wave 2", value: "2" }, { label: "Wave 3", value: "3" }], tab: "category-product", section: "CATEGORY" },
+    //   { name: "shelf_life_days", label: "Shelf Life (Days)", type: "number", tab: "category-product", section: "CATEGORY" },
 
-    // Category & Product Tab - Flags
-    { name: "co_packed", label: "Co-packed", type: "checkbox", tab: "category-product", section: "FLAGS" },
-    { name: "barcode_print", label: "Barcode Print", type: "checkbox", tab: "category-product", section: "FLAGS" },
-    { name: "hazmat_class", label: "Hazmat Class", type: "checkbox", tab: "category-product", section: "FLAGS" },
-    { name: "food_ind", label: "Food Ind", type: "checkbox", tab: "category-product", section: "FLAGS" },
-    { name: "pharma_ind", label: "Pharma Ind", type: "checkbox", tab: "category-product", section: "FLAGS" },
+    //   // Category & Product Tab - Flags
+    //   { name: "co_packed", label: "Co-packed", type: "checkbox", tab: "category-product", section: "FLAGS" },
+    //   { name: "barcode_print", label: "Barcode Print", type: "checkbox", tab: "category-product", section: "FLAGS" },
+    //   { name: "hazmat_class", label: "Hazmat Class", type: "checkbox", tab: "category-product", section: "FLAGS" },
+    //   { name: "food_ind", label: "Food Ind", type: "checkbox", tab: "category-product", section: "FLAGS" },
+    //   { name: "pharma_ind", label: "Pharma Ind", type: "checkbox", tab: "category-product", section: "FLAGS" },
 
-    // Category & Product Tab - Putaway Preference
-    { name: "special_instructions", label: "Special Instructions", type: "textarea", tab: "category-product", section: "PUTAWAY PREFERENCE" },
-  ],
-  saveEndpoint: (form, { editMode, original }) =>
-    editMode ? `product/${original?.prod_code || form.prod_code}` : "product",
-  deleteConfig: {
-    mode: "rawDelete",
-    payload: (row) => [{ prod_code: row.prod_code, prin_code: row.prin_code }],
+    //   // Category & Product Tab - Putaway Preference
+    //   { name: "special_instructions", label: "Special Instructions", type: "textarea", tab: "category-product", section: "PUTAWAY PREFERENCE" },
+    // ],
+    fields: [
+      // Product Details Tab - Principal Info
+      { name: "prin_code", label: "Principal Code", required: true, dropdownParam: "DROP_DOWN_PRINCIPAL", dropdownDisplayFields:["prin_code","prin_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "prin_code", width: 150, tab: "product-details", section: "PRINCIPAL INFO" },
+      { name: "group_code", label: "Group Code", required: true, dropdownParam: "DROP_DOWN_GROUP", dropdownCodeMap: { prin_code: "code1" }, dropdownDisplayFields: ["group_code", "group_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "group_code", width: 140, tab: "product-details", section: "PRINCIPAL INFO" },
+      { name: "brand_code", label: "Brand Code", required: true, dropdownParam: "DROP_DOWN_BRAND", dropdownCodeMap: { prin_code: "code1", group_code: "code2" }, dropdownDisplayFields: ["brand_code", "brand_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "brand_code", width: 140, tab: "product-details", section: "PRINCIPAL INFO" },
+
+      // Product Details Tab - Product Info
+      { name: "prod_code", label: "Product Code", disabledOnEdit: true, width: 160, tab: "product-details", section: "PRODUCT INFO" },
+      { name: "prod_name", label: "Product Name", required: true, width: 320, tab: "product-details", section: "PRODUCT INFO", colSpan: 2 },
+      { name: "model_number", label: "Model #", tab: "product-details", section: "PRODUCT INFO" },
+      { name: "variant_code", label: "Variant", tab: "product-details", section: "PRODUCT INFO" },
+
+      // UOM & Volume Tab - Unit of Measurement
+      { name: "uom_count", label: "No. of UOMs", type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
+      { name: "p_uom", label: "Primary UOM", required: true, dropdownParam: "DROP_DOWN_UOM", dropdownDisplayFields: ["uom_code", "uom_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "uom_code", width: 140, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
+      { name: "l_uom", label: "Lowest UOM", required: true, dropdownParam: "DROP_DOWN_UOM", dropdownDisplayFields: ["uom_code", "uom_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "uom_code", width: 130, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
+      { name: "uppp", label: "Units/Prim Pack", required: true, type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
+      { name: "upp", label: "Def. Units/Pallette", required: true, type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
+      { name: "qty_as_wt", label: "Qty As Wt", type: "checkbox", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
+
+      // UOM & Volume Tab - Volume
+      { name: "length", label: "Length", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+      { name: "breadth", label: "Width", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+      { name: "height", label: "Height", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+      { name: "volume", label: "Volume", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+      { name: "gross_wt", label: "Gross Weight", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+      { name: "net_wt", label: "Net Weight", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+      { name: "prod_hi", label: "Layers", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+      { name: "prod_ti", label: "Carton / Layer", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+
+      // Manufacture & Validation Tab - Manufacturer
+      { name: "harm_code", label: "Harmonize Code", dropdownParam: "DROP_DOWN_HARMONIZE", dropdownDisplayFields: ["harm_code", "harm_desc"], dropdownDisplaySeparator: " - ", dropdownValueKey: "harm_code", tab: "manufacture-validation", section: "MANUFACTURER" },
+      { name: "imco_code", label: "IMCO Code", tab: "manufacture-validation", section: "MANUFACTURER" },
+      { name: "manu_code", label: "Manufacturer", dropdownParam: "DROP_DOWN_MANUFACTURER", dropdownCodeMap: { prin_code: "code1" }, dropdownDisplayFields: ["manu_code", "manu_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "manu_code", tab: "manufacture-validation", section: "MANUFACTURER" },
+      { name: "alt_prod_code", label: "Alternate Prod Code", tab: "manufacture-validation", section: "MANUFACTURER" },
+      { name: "site_ind", label: "Default Site Ind", required: true, dropdownParam: "DROP_DOWN_SITE",dropdownDisplayFields: ["site_ind", "site_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "site_code", tab: "manufacture-validation", section: "MANUFACTURER" },
+      { name: "batch_type", label: "Batch Type", type: "number", tab: "manufacture-validation", section: "MANUFACTURER" },
+
+      // Manufacture & Validation Tab - Validation
+      { name: "chk_mfgexpdt", label: "Mfg/Exp Dt", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
+      { name: "chk_manucode", label: "Supp. cd", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
+      { name: "chk_lotno", label: "Lot No", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
+      { name: "kitting", label: "Kitting", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
+      { name: "serialize", label: "Serialize", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
+      { name: "rcpt_exp_limit", label: "Receipt Exp Limit", type: "number", tab: "manufacture-validation", section: "VALIDATION" },
+      { name: "minperiod_exppick", label: "Min Period Exp Pick", type: "number", tab: "manufacture-validation", section: "VALIDATION" },
+
+      // Category & Product Tab - Category
+      { name: "category_abc", label: "Category ABC", type: "select", options: [{ label: "A", value: "A" }, { label: "B", value: "B" }, { label: "C", value: "C" }], tab: "category-product", section: "CATEGORY" },
+      { name: "prod_status", label: "Status", required: true, type: "select", options: [{ label: "Active", value: "Active" }, { label: "Inactive", value: "Inactive" }], tab: "category-product", section: "CATEGORY" },
+      { name: "prod_type", label: "Product Type", dropdownParam: "DROP_DOWN_PRODUCT_TYPE", tab: "category-product", section: "CATEGORY" },
+      { name: "product_stage", label: "Product Stage", tab: "category-product", section: "CATEGORY" },
+      { name: "base_price", label: "Base Price", type: "number", tab: "category-product", section: "CATEGORY" },
+      { name: "wave_code", label: "Def. Pick Wave", type: "select", options: [{ label: "Wave 1", value: "1" }, { label: "Wave 2", value: "2" }, { label: "Wave 3", value: "3" }], tab: "category-product", section: "CATEGORY" },
+      { name: "shelf_life", label: "Shelf Life (Days)", type: "number", tab: "category-product", section: "CATEGORY" },
+
+      // Category & Product Tab - Flags
+      { name: "co_pack", label: "Co-packed", type: "checkbox", tab: "category-product", section: "FLAGS" },
+      { name: "pack_key", label: "Barcode Print", type: "checkbox", tab: "category-product", section: "FLAGS" },
+      { name: "hazmat_class", label: "Hazmat Class", type: "checkbox", tab: "category-product", section: "FLAGS" },
+      { name: "food_ind", label: "Food Ind", type: "checkbox", tab: "category-product", section: "FLAGS" },
+      { name: "pharma_ind", label: "Pharma Ind", type: "checkbox", tab: "category-product", section: "FLAGS" },
+
+      // Category & Product Tab - Putaway Preference
+      { name: "special_instructions", label: "Special Instructions", type: "textarea", tab: "category-product", section: "PUTAWAY PREFERENCE" },
+    ],
+
+    saveEndpoint: (form, { editMode, original }) =>
+      editMode ? `product` : "product",
+    deleteConfig: {
+      mode: "rawDelete",
+      payload: (row) => [{ prod_code: row.prod_code, prin_code: row.prin_code }],
+    },
+    customLoad: async (user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      const data = await executeWmsInboundSql(`
+        SELECT p.*,
+              pr.PRIN_NAME,
+              g.GROUP_NAME,
+              b.BRAND_NAME
+        FROM MS_PRODUCT p
+        LEFT JOIN MS_PRINCIPAL pr
+              ON pr.COMPANY_CODE = p.COMPANY_CODE
+              AND pr.PRIN_CODE    = p.PRIN_CODE
+        LEFT JOIN MS_PRODGROUP g
+              ON g.COMPANY_CODE = p.COMPANY_CODE
+              AND g.PRIN_CODE    = p.PRIN_CODE
+              AND g.GROUP_CODE   = p.GROUP_CODE
+        LEFT JOIN MS_PRODBRAND b
+              ON b.COMPANY_CODE = p.COMPANY_CODE
+              AND b.PRIN_CODE    = p.PRIN_CODE
+              AND b.GROUP_CODE   = p.GROUP_CODE
+              AND b.BRAND_CODE   = p.BRAND_CODE
+        WHERE p.COMPANY_CODE = '${typedUser.company_code}'
+        ORDER BY p.PROD_CODE
+      `);
+      return {
+        tableData: data as Record<string, unknown>[],
+        count: data.length,
+      };
+    },
   },
-},
   site: {
     title: "Site Master",
     subtitle: "Maintain site setup with warehouse, division, type, and storage behavior.",
@@ -672,27 +768,29 @@ country: {
     keyField: "brand_code",
     fields: [
       { name: "brandCode", label: "Brand Code", disabledOnEdit: true, width: 130, hideOnAdd: true },
-      { name: "prin_code", label: "Principal Code", required: true, dropdownParam: "DROP_DOWN_PRINCIPAL", dropdownDisplayFields: ["prin_code", "prin_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "prin_code", width: 150 },
-      { name: "group_code", label: "Group Code", required: true, dropdownParam: "DROP_DOWN_GROUP", dropdownDisplayFields: ["group_code", "group_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "group_code", dropdownCodeMap: { prin_code: "code1" }, width: 150, disabledWhen: (form) => !form.prin_code },
-      { name: "brand_name", label: "Brand Name", required: true, width: 230 },
-      { name: "pref_site", label: "Preferred Site", required: false, width: 140 },
-      { name: "pref_loc_from", label: "Location From", required: false, width: 150 },
-      { name: "pref_loc_to", label: "Location To", required: false, width: 150 },
+      { name: "prinCode", label: "Principal Code", required: true, dropdownParam: "DROP_DOWN_PRINCIPAL", dropdownDisplayFields: ["prin_code", "prin_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "prin_code", width: 150 },
+      { name: "groupCode", label: "Group Code", required: true, dropdownParam: "DROP_DOWN_GROUP", dropdownDisplayFields: ["group_code", "group_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "group_code", dropdownCodeMap: { prinCode: "code1" }, width: 150, disabledWhen: (form) => !form.prinCode },
+      { name: "brandName", label: "Brand Name", required: true, width: 230 },
+      { name: "prefSite", label: "Preferred Site", required: false, width: 140 },
+      { name: "prefAisleFrom", label: "Location From", required: false, width: 150 },
+      { name: "prefAisleTo", label: "Location To", required: false, width: 150 },
     ],
     deleteConfig: {
       mode: "registered",
       payload: (row) => [{ company_code: row.company_code, prin_code: row.prin_code, group_code: row.group_code, brand_code: row.brand_code }],
     },
     customSave: async (form, context) => {
-      const { editMode, original } = context;
+      console.log("Custom save logic for Brand Master", form, context);
+      const { editMode, original, user } = context;
+      const typedUser = user as { loginid: string };
       await executeDynamicMutation({
-        loginid: "Admin",
+        loginid: typedUser.loginid,
         parameter: "MWMS_ms_prodbrand",
         val1s1: form.company_code as string,
-        val1s2: (form.brand_code ? form.brand_code : editMode ? original?.brand_code : undefined) as string | undefined,
-        val1s3: form.prin_code as string,
-        val1s4: form.group_code as string,
-        val1s5: form.brand_name as string,
+        val1s2: (form.brandCode ? form.brandCode : editMode ? original?.brandCode : undefined) as string | undefined,
+        val1s3: form.prinCode as string,
+        val1s4: form.groupCode as string,
+        val1s5: form.brandName as string,
       });
     },
   },
