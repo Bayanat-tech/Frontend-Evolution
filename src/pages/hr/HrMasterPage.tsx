@@ -28,6 +28,7 @@ export type HrMasterField = {
   label: string;
   required?: boolean;
   disabledOnEdit?: boolean;
+  disabledOnAdd?: boolean;
   type?: "text" | "number" | "select" | "email" | "date";
   options?: { label: string; value: string }[];
   lookup?: {
@@ -295,7 +296,7 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
               {config.fields.map((field) => (
                 <label className="field" key={field.name}>
                   <span>{field.label}{field.required ? <strong className="text-destructive"> *</strong> : null}</span>
-                  {renderInput(field, form[field.name], form[`${field.name}_name`], Boolean(editMode && field.disabledOnEdit), buildContext(), (value, row) => setForm((current) => ({ ...current, [field.name]: value, ...(row ? displayPatch(field, row) : { [`${field.name}_name`]: "" }) })))}
+                  {renderInput(field, form[field.name], form[`${field.name}_name`], Boolean((editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd)), buildContext(), (value, row) => setForm((current) => ({ ...current, [field.name]: value, ...(row ? displayPatch(field, row) : { [`${field.name}_name`]: "" }) })))}
                 </label>
               ))}
             </CardContent>

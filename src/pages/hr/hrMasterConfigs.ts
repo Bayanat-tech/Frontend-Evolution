@@ -36,6 +36,24 @@ const countryLookup = {
   loadOptions: async () => (await getWmsMaster("country", { page: 1, limit: 100000 })).tableData,
 };
 
+
+
+const religionLookup = {
+  columns: [
+    { field: "religion_code", header: "Code" },
+    { field: "religion_name", header: "Religion Name" },
+  ],
+  valueField: "religion_code",
+  displayFields: ["religion_code", "religion_name"],
+  loadOptions: (context: { loginid: string; companyCode: string }) =>
+    getDynamicLookup({
+      parameter: "MST_HR_MS_HR_RELIGION",
+      loginid: context.loginid,
+      code1: "",
+      code2: "",
+    }),
+};
+
 export const hrMasterConfigs: Record<string, HrMasterConfig> = {
   department: {
     title: "Department Master",
@@ -297,7 +315,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     }),
     buildDelete: (row, context) => ({ parameter: "MST_HR_DEL_RELIGION", loginid: context.loginid, code1: text(row, "religion_code") }),
     fields: [
-      { name: "religion_code", label: "Religion Code", disabledOnEdit: true, width: 150 },
+      { name: "religion_code", label: "Religion Code", disabledOnEdit: true,  disabledOnAdd: true, width: 150 },
       { name: "religion_name", label: "Religion Name", required: true, width: 260 },
       { name: "religion_short_name", label: "Short Name", width: 150 },
       { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
@@ -328,8 +346,9 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     }),
     buildDelete: (row, context) => ({ parameter: "MST_HR_DEL_CASTE", loginid: context.loginid, code1: text(row, "caste_code"), code2: text(row, "religion_code") }),
     fields: [
-      { name: "caste_code", label: "Caste Code", required: true, disabledOnEdit: true, width: 140 },
-      { name: "religion_code", label: "Religion Code", required: true, disabledOnEdit: true, width: 150 },
+    { name: "caste_code", label: "Caste Code", disabledOnEdit: true, disabledOnAdd: true, width: 140 },
+      // { name: "religion_code", label: "Religion Code", required: true, disabledOnEdit: true, width: 150 },
+      { name: "religion_code", label: "Religion", required: true, lookup: religionLookup, width: 150 },
       { name: "caste_name", label: "Caste Name", required: true, width: 260 },
       { name: "caste_short_name", label: "Short Name", width: 150 },
       { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
