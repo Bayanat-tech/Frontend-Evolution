@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { Save, X } from "lucide-react";
 import type { FormEvent } from "react";
-import { getWmsMaster } from "../api/wms";
+import { getWmsMaster, fetchDropdownOptions } from "../api/wms";
 import { Button } from "./ui/Button";
 import { Card, CardContent, CardHeader } from "./ui/Card";
 import { Input } from "./ui/Input";
 import { Select } from "./ui/Select";
 import type { WmsMasterField, WmsMasterFormTab } from "../pages/wms/WmsSimpleMasterPage";
+import type { DropdownOption } from "../api/dropdowns";
 
 type Props = {
   fields: WmsMasterField[];
@@ -28,12 +29,21 @@ const [activeTab, setActiveTab] = useState(tabs?.[0]?.key ?? "__default");
 useEffect(() => {
   setActiveTab(tabs?.[0]?.key ?? "__default");
 }, [tabs]);
+
+  // dropdownOptions cache: key → options[]
+  const [dropdownCache, setDropdownCache] = useState<
+    Record<string, DropdownOption[]>
+  >({});
+
   // asyncOptions cache: fieldName → options[]
   const [asyncCache, setAsyncCache] = useState<
     Record<string, { label: string; value: string }[]>
   >({});
 
-  // fetch async options for all fields (or re-fetch when dependsOn field changes)
+  // Track which dropdowns are loading
+  const [dropdownLoading, setDropdownLoading] = useState<Record<string, boolean>>({});
+
+  // Fetch async options for all fields (or re-fetch when dependsOn field changes)
   useEffect(() => {
     fields.forEach((field) => {
       if (!field.asyncOptions) return;
@@ -61,13 +71,63 @@ useEffect(() => {
     });
   }, [fields, form, asyncCache]);
 
-  const getOptions = (field: WmsMasterField) => {
+  /**
+   * Lazy load dropdown options when field is focused
+   */
+  const loadDropdownOptions = async (field: WmsMasterField) => {
+    if (!field.dropdownKey) return;
+
+    const cacheKey = field.name;
+
+    // Return cached options if available
+    if (dropdownCache[cacheKey]) return;
+
+    // Skip if already loading
+    if (dropdownLoading[cacheKey]) return;
+
+    setDropdownLoading((prev) => ({ ...prev, [cacheKey]: true }));
+
+    try {
+      console.log(`Fetching ${field.dropdownKey}`);
+      const options = await fetchDropdownOptions(field.dropdownKey);
+      console.log(`Fetched ${options.length} options for ${field.name}:`, options);
+      setDropdownCache((prev) => ({ ...prev, [cacheKey]: options }));
+    } catch (error) {
+      console.error(`Error loading dropdown for ${field.name}:`, error);
+    } finally {
+      setDropdownLoading((prev) => ({ ...prev, [cacheKey]: false }));
+    }
+  };
+
+  const getOptions = (field: WmsMasterField): DropdownOption[] => {
+    // Static options
     if (field.options) return field.options;
+
+    // Dropdown API options
+    if (field.dropdownKey) {
+      const cacheKey = field.dropdownDependsOn
+        ? `${field.name}__${form[field.dropdownDependsOn]}`
+        : field.name;
+      let options = dropdownCache[cacheKey] ?? [];
+
+      // Filter options based on filterDependsOn property
+      if (field.filterDependsOn) {
+        const filterValue = form[field.filterDependsOn];
+        options = options.filter(
+          (opt) => opt[field.filterDependsOn as string] === filterValue
+        );
+      }
+
+      return options;
+    }
+
+    // Legacy async options
     if (field.asyncOptions) {
       const { dependsOn } = field.asyncOptions;
       const cacheKey = dependsOn ? `${field.name}__${form[dependsOn]}` : field.name;
       return asyncCache[cacheKey] ?? [];
     }
+
     return [];
   };
 
@@ -78,18 +138,29 @@ useEffect(() => {
       ? fields.filter((f) => (f.tab ?? tabs![0].key) === tabKey)
       : fields;
 
+    // On add/update pages, show only fields where required === true
+    const filtered = visible.filter((f) => f.required === true);
+
     return (
       <div className="grid gap-3 md:grid-cols-2">
-        {visible.map((field) => (
+        {filtered.map((field) => (
           <label
             key={field.name}
             className={`field${field.type === "textarea" ? " md:col-span-2" : ""}`}
           >
             <span>
               {field.label}
-              {field.required && <strong className="text-destructive"> *</strong>}
+              {field.required === true && <strong className="text-destructive"> *</strong>}
             </span>
-            {renderInput(field, form[field.name], Boolean(editMode && field.disabledOnEdit), getOptions(field), onChange)}
+            {renderInput(
+              field,
+              form[field.name],
+              Boolean(editMode && field.disabledOnEdit) || Boolean(field.disabledWhen?.(form)),
+              getOptions(field),
+              onChange,
+              () => loadDropdownOptions(field),
+              dropdownLoading[field.name] || false
+            )}
           </label>
         ))}
       </div>
@@ -155,14 +226,17 @@ function renderInput(
   field: WmsMasterField,
   value: unknown,
   disabled: boolean,
-  options: { label: string; value: string }[],
+  options: DropdownOption[],
   onChange: (name: string, value: unknown) => void,
+  onDropdownFocus: () => void,
+  isLoading: boolean,
 ) {
-  if (field.type === "select" || field.asyncOptions) {
+  if (field.type === "select" || field.asyncOptions || field.dropdownKey) {
     return (
       <Select
-        disabled={disabled}
+        disabled={disabled || isLoading}
         value={String(value ?? "")}
+        onFocus={onDropdownFocus}
         onChange={(e) => onChange(field.name, e.target.value)}
       >
         <option value="">-- Select --</option>

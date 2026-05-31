@@ -1529,7 +1529,7 @@ const columns = makeColumns(
         }
         onRowSelectionChange={
           (tab === "quality_clearance" || tab === "putway_details" || tab === "job_confirmation")
-            ? (sel) => setSelectedRows(sel)
+            ? setSelectedRows
             : undefined
         }
       />

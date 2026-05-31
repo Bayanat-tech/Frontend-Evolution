@@ -13,14 +13,13 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Search, X } from "lucide-react";
+import { ArrowDown, ArrowDownUp, ArrowUp, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Search, X } from "lucide-react";
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "../../lib/utils";
 import { Button } from "./Button";
 import { Input } from "./Input";
 import { Skeleton } from "./Skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./Table";
-import ExportCSVButton from "./ExportCSVButton";
 
 export type DataTableDensity = "grid" | "compact" | "comfortable" | "large";
 
@@ -53,11 +52,9 @@ export type DataTableProps<TData, TValue> = {
   rowClassName?: (row: TData) => string;
   onRowClick?: (row: TData) => void;
   getRowId?: (row: TData, index: number) => string;
-  exportScope?: "all" | "filtered" | "page";
-  /** Optional: explicit dataset to use for export (useful for server-side pagination) */
-  exportData?: TData[];
-  /** Called whenever row selection changes. Receives the array of selected row originals. */
+  /** Called whenever row selection changes; receives array of selected row originals */
   onRowSelectionChange?: (selectedRows: TData[]) => void;
+  initialSorting?: SortingState;
 };
 
 const densityClasses: Record<DataTableDensity, { row: string; cell: string }> = {
@@ -77,6 +74,16 @@ const globalIncludesText: FilterFn<unknown> = (row, _columnId, filterValue) => {
   const search = String(filterValue ?? "").trim().toLowerCase();
   if (!search) return true;
   return row.getAllCells().some((cell) => String(cell.getValue() ?? "").toLowerCase().includes(search));
+};
+
+const dateBetween: FilterFn<unknown> = (row, columnId, filterValue) => {
+  const range = filterValue as { from?: string; to?: string } | undefined;
+  if (!range?.from && !range?.to) return true;
+  const value = toDateOnly(row.getValue(columnId));
+  if (!value) return false;
+  if (range.from && value < range.from) return false;
+  if (range.to && value > range.to) return false;
+  return true;
 };
 
 export function DataTable<TData, TValue>({
@@ -108,11 +115,10 @@ export function DataTable<TData, TValue>({
   rowClassName,
   onRowClick,
   getRowId,
-  exportScope = "filtered",
-  exportData: providedExportData,
   onRowSelectionChange,
+  initialSorting = [],
 }: DataTableProps<TData, TValue>) {
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const [sorting, setSorting] = useState<SortingState>(initialSorting);
   const [internalColumnFilters, setInternalColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -121,13 +127,21 @@ export function DataTable<TData, TValue>({
   const globalFilter = searchValue ?? internalSearch;
   const columnFilters = controlledColumnFilters ?? internalColumnFilters;
   const rowStyle = densityClasses[density];
+  const enhancedColumns = useMemo(
+    () => columns.map((column) => {
+      const id = "id" in column && column.id ? column.id : "accessorKey" in column ? String(column.accessorKey) : "";
+      return isDateColumn(id) && !column.filterFn ? { ...column, filterFn: dateBetween as FilterFn<TData> } : column;
+    }),
+    [columns],
+  );
 
   const table = useReactTable({
     data,
-    columns,
+    columns: enhancedColumns,
     getRowId,
     filterFns: {
       includesText: includesText as FilterFn<TData>,
+      dateBetween: dateBetween as FilterFn<TData>,
     },
     globalFilterFn: globalIncludesText as FilterFn<TData>,
     defaultColumn: {
@@ -165,42 +179,21 @@ export function DataTable<TData, TValue>({
     getPaginationRowModel: getPaginationRowModel(),
     manualPagination,
     manualFiltering,
-    pageCount: manualPagination
-      ? Math.max(1, Math.ceil((totalRows ?? data.length) / Math.max(pageSize, 1)))
-      : undefined,
+    pageCount: manualPagination ? Math.max(1, Math.ceil((totalRows ?? data.length) / Math.max(pageSize, 1))) : undefined,
   });
 
-  // Fire onRowSelectionChange whenever selection changes
-  useEffect(() => {
-    if (!onRowSelectionChange) return;
-    const selected = table.getSelectedRowModel().rows.map((r) => r.original);
-    onRowSelectionChange(selected);
-  }, [rowSelection]);
-
-  // Reset selection when data changes (e.g. tab switch)
-  useEffect(() => {
-    setRowSelection({});
-  }, [data]);
-
-  const visibleRows = manualFiltering
-    ? table.getCoreRowModel().rows
-    : manualPagination
-    ? table.getFilteredRowModel().rows
-    : enablePagination
-    ? table.getRowModel().rows
-    : table.getFilteredRowModel().rows;
-
-  const skeletonRows = useMemo(() => Array.from({ length: Math.min(pageSize, 10) }), [pageSize]);
+  const visibleRows = manualFiltering ? table.getCoreRowModel().rows : manualPagination ? table.getSortedRowModel().rows : enablePagination ? table.getRowModel().rows : table.getFilteredRowModel().rows;
+  const skeletonRows = useMemo(() => Array.from({ length: Math.min(pageSize, 100) }), [pageSize]);
   const heightValue = typeof height === "number" ? `${height}px` : height;
   const minWidthValue = typeof minWidth === "number" ? `${minWidth}px` : minWidth;
-  const pageCount = manualPagination
-    ? Math.max(1, Math.ceil((totalRows ?? data.length) / Math.max(pageSize, 1)))
-    : table.getPageCount() || 1;
+  const pageCount = manualPagination ? Math.max(1, Math.ceil((totalRows ?? data.length) / Math.max(pageSize, 1))) : table.getPageCount() || 1;
   const currentPageIndex = manualPagination ? pageIndex : table.getState().pagination.pageIndex;
+  const effectiveTotalRows = totalRows ?? (manualPagination ? data.length : table.getFilteredRowModel().rows.length);
+  const firstVisibleRow = effectiveTotalRows === 0 ? 0 : currentPageIndex * pageSize + 1;
+  const lastVisibleRow = Math.min(effectiveTotalRows, currentPageIndex * pageSize + visibleRows.length);
   const displayTitle = title && !isCountTitle(title) ? title : undefined;
   const canPreviousPage = currentPageIndex > 0;
   const canNextPage = currentPageIndex < pageCount - 1;
-
   const goToPage = (nextPageIndex: number) => {
     const boundedPageIndex = Math.min(Math.max(nextPageIndex, 0), Math.max(pageCount - 1, 0));
     if (manualPagination) {
@@ -209,7 +202,6 @@ export function DataTable<TData, TValue>({
       table.setPageIndex(boundedPageIndex);
     }
   };
-
   const changePageSize = (nextPageSize: number) => {
     if (manualPagination) {
       onPageSizeChange?.(nextPageSize);
@@ -218,58 +210,34 @@ export function DataTable<TData, TValue>({
     }
   };
 
-  // determine export data based on exportScope or explicit providedExportData
-  let exportData: TData[] = providedExportData ?? data;
-  try {
-    if (!providedExportData) {
-      if (exportScope === "all") {
-        exportData = data;
-      } else if (exportScope === "page") {
-        exportData = table.getRowModel().rows.map((r) => r.original as TData);
-      } else {
-        // 'filtered' scope: prefer client-side filtered rows; if manualFiltering is enabled
-        // assume `data` already represents filtered results from server
-        exportData = manualFiltering ? data : table.getFilteredRowModel().rows.map((r) => r.original as TData);
-      }
-    }
-  } catch (err) {
-    exportData = data;
-  }
+  useEffect(() => {
+    if (!manualPagination) table.setPageSize(pageSize);
+  }, [manualPagination, pageSize, table]);
 
-  console.log("enablePagination", enablePagination);
+  // notify parent of selection changes
+  useEffect(() => {
+    if (!onRowSelectionChange) return;
+    const selected = table.getSelectedRowModel().rows.map((r) => r.original as TData);
+    onRowSelectionChange(selected);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowSelection]);
 
   return (
-    <div className="overflow-hidden rounded-md border bg-card shadow-sm">
+    <div className="overflow-hidden rounded-lg border border-[#aebbd0] bg-card shadow-[0_8px_22px_rgba(15,23,42,0.07)]">
       {(displayTitle || subtitle || onSearchChange || toolbar || enableColumnVisibility) && (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b p-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#c7d2e3] bg-white px-3 py-2">
           {(displayTitle || subtitle) && (
-            <div className="flex items-center gap-3">
-              <div>
-                {subtitle && <p className="eyebrow">{subtitle}</p>}
-                {displayTitle && <h2 className="m-0 text-base font-semibold">{displayTitle}</h2>}
-              </div>
-              {/* Selection badge */}
-              {onRowSelectionChange && (
-                <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                  {/* {selectedCount} selected */}
-                  <button
-                    type="button"
-                    className="ml-0.5 rounded hover:text-destructive"
-                    onClick={() => setRowSelection({})}
-                    title="Clear selection"
-                  >
-                    <X size={10} />
-                  </button>
-                </span>
-              )}
+            <div>
+              {subtitle && <p className="eyebrow">{subtitle}</p>}
+              {displayTitle && <h2 className="m-0 text-base font-semibold">{displayTitle}</h2>}
             </div>
           )}
           <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
             {onSearchChange && (
-              <label className="flex h-8 w-[min(340px,100%)] items-center gap-2 rounded-md border bg-background px-2.5 text-muted-foreground">
+              <label className="flex h-9 w-[min(390px,100%)] items-center gap-2 rounded-full border border-[#aebbd0] bg-[#fbfdff] px-3 text-muted-foreground shadow-inner">
                 <Search size={15} />
                 <Input
-                  className="h-7 border-0 bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
+                  className="h-7 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
                   value={globalFilter ?? ""}
                   onChange={(event) => table.setGlobalFilter(event.target.value)}
                   placeholder={searchPlaceholder}
@@ -295,14 +263,12 @@ export function DataTable<TData, TValue>({
                 </div>
               </details>
             )}
-            {/** Export button appears before any custom toolbar controls */}
-            <ExportCSVButton data={exportData} columns={columns as any} filename={`${displayTitle ?? "export"}.csv`} />
             {toolbar}
           </div>
         </div>
       )}
 
-      <div className="overflow-auto" style={{ maxHeight: heightValue }}>
+      <div className="overflow-auto bg-white" style={{ maxHeight: heightValue }}>
         <Table style={{ minWidth: minWidthValue }}>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -315,13 +281,10 @@ export function DataTable<TData, TValue>({
                     onClick={header.column.getToggleSortingHandler()}
                   >
                     <div className="flex min-h-7 items-center justify-between gap-1">
-                      <span className="min-w-0 truncate">
+                      <span className="flex min-w-0 items-center gap-1 truncate">
                         {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                        {header.column.getIsSorted() === "asc" && (
-                          <span className="ml-1 text-[10px] normal-case text-primary">Asc</span>
-                        )}
-                        {header.column.getIsSorted() === "desc" && (
-                          <span className="ml-1 text-[10px] normal-case text-primary">Desc</span>
+                        {header.column.getCanSort() && (
+                          <SortIcon sorted={header.column.getIsSorted()} />
                         )}
                       </span>
                       {enableColumnFilters && header.column.getCanFilter() && (
@@ -341,22 +304,16 @@ export function DataTable<TData, TValue>({
             {loading ? (
               skeletonRows.map((_, index) => (
                 <TableRow className={rowStyle.row} key={index}>
-                  <TableCell className={rowStyle.cell} colSpan={columns.length}>
-                    <Skeleton />
-                  </TableCell>
+                  <TableCell className={rowStyle.cell} colSpan={enhancedColumns.length}><Skeleton /></TableCell>
                 </TableRow>
               ))
             ) : visibleRows.length ? (
               visibleRows.map((row) => (
                 <TableRow
-                  className={cn(
-                    rowStyle.row,
-                    rowClassName?.(row.original),
-                    // highlight selected rows
-                    onRowSelectionChange && row.getIsSelected() && "bg-primary/5 outline outline-1 outline-primary/20",
-                  )}
-                  data-state={row.getIsSelected() ? "selected" : undefined}
+                  className={cn(rowStyle.row, onRowClick && "cursor-pointer", rowClassName?.(row.original))}
+                  data-state={row.getIsSelected() && "selected"}
                   key={row.id}
+                  onClick={() => onRowClick?.(row.original)}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell className={rowStyle.cell} key={cell.id}>
@@ -367,7 +324,7 @@ export function DataTable<TData, TValue>({
               ))
             ) : (
               <TableRow>
-                <TableCell className="h-32 text-center text-muted-foreground" colSpan={columns.length}>
+                <TableCell className="h-32 text-center text-muted-foreground" colSpan={enhancedColumns.length}>
                   {emptyText}
                 </TableCell>
               </TableRow>
@@ -377,17 +334,17 @@ export function DataTable<TData, TValue>({
       </div>
 
       {enablePagination && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#c7d2e3] bg-white px-3 py-2 text-sm text-muted-foreground">
           <div className="flex flex-wrap items-center gap-3">
             <span>
-              Page {currentPageIndex + 1} of {pageCount}
+              Showing <strong className="text-foreground">{firstVisibleRow}-{lastVisibleRow}</strong> of <strong className="text-foreground">{effectiveTotalRows.toLocaleString()}</strong>
             </span>
           </div>
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-2 text-xs">
-              Rows
+              Show
               <select
-                className="h-8 rounded-md border bg-background px-2 text-xs font-medium text-foreground"
+                className="h-8 rounded-md border border-[#aebbd0] bg-background px-2 text-xs font-medium text-foreground"
                 value={pageSize}
                 onChange={(event) => changePageSize(Number(event.target.value))}
               >
@@ -397,18 +354,10 @@ export function DataTable<TData, TValue>({
               </select>
             </label>
             <div className="flex items-center gap-1">
-              <Button size="icon" variant="outline" disabled={!canPreviousPage} onClick={() => goToPage(0)}>
-                <ChevronsLeft size={15} />
-              </Button>
-              <Button size="icon" variant="outline" disabled={!canPreviousPage} onClick={() => goToPage(currentPageIndex - 1)}>
-                <ChevronLeft size={15} />
-              </Button>
-              <Button size="icon" variant="outline" disabled={!canNextPage} onClick={() => goToPage(currentPageIndex + 1)}>
-                <ChevronRight size={15} />
-              </Button>
-              <Button size="icon" variant="outline" disabled={!canNextPage} onClick={() => goToPage(pageCount - 1)}>
-                <ChevronsRight size={15} />
-              </Button>
+              <Button size="icon" variant="outline" disabled={!canPreviousPage} onClick={() => goToPage(0)}><ChevronsLeft size={15} /></Button>
+              <Button size="icon" variant="outline" disabled={!canPreviousPage} onClick={() => goToPage(currentPageIndex - 1)}><ChevronLeft size={15} /></Button>
+              <Button size="icon" variant="outline" disabled={!canNextPage} onClick={() => goToPage(currentPageIndex + 1)}><ChevronRight size={15} /></Button>
+              <Button size="icon" variant="outline" disabled={!canNextPage} onClick={() => goToPage(pageCount - 1)}><ChevronsRight size={15} /></Button>
             </div>
           </div>
         </div>
@@ -418,9 +367,7 @@ export function DataTable<TData, TValue>({
 }
 
 function isCountTitle(title: string) {
-  return /^(loading|[\d,]+\s+(records?|rows?|items?|documents?|vouchers?|cheques?|lines?|jobs?|countries?))$/i.test(
-    title.trim(),
-  );
+  return /^(loading|[\d,]+\s+(records?|rows?|items?|documents?|vouchers?|cheques?|lines?|jobs?|countries?))$/i.test(title.trim());
 }
 
 function ColumnFilterButton<TData, TValue>({
@@ -432,10 +379,9 @@ function ColumnFilterButton<TData, TValue>({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const value = String(column.getFilterValue() ?? "");
+  const rawValue = column.getFilterValue();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [position, setPosition] = useState({ left: 12, top: 12 });
-
   const updatePosition = () => {
     const rect = buttonRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -469,7 +415,7 @@ function ColumnFilterButton<TData, TValue>({
         type="button"
         className={cn(
           "grid h-5 w-5 place-items-center rounded text-muted-foreground hover:bg-background hover:text-primary",
-          value && "bg-primary/10 text-primary",
+          hasFilterValue(rawValue) && "bg-primary/10 text-primary",
         )}
         onClick={(event) => {
           event.stopPropagation();
@@ -483,7 +429,8 @@ function ColumnFilterButton<TData, TValue>({
       </button>
       {open && (
         <ColumnFilterPopup
-          value={value}
+          value={rawValue}
+          isDate={isDateColumn(column.id)}
           position={position}
           onChange={(nextValue) => column.setFilterValue(nextValue)}
           onClose={() => onOpenChange(false)}
@@ -495,18 +442,22 @@ function ColumnFilterButton<TData, TValue>({
 
 function ColumnFilterPopup({
   value,
+  isDate,
   position,
   onChange,
   onClose,
 }: {
-  value: string;
+  value: unknown;
+  isDate: boolean;
   position: { left: number; top: number };
-  onChange: (value: string) => void;
+  onChange: (value: unknown) => void;
   onClose: () => void;
 }) {
+  const textValue = typeof value === "string" ? value : "";
+  const dateValue = (typeof value === "object" && value ? value : {}) as { from?: string; to?: string };
   return (
     <div
-      className="fixed z-[80] grid w-[196px] gap-1.5 rounded-md border bg-popover p-2 text-[11px] normal-case shadow-xl"
+      className="fixed z-[90] grid w-[228px] gap-2 rounded-lg border border-[#9fb0c8] bg-white p-3 text-xs normal-case text-foreground shadow-[0_18px_42px_rgba(15,23,42,0.22)] ring-1 ring-slate-900/5"
       style={{ left: position.left, top: position.top }}
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
@@ -514,34 +465,82 @@ function ColumnFilterPopup({
       }}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="font-semibold leading-none text-foreground">Filter</span>
-        <button
-          type="button"
-          className="grid h-5 w-5 place-items-center rounded hover:bg-accent"
-          onClick={onClose}
-          aria-label="Close filter"
-        >
+        <span className="font-semibold leading-none text-foreground">{isDate ? "Date filter" : "Column filter"}</span>
+        <button type="button" className="grid h-5 w-5 place-items-center rounded hover:bg-accent" onClick={onClose} aria-label="Close filter">
           <X size={12} />
         </button>
       </div>
-      <label className="flex h-7 items-center gap-1 rounded-md border bg-background px-2 text-muted-foreground">
-        <Search size={12} />
-        <Input
-          autoFocus
-          className="h-6 border-0 bg-transparent px-0 text-[11px] shadow-none focus-visible:ring-0"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="Contains..."
-        />
-      </label>
+      {isDate ? (
+        <div className="grid gap-2">
+          <label className="grid gap-1 text-[11px] font-medium text-muted-foreground">
+            From
+            <span className="flex h-8 items-center gap-2 rounded-md border border-[#b6c3d6] bg-[#fbfdff] px-2">
+              <CalendarDays size={13} />
+              <Input
+                autoFocus
+                type="date"
+                className="h-7 border-0 bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
+                value={dateValue.from || ""}
+                onChange={(event) => onChange({ ...dateValue, from: event.target.value })}
+              />
+            </span>
+          </label>
+          <label className="grid gap-1 text-[11px] font-medium text-muted-foreground">
+            To
+            <span className="flex h-8 items-center gap-2 rounded-md border border-[#b6c3d6] bg-[#fbfdff] px-2">
+              <CalendarDays size={13} />
+              <Input
+                type="date"
+                className="h-7 border-0 bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
+                value={dateValue.to || ""}
+                onChange={(event) => onChange({ ...dateValue, to: event.target.value })}
+              />
+            </span>
+          </label>
+        </div>
+      ) : (
+        <label className="flex h-8 items-center gap-1 rounded-md border border-[#b6c3d6] bg-[#fbfdff] px-2 text-muted-foreground">
+          <Search size={13} />
+          <Input
+            autoFocus
+            className="h-7 border-0 bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
+            value={textValue}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="Contains..."
+          />
+        </label>
+      )}
       <div className="flex justify-end gap-1">
-        <Button size="sm" variant="ghost" type="button" onClick={() => onChange("")}>
-          Clear
-        </Button>
-        <Button size="sm" type="button" onClick={onClose}>
-          Done
-        </Button>
+        <Button size="sm" variant="ghost" type="button" onClick={() => onChange(isDate ? undefined : "")}>Clear</Button>
+        <Button size="sm" type="button" onClick={onClose}>Done</Button>
       </div>
     </div>
   );
+}
+
+function SortIcon({ sorted }: { sorted: false | "asc" | "desc" }) {
+  if (sorted === "asc") return <ArrowUp className="text-primary" size={12} />;
+  if (sorted === "desc") return <ArrowDown className="text-primary" size={12} />;
+  return <ArrowDownUp className="text-muted-foreground/80" size={12} />;
+}
+
+function isDateColumn(columnId: string) {
+  return /(^|_)(date|dt)(_|$)/i.test(columnId);
+}
+
+function hasFilterValue(value: unknown) {
+  if (typeof value === "string") return value.trim().length > 0;
+  if (value && typeof value === "object") return Boolean((value as { from?: string; to?: string }).from || (value as { from?: string; to?: string }).to);
+  return false;
+}
+
+function toDateOnly(value: unknown) {
+  if (!value) return "";
+  const raw = String(value);
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})|^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (!match) return "";
+  if (match[1]) return match[1];
+  return `${match[4]}-${match[3]}-${match[2]}`;
 }

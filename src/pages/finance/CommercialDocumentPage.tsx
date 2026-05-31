@@ -258,7 +258,7 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
         density="grid"
         enablePagination
         manualPagination
-        manualFiltering
+        initialSorting={[{ id: "doc_date", desc: true }]}
         pageIndex={pageIndex}
         pageSize={pageSize}
         totalRows={totalRows}
@@ -455,7 +455,7 @@ function CommercialEditor({
 
   return (
     <form className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
-      <CardHeader className="border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
+      <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
             <div>
@@ -464,16 +464,16 @@ function CommercialEditor({
               </p>
               <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">{META[docType].title}</h2>
             </div>
-            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
+            <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
               <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
               <strong className="block text-xs leading-tight text-primary-foreground">{form.doc_no || "New"}</strong>
             </div>
-            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
+            <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
               <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
               <strong className="block text-xs leading-tight text-primary-foreground">{formatAmount(total + taxTotal)}</strong>
             </div>
             {form.div_code && (
-              <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
+              <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Division</span>
                 <strong className="block max-w-[220px] truncate text-xs leading-tight text-primary-foreground">{form.div_code}{form.div_name ? ` - ${form.div_name}` : ""}</strong>
               </div>
@@ -505,6 +505,13 @@ function CommercialEditor({
             {error && <div className="alert error">{error}</div>}
 
        <div className="commercial-header-shell rounded-md border bg-card">
+       <div className="commercial-section-title">
+         <div>
+           <p className="eyebrow m-0">Header</p>
+           <h3 className="m-0 text-sm font-semibold leading-tight">Document Information</h3>
+         </div>
+         <span>{showHeaderDetails ? "Full header" : "Compact header"}</span>
+       </div>
        <div className={`commercial-header-panel payment-header-grid relative grid grid-cols-6 gap-2.5 p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1 ${showHeaderDetails ? "is-expanded" : "is-collapsed"}`}>
 
   {/* ── Doc No (edit only) ── */}
@@ -1053,7 +1060,7 @@ function CommercialEditor({
   </Button>
 </div>
 </div>
-            <div className="min-w-0 rounded-md border bg-card">
+            <div className="commercial-lines-card min-w-0 rounded-md border bg-card">
               <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
                 <div>
                   <p className="eyebrow m-0">Details</p>
@@ -1227,7 +1234,7 @@ function CommercialEditor({
           </div>
         )}
       </CardContent>
-      <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
+      <div className="commercial-sticky-footer flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
         <div className="text-sm text-muted-foreground">
           Total Amount <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(total + taxTotal)}</strong>
         </div>
