@@ -53,7 +53,7 @@ export type DataTableProps<TData, TValue> = {
   onRowClick?: (row: TData) => void;
   getRowId?: (row: TData, index: number) => string;
   /** Called whenever row selection changes; receives array of selected row originals */
-  onRowSelectionChange?: (selectedRows: TData[]) => void;
+   onRowSelectionChange?: (selectedRows: TData[]) => void;
   initialSorting?: SortingState;
 };
 
