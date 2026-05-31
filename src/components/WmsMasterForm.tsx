@@ -61,14 +61,10 @@ const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOptio
         if (fieldName === "company_code") continue;
         const value = form[fieldName];
         console.log(`Value for ${fieldName}:`, value);
-        if (value) {
-          console.log(`Adding to params: code${codeIndex} = ${value}`);
-          params[`code${codeIndex}`] = value;
-        }
+        if (value) params[`code${codeIndex}`] = value;
         codeIndex++;
       }
     }
-    console.log("Final params for dropdown lookup:", params);
 
     const results = await getDynamicLookup(params as any);
     const labelKey = field.dropdownLabelKey || "label";
@@ -129,7 +125,7 @@ const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOptio
       ? fields.filter((f) => (f.tab ?? tabs![0].key) === tabKey)
       : fields;
 
-    const filtered = visible;
+  const filtered = visible.filter((f) => !(f.hideOnAdd && !editMode));
 
     const sections: Record<string, typeof filtered> = {};
     filtered.forEach((field) => {

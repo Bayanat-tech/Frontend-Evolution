@@ -15,6 +15,7 @@ export type WmsMasterField = {
   name: string;
   label: string;
   required?: boolean;
+  hideOnAdd?: boolean;
   disabledOnEdit?: boolean;
   disabledWhen?: (form: Record<string, unknown>) => boolean;
   type?: "text" | "number" | "select" | "email" | "textarea" | "checkbox" | "date";
@@ -65,6 +66,9 @@ export type WmsSimpleMasterConfig = {
   mapAfterLoad?: (data: Record<string, unknown>) => Record<string, unknown>;
   saveEndpoint?: (form: Record<string, unknown>, context: { editMode: boolean; original: Record<string, unknown> | null }) => string;
     formTabs?: WmsMasterFormTab[];
+
+  customSave?: (form: Record<string, unknown>, context: { editMode: boolean; original: Record<string, unknown> | null; user: unknown }) => Promise<void>;
+  customDelete?: (row: Record<string, unknown>, user: unknown) => Promise<void>;
 };
 
 export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig }) {
@@ -124,6 +128,12 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
 
   const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(
     () => [
+      ...tableFields.map((field) => ({
+        accessorKey: field.name,
+        header: field.label,
+        size: field.width || 160,
+        cell: ({ row }: { row: { original: Record<string, unknown> } }) => formatValue(row.original[field.name]),
+      })),
       {
         id: "actions",
         header: "Actions",
@@ -145,12 +155,6 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
         ),
         size: 90,
       },
-      ...tableFields.map((field) => ({
-        accessorKey: field.name,
-        header: field.label,
-        size: field.width || 160,
-        cell: ({ row }: { row: { original: Record<string, unknown> } }) => formatValue(row.original[field.name]),
-      })),
     ],
     [config, tableFields],
   );
@@ -172,47 +176,80 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
     setNotice(null);
   };
 
-  const saveRecord = async (event: FormEvent) => {
-    event.preventDefault();
-    const missing = editableFields.find((field) => field.required && !String(form[field.name] ?? "").trim());
-    if (missing) {
-      setNotice({ type: "error", message: `${missing.label} is required` });
-      return;
-    }
-    setSaving(true);
-    setNotice(null);
-    try {
-      // Transform form data: convert checkboxes and filter out empty non-required fields
-      const transformedForm = editableFields.reduce((acc, field) => {
-        let value = form[field.name];
+  // const saveRecord = async (event: FormEvent) => {
+  //   event.preventDefault();
+  //   const missing = editableFields.find((field) => field.required && !String(form[field.name] ?? "").trim());
+  //   if (missing) {
+  //     setNotice({ type: "error", message: `${missing.label} is required` });
+  //     return;
+  //   }
+  //   setSaving(true);
+  //   setNotice(null);
+  //   try {
+  //     // Transform form data: convert checkboxes and filter out empty non-required fields
+  //     const transformedForm = editableFields.reduce((acc, field) => {
+  //       let value = form[field.name];
         
-        // Convert checkbox values: true → "Y", false/empty → ""
-        if (field.type === "checkbox") {
-          value = value === true || value === "Y" ? "Y" : "N";
-        }
-        
-        // // Skip empty values for non-required fields (especially date/text fields)
-        // if (!field.required && (value === "" || value === null || value === undefined)) {
-        //   return acc;
-        // }
-        
-        acc[field.name] = value;
-        return acc;
-      }, {} as Record<string, unknown>);
+  //       // Convert checkbox values: true → "Y", false/empty → ""
+  //       if (field.type === "checkbox") {
+  //         value = value === true || value === "Y" ? "Y" : "N";
+  //       }
+  //       if (value === "")value = null; // Convert empty strings to null for non-required fields
+  //       acc[field.name] = value;
+  //       return acc;
+  //     }, {} as Record<string, unknown>);
 
-      const mapped = config.mapBeforeSave?.(transformedForm, { editMode, original }) || transformedForm;
+  //     const mapped = config.mapBeforeSave?.(transformedForm, { editMode, original }) || transformedForm;
+  //     const endpoint = config.saveEndpoint?.(mapped, { editMode, original }) || config.gmEndpoint;
+  //     await saveWmsGm(endpoint, { ...mapped, company_code: mapped.company_code || user?.company_code || "" }, editMode ? "put" : "post");
+  //     setFormOpen(false);
+  //     setNotice({ type: "success", message: `${config.title} ${editMode ? "updated" : "added"} successfully` });
+  //     await loadRows(pageIndex, pageSize);
+  //   } catch (error) {
+  //     setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to save ${config.title}` });
+  //   } finally {
+  //     setSaving(false);
+  //   }
+  // };
+const saveRecord = async (event: FormEvent) => {
+  event.preventDefault();
+  const missing = editableFields.find((field) => field.required && !String(form[field.name] ?? "").trim());
+  if (missing) {
+    setNotice({ type: "error", message: `${missing.label} is required` });
+    return;
+  }
+  setSaving(true);
+  setNotice(null);
+  try {
+    const transformedForm = editableFields.reduce((acc, field) => {
+      let value = form[field.name];
+      if (field.type === "checkbox") {
+        value = value === true || value === "Y" ? "Y" : "N";
+      }
+      if (value === "") value = null;
+      acc[field.name] = value;
+      return acc;
+    }, {} as Record<string, unknown>);
+
+    const finalForm = { ...transformedForm, company_code: transformedForm.company_code || user?.company_code || "" };
+
+    if (config.customSave) {
+      await config.customSave(finalForm, { editMode, original, user });
+    } else {
+      const mapped = config.mapBeforeSave?.(finalForm, { editMode, original }) || finalForm;
       const endpoint = config.saveEndpoint?.(mapped, { editMode, original }) || config.gmEndpoint;
-      await saveWmsGm(endpoint, { ...mapped, company_code: mapped.company_code || user?.company_code || "" }, editMode ? "put" : "post");
-      setFormOpen(false);
-      setNotice({ type: "success", message: `${config.title} ${editMode ? "updated" : "added"} successfully` });
-      await loadRows(pageIndex, pageSize);
-    } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to save ${config.title}` });
-    } finally {
-      setSaving(false);
+      await saveWmsGm(endpoint, mapped, editMode ? "put" : "post");
     }
-  };
 
+    setFormOpen(false);
+    setNotice({ type: "success", message: `${config.title} ${editMode ? "updated" : "added"} successfully` });
+    await loadRows(pageIndex, pageSize);
+  } catch (error) {
+    setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to save ${config.title}` });
+  } finally {
+    setSaving(false);
+  }
+};
   const confirmDelete = async () => {
     if (!deleteTarget || !config.deleteConfig || config.deleteConfig.mode === "disabled") return;
     setSaving(true);
