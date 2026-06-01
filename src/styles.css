@@ -3,6 +3,10 @@
 @tailwind utilities;
 
 :root {
+  --app-font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --app-control-font-size: 13px;
+  --app-table-font-size: 13px;
+  --app-label-font-size: 12px;
   --background: 220 33% 98%;
   --foreground: 238 28% 14%;
   --card: 0 0% 100%;
@@ -33,7 +37,7 @@
   --success: #10b981;
   --danger: #dc2626;
   --shadow: 0 18px 45px rgba(15, 23, 42, 0.1);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--app-font-family);
   color: var(--text);
   background: var(--bg);
 }
@@ -48,7 +52,7 @@ body,
   width: 100%;
   min-height: 100%;
   margin: 0;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--app-font-family);
 }
 
 html,
@@ -58,7 +62,7 @@ body {
 
 body {
   background: var(--bg);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--app-font-family);
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   font-variation-settings: normal;
   -webkit-font-smoothing: antialiased;
@@ -2480,4 +2484,60 @@ footer,
   .data-table-pagination {
     font-size: 12px;
   }
+}
+
+/* Global application typography guard.
+   Keep every operational module on the same Inter stack and prevent local
+   utility classes from making ordinary forms/tables feel like different apps. */
+:where(
+  body,
+  #root,
+  .app,
+  .workspace-shell,
+  .workspace-content,
+  .sidebar,
+  .ui-card,
+  .modal-card,
+  .dialog,
+  .data-table-shell,
+  .lookup-popover,
+  .payment-workbench,
+  .commercial-editor
+) {
+  font-family: var(--app-font-family);
+}
+
+:where(
+  .workspace-content,
+  .modal-card,
+  .lookup-popover,
+  .data-table-shell,
+  .payment-workbench,
+  .commercial-editor
+) :where(input, select, textarea, button, label, table, th, td, [role="button"], [role="combobox"], [role="listbox"], [role="option"]) {
+  font-family: var(--app-font-family);
+}
+
+:where(.workspace-content, .modal-card, .lookup-popover) :where(.field > span, label, .ui-label) {
+  font-size: var(--app-label-font-size);
+  line-height: 1.25;
+}
+
+:where(.workspace-content, .modal-card, .lookup-popover) :where(.ui-input, .ui-select, .ui-textarea, input, select, textarea, [role="combobox"]) {
+  font-size: var(--app-control-font-size);
+  line-height: 1.35;
+}
+
+:where(.workspace-content, .modal-card) :where(.data-table-shell table, .data-table-scroll table, .ui-table, table) {
+  font-size: var(--app-table-font-size);
+}
+
+:where(.workspace-content, .modal-card) :where(.data-table-shell th, .data-table-scroll th, table th) {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+:where(.workspace-content, .modal-card) :where(.data-table-shell td, .data-table-scroll td, table td) {
+  font-size: var(--app-table-font-size);
+  line-height: 1.25;
 }
