@@ -141,3 +141,16 @@ export async function postWmsStockAdjustment<TPayload extends Record<string, unk
   if (!response.data.success) throw new Error(response.data.message || `Unable to save ${endpoint}`);
   return response.data;
 }
+
+export async function postWmsBillingActivity<TPayload extends Record<string , unknown>>(payload: TPayload) {
+  const response = await api.post<ApiResponse<unknown>>(`/api/wms/gm/createPrincipalActivity` ,payload);
+  if(!response.data.success) throw new Error(response.data.message || `Unable to save Billing Activity`);
+  return response.data;
+}
+
+export async function upsertMsActivityBillingApi<TPayload extends Record<string , unknown>>(payload: TPayload) {
+  const response = await api.post<ApiResponse<unknown>>(`/api/wms/inbound/upsertMsActivityBilling` ,payload);
+  if(!response.data.success) throw new Error(response.data.message || `Unable to update Billing Activity`);
+  return response.data;
+}
+ 
