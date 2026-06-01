@@ -82,63 +82,7 @@ export const pamsMasterConfigs: Record<string, PamsMasterConfig> = {
     }),
     buildDelete: (row, ctx) => ({ code1: text(row.KPI_TYPE_CODE), code2: ctx.companyCode }),
   },
-  kpiGroup: {
-    title: "KPI Groups",
-    subtitle: "Maintain KPI groups, weightage, and organization scope.",
-    routeKeys: ["kpi_groups", "kpi_master"],
-    listParameter: "kpi",
-    saveParameter: "kpi_ins_upd",
-    deleteParameter: "delete_kpi",
-    keyFields: ["KPI_CODE", "KPI_TYPE_CODE"],
-    fields: [
-      { name: "KPI_TYPE_CODE", label: "Kpi Type Code", type: "select", required: true, lookup: { parameter: "kpi_type", value: "KPI_TYPE_CODE", label: "KPI_TYPE_DESC" }, table: true, width: 160 },
-      { name: "KPI_CODE", label: "Kpi Code", disabledOnEdit: true, table: true, width: 160 },
-      { name: "KPI_DESC", label: "Kpi Desc", type: "textarea", required: true, table: true, width: 280 },
-      { name: "DIVISION_CODE", label: "Division", type: "select", lookup: { parameter: "division", value: "DIV_CODE", label: "DIV_NAME" }, table: true, width: 250, display: (row) => orgLabel(row, "DIVISION_CODE", "DIVISION_NAME") },
-      { name: "DEPARTMENT_CODE", label: "Department", type: "select", lookup: { parameter: "department", value: "DEPT_CODE", label: "DEPT_NAME", dependsOn: "DIVISION_CODE", code2From: "DIVISION_CODE" }, table: true, width: 180, display: (row) => orgLabel(row, "DEPARTMENT_CODE", "DEPARTMENT_NAME") },
-      { name: "SECTION_CODE", label: "Section", type: "select", lookup: { parameter: "section", value: "SECTION_CODE", label: "SECTION_NAME", dependsOn: "DEPARTMENT_CODE", code2From: "DIVISION_CODE", code3From: "DEPARTMENT_CODE" }, table: true, width: 250, display: (row) => orgLabel(row, "SECTION_CODE", "SECTION_NAME") },
-      { name: "DESG_CODE", label: "Designation", type: "select", lookup: { parameter: "designation", value: "DESG_CODE", label: "DESG_NAME", dependsOn: "DEPARTMENT_CODE", code2From: "DIVISION_CODE", code3From: "DEPARTMENT_CODE", code4From: "SECTION_CODE" }, table: true, width: 250, display: (row) => orgLabel(row, "DESG_CODE", "DESG_NAME") },
-      { name: "STANDARD_WEIGHTAGE", label: "Standard Weightage", type: "number", table: true, width: 150 },
-    ],
-    buildSave: (form, ctx) => ({
-      val1s1: text(form.KPI_CODE),
-      val1s2: text(form.KPI_DESC),
-      val1s3: text(form.KPI_TYPE_CODE),
-      val1s4: ctx.companyCode,
-      val1s5: text(form.DIVISION_CODE),
-      val1s6: text(form.DEPARTMENT_CODE),
-      val1s7: text(form.SECTION_CODE),
-      val1s8: text(form.DESG_CODE),
-      val1n1: number(form.STANDARD_WEIGHTAGE),
-    }),
-    buildDelete: (row, ctx) => ({ code1: text(row.KPI_CODE), code2: text(row.KPI_TYPE_CODE), code3: ctx.companyCode }),
-  },
-  kpiActivity: {
-    title: "KPI Activity",
-    subtitle: "Maintain activity-level KPI items.",
-    routeKeys: ["kpi_activity", "kpi_item"],
-    listParameter: "kpi_item_page",
-    saveParameter: "kpi_item_ins_upd",
-    deleteParameter: "delete_kpi_item",
-    keyFields: ["KPI_ITEM_SRNO", "KPI_CODE"],
-    fields: [
-      { name: "KPI_TYPE_CODE", label: "Category", type: "select", lookup: { parameter: "kpi_type", value: "KPI_TYPE_CODE", label: "KPI_TYPE_DESC" }, table: false },
-      { name: "KPI_CODE", label: "KPI", type: "select", required: true, lookup: { parameter: "kpi", value: "KPI_CODE", label: "KPI_DESC" }, table: false },
-      { name: "KPI_ITEM_SRNO", label: "Item SRNO", type: "number", disabledOnEdit: true, table: true, width: 120 },
-      { name: "KPI_ITEM_DESC", label: "Item Desc", type: "textarea", required: true, table: true, width: 520 },
-      { name: "DIV_CODE", label: "Division", type: "select", lookup: { parameter: "division", value: "DIV_CODE", label: "DIV_NAME" }, table: false },
-      { name: "DEPT_CODE", label: "Department", type: "select", lookup: { parameter: "department", value: "DEPT_CODE", label: "DEPT_NAME", dependsOn: "DIV_CODE", code2From: "DIV_CODE" }, table: false },
-    ],
-    buildSave: (form, ctx) => ({
-      val1s1: ctx.companyCode,
-      val1s2: text(form.KPI_CODE),
-      val1n1: number(form.KPI_ITEM_SRNO),
-      val1s3: text(form.KPI_ITEM_DESC),
-      val1s4: text(form.DIV_CODE || form.DIVISION_CODE),
-      val1s5: text(form.DEPT_CODE || form.DEPARTMENT_CODE),
-    }),
-    buildDelete: (row, ctx) => ({ code1: ctx.companyCode, code2: text(row.KPI_CODE), number1: number(row.KPI_ITEM_SRNO || row.KPI_ITEM_CODE) }),
-  },
+
   departmentKpi: {
     title: "KPI Assignment",
     subtitle: "Assign KPIs to division, department, and employee scope.",
@@ -349,7 +293,7 @@ export function PamsMasterPage({ config }: { config: PamsMasterConfig }) {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
   const [lookups, setLookups] = useState<Record<string, Row[]>>({});
-  const loginid = user?.loginid || user?.username || "";
+  const loginid = user?.loginid ?? "";
   const companyCode = user?.company_code || "";
   const tableFields = config.fields.filter((field) => field.table !== false);
 
@@ -724,7 +668,7 @@ export function PamsReportPage({ type }: { type: "summary" | "listing" }) {
     </section>
   );
 }
-
+// Kpi Assignment master page used for both department KPI assignment and skill/goal assignment, differentiated by selectedType state and itemTypes options
 export function PamsDepartmentAssignmentPage() {
   const { user } = useAuth();
   const [employees, setEmployees] = useState<Row[]>([]);
@@ -760,14 +704,33 @@ export function PamsDepartmentAssignmentPage() {
     setLoading(true);
     setNotice(null);
     try {
-      await pamsPopulateDepartmentKpi({ company_code: companyCode, employee_code: selectedEmployee, item_type: selectedType });
-      const data = await pamsSelect({ parameter: "kpi_assignment_page", loginid, code1: companyCode, code2: selectedType, code3: selectedEmployee });
+      // pamsSave ki jagah pamsSelect use karo
+      await pamsSelect({
+        parameter: "populate_dept_kpi",
+        loginid,
+        code1: companyCode,
+        code2: selectedEmployee,
+        code3: selectedType,
+      });
+
+      const data = await pamsSelect({
+        parameter: "kpi_assignment_page",
+        loginid,
+        code1: companyCode,
+        code2: selectedType,
+        code3: selectedEmployee
+      });
       const normalized = data.map(normalizeRow);
       setRows(normalized);
-      setSelectedRows(Object.fromEntries(normalized.map((row) => [assignmentRowKey(row), true])));
+      setSelectedRows(Object.fromEntries(
+        normalized.map((row) => [assignmentRowKey(row), true])
+      ));
       setExpandedRows({});
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load assignments" });
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to load assignments"
+      });
     } finally {
       setLoading(false);
     }
@@ -825,12 +788,11 @@ export function PamsDepartmentAssignmentPage() {
     <section className="grid gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">Department KPI Assignment</h1>
+          <h1 className="m-0 text-2xl font-semibold text-foreground">KPI Assignment</h1>
           <p className="mt-1 text-sm text-muted-foreground">Select employee, item type, and save the required appraisal assignment rows.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={loadAssignments}><RefreshCw size={15} /> Load</Button>
-          <Button disabled={saving || !rows.length} onClick={saveAssignments}><Save size={15} /> {saving ? "Saving..." : "Save Selected"}</Button>
+
         </div>
       </div>
       {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
@@ -1044,7 +1006,6 @@ export function PamsBulkAppraisalPage() {
     <section className="grid gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><h1 className="m-0 text-2xl font-semibold">Bulk Appraisal</h1><p className="mt-1 text-sm text-muted-foreground">Create appraisal documents for selected employees and period.</p></div>
-        <Button disabled={loading} onClick={process}><Users size={15} /> {loading ? "Processing..." : "Process"}</Button>
       </div>
       {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
       <Card>
@@ -1065,23 +1026,62 @@ export function PamsBulkAppraisalPage() {
               <Search size={15} /> {selectedCount ? `${selectedCount} employee${selectedCount === 1 ? "" : "s"} selected` : "Search employee"}
             </Button>
           </Field>
-          <div className="flex items-end"><Button type="button" variant="outline" disabled={loading || selectedCount === 0} onClick={addEmployees}><Plus size={15} /> Add</Button></div>
+          {/* REMOVED: Add button. ADDED: Process button */}
+          <div className="flex items-end">
+            <Button type="button" disabled={loading} onClick={process}>
+              <Users size={15} /> {loading ? "Processing..." : "Process"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
       <DataTable columns={columns} data={employeeRows} title={`${employeeRows.length.toLocaleString()} Employees`} subtitle="Bulk Appraisal Status" height={520} minWidth={1300} density="grid" enablePagination pageSize={100} searchPlaceholder="Search employee, division, status..." />
       <Dialog
         open={employeeDialogOpen}
+        wide
         title="Select Employees"
         onClose={() => setEmployeeDialogOpen(false)}
-        footer={<><Button variant="outline" onClick={() => setEmployeeDialogOpen(false)}>Cancel</Button><Button disabled={loading || selectedCount === 0} onClick={addEmployees}><Plus size={15} /> Add Selected</Button></>}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setEmployeeDialogOpen(false)}>Cancel</Button>
+            <Button disabled={loading || selectedCount === 0} onClick={addEmployees}>
+              <Plus size={15} /> Add Selected
+            </Button>
+          </>
+        }
       >
         <div className="grid gap-3">
-          <Input value={employeeSearch} onChange={(event) => setEmployeeSearch(event.target.value)} placeholder="Search employee code or name" />
+          <Input
+            value={employeeSearch}
+            onChange={(event) => setEmployeeSearch(event.target.value)}
+            placeholder="Search employee code or name"
+          />
           <div className="max-h-[460px] overflow-auto rounded-lg border border-border">
-            <table className="w-full min-w-[760px] border-collapse text-sm">
+            <table className="w-full table-fixed border-collapse text-sm">
+              <colgroup>
+                <col className="w-10" />
+                <col className="w-[22%]" />
+                <col className="w-[30%]" />
+                <col className="w-[48%]" />
+              </colgroup>
               <thead className="sticky top-0 bg-muted text-[11px] uppercase tracking-[0.12em] text-primary">
                 <tr>
-                  <th className="w-14 border-b border-border px-3 py-2 text-left">Select</th>
+                  <th className="border-b border-border px-3 py-2 text-left">
+                    {/* Select All checkbox */}
+                    <input
+                      type="checkbox"
+                      checked={
+                        filteredEmployees.length > 0 &&
+                        filteredEmployees.every((e) => Boolean(selectedEmployees[text(e.EMPLOYEE_CODE || e.employee_code)]))
+                      }
+                      onChange={(event) => {
+                        const next = { ...selectedEmployees };
+                        filteredEmployees.forEach((e) => {
+                          next[text(e.EMPLOYEE_CODE || e.employee_code)] = event.target.checked;
+                        });
+                        setSelectedEmployees(next);
+                      }}
+                    />
+                  </th>
                   <th className="border-b border-border px-3 py-2 text-left">Employee ID</th>
                   <th className="border-b border-border px-3 py-2 text-left">Employee Code</th>
                   <th className="border-b border-border px-3 py-2 text-left">Employee Name</th>
@@ -1094,10 +1094,12 @@ export function PamsBulkAppraisalPage() {
                   const code = text(employee.EMPLOYEE_CODE || employee.employee_code);
                   return (
                     <tr key={`${code}_${index}`} className="border-b border-border hover:bg-muted/40">
-                      <td className="px-3 py-2"><input type="checkbox" checked={Boolean(selectedEmployees[code])} onChange={(event) => setSelectedEmployees((current) => ({ ...current, [code]: event.target.checked }))} /></td>
-                      <td className="px-3 py-2">{formatValue(employee.EMPLOYEE_ID || employee.employee_id)}</td>
-                      <td className="px-3 py-2 font-medium text-foreground">{formatValue(employee.EMPLOYEE_CODE || employee.employee_code)}</td>
-                      <td className="px-3 py-2">{formatValue(employee.RPT_NAME || employee.EMP_NAME || employee.employee_name)}</td>
+                      <td className="px-3 py-2">
+                        <input type="checkbox" checked={Boolean(selectedEmployees[code])} onChange={(event) => setSelectedEmployees((current) => ({ ...current, [code]: event.target.checked }))} />
+                      </td>
+                      <td className="truncate px-3 py-2">{formatValue(employee.EMPLOYEE_ID || employee.employee_id)}</td>
+                      <td className="truncate px-3 py-2 font-medium text-foreground">{formatValue(employee.EMPLOYEE_CODE || employee.employee_code)}</td>
+                      <td className="truncate px-3 py-2">{formatValue(employee.RPT_NAME || employee.EMP_NAME || employee.employee_name)}</td>
                     </tr>
                   );
                 })}
@@ -1744,18 +1746,52 @@ function bulkAppraisalColumns(): ColumnDef<Row>[] {
   return [
     { accessorKey: "EMPLOYEE_ID", header: "Employee Id", size: 150, cell: ({ row }) => formatValue(row.original.EMPLOYEE_ID || row.original.employee_id) },
     { accessorKey: "EMPLOYEE_CODE", header: "Employee Code", size: 160, cell: ({ row }) => formatValue(row.original.EMPLOYEE_CODE || row.original.employee_code) },
-    { accessorKey: "RPT_NAME", header: "Employee Name", size: 280, cell: ({ row }) => formatValue(row.original.RPT_NAME || row.original.EMP_NAME || row.original.employee_name) },
-    { id: "division", header: "Division", size: 260, cell: ({ row }) => orgLabel(row.original, "DIV_CODE", "DIV_NAME") || orgLabel(row.original, "DIVISION_CODE", "DIVISION_NAME") },
-    { id: "department", header: "Department", size: 260, cell: ({ row }) => orgLabel(row.original, "DEPT_CODE", "DEPT_NAME") || orgLabel(row.original, "DEPARTMENT_CODE", "DEPARTMENT_NAME") },
-    { id: "section", header: "Section", size: 240, cell: ({ row }) => orgLabel(row.original, "SECTION_CODE", "SECTION_NAME") },
-    { id: "designation", header: "Designation", size: 240, cell: ({ row }) => orgLabel(row.original, "DESG_CODE", "DESG_NAME") },
+    {
+      accessorKey: "RPT_NAME",
+      header: "Employee Name",
+      size: 280,
+      cell: ({ row }) => <span className="whitespace-nowrap">{formatValue(row.original.RPT_NAME || row.original.EMP_NAME || row.original.employee_name)}</span>,
+    },
+    {
+      id: "division",
+      header: "Division",
+      size: 260,
+      cell: ({ row }) => <span className="whitespace-nowrap">{orgLabel(row.original, "DIV_CODE", "DIV_NAME") || orgLabel(row.original, "DIVISION_CODE", "DIVISION_NAME")}</span>,
+    },
+    {
+      id: "department",
+      header: "Department",
+      size: 260,
+      cell: ({ row }) => <span className="whitespace-nowrap">{orgLabel(row.original, "DEPT_CODE", "DEPT_NAME") || orgLabel(row.original, "DEPARTMENT_CODE", "DEPARTMENT_NAME")}</span>,
+    },
+    {
+      id: "section",
+      header: "Section",
+      size: 240,
+      cell: ({ row }) => <span className="whitespace-nowrap">{orgLabel(row.original, "SECTION_CODE", "SECTION_NAME")}</span>,
+    },
+    {
+      id: "designation",
+      header: "Designation",
+      size: 240,
+      cell: ({ row }) => <span className="whitespace-nowrap">{orgLabel(row.original, "DESG_CODE", "DESG_NAME")}</span>,
+    },
     {
       accessorKey: "STATUS",
       header: "Status",
       size: 160,
+      // Sticky right column
+      meta: { sticky: "right" },
       cell: ({ row }) => {
         const status = text(row.original.STATUS || row.original.status || row.original.MESSAGE);
-        return <span className={status.toLowerCase().includes("process") ? "inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700" : "inline-flex rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground"}>{status || "-"}</span>;
+        return (
+          <span className={status.toLowerCase().includes("process")
+            ? "inline-flex whitespace-nowrap rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700"
+            : "inline-flex whitespace-nowrap rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground"
+          }>
+            {status || "-"}
+          </span>
+        );
       },
     },
   ];

@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
+import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { useAuth } from "../../state/AuthContext";
 
@@ -240,7 +241,7 @@ export function ExpenseTypePage() {
         </div>
       </div>
 
-      {notice && <div className={`alert ${notice.type}`}>{notice.message}</div>}
+      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
       <div className="grid min-h-[650px] grid-cols-[350px_minmax(0,1fr)] gap-4 max-xl:grid-cols-1">
         <Card className="overflow-hidden">

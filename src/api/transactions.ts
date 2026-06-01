@@ -176,15 +176,23 @@ export function getDefaultFyPeriod(periods: FyPeriod[], companyInfo?: CompanyInf
   return matchingYear?.fy_period || periods[periods.length - 1]?.fy_period || periods[0]?.fy_period || "";
 }
 
-export async function getTransactionDocuments(docType: TransactionType, fyPeriod?: string, search?: string, page = 1, limit = 100) {
+export async function getTransactionDocuments(docType: TransactionType, fyPeriod?: string, search?: string, page = 1, limit = 100,columnFilters?: { field: string; values: string }[]) {
   const filters: unknown[] = [[{ field_name: "doc_type", field_value: docType, operator: "exactmatch" }]];
   if (fyPeriod) filters.push([{ field_name: "fy_period", field_value: fyPeriod, operator: "exactmatch" }]);
   if (search?.trim()) {
     filters.push([
       { field_name: "doc_no", field_value: search.trim(), operator: "contains" },
-      { field_name: "ac_code", field_value: search.trim(), operator: "contains" },
+      { field_name: "ac_name", field_value: search.trim(), operator: "contains" },
       { field_name: "ref_no", field_value: search.trim(), operator: "contains" },
     ]);
+  }
+
+   if (columnFilters?.length) {
+    columnFilters.forEach(({ field, values }) => {
+      if (values.trim()) {
+        filters.push([{ field_name: field, field_value: values.trim(), operator: "contains" }]);
+      }
+    });
   }
 
   const response = await api.get<ApiResponse<{ tableData: TransactionDocumentRow[]; count: number }>>("/api/finance/doc", {
@@ -223,6 +231,14 @@ export async function getTransactionDefaultData(docType: TransactionType, isEdit
 }
 
 export async function getTransactionHeader(docNo: string, docType: TransactionType) {
+  const response = await api.get<ApiResponse<Record<string, unknown>>>(`/api/finance/transactions/header/${encodeURIComponent(docNo)}`, {
+    params: { doc_type: docType },
+  });
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load document header");
+  return response.data.data || {};
+}
+
+export async function getInvoicesTransactionHeader(docNo: string, docType: TransactionType) {
   const response = await api.get<ApiResponse<Record<string, unknown>>>(`/api/finance/transactions/header/${encodeURIComponent(docNo)}`, {
     params: { doc_type: docType },
   });
@@ -376,14 +392,6 @@ export async function getLpoDetail(docNo: string, docType: string) {
   return response.data.data || [];
 }
 
-export async function getLpoRefDocSearch(divCode: string, companyCode: string) {
-  const { getDynamicFinanceLookup } = await import("./lookups");
-  return getDynamicFinanceLookup({
-    parameter: "Account_LPO_REF_DOC",
-    code1: companyCode,
-    number1: Number(divCode) || undefined,
-  });
-}
 
 // Get lpo (Ref_Doc) in PI
 export async function getPurchaseHeader(docNo: string, docType: string) {
@@ -406,7 +414,7 @@ export async function saveTransactionDocument(payload: TransactionHeader, editMo
 export async function upsertBulkAccountEntryApi(payload: {
   header: Record<string, unknown>;
   details: Record<string, unknown>[];
-  invoiceDetails: Record<string, unknown>[];
+  invoiceDetails?: Record<string, unknown>[];
   expenseDetails: Record<string, unknown>[];
   jobDetails: Record<string, unknown>[];
   loginid: string;

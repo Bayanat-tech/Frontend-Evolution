@@ -3,10 +3,11 @@ import { Edit2, Eye, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { executeDynamicDelete, getDynamicLookup, getLookupValue, LookupRow, postFinance } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
+// Card removed: editor now opens in modal Dialog
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
+import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
 import { useAuth } from "../../state/AuthContext";
 
@@ -160,20 +161,45 @@ export function AssetTransferPage() {
         </div>
       </div>
 
-      {notice && <div className={`alert ${notice.type}`}>{notice.message}</div>}
+      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-      <div className="grid min-h-[690px] grid-cols-[minmax(0,1fr)_560px] gap-4 max-2xl:grid-cols-1">
-        <DataTable columns={columns} data={filteredRows} title={loading ? "Loading" : `${filteredRows.length} Records`} subtitle="Transfers" searchValue={query} onSearchChange={setQuery} searchPlaceholder="Search transfer..." loading={loading} emptyText="No asset transfers found" height={650} minWidth={1120} density="grid" getRowId={(row, index) => `${row.doc_no || "new"}_${index}`} />
-        <Card className="overflow-hidden">
-          {editor ? (
-            <TransferEditor editor={editor} companyCode={companyCode} loginId={loginId} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); setNotice({ type: "success", message: "Asset transfer saved successfully" }); await loadRows(); }} />
-          ) : (
-            <div className="grid min-h-[690px] place-items-center p-8 text-center text-muted-foreground">
-              <div><p className="eyebrow">No Form Open</p><h2 className="m-0 text-lg font-semibold text-foreground">Select or create a transfer</h2><p className="mt-2 text-sm">Header and details stay together in a compact editor.</p></div>
-            </div>
-          )}
-        </Card>
-      </div>
+      <DataTable
+        columns={columns}
+        data={filteredRows}
+        title={loading ? "Loading" : `${filteredRows.length} Records`}
+        subtitle="Transfers"
+        searchValue={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="Search transfer..."
+        loading={loading}
+        emptyText="No asset transfers found"
+        height={650}
+        minWidth={1120}
+        density="grid"
+        getRowId={(row, index) => `${row.doc_no || "new"}_${index}`}
+      />
+
+      {editor && (
+        <Dialog
+          open
+          wide
+          title={`${editor.mode === "create" ? "Create" : editor.mode === "edit" ? "Edit" : "View"} Asset Transfer`}
+          description="Header and details"
+          onClose={() => setEditor(null)}
+        >
+          <TransferEditor
+            editor={editor}
+            companyCode={companyCode}
+            loginId={loginId}
+            onClose={() => setEditor(null)}
+            onSaved={async () => {
+              setEditor(null);
+              setNotice({ type: "success", message: "Asset transfer saved successfully" });
+              await loadRows();
+            }}
+          />
+        </Dialog>
+      )}
 
       {deleteTarget && (
         <Dialog open compact tone="danger" title="Delete Transfer" description="This action cannot be undone." onClose={() => setDeleteTarget(null)} footer={<><Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button><Button variant="destructive" onClick={() => void deleteRow()}>Delete</Button></>}>
