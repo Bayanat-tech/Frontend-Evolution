@@ -393,14 +393,14 @@ country: {
       { name: "default_foc", label: "Default Foc", type: "select", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
     ],
     saveEndpoint: (form, { editMode, original }) => (editMode ? `principal/${original?.prin_code || form.prin_code}` : "principal"),
-    customSave: async (form, context) => {
-      const { user } = context;
-      const typedUser = user as { loginid: string };
-      await msPrincipalServiceInstance.upsertMsPrincipalApi({
-        data: form as any,
-        loginid: typedUser.loginid,
-      });
-    },
+    // customSave: async (form, context) => {
+    //   const { user } = context;
+    //   const typedUser = user as { loginid: string };
+    //   await msPrincipalServiceInstance.upsertMsPrincipalApi({
+    //     data: form as any,
+    //     loginid: typedUser.loginid,
+    //   });
+    // },
     deleteConfig: { mode: "disabled", payload: () => null, reason: "Delete endpoint is not registered in the existing backend" },
   },
   customer: {
