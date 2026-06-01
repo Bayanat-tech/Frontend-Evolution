@@ -4,7 +4,7 @@ import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { deleteWmsGm, deleteWmsGmRaw, getWmsMaster, saveWmsGm } from "../../api/wms";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
-import { DataTable } from "../../components/ui/DataTable";
+import { WmsDataTable } from "../../components/ui/WmsDataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
@@ -15,18 +15,30 @@ export type WmsMasterField = {
   name: string;
   label: string;
   required?: boolean;
+  hideOnAdd?: boolean;
   disabledOnEdit?: boolean;
-  type?: "text" | "number" | "select" | "email" | "textarea";
+  disabledWhen?: (form: Record<string, unknown>) => boolean;
+  type?: "text" | "number" | "select" | "email" | "textarea" | "checkbox" | "date";
   options?: { label: string; value: string }[];
+  dropdownParam?: string;
+  dropdownLabelKey?: string;
+  dropdownValueKey?: string;
+  dropdownDisplayFields?: string[];
+  dropdownDisplaySeparator?: string;
+  dropdownCodeMap?: Record<string, string>;
+  filterDependsOn?: string;
   asyncOptions?: {
-    endpoint: string;           // e.g. "country"
-    labelKey: string;           // e.g. "country_name"
-    valueKey: string;           // e.g. "country_code"
-    dependsOn?: string;         // field name this depends on (for chained dropdowns)
+    endpoint: string;
+    labelKey: string;
+    valueKey: string;
+    dependsOn?: string;
   };
-  tab?: string;                 // which tab this field belongs to
+  tab?: string;
+  section?: string;
   table?: boolean;
   width?: number;
+  colSpan?: number;
+  align?: "left" | "center" | "right";
 };
 
 export type WmsDeleteConfig = {
@@ -46,14 +58,61 @@ export type WmsSimpleMasterConfig = {
   master: string;
   gmEndpoint: string;
   routeKeys?: string[];
-  keyField: string;
+  keyField?: string;  // Single key field (fallback if keyFields not provided)
+  keyFields?: string[];  // Multiple fields to compose unique row ID
   fields: WmsMasterField[];
   defaults?: Record<string, unknown>;
+  fieldsPerRow?: number;  // Number of fields per row (default: 2)
   deleteConfig?: WmsDeleteConfig;
   mapBeforeSave?: (form: Record<string, unknown>, context: { editMode: boolean; original: Record<string, unknown> | null }) => Record<string, unknown>;
+  mapAfterLoad?: (data: Record<string, unknown>) => Record<string, unknown>;
   saveEndpoint?: (form: Record<string, unknown>, context: { editMode: boolean; original: Record<string, unknown> | null }) => string;
     formTabs?: WmsMasterFormTab[];
+
+  customLoad?: (user: unknown) => Promise<{ tableData: Record<string, unknown>[]; count?: number }>;
+  customSave?: (form: Record<string, unknown>, context: { editMode: boolean; original: Record<string, unknown> | null; user: unknown }) => Promise<void>;
+  customDelete?: (row: Record<string, unknown>, user: unknown) => Promise<void>;
+  rowIdSeparator?: string;  // Separator for composite row IDs (default: '_')
 };
+
+function generateRowId(row: Record<string, unknown>, config: WmsSimpleMasterConfig, index: number): string {
+  const separator = config.rowIdSeparator || "_";
+  
+  // Use multiple key fields if provided
+  if (config.keyFields && config.keyFields.length > 0) {
+    const composedId = config.keyFields
+      .map((field) => String(row[field] ?? "").trim())
+      .filter((val) => val.length > 0)
+      .join(separator);
+    return composedId || `${config.master}${separator}${index}`;
+  }
+  
+  // Fallback to single key field
+  if (config.keyField) {
+    return String(row[config.keyField] || `${config.master}${separator}${index}`);
+  }
+  
+  // Final fallback
+  return `${config.master}${separator}${index}`;
+}
+
+function getRowDisplayKey(row: Record<string, unknown>, config: WmsSimpleMasterConfig): string {
+  // Use multiple key fields if provided
+  if (config.keyFields && config.keyFields.length > 0) {
+    return config.keyFields
+      .map((field) => String(row[field] ?? "").trim())
+      .filter((val) => val.length > 0)
+      .join(config.rowIdSeparator || "_");
+  }
+  
+  // Fallback to single key field
+  if (config.keyField) {
+    return String(row[config.keyField] ?? "");
+  }
+  
+  // Final fallback
+  return "";
+}
 
 export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig }) {
   const { user } = useAuth();
@@ -81,31 +140,62 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
     company_code: user?.company_code || "",
   });
 
+  // const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize) => {
+  //   setLoading(true);
+  //   setNotice(null);
+  //   try {
+  //     const hasSearch = Boolean(query.trim() || columnFilters.some((filter) => String(filter.value ?? "").trim()));
+  //     const requestPageIndex = hasSearch ? 0 : nextPageIndex;
+  //     const requestPageSize = hasSearch ? 100000 : nextPageSize;
+  //     const activeFilters = columnFilters
+  //       .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
+  //       .filter((filter) => filter.values);
+  //     const response = await getWmsMaster(config.master, {
+  //       page: requestPageIndex + 1,
+  //       limit: requestPageSize,
+  //       ...(query.trim() ? { search: query.trim() } : {}),
+  //       ...(activeFilters.length ? { filter: JSON.stringify({ search: activeFilters }) } : {}),
+  //     });
+  //     setRows(response.tableData.map(normalizeRow));
+  //     setTotalRows(response.count || response.tableData.length);
+  //   } catch (error) {
+  //     setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to load ${config.title}` });
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
   const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize) => {
     setLoading(true);
+    setRows([]); // Clear rows immediately when loading starts
     setNotice(null);
     try {
-      const hasSearch = Boolean(query.trim() || columnFilters.some((filter) => String(filter.value ?? "").trim()));
-      const requestPageIndex = hasSearch ? 0 : nextPageIndex;
-      const requestPageSize = hasSearch ? 100000 : nextPageSize;
-      const activeFilters = columnFilters
-        .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
-        .filter((filter) => filter.values);
-      const response = await getWmsMaster(config.master, {
-        page: requestPageIndex + 1,
-        limit: requestPageSize,
-        ...(query.trim() ? { search: query.trim() } : {}),
-        ...(activeFilters.length ? { filter: JSON.stringify({ search: activeFilters }) } : {}),
-      });
-      setRows(response.tableData.map(normalizeRow));
-      setTotalRows(response.count || response.tableData.length);
+      if (config.customLoad) {
+        const response = await config.customLoad(user);
+        setRows(response.tableData.map(normalizeRow));
+        setTotalRows(response.count || response.tableData.length);
+      } else {
+        const hasSearch = Boolean(query.trim() || columnFilters.some((filter) => String(filter.value ?? "").trim()));
+        const requestPageIndex = hasSearch ? 0 : nextPageIndex;
+        const requestPageSize = hasSearch ? 100000 : nextPageSize;
+        const activeFilters = columnFilters
+          .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
+          .filter((filter) => filter.values);
+        const response = await getWmsMaster(config.master, {
+          page: requestPageIndex + 1,
+          limit: requestPageSize,
+          ...(query.trim() ? { search: query.trim() } : {}),
+          ...(activeFilters.length ? { filter: JSON.stringify({ search: activeFilters }) } : {}),
+        });
+        setRows(response.tableData.map(normalizeRow));
+        setTotalRows(response.count || response.tableData.length);
+      }
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to load ${config.title}` });
+      setRows([]);
     } finally {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     void loadRows();
   }, [config.master, pageIndex, pageSize, query, columnFilters]);
@@ -116,22 +206,32 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
         accessorKey: field.name,
         header: field.label,
         size: field.width || 160,
-        cell: ({ row }: { row: { original: Record<string, unknown> } }) => formatValue(row.original[field.name]),
+        cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
+          const value = formatValue(row.original[field.name]);
+          const alignmentClass = field.align ? 
+            field.align === "right" ? "text-right" : field.align === "center" ? "text-center" : "text-left"
+            : "text-left";
+          return <div className={alignmentClass}>{value}</div>;
+        },
       })),
       {
         id: "actions",
         header: "Actions",
         cell: ({ row }) => (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center justify-center gap-1">
             <Button size="icon" variant="ghost" onClick={() => openEdit(row.original)} title={`Edit ${config.title}`}>
               <Edit2 size={14} />
             </Button>
             <Button
               size="icon"
               variant="ghost"
-              disabled={config.deleteConfig?.mode === "disabled"}
+              disabled={!config.customDelete && config.deleteConfig?.mode === "disabled"}
               onClick={() => setDeleteTarget(row.original)}
-              title={config.deleteConfig?.mode === "disabled" ? config.deleteConfig.reason || "Delete endpoint is not registered" : `Delete ${config.title}`}
+              title={
+                !config.customDelete && config.deleteConfig?.mode === "disabled"
+                  ? config.deleteConfig.reason || "Delete endpoint is not registered"
+                  : `Delete ${config.title}`
+              }
             >
               <Trash2 size={14} />
             </Button>
@@ -154,44 +254,121 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
   const openEdit = (row: Record<string, unknown>) => {
     setEditMode(true);
     setOriginal(row);
-    setForm({ ...makeEmpty(), ...row });
+    const mappedData = config.mapAfterLoad ? config.mapAfterLoad(row) : row;
+    setForm({ ...makeEmpty(), ...mappedData });
     setFormOpen(true);
     setNotice(null);
   };
 
-  const saveRecord = async (event: FormEvent) => {
-    event.preventDefault();
-    const missing = editableFields.find((field) => field.required && !String(form[field.name] ?? "").trim());
-    if (missing) {
-      setNotice({ type: "error", message: `${missing.label} is required` });
-      return;
-    }
-    setSaving(true);
-    setNotice(null);
-    try {
-      const mapped = config.mapBeforeSave?.(form, { editMode, original }) || form;
-      const endpoint = config.saveEndpoint?.(mapped, { editMode, original }) || config.gmEndpoint;
-      await saveWmsGm(endpoint, { ...mapped, company_code: mapped.company_code || user?.company_code || "" }, editMode ? "put" : "post");
-      setFormOpen(false);
-      setNotice({ type: "success", message: `${config.title} ${editMode ? "updated" : "added"} successfully` });
-      await loadRows(pageIndex, pageSize);
-    } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to save ${config.title}` });
-    } finally {
-      setSaving(false);
-    }
-  };
+  // const saveRecord = async (event: FormEvent) => {
+  //   event.preventDefault();
+  //   const missing = editableFields.find((field) => field.required && !String(form[field.name] ?? "").trim());
+  //   if (missing) {
+  //     setNotice({ type: "error", message: `${missing.label} is required` });
+  //     return;
+  //   }
+  //   setSaving(true);
+  //   setNotice(null);
+  //   try {
+  //     // Transform form data: convert checkboxes and filter out empty non-required fields
+  //     const transformedForm = editableFields.reduce((acc, field) => {
+  //       let value = form[field.name];
+        
+  //       // Convert checkbox values: true → "Y", false/empty → ""
+  //       if (field.type === "checkbox") {
+  //         value = value === true || value === "Y" ? "Y" : "N";
+  //       }
+  //       if (value === "")value = null; // Convert empty strings to null for non-required fields
+  //       acc[field.name] = value;
+  //       return acc;
+  //     }, {} as Record<string, unknown>);
 
+  //     const mapped = config.mapBeforeSave?.(transformedForm, { editMode, original }) || transformedForm;
+  //     const endpoint = config.saveEndpoint?.(mapped, { editMode, original }) || config.gmEndpoint;
+  //     await saveWmsGm(endpoint, { ...mapped, company_code: mapped.company_code || user?.company_code || "" }, editMode ? "put" : "post");
+  //     setFormOpen(false);
+  //     setNotice({ type: "success", message: `${config.title} ${editMode ? "updated" : "added"} successfully` });
+  //     await loadRows(pageIndex, pageSize);
+  //   } catch (error) {
+  //     setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to save ${config.title}` });
+  //   } finally {
+  //     setSaving(false);
+  //   }
+  // };
+const saveRecord = async (event: FormEvent) => {
+  event.preventDefault();
+  const missing = editableFields.find((field) => field.required && !String(form[field.name] ?? "").trim());
+  if (missing) {
+    setNotice({ type: "error", message: `${missing.label} is required` });
+    return;
+  }
+  setSaving(true);
+  setNotice(null);
+  try {
+    const transformedForm = editableFields.reduce((acc, field) => {
+      let value = form[field.name];
+      if (field.type === "checkbox") {
+        value = value === true || value === "Y" ? "Y" : "N";
+      }
+      if (value === "") value = null;
+      acc[field.name] = value;
+      return acc;
+    }, {} as Record<string, unknown>);
+
+    const finalForm = { ...transformedForm, company_code: transformedForm.company_code || user?.company_code || "" };
+
+    if (config.customSave) {
+      await config.customSave(finalForm, { editMode, original, user });
+    } else {
+      const mapped = config.mapBeforeSave?.(finalForm, { editMode, original }) || finalForm;
+      const endpoint = config.saveEndpoint?.(mapped, { editMode, original }) || config.gmEndpoint;
+      await saveWmsGm(endpoint, mapped, editMode ? "put" : "post");
+    }
+
+    setFormOpen(false);
+    setNotice({ type: "success", message: `${config.title} ${editMode ? "updated" : "added"} successfully` });
+    await loadRows(pageIndex, pageSize);
+  } catch (error) {
+    setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to save ${config.title}` });
+  } finally {
+    setSaving(false);
+  }
+};
+  // const confirmDelete = async () => {
+  //   if (!deleteTarget || !config.deleteConfig || config.deleteConfig.mode === "disabled") return;
+  //   setSaving(true);
+  //   setNotice(null);
+  //   try {
+  //     const payload = config.deleteConfig.payload(deleteTarget);
+  //     if (config.deleteConfig.mode === "registered") {
+  //       await deleteWmsGm(config.gmEndpoint, payload);
+  //     } else {
+  //       await deleteWmsGmRaw(config.gmEndpoint, payload, config.deleteConfig.mode === "rawDelete" ? "delete" : "post");
+  //     }
+  //     setDeleteTarget(null);
+  //     setNotice({ type: "success", message: `${config.title} deleted successfully` });
+  //     await loadRows(pageIndex, pageSize);
+  //   } catch (error) {
+  //     setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to delete ${config.title}` });
+  //   } finally {
+  //     setSaving(false);
+  //   }
+  // };
   const confirmDelete = async () => {
-    if (!deleteTarget || !config.deleteConfig || config.deleteConfig.mode === "disabled") return;
+    if (!deleteTarget) return;
     setSaving(true);
     setNotice(null);
     try {
-      const payload = config.deleteConfig.payload(deleteTarget);
-      if (config.deleteConfig.mode === "registered") {
-        await deleteWmsGm(config.gmEndpoint, payload);
+      if (config.customDelete) {
+        await config.customDelete(deleteTarget, user);
       } else {
-        await deleteWmsGmRaw(config.gmEndpoint, payload, config.deleteConfig.mode === "rawDelete" ? "delete" : "post");
+        if (!config.deleteConfig || config.deleteConfig.mode === "disabled") return;
+        const payload = config.deleteConfig.payload(deleteTarget);
+        if (config.deleteConfig.mode === "registered") {
+          await deleteWmsGm(config.gmEndpoint, payload);
+        } else {
+          await deleteWmsGmRaw(config.gmEndpoint, payload, config.deleteConfig.mode === "rawDelete" ? "delete" : "post");
+        }
       }
       setDeleteTarget(null);
       setNotice({ type: "success", message: `${config.title} deleted successfully` });
@@ -202,14 +379,10 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
       setSaving(false);
     }
   };
-
   return (
     <section className="grid gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="eyebrow">WMS Master</p>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">{config.title}</h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{config.subtitle}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={() => loadRows()}>
@@ -223,7 +396,7 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
 
       {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
 
-      <DataTable
+      <WmsDataTable
         columns={columns}
         data={rows}
         title={loading ? "Loading" : `${totalRows.toLocaleString()} Records`}
@@ -255,22 +428,26 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
           setPageSize(nextPageSize);
           setPageIndex(0);
         }}
-        getRowId={(row, index) => String(row[config.keyField] || `${config.master}_${index}`)}
+        getRowId={(row, index) => generateRowId(row, config, index)}
       />
 
-      <Dialog open={formOpen} title={editMode ? `Edit ${config.title}` : `Add ${config.title}`} description="Master details" compact onClose={() => setFormOpen(false)}>
+      <Dialog open={formOpen} title={editMode ? `Edit ${config.title}` : `Add ${config.title}`} description="Master details" compact wide onClose={() => setFormOpen(false)} >
+      <div style={{ maxHeight: 'calc(90vh - 180px)', overflowY: 'auto', width: '100%' }}>
       <WmsMasterForm
           fields={editableFields}
-          key={formOpen ? (editMode ? `edit-${String(original?.[config.keyField])}` : "add") : "closed"}
+          key={formOpen ? (editMode ? `edit-${getRowDisplayKey(original || {}, config)}` : "add") : "closed"}
           tabs={config.formTabs}
+          fieldsPerRow={config.fieldsPerRow}
           form={form}
           editMode={editMode}
           saving={saving}
           notice={notice}
+          user={user}
           onChange={(name:any, value:any) => setForm((prev) => ({ ...prev, [name]: value }))}
           onSave={saveRecord}
           onCancel={() => setFormOpen(false)}
         />
+      </div>
         {/* <form className="grid gap-4" onSubmit={saveRecord}>
           <Card>
             <CardHeader>
@@ -301,7 +478,7 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
       <Dialog
         open={Boolean(deleteTarget)}
         title={`Delete ${config.title}`}
-        description={deleteTarget ? `Delete ${formatValue(deleteTarget[config.keyField])}?` : undefined}
+        description={deleteTarget ? `Delete ${formatValue(getRowDisplayKey(deleteTarget, config))}?` : undefined}
         compact
         tone="danger"
         onClose={() => setDeleteTarget(null)}
