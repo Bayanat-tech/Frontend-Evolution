@@ -34,6 +34,7 @@ export type DynamicQueryParams = {
 export type DynamicMutationParams = {
   parameter: string;
   loginid: string;
+
   val1s1?: string;
   val1s2?: string;
   val1s3?: string;
@@ -50,6 +51,24 @@ export type DynamicMutationParams = {
   val1s14?: string;
   val1s15?: string;
   val1s16?: string;
+  val1s17?: string;
+  val1s18?: string;
+  val1s19?: string;
+  val1s20?: string;
+  val1s21?: string;
+  val1s22?: string;
+  val1s23?: string;
+  val1s24?: string;
+  val1s25?: string;
+  val1s26?: string;
+  val1s27?: string;
+  val1s28?: string;
+  val1s29?: string;
+  val1s30?: string;
+  val1s31?: string;
+  val1s32?: string;
+  val1s33?: string;
+
   val1n1?: number;
   val1n2?: number;
   val1n3?: number;
@@ -57,21 +76,25 @@ export type DynamicMutationParams = {
   val1n5?: number;
   val1n6?: number;
   val1n7?: number;
+
   val1d1?: string | null;
   val1d2?: string | null;
   val1d3?: string | null;
   val1d4?: string | null;
   val1d5?: string | null;
+
   wval1s1?: string;
   wval1s2?: string;
   wval1s3?: string;
   wval1s4?: string;
   wval1s5?: string;
+
   wval1n1?: number;
   wval1n2?: number;
   wval1n3?: number;
   wval1n4?: number;
   wval1n5?: number;
+
   wval1d1?: string | null;
   wval1d2?: string | null;
   wval1d3?: string | null;

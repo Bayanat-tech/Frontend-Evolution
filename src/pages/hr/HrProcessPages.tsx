@@ -12,6 +12,7 @@ import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { SalaryAdvancePage } from "./SalaryAdvancePage";
+import {TrainingFeedbackPage} from "./Hrtrainingfeedbackpage";
 
 type Notice = { type: "success" | "error"; message: string } | null;
 
@@ -329,6 +330,12 @@ export function HrPayUnitsPage({ mode }: { mode: PayUnitMode }) {
 export function HrWarningLetterPage() {
   return <SalaryAdvancePage />;
 }
+
+
+export function Hrtrainingfeedbackpage(){
+return <TrainingFeedbackPage />;
+}
+
 
 function PayUnitEditor({
   mode,
