@@ -676,6 +676,19 @@ a {
   border: 1px solid #fecaca;
 }
 
+.alert.success {
+  color: #065f46;
+  background: #ecfdf5;
+  border: 1px solid #bbf7d0;
+  animation: alert-fade-out 4s linear forwards;
+}
+
+@keyframes alert-fade-out {
+  0% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 .selection-header,
 .workspace-header {
   height: 58px;

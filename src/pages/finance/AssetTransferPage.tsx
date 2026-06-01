@@ -1,9 +1,8 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Edit2, Eye, Plus, RefreshCw, Trash2, Building2, Check } from "lucide-react";
+import { Edit2, Eye, Plus, RefreshCw, Trash2, Building2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { executeDynamicDelete, getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
@@ -300,7 +299,6 @@ export function AssetTransferPage() {
       {/* ===================== DIVISION SELECT DIALOG ===================== */}
       <Dialog
         open={divisionOpen}
-        // compact
         title="Select Division"
         description="Choose a division to create a new asset transfer."
         onClose={() => setDivisionOpen(false)}
@@ -311,17 +309,12 @@ export function AssetTransferPage() {
         }
       >
         <div className="grid gap-1 min-w-[500px]">
-          {/* Search */}
-          <div className="relative">
-            <Input
-              placeholder="Search division..."
-              value={divisionSearch}
-              onChange={(e) => setDivisionSearch(e.target.value)}
-              className="pr-8"
-            />
-          </div>
-
-          {/* List */}
+          <Input
+            placeholder="Search division..."
+            value={divisionSearch}
+            onChange={(e) => setDivisionSearch(e.target.value)}
+            className="pr-8"
+          />
           <div className="grid max-h-72 gap-1 overflow-y-auto rounded-md border bg-muted/30 p-1">
             {loadingDivisions ? (
               <div className="py-8 text-center text-sm text-muted-foreground">
@@ -363,7 +356,6 @@ export function AssetTransferPage() {
               : "View Asset Transfer"
           }
           onClose={() => setPopup({ open: false })}
-          // Large dialog — no footer, form handles its own buttons
           footer={null}
         >
           <AddAssetTransferForm

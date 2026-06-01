@@ -20,25 +20,31 @@ TableBody.displayName = "TableBody";
 
 const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(
   ({ className, ...props }, ref) => (
-    <tr ref={ref} className={cn("border-b transition-colors hover:bg-accent data-[state=selected]:bg-accent", className)} {...props} />
+    <tr
+      ref={ref}
+      className={cn("border-b transition-colors hover:bg-accent data-[state=selected]:bg-accent", className)}
+      {...props}
+    />
   ),
 );
+
 TableRow.displayName = "TableRow";
 
 const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<HTMLTableCellElement>>(
   ({ className, ...props }, ref) => (
-    <th
-      ref={ref}
-      className={cn("h-8 border-b border-[#d7e1f1] px-2 text-left align-middle text-[11px] font-bold uppercase tracking-wide", className)}
-      {...props}
-    />
+<th ref={ref} className={cn("h-6 border-b border-[#d7e1f1] px-2 text-left align-middle text-[10px] font-bold uppercase tracking-wide", className)} {...props} />
   ),
 );
 TableHead.displayName = "TableHead";
 
 const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<HTMLTableCellElement>>(
   ({ className, ...props }, ref) => (
-    <td ref={ref} className={cn("border-b px-2 py-1.5 align-middle", className)} {...props} />
+    <td
+      ref={ref}
+      className={cn("border-b px-2 align-middle overflow-hidden text-[11px]", className)}
+      style={{ padding: "1px 8px", lineHeight: "1" }}
+      {...props}
+    />
   ),
 );
 TableCell.displayName = "TableCell";

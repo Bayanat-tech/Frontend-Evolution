@@ -23,6 +23,7 @@ export type TransactionDocumentRow = {
   cheque_date?: string;
   cheque_bank?: string;
   amount?: number;
+  net_amount?: number;
   canceled?: string;
   fy_period?: string;
 };
@@ -175,15 +176,23 @@ export function getDefaultFyPeriod(periods: FyPeriod[], companyInfo?: CompanyInf
   return matchingYear?.fy_period || periods[periods.length - 1]?.fy_period || periods[0]?.fy_period || "";
 }
 
-export async function getTransactionDocuments(docType: TransactionType, fyPeriod?: string, search?: string, page = 1, limit = 100) {
+export async function getTransactionDocuments(docType: TransactionType, fyPeriod?: string, search?: string, page = 1, limit = 100,columnFilters?: { field: string; values: string }[]) {
   const filters: unknown[] = [[{ field_name: "doc_type", field_value: docType, operator: "exactmatch" }]];
   if (fyPeriod) filters.push([{ field_name: "fy_period", field_value: fyPeriod, operator: "exactmatch" }]);
   if (search?.trim()) {
     filters.push([
       { field_name: "doc_no", field_value: search.trim(), operator: "contains" },
-      { field_name: "ac_code", field_value: search.trim(), operator: "contains" },
+      { field_name: "ac_name", field_value: search.trim(), operator: "contains" },
       { field_name: "ref_no", field_value: search.trim(), operator: "contains" },
     ]);
+  }
+
+   if (columnFilters?.length) {
+    columnFilters.forEach(({ field, values }) => {
+      if (values.trim()) {
+        filters.push([{ field_name: field, field_value: values.trim(), operator: "contains" }]);
+      }
+    });
   }
 
   const response = await api.get<ApiResponse<{ tableData: TransactionDocumentRow[]; count: number }>>("/api/finance/doc", {
@@ -405,7 +414,7 @@ export async function saveTransactionDocument(payload: TransactionHeader, editMo
 export async function upsertBulkAccountEntryApi(payload: {
   header: Record<string, unknown>;
   details: Record<string, unknown>[];
-  invoiceDetails: Record<string, unknown>[];
+  invoiceDetails?: Record<string, unknown>[];
   expenseDetails: Record<string, unknown>[];
   jobDetails: Record<string, unknown>[];
   loginid: string;
@@ -430,4 +439,43 @@ export async function deleteTransactionDocument(docNos: string[], docType: Trans
   });
   if (!response.data.success) throw new Error(response.data.message || "Unable to delete document");
   return response.data;
+}
+
+export function getDocumentReportUrl(docType: TransactionType | string, docNo: string, format: "pdf" | "excel" = "pdf") {
+  const baseUrl = String(api.defaults.baseURL || "").replace(/\/$/, "");
+  const encodedType = encodeURIComponent(docType);
+  const encodedNo = encodeURIComponent(docNo);
+  if (format === "excel") {
+    return `${baseUrl}/api/finance/transactions/report/${encodedType}/${encodedNo}/excel`;
+  }
+  return `${baseUrl}/api/finance/transactions/report/${encodedType}/${encodedNo}`;
+}
+
+export async function openDocumentReport(docType: TransactionType | string, docNo: string) {
+  if (!docNo) return;
+  const response = await api.get(`/api/finance/transactions/report/${encodeURIComponent(docType)}/${encodeURIComponent(docNo)}`, {
+    responseType: "blob",
+  });
+  const blob = new Blob([response.data], { type: "text/html;charset=utf-8" });
+  const url = window.URL.createObjectURL(blob);
+  window.open(url, "_blank", "noopener,noreferrer");
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+}
+
+export async function downloadDocumentReportExcel(docType: TransactionType | string, docNo: string) {
+  if (!docNo) return;
+  const response = await api.get(`/api/finance/transactions/report/${encodeURIComponent(docType)}/${encodeURIComponent(docNo)}/excel`, {
+    responseType: "blob",
+  });
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${docType}_${docNo}_report.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }

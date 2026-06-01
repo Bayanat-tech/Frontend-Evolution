@@ -1,4 +1,4 @@
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { Ban, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
@@ -35,6 +35,7 @@ import { CardContent, CardHeader } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
+import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
@@ -77,6 +78,7 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
   const [deleteTarget, setDeleteTarget] = useState<TransactionDocumentRow | null>(null);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
+    const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
   const loadLookups = async () => {
     const [fyData, divisionData] = await Promise.all([getFyPeriods(), getDivisions()]);
@@ -85,12 +87,21 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
     setFyPeriod((current) => current || fyData[0]?.fy_period || "");
   };
 
-  const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize) => {
+  const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize, nextColumnFilters = columnFilters) => {
     if (!nextFy) return;
     setLoading(true);
     setNotice(null);
     try {
-      const response = await getTransactionDocuments(docType, nextFy, nextQuery, nextPageIndex + 1, nextPageSize);
+      const hasSearch = Boolean(query.trim() || nextColumnFilters.some((filter) => String(filter.value ?? "").trim()));
+      const requestPageIndex = hasSearch ? 0 : nextPageIndex;
+      const requestPageSize = hasSearch ? 100000 : nextPageSize;
+      const activeFilters = nextColumnFilters
+        .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
+        .filter((filter) => filter.values);
+      const params: Record<string, any> = {};
+      if (query.trim()) params.search = query.trim();
+      if (activeFilters.length) params.filter = JSON.stringify({ search: activeFilters });
+      const response = await getTransactionDocuments(docType, nextFy, nextQuery, requestPageIndex + 1, requestPageSize, activeFilters);
       setRows(response.tableData);
       setTotalRows(response.count || response.tableData.length);
     } catch (error) {
@@ -109,7 +120,7 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
 
   useEffect(() => {
     void loadRows();
-  }, [fyPeriod, docType, query, pageIndex, pageSize]);
+  }, [fyPeriod, docType, query, pageIndex, pageSize, columnFilters]);
 
 
 
@@ -154,7 +165,7 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
         </div>
       ),
     },
-  ], [docType]);
+  ], [docType, columnFilters]);
 
   const openCreateForDivision = (division: Division) => {
     setDivisionPicker(false);
@@ -190,7 +201,6 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
     <section className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="eyebrow">Finance Transaction</p>
           <h1 className="m-0 text-2xl font-semibold tracking-tight">{meta.title}</h1>
           <p className="m-0 mt-1 text-sm text-muted-foreground">{meta.subtitle}</p>
         </div>
@@ -203,7 +213,7 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
         </div>
       </div>
 
-      {notice && <div className={`alert ${notice.type}`}>{notice.message}</div>}
+      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
       <div className="min-h-[650px]">
         <DataTable
@@ -228,6 +238,11 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
           pageIndex={pageIndex}
           pageSize={pageSize}
           totalRows={totalRows}
+          columnFilters={columnFilters}
+          onColumnFiltersChange={(filters) => {
+            setColumnFilters(filters);
+            setPageIndex(0);
+          }}
           onPageChange={setPageIndex}
           onPageSizeChange={(nextPageSize) => {
             setPageSize(nextPageSize);
@@ -295,8 +310,6 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
     </section>
   );
 }
-
-
 
 function PettyCashPaymentDocument({
   docType,
@@ -418,6 +431,7 @@ function PettyCashPaymentDocument({
     }));
   };
 
+  // REPLACE WITH:
   const selectDetailAccount = async (detail: TransactionDetail, value: string, row: LookupRow | null) => {
     const acName = text(getLookupValue(row || {}, "ac_name"));
     updateDetail(detail.id, { ac_code: value, ac_name: acName, child_table: "", child_code: "" });
@@ -428,7 +442,47 @@ function PettyCashPaymentDocument({
     setSelectedDetailId(detail.id);
     try {
       const child = await getChildTableName(value);
-      updateDetail(detail.id, { child_table: child?.table || "", child_code: child?.code || "" });
+      const childTable = child?.table || "";
+      const childCode = child?.code || "";
+      updateDetail(detail.id, { child_table: childTable, child_code: childCode });
+
+      if (childTable === "expense" && childCode) {
+        setForm((current) => {
+          const updatedDetail = current.detail.find((d) => d.id === detail.id);
+          if (!updatedDetail) return current;
+          const existingRows = (current.children[detail.id] || []) as TransactionChildRow[];
+          const shouldAutoFill =
+            existingRows.length === 0 ||
+            (existingRows.length === 1 && !text((existingRows[0] as Record<string, unknown>).exp_type_code));
+          if (!shouldAutoFill) return current;
+          const autoRow: TransactionChildRow = {
+            id: newId(),
+            dtl_sr_no: 1,
+            serial_no: updatedDetail.serial_no,
+            doc_no: current.doc_no || "1",
+            doc_type: docType,
+            div_code: current.div_code,
+            doc_date: current.doc_date,
+            company_code: updatedDetail.company_code || "",
+            ac_code: value,
+            sign_ind: updatedDetail.sign_ind,
+            amount: 0,
+            lcur_amount: 0,
+            curr_code: current.curr_code,
+            ex_rate: current.ex_rate,
+            isEditMode: false,
+            exp_type_code: childCode,
+            exp_subtype_code: "",
+            exp_code: childCode,
+            exp_type_description: "",
+            job_no: "",
+          };
+          return {
+            ...current,
+            children: { ...current.children, [detail.id]: [autoRow] },
+          };
+        });
+      }
     } catch {
       updateDetail(detail.id, { child_table: "", child_code: "" });
     }
@@ -1059,7 +1113,7 @@ function ChildAllocationTable({
       ? ["No", "Invoice", "Invoice Date", "Invoice Amount", "Outstanding", "Amount", "Paid Amount", "Action"]
       : childTable === "job"
         ? ["No", "Job No", "Doc Ref", "Doc Ref 2", "Amount", "Action"]
-        : ["No", "Subtype", "Expense Code", "Description", "Job No", "Amount", "Action"];
+        : ["No", "Expense Type Code ", "Expense Subtype Code", "Description", "Job No", "Amount", "Action"];
 
   const user = useAuth()
 
@@ -1096,6 +1150,32 @@ function ChildAllocationTable({
                   </td>
                   <td className="px-2 py-1"><Input disabled value={text(row.inv_amt)} /></td>
                   <td className="px-2 py-1"><Input disabled value={text(row.c_bal_amt_org)} /></td>
+                  <td className="w-32 px-2 py-1">
+                    <div className="flex flex-col gap-1">
+                      <Input
+                        disabled={disabled}
+                        type="number"
+                        step="0.001"
+                        value={Number(row.amount || 0)}
+                        onChange={(event) =>
+                          onChange(row.id, {
+                            amount: Number(event.target.value || 0),
+                          })
+                        }
+                        color={
+                          Number(row.amount || 0) > Number(row.c_bal_amt_org || 0)
+                            ? "danger"
+                            : "neutral"
+                        }
+                      />
+
+                      {Number(row.amount || 0) > Number(row.c_bal_amt_org || 0) && (
+                        <span className="text-xs text-red-500">
+                          Amount exceeds available balance
+                        </span>
+                      )}
+                    </div>
+                  </td>
                 </>
               ) : childTable === "job" ? (
                 <>
@@ -1123,45 +1203,99 @@ function ChildAllocationTable({
                 </>
               ) : (
                 <>
-                  <td className="px-2 py-1">   <LookupField
-                    label="Expense subtype"
-                    compact
-                    placeholder="Expense subtype"
-                    value={text(row.exp_subtype_description)}
-                    displayValue={text(row.exp_subtype_code) ? `${row.exp_subtype_code} - ${row.exp_subtype_description}` : ""}
-                    columns={[{ field: "exp_subtype_code", header: "Expense Subtype Code" }, { field: "exp_subtype_description", header: "Expense Subtype Description" }]}
-                    valueField="exp_subtype_code"
-                    displayFields={["exp_subtype_code", "exp_subtype_description"]}
-                    loadOptions={() => getDynamicLookup({
-                      parameter: "AC_BP_BR_EXP_SUBTYPE_CODE",
-                      loginid: user?.user?.loginid ?? "",
-                      code1: user?.user?.company_code ?? "",
-                    })}
-                    disabled={disabled}
-                    onChange={(value, lookupRow) => onChange(row.id, { exp_subtype_code: value, exp_subtype_description: value ? text(getLookupValue(lookupRow || {}, "exp_subtype_description")) : "" })}
-                  /></td>
-                  <td className="px-2 py-1">  <LookupField
-                    label="Expense type"
-                    compact
-                    placeholder="Expense type"
-                    value={text(row.exp_type_code)}
-                    displayValue={text(row.exp_type_code) ? `${row.exp_type_code} - ${row.exp_description}` : ""}
-                    columns={[{ field: "exp_type_code", header: "Expense Type Code" }, { field: "exp_description", header: "Expense Type Description" }]}
-                    valueField="exp_type_code"
-                    displayFields={["exp_type_code", "exp_description"]}
-                    loadOptions={() => getDynamicLookup({
-                      parameter: "AC_BP_BR_EXP_TYPE_CODE",
-                      loginid: user?.user?.loginid ?? "",
-                      code1: user?.user?.company_code ?? "",
-                    })}
-                    disabled={disabled}
-                    onChange={(value, lookupRow) => onChange(row.id, { exp_type_code: value, exp_description: value ? text(getLookupValue(lookupRow || {}, "exp_description")) : "" })}
-                  /></td>
+                  <td className="px-2 py-1">
+                    <LookupField
+                      label="Expense type"
+                      compact
+                      placeholder="Expense type"
+                      value={text(row.exp_type_code)}
+                      displayValue={
+                        text(row.exp_type_code)
+                          ? `${row.exp_type_code} - ${row.exp_type_description}`
+                          : ""
+                      }
+                      columns={[
+                        { field: "exp_type_code", header: "Expense Type Code" },
+                        { field: "exp_description", header: "Expense Type Description" }
+                      ]}
+                      valueField="exp_type_code"
+                      displayFields={["exp_type_code", "exp_type_description"]}
+                      loadOptions={() =>
+                        getDynamicLookup({
+                          parameter: "AC_BP_BR_EXP_TYPE_CODE",
+                          loginid: user?.user?.loginid ?? "",
+                          code1: user?.user?.company_code ?? "",
+                        })
+                      }
+                      disabled={disabled}
+                      onChange={(value, lookupRow) =>
+                        onChange(row.id, {
+                          exp_type_code: value,
+                          exp_type_description: value
+                            ? text(getLookupValue(lookupRow || {}, "exp_type_description"))
+                            : "",
+                          exp_subtype_code: "",
+                          exp_subtype_description: "",
+                        })
+                      }
+                    />
+                  </td>
+
+                  <td className="px-2 py-1">
+                    <LookupField
+                      key={`subtype-${row.id}-${row.exp_type_code || "none"}`}
+                      label="Expense subtype"
+                      compact
+                      placeholder="Expense subtype"
+                      value={text(row.exp_subtype_description)}
+                      displayValue={
+                        text(row.exp_subtype_code)
+                          ? `${row.exp_subtype_code} - ${row.exp_subtype_description}`
+                          : ""
+                      }
+                      columns={[
+                        { field: "exp_subtype_code", header: "Expense Subtype Code" },
+                        {
+                          field: "exp_subtype_description",
+                          header: "Expense Subtype Description"
+                        }
+                      ]}
+                      valueField="exp_subtype_code"
+                      displayFields={[
+                        "exp_subtype_code",
+                        "exp_subtype_description"
+                      ]}
+                      loadOptions={() => {
+                        const currentExpType = text(row.exp_type_code);
+                        if (!currentExpType) return Promise.resolve([]);
+                        return getDynamicLookup({
+                          parameter: "AC_BP_BR_EXP_SUBTYPE_CODE",
+                          loginid: user?.user?.loginid ?? "",
+                          code1: user?.user?.company_code ?? "",
+                          code2: currentExpType,
+                        });
+                      }}
+                      disabled={disabled || !row.exp_type_code}
+                      onChange={(value, lookupRow) =>
+                        onChange(row.id, {
+                          exp_subtype_code: value,
+                          exp_subtype_description: value
+                            ? text(
+                              getLookupValue(
+                                lookupRow || {},
+                                "exp_subtype_description"
+                              )
+                            )
+                            : "",
+                        })
+                      }
+                    />
+                  </td>
                   <td className="px-2 py-1"><Input disabled={disabled} value={text(row.exp_description)} onChange={(event) => onChange(row.id, { exp_description: event.target.value })} /></td>
                   <td className="px-2 py-1"><Input disabled={disabled} value={text(row.job_no)} onChange={(event) => onChange(row.id, { job_no: event.target.value })} /></td>
                 </>
               )}
-              <td className="w-32 px-2 py-1"><Input disabled={disabled} type="number" step="0.001" value={Number(row.amount || 0)} onChange={(event) => onChange(row.id, { amount: Number(event.target.value || 0) })} /></td>
+              {childTable !== "invoice" && <td className="w-32 px-2 py-1"><Input disabled={disabled} type="number" step="0.001" value={Number(row.amount || 0)} onChange={(event) => onChange(row.id, { amount: Number(event.target.value || 0) })} /></td>}
               {childTable === "invoice" && <td className="w-32 px-2 py-1"><Input disabled value={Number(row.paid_amt || 0)} /></td>}
               <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => onRemove(row.id)}><X size={14} /></Button></td>
             </tr>

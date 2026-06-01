@@ -3,10 +3,11 @@ import { Edit2, Eye, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { executeDynamicDelete, getDynamicLookup, getLookupValue, LookupRow, postFinance } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
+// Card removed: editor will open in modal Dialog
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
+import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
@@ -200,50 +201,46 @@ export function AssetSaleRegisterPage({ mode = "sale" }: { mode?: "sale" | "disp
         </div>
       </div>
 
-      {notice && <div className={`alert ${notice.type}`}>{notice.message}</div>}
+      <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-      <div className="grid min-h-[690px] grid-cols-[minmax(0,1fr)_520px] gap-4 max-2xl:grid-cols-1">
-        <DataTable
-          columns={columns}
-          data={filteredRows}
-          title={loading ? "Loading" : `${filteredRows.length} Records`}
-          subtitle={title}
-          searchValue={query}
-          onSearchChange={setQuery}
-          searchPlaceholder="Search document, asset, account..."
-          loading={loading}
-          emptyText={`No ${title.toLowerCase()} records found`}
-          height={650}
-          minWidth={1450}
-          density="grid"
-          getRowId={(row, index) => `${row.doc_no || "new"}_${row.asset_id}_${index}`}
-        />
+      <DataTable
+        columns={columns}
+        data={filteredRows}
+        title={loading ? "Loading" : `${filteredRows.length} Records`}
+        subtitle={title}
+        searchValue={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="Search document, asset, account..."
+        loading={loading}
+        emptyText={`No ${title.toLowerCase()} records found`}
+        height={650}
+        minWidth={1450}
+        density="grid"
+        getRowId={(row, index) => `${row.doc_no || "new"}_${row.asset_id}_${index}`}
+      />
 
-        <Card className="overflow-hidden">
-          {editor ? (
-            <AssetSaleEditor
-              editor={editor}
-              title={title}
-              companyCode={companyCode}
-              loginId={loginId}
-              onClose={() => setEditor(null)}
-              onSaved={async () => {
-                setEditor(null);
-                setNotice({ type: "success", message: `${title} saved successfully` });
-                await loadRows();
-              }}
-            />
-          ) : (
-            <div className="grid min-h-[690px] place-items-center p-8 text-center text-muted-foreground">
-              <div>
-                <p className="eyebrow">No Form Open</p>
-                <h2 className="m-0 text-lg font-semibold text-foreground">Select a row or create one</h2>
-                <p className="mt-2 text-sm">The editor opens here without hiding the list.</p>
-              </div>
-            </div>
-          )}
-        </Card>
-      </div>
+      {editor && (
+        <Dialog
+          open
+          wide
+          title={`${editor.mode === "create" ? "Create" : editor.mode === "edit" ? "Edit" : "View"} ${title}`}
+          description="Details"
+          onClose={() => setEditor(null)}
+        >
+          <AssetSaleEditor
+            editor={editor}
+            title={title}
+            companyCode={companyCode}
+            loginId={loginId}
+            onClose={() => setEditor(null)}
+            onSaved={async () => {
+              setEditor(null);
+              setNotice({ type: "success", message: `${title} saved successfully` });
+              await loadRows();
+            }}
+          />
+        </Dialog>
+      )}
 
       {deleteTarget && (
         <Dialog open compact tone="danger" title={`Delete ${title}`} description="This action cannot be undone." onClose={() => setDeleteTarget(null)} footer={<><Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button><Button variant="destructive" onClick={() => void deleteRow()}>Delete</Button></>}>
