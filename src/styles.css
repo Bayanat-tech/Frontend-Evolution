@@ -2344,7 +2344,7 @@ footer,
   .commercial-lines-scroll > table,
   .workspace-content .overflow-auto > table,
   .workspace-content .overflow-x-auto > table {
-    width: max-content;
+    width: 100%;
     min-width: 100%;
   }
 

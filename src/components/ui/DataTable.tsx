@@ -312,7 +312,7 @@ export function DataTable<TData, TValue>({
         style={{ maxHeight: heightValue, overflowX: "auto" }}
         onScroll={syncTopScroll}
       >
-        <Table style={{ minWidth: minWidthValue, width: "max-content" }}>
+        <Table style={{ minWidth: minWidthValue, width: `max(100%, ${minWidthValue})` }}>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
