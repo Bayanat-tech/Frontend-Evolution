@@ -4,7 +4,7 @@ import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { deleteWmsGm, deleteWmsGmRaw, getWmsMaster, saveWmsGm } from "../../api/wms";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
-import { DataTable } from "../../components/ui/DataTable";
+import { WmsDataTable } from "../../components/ui/WmsDataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
@@ -38,6 +38,7 @@ export type WmsMasterField = {
   table?: boolean;
   width?: number;
   colSpan?: number;
+  align?: "left" | "center" | "right";
 };
 
 export type WmsDeleteConfig = {
@@ -57,7 +58,8 @@ export type WmsSimpleMasterConfig = {
   master: string;
   gmEndpoint: string;
   routeKeys?: string[];
-  keyField: string;
+  keyField?: string;  // Single key field (fallback if keyFields not provided)
+  keyFields?: string[];  // Multiple fields to compose unique row ID
   fields: WmsMasterField[];
   defaults?: Record<string, unknown>;
   fieldsPerRow?: number;  // Number of fields per row (default: 2)
@@ -70,7 +72,47 @@ export type WmsSimpleMasterConfig = {
   customLoad?: (user: unknown) => Promise<{ tableData: Record<string, unknown>[]; count?: number }>;
   customSave?: (form: Record<string, unknown>, context: { editMode: boolean; original: Record<string, unknown> | null; user: unknown }) => Promise<void>;
   customDelete?: (row: Record<string, unknown>, user: unknown) => Promise<void>;
+  rowIdSeparator?: string;  // Separator for composite row IDs (default: '_')
 };
+
+function generateRowId(row: Record<string, unknown>, config: WmsSimpleMasterConfig, index: number): string {
+  const separator = config.rowIdSeparator || "_";
+  
+  // Use multiple key fields if provided
+  if (config.keyFields && config.keyFields.length > 0) {
+    const composedId = config.keyFields
+      .map((field) => String(row[field] ?? "").trim())
+      .filter((val) => val.length > 0)
+      .join(separator);
+    return composedId || `${config.master}${separator}${index}`;
+  }
+  
+  // Fallback to single key field
+  if (config.keyField) {
+    return String(row[config.keyField] || `${config.master}${separator}${index}`);
+  }
+  
+  // Final fallback
+  return `${config.master}${separator}${index}`;
+}
+
+function getRowDisplayKey(row: Record<string, unknown>, config: WmsSimpleMasterConfig): string {
+  // Use multiple key fields if provided
+  if (config.keyFields && config.keyFields.length > 0) {
+    return config.keyFields
+      .map((field) => String(row[field] ?? "").trim())
+      .filter((val) => val.length > 0)
+      .join(config.rowIdSeparator || "_");
+  }
+  
+  // Fallback to single key field
+  if (config.keyField) {
+    return String(row[config.keyField] ?? "");
+  }
+  
+  // Final fallback
+  return "";
+}
 
 export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig }) {
   const { user } = useAuth();
@@ -124,6 +166,7 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
   // };
   const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize) => {
     setLoading(true);
+    setRows([]); // Clear rows immediately when loading starts
     setNotice(null);
     try {
       if (config.customLoad) {
@@ -148,6 +191,7 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
       }
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to load ${config.title}` });
+      setRows([]);
     } finally {
       setLoading(false);
     }
@@ -162,13 +206,19 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
         accessorKey: field.name,
         header: field.label,
         size: field.width || 160,
-        cell: ({ row }: { row: { original: Record<string, unknown> } }) => formatValue(row.original[field.name]),
+        cell: ({ row }: { row: { original: Record<string, unknown> } }) => {
+          const value = formatValue(row.original[field.name]);
+          const alignmentClass = field.align ? 
+            field.align === "right" ? "text-right" : field.align === "center" ? "text-center" : "text-left"
+            : "text-left";
+          return <div className={alignmentClass}>{value}</div>;
+        },
       })),
       {
         id: "actions",
         header: "Actions",
         cell: ({ row }) => (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center justify-center gap-1">
             <Button size="icon" variant="ghost" onClick={() => openEdit(row.original)} title={`Edit ${config.title}`}>
               <Edit2 size={14} />
             </Button>
@@ -346,7 +396,7 @@ const saveRecord = async (event: FormEvent) => {
 
       {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
 
-      <DataTable
+      <WmsDataTable
         columns={columns}
         data={rows}
         title={loading ? "Loading" : `${totalRows.toLocaleString()} Records`}
@@ -378,14 +428,14 @@ const saveRecord = async (event: FormEvent) => {
           setPageSize(nextPageSize);
           setPageIndex(0);
         }}
-        getRowId={(row, index) => String(row[config.keyField] || `${config.master}_${index}`)}
+        getRowId={(row, index) => generateRowId(row, config, index)}
       />
 
       <Dialog open={formOpen} title={editMode ? `Edit ${config.title}` : `Add ${config.title}`} description="Master details" compact wide onClose={() => setFormOpen(false)} >
       <div style={{ maxHeight: 'calc(90vh - 180px)', overflowY: 'auto', width: '100%' }}>
       <WmsMasterForm
           fields={editableFields}
-          key={formOpen ? (editMode ? `edit-${String(original?.[config.keyField])}` : "add") : "closed"}
+          key={formOpen ? (editMode ? `edit-${getRowDisplayKey(original || {}, config)}` : "add") : "closed"}
           tabs={config.formTabs}
           fieldsPerRow={config.fieldsPerRow}
           form={form}
@@ -428,7 +478,7 @@ const saveRecord = async (event: FormEvent) => {
       <Dialog
         open={Boolean(deleteTarget)}
         title={`Delete ${config.title}`}
-        description={deleteTarget ? `Delete ${formatValue(deleteTarget[config.keyField])}?` : undefined}
+        description={deleteTarget ? `Delete ${formatValue(getRowDisplayKey(deleteTarget, config))}?` : undefined}
         compact
         tone="danger"
         onClose={() => setDeleteTarget(null)}

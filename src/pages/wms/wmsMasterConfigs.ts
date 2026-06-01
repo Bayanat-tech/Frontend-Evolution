@@ -676,7 +676,8 @@ country: {
     master: "location",
     gmEndpoint: "location",
     routeKeys: ["location"],
-    keyField: "location_code",
+    keyFields: ["site_code", "location_code"],
+    rowIdSeparator: "|",
     fieldsPerRow: 4,
     fields: [
       // general
