@@ -346,30 +346,40 @@ export function AssetTransferPage() {
 
       {/* ===================== ADD / EDIT / VIEW FORM DIALOG ===================== */}
       {popup.open && (
-        <Dialog
-          open
-          title={
-            popup.mode === "create"
-              ? "Create Asset Transfer"
-              : popup.mode === "edit"
-              ? "Edit Asset Transfer"
-              : "View Asset Transfer"
-          }
-          onClose={() => setPopup({ open: false })}
-          footer={null}
-        >
-          <AddAssetTransferForm
-            mode={popup.mode}
-            doc_no={popup.mode !== "create" ? popup.doc_no : undefined}
-            div_code={popup.div_code}
-            div_name={popup.div_name}
-            doc_type="ATR"
-            companyCode={companyCode}
-            loginId={loginId}
+        <>
+          <style>{`
+            .asset-transfer-dialog [class*="rounded-lg"][class*="border"][class*="bg-card"] {
+              width: min(96vw, 1000px) !important;
+              max-width: min(96vw, 1000px) !important;
+            }
+          `}</style>
+          <div className="asset-transfer-dialog">
+          <Dialog
+            open
+            title={
+              popup.mode === "create"
+                ? "Create Asset Transfer"
+                : popup.mode === "edit"
+                ? "Edit Asset Transfer"
+                : "View Asset Transfer"
+            }
             onClose={() => setPopup({ open: false })}
-            onSaved={handleFormSaved}
-          />
-        </Dialog>
+            footer={null}
+          >
+            <AddAssetTransferForm
+              mode={popup.mode}
+              doc_no={popup.mode !== "create" ? popup.doc_no : undefined}
+              div_code={popup.div_code}
+              div_name={popup.div_name}
+              doc_type="ATR"
+              companyCode={companyCode}
+              loginId={loginId}
+              onClose={() => setPopup({ open: false })}
+              onSaved={handleFormSaved}
+            />
+          </Dialog>
+          </div>
+        </>
       )}
 
       {/* ===================== DELETE CONFIRM ===================== */}
