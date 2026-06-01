@@ -220,9 +220,6 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
     <section className="grid gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="eyebrow">WMS Master</p>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">{config.title}</h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{config.subtitle}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={() => loadRows()}>

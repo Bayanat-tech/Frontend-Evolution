@@ -14,7 +14,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowDownUp, ArrowUp, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Search, X } from "lucide-react";
-import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, UIEvent, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "../../lib/utils";
 import { Button } from "./Button";
 import { Input } from "./Input";
@@ -124,6 +124,9 @@ export function DataTable<TData, TValue>({
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [activeFilterColumn, setActiveFilterColumn] = useState<string | null>(null);
   const [internalSearch, setInternalSearch] = useState("");
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const [scrollContentWidth, setScrollContentWidth] = useState(0);
   const globalFilter = searchValue ?? internalSearch;
   const columnFilters = controlledColumnFilters ?? internalColumnFilters;
   const rowStyle = densityClasses[density];
@@ -185,7 +188,8 @@ export function DataTable<TData, TValue>({
   const visibleRows = manualFiltering ? table.getCoreRowModel().rows : manualPagination ? table.getSortedRowModel().rows : enablePagination ? table.getRowModel().rows : table.getFilteredRowModel().rows;
   const skeletonRows = useMemo(() => Array.from({ length: Math.min(pageSize, 100) }), [pageSize]);
   const heightValue = typeof height === "number" ? `${height}px` : height;
-  const minWidthValue = typeof minWidth === "number" ? `${minWidth}px` : minWidth;
+  const responsiveMinWidth = minWidth ?? Math.max(760, enhancedColumns.length * 140);
+  const minWidthValue = typeof responsiveMinWidth === "number" ? `${responsiveMinWidth}px` : responsiveMinWidth;
   const pageCount = manualPagination ? Math.max(1, Math.ceil((totalRows ?? data.length) / Math.max(pageSize, 1))) : table.getPageCount() || 1;
   const currentPageIndex = manualPagination ? pageIndex : table.getState().pagination.pageIndex;
   const effectiveTotalRows = totalRows ?? (manualPagination ? data.length : table.getFilteredRowModel().rows.length);
@@ -222,8 +226,33 @@ export function DataTable<TData, TValue>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rowSelection]);
 
+  useEffect(() => {
+    const scrollElement = tableScrollRef.current;
+    if (!scrollElement) return undefined;
+    const updateWidth = () => setScrollContentWidth(scrollElement.scrollWidth);
+    updateWidth();
+    const resizeObserver = new ResizeObserver(updateWidth);
+    resizeObserver.observe(scrollElement);
+    if (scrollElement.firstElementChild) resizeObserver.observe(scrollElement.firstElementChild);
+    window.addEventListener("resize", updateWidth);
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateWidth);
+    };
+  }, [columns.length, data.length, visibleRows.length, minWidthValue]);
+
+  const syncTableScroll = (event: UIEvent<HTMLDivElement>) => {
+    if (!tableScrollRef.current) return;
+    tableScrollRef.current.scrollLeft = event.currentTarget.scrollLeft;
+  };
+
+  const syncTopScroll = (event: UIEvent<HTMLDivElement>) => {
+    if (!topScrollRef.current) return;
+    topScrollRef.current.scrollLeft = event.currentTarget.scrollLeft;
+  };
+
   return (
-    <div className="data-table-shell overflow-hidden rounded-lg border border-[#aebbd0] bg-card shadow-[0_8px_22px_rgba(15,23,42,0.07)]">
+    <div className="data-table-shell w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-[#aebbd0] bg-card shadow-[0_8px_22px_rgba(15,23,42,0.07)]">
       {(displayTitle || subtitle || onSearchChange || toolbar || enableColumnVisibility) && (
         <div className="data-table-header flex flex-wrap items-center justify-between gap-2 border-b border-[#c7d2e3] bg-white px-3 py-2">
           {(displayTitle || subtitle) && (
@@ -268,8 +297,22 @@ export function DataTable<TData, TValue>({
         </div>
       )}
 
-      <div className="data-table-scroll overflow-auto bg-white" style={{ maxHeight: heightValue }}>
-        <Table style={{ minWidth: minWidthValue }}>
+      <div
+        ref={topScrollRef}
+        className="data-table-x-scrollbar"
+        aria-hidden="true"
+        onScroll={syncTableScroll}
+      >
+        <div style={{ width: scrollContentWidth ? `${scrollContentWidth}px` : minWidthValue, height: 1 }} />
+      </div>
+
+      <div
+        ref={tableScrollRef}
+        className="data-table-scroll overflow-auto bg-white"
+        style={{ maxHeight: heightValue, overflowX: "auto" }}
+        onScroll={syncTopScroll}
+      >
+        <Table style={{ minWidth: minWidthValue, width: "max-content" }}>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
