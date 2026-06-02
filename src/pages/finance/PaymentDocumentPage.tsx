@@ -227,7 +227,7 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
           columns={columns}
           data={rows}
           title={loading ? "Loading" : `${totalRows.toLocaleString()} Documents`}
-          subtitle={docType}
+          subtitle={`${meta.title} List`}
           searchValue={query}
           onSearchChange={(value) => {
             setQuery(value);

@@ -89,8 +89,8 @@ const dateBetween: FilterFn<unknown> = (row, columnId, filterValue) => {
 export function DataTable<TData, TValue>({
   columns,
   data,
-  title,
-  subtitle,
+  title: _title,
+  subtitle: _subtitle,
   searchValue,
   onSearchChange,
   searchPlaceholder = "Search...",
@@ -195,7 +195,6 @@ export function DataTable<TData, TValue>({
   const effectiveTotalRows = totalRows ?? (manualPagination ? data.length : table.getFilteredRowModel().rows.length);
   const firstVisibleRow = effectiveTotalRows === 0 ? 0 : currentPageIndex * pageSize + 1;
   const lastVisibleRow = Math.min(effectiveTotalRows, currentPageIndex * pageSize + visibleRows.length);
-  const displayTitle = title && !isCountTitle(title) ? title : undefined;
   const canPreviousPage = currentPageIndex > 0;
   const canNextPage = currentPageIndex < pageCount - 1;
   const goToPage = (nextPageIndex: number) => {
@@ -252,21 +251,16 @@ export function DataTable<TData, TValue>({
   };
 
   return (
-    <div className="data-table-shell w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-[#aebbd0] bg-card shadow-[0_8px_22px_rgba(15,23,42,0.07)]">
-      {(displayTitle || subtitle || onSearchChange || toolbar || enableColumnVisibility) && (
-        <div className="data-table-header flex flex-wrap items-center justify-between gap-2 border-b border-[#c7d2e3] bg-white px-3 py-2">
-          {(displayTitle || subtitle) && (
-            <div>
-              {subtitle && <p className="eyebrow">{subtitle}</p>}
-              {displayTitle && <h2 className="m-0 text-base font-semibold">{displayTitle}</h2>}
-            </div>
-          )}
-          <div className="data-table-actions flex flex-1 flex-wrap items-center justify-end gap-2">
+    <div className="data-table-wrap grid w-full min-w-0 max-w-full gap-2">
+      <div className="data-table-shell w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-[#aebbd0] bg-card shadow-[0_8px_22px_rgba(15,23,42,0.07)]">
+      {(onSearchChange || toolbar || enableColumnVisibility) && (
+        <div className="data-table-header grid gap-2 border-b border-[#c7d2e3] bg-white px-3 py-2">
+          <div className="data-table-actions flex w-full flex-wrap items-center gap-2">
             {onSearchChange && (
-              <label className="data-table-search flex h-9 w-[min(390px,100%)] items-center gap-2 rounded-full border border-[#aebbd0] bg-[#fbfdff] px-3 text-muted-foreground shadow-inner">
-                <Search size={15} />
+              <label className="data-table-search flex h-10 min-w-[260px] flex-1 items-center gap-2 rounded-full border border-[#aebbd0] bg-[#fbfdff] px-3 text-muted-foreground shadow-inner">
+                <Search size={16} />
                 <Input
-                  className="h-7 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+                  className="h-8 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
                   value={globalFilter ?? ""}
                   onChange={(event) => table.setGlobalFilter(event.target.value)}
                   placeholder={searchPlaceholder}
@@ -292,8 +286,13 @@ export function DataTable<TData, TValue>({
                 </div>
               </details>
             )}
-            {toolbar}
-          </div>
+            {toolbar && (
+              <div className="data-table-toolbar flex flex-wrap items-center justify-end gap-2">
+                {toolbar}
+              </div>
+            )}
+            {!onSearchChange && !toolbar && <span className="min-h-1 flex-1" />}
+            </div>
         </div>
       )}
 
@@ -405,12 +404,9 @@ export function DataTable<TData, TValue>({
           </div>
         </div>
       )}
+      </div>
     </div>
   );
-}
-
-function isCountTitle(title: string) {
-  return /^(loading|[\d,]+\s+(records?|rows?|items?|documents?|vouchers?|cheques?|lines?|jobs?|countries?))$/i.test(title.trim());
 }
 
 function ColumnFilterButton<TData, TValue>({
