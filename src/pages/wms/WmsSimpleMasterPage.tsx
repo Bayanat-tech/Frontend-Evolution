@@ -1,6 +1,7 @@
 import { Edit2, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
+import { useToast } from "../../components/ui/AlertToast";
 import { deleteWmsGm, deleteWmsGmRaw, getWmsMaster, saveWmsGm } from "../../api/wms";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
@@ -147,6 +148,7 @@ function clearDependentFields(
 
 export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig }) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -160,7 +162,6 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
   const [original, setOriginal] = useState<Record<string, unknown> | null>(null);
   const [form, setForm] = useState<Record<string, unknown>>({});
   const [deleteTarget, setDeleteTarget] = useState<Record<string, unknown> | null>(null);
-  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const editableFields = config.fields;
   const tableFields = config.fields.filter((field) => field.table !== false);
@@ -198,7 +199,6 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
   const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize) => {
     setLoading(true);
     setRows([]); // Clear rows immediately when loading starts
-    setNotice(null);
     try {
       if (config.customLoad) {
         const response = await config.customLoad(user);
@@ -221,7 +221,7 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
         setTotalRows(response.count || response.tableData.length);
       }
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to load ${config.title}` });
+      toast.error(error instanceof Error ? error.message : `Unable to load ${config.title}`);
       setRows([]);
     } finally {
       setLoading(false);
@@ -279,7 +279,6 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
     setOriginal(null);
     setForm(makeEmpty());
     setFormOpen(true);
-    setNotice(null);
   };
 
   const openEdit = (row: Record<string, unknown>) => {
@@ -288,7 +287,6 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
     const mappedData = config.mapAfterLoad ? config.mapAfterLoad(row) : row;
     setForm({ ...makeEmpty(), ...mappedData });
     setFormOpen(true);
-    setNotice(null);
   };
 
   // const saveRecord = async (event: FormEvent) => {
@@ -330,11 +328,10 @@ const saveRecord = async (event: FormEvent) => {
   event.preventDefault();
   const missing = editableFields.find((field) => field.required && !String(form[field.name] ?? "").trim());
   if (missing) {
-    setNotice({ type: "error", message: `${missing.label} is required` });
+    toast.error(`${missing.label} is required`);
     return;
   }
   setSaving(true);
-  setNotice(null);
   try {
     const transformedForm = editableFields.reduce((acc, field) => {
       let value = form[field.name];
@@ -357,10 +354,10 @@ const saveRecord = async (event: FormEvent) => {
     }
 
     setFormOpen(false);
-    setNotice({ type: "success", message: `${config.title} ${editMode ? "updated" : "added"} successfully` });
+    toast.success(editMode ? "Successfully updated" : "Successfully created");
     await loadRows(pageIndex, pageSize);
   } catch (error) {
-    setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to save ${config.title}` });
+    toast.error(error instanceof Error ? error.message : `Unable to save ${config.title}`);
   } finally {
     setSaving(false);
   }
@@ -388,7 +385,6 @@ const saveRecord = async (event: FormEvent) => {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setSaving(true);
-    setNotice(null);
     try {
       if (config.customDelete) {
         await config.customDelete(deleteTarget, user);
@@ -402,10 +398,10 @@ const saveRecord = async (event: FormEvent) => {
         }
       }
       setDeleteTarget(null);
-      setNotice({ type: "success", message: `${config.title} deleted successfully` });
+      toast.success("Successfully deleted");
       await loadRows(pageIndex, pageSize);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to delete ${config.title}` });
+      toast.error(error instanceof Error ? error.message : `Unable to delete ${config.title}`);
     } finally {
       setSaving(false);
     }
@@ -424,8 +420,6 @@ const saveRecord = async (event: FormEvent) => {
           </Button>
         </div>
       </div>
-
-      {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
 
       <WmsDataTable
         columns={columns}
@@ -472,7 +466,6 @@ const saveRecord = async (event: FormEvent) => {
           form={form}
           editMode={editMode}
           saving={saving}
-          notice={notice}
           user={user}
           onChange={(name:any, value:any) => setForm((prev) => {
             const updated = { ...prev, [name]: value };
