@@ -1,10 +1,11 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import {
   Division,
   FyPeriod,
+  cancelTransactionDocument,
   getCompanyInfo,
   getDefaultFyPeriod,
   getDivisions,
@@ -144,6 +145,7 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<{ mode: "create"; div?: Division } | { mode: "edit"; row: TransactionDocumentRow } | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
 
   const loadLookups = async () => {
     const [fyData, divisionData, companyInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
@@ -192,6 +194,18 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
     void loadRows();
   }, [fyPeriod, docType, query, pageIndex, pageSize]);
 
+  const confirmCancel = async () => {
+    if (!cancelTarget) return;
+    try {
+      await cancelTransactionDocument(cancelTarget.doc_no, cancelTarget.doc_type || docType);
+      setCancelTarget(null);
+      setNotice({ type: "success", message: "Document cancelled successfully" });
+      await loadRows();
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to cancel document" });
+    }
+  };
+
   const columns = useMemo<ColumnDef<TransactionDocumentRow>[]>(() => [
     { accessorKey: "doc_no", header: "Doc No", cell: ({ getValue }) => <span className="font-semibold">{String(getValue() || "")}</span> },
     { accessorKey: "doc_date", header: "Date", cell: ({ getValue }) => dateInput(getValue()) },
@@ -219,6 +233,11 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
           <Button size="icon" variant="ghost" onClick={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)} title="Excel">
             <Download size={15} />
           </Button>
+          {row.original.canceled !== "Y" && (
+            <Button size="icon" variant="ghost" onClick={() => setCancelTarget(row.original)} title="Cancel">
+              <Ban size={15} />
+            </Button>
+          )}
           <Button size="icon" variant="ghost"><Trash2 size={15} /></Button>
         </div>
       ),
@@ -246,6 +265,7 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
         columns={columns}
         data={rows}
         title={loading ? "Loading" : `${totalRows.toLocaleString()} Documents`}
+        subtitle={`${meta.title} List`}
         searchValue={query}
         onSearchChange={(value) => {
           setQuery(value);
@@ -307,6 +327,23 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
             </button>
           ))}
         </div>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(cancelTarget)}
+        title="Cancel Document"
+        description={`Cancel ${cancelTarget?.doc_no || "this document"}?`}
+        onClose={() => setCancelTarget(null)}
+        footer={(
+          <>
+            <Button variant="outline" onClick={() => setCancelTarget(null)}>Close</Button>
+            <Button variant="destructive" onClick={() => void confirmCancel()}><Ban size={15} /> Cancel Document</Button>
+          </>
+        )}
+      >
+        <p className="m-0 text-sm text-muted-foreground">
+          This will mark the document as cancelled using the finance cancellation API.
+        </p>
       </Dialog>
     </section>
   );
