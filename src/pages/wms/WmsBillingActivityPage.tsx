@@ -1,7 +1,7 @@
 import { Edit2, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { deleteWmsGm, getWmsMaster, postWmsBillingActivity, upsertMsActivityBillingApi } from "../../api/wms";
+import { getWmsMaster, postWmsBillingActivity, upsertMsActivityBillingApi } from "../../api/wms";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
@@ -10,7 +10,7 @@ import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { LookupField } from "../../components/ui/LookupField";
-import { getDynamicLookup, getLookupText } from "../../api/lookups";
+import { executeDynamicDelete, getDynamicLookup, getLookupText } from "../../api/lookups";
 
 type TBillingActivity = {
   from?: string;
@@ -80,7 +80,7 @@ type TPrincipal = {
   created_at: Date;
 };
 
-export type TMoc = {
+type TMoc = {
   moc_code?: string;
   moc_name?: string;
   description: string;
@@ -92,6 +92,16 @@ export type TMoc = {
   created_at?: Date;
 };
 
+type PopulateBillingActivity ={
+  prin_from : string,
+  prin_to : string,
+};
+
+const emptyPopBillAct : PopulateBillingActivity ={
+  prin_from : '',
+  prin_to : '',
+}
+
 export function WmsBillingActPage() {
   const { user } = useAuth();
   const [rows, setRows] = useState<TBillingActivity[]>([]);
@@ -101,19 +111,21 @@ export function WmsBillingActPage() {
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(100);
   const [totalRows, setTotalRows] = useState(0);
-  const [formOpen, setFormOpen] = useState(false);
+  // const [formOpen, setFormOpen] = useState(false);  
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState<TBillingActivity>(emptyBillingActivity);
-  const [deleteTarget, setDeleteTarget] = useState<TBillingActivity | null>(null);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [popBillActform, setpopBillActform] = useState<PopulateBillingActivity>(emptyPopBillAct);
+  const [openDailog , setOpenDailog] =useState<"add" | "populate" | null>(null);
 
   // Principal filter
   const [prinCode, setPrinCode] = useState("");
   const [principals, setPrincipals] = useState<TPrincipal[]>([]);
 
-  // Password dialog for delete
-  const [deletePassword, setDeletePassword] = useState("");
-  const [deletePasswordOpen, setDeletePasswordOpen] = useState(false);
+  //Dialog for Activity delete
+  const [ActOpen, setActOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<TBillingActivity | null>(null);
+
 
   // Load principals for the filter dropdown
   useEffect(() => {
@@ -160,21 +172,33 @@ export function WmsBillingActPage() {
     );
   }, [query, rows]);
 
+  const openPopBillAct = () =>{
+    console.log('openPopBillAct hit');
+    if (!prinCode) {
+      setNotice({ type: "error", message: "Please select a principal first" });
+      return;
+    }
+    setpopBillActform({ ...emptyPopBillAct, prin_from: prinCode || "" });
+    setOpenDailog('populate');
+    setNotice(null);
+  }
+
   const openAdd = () => {
+    console.log('openAdd hit');
     if (!prinCode) {
       setNotice({ type: "error", message: "Please select a principal first" });
       return;
     }
     setEditMode(false);
     setForm({ ...emptyBillingActivity, prin_code: prinCode, company_code: user?.company_code || "" });
-    setFormOpen(true);
+    setOpenDailog('add');
     setNotice(null);
   };
 
   const openEdit = (row: TBillingActivity) => {
     setEditMode(true);
     setForm(row);
-    setFormOpen(true);
+    setOpenDailog('add');
     setNotice(null);
   };
 
@@ -188,6 +212,7 @@ export function WmsBillingActPage() {
     setNotice(null);
     try {
       if(editMode){
+      console.log('hit edit mode api');
       await upsertMsActivityBillingApi(
         { ...form, company_code: form.company_code || user?.company_code || "" },
       );
@@ -196,7 +221,7 @@ export function WmsBillingActPage() {
         { ...form, company_code: form.company_code || user?.company_code || "" },
       );
       }
-      setFormOpen(false);
+      setOpenDailog(null);
       setNotice({ type: "success", message: editMode ? "Activity updated successfully" : "Activity added successfully" });
       await loadRows(pageIndex, pageSize);
     } catch (error) {
@@ -209,8 +234,7 @@ export function WmsBillingActPage() {
   // Open password dialog instead of deleting directly
   const requestDelete = (row: TBillingActivity) => {
     setDeleteTarget(row);
-    setDeletePassword("");
-    setDeletePasswordOpen(true);
+    setActOpen(true);
   };
 
   const confirmDelete = async () => {
@@ -218,10 +242,15 @@ export function WmsBillingActPage() {
     setSaving(true);
     setNotice(null);
     try {
-      await deleteWmsGm("billing_activity", [deleteTarget.act_code, deletePassword]);
-      setDeletePasswordOpen(false);
+      await executeDynamicDelete({parameter: "BILLING_ACTIVITY_DET_PRINCIPAL",
+              loginid: user?.loginid || "",
+              code1: user?.company_code || "",
+              code2: deleteTarget.prin_code || "",
+              code3: deleteTarget.act_code || "",
+              code4: deleteTarget.jobtype || "",
+          });
+      setActOpen(false);
       setDeleteTarget(null);
-      setDeletePassword("");
       setNotice({ type: "success", message: "Activity deleted successfully" });
       await loadRows(pageIndex, pageSize);
     } catch (error) {
@@ -275,6 +304,9 @@ export function WmsBillingActPage() {
           <Button onClick={openAdd} disabled={!prinCode}>
             <Plus size={15} /> Add Activity
           </Button>
+          <Button onClick={openPopBillAct} disabled={!prinCode}>
+            <Plus size={15} /> Populate Activities
+          </Button>
         </div>
       </div>
 
@@ -322,13 +354,55 @@ export function WmsBillingActPage() {
         getRowId={(row) => (row.act_code ?? "") + (row.jobtype ?? "")}
       />
 
+      <Dialog
+       open={openDailog === "populate"}
+       title={"Populate Activities"}
+       compact
+       onClose={() => setOpenDailog(null)}
+      >
+        <form className="grid gap-4">
+          <Card>
+            <CardContent className="grid gap-3 md:grid-cols-2">
+              <Field label="From Principal" required>
+                <Input disabled value={popBillActform.prin_from} />
+              </Field>
+
+              <LookupField
+                label="To Principal"
+                value={popBillActform.prin_to ?? ""}
+                valueField="prin_code"
+                displayFields={["prin_code", "prin_name"]}
+                columns={[
+                  { field: "prin_code", header: "Principal Code" },
+                  { field: "prin_name", header: "Principal Name" },
+                ]}
+                loadOptions={async () => {
+                  const res = await getWmsMaster("principal", { page: 1, limit: 100000 });
+                  return res.tableData as TMoc[];
+                }}
+                onChange={(value) => setpopBillActform((c) => ({ ...c, prin_to: value }))}
+              />
+
+            </CardContent>
+          </Card>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setOpenDailog(null)}>
+              <X size={15} /> Cancel
+            </Button>
+            <Button disabled type="submit">
+              <Save size={15} /> {saving ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
       {/* ── Add / Edit Form Dialog ── */}
       <Dialog
-        open={formOpen}
+        open={openDailog === "add"}
         title={editMode ? "Edit Activity" : "Add Activity"}
         description="Activity information"
         compact
-        onClose={() => setFormOpen(false)}
+        onClose={() => setOpenDailog(null)}
         wide
       >
         <form className="grid gap-4" onSubmit={saveBillActivity}>
@@ -345,6 +419,7 @@ export function WmsBillingActPage() {
               </Field>
 
               <LookupField
+                disabled={editMode}
                 label="Activity"
                 value={form.act_code ?? ''}
                 columns={[
@@ -370,10 +445,11 @@ export function WmsBillingActPage() {
                 }
               />
 
-              <Field label="Job Type" required>
+              <Field label="Job Type"  required>
                 <Select
                   value={form.jobtype}
                   onChange={(e) => setForm((c) => ({ ...c, jobtype: e.target.value }))}
+                  disabled={editMode}
                 >
                   <option value="">Select...</option>
                   <option value="IMP">Import</option>
@@ -470,7 +546,7 @@ export function WmsBillingActPage() {
           </Card>
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => setOpenDailog(null)}>
               <X size={15} /> Cancel
             </Button>
             <Button disabled={saving} type="submit">
@@ -482,19 +558,19 @@ export function WmsBillingActPage() {
 
       {/* ── Delete Password Dialog ── */}
       <Dialog
-        open={deletePasswordOpen}
+        open={ActOpen}
         title="Delete Activity"
         description={deleteTarget ? `Delete ${deleteTarget.act_code} - ${deleteTarget.activity}?` : undefined}
         compact
         tone="danger"
-        onClose={() => { setDeletePasswordOpen(false); setDeletePassword(""); }}
+        onClose={() => { setActOpen(false) }}
         footer={
           <>
-            <Button variant="outline" onClick={() => { setDeletePasswordOpen(false); setDeletePassword(""); }}>
+            <Button variant="outline" onClick={() => { setActOpen(false)}}>
               Cancel
             </Button>
             <Button
-              disabled={saving || !deletePassword.trim()}
+              disabled={saving}
               variant="destructive"
               onClick={confirmDelete}
             >
@@ -504,15 +580,7 @@ export function WmsBillingActPage() {
         }
       >
         <div className="grid gap-3">
-          <p className="m-0 text-sm text-muted-foreground">Enter your password to confirm deletion.</p>
-          <Field label="Password" required>
-            <Input
-              type="password"
-              autoFocus
-              value={deletePassword}
-              onChange={(e) => setDeletePassword(e.target.value)}
-            />
-          </Field>
+          <p className="m-0 text-sm text-muted-foreground">Are you sure you want to delete?</p>
         </div>
       </Dialog>
     </section>

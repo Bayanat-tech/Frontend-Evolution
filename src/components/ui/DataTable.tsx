@@ -236,7 +236,7 @@ export function DataTable<TData, TValue>({
     exportData = data;
   }
 
-  console.log("enablePagination", enablePagination);
+  // console.log("enablePagination", enablePagination);
 
   return (
     <div className="overflow-hidden rounded-md border bg-card shadow-sm">

@@ -149,7 +149,7 @@ export async function postWmsBillingActivity<TPayload extends Record<string , un
 }
 
 export async function upsertMsActivityBillingApi<TPayload extends Record<string , unknown>>(payload: TPayload) {
-  const response = await api.post<ApiResponse<unknown>>(`/api/wms/inbound/upsertMsActivityBilling` ,payload);
+  const response = await api.put<ApiResponse<unknown>>(`/api/wms/inbound/upsertMsActivityBilling` ,payload);
   if(!response.data.success) throw new Error(response.data.message || `Unable to update Billing Activity`);
   return response.data;
 }
