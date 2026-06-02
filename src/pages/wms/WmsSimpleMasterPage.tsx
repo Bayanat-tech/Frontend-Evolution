@@ -414,13 +414,14 @@ const saveRecord = async (event: FormEvent) => {
     <section className="grid gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
+          <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">{config.title}</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={() => loadRows()}>
             <RefreshCw size={15} /> Refresh
           </Button>
           <Button onClick={openAdd}>
-            <Plus size={15} /> Add
+            <Plus size={15} /> Add {config.title}
           </Button>
         </div>
       </div>
