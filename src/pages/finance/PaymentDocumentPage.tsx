@@ -1,10 +1,9 @@
-import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, X } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import {
   cancelTransactionDocument,
-  deleteTransactionDocument,
   Division,
   FyPeriod,
   getCompanyInfo,
@@ -79,7 +78,6 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
   const [totalRows, setTotalRows] = useState(0);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<EditorState>(null);
-  const [deleteTarget, setDeleteTarget] = useState<TransactionDocumentRow | null>(null);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -166,9 +164,6 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
               <Ban size={15} />
             </Button>
           )}
-          <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(row.original)} title="Delete">
-            <Trash2 size={15} />
-          </Button>
         </div>
       ),
     },
@@ -190,19 +185,6 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to cancel document" });
     }
   };
-
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
-    try {
-      await deleteTransactionDocument([deleteTarget.doc_no], docType);
-      setDeleteTarget(null);
-      setNotice({ type: "success", message: "Document deleted successfully" });
-      await loadRows();
-    } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete document" });
-    }
-  };
-
 
   return (
     <section className="grid gap-4">
@@ -265,6 +247,11 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
             docType={docType}
             editor={editor}
             onClose={() => setEditor(null)}
+            onCancelled={async () => {
+              setEditor(null);
+              setNotice({ type: "success", message: "Document cancelled successfully" });
+              await loadRows();
+            }}
             onSaved={async (message) => {
               setEditor(null);
               setNotice({ type: "success", message });
@@ -305,15 +292,6 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
         onClose={() => setCancelTarget(null)}
         onConfirm={() => void confirmCancel()}
       />
-      <ConfirmDialog
-        open={Boolean(deleteTarget)}
-        tone="danger"
-        title="Delete Document"
-        description="This action cannot be undone."
-        actionLabel="Delete"
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => void confirmDelete()}
-      />
     </section>
   );
 }
@@ -324,11 +302,13 @@ function PaymentDocumentEditor({
   docType,
   editor,
   onClose,
+  onCancelled,
   onSaved,
 }: {
   docType: TransactionType;
   editor: EditorState;
   onClose: () => void;
+  onCancelled: () => Promise<void>;
   onSaved: (message: string) => Promise<void>;
 }) {
   const { user } = useAuth();
@@ -340,6 +320,7 @@ function PaymentDocumentEditor({
   const [saving, setSaving] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [showHeaderDetails, setShowHeaderDetails] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -426,9 +407,25 @@ function PaymentDocumentEditor({
   }, [form.detail.map((d) => d.amount).join(",")]);
 
   const disabled = form.canceled === "Y" || saving;
+
+  const cancelCurrentDocument = async () => {
+    if (!form.doc_no || form.doc_no === "0" || form.canceled === "Y") return;
+    setSaving(true);
+    setError("");
+    try {
+      await cancelTransactionDocument(form.doc_no, form.doc_type);
+      setCancelConfirmOpen(false);
+      await onCancelled();
+    } catch (cancelError) {
+      setError(cancelError instanceof Error ? cancelError.message : "Unable to cancel document");
+    } finally {
+      setSaving(false);
+    }
+  };
   const total = form.detail.reduce((sum, row) => sum + (Number(row.amount) || 0) * row.sign_ind, 0);
 
   const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0) * row.sign_ind, 0);
+  const isCancelled = form.canceled === "Y";
 
   const updateField = (field: keyof TransactionHeader, value: string | number) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -677,7 +674,7 @@ function PaymentDocumentEditor({
   };
 
   return (
-    <form className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
+    <form className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`} onSubmit={submit}>
       <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
@@ -712,6 +709,11 @@ function PaymentDocumentEditor({
                 <Button aria-label="Excel" type="button" variant="secondary" size="icon" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
                   <Download size={15} />
                 </Button>
+                {form.canceled !== "Y" && (
+                  <Button type="button" variant="secondary" onClick={() => setCancelConfirmOpen(true)} disabled={saving}>
+                    <Ban size={15} /> Cancel
+                  </Button>
+                )}
               </>
             )}
             <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
@@ -721,6 +723,15 @@ function PaymentDocumentEditor({
           </div>
         </div>
       </CardHeader>
+      {isCancelled && (
+        <div className="cancelled-document-banner" role="status">
+          <div>
+            <span className="cancelled-document-kicker">Cancelled Document</span>
+            <strong>{form.doc_no || DOCUMENT_META[docType].title}</strong>
+          </div>
+          <p>This document is cancelled and opened in read-only mode. You can still print, export, and view attachments.</p>
+        </div>
+      )}
 
       <CardContent className="min-h-0 overflow-auto p-3">
         {loading ? (
@@ -1101,6 +1112,15 @@ function PaymentDocumentEditor({
         loginId={user?.loginid || user?.username || ""}
         flowLevel={2}
         readOnly={form.canceled === "Y"}
+      />
+      <ConfirmDialog
+        open={cancelConfirmOpen}
+        tone="danger"
+        title="Cancel Document"
+        description={`Cancel ${form.doc_no || "this document"}?`}
+        actionLabel="Cancel Document"
+        onClose={() => setCancelConfirmOpen(false)}
+        onConfirm={() => void cancelCurrentDocument()}
       />
     </form>
   );

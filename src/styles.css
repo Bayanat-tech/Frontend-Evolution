@@ -1708,6 +1708,86 @@ footer,
   font-variant-numeric: tabular-nums;
 }
 
+.cancelled-document-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #fecaca;
+  background:
+    linear-gradient(90deg, rgba(239, 68, 68, 0.13), rgba(254, 242, 242, 0.94)),
+    repeating-linear-gradient(-45deg, rgba(239, 68, 68, 0.08) 0 8px, transparent 8px 18px);
+  color: #7f1d1d;
+  padding: 9px 16px;
+}
+
+.cancelled-document-banner > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cancelled-document-banner strong {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.cancelled-document-banner p {
+  margin: 0;
+  color: #991b1b;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.cancelled-document-kicker {
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  padding: 4px 9px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.payment-workbench.is-cancelled .commercial-header-shell,
+.payment-workbench.is-cancelled .commercial-lines-card {
+  border-color: #fecaca;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(254, 242, 242, 0.52));
+}
+
+.payment-workbench.is-cancelled .commercial-header-shell::after,
+.payment-workbench.is-cancelled .commercial-lines-card::after {
+  content: "CANCELLED";
+  position: absolute;
+  inset: auto 22px 18px auto;
+  pointer-events: none;
+  color: rgba(220, 38, 38, 0.12);
+  font-size: clamp(32px, 5vw, 72px);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  transform: rotate(-10deg);
+}
+
+.payment-workbench.is-cancelled .commercial-header-shell,
+.payment-workbench.is-cancelled .commercial-lines-card {
+  position: relative;
+}
+
+.payment-workbench.is-cancelled .commercial-header-shell .ui-input,
+.payment-workbench.is-cancelled .commercial-header-shell .ui-select,
+.payment-workbench.is-cancelled .commercial-lines-card .ui-input,
+.payment-workbench.is-cancelled .commercial-lines-card .ui-select,
+.payment-workbench.is-cancelled .commercial-lines-card textarea,
+.payment-workbench.is-cancelled .commercial-lines-card button {
+  pointer-events: none;
+  background: #f8fafc;
+  color: #64748b;
+}
+
 .commercial-header-shell {
   min-width: 0;
   max-width: 100%;
