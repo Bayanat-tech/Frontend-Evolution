@@ -49,7 +49,7 @@ import {
   Warehouse,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
@@ -63,7 +63,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   const location = useLocation();
   const navigate = useNavigate();
   const { user, menuTree, logout } = useAuth();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => (typeof window !== "undefined" ? window.innerWidth <= 768 : false));
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const activeApp = useMemo(() => {
@@ -79,6 +79,12 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
     logout();
     navigate("/login", { replace: true });
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.innerWidth <= 768) setCollapsed(true);
+  }, [location.pathname]);
+
   const workspaceRoute = resolveWorkspaceRoute({ pathname: location.pathname, activeApp });
 
   return (

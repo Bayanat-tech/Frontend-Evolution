@@ -1,5 +1,5 @@
+import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { Ban, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import {
@@ -227,7 +227,7 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
           columns={columns}
           data={rows}
           title={loading ? "Loading" : `${totalRows.toLocaleString()} Documents`}
-          subtitle={docType}
+          subtitle={`${meta.title} List`}
           searchValue={query}
           onSearchChange={(value) => {
             setQuery(value);
@@ -241,7 +241,7 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
           density="grid"
           enablePagination
           manualPagination
-          manualFiltering
+          initialSorting={[{ id: "doc_date", desc: true }]}
           pageIndex={pageIndex}
           pageSize={pageSize}
           totalRows={totalRows}
@@ -339,6 +339,7 @@ function PaymentDocumentEditor({
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [showHeaderDetails, setShowHeaderDetails] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -676,24 +677,30 @@ function PaymentDocumentEditor({
   };
 
   return (
-    <form className="payment-workbench grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
-      <CardHeader className="border-b bg-primary px-5 py-2.5 text-primary-foreground shadow-sm">
-        <div className="flex min-h-12 items-center justify-between gap-4">
+    <form className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
+      <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
+        <div className="flex min-h-10 items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
             <div>
               <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
                 {editMode ? "Edit Document" : "New Document"}
               </p>
-              <h2 className="m-0 text-lg font-semibold leading-tight text-primary-foreground">{DOCUMENT_META[docType].title}</h2>
+              <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">{DOCUMENT_META[docType].title}</h2>
             </div>
-            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1">
+            <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
               <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
               <strong className="block text-sm leading-tight text-primary-foreground">{form.doc_no || "New"}</strong>
             </div>
-            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1">
+            <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
               <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
               <strong className="block text-sm leading-tight text-primary-foreground">{formatAmount(total)}</strong>
             </div>
+            {form.div_code && (
+              <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
+                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Division</span>
+                <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}</strong>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
@@ -722,7 +729,15 @@ function PaymentDocumentEditor({
           <div className="grid gap-3">
             {error && <div className="alert error">{error}</div>}
 
-            <div className="payment-header-grid grid grid-cols-6 gap-2.5 rounded-md border bg-card p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
+            <div className="commercial-header-shell rounded-md border bg-card">
+              <div className="commercial-section-title">
+                <div>
+                  <p className="eyebrow m-0">Header</p>
+                  <h3 className="m-0 text-sm font-semibold leading-tight">Payment Information</h3>
+                </div>
+                <span>{showHeaderDetails ? "Full header" : "Compact header"}</span>
+              </div>
+              <div className={`commercial-header-panel payment-header-grid relative grid grid-cols-6 gap-2.5 p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1 ${showHeaderDetails ? "is-expanded" : "is-collapsed"}`}>
               {editMode && <Field label="Doc No"><Input disabled value={form.doc_no || ""} /></Field>}
               <Field label="Doc Date"><Input disabled={disabled} required type="date" value={dateInput(form.doc_date)} onChange={(event) => updateField("doc_date", event.target.value)} /></Field>
               <LookupField
@@ -828,9 +843,30 @@ function PaymentDocumentEditor({
                 <span>Remarks</span>
                 <Input disabled={disabled} value={form.remarks || ""} onChange={(event) => updateField("remarks", event.target.value)} />
               </label>
+              </div>
+              <div className="commercial-header-footer flex items-center justify-between gap-3 border-t bg-secondary/30 px-3 py-2">
+                <div className="min-w-0 truncate text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">Account:</span>{" "}
+                  <span>{form.ac_name || form.ac_code || "Not selected"}</span>
+                  <span className="mx-2 text-border">|</span>
+                  <span className="font-semibold text-foreground">Currency:</span>{" "}
+                  <span>{form.curr_code || "-"}</span>
+                  {docType !== "CR" && (
+                    <>
+                      <span className="mx-2 text-border">|</span>
+                      <span className="font-semibold text-foreground">Cheque:</span>{" "}
+                      <span>{form.cheque_no || "-"}</span>
+                    </>
+                  )}
+                </div>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setShowHeaderDetails((value) => !value)}>
+                  {showHeaderDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  {showHeaderDetails ? "Compact header" : "Show all header fields"}
+                </Button>
+              </div>
             </div>
 
-            <div className="rounded-md border bg-card">
+            <div className="commercial-lines-card rounded-md border bg-card">
               <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
                 <div>
                   <p className="eyebrow m-0">Details</p>

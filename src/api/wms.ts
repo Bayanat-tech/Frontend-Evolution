@@ -25,6 +25,8 @@ export async function getWmsMaster(master: string, options: WmsPagination & Reco
   return response.data.data || { tableData: [], count: 0 };
 }
 
+
+
 export async function deleteWmsMaster(master: string, ids: unknown[]) {
   const response = await api.post<ApiResponse<unknown>>(`/api/wms/${master}`, { ids });
   if (!response.data.success) throw new Error(response.data.message || `Unable to delete ${master}`);

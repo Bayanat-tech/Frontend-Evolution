@@ -33,7 +33,7 @@ const S = {
   container: {
     width: "100%",
     padding: "12px",
-    fontFamily: "system-ui, -apple-system, sans-serif",
+    fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   },
 
   // ── Header — light blue background (as in current UI) ─────────────────────
