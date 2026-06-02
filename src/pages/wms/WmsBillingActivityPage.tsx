@@ -1,5 +1,5 @@
 import { Edit2, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { getWmsMaster, postWmsBillingActivity, upsertMsActivityBillingApi } from "../../api/wms";
 import { Button } from "../../components/ui/Button";
@@ -11,6 +11,7 @@ import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { LookupField } from "../../components/ui/LookupField";
 import { executeDynamicDelete, getDynamicLookup, getLookupText } from "../../api/lookups";
+import { useToast, ToastProvider } from "../../components/ui/AlertToast";
 
 type TBillingActivity = {
   from?: string;
@@ -114,7 +115,7 @@ export function WmsBillingActPage() {
   // const [formOpen, setFormOpen] = useState(false);  
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState<TBillingActivity>(emptyBillingActivity);
-  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  // const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [popBillActform, setpopBillActform] = useState<PopulateBillingActivity>(emptyPopBillAct);
   const [openDailog , setOpenDailog] =useState<"add" | "populate" | null>(null);
 
@@ -125,6 +126,9 @@ export function WmsBillingActPage() {
   //Dialog for Activity delete
   const [ActOpen, setActOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TBillingActivity | null>(null);
+
+  //Toast
+  const {toast} = useToast();
 
 
   // Load principals for the filter dropdown
@@ -143,7 +147,7 @@ export function WmsBillingActPage() {
 
   const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize) => {
     setLoading(true);
-    setNotice(null);
+    // setNotice(null);
     try {
       const hasSearch = Boolean(query.trim());
       const response = await getWmsMaster("billing_activity", {
@@ -154,7 +158,8 @@ export function WmsBillingActPage() {
       setRows(response.tableData.map(mapBillingActivity));
       setTotalRows(response.count || response.tableData.length);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load billing activities" });
+      // setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load billing activities" });
+      toast.error( error instanceof Error ? error.message : "Unable to load billing activities")
     } finally {
       setLoading(false);
     }
@@ -175,41 +180,43 @@ export function WmsBillingActPage() {
   const openPopBillAct = () =>{
     console.log('openPopBillAct hit');
     if (!prinCode) {
-      setNotice({ type: "error", message: "Please select a principal first" });
+      // setNotice({ type: "error", message: "Please select a principal first" });
+      toast.warning("Please select a Principal first");
       return;
     }
     setpopBillActform({ ...emptyPopBillAct, prin_from: prinCode || "" });
     setOpenDailog('populate');
-    setNotice(null);
   }
 
   const openAdd = () => {
     console.log('openAdd hit');
     if (!prinCode) {
-      setNotice({ type: "error", message: "Please select a principal first" });
+      // setNotice({ type: "error", message: "Please select a principal first" });
+      toast.warning("Please select a Principal first");
       return;
     }
     setEditMode(false);
     setForm({ ...emptyBillingActivity, prin_code: prinCode, company_code: user?.company_code || "" });
     setOpenDailog('add');
-    setNotice(null);
+    // setNotice(null);
   };
 
   const openEdit = (row: TBillingActivity) => {
     setEditMode(true);
     setForm(row);
     setOpenDailog('add');
-    setNotice(null);
+    // setNotice(null);
   };
 
   const saveBillActivity = async (event: FormEvent) => {
     event.preventDefault();
     if (!form.prin_code.trim() || !form.act_code?.trim()) {
-      setNotice({ type: "error", message: "Principal and Activity are required" });
+      // setNotice({ type: "error", message: "Principal and Activity are required" });
+      toast.warning("Principal and Activity are required");
       return;
     }
     setSaving(true);
-    setNotice(null);
+    // setNotice(null);
     try {
       if(editMode){
       console.log('hit edit mode api');
@@ -222,10 +229,12 @@ export function WmsBillingActPage() {
       );
       }
       setOpenDailog(null);
-      setNotice({ type: "success", message: editMode ? "Activity updated successfully" : "Activity added successfully" });
+      // setNotice({ type: "success", message: editMode ? "Activity updated successfully" : "Activity added successfully" });
+      toast.success( editMode ? "Activity updated successfully" : "Activity added successfully")
       await loadRows(pageIndex, pageSize);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save Activity" });
+      // setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save Activity" });
+      toast.error( error instanceof Error ? error.message : "Unable to save Activity")
     } finally {
       setSaving(false);
     }
@@ -240,7 +249,7 @@ export function WmsBillingActPage() {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setSaving(true);
-    setNotice(null);
+    // setNotice(null);
     try {
       await executeDynamicDelete({parameter: "BILLING_ACTIVITY_DET_PRINCIPAL",
               loginid: user?.loginid || "",
@@ -251,10 +260,12 @@ export function WmsBillingActPage() {
           });
       setActOpen(false);
       setDeleteTarget(null);
-      setNotice({ type: "success", message: "Activity deleted successfully" });
+      // setNotice({ type: "success", message: "Activity deleted successfully" });
+      toast.success("Activity deleted successfully")
       await loadRows(pageIndex, pageSize);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete activity" });
+      // setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete activity" });
+      toast.error( error instanceof Error ? error.message : "Unable to delete activity")
     } finally {
       setSaving(false);
     }
@@ -310,7 +321,7 @@ export function WmsBillingActPage() {
         </div>
       </div>
 
-      {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
+      {/* {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>} */}
 
       {/* ── Principal Filter ── */}
       <div className="flex items-center gap-3">
@@ -612,6 +623,8 @@ function mapBillingActivity(row: Record<string, unknown>): TBillingActivity {
     bill_amount: Number(row.bill_amount ?? row.BILL_AMOUNT ?? 0),
     inb_show: text(row.inb_show ?? row.INB_SHOW),
     company_code: text(row.company_code ?? row.COMPANY_CODE),
+    freeze_flag : text(row.freeze_flag ?? row.FREEZE_FLAG),
+    mandatory_flag :text(row.mandatory_flag ?? row.MANDATORY_FLAG),
   };
 }
 
