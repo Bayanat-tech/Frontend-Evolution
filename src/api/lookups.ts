@@ -22,6 +22,7 @@ export type DynamicQueryParams = {
   code8?: string;
   code9?: string;
   code10?: string;
+  code20?:string;
   number1?: number;
   number2?: number;
   number3?: number;
