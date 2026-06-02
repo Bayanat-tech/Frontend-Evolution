@@ -28,9 +28,14 @@ import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
 import { SecurityAssignmentPage, securityAssignmentConfigs } from "../pages/security/SecurityAssignmentPage";
 import { SecurityMasterPage, securityMasterConfigs } from "../pages/security/SecurityMasterPage";
 import { SecurityOperationAccessPage } from "../pages/security/SecurityOperationAccessPage";
-import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
-import { PettyCashPaymentDocumentEditor } from "../pages/finance/PettyCashPayment";
+import { KpiItemPage } from "../pages/pams/KpiActivityPage";
+import MyTaskPage from "../pages/pams/MyTaskpage";
+import AppraisalViewTabsPage from "../pages/pams/AppraisalViewtabspage";
+import { KpiGroupPage } from "../pages/pams/KpiGroupPage";
+import AppraisalSummaryReportDesign from "../pages/pams/AppraisalSummaryReportDesign";
+import AppraisalDivisionSummaryReport from "../pages/pams/AppraisalDivisionSummaryReport";
 
+import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
 import { JVDocumentEditor } from "../pages/finance/JVDocumentPage";
 
 import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs } from "../pages/pams/PamsPages";
@@ -128,11 +133,6 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: ({ pathname }) => <PaymentDocumentPage docType={getTransactionDocType(pathname)!} />,
   },
   {
-    name: "Finance Payment Documents",
-    match: ({ pathname }) => Boolean(getPettyCashDocType(pathname)),
-    element: ({ pathname }) => <PettyCashPaymentDocumentEditor docType={getPettyCashDocType(pathname)!} />,
-  },
-  {
     name: "Finance Utility Master",
     match: ({ pathname }) => Boolean(getUtilityMasterConfig(pathname)),
     element: ({ pathname }) => <FinanceUtilityMasterPage config={getUtilityMasterConfig(pathname)!} />,
@@ -217,28 +217,144 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isPamsRoute(pathname) && isPamsBulkAppraisalRoute(pathname),
     element: () => <PamsBulkAppraisalPage />,
   },
+  // ── PAMS My Task Routes (Specific tabs first, then default) ──
+  {
+    name: "PAMS My Task Pending",
+    match: ({ pathname }) => {
+      const normalized = pathname.toLowerCase();
+      return isPamsRoute(pathname) && 
+        (normalized.includes("/my_task/pending") || 
+         normalized.includes("/my-task/pending"));
+    },
+    element: () => <MyTaskPage initialTab={0} />,
+  },
+  {
+    name: "PAMS My Task In Progress",
+    match: ({ pathname }) => {
+      const normalized = pathname.toLowerCase();
+      return isPamsRoute(pathname) && 
+        (normalized.includes("/my_task/in_progress") || 
+         normalized.includes("/my-task/in-progress"));
+    },
+    element: () => <MyTaskPage initialTab={1} />,
+  },
+  {
+    name: "PAMS My Task Rejected",
+    match: ({ pathname }) => {
+      const normalized = pathname.toLowerCase();
+      return isPamsRoute(pathname) && 
+        (normalized.includes("/my_task/rejected") || 
+         normalized.includes("/my-task/rejected"));
+    },
+    element: () => <MyTaskPage initialTab={2} />,
+  },
+  {
+    name: "PAMS My Task Sent Back",
+    match: ({ pathname }) => {
+      const normalized = pathname.toLowerCase();
+      return isPamsRoute(pathname) && 
+        (normalized.includes("/my_task/sent_back") || 
+         normalized.includes("/my-task/sent-back"));
+    },
+    element: () => <MyTaskPage initialTab={3} />,
+  },
+  {
+    name: "PAMS My Task Closed",
+    match: ({ pathname }) => {
+      const normalized = pathname.toLowerCase();
+      return isPamsRoute(pathname) && 
+        (normalized.includes("/my_task/closed") || 
+         normalized.includes("/my-task/closed"));
+    },
+    element: () => <MyTaskPage initialTab={4} />,
+  },
   {
     name: "PAMS My Task",
-    match: ({ pathname }) => isPamsRoute(pathname) && pathname.toLowerCase().includes("/my_task") && !pathname.toLowerCase().includes("/view/"),
-    element: () => <PamsTaskPage />,
+    match: ({ pathname }) => {
+      const normalized = pathname.toLowerCase();
+      return isPamsRoute(pathname) && 
+        normalized.includes("/my_task") && 
+        !normalized.includes("/view/") &&
+        !normalized.includes("/edit/") &&
+        !normalized.includes("/pending") &&
+        !normalized.includes("/in_progress") &&
+        !normalized.includes("/rejected") &&
+        !normalized.includes("/sent_back") &&
+        !normalized.includes("/closed");
+    },
+    element: () => <MyTaskPage initialTab={0} />,
   },
+  // ── PAMS Appraisal View/Edit Routes ──
+  {
+  name: "PAMS Appraisal Tabs View",
+  match: ({ pathname }) => {
+    const normalized = pathname.toLowerCase();
+    return isPamsRoute(pathname) && 
+      (normalized.includes("/appraisal/view/") || 
+       normalized.includes("/appraisal/edit/") ||
+       normalized.includes("/view/") && normalized.includes("employee_code"));
+  },
+  element: () => <AppraisalViewTabsPage />,
+},
   {
     name: "PAMS Appraisal View",
-    match: ({ pathname }) => isPamsRoute(pathname) && pathname.toLowerCase().includes("/my_task/view/"),
-    element: () => <PamsAppraisalViewPage />,
+    match: ({ pathname }) => {
+      const normalized = pathname.toLowerCase();
+      return isPamsRoute(pathname) && 
+        (normalized.includes("/my_task/view/") || 
+         normalized.includes("/my-task/view/") ||
+         normalized.includes("/view/"));
+    },
+    element: () => <AppraisalViewTabsPage />,
   },
-  {
-    name: "PAMS Reports",
-    match: ({ pathname }) => isPamsRoute(pathname) && (pathname.toLowerCase().includes("appraisal_listing_summary") || pathname.toLowerCase().includes("appraisal_listing")),
-    element: ({ pathname }) => <PamsReportPage type={pathname.toLowerCase().includes("summary") ? "summary" : "listing"} />,
-  },
+  // {
+  //   name: "PAMS Reports",
+  //   match: ({ pathname }) => {
+  //     const normalized = pathname.toLowerCase();
+  //     return isPamsRoute(pathname) && 
+  //       (normalized.includes("appraisal_listing_summary") || 
+  //        normalized.includes("appraisal_listing") ||
+  //        normalized.includes("/reports"));
+  //   },
+  //   element: ({ pathname }) => <PamsReportPage type={pathname.toLowerCase().includes("summary") ? "summary" : "listing"} />,
+  // },
   {
     name: "PAMS Department Assignment",
     match: ({ pathname }) => {
       const normalized = pathname.toLowerCase();
-      return isPamsRoute(pathname) && (normalized.includes("/department_kpi") || normalized.includes("/kpi_assignment"));
+      return isPamsRoute(pathname) && 
+        (normalized.includes("/department_kpi") || 
+         normalized.includes("/kpi_assignment") ||
+         normalized.includes("/dept-kpi"));
     },
     element: () => <PamsDepartmentAssignmentPage />,
+  },
+//// reporting pages
+  {
+  name: "PAMS Appraisal Summary Report",
+  match: ({ pathname }) => isPamsRoute(pathname) && isPamsAppraisalSummaryRoute(pathname),
+  element: () => <AppraisalSummaryReportDesign required_values={{
+    loginid: undefined,
+    company_code: undefined,
+    period_label: undefined,
+  }} />,
+},
+// reporting pages section mein, AppraisalSummaryReport ke NEECHE add karo:
+ {
+    name: "PAMS Appraisal Division Summary Report", 
+    match: ({ pathname }) => isPamsRoute(pathname) && isPamsAppraisalDivisionSummaryRoute(pathname),
+    element: () => <AppraisalDivisionSummaryReport />,
+  },
+  {
+    name: "PAMS KPI Group",
+    match: ({ pathname }) => isPamsRoute(pathname) && isPamsKpiGroupRoute(pathname),
+    element: () => <KpiGroupPage />,
+  },
+  // ── PAMS KPI Item — must be BEFORE PAMS Master so kpi_item route match ho pehle ──
+  {
+    name: "PAMS KPI Item",
+    match: ({ pathname }) => isPamsRoute(pathname) && isPamsKpiItemRoute(pathname),
+    element: () => <KpiItemPage />,
   },
   {
     name: "PAMS Master",
@@ -380,12 +496,10 @@ function getTransactionDocType(pathname: string) {
   if (normalized.includes("/finance/accounts/transactions/cheque-payment")) return "BP" as const;
   if (normalized.includes("/finance/accounts/transactions/cheque-receipt")) return "BR" as const;
   if (normalized.includes("/finance/accounts/transactions/cash-receipt")) return "CR" as const;
-  return null;
-}
-
-function getPettyCashDocType(pathname: string) {
-  const normalized = pathname.toLowerCase();
-  if (normalized.includes("/finance/accounts/transactions/petty_cash_payment") || normalized.includes("/finance/accounts/transactions/petty-cash-payment")) return "CP" as const;
+  if (
+    normalized.includes("/finance/accounts/transactions/petty_cash_payment") ||
+    normalized.includes("/finance/accounts/transactions/petty-cash-payment")
+  ) return "CP" as const;
   return null;
 }
 
@@ -461,7 +575,19 @@ function isWmsCountryRoute(pathname: string) {
 
 function isWmsInboundRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  return normalized.includes("/wms/") && normalized.includes("/inbound") && (normalized.includes("/jobs") || normalized.includes("/job") || normalized.includes("/inboundjob"));
+  if (!normalized.includes("/wms/")) return false;
+ 
+  // Case 1: listing page — /wms/.../inbound/jobs (any depth)
+  const isListing =
+    normalized.includes("/inbound") &&
+    (normalized.includes("/jobs") || normalized.includes("/inboundjob"));
+ 
+  // Case 2: detail page — /wms/.../view/{jobNo}/{tab}
+  // The navigate() call in WmsInboundPage does `navigate("view/IB.../shipment_details")`
+  // which resolves relative to the listing, producing /workspace/wms/.../view/IB.../...
+  const isDetail = normalized.includes("/view/");
+ 
+  return isListing || isDetail;
 }
 
 function isWmsOutboundRoute(pathname: string) {
@@ -561,6 +687,30 @@ function isPamsBulkAppraisalRoute(pathname: string) {
   const normalized = pathname.toLowerCase().replace(/\/+$/, "");
   return normalized.endsWith("/pams/masters/gm/kpi") || normalized.includes("/bulk");
 }
+
+function isPamsKpiGroupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/kpi_groups");
+}
+
+function isPamsKpiItemRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/kpi_activity");
+}
+
+
+function isPamsAppraisalSummaryRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/appraisal_listing_summary") || 
+         normalized.includes("/appraisal-listing-summary");
+}
+
+function isPamsAppraisalDivisionSummaryRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/appraisal_listing") ||
+         normalized.includes("/appraisal-listing");
+}
+
 
 function getPamsMasterConfig(context: WorkspaceRouteContext) {
   if (!isPamsRoute(context.pathname)) return null;

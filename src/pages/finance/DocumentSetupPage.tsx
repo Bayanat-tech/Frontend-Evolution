@@ -176,6 +176,20 @@ export function DocumentSetupPage() {
     setSaving(true);
     setNotice(null);
     try {
+      const headerToSave = Object.values(dirtyHeader)
+        .filter((row) => row.ac_code.trim())
+        .map((row) => stripAccountForSave(row, companyCode));
+      const detailToSave = Object.values(dirtyDetail)
+        .filter((row) => row.ac_code.trim())
+        .map((row) => stripAccountForSave(row, companyCode));
+
+      if (headerToSave.length) {
+        await postFinance("insDocAccodeBulk", { rows: headerToSave, loginId });
+      }
+      if (detailToSave.length) {
+        await postFinance("insDocAccodeBulk", { rows: detailToSave, loginId });
+      }
+
       if (docDirty) {
         await postFinance("upsertSetupDoc", {
           ...docForm,
@@ -186,13 +200,6 @@ export function DocumentSetupPage() {
           back_date: Number(docForm.back_date || 0),
           loginid: loginId,
         });
-      }
-
-      const headerToSave = Object.values(dirtyHeader).filter((row) => row.ac_code.trim()).map(stripAccountForSave);
-      const detailToSave = Object.values(dirtyDetail).filter((row) => row.ac_code.trim()).map(stripAccountForSave);
-      const rows = [...headerToSave, ...detailToSave];
-      if (rows.length) {
-        await postFinance("insDocAccodeBulk", { rows, loginId });
       }
 
       setNotice({ type: "success", message: "Document setup saved successfully" });
@@ -220,7 +227,7 @@ export function DocumentSetupPage() {
 
     try {
       await postFinance("delDocAccodeBulk", {
-        rows: [stripAccountForSave(row)],
+        rows: [stripAccountForSave(row, companyCode)],
         loginId,
       });
       setDeleteTarget(null);
@@ -624,9 +631,9 @@ function mapDocAccount(row: LookupRow, index: number, fallbackType: "H" | "D", d
   };
 }
 
-function stripAccountForSave(row: DocAccountRow) {
+function stripAccountForSave(row: DocAccountRow, fallbackCompanyCode = "") {
   return {
-    company_code: row.company_code,
+    company_code: row.company_code || fallbackCompanyCode,
     doc_id: row.doc_id,
     hdr_dtl: row.hdr_dtl,
     ac_code: row.ac_code,

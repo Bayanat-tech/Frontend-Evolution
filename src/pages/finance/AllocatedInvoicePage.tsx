@@ -73,7 +73,6 @@ export function AllocatedInvoicePage() {
     <section className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="eyebrow">Finance Transaction</p>
           <h1 className="m-0 text-2xl font-semibold tracking-tight">Allocated Invoice</h1>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">

@@ -157,11 +157,6 @@ export function WmsCountryPage() {
     <section className="grid gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="eyebrow">WMS Master</p>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">Country Master</h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Maintain country code, country name, GCC flag, short description, and nationality using the existing Bayanat WMS backend.
-          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={() => loadRows()}>
