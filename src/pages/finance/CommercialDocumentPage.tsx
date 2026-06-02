@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X, AlertCircle } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import {
@@ -368,6 +368,8 @@ function CommercialEditor({
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [error, setError] = useState("");
   const [showHeaderDetails, setShowHeaderDetails] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [lineErrors, setLineErrors] = useState<Record<string, Record<string, string>>>({});   
 
   useEffect(() => {
     let mounted = true;
@@ -409,7 +411,7 @@ function CommercialEditor({
    const isSales = docType === "SI" || docType === "SV";
 
   // const total = form.detail.reduce((sum, line) => sum + Number(line.amount || 0) * line.sign_ind, 0);
-  const total = form.detail.filter((line) => Number(line.serial_no) < 9000).reduce((sum, line) => sum + Number(line.amount || 0), 0);
+  const total = form.detail.filter((line) => Number(line.serial_no) < 9000).reduce((sum, line) => sum + Number(line.amount || 0)* Number(line.sign_ind || 1), 0);
   const taxTotal = form.detail.filter((line) => Number(line.serial_no) < 9000).reduce((sum, line) => sum + (Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100, 0);
 
   const update = (field: keyof FormState, value: string | number) => setForm((current) => ({ ...current, [field]: value }));
@@ -462,33 +464,93 @@ function CommercialEditor({
     };
   });
   };
+
   const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!form.doc_date) return setError("Doc Date is required");
-    if (!form.div_code) return setError("Division is required");
-    if (!form.ac_code) return setError(docType === "PI" || docType === "PO" ? "Supplier is required" : "Customer is required");
-    if (!form.curr_code) return setError("Currency is required");
-    if (!form.ex_rate) return setError("Exchange Rate is required");
-    if (!form.detail.length) return setError("Add at least one detail line");
-    setSaving(true);
-    setError("");
-    try {
-      if (docType === "PO") {
-        const payload = buildCommercialPayload(form, user?.company_code || "");
-        const endpoint = editMode ? "/api/finance/transactions/lpo-update" : "/api/finance/transactions/lpo-document";
-        const response = editMode ? await api.put(endpoint, payload) : await api.post(endpoint, payload);
-        if (!response.data?.success) throw new Error(response.data?.message || "Unable to save LPO document");
-      } else {
-        const bulkPayload = buildCommercialBulkAccountEntryPayload(form, user?.company_code || "", user?.loginid || "");
-        await upsertBulkAccountEntryApi(bulkPayload);
-      }
-      await onSaved(editMode ? "Document updated successfully" : "Document created successfully");
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to save document");
-    } finally {
-      setSaving(false);
+  event.preventDefault();
+
+  const hErr: Record<string, string> = {};
+  if (!form.doc_date)                   hErr.doc_date  = "Doc Date is required";
+  if (!form.ac_code)                    hErr.ac_code   = isPO || isPI ? "Supplier is required" : "Customer is required";
+  if (!form.curr_code)                  hErr.curr_code = "Currency is required";
+  if (!form.ex_rate || form.ex_rate <= 0) hErr.ex_rate = "Exchange Rate must be > 0";
+  if (!isPO && !form.inv_date)          hErr.inv_date  = "INV Date is required";
+  if (isPI  && !form.ref_no)            hErr.ref_no    = "Ref No is required";
+  if (isSales && !form.ref_no)          hErr.ref_no    = "Ref No is required";    //inv_no 
+
+  const lErr: Record<string, Record<string, string>> = {};
+  const visibleLines = form.detail.filter((l) => Number(l.serial_no) < 9000);
+
+  if (visibleLines.length === 0) hErr._lines = "Add at least one detail line";
+
+  visibleLines.forEach((line) => {
+    const e: Record<string, string> = {};
+    if (!line.ac_code)                      e.ac_code = "Account is required";
+    if (!line.amount || line.amount <= 0)   e.amount  = "Amount must be > 0";
+    if (!line.qty    || line.qty    <= 0)   e.qty     = "Qty must be > 0";
+    if (Object.keys(e).length) lErr[line.id] = e;
+  });
+
+  setFieldErrors(hErr);
+  setLineErrors(lErr);
+
+  if (Object.keys(hErr).length || Object.keys(lErr).length) {
+       scrollToFirstError();
+    return;
+  }
+
+  setSaving(true);
+  setError("");
+  try {
+    if (docType === "PO") {
+      const payload  = buildCommercialPayload(form, user?.company_code || "");
+      const endpoint = editMode ? "/api/finance/transactions/lpo-update" : "/api/finance/transactions/lpo-document";
+      const response = editMode ? await api.put(endpoint, payload) : await api.post(endpoint, payload);
+      if (!response.data?.success) throw new Error(response.data?.message || "Unable to save LPO document");
+    } else {
+      const bulkPayload = buildCommercialBulkAccountEntryPayload(form, user?.company_code || "", user?.loginid || "");
+      await upsertBulkAccountEntryApi(bulkPayload);
     }
-  };
+    await onSaved(editMode ? "Document updated successfully" : "Document created successfully");
+  } catch (submitError) {
+    setError(submitError instanceof Error ? submitError.message : "Unable to save document");
+  } finally {
+    setSaving(false);
+  }
+ };
+
+ const scrollToFirstError = () => {
+  setTimeout(() => {
+    const el = document.querySelector(".border-destructive, [data-error='true']");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, 50);
+};
+  // const submit = async (event: FormEvent) => {
+  //   event.preventDefault();
+  //   if (!form.doc_date) return setError("Doc Date is required");
+  //   if (!form.div_code) return setError("Division is required");
+  //   if (!form.ac_code) return setError(docType === "PI" || docType === "PO" ? "Supplier is required" : "Customer is required");
+  //   if (!form.curr_code) return setError("Currency is required");
+  //   if (!form.ex_rate) return setError("Exchange Rate is required");
+  //   if (!form.detail.length) return setError("Add at least one detail line");
+  //   setSaving(true);
+  //   setError("");
+  //   try {
+  //     if (docType === "PO") {
+  //       const payload = buildCommercialPayload(form, user?.company_code || "");
+  //       const endpoint = editMode ? "/api/finance/transactions/lpo-update" : "/api/finance/transactions/lpo-document";
+  //       const response = editMode ? await api.put(endpoint, payload) : await api.post(endpoint, payload);
+  //       if (!response.data?.success) throw new Error(response.data?.message || "Unable to save LPO document");
+  //     } else {
+  //       const bulkPayload = buildCommercialBulkAccountEntryPayload(form, user?.company_code || "", user?.loginid || "");
+  //       await upsertBulkAccountEntryApi(bulkPayload);
+  //     }
+  //     await onSaved(editMode ? "Document updated successfully" : "Document created successfully");
+  //   } catch (submitError) {
+  //     setError(submitError instanceof Error ? submitError.message : "Unable to save document");
+  //   } finally {
+  //     setSaving(false);
+  //   }
+  // };
 
   return (
     <form className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
@@ -557,30 +619,34 @@ function CommercialEditor({
   )}
 
   {/* ── Doc Date ── */}
-  <Field label="Doc Date">
+  <Field label="Doc Date" required error={fieldErrors.doc_date}>
     <Input type="date" value={dateInput(form.doc_date)}
+    className={fieldErrors.doc_date ? "border-destructive" : ""}
       onChange={(e) => update("doc_date", e.target.value)} />
   </Field>
 
   {/* ── INV Date — PI / SI / SV only (field: inv_date) ── */}
   {!isPO && (
-    <Field label="INV Date">
+    <Field label="INV Date" required error={fieldErrors.inv_date}>
       <Input type="date" value={dateInput(form.inv_date)}
+        className={fieldErrors.inv_date ? "border-destructive" : ""}
         onChange={(e) => update("inv_date", e.target.value)} />
     </Field>
   )}
 
   {/* ── Invoice No — PI / SI / SV only (field: ref_no in PI, inv_no in SI/SV) ── */}
   {isPI && (
-    <Field label="Invoice No">
+    <Field label="Ref No" required error={fieldErrors.ref_no}>
       <Input value={form.ref_no || ""}
+        className={fieldErrors.ref_no ? "border-destructive" : ""}
         onChange={(e) => update("ref_no", e.target.value)} />
     </Field>
   )}
   {isSales && (
-    <Field label="Invoice No">
-      <Input value={form.inv_no || ""}
-        onChange={(e) => update("inv_no", e.target.value)} />
+    <Field label="Ref No" required error={fieldErrors.ref_no}>
+      <Input value={form.ref_no ||form.inv_no|| ""}
+        className={fieldErrors.ref_no ? "border-destructive" : ""}
+        onChange={(e) => update("ref_no", e.target.value)} />
     </Field>
   )}
 
@@ -616,15 +682,16 @@ function CommercialEditor({
   )}
 
   {/* ── Division ── */}
-  <Field label="Division">
-    <Input disabled
+  <Field label="Division" required error={fieldErrors.div_name}>
+    <Input disabled required
       value={`${form.div_code}${form.div_name ? ` - ${form.div_name}` : ""}`} />
   </Field>
 
   {/* ── Supplier Code + Name — PO / PI  & ── Customer Code + Name — SI / SV ──── */}
   {/* field: ac_code / ac_name — same in all tables ── */}
+  <div className="field">
   <LookupField
-    label={isSales ? "Customer" : "Supplier"}
+    label={isSales ? "Customer" : "Supplier"} required
     value={form.ac_code}
     displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
     columns={[
@@ -671,10 +738,17 @@ function CommercialEditor({
         dlvr_mobile:   get("mobile_no"),
         dlvr_email:    get("e_mail"),
         remarks:       get("l4_description"), 
-      }));
+      })); 
     }) ();
     }}
   />
+   {fieldErrors.ac_code && (
+    <span data-error="true" style={{ fontSize: 11, color: "#E24B4A", display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
+      <AlertCircle size={11} /> {fieldErrors.ac_code}
+    </span>
+  )}
+</div>
+
 
   {/* Supplier/Customer Name — read-only display */}
   <Field label={isSales ? "Customer Name" : "Supplier Name"}>
@@ -682,8 +756,10 @@ function CommercialEditor({
   </Field>
 
   {/* ── Currency ── */}
+  <div className="field">
    <LookupField
     label="Currency"
+    required
     value={form.curr_code ?? ""}
     displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
     columns={[
@@ -708,10 +784,17 @@ function CommercialEditor({
       }))
     }
   />
+     {fieldErrors.curr_code && (
+    <span data-error="true" style={{ fontSize: 11, color: "#E24B4A", display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
+      <AlertCircle size={11} /> {fieldErrors.curr_code}
+    </span>
+  )}
+ </div>
 
   {/* ── Ex Rate ── */}
-  <Field label="Ex Rate">
+  <Field label="Ex Rate" required error={fieldErrors.ex_rate}>
     <Input type="number" step="0.0001" value={form.ex_rate}
+     className={fieldErrors.ref_no ? "border-destructive" : ""}
       onChange={(e) => update("ex_rate", Number(e.target.value || 1))} />
   </Field>
 
@@ -801,7 +884,13 @@ function CommercialEditor({
     displayFields={["DOC_NO"]}
     loadOptions={() =>
       getDynamicFinanceLookup({
-        parameter: "Account_LPO_REF_DOC",
+        parameter:
+        //  form.doc_type === "PI"       //Reff Doc acc to Doc Type
+        // ? "Account_LPO_REF_DOC"
+        // : form.doc_type === "SI"
+        // ? "Account_SI_REF_DOC"
+        // : "Account_SV_REF_DOC",
+        "Account_LPO_REF_DOC",
         code1: user?.company_code || "",
         number1: form.div_code ? Number(form.div_code) : undefined,
       })
@@ -1002,18 +1091,6 @@ function CommercialEditor({
   <Field label="Tax Type">
     <Select
       value={form.tax_type || ""}  // field: tax_type in UI, maps to tx_compnt_1_expmt in table
-//       onChange={(e) => {
-//   const v    = e.target.value;
-//   const perc = v === "S" ? 5 : 0;
-//   setForm((c) => ({
-//     ...c,
-//     tax_type: v,
-//     tx_compnt_1_expmt: v,
-//     tx_compnt_perc_1: perc,
-//   }));
-//   syncLineTax(form.tx_compntcat_code_1 || "",v,perc);
-//  }}
-
  onChange={(e) => {
   const v    = e.target.value;
   const perc = v === "S" ? 5 : 0;
@@ -1113,6 +1190,7 @@ function CommercialEditor({
                       <th className="px-2 py-2 text-left">Division</th>
                       <th className="px-2 py-2 text-left">Account</th>
                       <th className="px-2 py-2 text-left">A/c Name</th>
+                      {isPO && <th className="px-2 py-2 text-left">Product Code</th>}
                       <th className="px-2 py-2 text-left">Description</th>
                       <th className="px-2 py-2 text-left">Currency</th>
                       <th className="px-2 py-2 text-left">Ex Rate</th>
@@ -1125,6 +1203,8 @@ function CommercialEditor({
                       <th className="px-2 py-2 text-left">Tax %</th>
                       <th className="px-2 py-2 text-left">Tax Amt</th>
                       <th className="px-2 py-2 text-left">Job</th>
+                      {isPO && <th className="px-2 py-2 text-left">Dept.</th>}
+                      {isPO && <th className="px-2 py-2 text-left">Remarks</th>}
                       <th className="px-2 py-2 text-left">Base Amount</th>
                       <th className="px-2 py-2 text-left">Action</th>
                     </tr>
@@ -1139,6 +1219,7 @@ function CommercialEditor({
                         <td className="w-[260px] px-2 py-1">
                           <LookupField
                             label="Line Account"
+                            required
                             compact
                             placeholder="A/c code"
                             value={line.ac_code}
@@ -1149,8 +1230,22 @@ function CommercialEditor({
                             loadOptions={() => getDocAccounts(docType, "D", form.div_code)}
                             onChange={(value, row) => updateLine(line.id, { ac_code: value, ac_name: text(getLookupValue(row || {}, "ac_name")) })}
                           />
+                          {lineErrors[line.id]?.ac_code && (
+    <span style={{ fontSize: 10, color: "#E24B4A", display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
+      <AlertCircle size={10} /> {lineErrors[line.id].ac_code}
+    </span>
+  )}
+
                         </td>
                         <td className="w-[240px] px-2 py-1"><Input disabled value={line.ac_name || ""} /></td>
+                        {isPO && (
+  <td className="w-36 px-2 py-1">
+    <Input
+      value={line.prod_code || ""}
+      onChange={(e) => updateLine(line.id, { prod_code: e.target.value })}
+    />
+  </td>
+)}
                         <td className="w-[360px] px-2 py-1">
                           <textarea
                             className="commercial-line-description"
@@ -1161,7 +1256,8 @@ function CommercialEditor({
                         </td>
                         <td className="w-[210px] px-2 py-1">
                           <LookupField
-    label="Currency"
+    label="Currency" 
+    compact
     value={form.curr_code ?? ""}
     displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
     columns={[
@@ -1238,6 +1334,12 @@ function CommercialEditor({
                         // value={line.tx_compnt_amt_1 ?? 0}  onChange={(event) => updateLine(line.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                         value={((Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100).toFixed(3)} /></td>
                         <td className="w-40 px-2 py-1"><Input value={line.job_no || ""} onChange={(event) => updateLine(line.id, { job_no: event.target.value })} /></td>
+                        {isPO && (
+                          <td className="w-36 px-2 py-1"> <Input  value={line.dept_code || ""}  onChange={(e) => updateLine(line.id, { dept_code: e.target.value })}/> </td>
+)}
+{isPO && (
+  <td className="w-[260px] px-2 py-1"> <Input  value={line.other_remarks || ""}  onChange={(e) => updateLine(line.id, { other_remarks: e.target.value })} /> </td>
+)}
                         <td className="w-56 px-2 py-1">
                           {/* <Input disabled value={formatAmount(Number(line.amount || 0) * Number(form.ex_rate || 1) * Number(line.sign_ind || 1))} /> */}
                           <Input className="commercial-number-input text-right tabular-nums" disabled value={formatAmount(Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1))} />
@@ -1301,8 +1403,12 @@ function CommercialEditor({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="field"><span>{label}</span>{children}</label>;
+function Field({ label, children,error,required }: { label: string; children: React.ReactNode; error?: string; required?: boolean }) {
+  return <label className="field"><span>{label} {required && <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span>}</span>{children}{error && (
+        <span style={{ fontSize: 11, color: "#E24B4A", display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
+          <AlertCircle size={11} /> {error}
+        </span>
+      )}</label>;
 }
 
 function emptyForm(docType: CommercialType, div?: Division): FormState {
@@ -1334,8 +1440,11 @@ function emptyLine(docType: CommercialType, serialNo: number): Line {
     tx_compnt_1_expmt: "N",
     tx_compnt_perc_1: 0,
     tx_compnt_amt_1: 0,
+    dept_code: "",          
+    job_no: "",             
     prod_code: docType==="PO" ? "" : undefined,    // only required for PO
     other_remarks: docType === "PO" ? "" : undefined,
+
   };
 }
 
@@ -1345,7 +1454,7 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
     doc_no: text(header.doc_no),
     doc_type: docType,
     doc_date: dateInput(header.doc_date),
-    inv_no: text(header.inv_no ?? header.invoice_number),
+    inv_no: text(header.inv_no),
     inv_date: dateInput(header.inv_date ?? header.invoice_date ?? header.ref_date),
     ref_date: dateInput(header.ref_date),
     app_ref_no: text(header.app_ref_no),
@@ -1412,7 +1521,8 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
     company_code: companyCode,
     ex_rate: Number(form.ex_rate || 1),
     // ref_doc_no: form.ref_doc_no || form.ref_no || form.doc_no || "",
-    ref_doc_no: form.doc_type === "PI" ? (form.ref_doc_no || "") : (form.ref_doc_no || form.ref_no || form.doc_no || ""),
+    ref_doc_no:form.doc_type === "PI"  ? (form.ref_doc_no || "") : "",
+    // ref_doc_no: form.doc_type === "PI" ? (form.ref_doc_no || "") : (form.ref_doc_no || form.ref_no || form.doc_no || ""),
     party_name: form.ac_name || "",
     invoice_no: form.inv_no || "",
     invoice_date: form.inv_date || "",
@@ -1503,6 +1613,7 @@ function buildCommercialBulkAccountEntryPayload(form: FormState, companyCode: st
     lcur_amount: Number(line.lcur_amount ?? Math.abs(Number(line.amount || 0)) * Number(line.ex_rate || form.ex_rate || 1)),
     sign_ind: commercialDetailSign(form.doc_type, line.sign_ind),
     sign_code: commercialDetailSign(form.doc_type, line.sign_ind) === 1 ? "DR" : "CR",
+    dept_code: line.dept_code || "",
   }));
 
   return {
