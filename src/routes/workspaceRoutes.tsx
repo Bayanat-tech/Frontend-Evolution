@@ -41,6 +41,7 @@ import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDe
 import { HrMasterPage } from "../pages/hr/HrMasterPage";
 import { hrMasterConfigs } from "../pages/hr/hrMasterConfigs";
 import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrPayUnitsPage } from "../pages/hr/HrProcessPages";
+import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -174,6 +175,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isWmsOutboundRoute(pathname),
     element: () => <WmsOutboundPage />,
   },
+   {
+    name: "WMS Billing Activity Master",
+    match: ({ pathname }) => isWmsBillingActRoute(pathname),
+    element: () => <WmsBillingActPage />,
+  },
+  
   {
     name: "WMS Simple Master",
     match: ({ pathname }) => Boolean(getWmsSimpleMasterConfig(pathname)),
@@ -554,7 +561,10 @@ function isWmsCountryRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/wms/") && normalized.includes("/country");
 }
-
+function isWmsBillingActRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/wms/") && normalized.includes("/principal_masters") && (normalized.includes("/billing_activity"));
+}
 function isWmsInboundRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   if (!normalized.includes("/wms/")) return false;
