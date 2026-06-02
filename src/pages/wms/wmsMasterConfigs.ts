@@ -330,17 +330,21 @@ country: {
       { name: "prin_faxno1", label: "Company Fax 1", tab: "contact-info", section: "CONTACT INFORMATION" },
       { name: "prin_faxno2", label: "Company Fax 2", tab: "contact-info", section: "CONTACT INFORMATION" },
       { name: "prin_faxno3", label: "Company Fax 3", tab: "contact-info", section: "CONTACT INFORMATION" },
-      { name: "prin_cont1", label: "Contact Person", tab: "contact-info", section: "CONTACT INFORMATION" },
-      { name: "prin_cont_telno1", label: "Telephone", tab: "contact-info", section: "CONTACT INFORMATION" },
+      { name: "prin_contact1", label: "Contact Person 1", tab: "contact-info", section: "CONTACT INFORMATION" },
+      { name: "prin_contact2", label: "Contact Person 2", tab: "contact-info", section: "CONTACT INFORMATION" },
+      { name: "prin_contact3", label: "Contact Person 3", tab: "contact-info", section: "CONTACT INFORMATION" },
+      { name: "prin_telno1", label: "Telephone 1", tab: "contact-info", section: "CONTACT INFORMATION" },
+      { name: "prin_telno2", label: "Telephone 2", tab: "contact-info", section: "CONTACT INFORMATION" },
+      { name: "prin_telno3", label: "Telephone 3", tab: "contact-info", section: "CONTACT INFORMATION" },
       // Basic Info Tab - Organization
       { name: "div_code", label: "Division", required: true, dropdownParam: "DROP_DOWN_DIVISION", dropdownDisplayFields: ["div_code", "div_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "div_code", dropdownCodeMap: { company_code: "code1" }, tab: "organization", section: "ORGANIZATION" },
       { name: "prin_dept_code", label: "Department", required: true, dropdownParam: "DROP_DOWN_DEPT_BASED_ON_DIV", dropdownDisplayFields: ["dept_code", "dept_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "dept_code", dropdownCodeMap: { div_code: "code1" }, tab: "organization", section: "ORGANIZATION" },
       { name: "prin_acref", label: "Reference", tab: "organization", section: "ORGANIZATION" },
       { name: "auto_generate_product_code", label: "Auto Generate Product Code", type: "checkbox", tab: "organization", section: "ORGANIZATION" },
       // Account Info Tab - Company Registration Information
-      { name: "trn_no", label: "Tax Registered No.",type: "number", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
+      { name: "trn_no", label: "Tax Registered No.", type: "text", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
       { name: "trn_exp_date", label: "Tax Reg. Expiry Date", type: "date", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
-      { name: "comm_reg_no", type:"number", label: "Commercial Reg. No.", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
+      { name: "comm_reg_no", label: "Commercial Reg. No.", type: "text", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
       { name: "comm_reg_exp_date", label: "Commercial Reg. Expiry", type: "date", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
       { name: "prin_lic_no", label: "License No.", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
       { name: "prin_lic_type", label: "License Type", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
@@ -372,35 +376,44 @@ country: {
       { name: "storage_productwise", label: "Product Wise Storage", type: "checkbox", tab: "settings", section: "PRODUCT AND SHIPMENT SETTINGS" },
       { name: "dir_shpmnt", label: "Direct Shipment", type: "checkbox", tab: "settings", section: "PRODUCT AND SHIPMENT SETTINGS" },
       { name: "perpectual_confirm_allow", label: "Perpetual Confirm Allow", type: "checkbox", tab: "settings", section: "PRODUCT AND SHIPMENT SETTINGS" },
-      { name: "validate_expdate", label: "Outbound Validate Exp Date", type: "text", tab: "settings", section: "PRODUCT AND SHIPMENT SETTINGS" },
-      { name: "minperiod_exppick", label: "Outbound Min Exp Period", type: "text", tab: "settings", section: "PRODUCT AND SHIPMENT SETTINGS" },
+      { name: "validate_expdate", label: "Outbound Validate Exp Date", type: "date", tab: "settings", section: "PRODUCT AND SHIPMENT SETTINGS" },
+      { name: "minperiod_exppick", label: "Outbound Min Exp Period", type: "number", tab: "settings", section: "PRODUCT AND SHIPMENT SETTINGS" },
       { name: "rcpt_exp_limit", label: "Inbound Exp Limit (days)", type: "number", tab: "settings", section: "PRODUCT AND SHIPMENT SETTINGS" },
       // Storage Info Tab - Location
       { name: "pref_site", label: "Preferred Site", dropdownParam: "DROP_DOWN_SITE", dropdownDisplayFields: ["site_code", "site_name"], dropdownValueKey: "site_code", tab: "storage-info", section: "LOCATION" },
       { name: "pref_loc_from", label: "Location From", dropdownParam: "DROP_DOWN_LOCATION", dropdownCodeMap: { preferred_site: "code1" }, dropdownDisplayFields: ["location_code", "location_name"], dropdownValueKey: "location_code", tab: "storage-info", section: "LOCATION" },
       { name: "pref_loc_to", label: "Location To", dropdownParam: "DROP_DOWN_LOCATION", dropdownCodeMap: { preferred_site: "code1", location_from: "code2" }, dropdownDisplayFields: ["location_code", "location_name"], dropdownValueKey: "location_code", tab: "storage-info", section: "LOCATION" },
-      { name: "pref_aisle_from", label: "Aisle From", tab: "storage-info", section: "LOCATION" },
-      { name: "pref_aisle_to", label: "Aisle To", tab: "storage-info", section: "LOCATION" },
-      { name: "pref_col_from", label: "Column From", tab: "storage-info", section: "LOCATION" },
-      { name: "pref_col_to", label: "Column To", tab: "storage-info", section: "LOCATION" },
+      { name: "pref_aisle_from", label: "Aisle From", type: "text", tab: "storage-info", section: "LOCATION" },
+      { name: "pref_aisle_to", label: "Aisle To", type: "text", tab: "storage-info", section: "LOCATION" },
+      { name: "pref_col_from", label: "Column From", type: "number", tab: "storage-info", section: "LOCATION" },
+      { name: "pref_col_to", label: "Column To", type: "number", tab: "storage-info", section: "LOCATION" },
       // Storage Info Tab - Site, Service and Storage Details
       { name: "pref_ht_from", label: "Height From", type: "number", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
       { name: "pref_ht_to", label: "Height To", type: "number", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
       { name: "prin_siteind", label: "Default Site Ind", dropdownParam: "DROP_DOWN_SITE_IND", dropdownDisplayFields: ["site_ind", "ind_desc"],
         dropdownDisplaySeparator: " - ", dropdownValueKey: "site_ind", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
       { name: "service_date", label: "Service Date", type: "date", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
-      { name: "storage_type", label: "Storage Type", type: "select", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
-      { name: "default_foc", label: "Default Foc", type: "select", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "storage_type", label: "Storage Type", type: "text", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "default_foc", label: "Default FOC", type: "text", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      // Storage Info Tab - Additional Fields
+      { name: "pri_grnno", label: "GRN Number", type: "number", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "prin_license", label: "License", type: "text", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "backorder_pick", label: "Backorder Pick", type: "text", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "box_no", label: "Box Number", type: "text", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "storage_slab_bill", label: "Storage Slab Bill", type: "text", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "free_storage", label: "Free Storage", type: "text", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "displ_siteind_faltarea", label: "Display Site Indicator", type: "text", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "inb_jobwise_bill", label: "Inbound Job Wise Bill", type: "text", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
     ],
     saveEndpoint: (form, { editMode, original }) => (editMode ? `principal/${original?.prin_code || form.prin_code}` : "principal"),
-    // customSave: async (form, context) => {
-    //   const { user } = context;
-    //   const typedUser = user as { loginid: string };
-    //   await msPrincipalServiceInstance.upsertMsPrincipalApi({
-    //     data: form as any,
-    //     loginid: typedUser.loginid,
-    //   });
-    // },
+    customSave: async (form, context) => {
+      const { user } = context;
+      const typedUser = user as { loginid: string };
+      await msPrincipalServiceInstance.upsertMsPrincipalApi({
+        data: form as any,
+        loginid: typedUser.loginid,
+      });
+    },
     deleteConfig: { mode: "disabled", payload: () => null, reason: "Delete endpoint is not registered in the existing backend" },
   },
   customer: {

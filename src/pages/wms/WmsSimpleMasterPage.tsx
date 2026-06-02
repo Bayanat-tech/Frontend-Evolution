@@ -114,6 +114,37 @@ function getRowDisplayKey(row: Record<string, unknown>, config: WmsSimpleMasterC
   return "";
 }
 
+function clearDependentFields(
+  fieldName: string,
+  newValue: unknown,
+  form: Record<string, unknown>,
+  config: WmsSimpleMasterConfig
+): Record<string, unknown> {
+  // If a field is being cleared (empty/null/undefined), clear all dependent fields
+  const isFieldBeingCleared = newValue === "" || newValue === null || newValue === undefined;
+  
+  if (!isFieldBeingCleared) {
+    return form;
+  }
+
+  // Find all fields that depend on the current field
+  const updatedForm = { ...form };
+  
+  config.fields.forEach((field) => {
+    // Check if this field depends on the field being cleared
+    if (field.dropdownCodeMap) {
+      // Check if the cleared field is a dependency
+      const dependsOnClearedField = Object.keys(field.dropdownCodeMap).includes(fieldName);
+      if (dependsOnClearedField) {
+        // Clear this dependent field
+        updatedForm[field.name] = field.type === "number" ? 0 : "";
+      }
+    }
+  });
+
+  return updatedForm;
+}
+
 export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig }) {
   const { user } = useAuth();
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
@@ -443,7 +474,11 @@ const saveRecord = async (event: FormEvent) => {
           saving={saving}
           notice={notice}
           user={user}
-          onChange={(name:any, value:any) => setForm((prev) => ({ ...prev, [name]: value }))}
+          onChange={(name:any, value:any) => setForm((prev) => {
+            const updated = { ...prev, [name]: value };
+            // Clear dependent fields if a parent field is cleared
+            return clearDependentFields(name, value, updated, config);
+          })}
           onSave={saveRecord}
           onCancel={() => setFormOpen(false)}
         />
