@@ -40,18 +40,18 @@ country: {
   gmEndpoint: "country",
   routeKeys: ["country"],
   keyField: "country_code",
-  formTabs: [
-    { key: "basic", label: "Basic Info" },
-    { key: "extra", label: "Extra Details" },
-  ],
+  // formTabs: [
+  //   { key: "basic", label: "Basic Info" },
+  //   { key: "extra", label: "Extra Details" },
+  // ],
   fields: [
-    { name: "country_code", label: "Country Code", required: true, disabledOnEdit: true, width: 150, tab: "basic" },
-    { name: "country_name", label: "Country Name", required: true, width: 260, tab: "basic" },
-    { name: "gcc_flag",     label: "GCC",           type: "select", options: yesNo, width: 100, tab: "basic" },
-    { name: "short_desc",   label: "Short Description", width: 200, tab: "extra" },
-    { name: "nationality",  label: "Nationality",   width: 180, tab: "extra" },
+    { name: "country_code", label: "Country Code", required: true, disabledOnEdit: true, width: 150 },
+    { name: "country_name", label: "Country Name", required: true, width: 260 },
+    { name: "country_gcc",     label: "GCC",           type: "select", options: yesNo, width: 100 },
+    { name: "short_desc",   label: "Short Description", width: 200 },
+    { name: "nationality",  label: "Nationality",   width: 180 },
   ],
-  defaults: { gcc_flag: "N" },
+  defaults: { country_gcc: "N" },
   deleteConfig: { mode: "registered", payload: (row) => [row.country_code] },
 },
   activitygroup: {

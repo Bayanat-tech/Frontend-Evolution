@@ -20,7 +20,6 @@ import { FinanceUtilityMasterPage, financeUtilityConfigs } from "../pages/financ
 import { PaymentDocumentPage } from "../pages/finance/PaymentDocumentPage";
 import { PLSetupPage } from "../pages/finance/PLSetupPage";
 import { PrepaidRegisterPage } from "../pages/finance/PrepaidRegisterPage";
-import { WmsCountryPage } from "../pages/wms/WmsCountryPage";
 import { WmsInboundPage } from "../pages/wms/WmsInboundPage";
 import { WmsOutboundPage } from "../pages/wms/WmsOutboundPage";
 import { WmsSimpleMasterPage } from "../pages/wms/WmsSimpleMasterPage";
@@ -174,11 +173,6 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "WMS Outbound",
     match: ({ pathname }) => isWmsOutboundRoute(pathname),
     element: () => <WmsOutboundPage />,
-  },
-  {
-    name: "WMS Country Master",
-    match: ({ pathname }) => isWmsCountryRoute(pathname),
-    element: () => <WmsCountryPage />,
   },
   {
     name: "WMS Simple Master",
