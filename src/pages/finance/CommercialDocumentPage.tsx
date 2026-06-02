@@ -374,7 +374,7 @@ function CommercialEditor({
    const isSales = docType === "SI" || docType === "SV";
 
   // const total = form.detail.reduce((sum, line) => sum + Number(line.amount || 0) * line.sign_ind, 0);
-  const total = form.detail.filter((line) => Number(line.serial_no) < 9000).reduce((sum, line) => sum + Number(line.amount || 0), 0);
+  const total = form.detail.filter((line) => Number(line.serial_no) < 9000).reduce((sum, line) => sum + Number(line.amount || 0)* Number(line.sign_ind || 1), 0);
   const taxTotal = form.detail.filter((line) => Number(line.serial_no) < 9000).reduce((sum, line) => sum + (Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100, 0);
 
   const update = (field: keyof FormState, value: string | number) => setForm((current) => ({ ...current, [field]: value }));
@@ -437,8 +437,8 @@ function CommercialEditor({
   if (!form.curr_code)                  hErr.curr_code = "Currency is required";
   if (!form.ex_rate || form.ex_rate <= 0) hErr.ex_rate = "Exchange Rate must be > 0";
   if (!isPO && !form.inv_date)          hErr.inv_date  = "INV Date is required";
-  if (isPI  && !form.ref_no)            hErr.ref_no    = "Invoice No is required";
-  if (isSales && !form.inv_no)          hErr.inv_no    = "Invoice No is required";
+  if (isPI  && !form.ref_no)            hErr.ref_no    = "Ref No is required";
+  if (isSales && !form.ref_no)          hErr.ref_no    = "Ref No is required";    //inv_no 
 
   const lErr: Record<string, Record<string, string>> = {};
   const visibleLines = form.detail.filter((l) => Number(l.serial_no) < 9000);
@@ -599,17 +599,17 @@ function CommercialEditor({
 
   {/* ── Invoice No — PI / SI / SV only (field: ref_no in PI, inv_no in SI/SV) ── */}
   {isPI && (
-    <Field label="Invoice No" required error={fieldErrors.ref_no}>
+    <Field label="Ref No" required error={fieldErrors.ref_no}>
       <Input value={form.ref_no || ""}
         className={fieldErrors.ref_no ? "border-destructive" : ""}
         onChange={(e) => update("ref_no", e.target.value)} />
     </Field>
   )}
   {isSales && (
-    <Field label="Ref No" required error={fieldErrors.inv_no}>
-      <Input value={form.inv_no ||form.ref_no|| ""}
-        className={fieldErrors.inv_no ? "border-destructive" : ""}
-        onChange={(e) => update("inv_no", e.target.value)} />
+    <Field label="Ref No" required error={fieldErrors.ref_no}>
+      <Input value={form.ref_no ||form.inv_no|| ""}
+        className={fieldErrors.ref_no ? "border-destructive" : ""}
+        onChange={(e) => update("ref_no", e.target.value)} />
     </Field>
   )}
 
@@ -1417,7 +1417,7 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
     doc_no: text(header.doc_no),
     doc_type: docType,
     doc_date: dateInput(header.doc_date),
-    inv_no: text(header.inv_no ?? header.invoice_number),
+    inv_no: text(header.inv_no),
     inv_date: dateInput(header.inv_date ?? header.invoice_date ?? header.ref_date),
     ref_date: dateInput(header.ref_date),
     app_ref_no: text(header.app_ref_no),
