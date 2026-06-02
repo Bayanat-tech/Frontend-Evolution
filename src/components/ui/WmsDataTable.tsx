@@ -20,10 +20,11 @@ import { Button } from "./Button";
 import { Input } from "./Input";
 import { Skeleton } from "./Skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./Table";
+import { DataTableProps } from "./DataTable";
 
-export type DataTableDensity = "grid" | "compact" | "comfortable" | "large";
+export type WmsDataTableDensity = "grid" | "compact" | "comfortable" | "large";
 
-export type DataTableProps<TData, TValue> = {
+export type WmsDataTableProps<TData, TValue> = {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   title?: string;
@@ -36,8 +37,8 @@ export type DataTableProps<TData, TValue> = {
   emptyText?: string;
   height?: number | string;
   minWidth?: number | string;
-  density?: DataTableDensity;
-  pageSize?: number;
+  density?: WmsDataTableDensity;
+  pageSize?: number;    
   enablePagination?: boolean;
   manualPagination?: boolean;
   pageIndex?: number;
@@ -57,7 +58,7 @@ export type DataTableProps<TData, TValue> = {
   initialSorting?: SortingState;
 };
 
-const densityClasses: Record<DataTableDensity, { row: string; cell: string }> = {
+const densityClasses: Record<WmsDataTableDensity, { row: string; cell: string }> = {
   grid: { row: "h-7", cell: "px-2 py-0.5 text-[11px] leading-tight" },
   compact: { row: "h-8", cell: "px-2 py-1 text-xs leading-tight" },
   comfortable: { row: "h-12", cell: "py-3" },
@@ -86,7 +87,7 @@ const dateBetween: FilterFn<unknown> = (row, columnId, filterValue) => {
   return true;
 };
 
-export function DataTable<TData, TValue>({
+export function WmsDataTable<TData, TValue>({
   columns,
   data,
   title,
@@ -117,7 +118,7 @@ export function DataTable<TData, TValue>({
   getRowId,
   onRowSelectionChange,
   initialSorting = [],
-}: DataTableProps<TData, TValue>) {
+}: WmsDataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>(initialSorting);
   const [internalColumnFilters, setInternalColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -186,7 +187,7 @@ export function DataTable<TData, TValue>({
   });
 
   const visibleRows = manualFiltering ? table.getCoreRowModel().rows : manualPagination ? table.getSortedRowModel().rows : enablePagination ? table.getRowModel().rows : table.getFilteredRowModel().rows;
-  const skeletonRows = useMemo(() => Array.from({ length: Math.min(pageSize, 100) }), [pageSize]);
+  const skeletonRows = useMemo(() => Array.from({ length: Math.min(loading ? pageSize : 0, 100) }), [pageSize, loading]);
   const heightValue = typeof height === "number" ? `${height}px` : height;
   const responsiveMinWidth = minWidth ?? Math.max(760, enhancedColumns.length * 140);
   const minWidthValue = typeof responsiveMinWidth === "number" ? `${responsiveMinWidth}px` : responsiveMinWidth;
@@ -217,6 +218,13 @@ export function DataTable<TData, TValue>({
   useEffect(() => {
     if (!manualPagination) table.setPageSize(pageSize);
   }, [manualPagination, pageSize, table]);
+
+  // Reset table state when data changes to prevent stale rows
+  useEffect(() => {
+    if (!manualPagination && data.length > 0) {
+      table.resetRowSelection();
+    }
+  }, [data.length, manualPagination, table]);
 
   // notify parent of selection changes
   useEffect(() => {
@@ -312,7 +320,7 @@ export function DataTable<TData, TValue>({
         style={{ maxHeight: heightValue, overflowX: "auto" }}
         onScroll={syncTopScroll}
       >
-        <Table style={{ minWidth: minWidthValue, width: `max(100%, ${minWidthValue})` }}>
+        <Table key={`table-${data.length}-${loading}`} style={{ minWidth: minWidthValue, width: `max(100%, ${minWidthValue})` }}>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
@@ -344,27 +352,29 @@ export function DataTable<TData, TValue>({
             ))}
           </TableHeader>
           <TableBody>
-            {loading ? (
+            {loading && skeletonRows.length > 0 ? (
               skeletonRows.map((_, index) => (
-                <TableRow className={rowStyle.row} key={index}>
+                <TableRow className={rowStyle.row} key={`skeleton-${index}`}>
                   <TableCell className={rowStyle.cell} colSpan={enhancedColumns.length}><Skeleton /></TableCell>
                 </TableRow>
               ))
-            ) : visibleRows.length ? (
-              visibleRows.map((row) => (
-                <TableRow
-                  className={cn(rowStyle.row, onRowClick && "cursor-pointer", rowClassName?.(row.original))}
-                  data-state={row.getIsSelected() && "selected"}
-                  key={row.id}
-                  onClick={() => onRowClick?.(row.original)}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell className={rowStyle.cell} key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+            ) : visibleRows.length > 0 ? (
+              visibleRows
+                .filter((row) => row.getVisibleCells().length > 0)
+                .map((row) => (
+                  <TableRow
+                    className={cn(rowStyle.row, onRowClick && "cursor-pointer", rowClassName?.(row.original))}
+                    data-state={row.getIsSelected() && "selected"}
+                    key={row.id}
+                    onClick={() => onRowClick?.(row.original)}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell className={rowStyle.cell} key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
             ) : (
               <TableRow>
                 <TableCell className="h-32 text-center text-muted-foreground" colSpan={enhancedColumns.length}>

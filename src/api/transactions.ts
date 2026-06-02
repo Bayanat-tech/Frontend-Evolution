@@ -238,6 +238,14 @@ export async function getTransactionHeader(docNo: string, docType: TransactionTy
   return response.data.data || {};
 }
 
+export async function getInvoicesTransactionHeader(docNo: string, docType: TransactionType) {
+  const response = await api.get<ApiResponse<Record<string, unknown>>>(`/api/finance/transactions/header/${encodeURIComponent(docNo)}`, {
+    params: { doc_type: docType },
+  });
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load document header");
+  return response.data.data || {};
+}
+
 export async function getTransactionDetail(docNo: string, divCode: string, docType: TransactionType) {
   const response = await api.get<ApiResponse<Record<string, unknown>[]>>(`/api/finance/transactions/detail/${encodeURIComponent(docNo)}`, {
     params: { div_code: divCode, doc_type: docType },
@@ -384,14 +392,6 @@ export async function getLpoDetail(docNo: string, docType: string) {
   return response.data.data || [];
 }
 
-export async function getLpoRefDocSearch(divCode: string, companyCode: string) {
-  const { getDynamicFinanceLookup } = await import("./lookups");
-  return getDynamicFinanceLookup({
-    parameter: "Account_LPO_REF_DOC",
-    code1: companyCode,
-    number1: Number(divCode) || undefined,
-  });
-}
 
 // Get lpo (Ref_Doc) in PI
 export async function getPurchaseHeader(docNo: string, docType: string) {

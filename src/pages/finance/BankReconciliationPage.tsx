@@ -151,7 +151,6 @@ export function BankReconciliationPage() {
     <section className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="eyebrow">Finance Transaction</p>
           <h1 className="m-0 text-2xl font-semibold tracking-tight">Bank Reconciliation</h1>
           <p className="m-0 mt-1 text-sm text-muted-foreground">Retrieve cheque transactions and update reconciliation status.</p>
         </div>
