@@ -50,6 +50,7 @@ type Line = {
   sign_ind: 1 | -1;
   job_no?: string;
   dept_code?: string;
+  cost_code?: string;
   tx_compntcat_code_1?: string;
   tx_cat_code?: string;
   tx_compnt_1_expmt?: string;
@@ -374,7 +375,15 @@ function CommercialEditor({
    const isSales = docType === "SI" || docType === "SV";
 
   // const total = form.detail.reduce((sum, line) => sum + Number(line.amount || 0) * line.sign_ind, 0);
-  const total = form.detail.filter((line) => Number(line.serial_no) < 9000).reduce((sum, line) => sum + Number(line.amount || 0)* Number(line.sign_ind || 1), 0);
+  // const total = form.detail.filter((line) => Number(line.serial_no) < 9000).reduce((sum, line) => sum + Number(line.amount || 0)* Number(line.sign_ind || 1), 0);
+  const baseSign = (docType === "PI" || docType === "PO") ? 1 : -1;
+  const visibleLines = form.detail.filter((line) => Number(line.serial_no) < 9000);
+
+  const total = visibleLines.reduce((sum, line) => {
+  const amt = Math.abs(Number(line.amount || 0));
+  const dir = Number(line.sign_ind || 1) === baseSign ? 1 : -1;
+  return sum + amt * dir;
+  }, 0);
   const taxTotal = form.detail.filter((line) => Number(line.serial_no) < 9000).reduce((sum, line) => sum + (Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100, 0);
 
   const update = (field: keyof FormState, value: string | number) => setForm((current) => ({ ...current, [field]: value }));
@@ -1055,7 +1064,7 @@ const withTax = {
       <option value="S">Std. Tax</option>
       <option value="Z">Zero</option>
       <option value="E">Expmt</option>
-      <option value="N">No Tax</option>
+      <option value="N">No VAT</option>
     </Select>
   </Field>
 
@@ -1127,6 +1136,7 @@ const withTax = {
                       <th className="px-2 py-2 text-left">A/c Name</th>
                       {isPO && <th className="px-2 py-2 text-left">Product Code</th>}
                       <th className="px-2 py-2 text-left">Description</th>
+                      {isPO && <th className="px-2 py-2 text-left">Cost Code</th>}
                       <th className="px-2 py-2 text-left">Currency</th>
                       <th className="px-2 py-2 text-left">Ex Rate</th>
                       <th className="px-2 py-2 text-left">Qty</th>
@@ -1189,6 +1199,9 @@ const withTax = {
                             placeholder="Description"
                           />
                         </td>
+                        {isPO && (<td className="w-36 px-2 py-1"> <Input value={line.cost_code || ""} onChange={(e) => updateLine(line.id, { cost_code: e.target.value })} />
+                        </td>
+                        )}
                         <td className="w-[210px] px-2 py-1">
                           <LookupField
     label="Currency" 
@@ -1207,13 +1220,7 @@ const withTax = {
         code1: user?.company_code || "",
       })
     }
-    onChange={(value, row) =>
-      setForm((c) => ({
-        ...c,
-        curr_code: value,
-        curr_name: text(getLookupValue(row || {}, "curr_name")),
-        ex_rate: Number(getLookupValue(row || {}, "ex_rate") || 1),
-      }))
+    onChange={(value, row) =>setForm((c) => ({  ...c,  curr_code: value,  curr_name: text(getLookupValue(row || {}, "curr_name")),  ex_rate: Number(getLookupValue(row || {}, "ex_rate") || 1),}))
     }
   />
   
@@ -1236,12 +1243,6 @@ const withTax = {
                         </td>
                         <td className="w-40 px-2 py-1"><Input value={line.tx_compntcat_code_1 || ""} onChange={(event) => updateLine(line.id, { tx_compntcat_code_1: event.target.value })} /></td>
                         <td className="w-40 px-2 py-1">
-                          {/* <Select value={line.tx_compnt_1_expmt || "N"} onChange={(event) => updateLine(line.id, { tx_compnt_1_expmt: event.target.value })}>
-                            <option value="N">No Tax</option>
-                            <option value="S">Std Tax</option>
-                            <option value="Z">Zero</option>
-                            <option value="E">Exempt</option>
-                          </Select> */}
                           <Select value={line.tx_compnt_1_expmt || "N"} onChange={(event) => {
   const v    = event.target.value;
   const perc = v === "S" ? 5 : 0;
@@ -1252,8 +1253,8 @@ const withTax = {
     tx_compnt_amt_1:     taxAmt,
   });
 }}>
-  <option value="N">No Tax</option>
   <option value="S">Std Tax</option>
+  <option value="N">No Tax</option>
   <option value="Z">Zero</option>
   <option value="E">Exempt</option>
 </Select>
@@ -1379,7 +1380,7 @@ function emptyLine(docType: CommercialType, serialNo: number): Line {
     job_no: "",             
     prod_code: docType==="PO" ? "" : undefined,    // only required for PO
     other_remarks: docType === "PO" ? "" : undefined,
-
+    cost_code: docType === "PO" ? "" : undefined,
   };
 }
 
@@ -1446,6 +1447,7 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
         tx_compnt_amt_1: Number(row.tx_compnt_amt_1 || 0),
         prod_code:     docType === "PO" ? text(row.prod_code) : undefined,
         other_remarks: docType === "PO" ? text(row.other_remarks) : undefined,
+        cost_code: docType === "PO" ? text(row.cost_code) : undefined,
       };
     }),
   };
@@ -1491,6 +1493,7 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
       tx_compnt_lcuramt_1:  (Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100) * Number(form.ex_rate || 1),
       lcur_amount: Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1),
       prod_code: line.prod_code || "",
+      cost_code: line.cost_code || "", 
       other_remarks: line.other_remarks || "",
       // tx_compnt_lcuramt_1: (Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100) * Number(form.ex_rate || 1),
       header_ac_code: form.ac_code,
