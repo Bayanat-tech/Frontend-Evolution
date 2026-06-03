@@ -273,14 +273,14 @@ export function WmsBillingActPage() {
 
   const columns = useMemo<ColumnDef<TBillingActivity>[]>(
     () => [
-      { accessorKey: "activity", header: "Activity", size: 130 },
-      { accessorKey: "jobtype", header: "Job Type", size: 120 },
+      { accessorKey: "activity", header: "Activity", size: 200 },
+      { accessorKey: "jobtype", header: "Job Type", size: 100 },
       { accessorKey: "uoc", header: "UOC", size: 80 },
-      { accessorKey: "moc1", header: "MOC1", size: 120 },
-      { accessorKey: "moc2", header: "MOC2", size: 120 },
-      { accessorKey: "cost", header: "Cost", size: 100 },
-      { accessorKey: "bill_amount", header: "Bill Amount", size: 110 },
-      { accessorKey: "inb_show", header: "Inbound Show", size: 120 },
+      { accessorKey: "moc1", header: "MOC1", size: 80 },
+      { accessorKey: "moc2", header: "MOC2", size: 80 },
+      { accessorKey: "cost", header: "Cost", size: 80 },
+      { accessorKey: "bill_amount", header: "Bill Amount", size: 80 },
+      { accessorKey: "inb_show", header: "Inbound Show", size: 80 },
       {
         id: "actions",
         header: "Actions",
