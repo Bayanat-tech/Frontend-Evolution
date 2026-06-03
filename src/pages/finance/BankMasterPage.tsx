@@ -56,9 +56,9 @@ export function BankMasterPage() {
   const [editor, setEditor] = useState<EditorState>(null);
   const [deleteTarget, setDeleteTarget] = useState<BankRow | null>(null);
 
-  const loadRows = async () => {
+  const loadRows = async (clearNotice = true) => {
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const response = await api.get("/api/hr/bank");
       const tableData = response.data?.data?.tableData || response.data?.data || [];
@@ -112,7 +112,7 @@ export function BankMasterPage() {
       await api.post("/api/hr/bank", { ids: [deleteTarget.bank_code] });
       setDeleteTarget(null);
       setNotice({ type: "success", message: "Bank deleted successfully" });
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete bank" });
     }
@@ -152,7 +152,7 @@ export function BankMasterPage() {
 
         <Card className="overflow-hidden">
           {editor ? (
-            <BankEditor editor={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); await loadRows(); }} />
+            <BankEditor editor={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); setNotice({ type: "success", message: "Bank saved successfully" }); await loadRows(false); }} />
           ) : (
             <div className="grid min-h-[620px] place-items-center p-8 text-center text-muted-foreground">
               <div>
