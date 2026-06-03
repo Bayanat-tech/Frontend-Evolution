@@ -823,10 +823,15 @@ country: {
       { name: "address", label: "Address", table: false },
       { name: "fax_no", label: "Fax No", table: false },
     ],
-    mapBeforeSave: (form, { editMode, original }) => ({
-      ...form,
-      ...(editMode ? { old_airline_code: original?.airline_code || form.airline_code } : {}),
-    }),
+    mapBeforeSave: (form, { editMode, original }) => {
+      if (editMode && original) {
+        return {
+          ...form,
+          old_airline_code: original["airline_code"], // capture original code
+        };
+      }
+      return form;
+    },
     deleteConfig: { mode: "registered", payload: (row) => [{ airline_code: row.airline_code, company_code: row.company_code }] },
   },
 
