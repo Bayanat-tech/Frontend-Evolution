@@ -456,19 +456,124 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       },
     });
 
-    cols.push({
-      accessorKey: "APPRAISAL_FROM",
-      header: "From",
-      size: 110,
-      cell: ({ row }) => fmtDate(row.original.APPRAISAL_FROM),
-    });
+    // cols.push({
+    //   accessorKey: "APPRAISAL_FROM",
+    //   header: "From",
+    //   size: 110,
+    //   cell: ({ row }) => fmtDate(row.original.APPRAISAL_FROM),
+    // });
+
+    // cols.push({
+    //   accessorKey: "APPRAISAL_TO",
+    //   header: "To",
+    //   size: 110,
+    //   cell: ({ row }) => fmtDate(row.original.APPRAISAL_TO),
+    // });
 
     cols.push({
-      accessorKey: "APPRAISAL_TO",
-      header: "To",
-      size: 110,
-      cell: ({ row }) => fmtDate(row.original.APPRAISAL_TO),
-    });
+  accessorKey: "PERIOD_RANGE",
+  header: "Period Range",
+  size: 210,
+  cell: ({ row }) => {
+    const from = fmtDate(row.original.APPRAISAL_FROM);
+    const to   = fmtDate(row.original.APPRAISAL_TO);
+    if (from === "NA" && to === "NA") return <span style={{ color: "#9ca3af" }}>—</span>;
+    return (
+      <span style={{ whiteSpace: "nowrap", fontSize: "0.8rem" }}>
+        <span style={{ color: "#374151" }}>{from}</span>
+        <span style={{ color: "#9ca3af", margin: "0 4px" }}>→</span>
+        <span style={{ color: "#374151" }}>{to}</span>
+      </span>
+    );
+  },
+});
+
+    // ── Avg Score — uses FINAL_RATING from VW_EMPLOYEE_FINAL_RATING ──────────────
+cols.push({
+  accessorKey: "FINAL_RATING",
+  header: "Avg Score",
+  size: 110,
+  cell: ({ row }) => {
+    const avg = Math.round(Number(row.original.FINAL_RATING || 0));
+    if (!avg) return <span style={{ color: "#9ca3af" }}>—</span>;
+
+    let bg = "#f3f4f6", color = "#374151", border = "#d1d5db";
+    if (avg >= 5)      { bg = "#e8f0fe"; color = "#1a4fa0"; border = "#b3caf5"; }
+    else if (avg >= 4) { bg = "#e6f9f0"; color = "#0a6640"; border = "#b7ebd4"; }
+    else if (avg >= 3) { bg = "#f3e8fe"; color = "#6b21a8"; border = "#d9b3f5"; }
+    else if (avg >= 2) { bg = "#fff4e5"; color = "#92400e"; border = "#fcd38a"; }
+    else if (avg >= 1) { bg = "#fdecea"; color = "#a01a1a"; border = "#f5b3b3"; }
+
+    return (
+      <span style={{
+        display: "inline-block",
+        padding: "2px 12px",
+        borderRadius: "999px",
+        fontSize: "0.75rem",
+        fontWeight: 700,
+        background: bg, color,
+        border: `1px solid ${border}`,
+      }}>
+        {avg}
+      </span>
+    );
+  },
+});
+
+// ── Next Action By ────────────────────────────────────────────────────────────
+cols.push({
+  accessorKey: "NEXT_ACTION_BY",
+  header: "Next Action By",
+  size: 190,
+  cell: ({ row }) => {
+    const code = text(row.original.NEXT_ACTION_BY);
+    const name = text(row.original.NEXT_ACTION_BY_NAME);
+
+    if (!code) {
+      return <span style={{ color: "#9ca3af" }}>—</span>;
+    }
+
+    return (
+      <span style={{ fontWeight: 500, whiteSpace: "nowrap" }}>
+        {code} {name ? `- ${name}` : ""}
+      </span>
+    );
+  },
+});
+
+// ── Sent Back Remarks — only meaningful on SENT BACK tab ─────────────────────
+cols.push({
+  accessorKey: "SENT_BACK_REASON",
+  header: "Sent Back Remarks",
+  size: 230,
+  cell: ({ row }) => {
+    const reason = text(row.original.SENT_BACK_REASON);
+    const by     = text(row.original.SENT_BACK_BY);
+    if (!reason) return <span style={{ color: "#9ca3af" }}>—</span>;
+    return (
+      <div style={{ lineHeight: 1.4 }}>
+        <div
+          title={reason}
+          style={{
+            maxWidth: "210px",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            fontSize: "0.8rem",
+            fontWeight: 500,
+          }}
+        >
+          {reason}
+        </div>
+        {by && (
+          <div style={{ fontSize: "0.7rem", color: "#9ca3af", marginTop: "2px" }}>
+            by {by}
+          </div>
+        )}
+      </div>
+    );
+  },
+});
 
     cols.push({
       accessorKey: "LAST_ACTION",
