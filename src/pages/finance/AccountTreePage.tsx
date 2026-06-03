@@ -201,9 +201,7 @@ const ACCOUNT_FORM_SECTIONS: Array<{
       { name: "bi_pl_bs_ind", label: "BI PL BS IND" },
       { name: "bi_dept", label: "BI Dept" },
       { name: "exp_alloc", label: "Expense Allocation" },
-      { name: "exp_type_code", label: "Exp Type Code" },
       { name: "exp_type_description", label: "Exp Type Description" },
-      { name: "exp_subtype_code", label: "Exp SubType Code" },
       { name: "exp_subtype_description", label: "Exp SubType Description" },
     ],
   },
@@ -282,7 +280,7 @@ export function AccountTreePage() {
     <section className="finance-page grid gap-4">
       <div className="finance-toolbar flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="eyebrow">Finance Master</p>
+          {/* <p className="eyebrow">Finance Master</p> */}
           <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">A/C Tree</h1>
         </div>
         <div className="toolbar-actions flex flex-wrap items-center justify-end gap-2">
@@ -494,6 +492,7 @@ function AccountNodeEditor({ dialog, onClose, onSaved }: { dialog: DialogState; 
   const [l4Type, setL4Type] = useState("N");
   const [l4Bill, setL4Bill] = useState("N");
   const [l4Job, setL4Job] = useState("N");
+  const { user } = useAuth();
   const [accountForm, setAccountForm] = useState<AccountFormState>({
     ...EMPTY_ACCOUNT_FORM,
     l4_code: level === 5 ? parent?.id || node?.parent_code || "" : "",
@@ -518,9 +517,40 @@ function AccountNodeEditor({ dialog, onClose, onSaved }: { dialog: DialogState; 
         const data = await getAccountTreeNode(level, node.id);
         if (!active) return;
 
+        // if (level === 5) {
+        //   setAccountForm(mapAccountDataToForm(data, node.parent_code || ""));
+        // }
         if (level === 5) {
-          setAccountForm(mapAccountDataToForm(data, node.parent_code || ""));
-        } else {
+  const form = mapAccountDataToForm(data, node.parent_code || "");
+
+  if (form.exp_type_code && !form.exp_type_description) {
+    try {
+      const results = await getDynamicLookup({
+        parameter: "AC_EXPSTYPE_EXPSTYPE_MASTER",
+        loginid: user?.loginid || "",
+        code1: user?.company_code || "",
+      });
+      const found = results.find((r: any) => r.exp_type_code === form.exp_type_code);
+      if (found) form.exp_type_description = String(found.exp_type_description || "");
+    } catch (_) {}
+  }
+
+  if (form.exp_subtype_code && !form.exp_subtype_description) {
+    try {
+      const results = await getDynamicLookup({
+        parameter: "AC_EXPSTYPE_EXPSUBTYPE_MASTER",
+        loginid: user?.loginid || "",
+        code1: user?.company_code || "",
+        code2: form.exp_type_code,
+      });
+      const found = results.find((r: any) => r.exp_subtype_code === form.exp_subtype_code);
+      if (found) form.exp_subtype_description = String(found.exp_subtype_description || "");
+    } catch (_) {}
+  }
+
+  setAccountForm(form);
+}
+         else {
           const normalized = normalizeRecord(data);
           if (level === 2) setDescription(String(normalized.l2_description || node.label));
           if (level === 3) setDescription(String(normalized.l3_description || node.label));
