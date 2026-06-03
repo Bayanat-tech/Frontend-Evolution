@@ -1,5 +1,4 @@
 import {
-  AlertCircle,
   ChevronDown,
   ChevronRight,
   Edit2,
@@ -30,6 +29,7 @@ import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
+import { NoticeToast } from "../../components/ui/NoticeToast";
 import { Select } from "../../components/ui/Select";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { cn } from "../../lib/utils";
@@ -231,9 +231,9 @@ export function AccountTreePage() {
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
 
-  const loadTree = async () => {
+  const loadTree = async (clearNotice = true) => {
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const data = await getAccountTree();
       setTree(data);
@@ -263,7 +263,7 @@ export function AccountTreePage() {
   const handleDialogSaved = async (message?: string) => {
     setDialog(null);
     setNotice({ type: "success", message: message || "Account tree updated" });
-    await loadTree();
+    await loadTree(false);
   };
 
   const handleDelete = async () => {
@@ -272,7 +272,7 @@ export function AccountTreePage() {
       await deleteAccountTreeNode(deleteTarget.level, deleteTarget.id);
       setDeleteTarget(null);
       setNotice({ type: "success", message: "Account node deleted" });
-      await loadTree();
+      await loadTree(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete account node" });
     }
@@ -297,12 +297,7 @@ export function AccountTreePage() {
         </div>
       </div>
 
-      {notice && (
-        <div className={`alert ${notice.type}`}>
-          <AlertCircle size={15} />
-          {notice.message}
-        </div>
-      )}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
       <div className="account-tree-layout grid min-h-[620px] grid-cols-[minmax(340px,40%)_1fr] gap-4 max-lg:grid-cols-1">
         <Card className="tree-panel flex min-w-0 flex-col overflow-hidden">
@@ -597,7 +592,7 @@ function AccountNodeEditor({ dialog, onClose, onSaved }: { dialog: DialogState; 
       </div>
 
       <form id="account-node-form" className="account-node-form min-h-0 flex-1 overflow-auto p-4" onSubmit={handleSubmit}>
-        {error && <div className="alert error">{error}</div>}
+        <NoticeToast notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
         {loadingDetails ? (
           <div className="form-loading">

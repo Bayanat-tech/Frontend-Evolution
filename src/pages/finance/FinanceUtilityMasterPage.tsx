@@ -212,9 +212,9 @@ export function FinanceUtilityMasterPage({ config }: { config: FinanceUtilityMas
   const [editor, setEditor] = useState<EditorState>(null);
   const [deleteTarget, setDeleteTarget] = useState<MasterRow | null>(null);
 
-  const loadRows = async () => {
+  const loadRows = async (clearNotice = true) => {
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const data = await getDynamicLookup({
         parameter: config.listParameter,
@@ -288,7 +288,7 @@ export function FinanceUtilityMasterPage({ config }: { config: FinanceUtilityMas
       });
       setDeleteTarget(null);
       setNotice({ type: "success", message: `${config.title} deleted successfully` });
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to delete ${config.title}` });
     }
@@ -346,7 +346,7 @@ export function FinanceUtilityMasterPage({ config }: { config: FinanceUtilityMas
             onSaved={async () => {
               setEditor(null);
               setNotice({ type: "success", message: `${config.title} saved successfully` });
-              await loadRows();
+              await loadRows(false);
             }}
           />
         </Dialog>
@@ -441,7 +441,7 @@ function UtilityEditor({
         <h2 className="m-0 text-xl font-semibold tracking-tight">{config.title}</h2>
       </div>
       <form className="grid flex-1 content-start gap-4 overflow-auto py-4 md:grid-cols-2" id={`${config.keyField}-form`} onSubmit={handleSubmit}>
-        {error && <div className="alert error">{error}</div>}
+        <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
         {config.fields.map((field) => (
           <UtilityField
             companyCode={companyCode}

@@ -8,12 +8,17 @@ type ApiResponse<T> = {
 
 export type PamsProcedureParams = {
   parameter: string;
-  loginid: string;
+  loginid?: string;
   code1?: string;
   code2?: string;
   code3?: string;
   code4?: string;
   code5?: string;
+  code6?: string;
+  code7?: string;
+  code8?: string;
+  code9?: string;
+  code10?: string;
   number1?: number;
   number2?: number;
   number3?: number;
@@ -59,41 +64,98 @@ export type PamsProcedureParams = {
   wval1d5?: string | Date | null;
 };
 
-export async function pamsSelect<T = Record<string, unknown>>(params: PamsProcedureParams): Promise<T[]> {
-  const response = await api.post<ApiResponse<T[]>>("/api/pams/gm/proc_build_dynamic_sql_pams", normalizeParams(params));
-  if (!response.data.success) throw new Error(response.data.message || "Unable to load PAMS data");
+// ── PAMS procedure (proc_build_dynamic_sql_pams) ──────────────
+export async function pamsSelect<T = Record<string, unknown>>(
+  params: PamsProcedureParams
+): Promise<T[]> {
+  const response = await api.post<ApiResponse<T[]>>(
+    "/api/pams/gm/proc_build_dynamic_sql_pams",
+    normalizeParams(params)
+  );
+  if (!response.data.success)
+    throw new Error(response.data.message || "Unable to load PAMS data");
   return Array.isArray(response.data.data) ? response.data.data : [];
 }
 
+// ── Common procedure (PROC_BUILD_DYNAMIC_SQL_COMMON) ─────────
+export async function pamsCommonSelect<T = Record<string, unknown>>(
+  params: PamsProcedureParams
+): Promise<T[]> {
+  if (!params?.parameter) return [];
+  try {
+    const response = await api.post<ApiResponse<T[]>>(
+      "/api/wms/common/proc_build_dynamic_sql_common",
+      params
+    );
+    if (response.data?.success && Array.isArray(response.data?.data))
+      return response.data.data;
+    return [];
+  } catch (error: unknown) {
+    console.error(
+      "Error in pamsCommonSelect:",
+      (error as { message: string }).message
+    );
+    return [];
+  }
+}
+
 export async function pamsSave(params: PamsProcedureParams) {
-  const response = await api.post<ApiResponse<unknown>>("/api/pams/gm/proc_build_dynamic_ins_upd_pams", normalizeParams(params));
-  if (!response.data.success) throw new Error(response.data.message || "Unable to save PAMS record");
+  const response = await api.post<ApiResponse<unknown>>(
+    "/api/pams/gm/proc_build_dynamic_ins_upd_pams",
+    normalizeParams(params)
+  );
+  if (!response.data.success)
+    throw new Error(response.data.message || "Unable to save PAMS record");
   return response.data;
 }
 
 export async function pamsDelete(params: PamsProcedureParams) {
-  const response = await api.post<ApiResponse<unknown>>("/api/pams/gm/proc_build_dynamic_del_pams", normalizeParams(params));
-  if (!response.data.success) throw new Error(response.data.message || "Unable to delete PAMS record");
+  const response = await api.post<ApiResponse<unknown>>(
+    "/api/pams/gm/proc_build_dynamic_del_pams",
+    normalizeParams(params)
+  );
+  if (!response.data.success)
+    throw new Error(response.data.message || "Unable to delete PAMS record");
   return response.data;
 }
 
 export async function pamsCommonProcedure(params: PamsProcedureParams) {
-  const response = await api.post<ApiResponse<unknown>>("/api/wms/common/procBuildCommonProcedurewmc", normalizeParams(params));
-  if (!response.data.success) throw new Error(response.data.message || "Unable to run process");
+  const response = await api.post<ApiResponse<unknown>>(
+    "/api/wms/common/procBuildCommonProcedurewmc",
+    normalizeParams(params)
+  );
+  if (!response.data.success)
+    throw new Error(response.data.message || "Unable to run process");
   return response.data;
 }
 
 export async function pamsUpdateRatings(rows: Record<string, unknown>[]) {
-  const response = await api.post<ApiResponse<unknown>>("/api/pams/gm/update-ratings", { rows });
-  if (!response.data.success && response.data.message !== "Ratings updated successfully") {
+  const response = await api.post<ApiResponse<unknown>>(
+    "/api/pams/gm/update-ratings",
+    { rows }
+  );
+  if (
+    !response.data.success &&
+    response.data.message !== "Ratings updated successfully"
+  ) {
     throw new Error(response.data.message || "Unable to update ratings");
   }
   return response.data;
 }
 
-export async function pamsPopulateDepartmentKpi(params: { company_code: string; employee_code: string; item_type: string }) {
-  const response = await api.post<ApiResponse<unknown>>("/api/pams/gm/proc_populate_ms_eam_dept_kpi", params);
-  if (!response.data.success) throw new Error(response.data.message || "Unable to populate assignment data");
+export async function pamsPopulateDepartmentKpi(params: {
+  company_code: string;
+  employee_code: string;
+  item_type: string;
+}) {
+  const response = await api.post<ApiResponse<unknown>>(
+    "/api/pams/gm/proc_populate_ms_eam_dept_kpi",
+    params
+  );
+  if (!response.data.success)
+    throw new Error(
+      response.data.message || "Unable to populate assignment data"
+    );
   return response.data;
 }
 

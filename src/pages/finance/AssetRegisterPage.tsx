@@ -93,9 +93,9 @@ export function AssetRegisterPage() {
   const [editor, setEditor] = useState<EditorState>(null);
   const [deleteTarget, setDeleteTarget] = useState<AssetRow | null>(null);
 
-  const loadRows = async () => {
+  const loadRows = async (clearNotice = true) => {
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const data = await getDynamicLookup({
         parameter: "AC_ASSETS_register",
@@ -167,7 +167,7 @@ export function AssetRegisterPage() {
       });
       setDeleteTarget(null);
       setNotice({ type: "success", message: "Asset deleted successfully" });
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete asset" });
     }
@@ -220,7 +220,7 @@ export function AssetRegisterPage() {
             onSaved={async () => {
               setEditor(null);
               setNotice({ type: "success", message: "Asset saved successfully" });
-              await loadRows();
+              await loadRows(false);
             }}
           />
         </Dialog>
@@ -315,7 +315,7 @@ function AssetEditor({
       </div>
 
       <form className="grid flex-1 content-start gap-4 overflow-auto p-4" id="asset-register-form" onSubmit={handleSubmit}>
-        {error && <div className="alert error">{error}</div>}
+        <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
         <div className="rounded-md border bg-secondary/35 p-3">
           <p className="eyebrow mb-3">Asset Details</p>

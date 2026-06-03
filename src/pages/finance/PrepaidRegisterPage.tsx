@@ -95,9 +95,9 @@ export function PrepaidRegisterPage() {
   const [editor, setEditor] = useState<EditorState>(null);
   const [deleteTarget, setDeleteTarget] = useState<PrepaidRow | null>(null);
 
-  const loadRows = async () => {
+  const loadRows = async (clearNotice = true) => {
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const data = await getDynamicLookup({
         parameter: "AC_PREPAID_PREPAID_PAGE",
@@ -177,7 +177,7 @@ export function PrepaidRegisterPage() {
       });
       setDeleteTarget(null);
       setNotice({ type: "success", message: "Prepaid record deleted successfully" });
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete prepaid record" });
     }
@@ -230,7 +230,7 @@ export function PrepaidRegisterPage() {
             onSaved={async () => {
               setEditor(null);
               setNotice({ type: "success", message: "Prepaid record saved successfully" });
-              await loadRows();
+              await loadRows(false);
             }}
           />
         </Dialog>
@@ -339,7 +339,7 @@ function PrepaidEditor({
       </div>
 
       <form className="grid flex-1 content-start gap-4 overflow-auto p-4" id="prepaid-register-form" onSubmit={handleSubmit}>
-        {error && <div className="alert error">{error}</div>}
+        <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
         <div className="grid grid-cols-3 gap-3">
           <Field label="Doc No" value={form.doc_no} onChange={(value) => setField("doc_no", value)} disabled={readOnly || isEdit} />

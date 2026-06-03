@@ -18,6 +18,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -82,12 +83,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     [dismiss],
   );
 
-  const toast = {
-    success: (m: string, d?: number) => add("success", m, d),
-    error:   (m: string, d?: number) => add("error",   m, d ?? 6000),
-    info:    (m: string, d?: number) => add("info",    m, d),
-    warning: (m: string, d?: number) => add("warning", m, d ?? 5000),
-  };
+  const toast = useMemo(
+    () => ({
+      success: (m: string, d?: number) => add("success", m, d),
+      error:   (m: string, d?: number) => add("error",   m, d ?? 6000),
+      info:    (m: string, d?: number) => add("info",    m, d),
+      warning: (m: string, d?: number) => add("warning", m, d ?? 5000),
+    }),
+    [add],
+  );
 
   return (
     <ToastContext.Provider value={{ toast }}>

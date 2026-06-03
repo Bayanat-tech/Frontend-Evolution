@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
+import { NoticeToast } from "../../components/ui/NoticeToast";
 import { useAuth } from "../../state/AuthContext";
 import { pamsSelect, pamsSave, pamsDelete } from "../../api/pams";
 import type { PamsProcedureParams } from "../../api/pams";
@@ -425,9 +426,7 @@ export function KpiItemPage() {
 
       </div>
 
-      {notice && (
-        <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>
-      )}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
       {/* ── Cascade filters card ─────────────────────────────────────────────── */}
       <Card>
@@ -610,7 +609,7 @@ function KpiItemForm({
         </CardContent>
       </Card>
 
-      {error && <div className="alert error">{error}</div>}
+      <NoticeToast notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
       <div className="sticky bottom-0 -mx-4 -mb-4 flex justify-end gap-2 border-t bg-card/95 px-4 py-3 backdrop-blur">
         <Button type="button" variant="outline" onClick={() => onClose(false)}>Cancel</Button>
