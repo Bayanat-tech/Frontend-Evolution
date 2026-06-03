@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X, AlertCircle } from "lucide-react";
+import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, X, AlertCircle } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import {
@@ -105,7 +105,8 @@ tx_compntcat_code_1?: string;
 tx_cat_code?: string;
 tx_compnt_1_expmt?: string;
 tx_compnt_perc_1?: number;
-print_letter_head?: boolean;
+  print_letter_head?: boolean;
+  canceled?: string;
   detail: Line[];
 };
 
@@ -238,7 +239,6 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
               <Ban size={15} />
             </Button>
           )}
-          <Button size="icon" variant="ghost"><Trash2 size={15} /></Button>
         </div>
       ),
     },
@@ -370,6 +370,22 @@ function CommercialEditor({
   const [showHeaderDetails, setShowHeaderDetails] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [lineErrors, setLineErrors] = useState<Record<string, Record<string, string>>>({});   
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+
+  const cancelCurrentDocument = async () => {
+    if (!form.doc_no || form.doc_no === "0" || form.canceled === "Y") return;
+    setSaving(true);
+    setError("");
+    try {
+      await cancelTransactionDocument(form.doc_no, form.doc_type);
+      setCancelConfirmOpen(false);
+      await onSaved("Document cancelled successfully");
+    } catch (cancelError) {
+      setError(cancelError instanceof Error ? cancelError.message : "Unable to cancel document");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -393,7 +409,10 @@ function CommercialEditor({
              ),
          ]);
         
-        if (mounted) setForm(mapForm(docType, header, detail));
+        if (mounted) {
+          console.debug("CommercialDocumentPage: header loaded", header);
+          setForm(mapForm(docType, header, detail));
+        }
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Unable to load document");
       } finally {
@@ -406,9 +425,10 @@ function CommercialEditor({
     };
   }, [docType, editMode, editor]);
 
-   const isPO    = docType === "PO";
-   const isPI    = docType === "PI";
-   const isSales = docType === "SI" || docType === "SV";
+  const isPO    = docType === "PO";
+  const isPI    = docType === "PI";
+  const isSales = docType === "SI" || docType === "SV";
+  const isCancelled = form.canceled === "Y";
 
   // const total = form.detail.reduce((sum, line) => sum + Number(line.amount || 0) * line.sign_ind, 0);
   const total = form.detail.filter((line) => Number(line.serial_no) < 9000).reduce((sum, line) => sum + Number(line.amount || 0)* Number(line.sign_ind || 1), 0);
@@ -423,6 +443,7 @@ function CommercialEditor({
   // };
 
   const addLine = () => {
+  if (isCancelled) return;
   setForm((current) => {
     const newLine = emptyLine(docType, current.detail.length + 1);
     const withTax = {
@@ -553,7 +574,7 @@ function CommercialEditor({
   // };
 
   return (
-    <form className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
+    <form className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`} onSubmit={submit}>
       <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
@@ -579,6 +600,7 @@ function CommercialEditor({
             )}
           </div>
           <div className="flex items-center gap-2">
+            {form.canceled === "Y" && <span className="rounded-full border border-primary-foreground/35 px-2.5 py-1 text-xs font-semibold text-primary-foreground">Cancelled</span>}
             {form.doc_no && form.doc_no !== "0" && (
               <>
                 <Button type="button" variant="secondary" onClick={() => void openDocumentReport(form.doc_type, form.doc_no || "")}>
@@ -587,6 +609,11 @@ function CommercialEditor({
                 <Button aria-label="Excel" type="button" variant="secondary" size="icon" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
                   <Download size={15} />
                 </Button>
+                {form.canceled !== "Y" && (
+                  <Button type="button" variant="secondary" onClick={() => setCancelConfirmOpen(true)} disabled={saving}>
+                    <Ban size={15} /> Cancel
+                  </Button>
+                )}
               </>
             )}
             <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
@@ -596,12 +623,21 @@ function CommercialEditor({
           </div>
         </div>
       </CardHeader>
+      {isCancelled && (
+        <div className="cancelled-document-banner" role="status">
+          <div>
+            <span className="cancelled-document-kicker">Cancelled Document</span>
+            <strong>{form.doc_no || META[docType].title}</strong>
+          </div>
+          <p>This document is cancelled and opened in read-only mode. You can still print, export, and view attachments.</p>
+        </div>
+      )}
       <CardContent className="min-h-0 overflow-y-auto overflow-x-hidden p-3">
         {loading ? (
           <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
         ) : (
           <div className="grid min-w-0 gap-3">
-            {error && <div className="alert error">{error}</div>}
+            <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
        <div className="commercial-header-shell rounded-md border bg-card">
        <div className="commercial-section-title">
@@ -620,7 +656,7 @@ function CommercialEditor({
 
   {/* ── Doc Date ── */}
   <Field label="Doc Date" required error={fieldErrors.doc_date}>
-    <Input type="date" value={dateInput(form.doc_date)}
+    <Input disabled={isCancelled} type="date" value={dateInput(form.doc_date)}
     className={fieldErrors.doc_date ? "border-destructive" : ""}
       onChange={(e) => update("doc_date", e.target.value)} />
   </Field>
@@ -628,7 +664,7 @@ function CommercialEditor({
   {/* ── INV Date — PI / SI / SV only (field: inv_date) ── */}
   {!isPO && (
     <Field label="INV Date" required error={fieldErrors.inv_date}>
-      <Input type="date" value={dateInput(form.inv_date)}
+      <Input disabled={isCancelled} type="date" value={dateInput(form.inv_date)}
         className={fieldErrors.inv_date ? "border-destructive" : ""}
         onChange={(e) => update("inv_date", e.target.value)} />
     </Field>
@@ -637,14 +673,14 @@ function CommercialEditor({
   {/* ── Invoice No — PI / SI / SV only (field: ref_no in PI, inv_no in SI/SV) ── */}
   {isPI && (
     <Field label="Ref No" required error={fieldErrors.ref_no}>
-      <Input value={form.ref_no || ""}
+      <Input disabled={isCancelled} value={form.ref_no || ""}
         className={fieldErrors.ref_no ? "border-destructive" : ""}
         onChange={(e) => update("ref_no", e.target.value)} />
     </Field>
   )}
   {isSales && (
     <Field label="Ref No" required error={fieldErrors.ref_no}>
-      <Input value={form.ref_no ||form.inv_no|| ""}
+      <Input disabled={isCancelled} value={form.ref_no ||form.inv_no|| ""}
         className={fieldErrors.ref_no ? "border-destructive" : ""}
         onChange={(e) => update("ref_no", e.target.value)} />
     </Field>
@@ -653,19 +689,19 @@ function CommercialEditor({
   {/* ── PO-only: Ref No / Ref Date / APP Ref No / LPO Category ── */}
   {isPO && (
     <Field label="Ref No">
-      <Input value={form.ref_no || ""}
+      <Input disabled={isCancelled} value={form.ref_no || ""}
         onChange={(e) => update("ref_no", e.target.value)} />
     </Field>
   )}
   {isPO && (
     <Field label="Ref Date">
-      <Input type="date" value={dateInput(form.ref_date)}
+      <Input disabled={isCancelled} type="date" value={dateInput(form.ref_date)}
         onChange={(e) => update("ref_date", e.target.value)} />
     </Field>
   )}
   {isPO && (
     <Field label="APP Ref No">
-      <Input value={form.app_ref_no || ""}
+      <Input disabled={isCancelled} value={form.app_ref_no || ""}
         onChange={(e) => update("app_ref_no", e.target.value)} />
     </Field>
   )}
@@ -703,6 +739,7 @@ function CommercialEditor({
     valueField="ac_code"
     displayFields={["ac_code", "ac_name"]}
     loadOptions={() => getDocAccounts(docType, "H", form.div_code)}
+    disabled={isCancelled}
     onChange={(value, row) => {
       const r   = row || {} as Record<string, unknown>;
       const get = (k: string) =>
@@ -755,208 +792,100 @@ function CommercialEditor({
     <Input disabled value={form.ac_name || ""} />
   </Field>
 
-  {/* ── Currency ── */}
+  {/* Currency + Exchange Rate */}
   <div className="field">
-   <LookupField
-    label="Currency"
-    required
-    value={form.curr_code ?? ""}
-    displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
-    columns={[
-      { field: "curr_code", header: "Code" },
-      { field: "curr_name", header: "Name" },
-      { field: "ex_rate",   header: "Ex Rate" },
-    ]}
-    valueField="curr_code"
-    displayFields={["curr_code", "curr_name", "ex_rate"]}
-    loadOptions={() =>
-      getDynamicFinanceLookup({
-        parameter: "Account_Currency_CODE_Search",
-        code1: user?.company_code || "",
-      })
-    }
-    onChange={(value, row) =>
-      setForm((c) => ({
-        ...c,
-        curr_code: value,
-        curr_name: text(getLookupValue(row || {}, "curr_name")),
-        ex_rate:   Number(getLookupValue(row || {}, "ex_rate") || c.ex_rate || 1),
-      }))
-    }
-  />
-     {fieldErrors.curr_code && (
-    <span data-error="true" style={{ fontSize: 11, color: "#E24B4A", display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
-      <AlertCircle size={11} /> {fieldErrors.curr_code}
-    </span>
-  )}
- </div>
+    <LookupField
+      label="Currency"
+      required
+      disabled={isCancelled}
+      value={form.curr_code ?? ""}
+      displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
+      columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }, { field: "ex_rate", header: "Ex Rate" }]}
+      valueField="curr_code"
+      displayFields={["curr_code", "curr_name", "ex_rate"]}
+      loadOptions={() => getDynamicFinanceLookup({ parameter: "Account_Currency_CODE_Search", code1: user?.company_code || "" })}
+      onChange={(value, row) => setForm((c) => ({ ...c, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(getLookupValue(row || {}, "ex_rate") || c.ex_rate || 1) }))}
+    />
+    {fieldErrors.curr_code && (
+      <span data-error="true" style={{ fontSize: 11, color: "#E24B4A", display: "flex", alignItems: "center", gap: 3, marginTop: 2 }}>
+        <AlertCircle size={11} /> {fieldErrors.curr_code}
+      </span>
+    )}
+  </div>
 
-  {/* ── Ex Rate ── */}
   <Field label="Ex Rate" required error={fieldErrors.ex_rate}>
-    <Input type="number" step="0.0001" value={form.ex_rate}
-     className={fieldErrors.ref_no ? "border-destructive" : ""}
+    <Input disabled={isCancelled} type="number" step="0.0001" value={form.ex_rate}
+      className={fieldErrors.ref_no ? "border-destructive" : ""}
       onChange={(e) => update("ex_rate", Number(e.target.value || 1))} />
   </Field>
 
-  {/* ── Address  ── */}
   <label className="field col-span-2 max-md:col-span-1">
     <span>Address</span>
-    <Input value={form.party_address || ""}
-      onChange={(e) => update("party_address", e.target.value)} />
+    <Input disabled={isCancelled} value={form.party_address || ""} onChange={(e) => update("party_address", e.target.value)} />
   </label>
 
-  {/* ── Phone ── */}
-  <Field label="Phone">
-    <Input value={form.party_phone || ""}
-      onChange={(e) => update("party_phone", e.target.value)} />
+  {/* Contact / Delivery */}
+  <Field label="Contact">
+    <Input disabled={isCancelled} value={form.dlvr_contact || ""} onChange={(e) => update("dlvr_contact", e.target.value)} />
+  </Field>
+  <Field label="Mobile">
+    <Input disabled={isCancelled} value={form.dlvr_mobile || ""} onChange={(e) => update("dlvr_mobile", e.target.value)} />
+  </Field>
+  <Field label="E-mail">
+    <Input disabled={isCancelled} value={form.dlvr_email || ""} onChange={(e) => update("dlvr_email", e.target.value)} />
   </Field>
 
-  {/* ── Fax ── */}
-  <Field label="Fax">
-    <Input value={form.party_fax || ""}
-      onChange={(e) => update("party_fax", e.target.value)} />
-  </Field>
-
-  {/* ── Mobile / Email / Contact — PO only ── */}
-  {isPO && (
-    <Field label="Mobile">
-      <Input value={form.dlvr_mobile || ""}
-        onChange={(e) => update("dlvr_mobile", e.target.value)} />
-    </Field>
-  )}
-  {isPO && (
-    <Field label="Email">
-      <Input value={form.dlvr_email || ""}
-        onChange={(e) => update("dlvr_email", e.target.value)} />
-    </Field>
-  )}
-  {isPO && (
-    <Field label="Contact">
-      <Input value={form.dlvr_contact || ""}
-        onChange={(e) => update("dlvr_contact", e.target.value)} />
-    </Field>
-  )}
-
-  {/* ── Payment Terms ── */}
   <Field label="Payment Terms">
-    <Input value={form.payment_terms || ""}
-      onChange={(e) => update("payment_terms", e.target.value)} />
+    <Input disabled={isCancelled} value={form.payment_terms || ""} onChange={(e) => update("payment_terms", e.target.value)} />
   </Field>
 
-  {/* ── Delivery Term  ── */}
   {isPO && (
     <Field label="Delivery Term">
-      <Input
-        value={form.dlvr_term || ""}
-        onChange={(e) => update("dlvr_term", e.target.value)}
-      />
+      <Input disabled={isCancelled} value={form.dlvr_term || ""} onChange={(e) => update("dlvr_term", e.target.value)} />
     </Field>
   )}
 
-  {/* ── Delivery To — PO only ── */}
   {isPO && (
     <Field label="Delivery To">
-      <Input value={form.delivery_to || ""}
-        onChange={(e) => update("delivery_to", e.target.value)} />
+      <Input disabled={isCancelled} value={form.delivery_to || ""} onChange={(e) => update("delivery_to", e.target.value)} />
     </Field>
   )}
 
-  {/* ── Ref Doc — PI / SI / SV (field: ref_doc_no) ── */}
-  {/* {!isPO && (
-    <Field label="Ref Doc">
-      <Input value={form.ref_doc_no || ""}
-        onChange={(e) => update("ref_doc_no", e.target.value)} />
-    </Field>
-  )} */}
-   
-   {!isPO && (
-  <LookupField
-    label="Ref Doc"
-    value={form.ref_doc_no || ""}
-    displayValue={form.ref_doc_no || ""}
-    columns={[
-      { field: "DOC_NO",   header: "Doc No"  },
-      { field: "DOC_DATE", header: "Date"    },
-      { field: "REF_NO",   header: "Ref No"  },
-      { field: "REMARKS",  header: "Remarks" },
-    ]}
-    valueField="DOC_NO"
-    displayFields={["DOC_NO"]}
-    loadOptions={() =>
-      getDynamicFinanceLookup({
-        parameter:
-        //  form.doc_type === "PI"       //Reff Doc acc to Doc Type
-        // ? "Account_LPO_REF_DOC"
-        // : form.doc_type === "SI"
-        // ? "Account_SI_REF_DOC"
-        // : "Account_SV_REF_DOC",
-        "Account_LPO_REF_DOC",
-        code1: user?.company_code || "",
-        number1: form.div_code ? Number(form.div_code) : undefined,
-      })
-    }
-    onChange={async (value, row) => {
-      if (!value || !row) return;
-
-      const r       = row as Record<string, unknown>;
-      const docNo   = String(r["DOC_NO"]   ?? r["doc_no"]   ?? value);
-      const srcType = String(r["DOC_TYPE"] ?? r["doc_type"] ?? "PO");
-
-      // Show selection immediately
-      setForm((c) => ({ ...c, ref_doc_no: docNo }));
-
-      try {
-        let header: Record<string, unknown> = {};
+  {!isPO && (
+    <LookupField
+      label="Ref Doc"
+      disabled={isCancelled}
+      value={form.ref_doc_no || ""}
+      displayValue={form.ref_doc_no || ""}
+      columns={[{ field: "DOC_NO", header: "Doc No" }, { field: "DOC_DATE", header: "Date" }, { field: "REF_NO", header: "Ref No" }, { field: "REMARKS", header: "Remarks" }]}
+      valueField="DOC_NO"
+      displayFields={["DOC_NO"]}
+      loadOptions={() => getDynamicFinanceLookup({ parameter: "Account_LPO_REF_DOC", code1: user?.company_code || "", number1: form.div_code ? Number(form.div_code) : undefined })}
+      onChange={async (value, row) => {
+        if (!value || !row) return;
+        const r = row as Record<string, unknown>;
+        const docNo = String(r["DOC_NO"] ?? r["doc_no"] ?? value);
+        const srcType = String(r["DOC_TYPE"] ?? r["doc_type"] ?? "PO");
+        setForm((c) => ({ ...c, ref_doc_no: docNo }));
         try {
-          header = await getPurchaseHeader(docNo, srcType);
-          if (!hasRecordData(header)) {
-            header = await getLpoHeader(docNo, srcType);
-          }
-        } catch {
-          header = await getLpoHeader(docNo, srcType);
-        }
-
-        let rawDetail: Record<string, unknown>[] = [];
-        try {
-          const res = await getTransactionDetail(docNo, form.div_code, srcType as TransactionType);
-          if (res.length) rawDetail = res;
-        } catch {}
-
-        if (!rawDetail.length) {
-          try {
-            rawDetail = await getLpoDetail(docNo, srcType);
-          } catch {}
-        }
-
-        // Force PI when source doc is a PO
-        const targetDocType: CommercialType =
-          srcType.toUpperCase() === "PO" ? "PI" : (srcType as CommercialType);
-
-        const mapped = mapForm(targetDocType, header, rawDetail);
-
-        setForm((c) => ({
-          ...c,
-          ...mapped,
-          doc_type:   targetDocType,
-          doc_no:     c.doc_no,     // preserve existing doc_no in edit mode
-          div_code:   c.div_code,   // never overwrite user's chosen division
-          div_name:   c.div_name,
-          ref_doc_no: docNo,        
-          detail:     mapped.detail,
-        }));
-
-      } catch (err) {
-        console.error("Failed to load ref doc", err);
-        setError(err instanceof Error ? err.message : "Unable to load reference document");
-      }
-    }}
-  />
- )}
+          let header: Record<string, unknown> = {};
+          try { header = await getPurchaseHeader(docNo, srcType); if (!hasRecordData(header)) header = await getLpoHeader(docNo, srcType); } catch { header = await getLpoHeader(docNo, srcType); }
+          let rawDetail: Record<string, unknown>[] = [];
+          try { const res = await getTransactionDetail(docNo, form.div_code, srcType as TransactionType); if (res.length) rawDetail = res; } catch {}
+          if (!rawDetail.length) { try { rawDetail = await getLpoDetail(docNo, srcType); } catch {} }
+          const targetDocType: CommercialType = srcType.toUpperCase() === "PO" ? "PI" : (srcType as CommercialType);
+          const mapped = mapForm(targetDocType, header, rawDetail);
+          setForm((c) => ({ ...c, ...mapped, doc_type: targetDocType, doc_no: c.doc_no, div_code: c.div_code, div_name: c.div_name, ref_doc_no: docNo, detail: mapped.detail }));
+        } catch (err) { console.error("Failed to load ref doc", err); setError(err instanceof Error ? err.message : "Unable to load reference document"); }
+      }}
+    />
+  )}
 
   {/* ── Salesman Code + Name — SI / SV only ── */}
   {isSales && (
   <LookupField
     label="Salesman"
+    disabled={isCancelled}
     value={form.salesman_code ?? ""}
     displayValue={form.salesman_name ? `${form.salesman_code} - ${form.salesman_name}` : form.salesman_code ?? ""}
     columns={[
@@ -990,6 +919,7 @@ function CommercialEditor({
    {isSales && (
    <LookupField
     label="Sector"
+    disabled={isCancelled}
     value={form.sector_code ?? ""}
     displayValue={form.sector_name ? `${form.sector_code} - ${form.sector_name}` : form.sector_code ?? ""}
     columns={[
@@ -1022,6 +952,7 @@ function CommercialEditor({
   {/* ── Tax Category  ── */}
   <LookupField
   label="Tax Category"
+  disabled={isCancelled}
   value={form.tx_compntcat_code_1 ?? ""}
   displayValue={form.tx_compntcat_code_1 ?? ""}
   columns={[
@@ -1091,6 +1022,7 @@ function CommercialEditor({
   <Field label="Tax Type">
     <Select
       value={form.tax_type || ""}  // field: tax_type in UI, maps to tx_compnt_1_expmt in table
+      disabled={isCancelled}
  onChange={(e) => {
   const v    = e.target.value;
   const perc = v === "S" ? 5 : 0;
@@ -1127,7 +1059,7 @@ function CommercialEditor({
   {/* ── Remarks ) ── */}
   <label className="field col-span-2 max-md:col-span-1">
     <span>Remarks</span>
-    <Input value={form.remarks || ""}
+    <Input disabled={isCancelled} value={form.remarks || ""}
       onChange={(e) => update("remarks", e.target.value)} />
   </label>
 
@@ -1180,7 +1112,7 @@ function CommercialEditor({
                   <p className="eyebrow m-0">Details</p>
                   <h3 className="m-0 text-sm font-semibold leading-tight">Document Lines</h3>
                 </div>
-                <Button size="sm" type="button" variant="outline" onClick={addLine}><Plus size={14} /> Add Line</Button>
+                <Button disabled={isCancelled} size="sm" type="button" variant="outline" onClick={addLine}><Plus size={14} /> Add Line</Button>
               </div>
               <div className="commercial-lines-scroll overflow-auto">
                 <table className="w-full min-w-[2140px] text-[12px]">
@@ -1228,6 +1160,7 @@ function CommercialEditor({
                             valueField="ac_code"
                             displayFields={["ac_code", "ac_name"]}
                             loadOptions={() => getDocAccounts(docType, "D", form.div_code)}
+                            disabled={isCancelled}
                             onChange={(value, row) => updateLine(line.id, { ac_code: value, ac_name: text(getLookupValue(row || {}, "ac_name")) })}
                           />
                           {lineErrors[line.id]?.ac_code && (
@@ -1240,7 +1173,7 @@ function CommercialEditor({
                         <td className="w-[240px] px-2 py-1"><Input disabled value={line.ac_name || ""} /></td>
                         {isPO && (
   <td className="w-36 px-2 py-1">
-    <Input
+    <Input disabled={isCancelled}
       value={line.prod_code || ""}
       onChange={(e) => updateLine(line.id, { prod_code: e.target.value })}
     />
@@ -1248,6 +1181,7 @@ function CommercialEditor({
 )}
                         <td className="w-[360px] px-2 py-1">
                           <textarea
+                            disabled={isCancelled}
                             className="commercial-line-description"
                             value={line.remarks || ""}
                             onChange={(event) => updateLine(line.id, { remarks: event.target.value })}
@@ -1256,37 +1190,23 @@ function CommercialEditor({
                         </td>
                         <td className="w-[210px] px-2 py-1">
                           <LookupField
-    label="Currency" 
-    compact
-    value={form.curr_code ?? ""}
-    displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
-    columns={[
-      { field: "curr_code", header: "Code" },
-      { field: "curr_name", header: "Name" },
-    ]}
-    valueField="curr_code"
-    displayFields={["curr_code", "curr_name", "ex_rate"]}
-    loadOptions={() =>
-      getDynamicFinanceLookup({
-        parameter: "Account_Currency_CODE_Search",
-        code1: user?.company_code || "",
-      })
-    }
-    onChange={(value, row) =>
-      setForm((c) => ({
-        ...c,
-        curr_code: value,
-        curr_name: text(getLookupValue(row || {}, "curr_name")),
-        ex_rate: Number(getLookupValue(row || {}, "ex_rate") || 1),
-      }))
-    }
-  />
+                            label="Currency"
+                            compact
+                            disabled={isCancelled}
+                            value={form.curr_code ?? ""}
+                            displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
+                            columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
+                            valueField="curr_code"
+                            displayFields={["curr_code", "curr_name", "ex_rate"]}
+                            loadOptions={() => getDynamicFinanceLookup({ parameter: "Account_Currency_CODE_Search", code1: user?.company_code || "" })}
+                            onChange={(value, row) => setForm((c) => ({ ...c, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(getLookupValue(row || {}, "ex_rate") || 1) }))}
+                          />
   
                         </td>
-                        <td className="w-40 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" step="0.0001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></td>
-                        <td className="w-36 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" value={line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
-                        <td className="w-44 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" step="0.001" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
-                        <td className="w-56 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" step="0.001" value={line.amount} 
+                        <td className="w-40 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input text-right tabular-nums" type="number" step="0.0001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></td>
+                        <td className="w-36 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input text-right tabular-nums" type="number" value={line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
+                        <td className="w-44 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input text-right tabular-nums" type="number" step="0.001" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
+                        <td className="w-56 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input text-right tabular-nums" type="number" step="0.001" value={line.amount} 
                         // onChange={(event) => updateLine(line.id, { amount: Number(event.target.value || 0) })} /></td>
                         onChange={(e) => {
     const amount = Number(e.target.value || 0);
@@ -1294,12 +1214,12 @@ function CommercialEditor({
     updateLine(line.id, { amount, tx_compnt_amt_1: (amount * taxperc) / 100 });
   }} /></td>
                         <td className="w-28 px-2 py-1">
-                          <Select className="h-9" value={line.sign_ind} onChange={(event) => updateLine(line.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
+                          <Select disabled={isCancelled} className="h-9" value={line.sign_ind} onChange={(event) => updateLine(line.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
                             <option value={-1}>Cr</option>
                             <option value={1}>Dr</option>
                           </Select>
                         </td>
-                        <td className="w-40 px-2 py-1"><Input value={line.tx_compntcat_code_1 || ""} onChange={(event) => updateLine(line.id, { tx_compntcat_code_1: event.target.value })} /></td>
+                        <td className="w-40 px-2 py-1"><Input disabled={isCancelled} value={line.tx_compntcat_code_1 || ""} onChange={(event) => updateLine(line.id, { tx_compntcat_code_1: event.target.value })} /></td>
                         <td className="w-40 px-2 py-1">
                           {/* <Select value={line.tx_compnt_1_expmt || "N"} onChange={(event) => updateLine(line.id, { tx_compnt_1_expmt: event.target.value })}>
                             <option value="N">No Tax</option>
@@ -1307,7 +1227,7 @@ function CommercialEditor({
                             <option value="Z">Zero</option>
                             <option value="E">Exempt</option>
                           </Select> */}
-                          <Select value={line.tx_compnt_1_expmt || "N"} onChange={(event) => {
+                          <Select disabled={isCancelled} value={line.tx_compnt_1_expmt || "N"} onChange={(event) => {
   const v    = event.target.value;
   const perc = v === "S" ? 5 : 0;
   const taxAmt = (Number(line.amount || 0) * perc) / 100;
@@ -1323,28 +1243,28 @@ function CommercialEditor({
   <option value="E">Exempt</option>
 </Select>
                         </td>
-                        <td className="w-36 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" value={line.tx_compnt_perc_1 ?? 0} 
+                        <td className="w-36 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input text-right tabular-nums" type="number" value={line.tx_compnt_perc_1 ?? 0} 
                         // onChange={(event) => updateLine(line.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
                         onChange={(e) => {
     const perc   = Number(e.target.value || 0);
     const taxAmt = (Number(line.amount || 0) * perc) / 100;
     updateLine(line.id, { tx_compnt_perc_1: perc, tx_compnt_amt_1: taxAmt });
   }} /></td>
-                        <td className="w-52 px-2 py-1"><Input className="commercial-number-input text-right tabular-nums" type="number" 
+                        <td className="w-52 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input text-right tabular-nums" type="number" 
                         // value={line.tx_compnt_amt_1 ?? 0}  onChange={(event) => updateLine(line.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                         value={((Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100).toFixed(3)} /></td>
-                        <td className="w-40 px-2 py-1"><Input value={line.job_no || ""} onChange={(event) => updateLine(line.id, { job_no: event.target.value })} /></td>
+                        <td className="w-40 px-2 py-1"><Input disabled={isCancelled} value={line.job_no || ""} onChange={(event) => updateLine(line.id, { job_no: event.target.value })} /></td>
                         {isPO && (
-                          <td className="w-36 px-2 py-1"> <Input  value={line.dept_code || ""}  onChange={(e) => updateLine(line.id, { dept_code: e.target.value })}/> </td>
+                          <td className="w-36 px-2 py-1"> <Input disabled={isCancelled}  value={line.dept_code || ""}  onChange={(e) => updateLine(line.id, { dept_code: e.target.value })}/> </td>
 )}
 {isPO && (
-  <td className="w-[260px] px-2 py-1"> <Input  value={line.other_remarks || ""}  onChange={(e) => updateLine(line.id, { other_remarks: e.target.value })} /> </td>
+  <td className="w-[260px] px-2 py-1"> <Input disabled={isCancelled}  value={line.other_remarks || ""}  onChange={(e) => updateLine(line.id, { other_remarks: e.target.value })} /> </td>
 )}
                         <td className="w-56 px-2 py-1">
                           {/* <Input disabled value={formatAmount(Number(line.amount || 0) * Number(form.ex_rate || 1) * Number(line.sign_ind || 1))} /> */}
                           <Input className="commercial-number-input text-right tabular-nums" disabled value={formatAmount(Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1))} />
                           </td>
-                        <td className="px-2 py-1"><Button size="icon" type="button" variant="ghost" onClick={() => removeLine(line.id)}><X size={14} /></Button></td>
+                        <td className="px-2 py-1"><Button disabled={isCancelled} size="icon" type="button" variant="ghost" onClick={() => removeLine(line.id)}><X size={14} /></Button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1385,7 +1305,7 @@ function CommercialEditor({
 </div> */}
         <div className="flex items-center gap-2">
         <Button disabled={saving} type="button" variant="outline" onClick={onClose}>Close</Button>
-        <Button disabled={saving || loading || form.detail.length === 0} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save"}</Button>
+        <Button disabled={saving || loading || form.detail.length === 0 || isCancelled} type="submit"><Save size={15} /> {saving ? "Saving..." : "Save"}</Button>
         </div>
       </div>
       <AttachmentDialog
@@ -1399,6 +1319,24 @@ function CommercialEditor({
         loginId={user?.loginid || user?.username || ""}
         flowLevel={2}
       />
+      <Dialog
+        open={cancelConfirmOpen}
+        title="Cancel Document"
+        description={`Cancel ${form.doc_no || "this document"}?`}
+        onClose={() => setCancelConfirmOpen(false)}
+        footer={(
+          <>
+            <Button type="button" variant="outline" onClick={() => setCancelConfirmOpen(false)}>Close</Button>
+            <Button type="button" variant="destructive" onClick={() => void cancelCurrentDocument()} disabled={saving}>
+              <Ban size={15} /> Cancel Document
+            </Button>
+          </>
+        )}
+      >
+        <p className="m-0 text-sm text-muted-foreground">
+          This will mark the document as cancelled using the finance cancellation API.
+        </p>
+      </Dialog>
     </form>
   );
 }
@@ -1422,6 +1360,7 @@ function emptyForm(docType: CommercialType, div?: Division): FormState {
     curr_code: "",
     ex_rate: 1,
     hse_compliance: "N",
+    canceled: "N",
     detail: [],
   };
 }
@@ -1482,6 +1421,7 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
     sector_name:   text(nested(headerRaw, ["Sector", "sector_name"]) ?? header.sector_name),
     ref_no:     text(header.ref_no),
     ref_doc_no: text(header.ref_doc_no),
+    canceled: text(header.canceled ?? header.cancelled ?? "N"),
     tax_type: text(header.tx_compnt_1_expmt),
     tx_compnt_1_expmt: text(header.tx_compnt_1_expmt),
     tx_compntcat_code_1: text(header.tx_compntcat_code_1),

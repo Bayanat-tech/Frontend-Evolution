@@ -339,7 +339,7 @@ function PrepaidEditor({
       </div>
 
       <form className="grid flex-1 content-start gap-4 overflow-auto p-4" id="prepaid-register-form" onSubmit={handleSubmit}>
-        {error && <div className="alert error">{error}</div>}
+        <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
         <div className="grid grid-cols-3 gap-3">
           <Field label="Doc No" value={form.doc_no} onChange={(value) => setField("doc_no", value)} disabled={readOnly || isEdit} />

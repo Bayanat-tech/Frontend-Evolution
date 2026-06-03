@@ -315,7 +315,7 @@ function AssetEditor({
       </div>
 
       <form className="grid flex-1 content-start gap-4 overflow-auto p-4" id="asset-register-form" onSubmit={handleSubmit}>
-        {error && <div className="alert error">{error}</div>}
+        <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
         <div className="rounded-md border bg-secondary/35 p-3">
           <p className="eyebrow mb-3">Asset Details</p>

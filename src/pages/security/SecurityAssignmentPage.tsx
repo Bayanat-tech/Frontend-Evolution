@@ -6,6 +6,7 @@ import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
+import { NoticeToast } from "../../components/ui/NoticeToast";
 import { useAuth } from "../../state/AuthContext";
 
 type AssignmentField = {
@@ -291,7 +292,7 @@ export function SecurityAssignmentPage({ config }: { config: SecurityAssignmentC
         </div>
       </div>
 
-      {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
       <div className="grid min-h-[640px] gap-4 xl:grid-cols-[400px_minmax(0,1fr)]">
         <Card className="min-h-[640px] overflow-visible">

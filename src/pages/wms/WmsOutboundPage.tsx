@@ -9,6 +9,7 @@ import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
+import { NoticeToast } from "../../components/ui/NoticeToast";
 import { Select } from "../../components/ui/Select";
 import { executeCommonProcedure, type LookupRow } from "../../api/lookups";
 import { useAuth } from "../../state/AuthContext";
@@ -300,7 +301,7 @@ function OutboundJobListing() {
         </div>
       </div>
 
-      {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
       <div className="flex flex-wrap gap-2 rounded-md border bg-card p-2">
         {listingTabs.map((tab) => (
@@ -551,7 +552,7 @@ function OutboundOperationalTab({ job, jobNo, tab, loadingJob }: { job: WmsRow |
 
   return (
     <section className="grid gap-3">
-      {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
       <DataTable
         columns={columns}
         data={rows}

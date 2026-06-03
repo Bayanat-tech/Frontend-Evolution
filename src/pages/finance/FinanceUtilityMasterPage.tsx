@@ -441,7 +441,7 @@ function UtilityEditor({
         <h2 className="m-0 text-xl font-semibold tracking-tight">{config.title}</h2>
       </div>
       <form className="grid flex-1 content-start gap-4 overflow-auto py-4 md:grid-cols-2" id={`${config.keyField}-form`} onSubmit={handleSubmit}>
-        {error && <div className="alert error">{error}</div>}
+        <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
         {config.fields.map((field) => (
           <UtilityField
             companyCode={companyCode}

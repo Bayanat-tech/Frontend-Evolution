@@ -3,6 +3,7 @@ import { Save, X, CheckCircle2, ChevronRight, AlertCircle, Loader2, Plus, Refres
 import type { FormEvent } from "react";
 import { getWmsMaster } from "../api/wms";
 import { getDynamicLookup } from "../api/lookups";
+import { useToast } from "./ui/AlertToast";
 import { Button } from "./ui/Button";
 import { Card, CardContent, CardHeader } from "./ui/Card";
 import { Input } from "./ui/Input";
@@ -23,7 +24,6 @@ type Props = {
   form: Record<string, unknown>;
   editMode: boolean;
   saving: boolean;
-  notice: { type: "success" | "error"; message: string } | null;
   user?: UserProfile | null;
   onChange: (name: string, value: unknown) => void;
   onSave: (e: FormEvent) => void;
@@ -31,7 +31,7 @@ type Props = {
 };
 
 export function WmsMasterForm({
-  fields, tabs, fieldsPerRow = 2, form, editMode, saving, notice, user, onChange, onSave, onCancel,
+  fields, tabs, fieldsPerRow = 2, form, editMode, saving, user, onChange, onSave, onCancel,
 }: Props) {
   const [activeTab, setActiveTab] = useState(tabs?.[0]?.key ?? "__default");
 
@@ -228,22 +228,6 @@ const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOptio
 
   return (
     <form className="flex flex-col gap-2" onSubmit={handleSubmitOrNext}>
-      {/* ── Notice Banner ── */}
-      {notice && (
-        <div
-          className={`flex items-start gap-2 rounded-md border px-3 py-2 text-[11px] font-medium
-            ${notice.type === "error"
-              ? "border-destructive/30 bg-destructive/5 text-destructive"
-              : "border-green-500/30 bg-green-500/5 text-green-700 dark:text-green-400"
-            }`}
-        >
-          {notice.type === "error"
-            ? <AlertCircle size={13} className="mt-px shrink-0" />
-            : <CheckCircle2 size={13} className="mt-px shrink-0" />}
-          <span>{notice.message}</span>
-        </div>
-      )}
-
       {/* ── Tab Form ── */}
       {hasTabs ? (
         <Card className="overflow-hidden border-border shadow-sm">

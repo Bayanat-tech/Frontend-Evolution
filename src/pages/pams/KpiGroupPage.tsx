@@ -9,6 +9,7 @@ import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
+import { NoticeToast } from "../../components/ui/NoticeToast";
 import { useAuth } from "../../state/AuthContext";
 import type { LookupRow } from "../../api/lookups";
 
@@ -350,12 +351,7 @@ export function KpiGroupPage() {
         </div>
       </div>
 
-      {/* Notice */}
-      {notice && (
-        <div className={notice.type === "error" ? "alert error" : "alert success"}>
-          {notice.message}
-        </div>
-      )}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
       {/* Table */}
       <DataTable
@@ -530,7 +526,7 @@ export function KpiGroupPage() {
             </CardContent>
           </Card>
 
-          {formError && <div className="alert error">{formError}</div>}
+          <NoticeToast notice={formError ? { type: "error", message: formError } : null} onClose={() => setFormError("")} />
 
           <div className="sticky bottom-0 -mx-4 -mb-4 flex justify-end gap-2 border-t bg-card/95 px-4 py-3 backdrop-blur">
             <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>

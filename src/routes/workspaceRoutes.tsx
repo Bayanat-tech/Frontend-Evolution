@@ -20,7 +20,6 @@ import { FinanceUtilityMasterPage, financeUtilityConfigs } from "../pages/financ
 import { PaymentDocumentPage } from "../pages/finance/PaymentDocumentPage";
 import { PLSetupPage } from "../pages/finance/PLSetupPage";
 import { PrepaidRegisterPage } from "../pages/finance/PrepaidRegisterPage";
-import { WmsCountryPage } from "../pages/wms/WmsCountryPage";
 import { WmsInboundPage } from "../pages/wms/WmsInboundPage";
 import { WmsOutboundPage } from "../pages/wms/WmsOutboundPage";
 import { WmsSimpleMasterPage } from "../pages/wms/WmsSimpleMasterPage";
@@ -44,6 +43,7 @@ import { hrMasterConfigs } from "../pages/hr/hrMasterConfigs";
 import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrPayUnitsPage } from "../pages/hr/HrProcessPages";
 import { Leaf } from "lucide-react";
 import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics";
+import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -182,11 +182,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isWmsOutboundRoute(pathname),
     element: () => <WmsOutboundPage />,
   },
-  {
-    name: "WMS Country Master",
-    match: ({ pathname }) => isWmsCountryRoute(pathname),
-    element: () => <WmsCountryPage />,
+   {
+    name: "WMS Billing Activity Master",
+    match: ({ pathname }) => isWmsBillingActRoute(pathname),
+    element: () => <WmsBillingActPage />,
   },
+  
   {
     name: "WMS Simple Master",
     match: ({ pathname }) => Boolean(getWmsSimpleMasterConfig(pathname)),
@@ -572,7 +573,10 @@ function isWmsCountryRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/wms/") && normalized.includes("/country");
 }
-
+function isWmsBillingActRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/wms/") && normalized.includes("/principal_masters") && (normalized.includes("/billing_activity"));
+}
 function isWmsInboundRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   if (!normalized.includes("/wms/")) return false;

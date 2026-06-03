@@ -20,6 +20,7 @@ import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
+import { NoticeToast } from "../../components/ui/NoticeToast";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 
@@ -245,7 +246,7 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
         </div>
       </div>
 
-      {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
       <DataTable
         columns={columns}

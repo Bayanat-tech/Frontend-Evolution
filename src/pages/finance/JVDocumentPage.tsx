@@ -701,7 +701,7 @@ function JVDocument({
           <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading voucher...</div>
         ) : (
           <div className="grid gap-4">
-            {error && <div className="alert error">{error}</div>}
+            <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
             <div className="grid grid-cols-3 gap-3 rounded-md border bg-card p-3 max-xl:grid-cols-2 max-md:grid-cols-1">
               {editMode && (
