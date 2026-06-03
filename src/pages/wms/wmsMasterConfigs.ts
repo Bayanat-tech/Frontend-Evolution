@@ -14,9 +14,9 @@ const activeInactive = [
 ];
 
 const transportMode = [
-  { label: "Sea", value: "S" },
-  { label: "Air", value: "A" },
-  { label: "Road", value: "R" },
+  { label: "Sea", value: "Sea" },
+  { label: "Air", value: "Air" },
+  { label: "Road", value: "Road" },
 ];
 
 export const wmsSimpleMasterConfigs: Record<string, WmsSimpleMasterConfig> = {
@@ -217,7 +217,7 @@ country: {
     fields: [
       { name: "port_code", label: "Port Code", required: true, disabledOnEdit: true, width: 140 },
       { name: "port_name", label: "Port Name", required: true, width: 260 },
-      { name: "country_code", label: "Country Code", width: 150 },
+      { name: "country_code", label: "Country Code", width: 150, dropdownParam: "DROP_DOWN_COUNTRY", dropdownDisplayFields: ["country_code", "country_name"], dropdownValueKey: "country_code", dropdownDisplaySeparator: " - " },
       { name: "trp_mode", label: "Transport Mode", type: "select", options: transportMode, width: 150 },
     ],
     deleteConfig: { mode: "registered", payload: (row) => [row.port_code] },
