@@ -51,6 +51,7 @@ type Line = {
   sign_ind: 1 | -1;
   job_no?: string;
   dept_code?: string;
+  cost_code?: string;
   tx_compntcat_code_1?: string;
   tx_cat_code?: string;
   tx_compnt_1_expmt?: string;
@@ -431,7 +432,15 @@ function CommercialEditor({
   const isCancelled = form.canceled === "Y";
 
   // const total = form.detail.reduce((sum, line) => sum + Number(line.amount || 0) * line.sign_ind, 0);
-  const total = form.detail.filter((line) => Number(line.serial_no) < 9000).reduce((sum, line) => sum + Number(line.amount || 0)* Number(line.sign_ind || 1), 0);
+  // const total = form.detail.filter((line) => Number(line.serial_no) < 9000).reduce((sum, line) => sum + Number(line.amount || 0)* Number(line.sign_ind || 1), 0);
+  const baseSign = (docType === "PI" || docType === "PO") ? 1 : -1;
+  const visibleLines = form.detail.filter((line) => Number(line.serial_no) < 9000);
+
+  const total = visibleLines.reduce((sum, line) => {
+  const amt = Math.abs(Number(line.amount || 0));
+  const dir = Number(line.sign_ind || 1) === baseSign ? 1 : -1;
+  return sum + amt * dir;
+  }, 0);
   const taxTotal = form.detail.filter((line) => Number(line.serial_no) < 9000).reduce((sum, line) => sum + (Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100, 0);
 
   const update = (field: keyof FormState, value: string | number) => setForm((current) => ({ ...current, [field]: value }));
@@ -446,12 +455,23 @@ function CommercialEditor({
   if (isCancelled) return;
   setForm((current) => {
     const newLine = emptyLine(docType, current.detail.length + 1);
-    const withTax = {
-      ...newLine,
-      tx_compntcat_code_1: current.tx_compntcat_code_1 || (isSales ? "11100" : "10100"),
-      tx_compnt_1_expmt:   current.tx_compnt_1_expmt || current.tax_type || "S",
-      tx_compnt_perc_1:    current.tx_compnt_perc_1 ?? 0,
-    };
+    // const withTax = {
+    //   ...newLine,
+    //   tx_compntcat_code_1: current.tx_compntcat_code_1 || (isSales ? "11100" : "10100"),
+    //   tx_compnt_1_expmt:   current.tx_compnt_1_expmt || current.tax_type || "S",
+    //   tx_compnt_perc_1:    current.tx_compnt_perc_1 ?? 0,
+    // };
+    const resolvedExpmt = current.tx_compnt_1_expmt || current.tax_type || "S";
+const resolvedPerc  = (current.tx_compnt_perc_1 != null && current.tx_compnt_perc_1 !== 0)
+  ? current.tx_compnt_perc_1
+  : resolvedExpmt === "S" ? 5 : 0;
+
+const withTax = {
+  ...newLine,
+  tx_compntcat_code_1: current.tx_compntcat_code_1 || (isSales ? "11100" : "10100"),
+  tx_compnt_1_expmt:   resolvedExpmt,
+  tx_compnt_perc_1:    resolvedPerc,
+};
     return { ...current, detail: [...current.detail, withTax] };
   });
 };
@@ -545,33 +565,6 @@ function CommercialEditor({
     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
   }, 50);
 };
-  // const submit = async (event: FormEvent) => {
-  //   event.preventDefault();
-  //   if (!form.doc_date) return setError("Doc Date is required");
-  //   if (!form.div_code) return setError("Division is required");
-  //   if (!form.ac_code) return setError(docType === "PI" || docType === "PO" ? "Supplier is required" : "Customer is required");
-  //   if (!form.curr_code) return setError("Currency is required");
-  //   if (!form.ex_rate) return setError("Exchange Rate is required");
-  //   if (!form.detail.length) return setError("Add at least one detail line");
-  //   setSaving(true);
-  //   setError("");
-  //   try {
-  //     if (docType === "PO") {
-  //       const payload = buildCommercialPayload(form, user?.company_code || "");
-  //       const endpoint = editMode ? "/api/finance/transactions/lpo-update" : "/api/finance/transactions/lpo-document";
-  //       const response = editMode ? await api.put(endpoint, payload) : await api.post(endpoint, payload);
-  //       if (!response.data?.success) throw new Error(response.data?.message || "Unable to save LPO document");
-  //     } else {
-  //       const bulkPayload = buildCommercialBulkAccountEntryPayload(form, user?.company_code || "", user?.loginid || "");
-  //       await upsertBulkAccountEntryApi(bulkPayload);
-  //     }
-  //     await onSaved(editMode ? "Document updated successfully" : "Document created successfully");
-  //   } catch (submitError) {
-  //     setError(submitError instanceof Error ? submitError.message : "Unable to save document");
-  //   } finally {
-  //     setSaving(false);
-  //   }
-  // };
 
   return (
     <form className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`} onSubmit={submit}>
@@ -637,7 +630,7 @@ function CommercialEditor({
           <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
         ) : (
           <div className="grid min-w-0 gap-3">
-            {error && <div className="alert error">{error}</div>}
+            <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
        <div className="commercial-header-shell rounded-md border bg-card">
        <div className="commercial-section-title">
@@ -969,19 +962,6 @@ function CommercialEditor({
       code1: user?.company_code || "",
     })
   }
-//   onChange={(value, row) => {
-//   const r    = row || {} as Record<string, unknown>;
-//   const perc = Number(getLookupValue(r, "tx_percnt") || 0);
-//   const code = text(getLookupValue(r, "tx_cat_code"));
-//   setForm((c) => ({
-//     ...c,
-//     tx_compntcat_code_1: value,
-//     tx_cat_code: code,
-//     tx_compnt_perc_1: perc,
-//   }));
-//   const nextTaxType = form.tx_compnt_1_expmt || "N";
-//   syncLineTax(value, nextTaxType, perc);
-//  }}
 
  onChange={(value, row) => {
   const r    = row || {} as Record<string, unknown>;
@@ -989,7 +969,8 @@ function CommercialEditor({
   const code = text(getLookupValue(r, "tx_cat_code"));
 
   setForm((c) => {
-    const resolvedPerc  = perc !== 0 ? perc : (c.tx_compnt_perc_1 ?? 0);
+    const resolvedPerc = perc !== 0 ? perc: c.tx_compnt_perc_1 !== 0 && c.tx_compnt_perc_1 != null? c.tx_compnt_perc_1
+    : (c.tx_compnt_1_expmt || c.tax_type) === "S" ? 5 : 0;
     const resolvedExpmt = c.tx_compnt_1_expmt || c.tax_type || "N";
 
     const updatedDetail = c.detail.map((line) => ({
@@ -1052,7 +1033,7 @@ function CommercialEditor({
       <option value="S">Std. Tax</option>
       <option value="Z">Zero</option>
       <option value="E">Expmt</option>
-      <option value="N">No Tax</option>
+      <option value="N">No VAT</option>
     </Select>
   </Field>
 
@@ -1124,6 +1105,7 @@ function CommercialEditor({
                       <th className="px-2 py-2 text-left">A/c Name</th>
                       {isPO && <th className="px-2 py-2 text-left">Product Code</th>}
                       <th className="px-2 py-2 text-left">Description</th>
+                      {isPO && <th className="px-2 py-2 text-left">Cost Code</th>}
                       <th className="px-2 py-2 text-left">Currency</th>
                       <th className="px-2 py-2 text-left">Ex Rate</th>
                       <th className="px-2 py-2 text-left">Qty</th>
@@ -1188,6 +1170,9 @@ function CommercialEditor({
                             placeholder="Description"
                           />
                         </td>
+                        {isPO && (<td className="w-36 px-2 py-1"> <Input value={line.cost_code || ""} onChange={(e) => updateLine(line.id, { cost_code: e.target.value })} />
+                        </td>
+                        )}
                         <td className="w-[210px] px-2 py-1">
                           <LookupField
                             label="Currency"
@@ -1221,13 +1206,7 @@ function CommercialEditor({
                         </td>
                         <td className="w-40 px-2 py-1"><Input disabled={isCancelled} value={line.tx_compntcat_code_1 || ""} onChange={(event) => updateLine(line.id, { tx_compntcat_code_1: event.target.value })} /></td>
                         <td className="w-40 px-2 py-1">
-                          {/* <Select value={line.tx_compnt_1_expmt || "N"} onChange={(event) => updateLine(line.id, { tx_compnt_1_expmt: event.target.value })}>
-                            <option value="N">No Tax</option>
-                            <option value="S">Std Tax</option>
-                            <option value="Z">Zero</option>
-                            <option value="E">Exempt</option>
-                          </Select> */}
-                          <Select disabled={isCancelled} value={line.tx_compnt_1_expmt || "N"} onChange={(event) => {
+                          <Select value={line.tx_compnt_1_expmt || "N"} onChange={(event) => {
   const v    = event.target.value;
   const perc = v === "S" ? 5 : 0;
   const taxAmt = (Number(line.amount || 0) * perc) / 100;
@@ -1237,8 +1216,8 @@ function CommercialEditor({
     tx_compnt_amt_1:     taxAmt,
   });
 }}>
-  <option value="N">No Tax</option>
   <option value="S">Std Tax</option>
+  <option value="N">No Tax</option>
   <option value="Z">Zero</option>
   <option value="E">Exempt</option>
 </Select>
@@ -1383,7 +1362,7 @@ function emptyLine(docType: CommercialType, serialNo: number): Line {
     job_no: "",             
     prod_code: docType==="PO" ? "" : undefined,    // only required for PO
     other_remarks: docType === "PO" ? "" : undefined,
-
+    cost_code: docType === "PO" ? "" : undefined,
   };
 }
 
@@ -1427,7 +1406,8 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
     tx_compntcat_code_1: text(header.tx_compntcat_code_1),
     // tx_cat_code:         text(header.tx_cat_code),
     tx_cat_code: text(nested(headerRaw, ["Tax Category", "tx_cat_code"]) ?? header.tx_cat_code),
-    tx_compnt_perc_1:    Number(header.tx_compnt_perc_1 || 0),
+    // tx_compnt_perc_1: Number(header.tx_compnt_perc_1 || 0),
+    tx_compnt_perc_1: Number(header.tx_compnt_perc_1 || 0) || (text(header.tx_compnt_1_expmt) === "S" ? 5 : 0),
     print_letter_head: !!header.print_letter_head,
     detail: detailRaw.map((raw, index) => {
       const row = lowerRecord(raw);
@@ -1450,6 +1430,7 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
         tx_compnt_amt_1: Number(row.tx_compnt_amt_1 || 0),
         prod_code:     docType === "PO" ? text(row.prod_code) : undefined,
         other_remarks: docType === "PO" ? text(row.other_remarks) : undefined,
+        cost_code: docType === "PO" ? text(row.cost_code) : undefined,
       };
     }),
   };
@@ -1491,13 +1472,11 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
       job_no: line.job_no || "",
       dept_code: line.dept_code || "",
       div_code: form.div_code,
-      // lcur_amount: Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1) * Number(line.sign_ind || 1),
-      // lcur_amount: Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1),
-
       tx_compnt_amt_1:      Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100,
       tx_compnt_lcuramt_1:  (Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100) * Number(form.ex_rate || 1),
       lcur_amount: Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1),
       prod_code: line.prod_code || "",
+      cost_code: line.cost_code || "", 
       other_remarks: line.other_remarks || "",
       // tx_compnt_lcuramt_1: (Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100) * Number(form.ex_rate || 1),
       header_ac_code: form.ac_code,

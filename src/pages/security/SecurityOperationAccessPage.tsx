@@ -5,6 +5,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
+import { NoticeToast } from "../../components/ui/NoticeToast";
 import { cn } from "../../lib/utils";
 import { useAuth } from "../../state/AuthContext";
 
@@ -86,14 +87,14 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
     }
   };
 
-  const loadPermissions = async () => {
+  const loadPermissions = async (clearNotice = true) => {
     if (!canLoadPermissions) {
       setPermissions(null);
       setHasExisting(false);
       return;
     }
     setPermissionLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const existing = await getExistingPermission(endpoint, mode, selectedPrincipal, selectedScreen);
       if (existing) {
@@ -148,7 +149,7 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
       await saveSecurityGm(endpoint, payload, hasExisting ? "put" : "post");
       setHasExisting(true);
       setNotice({ type: "success", message: `${title} saved successfully` });
-      await loadPermissions();
+      await loadPermissions(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to save ${title}` });
     } finally {
@@ -183,7 +184,7 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
         </Button>
       </div>
 
-      {notice && <div className={notice.type === "error" ? "alert error" : notice.type === "success" ? "alert success" : "alert"}>{notice.message}</div>}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
       <Card className="overflow-visible">
         <CardHeader className="border-b bg-muted/40">
