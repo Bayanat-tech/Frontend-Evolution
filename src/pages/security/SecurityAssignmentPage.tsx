@@ -201,13 +201,13 @@ export function SecurityAssignmentPage({ config }: { config: SecurityAssignmentC
     setLoading(false);
   };
 
-  const loadAssignments = async (userId = selectedUser) => {
+  const loadAssignments = async (userId = selectedUser, clearNotice = true) => {
     if (!userId) {
       setAssignedItems([]);
       return;
     }
     setAssignmentLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const response = await getSecurityGm<Record<string, unknown>[]>(`${config.createEndpoint}/${userId}`);
       setAssignedItems((response || []).map(normalizeRow));
@@ -251,7 +251,7 @@ export function SecurityAssignmentPage({ config }: { config: SecurityAssignmentC
       await Promise.all(pendingItems.map((item) => saveSecurityGm(config.createEndpoint, buildAssignmentPayload(shape, selectedUser, item, user?.company_code))));
       setPendingItems([]);
       setNotice({ type: "success", message: `${config.title} saved successfully` });
-      await loadAssignments(selectedUser);
+      await loadAssignments(selectedUser, false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to save ${config.title}` });
     } finally {
@@ -267,7 +267,7 @@ export function SecurityAssignmentPage({ config }: { config: SecurityAssignmentC
       await deleteSecurityGm(config.deleteEndpoint, config.deletePayload(deleteTarget));
       setDeleteTarget(null);
       setNotice({ type: "success", message: `${config.title} deleted successfully` });
-      await loadAssignments(selectedUser);
+      await loadAssignments(selectedUser, false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to delete ${config.title}` });
     } finally {

@@ -65,9 +65,9 @@ export function AccountWiseBudgetPage() {
   const [editor, setEditor] = useState<EditorState>(null);
   const [deleteTarget, setDeleteTarget] = useState<BudgetRow | null>(null);
 
-  const loadRows = async () => {
+  const loadRows = async (clearNotice = true) => {
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const data = await getDynamicLookup({
         parameter: "MS_BUDGET_ACWISE_PAGE",
@@ -174,7 +174,7 @@ export function AccountWiseBudgetPage() {
       });
       setDeleteTarget(null);
       setNotice({ type: "success", message: "Budget deleted successfully" });
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete budget" });
     }
@@ -219,7 +219,7 @@ export function AccountWiseBudgetPage() {
           description="Monthly budget details"
           onClose={() => setEditor(null)}
         >
-          <BudgetEditor editor={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); await loadRows(); }} />
+          <BudgetEditor editor={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); setNotice({ type: "success", message: editor.mode === "edit" ? "Budget updated successfully" : "Budget added successfully" }); await loadRows(false); }} />
         </Dialog>
       )}
 
@@ -312,7 +312,7 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
         </div>
       </div>
       <form className="grid flex-1 content-start gap-4 overflow-auto py-4" id="account-budget-form" onSubmit={handleSubmit}>
-        <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
+        {error && <div className="alert error">{error}</div>}
         <div className="grid grid-cols-2 gap-3">
           <LookupField
             label="Version"

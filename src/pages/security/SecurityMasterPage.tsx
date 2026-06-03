@@ -221,9 +221,9 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
     company_code: user?.company_code || "",
   });
 
-  const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize) => {
+  const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize, clearNotice = true) => {
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const response = await getSecurityMaster(config.master, {
         page: hasSearch ? 1 : nextPageIndex + 1,
@@ -328,7 +328,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
       await saveSecurityMaster(endpoint, buildSecurityPayload(config, form, user?.company_code), method as "post" | "put");
       setFormOpen(false);
       setNotice({ type: "success", message: `${config.title} ${editMode ? "updated" : "added"} successfully` });
-      await loadRows(pageIndex, pageSize);
+      await loadRows(pageIndex, pageSize, false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to save ${config.title}` });
     } finally {
@@ -370,7 +370,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
       await deleteSecurityMaster(config.master, [deleteTarget[config.keyField] as string | number]);
       setDeleteTarget(null);
       setNotice({ type: "success", message: `${config.title} deleted successfully` });
-      await loadRows(pageIndex, pageSize);
+      await loadRows(pageIndex, pageSize, false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to delete ${config.title}` });
     } finally {

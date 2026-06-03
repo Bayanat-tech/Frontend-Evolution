@@ -87,14 +87,14 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
     }
   };
 
-  const loadPermissions = async () => {
+  const loadPermissions = async (clearNotice = true) => {
     if (!canLoadPermissions) {
       setPermissions(null);
       setHasExisting(false);
       return;
     }
     setPermissionLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const existing = await getExistingPermission(endpoint, mode, selectedPrincipal, selectedScreen);
       if (existing) {
@@ -149,7 +149,7 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
       await saveSecurityGm(endpoint, payload, hasExisting ? "put" : "post");
       setHasExisting(true);
       setNotice({ type: "success", message: `${title} saved successfully` });
-      await loadPermissions();
+      await loadPermissions(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to save ${title}` });
     } finally {

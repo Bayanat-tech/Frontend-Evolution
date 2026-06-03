@@ -57,9 +57,9 @@ export function ExpenseTypePage() {
   const companyCode = user?.company_code || "";
   const loginId = user?.loginid || "";
 
-  const loadExpenseTypes = async () => {
+  const loadExpenseTypes = async (clearNotice = true) => {
     setLoadingTypes(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const rows = await getDynamicLookup({
         parameter: "AC_EXPSTYPE_EXPSTYPE_MASTER",
@@ -80,13 +80,13 @@ export function ExpenseTypePage() {
     }
   };
 
-  const loadDetails = async (row: ExpenseTypeRow) => {
+  const loadDetails = async (row: ExpenseTypeRow, clearNotice = true) => {
     setSelected(row);
     setActiveGrid(null);
     setDirtySubTypes({});
     setDirtyExpenseCodes({});
     setLoadingDetails(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const [subTypeRows, codeRows] = await Promise.all([
         getDynamicLookup({
@@ -198,7 +198,7 @@ export function ExpenseTypePage() {
       setDirtyExpenseCodes({});
       setActiveGrid(null);
       setNotice({ type: "success", message: "Expense setup saved successfully" });
-      await loadDetails(selected);
+      await loadDetails(selected, false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save expense setup" });
     } finally {
@@ -221,7 +221,7 @@ export function ExpenseTypePage() {
       });
       setDeleteTarget(null);
       setNotice({ type: "success", message: isSubType ? "Sub type deleted" : "Expense code deleted" });
-      await loadDetails(selected);
+      await loadDetails(selected, false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete row" });
     }

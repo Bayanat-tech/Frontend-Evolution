@@ -1,4 +1,4 @@
-import { Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, X } from "lucide-react";
+import { AlignCenter, Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
@@ -89,10 +89,10 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
     setFyPeriod((current) => current || getDefaultFyPeriod(fyData, companyInfo));
   };
 
-  const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize,nextColumnFilters = columnFilters ) => {
+  const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize, nextColumnFilters = columnFilters, clearNotice = true) => {
     if (!nextFy) return;
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const hasSearch = Boolean(query.trim() || nextColumnFilters.some((filter) => String(filter.value ?? "").trim()));
       const requestPageIndex = hasSearch ? 0 : nextPageIndex;
@@ -180,7 +180,7 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
       await cancelTransactionDocument(cancelTarget.doc_no, docType);
       setCancelTarget(null);
       setNotice({ type: "success", message: "Document cancelled successfully" });
-      await loadRows();
+      await loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to cancel document" });
     }
@@ -250,12 +250,12 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
             onCancelled={async () => {
               setEditor(null);
               setNotice({ type: "success", message: "Document cancelled successfully" });
-              await loadRows();
+              await loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false);
             }}
             onSaved={async (message) => {
               setEditor(null);
               setNotice({ type: "success", message });
-              await loadRows();
+              await loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false);
             }}
           />
         </div>
@@ -690,7 +690,7 @@ function PaymentDocumentEditor({
             </div>
             <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
               <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
-              <strong className="block text-sm leading-tight text-primary-foreground">{formatAmount(total)}</strong>
+              <strong className="block text-sm leading-tight text-primary-foreground">{formatAmount(total + totalTax)}</strong>
             </div>
             {form.div_code && (
               <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
@@ -830,7 +830,7 @@ function PaymentDocumentEditor({
                   ex_rate: Number(row?.ex_rate ?? 1),
                 }))}
               />
-              <Field label="Exchange Rate*"><Input disabled={disabled} required type="number" step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} /></Field>
+              <Field label="Exchange Rate*"><Input disabled={disabled} required type="number"  style={{ textAlign: "right" }} step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} /></Field>
               {docType !== "CR" && (
                 <LookupField
                   label="Bank Account"
@@ -969,8 +969,8 @@ function PaymentDocumentEditor({
                             onChange={(value, row) => updateDetail(detail.id, { curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(row?.ex_rate ?? form.ex_rate ?? 1) })}
                           />
                         </td>
-                        <td className="w-28 px-2 py-1"><Input disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
-                        <td className="w-32 px-2 py-1"><Input disabled={disabled} type="number" step="0.001" value={formatNumber(detail.amount)} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
+                        <td className="w-56 px-2 py-1"><Input disabled={disabled} type="number" step="0.0001"  style={{ textAlign: "right" }} value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
+                        <td className="w-56 px-2 py-1"><Input disabled={disabled} type="number" step="0.001" style={{ textAlign: "right" }} value={formatNumber(detail.amount)} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
                         <td className="w-28 px-2 py-1">
                           <Select className="h-9" disabled={disabled} value={detail.sign_ind} onChange={(event) => updateDetail(detail.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
                             <option value={1}>Dr</option>
@@ -982,8 +982,8 @@ function PaymentDocumentEditor({
                             label="Tax Code"
                             compact
                             placeholder="Tax code"
-                            value={detail.tx_compntcat_code_1 || ""}
-                            displayValue={detail.tx_compntcat_code_1 || ""}
+                            value={detail.tx_compntcat_code_1 || "N/A"}
+                            displayValue={detail.tx_compntcat_code_1 || "N/A"}
                             columns={[
                               { field: "tx_compntcat_code", header: "Code" },
                               { field: "tx_compntcat_name", header: "Name" },
@@ -1021,7 +1021,7 @@ function PaymentDocumentEditor({
                           </Select>
                         </td>
                         <td className="w-24 px-2 py-1"><Input disabled={disabled} type="number" value={detail.tx_compnt_perc_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
-                        <td className="w-28 px-2 py-1"><Input disabled={disabled} type="number" value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
+                        <td className="w-56 px-2 py-1"><Input disabled={disabled}  style={{ textAlign: "right" }} type="number" value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                         <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
                         <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
                         <td className="w-32 px-2 py-1"><Input disabled value={formatNumber(Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1)))} /></td>
@@ -1227,13 +1227,14 @@ function ChildAllocationTable({
                   <td className="px-2 py-1">
                     <Input disabled={disabled} type="date" value={dateInput(row.inv_date)} onChange={(event) => onChange(row.id, { inv_date: event.target.value })} />
                   </td>
-                  <td className="px-2 py-1"><Input disabled value={text(row.inv_amt)} /></td>
-                  <td className="px-2 py-1"><Input disabled value={text(row.c_bal_amt_org)} /></td>
-                  <td className="w-32 px-2 py-1">
+                  <td className="px-2 py-1"><Input disabled style={{ textAlign: "right" }} value={text(row.inv_amt)} /></td>
+                  <td className="px-2 py-1"><Input disabled style={{ textAlign: "right" }} value={text(row.c_bal_amt_org)} /></td>
+                  <td className=" px-2 py-1">
                     <div className="flex flex-col gap-1">
                       <Input
                         disabled={disabled}
                         type="number"
+                        style={{ textAlign: "right" }}
                         step="0.001"
                         value={Number(row.amount || 0)}
                         onChange={(event) =>
@@ -1375,8 +1376,8 @@ function ChildAllocationTable({
                 </>
               )}
 
-              {childTable !== "invoice" && <td className="w-32 px-2 py-1"><Input disabled={disabled} type="number" step="0.001" value={Number(row.amount || 0)} onChange={(event) => onChange(row.id, { amount: Number(event.target.value || 0) })} /></td>}
-              {childTable === "invoice" && <td className="w-32 px-2 py-1"><Input disabled value={Number(row.paid_amt || 0)} /></td>}
+              {childTable !== "invoice" && <td className="px-2 py-1"><Input disabled={disabled} type="number" style={{ textAlign: "right" }} step="0.001" value={Number(row.amount || 0)} onChange={(event) => onChange(row.id, { amount: Number(event.target.value || 0) })} /></td>}
+              {childTable === "invoice" && <td className=" px-2 py-1"><Input disabled style={{ textAlign: "right" }} value={Number(row.paid_amt || 0)} /></td>}
               <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => onRemove(row.id)}><X size={14} /></Button></td>
             </tr>
           ))}
@@ -1450,7 +1451,7 @@ function emptyDetailRow({
     ex_rate: 1,
     amount: 0,
     sign_ind: docType === "BP" || docType === "CP" ? 1 : -1,
-    tx_compntcat_code_1: "11100",
+    tx_compntcat_code_1: "N/A",
     tx_cat_code: "",
     tx_compnt_1_expmt: "N",
     tx_compnt_lcuramt_1: null,
@@ -1639,7 +1640,7 @@ function buildPayload(form: TransactionHeader, docType: TransactionType, company
         ex_rate: Number(row.ex_rate || form.ex_rate || 1),
         amount: Math.abs(Number(row.amount || 0)),
         sign_ind: row.sign_ind,
-        tx_compntcat_code_1: row.tx_compntcat_code_1 || "11100",
+        tx_compntcat_code_1: row.tx_compntcat_code_1 || "N/A",
         tx_compnt_1_expmt: row.tx_compnt_1_expmt || "N",
         tx_compnt_perc_1: row.tx_compnt_perc_1 ?? null,
         tx_compnt_amt_1: row.tx_compnt_amt_1 ?? null,
