@@ -28,7 +28,9 @@ export type HrMasterField = {
   name: string;
   label: string;
   required?: boolean;
+  hideOnAdd?: boolean;
   disabledOnEdit?: boolean;
+  disabledOnAdd?: boolean;
   type?: "text" | "number" | "select" | "email" | "date";
   options?: { label: string; value: string }[];
   lookup?: {
@@ -176,14 +178,16 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
 
   const openEdit = (row: Record<string, unknown>) => {
     setEditMode(true);
-    setForm({ ...makeEmpty(), ...row, company_code: row.company_code || companyCode });
+    setForm({ ...makeEmpty(), ...row, _edit_key: row[config.keyField], company_code: row.company_code || companyCode });
     setFormOpen(true);
     setNotice(null);
   };
 
   const saveRecord = async (event: FormEvent) => {
     event.preventDefault();
-    const missing = config.fields.find((field) => field.required && !String(form[field.name] ?? "").trim());
+  
+    const missing = config.fields.find(
+  (field) => field.required && !field.hideOnAdd && !String(form[field.name] ?? "").trim());
     if (missing) {
       setNotice({ type: "error", message: `${missing.label} is required` });
       return;
@@ -292,14 +296,22 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
                 <h2 className="m-0 text-sm font-semibold">Basic Information</h2>
               </div>
             </CardHeader>
+           
+
+
             <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {config.fields.map((field) => (
-                <label className="field" key={field.name}>
-                  <span>{field.label}{field.required ? <strong className="text-destructive"> *</strong> : null}</span>
-                  {renderInput(field, form[field.name], form[`${field.name}_name`], Boolean(editMode && field.disabledOnEdit), buildContext(), (value, row) => setForm((current) => ({ ...current, [field.name]: value, ...(row ? displayPatch(field, row) : { [`${field.name}_name`]: "" }) })))}
-                </label>
-              ))}
-            </CardContent>
+  {config.fields.map((field, index) => {
+    
+    if (field.hideOnAdd && !editMode) return null;
+
+    return (
+      <label className="field" key={field.name}>
+        <span>{field.label}{field.required ? <strong className="text-destructive"> *</strong> : null}</span>
+        {renderInput(field, form[field.name], form[`${field.name}_name`], Boolean((editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd)), buildContext(), (value, row) => setForm((current) => ({ ...current, [field.name]: value, ...(row ? displayPatch(field, row) : { [`${field.name}_name`]: "" }) })))}
+      </label>
+    );
+  })}
+</CardContent>
           </Card>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
