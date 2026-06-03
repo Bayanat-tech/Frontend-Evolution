@@ -27,6 +27,7 @@ export type HrMasterField = {
   name: string;
   label: string;
   required?: boolean;
+  hideOnAdd?: boolean;
   disabledOnEdit?: boolean;
   disabledOnAdd?: boolean;
   type?: "text" | "number" | "select" | "email" | "date";
