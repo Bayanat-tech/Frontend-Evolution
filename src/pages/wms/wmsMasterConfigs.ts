@@ -90,7 +90,7 @@ country: {
     fields: [
       { name: "activity_subgroup_code", label: "Sub Group Code", required: true, disabledOnEdit: true, width: 170 },
       { name: "act_subgroup_name", label: "Sub Group Name", required: true, width: 260 },
-      { name: "act_group_code", label: "Activity Group Code", required: true, width: 180 },
+      { name: "act_group_code", label: "Activity Group Code", required: true, width: 180, maxLength: 5, dropdownParam: 'DROP_DOWN_ACTIVITY_GROUP', dropdownDisplayFields: ['activity_group_code','act_group_name'], dropdownLabelKey: 'act_group_name', dropdownValueKey: 'activity_group_code' },
     ],
     deleteConfig: { mode: "registered", payload: (row) => [row.activity_subgroup_code] },
   },
