@@ -89,10 +89,10 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
     setFyPeriod((current) => current || getDefaultFyPeriod(fyData, companyInfo));
   };
 
-  const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize,nextColumnFilters = columnFilters ) => {
+  const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize, nextColumnFilters = columnFilters, clearNotice = true) => {
     if (!nextFy) return;
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const hasSearch = Boolean(query.trim() || nextColumnFilters.some((filter) => String(filter.value ?? "").trim()));
       const requestPageIndex = hasSearch ? 0 : nextPageIndex;
@@ -180,7 +180,7 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
       await cancelTransactionDocument(cancelTarget.doc_no, docType);
       setCancelTarget(null);
       setNotice({ type: "success", message: "Document cancelled successfully" });
-      await loadRows();
+      await loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to cancel document" });
     }
@@ -250,12 +250,12 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
             onCancelled={async () => {
               setEditor(null);
               setNotice({ type: "success", message: "Document cancelled successfully" });
-              await loadRows();
+              await loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false);
             }}
             onSaved={async (message) => {
               setEditor(null);
               setNotice({ type: "success", message });
-              await loadRows();
+              await loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false);
             }}
           />
         </div>

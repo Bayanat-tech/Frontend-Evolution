@@ -212,9 +212,9 @@ export function FinanceUtilityMasterPage({ config }: { config: FinanceUtilityMas
   const [editor, setEditor] = useState<EditorState>(null);
   const [deleteTarget, setDeleteTarget] = useState<MasterRow | null>(null);
 
-  const loadRows = async () => {
+  const loadRows = async (clearNotice = true) => {
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const data = await getDynamicLookup({
         parameter: config.listParameter,
@@ -288,7 +288,7 @@ export function FinanceUtilityMasterPage({ config }: { config: FinanceUtilityMas
       });
       setDeleteTarget(null);
       setNotice({ type: "success", message: `${config.title} deleted successfully` });
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to delete ${config.title}` });
     }
@@ -346,7 +346,7 @@ export function FinanceUtilityMasterPage({ config }: { config: FinanceUtilityMas
             onSaved={async () => {
               setEditor(null);
               setNotice({ type: "success", message: `${config.title} saved successfully` });
-              await loadRows();
+              await loadRows(false);
             }}
           />
         </Dialog>

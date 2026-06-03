@@ -107,9 +107,9 @@ export function KpiGroupPage() {
   const [formError, setFormError] = useState("");
 
   // ── Load table rows ───────────────────────────────────────────────────────
-  const loadRows = async () => {
+  const loadRows = async (clearNotice = true) => {
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const data = await pamsSelect({ parameter: "kpi_master", loginid, code1: companyCode });
       setRows(data.map(normalizeRow));
@@ -256,7 +256,7 @@ export function KpiGroupPage() {
       });
       setFormOpen(false);
       setNotice({ type: "success", message: editMode ? "KPI updated successfully" : "KPI added successfully" });
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Unable to save KPI");
     } finally {
@@ -279,7 +279,7 @@ export function KpiGroupPage() {
       });
       setDeleteTarget(null);
       setNotice({ type: "success", message: "KPI deleted successfully" });
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete KPI" });
     } finally {
@@ -345,7 +345,7 @@ export function KpiGroupPage() {
           <p className="mt-1 text-sm text-muted-foreground">Maintain KPI groups, weightage, and organization scope.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={loadRows}><RefreshCw size={15} /> Refresh</Button>
+          <Button variant="outline" onClick={() => void loadRows()}><RefreshCw size={15} /> Refresh</Button>
           <Button onClick={openAdd}><Plus size={15} /> Add KPI</Button>
         </div>
       </div>

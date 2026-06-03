@@ -297,9 +297,9 @@ export function PamsMasterPage({ config }: { config: PamsMasterConfig }) {
   const companyCode = user?.company_code || "";
   const tableFields = config.fields.filter((field) => field.table !== false);
 
-  const loadRows = async () => {
+  const loadRows = async (clearNotice = true) => {
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const data = await pamsSelect({ parameter: config.listParameter, loginid, code1: companyCode });
       setRows(data.map(normalizeRow));
@@ -420,7 +420,7 @@ export function PamsMasterPage({ config }: { config: PamsMasterConfig }) {
       await pamsSave({ parameter: config.saveParameter, loginid, ...extra });
       setFormOpen(false);
       setNotice({ type: "success", message: `${config.title} saved successfully` });
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to save ${config.title}` });
     } finally {
@@ -437,7 +437,7 @@ export function PamsMasterPage({ config }: { config: PamsMasterConfig }) {
       await pamsDelete({ parameter: config.deleteParameter, loginid, ...(config.buildDelete?.(deleteTarget, ctx) || genericDeleteValues(config.keyFields, deleteTarget, companyCode)) });
       setDeleteTarget(null);
       setNotice({ type: "success", message: `${config.title} deleted successfully` });
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to delete ${config.title}` });
     } finally {
@@ -453,7 +453,7 @@ export function PamsMasterPage({ config }: { config: PamsMasterConfig }) {
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{config.subtitle}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={loadRows}><RefreshCw size={15} /> Refresh</Button>
+          <Button variant="outline" onClick={() => void loadRows()}><RefreshCw size={15} /> Refresh</Button>
           <Button disabled={!config.saveParameter} onClick={openAdd}><Plus size={15} /> Add</Button>
         </div>
       </div>
@@ -696,13 +696,13 @@ export function PamsDepartmentAssignmentPage() {
       .catch(() => setEmployees([]));
   }, [loginid, companyCode]);
 
-  const loadAssignments = async () => {
+  const loadAssignments = async (clearNotice = true) => {
     if (!selectedEmployee || !selectedType) {
       setNotice({ type: "error", message: "Select employee and item type" });
       return;
     }
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       // pamsSave ki jagah pamsSelect use karo
       await pamsSelect({
@@ -763,7 +763,7 @@ export function PamsDepartmentAssignmentPage() {
       })));
       setNotice({ type: "success", message: "Assignment saved successfully" });
       setLastSaved(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
-      await loadAssignments();
+      await loadAssignments(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save assignments" });
     } finally {

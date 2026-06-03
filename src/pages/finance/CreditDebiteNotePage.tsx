@@ -87,10 +87,10 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
     setFyPeriod((current) => current || fyData[0]?.fy_period || "");
   };
 
-    const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize,nextColumnFilters = columnFilters ) => {
+    const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize, nextColumnFilters = columnFilters, clearNotice = true) => {
     if (!nextFy) return;
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const hasSearch = Boolean(query.trim() || nextColumnFilters.some((filter) => String(filter.value ?? "").trim()));
       const requestPageIndex = hasSearch ? 0 : nextPageIndex;
@@ -176,7 +176,7 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
       await cancelTransactionDocument(cancelTarget.doc_no, docType);
       setCancelTarget(null);
       setNotice({ type: "success", message: "Document cancelled successfully" });
-      await loadRows();
+      await loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to cancel document" });
     }
@@ -188,7 +188,7 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
       await deleteTransactionDocument([deleteTarget.doc_no], docType);
       setDeleteTarget(null);
       setNotice({ type: "success", message: "Document deleted successfully" });
-      await loadRows();
+      await loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete document" });
     }
@@ -259,7 +259,7 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
             onSaved={async (message) => {
               setEditor(null);
               setNotice({ type: "success", message });
-              await loadRows();
+              await loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false);
             }}
           />
         </div>

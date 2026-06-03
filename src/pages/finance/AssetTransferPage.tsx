@@ -72,9 +72,9 @@ export function AssetTransferPage() {
   const [editor, setEditor] = useState<EditorState>(null);
   const [deleteTarget, setDeleteTarget] = useState<TransferHeader | null>(null);
 
-  const loadRows = async () => {
+  const loadRows = async (clearNotice = true) => {
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const data = await getDynamicLookup({
         parameter: "AC_ASSETS_TRANSFER",
@@ -142,7 +142,7 @@ export function AssetTransferPage() {
       });
       setDeleteTarget(null);
       setNotice({ type: "success", message: "Asset transfer deleted successfully" });
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete asset transfer" });
     }
@@ -195,7 +195,7 @@ export function AssetTransferPage() {
             onSaved={async () => {
               setEditor(null);
               setNotice({ type: "success", message: "Asset transfer saved successfully" });
-              await loadRows();
+              await loadRows(false);
             }}
           />
         </Dialog>

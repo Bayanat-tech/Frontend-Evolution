@@ -231,9 +231,9 @@ export function AccountTreePage() {
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
 
-  const loadTree = async () => {
+  const loadTree = async (clearNotice = true) => {
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const data = await getAccountTree();
       setTree(data);
@@ -263,7 +263,7 @@ export function AccountTreePage() {
   const handleDialogSaved = async (message?: string) => {
     setDialog(null);
     setNotice({ type: "success", message: message || "Account tree updated" });
-    await loadTree();
+    await loadTree(false);
   };
 
   const handleDelete = async () => {
@@ -272,7 +272,7 @@ export function AccountTreePage() {
       await deleteAccountTreeNode(deleteTarget.level, deleteTarget.id);
       setDeleteTarget(null);
       setNotice({ type: "success", message: "Account node deleted" });
-      await loadTree();
+      await loadTree(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete account node" });
     }
