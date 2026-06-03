@@ -152,7 +152,7 @@ export function BankMasterPage() {
 
         <Card className="overflow-hidden">
           {editor ? (
-            <BankEditor editor={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); setNotice({ type: "success", message: "Bank saved successfully" }); await loadRows(false); }} />
+            <BankEditor editor={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); setNotice({ type: "success", message: editor.mode === "edit" ? "Bank updated successfully" : "Bank added successfully" }); await loadRows(false); }} />
           ) : (
             <div className="grid min-h-[620px] place-items-center p-8 text-center text-muted-foreground">
               <div>
@@ -228,7 +228,7 @@ function BankEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorState,
         <h2 className="m-0 text-xl font-semibold tracking-tight">Bank</h2>
       </div>
       <form className="grid flex-1 content-start gap-4 overflow-auto p-4" id="bank-master-form" onSubmit={handleSubmit}>
-        <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
+        {error && <div className="alert error">{error}</div>}
         <Field label="Bank Code" value={form.bank_code} onChange={(value) => setField("bank_code", value)} disabled={readOnly || isEdit} />
         <Field label="Bank Name" value={form.bank_name} onChange={(value) => setField("bank_name", value)} disabled={readOnly} />
         <Field label="Short Name" value={form.bank_short_name} onChange={(value) => setField("bank_short_name", value)} disabled={readOnly} />

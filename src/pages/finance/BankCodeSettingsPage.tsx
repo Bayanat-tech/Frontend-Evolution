@@ -179,7 +179,7 @@ export function BankCodeSettingsPage() {
 
         <Card className="overflow-hidden">
           {editor ? (
-            <BankCodeEditor editor={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); setNotice({ type: "success", message: "Bank code saved successfully" }); await loadRows(false); }} />
+            <BankCodeEditor editor={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); setNotice({ type: "success", message: editor.mode === "edit" ? "Bank code updated successfully" : "Bank code added successfully" }); await loadRows(false); }} />
           ) : (
             <div className="grid min-h-[620px] place-items-center p-8 text-center text-muted-foreground">
               <div>
@@ -268,7 +268,7 @@ function BankCodeEditor({
         <h2 className="m-0 text-xl font-semibold tracking-tight">Bank Code</h2>
       </div>
       <form className="grid flex-1 content-start gap-4 overflow-auto p-4" id="bank-code-form" onSubmit={handleSubmit}>
-        <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
+        {error && <div className="alert error">{error}</div>}
         <LookupField
           label="Account"
           value={form.ac_code}

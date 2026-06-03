@@ -167,7 +167,7 @@ export function BudgetVersionPage() {
 
         <Card className="overflow-hidden">
           {editor ? (
-            <BudgetVersionEditor editor={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); setNotice({ type: "success", message: "Budget version saved successfully" }); await loadRows(false); }} />
+            <BudgetVersionEditor editor={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); setNotice({ type: "success", message: editor.mode === "edit" ? "Budget version updated successfully" : "Budget version added successfully" }); await loadRows(false); }} />
           ) : (
             <div className="grid min-h-[620px] place-items-center p-8 text-center text-muted-foreground">
               <div>
@@ -264,7 +264,7 @@ function BudgetVersionEditor({ editor, onClose, onSaved }: { editor: Exclude<Edi
         <h2 className="m-0 text-xl font-semibold tracking-tight">Budget Version</h2>
       </div>
       <form className="grid flex-1 content-start gap-4 overflow-auto p-4" id="budget-version-form" onSubmit={handleSubmit}>
-        <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
+        {error && <div className="alert error">{error}</div>}
         {isEdit && (
           <div className="rounded-md border bg-secondary/40 p-3 text-xs text-muted-foreground">
             Document Type, Budget Year, Division and Version are record keys. To change those values, create a new version and delete the old one.

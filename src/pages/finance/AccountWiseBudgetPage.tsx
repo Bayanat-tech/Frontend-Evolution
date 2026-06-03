@@ -219,7 +219,7 @@ export function AccountWiseBudgetPage() {
           description="Monthly budget details"
           onClose={() => setEditor(null)}
         >
-          <BudgetEditor editor={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); setNotice({ type: "success", message: "Budget saved successfully" }); await loadRows(false); }} />
+          <BudgetEditor editor={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); setNotice({ type: "success", message: editor.mode === "edit" ? "Budget updated successfully" : "Budget added successfully" }); await loadRows(false); }} />
         </Dialog>
       )}
 
@@ -312,7 +312,7 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
         </div>
       </div>
       <form className="grid flex-1 content-start gap-4 overflow-auto py-4" id="account-budget-form" onSubmit={handleSubmit}>
-        <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
+        {error && <div className="alert error">{error}</div>}
         <div className="grid grid-cols-2 gap-3">
           <LookupField
             label="Version"

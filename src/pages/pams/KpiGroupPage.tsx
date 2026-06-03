@@ -346,7 +346,7 @@ export function KpiGroupPage() {
           <p className="mt-1 text-sm text-muted-foreground">Maintain KPI groups, weightage, and organization scope.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={loadRows}><RefreshCw size={15} /> Refresh</Button>
+          <Button variant="outline" onClick={() => void loadRows()}><RefreshCw size={15} /> Refresh</Button>
           <Button onClick={openAdd}><Plus size={15} /> Add KPI</Button>
         </div>
       </div>

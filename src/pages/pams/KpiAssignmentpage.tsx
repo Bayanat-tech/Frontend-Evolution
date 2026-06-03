@@ -254,7 +254,7 @@ export function KpiAssignmentPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={loadAssignments}>
+          <Button variant="outline" onClick={() => void loadAssignments()}>
             <RefreshCw size={15} /> Load
           </Button>
           <Button disabled={saving || !rows.length} onClick={saveAssignments}>
