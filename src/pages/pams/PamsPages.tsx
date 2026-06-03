@@ -298,9 +298,9 @@ export function PamsMasterPage({ config }: { config: PamsMasterConfig }) {
   const companyCode = user?.company_code || "";
   const tableFields = config.fields.filter((field) => field.table !== false);
 
-  const loadRows = async () => {
+  const loadRows = async (clearNotice = true) => {
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const data = await pamsSelect({ parameter: config.listParameter, loginid, code1: companyCode });
       setRows(data.map(normalizeRow));
@@ -421,7 +421,7 @@ export function PamsMasterPage({ config }: { config: PamsMasterConfig }) {
       await pamsSave({ parameter: config.saveParameter, loginid, ...extra });
       setFormOpen(false);
       setNotice({ type: "success", message: `${config.title} saved successfully` });
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to save ${config.title}` });
     } finally {
@@ -438,7 +438,7 @@ export function PamsMasterPage({ config }: { config: PamsMasterConfig }) {
       await pamsDelete({ parameter: config.deleteParameter, loginid, ...(config.buildDelete?.(deleteTarget, ctx) || genericDeleteValues(config.keyFields, deleteTarget, companyCode)) });
       setDeleteTarget(null);
       setNotice({ type: "success", message: `${config.title} deleted successfully` });
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to delete ${config.title}` });
     } finally {

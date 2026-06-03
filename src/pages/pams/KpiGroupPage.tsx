@@ -108,9 +108,9 @@ export function KpiGroupPage() {
   const [formError, setFormError] = useState("");
 
   // ── Load table rows ───────────────────────────────────────────────────────
-  const loadRows = async () => {
+  const loadRows = async (clearNotice = true) => {
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const data = await pamsSelect({ parameter: "kpi_master", loginid, code1: companyCode });
       setRows(data.map(normalizeRow));
@@ -257,7 +257,7 @@ export function KpiGroupPage() {
       });
       setFormOpen(false);
       setNotice({ type: "success", message: editMode ? "KPI updated successfully" : "KPI added successfully" });
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Unable to save KPI");
     } finally {
@@ -280,7 +280,7 @@ export function KpiGroupPage() {
       });
       setDeleteTarget(null);
       setNotice({ type: "success", message: "KPI deleted successfully" });
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete KPI" });
     } finally {

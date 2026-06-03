@@ -108,9 +108,9 @@ export function AssetSaleRegisterPage({ mode = "sale" }: { mode?: "sale" | "disp
   const [deleteTarget, setDeleteTarget] = useState<AssetSaleRow | null>(null);
   const title = mode === "disposal" ? "Asset Disposal" : "Asset Sale";
 
-  const loadRows = async () => {
+  const loadRows = async (clearNotice = true) => {
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const data = await getDynamicLookup({
         parameter: "AC_ASSETS_SALE_REGISTER",
@@ -182,7 +182,7 @@ export function AssetSaleRegisterPage({ mode = "sale" }: { mode?: "sale" | "disp
       });
       setDeleteTarget(null);
       setNotice({ type: "success", message: `${title} deleted successfully` });
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to delete ${title.toLowerCase()}` });
     }
@@ -236,7 +236,7 @@ export function AssetSaleRegisterPage({ mode = "sale" }: { mode?: "sale" | "disp
             onSaved={async () => {
               setEditor(null);
               setNotice({ type: "success", message: `${title} saved successfully` });
-              await loadRows();
+              await loadRows(false);
             }}
           />
         </Dialog>

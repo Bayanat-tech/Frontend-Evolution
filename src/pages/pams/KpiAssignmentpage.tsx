@@ -128,13 +128,13 @@ export function KpiAssignmentPage() {
   }, [loginid, companyCode]);
 
   // ── Load assignments when employee or type changes ────────────────────────
-  const loadAssignments = async () => {
+  const loadAssignments = async (clearNotice = true) => {
     if (!selectedEmployee || !selectedType) {
       setNotice({ type: "error", message: "Select employee and item type" });
       return;
     }
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       // Populate dept KPI first (fire-and-forget equivalent)
       await pamsSelect({
@@ -203,7 +203,7 @@ export function KpiAssignmentPage() {
       setLastSaved(
         new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
       );
-      await loadAssignments();
+      await loadAssignments(false);
     } catch (error) {
       setNotice({
         type: "error",
