@@ -740,12 +740,12 @@ country: {
     fields: [
       { name: "curr_code", label: "Currency Code", required: true, disabledOnEdit: true, width: 130 },
       { name: "curr_name", label: "Currency Name", required: true, width: 220 },
-      { name: "ex_rate", label: "Exchange Rate", type: "number", width: 130 },
-      { name: "division", label: "Division", required: true, width: 130 },
-      { name: "subdivision", label: "Sub Division", type: "number", required: true, width: 130 },
+      { name: "ex_rate", label: "Exchange Rate", type: "text", width: 130 },
+      { name: "division", label: "Division", dropdownParam: "DROP_DOWN_DIVISION", dropdownDisplayFields: ["div_code", "div_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "div_code", required: true, width: 130 },
+      { name: "subdivision", label: "Sub Division", type: "text", required: true, width: 130 },
       { name: "curr_sign", label: "Currency Sign", width: 120 },
     ],
-    defaults: { ex_rate: 1, subdivision: 100 },
+    defaults: { ex_rate: "1", subdivision: "100" },
     deleteConfig: { mode: "registered", payload: (row) => [row.curr_code] },
   },
   uom: {
