@@ -172,10 +172,11 @@ country: {
     routeKeys: ["moc2"],
     keyField: "charge_code",
     fields: [
-      { name: "charge_code", label: "Charge Code", required: true, width: 150 },
+      { name: "charge_code", label: "Charge Code", required: true, width: 150, maxLength: 4 },
       { name: "description", label: "Description", required: true, width: 260 },
-      { name: "charge_type", label: "Charge Type", required: true, width: 140 },
-      { name: "activity_group_code", label: "Activity Group", required: true, width: 170 },
+      { name: "charge_type", label: "Charge Type", required: true, width: 140, disabledOnEdit: true },
+      { name: "activity_group_code", label: "Activity Group", dropdownParam: 'DROP_DOWN_ACTIVITY_GROUP', 
+        dropdownDisplayFields: ['activity_group_code','act_group_name'], dropdownLabelKey: 'act_group_name', dropdownValueKey: 'activity_group_code', required: true, width: 170 },
     ],
     deleteConfig: { mode: "registered", payload: (row) => [{ charge_code: row.charge_code, charge_type: row.charge_type, company_code: row.company_code }] },
   },
@@ -475,72 +476,6 @@ country: {
       { key: "manufacture-validation", label: "Manufacture & Validation" },
       { key: "category-product", label: "Category & Product" },
     ],
-    // fields: [
-    //   // Product Details Tab - Principal Info
-    //   { name: "prin_code", label: "Principal Code", required: true, dropdownParam: "DROP_DOWN_PRINCIPAL", dropdownDisplayFields:["prin_code","prin_name"],dropdownDisplaySeparator: " - ",dropdownValueKey: "prin_code", width: 150, tab: "product-details", section: "PRINCIPAL INFO" },
-    //   { name: "group_code", label: "Group Code", required: true, dropdownParam: "DROP_DOWN_GROUP", dropdownCodeMap: { prin_code: "code1" },dropdownDisplayFields: ["group_code", "group_name"],dropdownDisplaySeparator: " - ",dropdownValueKey: "group_code", width: 140, tab: "product-details", section: "PRINCIPAL INFO" },
-    //   { name: "brand_code", label: "Brand Code", required: true, dropdownParam: "DROP_DOWN_BRAND", dropdownCodeMap: { prin_code: "code1", group_code: "code2" },dropdownDisplayFields: ["brand_code", "brand_name"],dropdownDisplaySeparator: " - ",dropdownValueKey: "brand_code", width: 140, tab: "product-details", section: "PRINCIPAL INFO" },
-
-    //   // Product Details Tab - Product Info
-    //   { name: "prod_code", label: "Product Code", disabledOnEdit: true, width: 160, tab: "product-details", section: "PRODUCT INFO" },
-    //   { name: "prod_name", label: "Product Name", required: true, width: 320, tab: "product-details", section: "PRODUCT INFO", colSpan: 2 },
-    //   { name: "model", label: "Model #", tab: "product-details", section: "PRODUCT INFO" },
-    //   { name: "variant", label: "Variant", tab: "product-details", section: "PRODUCT INFO" },
-
-    //   // UOM & Volume Tab - Unit of Measurement
-    //   { name: "no_of_uoms", label: "No. of UOMs", type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-    //   { name: "p_uom", label: "Primary UOM", required: true, dropdownParam: "DROP_DOWN_UOM", width: 140, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-    //   { name: "l_uom", label: "Lowest UOM", required: true, dropdownParam: "DROP_DOWN_UOM", width: 130, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-    //   { name: "units_prim_pack", label: "Units/Prim Pack", required: true, type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-    //   { name: "def_units_palette", label: "Def. Units/Pallette", required: true, type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-    //   { name: "qty_as_wt", label: "Qty As Wt", type: "checkbox", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-
-    //   // UOM & Volume Tab - Volume
-    //   { name: "length", label: "Length", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-    //   { name: "width", label: "Width", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-    //   { name: "height", label: "Height", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-    //   { name: "volume", label: "Volume", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-    //   { name: "gross_weight", label: "Gross Weight", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-    //   { name: "net_weight", label: "Net Weight", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-    //   { name: "layers", label: "Layers", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-    //   { name: "carton_layer", label: "Carton / Layer", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-
-    //   // Manufacture & Validation Tab - Manufacturer
-    //   { name: "harmonize_code", label: "Harmonize Code", dropdownParam: "DROP_DOWN_HARMONIZE", dropdownCodeMap: { prin_code: "code1", group_code: "code2", brand_code: "code3" }, tab: "manufacture-validation", section: "MANUFACTURER" },
-    //   { name: "imco_code", label: "IMCO Code", tab: "manufacture-validation", section: "MANUFACTURER" },
-    //   { name: "manufacturer", label: "Manufacturer", dropdownParam: "DROP_DOWN_MANUFACTURER", dropdownCodeMap: { prin_code: "code1" }, tab: "manufacture-validation", section: "MANUFACTURER" },
-    //   { name: "alt_prod_code", label: "Alternate Prod Code", tab: "manufacture-validation", section: "MANUFACTURER" },
-    //   { name: "default_site_ind", label: "Default Site Ind", required: true, dropdownParam: "DROP_DOWN_SITE", tab: "manufacture-validation", section: "MANUFACTURER" },
-    //   { name: "batch_type", label: "Batch Type", type: "number", tab: "manufacture-validation", section: "MANUFACTURER" },
-
-    //   // Manufacture & Validation Tab - Validation
-    //   { name: "mfg_exp_dt", label: "Mfg/Exp Dt", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
-    //   { name: "supp_cd", label: "Supp. cd", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
-    //   { name: "lot_no", label: "Lot No", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
-    //   { name: "kitting", label: "Kitting", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
-    //   { name: "serialize", label: "Serialize", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
-    //   { name: "receipt_exp_limit", label: "Receipt Exp Limit", type: "number", tab: "manufacture-validation", section: "VALIDATION" },
-    //   { name: "min_period_exp_pick", label: "Min Period Exp Pick", type: "number", tab: "manufacture-validation", section: "VALIDATION" },
-
-    //   // Category & Product Tab - Category
-    //   { name: "category_abc", label: "Category ABC", type: "select", options: [{ label: "A", value: "A" }, { label: "B", value: "B" }, { label: "C", value: "C" }], tab: "category-product", section: "CATEGORY" },
-    //   { name: "prod_status", label: "Status", required: true, type: "select", options: [{ label: "Active", value: "Active" }, { label: "Inactive", value: "Inactive" }], tab: "category-product", section: "CATEGORY" },
-    //   { name: "prod_type", label: "Product Type", dropdownParam: "DROP_DOWN_PRODUCT_TYPE", tab: "category-product", section: "CATEGORY" },
-    //   { name: "prod_stage", label: "Product Stage", tab: "category-product", section: "CATEGORY" },
-    //   { name: "base_price", label: "Base Price", type: "number", tab: "category-product", section: "CATEGORY" },
-    //   { name: "def_pick_wave", label: "Def. Pick Wave", type: "select", options: [{ label: "Wave 1", value: "1" }, { label: "Wave 2", value: "2" }, { label: "Wave 3", value: "3" }], tab: "category-product", section: "CATEGORY" },
-    //   { name: "shelf_life_days", label: "Shelf Life (Days)", type: "number", tab: "category-product", section: "CATEGORY" },
-
-    //   // Category & Product Tab - Flags
-    //   { name: "co_packed", label: "Co-packed", type: "checkbox", tab: "category-product", section: "FLAGS" },
-    //   { name: "barcode_print", label: "Barcode Print", type: "checkbox", tab: "category-product", section: "FLAGS" },
-    //   { name: "hazmat_class", label: "Hazmat Class", type: "checkbox", tab: "category-product", section: "FLAGS" },
-    //   { name: "food_ind", label: "Food Ind", type: "checkbox", tab: "category-product", section: "FLAGS" },
-    //   { name: "pharma_ind", label: "Pharma Ind", type: "checkbox", tab: "category-product", section: "FLAGS" },
-
-    //   // Category & Product Tab - Putaway Preference
-    //   { name: "special_instructions", label: "Special Instructions", type: "textarea", tab: "category-product", section: "PUTAWAY PREFERENCE" },
-    // ],
     fields: [
       // Product Details Tab - Principal Info
       { name: "prin_code", label: "Principal Code", required: true, dropdownParam: "DROP_DOWN_PRINCIPAL", dropdownDisplayFields:["prin_code","prin_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "prin_code", width: 150, tab: "product-details", section: "PRINCIPAL INFO" },
@@ -554,7 +489,7 @@ country: {
       { name: "variant_code", label: "Variant", tab: "product-details", section: "PRODUCT INFO" },
 
       // UOM & Volume Tab - Unit of Measurement
-      { name: "uom_count", label: "No. of UOMs", type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
+      { name: "uom_count", label: "No. of UOMs", type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT", required : true },
       { name: "p_uom", label: "Primary UOM", required: true, dropdownParam: "DROP_DOWN_UOM", dropdownDisplayFields: ["uom_code", "uom_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "uom_code", width: 140, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
       { name: "l_uom", label: "Lowest UOM", required: true, dropdownParam: "DROP_DOWN_UOM", dropdownDisplayFields: ["uom_code", "uom_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "uom_code", width: 130, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
       { name: "uppp", label: "Units/Prim Pack", required: true, type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
@@ -590,7 +525,7 @@ country: {
 
       // Category & Product Tab - Category
       { name: "category_abc", label: "Category ABC", type: "select", options: [{ label: "A", value: "A" }, { label: "B", value: "B" }, { label: "C", value: "C" }], tab: "category-product", section: "CATEGORY" },
-      { name: "prod_status", label: "Status", required: true, type: "select", options: [{ label: "Active", value: "Active" }, { label: "Inactive", value: "Inactive" }], tab: "category-product", section: "CATEGORY" },
+      { name: "prod_status", label: "Status", required: true, type: "select", options: [{ label: "Active", value: "A" }, { label: "Inactive", value: "I" }], tab: "category-product", section: "CATEGORY" },
       { name: "prod_type", label: "Product Type", dropdownParam: "DROP_DOWN_PRODUCT_TYPE", tab: "category-product", section: "CATEGORY" },
       { name: "product_stage", label: "Product Stage", tab: "category-product", section: "CATEGORY" },
       { name: "base_price", label: "Base Price", type: "number", tab: "category-product", section: "CATEGORY" },
@@ -840,7 +775,7 @@ country: {
     gmEndpoint: "line",
     keyField: "line_code",
     fields: [
-      { name: "line_code", label: "Line Code", required: true, disabledOnEdit: true, width: 140 },
+      { name: "line_code", label: "Line Code", hideOnAdd: true, disabledOnEdit: true, width: 140 },
       { name: "line_name", label: "Line Name", required: true, width: 260 },
     ],
     deleteConfig: { mode: "registered", payload: (row) => [row.line_code] },
