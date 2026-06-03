@@ -11,6 +11,7 @@ import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
+import { NoticeToast } from "../../components/ui/NoticeToast";
 import { useAuth } from "../../state/AuthContext";
 import type { LookupRow } from "../../api/lookups";
 
@@ -257,7 +258,7 @@ export function PamsDashboardPage() {
         </div>
         <Button variant="outline" onClick={loadDashboard}><RefreshCw size={15} /> Refresh</Button>
       </div>
-      {notice && <div className="alert error">{notice}</div>}
+      <NoticeToast notice={notice ? { type: "error", message: notice } : null} onClose={() => setNotice("")} />
       <div className="grid gap-3 md:grid-cols-4">
         {(loading ? [{}, {}, {}, {}] : metrics).map((item, index) => (
           <Card key={index}>
@@ -297,9 +298,9 @@ export function PamsMasterPage({ config }: { config: PamsMasterConfig }) {
   const companyCode = user?.company_code || "";
   const tableFields = config.fields.filter((field) => field.table !== false);
 
-  const loadRows = async () => {
+  const loadRows = async (clearNotice = true) => {
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const data = await pamsSelect({ parameter: config.listParameter, loginid, code1: companyCode });
       setRows(data.map(normalizeRow));
@@ -420,7 +421,7 @@ export function PamsMasterPage({ config }: { config: PamsMasterConfig }) {
       await pamsSave({ parameter: config.saveParameter, loginid, ...extra });
       setFormOpen(false);
       setNotice({ type: "success", message: `${config.title} saved successfully` });
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to save ${config.title}` });
     } finally {
@@ -437,7 +438,7 @@ export function PamsMasterPage({ config }: { config: PamsMasterConfig }) {
       await pamsDelete({ parameter: config.deleteParameter, loginid, ...(config.buildDelete?.(deleteTarget, ctx) || genericDeleteValues(config.keyFields, deleteTarget, companyCode)) });
       setDeleteTarget(null);
       setNotice({ type: "success", message: `${config.title} deleted successfully` });
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to delete ${config.title}` });
     } finally {
@@ -453,11 +454,11 @@ export function PamsMasterPage({ config }: { config: PamsMasterConfig }) {
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{config.subtitle}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={loadRows}><RefreshCw size={15} /> Refresh</Button>
+          <Button variant="outline" onClick={() => void loadRows()}><RefreshCw size={15} /> Refresh</Button>
           <Button disabled={!config.saveParameter} onClick={openAdd}><Plus size={15} /> Add</Button>
         </div>
       </div>
-      {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
       <DataTable
         columns={columns}
         data={rows}
@@ -663,7 +664,7 @@ export function PamsReportPage({ type }: { type: "summary" | "listing" }) {
           </CardContent>
         </Card>
       )}
-      {notice && <div className="alert error">{notice}</div>}
+      <NoticeToast notice={notice ? { type: "error", message: notice } : null} onClose={() => setNotice("")} />
       <DataTable columns={columns} data={rows} title={`${rows.length.toLocaleString()} Records`} subtitle={title} searchValue={query} onSearchChange={setQuery} searchPlaceholder={`Search ${title.toLowerCase()}...`} loading={loading} height={620} minWidth={1200} density="grid" enablePagination pageSize={100} />
     </section>
   );
@@ -696,13 +697,13 @@ export function PamsDepartmentAssignmentPage() {
       .catch(() => setEmployees([]));
   }, [loginid, companyCode]);
 
-  const loadAssignments = async () => {
+  const loadAssignments = async (clearNotice = true) => {
     if (!selectedEmployee || !selectedType) {
       setNotice({ type: "error", message: "Select employee and item type" });
       return;
     }
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       // pamsSave ki jagah pamsSelect use karo
       await pamsSelect({
@@ -763,7 +764,7 @@ export function PamsDepartmentAssignmentPage() {
       })));
       setNotice({ type: "success", message: "Assignment saved successfully" });
       setLastSaved(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
-      await loadAssignments();
+      await loadAssignments(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save assignments" });
     } finally {
@@ -795,7 +796,7 @@ export function PamsDepartmentAssignmentPage() {
 
         </div>
       </div>
-      {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
       <Card>
         <CardContent className="grid gap-3 pt-4 md:grid-cols-[1.3fr_1fr]">
           <Field label="Employee" required>
@@ -1007,7 +1008,7 @@ export function PamsBulkAppraisalPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><h1 className="m-0 text-2xl font-semibold">Bulk Appraisal</h1><p className="mt-1 text-sm text-muted-foreground">Create appraisal documents for selected employees and period.</p></div>
       </div>
-      {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
       <Card>
         <CardContent className="grid gap-3 pt-4 md:grid-cols-[1fr_1fr_auto]">
           <Field label="Period" required>
@@ -1262,7 +1263,7 @@ export function PamsAppraisalViewPage() {
           </div>
         </div>
       </div>
-      {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
       <div className="flex flex-wrap gap-2">
         {tabs.map((tab) => (
           <Button key={tab.key} type="button" variant={activeTab === tab.key ? "default" : "outline"} onClick={() => setActiveTab(tab.key)}>
@@ -1550,7 +1551,7 @@ function PamsAppraisalHeaderDialog({ open, row, mode, onClose }: { open: boolean
       footer={<><Button variant="outline" onClick={() => onClose(false)}>Close</Button>{!readOnly && <Button disabled={saving} onClick={() => void save()}><Save size={15} /> {saving ? "Saving..." : "Save"}</Button>}</>}
     >
       <form className="grid max-w-full gap-4 overflow-hidden" onSubmit={save}>
-        {notice && <div className="alert error">{notice}</div>}
+        <NoticeToast notice={notice ? { type: "error", message: notice } : null} onClose={() => setNotice("")} />
         <Card className="max-w-full overflow-hidden">
           <CardHeader className="border-b border-border">
             <div>
@@ -1681,7 +1682,7 @@ function PamsProcedureTable({
         <Button variant="outline" onClick={loadRows}><RefreshCw size={15} /> Refresh</Button>
       </div>
       {toolbarTop}
-      {notice && <div className="alert error">{notice}</div>}
+      <NoticeToast notice={notice ? { type: "error", message: notice } : null} onClose={() => setNotice("")} />
       <DataTable columns={columns} data={rows} title={`${rows.length.toLocaleString()} Records`} subtitle={title} searchValue={query} onSearchChange={setQuery} searchPlaceholder={`Search ${title.toLowerCase()}...`} loading={loading} height={620} minWidth={1200} density="grid" enablePagination pageSize={100} getRowId={(row, index) => `${parameter}_${Object.values(row).slice(0, 3).join("_")}_${index}`} />
     </section>
   );

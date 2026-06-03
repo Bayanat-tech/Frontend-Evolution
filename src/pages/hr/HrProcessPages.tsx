@@ -9,6 +9,7 @@ import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
+import { NoticeToast } from "../../components/ui/NoticeToast";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { SalaryAdvancePage } from "./SalaryAdvancePage";
@@ -131,7 +132,7 @@ export function HrPayrollProcessPage() {
   return (
     <section className="grid gap-4">
       <PageTitle title="Payroll Process" subtitle="Filter eligible employees and process payroll using the existing HR payroll procedure." />
-      {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
       <Card>
         <CardHeader>
           <div><p className="eyebrow">Process Criteria</p><h2 className="m-0 text-sm font-semibold">Payroll Selection</h2></div>
@@ -185,7 +186,7 @@ export function HrLeaveCancelPage() {
   return (
     <section className="grid gap-4">
       <PageTitle title="Leave Cancel" subtitle="Cancelled leave requests from the existing HR leave flow." />
-      {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
       <DataTable columns={columns} data={rows} subtitle="Leave Cancel List" title={`${rows.length.toLocaleString()} Records`} searchPlaceholder="Search request, employee, leave..." loading={loading} height={640} minWidth={1240} density="grid" enablePagination pageSize={100} toolbar={<Button variant="outline" onClick={loadRows}><RefreshCw size={15} /> Refresh</Button>} getRowId={(row, index) => String(text(row, "request_number") || `leave_${index}`)} />
     </section>
   );
@@ -226,7 +227,7 @@ export function HrPayrollAccountSetupPage() {
   return (
     <section className="grid gap-4">
       <PageTitle title="Payroll Account Setup" subtitle="Payroll pay component account setup using the existing HR pay component data." />
-      {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
       <DataTable columns={columns} data={rows} subtitle="Payroll Account Setup List" title={`${rows.length.toLocaleString()} Records`} searchPlaceholder="Search pay component, division..." loading={loading} height={640} minWidth={1100} density="grid" enablePagination pageSize={100} toolbar={<Button variant="outline" onClick={loadRows}><RefreshCw size={15} /> Refresh</Button>} getRowId={(row, index) => `${text(row, "pay_comp_id")}_${text(row, "div_code")}_${index}`} />
     </section>
   );
@@ -290,7 +291,7 @@ export function HrPayUnitsPage({ mode }: { mode: PayUnitMode }) {
   return (
     <section className="grid gap-4">
       <PageTitle title={title} subtitle={dependant ? "Maintain dependent pay unit rules and nationality limits." : "Maintain pay component units, payroll flags, and account-linked setup."} />
-      {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
       <DataTable
         columns={columns}
         data={rows}
@@ -499,7 +500,7 @@ function PayUnitEditor({
   return (
     <Dialog open title={`${mode === "add" ? "Add" : mode === "view" ? "View" : "Edit"} ${dependant ? "Pay Units Dependant" : "Pay Unit"}`} wide onClose={onClose}>
       <div className="grid gap-4">
-        {error && <div className="alert error">{error}</div>}
+        <NoticeToast notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
         {loading && <div className="alert">Loading pay unit details...</div>}
         <Card>
           <CardHeader><div><p className="eyebrow">Header</p><h2 className="m-0 text-sm font-semibold">Pay Component Information</h2></div></CardHeader>

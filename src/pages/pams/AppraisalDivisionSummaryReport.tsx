@@ -89,8 +89,8 @@ const BellCurveChart: React.FC<{ ratingCounts: Record<number, number> }> = ({ ra
 // ─── Report Design (printable area) ──────────────────────────
 const ReportDesign = React.forwardRef<HTMLDivElement, {
     rows: SummaryRow[];
-    filters: { div: string; dept: string; section: string; desg: string };
-    filterLabels: { div: string; dept: string; section: string; desg: string };
+    filters: { div: string; dept: string };
+    filterLabels: { div: string; dept: string };
 }>(({ rows, filters, filterLabels }, ref) => {
     const totals = useMemo(() => ({
         R1: rows.reduce((s, r) => s + Number(r.R1), 0),
@@ -105,12 +105,9 @@ const ReportDesign = React.forwardRef<HTMLDivElement, {
         1: totals.R1, 2: totals.R2, 3: totals.R3, 4: totals.R4, 5: totals.R5,
     };
 
-    // Use display labels (names) for filter label instead of codes
     const filterLabel = [
         filters.div !== "ALL" && `Division: ${filterLabels.div || filters.div}`,
         filters.dept !== "ALL" && `Dept: ${filterLabels.dept || filters.dept}`,
-        filters.section !== "ALL" && `Section: ${filterLabels.section || filters.section}`,
-        filters.desg !== "ALL" && `Designation: ${filterLabels.desg || filters.desg}`,
     ].filter(Boolean).join("  |  ");
 
     return (
@@ -272,8 +269,7 @@ const fetchDropdown = async (
     loginid: string,
     company_code: string,
     code2 = "ALL",
-    code3 = "ALL",
-    code4 = "ALL"
+    code3 = "ALL"
 ): Promise<DropdownItem[]> => {
     try {
         const res = await pamsSelect({
@@ -282,12 +278,11 @@ const fetchDropdown = async (
             code1: company_code,
             code2,
             code3,
-            code4,
         });
         if (!Array.isArray(res)) return [];
         return (res as Record<string, unknown>[]).map((r) => ({
-            code: String(r.DIV_CODE ?? r.DEPT_CODE ?? r.SECTION_CODE ?? r.DESG_CODE ?? ""),
-            name: String(r.DIV_NAME ?? r.DEPT_NAME ?? r.SECTION_NAME ?? r.DESG_NAME ?? ""),
+            code: String(r.DIV_CODE ?? r.DEPT_CODE ?? ""),
+            name: String(r.DIV_NAME ?? r.DEPT_NAME ?? ""),
         }));
     } catch {
         return [];
@@ -307,22 +302,16 @@ const AppraisalDivisionSummaryReport = () => {
     const loginid = user?.loginid ?? user?.username ?? "";
 
     // ── Filter codes (sent to API) ────────────────────────────
-    const [div, setDiv]         = useState("ALL");
-    const [dept, setDept]       = useState("ALL");
-    const [section, setSection] = useState("ALL");
-    const [desg, setDesg]       = useState("ALL");
+    const [div, setDiv]   = useState("ALL");
+    const [dept, setDept] = useState("ALL");
 
     // ── Filter display names (shown in report header) ─────────
-    const [divLabel, setDivLabel]         = useState("");
-    const [deptLabel, setDeptLabel]       = useState("");
-    const [sectionLabel, setSectionLabel] = useState("");
-    const [desgLabel, setDesgLabel]       = useState("");
+    const [divLabel, setDivLabel]   = useState("");
+    const [deptLabel, setDeptLabel] = useState("");
 
     // ── Dropdown option lists ──────────────────────────────────
-    const [divOptions, setDivOptions]         = useState<DropdownItem[]>([]);
-    const [deptOptions, setDeptOptions]       = useState<DropdownItem[]>([]);
-    const [sectionOptions, setSectionOptions] = useState<DropdownItem[]>([]);
-    const [desgOptions, setDesgOptions]       = useState<DropdownItem[]>([]);
+    const [divOptions, setDivOptions]   = useState<DropdownItem[]>([]);
+    const [deptOptions, setDeptOptions] = useState<DropdownItem[]>([]);
 
     const [reportData, setReportData]     = useState<SummaryRow[]>([]);
     const [isFetching, setIsFetching]     = useState(false);
@@ -340,27 +329,9 @@ const AppraisalDivisionSummaryReport = () => {
         if (!loginid) return;
         fetchDropdown("report_departments", loginid, company_code, div)
             .then(data => setDeptOptions(data));
-        setDept("ALL"); setDeptLabel("");
-        setSection("ALL"); setSectionLabel("");
-        setDesg("ALL"); setDesgLabel("");
+        setDept("ALL");
+        setDeptLabel("");
     }, [div, loginid, company_code]);
-
-    // ── Cascade: sections when dept changes ───────────────────
-    useEffect(() => {
-        if (!loginid) return;
-        fetchDropdown("report_sections", loginid, company_code, div, dept)
-            .then(data => setSectionOptions(data));
-        setSection("ALL"); setSectionLabel("");
-        setDesg("ALL"); setDesgLabel("");
-    }, [dept, loginid, company_code]);
-
-    // ── Cascade: designations when section changes ────────────
-    useEffect(() => {
-        if (!loginid) return;
-        fetchDropdown("report_designations", loginid, company_code, div, dept, section)
-            .then(data => setDesgOptions(data));
-        setDesg("ALL"); setDesgLabel("");
-    }, [section, loginid, company_code]);
 
     // ── Generate report ───────────────────────────────────────
     const handleGenerate = async () => {
@@ -374,7 +345,7 @@ const AppraisalDivisionSummaryReport = () => {
                 code1: company_code,
                 code2: div,
                 code3: dept,
-                code4: section,
+                code4: "ALL",
             });
             setReportData(Array.isArray(res) ? (res as unknown) as SummaryRow[] : []);
         } catch {
@@ -476,50 +447,6 @@ const AppraisalDivisionSummaryReport = () => {
                     />
                 </div>
 
-                {/* Section Lookup */}
-                <div style={{ flex: 1, minWidth: 160 }}>
-                    <LookupField
-                        label="Section"
-                        value={section === "ALL" ? "" : section}
-                        displayValue={sectionLabel}
-                        columns={lookupColumns}
-                        valueField="CODE"
-                        displayFields={["CODE", "NAME"]}
-                        loadOptions={() => Promise.resolve(toLookupRows(sectionOptions))}
-                        onChange={(val, row) => {
-                            if (!val) {
-                                setSection("ALL"); setSectionLabel("");
-                            } else {
-                                setSection(val);
-                                setSectionLabel(row ? String((row as Record<string, unknown>).NAME ?? val) : val);
-                            }
-                        }}
-                        placeholder="All Sections"
-                    />
-                </div>
-
-                {/* Designation Lookup */}
-                <div style={{ flex: 1, minWidth: 160 }}>
-                    <LookupField
-                        label="Designation"
-                        value={desg === "ALL" ? "" : desg}
-                        displayValue={desgLabel}
-                        columns={lookupColumns}
-                        valueField="CODE"
-                        displayFields={["CODE", "NAME"]}
-                        loadOptions={() => Promise.resolve(toLookupRows(desgOptions))}
-                        onChange={(val, row) => {
-                            if (!val) {
-                                setDesg("ALL"); setDesgLabel("");
-                            } else {
-                                setDesg(val);
-                                setDesgLabel(row ? String((row as Record<string, unknown>).NAME ?? val) : val);
-                            }
-                        }}
-                        placeholder="All Designations"
-                    />
-                </div>
-
                 <Button
                     variant="default"
                     size="default"
@@ -552,8 +479,8 @@ const AppraisalDivisionSummaryReport = () => {
                         <ReportDesign
                             ref={reportRef}
                             rows={reportData}
-                            filters={{ div, dept, section, desg }}
-                            filterLabels={{ div: divLabel, dept: deptLabel, section: sectionLabel, desg: desgLabel }}
+                            filters={{ div, dept }}
+                            filterLabels={{ div: divLabel, dept: deptLabel }}
                         />
                     </div>
                 )}

@@ -6,6 +6,8 @@ import { WorkspacePage } from "./pages/WorkspacePage";
 import { ProtectedRoute } from "./routes/ProtectedRoute";
 import { useAuth } from "./state/AuthContext";
 import { ToastProvider } from "./components/ui/AlertToast";
+import "../src/styles.css";
+import { WmsBootScreen } from "./components/BootScreen";
 
 export function App() {
   const { isBooting } = useAuth();
@@ -17,14 +19,18 @@ export function App() {
 
   const toggleTheme = () => setDark((value) => !value);
 
-  if (isBooting) {
-    return (
-      <div className="boot-screen">
-        <div className="spinner" />
-        <span>Starting secure workspace...</span>
-      </div>
-    );
-  }
+  // if (isBooting) {
+  //   return (
+  //     <div className="boot-screen">
+  //       <div className="spinner" />
+  //       <span>Starting secure workspace...</span>
+  //     </div>
+  //   );
+  // }
+
+if (isBooting) {
+  return <WmsBootScreen />;
+}
 
   return (
     <div className={dark ? "app dark" : "app"}>
