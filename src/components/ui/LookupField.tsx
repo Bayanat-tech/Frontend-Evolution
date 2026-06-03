@@ -22,6 +22,7 @@ type LookupFieldProps = {
   disabled?: boolean;
   compact?: boolean;
   placeholder?: string;
+  required?: boolean;
 };
 
 export function LookupField({
@@ -36,6 +37,7 @@ export function LookupField({
   disabled,
   compact,
   placeholder,
+  required,
 }: LookupFieldProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -147,7 +149,8 @@ export function LookupField({
   return (
     <>
       <label className={compact ? "block" : "field"}>
-        {!compact && <span>{label}</span>}
+        {!compact && <span>{label} {required && ( <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span>)}
+      </span>}
         <div ref={triggerRef} className="flex h-9 overflow-hidden rounded-md border bg-background">
           <button
             className="min-w-0 flex-1 border-0 bg-transparent px-3 text-left text-sm text-foreground disabled:opacity-60"

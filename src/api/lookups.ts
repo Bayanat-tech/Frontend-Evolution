@@ -4,6 +4,7 @@ type ApiResponse<T> = {
   success: boolean;
   data?: T;
   message?: string;
+  details?: string;
 };
 
 export type LookupRow = Record<string, unknown>;
@@ -163,10 +164,8 @@ export async function executeCommonProcedure(params: Record<string, unknown>) {
 }
 
 export async function postFinance<TPayload extends Record<string, unknown>>(endpoint: string, payload: TPayload) {
-   const response = await api.post<ApiResponse<unknown>>(`/api/finance/${endpoint}`, payload);
-   //const response = await api.post<ApiResponse<unknown>>("/api/wms/common/proc_build_dynamic_ins_upd_column90", payload);
-
-  if (!response.data.success) throw new Error(response.data.message || "Unable to save finance data");
+  const response = await api.post<ApiResponse<unknown>>(`/api/finance/${endpoint}`, payload);
+  if (!response.data.success) throw new Error(response.data.details || response.data.message || "Unable to save finance data");
   return response.data;
 }
 
