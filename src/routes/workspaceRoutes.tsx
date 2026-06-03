@@ -20,7 +20,6 @@ import { FinanceUtilityMasterPage, financeUtilityConfigs } from "../pages/financ
 import { PaymentDocumentPage } from "../pages/finance/PaymentDocumentPage";
 import { PLSetupPage } from "../pages/finance/PLSetupPage";
 import { PrepaidRegisterPage } from "../pages/finance/PrepaidRegisterPage";
-import { WmsCountryPage } from "../pages/wms/WmsCountryPage";
 import { WmsInboundPage } from "../pages/wms/WmsInboundPage";
 import { WmsOutboundPage } from "../pages/wms/WmsOutboundPage";
 import { WmsSimpleMasterPage } from "../pages/wms/WmsSimpleMasterPage";
@@ -36,14 +35,15 @@ import AppraisalSummaryReportDesign from "../pages/pams/AppraisalSummaryReportDe
 import AppraisalDivisionSummaryReport from "../pages/pams/AppraisalDivisionSummaryReport";
 
 import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
-import { PettyCashPaymentDocumentEditor } from "../pages/finance/PettyCashPayment";
-
 import { JVDocumentEditor } from "../pages/finance/JVDocumentPage";
 
 import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs } from "../pages/pams/PamsPages";
 import { HrMasterPage } from "../pages/hr/HrMasterPage";
 import { hrMasterConfigs } from "../pages/hr/hrMasterConfigs";
 import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrPayUnitsPage } from "../pages/hr/HrProcessPages";
+import { Leaf } from "lucide-react";
+import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics";
+import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -66,6 +66,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Finance Account Tree",
     match: ({ pathname }) => isAccountTreeRoute(pathname),
     element: () => <AccountTreePage />,
+  },
+  {
+    name: "Finance Account Report",
+    match: ({ pathname }) => isAccountReportRoute(pathname),
+    element: () => <LedgerBasics />,
   },
   {
     name: "Finance Bank Master",
@@ -128,11 +133,6 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: ({ pathname }) => <PaymentDocumentPage docType={getTransactionDocType(pathname)!} />,
   },
   {
-    name: "Finance Payment Documents",
-    match: ({ pathname }) => Boolean(getPettyCashDocType(pathname)),
-    element: ({ pathname }) => <PettyCashPaymentDocumentEditor docType={getPettyCashDocType(pathname)!} />,
-  },
-  {
     name: "Finance Utility Master",
     match: ({ pathname }) => Boolean(getUtilityMasterConfig(pathname)),
     element: ({ pathname }) => <FinanceUtilityMasterPage config={getUtilityMasterConfig(pathname)!} />,
@@ -182,11 +182,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isWmsOutboundRoute(pathname),
     element: () => <WmsOutboundPage />,
   },
-  {
-    name: "WMS Country Master",
-    match: ({ pathname }) => isWmsCountryRoute(pathname),
-    element: () => <WmsCountryPage />,
+   {
+    name: "WMS Billing Activity Master",
+    match: ({ pathname }) => isWmsBillingActRoute(pathname),
+    element: () => <WmsBillingActPage />,
   },
+  
   {
     name: "WMS Simple Master",
     match: ({ pathname }) => Boolean(getWmsSimpleMasterConfig(pathname)),
@@ -469,6 +470,11 @@ function isAccountTreeRoute(pathname: string) {
   );
 }
 
+function isAccountReportRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts/reports/account-report/detailed-reports/ledger-basic");
+}
+
 function getCreditDebitNoteDocType(pathname: string) {
   const normalized = pathname.toLowerCase();
   if (
@@ -491,12 +497,10 @@ function getTransactionDocType(pathname: string) {
   if (normalized.includes("/finance/accounts/transactions/cheque-payment")) return "BP" as const;
   if (normalized.includes("/finance/accounts/transactions/cheque-receipt")) return "BR" as const;
   if (normalized.includes("/finance/accounts/transactions/cash-receipt")) return "CR" as const;
-  return null;
-}
-
-function getPettyCashDocType(pathname: string) {
-  const normalized = pathname.toLowerCase();
-  if (normalized.includes("/finance/accounts/transactions/petty_cash_payment") || normalized.includes("/finance/accounts/transactions/petty-cash-payment")) return "CP" as const;
+  if (
+    normalized.includes("/finance/accounts/transactions/petty_cash_payment") ||
+    normalized.includes("/finance/accounts/transactions/petty-cash-payment")
+  ) return "CP" as const;
   return null;
 }
 
@@ -569,7 +573,10 @@ function isWmsCountryRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/wms/") && normalized.includes("/country");
 }
-
+function isWmsBillingActRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/wms/") && normalized.includes("/principal_masters") && (normalized.includes("/billing_activity"));
+}
 function isWmsInboundRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   if (!normalized.includes("/wms/")) return false;

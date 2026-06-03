@@ -76,9 +76,9 @@ export function DocumentSetupPage() {
   const companyCode = user?.company_code || "";
   const loginId = user?.loginid || "";
 
-  const loadDocs = async () => {
+  const loadDocs = async (clearNotice = true) => {
     setLoadingDocs(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const rows = await getDynamicLookup({
         parameter: "MS_AC_SETUP_DOC",
@@ -93,14 +93,14 @@ export function DocumentSetupPage() {
     }
   };
 
-  const loadDetails = async (doc: DocumentRow) => {
+  const loadDetails = async (doc: DocumentRow, clearNotice = true) => {
     setSelected(doc);
     setDocForm(doc);
     setDirtyHeader({});
     setDirtyDetail({});
     setActiveGrid(null);
     setLoadingDetails(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const [headers, details] = await Promise.all([
         getDynamicLookup({ parameter: "MS_AC_SETUP_DOC_ACCODE_HDR", loginid: loginId, code1: doc.doc_id }),
@@ -176,6 +176,20 @@ export function DocumentSetupPage() {
     setSaving(true);
     setNotice(null);
     try {
+      const headerToSave = Object.values(dirtyHeader)
+        .filter((row) => row.ac_code.trim())
+        .map((row) => stripAccountForSave(row, companyCode));
+      const detailToSave = Object.values(dirtyDetail)
+        .filter((row) => row.ac_code.trim())
+        .map((row) => stripAccountForSave(row, companyCode));
+
+      if (headerToSave.length) {
+        await postFinance("insDocAccodeBulk", { rows: headerToSave, loginId });
+      }
+      if (detailToSave.length) {
+        await postFinance("insDocAccodeBulk", { rows: detailToSave, loginId });
+      }
+
       if (docDirty) {
         await postFinance("upsertSetupDoc", {
           ...docForm,
@@ -188,19 +202,12 @@ export function DocumentSetupPage() {
         });
       }
 
-      const headerToSave = Object.values(dirtyHeader).filter((row) => row.ac_code.trim()).map(stripAccountForSave);
-      const detailToSave = Object.values(dirtyDetail).filter((row) => row.ac_code.trim()).map(stripAccountForSave);
-      const rows = [...headerToSave, ...detailToSave];
-      if (rows.length) {
-        await postFinance("insDocAccodeBulk", { rows, loginId });
-      }
-
       setNotice({ type: "success", message: "Document setup saved successfully" });
       setDirtyHeader({});
       setDirtyDetail({});
       setActiveGrid(null);
-      await loadDocs();
-      await loadDetails(docForm);
+      await loadDocs(false);
+      await loadDetails(docForm, false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save document setup" });
     } finally {
@@ -220,12 +227,12 @@ export function DocumentSetupPage() {
 
     try {
       await postFinance("delDocAccodeBulk", {
-        rows: [stripAccountForSave(row)],
+        rows: [stripAccountForSave(row, companyCode)],
         loginId,
       });
       setDeleteTarget(null);
       setNotice({ type: "success", message: "Document account deleted" });
-      if (selected) await loadDetails(selected);
+      if (selected) await loadDetails(selected, false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete account row" });
     }
@@ -624,9 +631,9 @@ function mapDocAccount(row: LookupRow, index: number, fallbackType: "H" | "D", d
   };
 }
 
-function stripAccountForSave(row: DocAccountRow) {
+function stripAccountForSave(row: DocAccountRow, fallbackCompanyCode = "") {
   return {
-    company_code: row.company_code,
+    company_code: row.company_code || fallbackCompanyCode,
     doc_id: row.doc_id,
     hdr_dtl: row.hdr_dtl,
     ac_code: row.ac_code,

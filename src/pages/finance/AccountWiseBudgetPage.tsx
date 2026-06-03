@@ -65,9 +65,9 @@ export function AccountWiseBudgetPage() {
   const [editor, setEditor] = useState<EditorState>(null);
   const [deleteTarget, setDeleteTarget] = useState<BudgetRow | null>(null);
 
-  const loadRows = async () => {
+  const loadRows = async (clearNotice = true) => {
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const data = await getDynamicLookup({
         parameter: "MS_BUDGET_ACWISE_PAGE",
@@ -174,7 +174,7 @@ export function AccountWiseBudgetPage() {
       });
       setDeleteTarget(null);
       setNotice({ type: "success", message: "Budget deleted successfully" });
-      await loadRows();
+      await loadRows(false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete budget" });
     }
@@ -219,7 +219,7 @@ export function AccountWiseBudgetPage() {
           description="Monthly budget details"
           onClose={() => setEditor(null)}
         >
-          <BudgetEditor editor={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); await loadRows(); }} />
+          <BudgetEditor editor={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); setNotice({ type: "success", message: editor.mode === "edit" ? "Budget updated successfully" : "Budget added successfully" }); await loadRows(false); }} />
         </Dialog>
       )}
 

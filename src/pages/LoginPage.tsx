@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Eye, EyeOff, LockKeyhole, Moon, Sun } from "lucide-react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { NoticeToast } from "../components/ui/NoticeToast";
 import { useAuth } from "../state/AuthContext";
 
 export function LoginPage({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => void }) {
@@ -76,7 +77,7 @@ export function LoginPage({ dark, onToggleTheme }: { dark: boolean; onToggleThem
               </div>
             </div>
 
-            {error && <div className="alert error">{error}</div>}
+            <NoticeToast notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
             <label className="field">
               <span>Login ID or Email</span>

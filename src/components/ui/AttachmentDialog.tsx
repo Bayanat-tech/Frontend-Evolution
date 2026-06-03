@@ -13,6 +13,7 @@ import { cn } from "../../lib/utils";
 import { Button } from "./Button";
 import { Dialog } from "./Dialog";
 import { Input } from "./Input";
+import { NoticeToast } from "./NoticeToast";
 
 type AttachmentDialogProps = {
   open: boolean;
@@ -165,7 +166,7 @@ export function AttachmentDialog({
           </Button>
         </div>
 
-        {notice && <div className={`alert ${notice.type}`}>{notice.message}</div>}
+        <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
         {!requestNumber ? (
           <EmptyAttachmentState title="Save Required" message="Attachments need a saved document or account code before upload." />

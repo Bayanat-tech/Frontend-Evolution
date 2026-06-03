@@ -176,7 +176,7 @@ export function getDefaultFyPeriod(periods: FyPeriod[], companyInfo?: CompanyInf
   return matchingYear?.fy_period || periods[periods.length - 1]?.fy_period || periods[0]?.fy_period || "";
 }
 
-export async function getTransactionDocuments(docType: TransactionType, fyPeriod?: string, search?: string, page = 1, limit = 100,columnFilters?: { field: string; values: string }[]) {
+export async function getTransactionDocuments(docType: TransactionType, fyPeriod?: string, search?: string, page = 1, limit = 100, columnFilters?: { field: string; values: string }[]) {
   const filters: unknown[] = [[{ field_name: "doc_type", field_value: docType, operator: "exactmatch" }]];
   if (fyPeriod) filters.push([{ field_name: "fy_period", field_value: fyPeriod, operator: "exactmatch" }]);
   if (search?.trim()) {
@@ -187,7 +187,7 @@ export async function getTransactionDocuments(docType: TransactionType, fyPeriod
     ]);
   }
 
-   if (columnFilters?.length) {
+  if (columnFilters?.length) {
     columnFilters.forEach(({ field, values }) => {
       if (values.trim()) {
         filters.push([{ field_name: field, field_value: values.trim(), operator: "contains" }]);
@@ -231,6 +231,14 @@ export async function getTransactionDefaultData(docType: TransactionType, isEdit
 }
 
 export async function getTransactionHeader(docNo: string, docType: TransactionType) {
+  const response = await api.get<ApiResponse<Record<string, unknown>>>(`/api/finance/transactions/header/${encodeURIComponent(docNo)}`, {
+    params: { doc_type: docType },
+  });
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load document header");
+  return response.data.data || {};
+}
+
+export async function getInvoicesTransactionHeader(docNo: string, docType: TransactionType) {
   const response = await api.get<ApiResponse<Record<string, unknown>>>(`/api/finance/transactions/header/${encodeURIComponent(docNo)}`, {
     params: { doc_type: docType },
   });
@@ -384,14 +392,6 @@ export async function getLpoDetail(docNo: string, docType: string) {
   return response.data.data || [];
 }
 
-export async function getLpoRefDocSearch(divCode: string, companyCode: string) {
-  const { getDynamicFinanceLookup } = await import("./lookups");
-  return getDynamicFinanceLookup({
-    parameter: "Account_LPO_REF_DOC",
-    code1: companyCode,
-    number1: Number(divCode) || undefined,
-  });
-}
 
 // Get lpo (Ref_Doc) in PI
 export async function getPurchaseHeader(docNo: string, docType: string) {
@@ -426,7 +426,7 @@ export async function upsertBulkAccountEntryApi(payload: {
 }
 
 export async function cancelTransactionDocument(docNo: string, docType: TransactionType) {
-  const response = await api.put<ApiResponse<null>>("/api/finance/transactions/cancel_cheque", null, {
+  const response = await api.put<ApiResponse<null>>("/api/finance/transactions/cancel_cheque", {}, {
     params: { doc_no: docNo, doc_type: docType },
   });
   if (!response.data.success) throw new Error(response.data.message || "Unable to cancel document");
@@ -460,6 +460,106 @@ export async function openDocumentReport(docType: TransactionType | string, docN
   const url = window.URL.createObjectURL(blob);
   window.open(url, "_blank", "noopener,noreferrer");
   window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+}
+
+/**
+ * Opens the Cheque Book Monitoring Report in a new tab
+ */
+/**
+ * Opens the Cheque Book Monitoring Report using common code parameters
+ */
+
+
+interface ReportParams {
+    parameter: string;
+    loginid: string;
+    code1?: string;
+    code2?: string;
+    code3?: string;
+    code4?: string;
+    code5?: string;
+    code6?: string;
+    code7?: string | number;
+    code8?: string | number;
+    code9?: string;
+    code10?: string;
+    code20?: string;
+    [key: string]: any;
+}
+
+// ── generic helper (same blob → new tab pattern) ──────────────────────────
+async function openReportInTab(endpoint: string, params: ReportParams): Promise<void> {
+    try {
+        const response = await api.post(endpoint, params, {
+            responseType: "blob",
+        });
+
+        const blob = new Blob([response.data], { type: "text/html;charset=utf-8" });
+        const url = window.URL.createObjectURL(blob);
+        const reportWindow = window.open(url, "_blank", "noopener,noreferrer");
+
+        if (!reportWindow) console.error("Please allow popups to view this report");
+
+        window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+        console.error(`Failed to open report [${endpoint}]:`, error);
+        throw error; // re-throw so the frontend can show an error banner
+    }
+}
+
+// ── 1. Cheque Book Monitoring ─────────────────────────────────────────────
+export async function openChequeMonitoringReport(params: ReportParams) {
+    await openReportInTab(
+        `/api/finance/transactions/reports/cheque-monitoring/html`,
+        params
+    );
+}
+
+export async function openChequeDateWiseReport(params: ReportParams) {
+    await openReportInTab(
+        `/api/finance/transactions/reports/cheque-date-wise/html`,
+        params
+    );
+}
+
+// ── 2. Detail Dump ────────────────────────────────────────────────────────
+export async function openDetailDumpReport(params: ReportParams) {
+    await openReportInTab(
+        `/api/finance/transactions/reports/detail-dump/html`,
+        params
+    );
+}
+
+// ── 3. Ledger With Details ────────────────────────────────────────────────
+export async function openLedgerWithDetailsReport(params: ReportParams) {
+    await openReportInTab(
+        `/api/finance/transactions/reports/ledger-with-details/html`,
+        params
+    );
+}
+
+// ── 4. Ledger With Opposite Entry ─────────────────────────────────────────
+export async function openLedgerOppositeEntryReport(params: ReportParams) {
+    await openReportInTab(
+        `/api/finance/transactions/reports/ledger-opposite-entry/html`,
+        params
+    );
+}
+
+// ── 5. Summary Dump ───────────────────────────────────────────────────────
+export async function openSummaryDumpReport(params: ReportParams) {
+    await openReportInTab(
+        `/api/finance/transactions/reports/summary-dump/html`,
+        params
+    );
+}
+
+// ── 6. Account Payee Wise ─────────────────────────────────────────────────
+export async function openAccountPayeeWiseReport(params: ReportParams) {
+    await openReportInTab(
+        `/api/finance/transactions/reports/account-payee-wise/html`,
+        params
+    );
 }
 
 export async function downloadDocumentReportExcel(docType: TransactionType | string, docNo: string) {

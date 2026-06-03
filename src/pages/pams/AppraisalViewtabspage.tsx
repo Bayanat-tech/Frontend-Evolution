@@ -8,6 +8,7 @@ import TaskGoalAppraisalTab      from "./Taskgoalappraisaltab";
 import TaskSkillAppraisalTab     from "./Taskskillappraisaltab";
 import AppraiserCommentsTab      from "./Appraisercommentstab";
 import PerformanceReportDesign   from "./Performancereportdesign";
+import { NoticeToast } from "../../components/ui/NoticeToast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SelectedTab = "task_details" | "characteristics" | "goals" | "skill" | "comments";
@@ -33,7 +34,7 @@ const S = {
   container: {
     width: "100%",
     padding: "12px",
-    fontFamily: "system-ui, -apple-system, sans-serif",
+    fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   },
   header: {
     display: "flex" as const,
@@ -571,7 +572,7 @@ useEffect(() => {
     <div style={S.container}>
 
       {/* Notice */}
-      {notice && <div style={S.notice(notice.type)}>{notice.message}</div>}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
       {/* ── Header ───────────────────────────────────────────────────────── */}
       <div style={S.header}>

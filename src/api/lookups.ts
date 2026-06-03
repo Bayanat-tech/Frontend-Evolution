@@ -4,6 +4,7 @@ type ApiResponse<T> = {
   success: boolean;
   data?: T;
   message?: string;
+  details?: string;
 };
 
 export type LookupRow = Record<string, unknown>;
@@ -21,6 +22,7 @@ export type DynamicQueryParams = {
   code8?: string;
   code9?: string;
   code10?: string;
+  code20?:string;
   number1?: number;
   number2?: number;
   number3?: number;
@@ -109,6 +111,12 @@ export async function getDynamicLookup(params: DynamicQueryParams) {
   return response.data.data || [];
 }
 
+export async function getDynamicLookupaccount(params: DynamicQueryParams) {
+  const response = await api.post<ApiResponse<LookupRow[]>>("/api/wms/common/proc_build_dynamic_sql_common20", params);
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load lookup data");
+  return response.data.data || [];
+}
+
 export async function getDynamicFinanceLookup(params: DynamicQueryParams) {
   const response = await api.post<ApiResponse<LookupRow[]>>("api/finance/proc_common_sql_finance", params);
   if (!response.data.success) throw new Error(response.data.message || "Unable to load Financelookup data");
@@ -141,7 +149,7 @@ export async function executeCommonProcedure(params: Record<string, unknown>) {
 
 export async function postFinance<TPayload extends Record<string, unknown>>(endpoint: string, payload: TPayload) {
   const response = await api.post<ApiResponse<unknown>>(`/api/finance/${endpoint}`, payload);
-  if (!response.data.success) throw new Error(response.data.message || "Unable to save finance data");
+  if (!response.data.success) throw new Error(response.data.details || response.data.message || "Unable to save finance data");
   return response.data;
 }
 

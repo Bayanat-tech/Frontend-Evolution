@@ -87,10 +87,10 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
     setFyPeriod((current) => current || fyData[0]?.fy_period || "");
   };
 
-   const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize,nextColumnFilters = columnFilters ) => {
+   const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize, nextColumnFilters = columnFilters, clearNotice = true) => {
     if (!nextFy) return;
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const hasSearch = Boolean(query.trim() || nextColumnFilters.some((filter) => String(filter.value ?? "").trim()));
       const requestPageIndex = hasSearch ? 0 : nextPageIndex;
@@ -178,7 +178,7 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
       await cancelTransactionDocument(cancelTarget.doc_no, docType);
       setCancelTarget(null);
       setNotice({ type: "success", message: "Document cancelled successfully" });
-      await loadRows();
+      await loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to cancel document" });
     }
@@ -190,7 +190,7 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
       await deleteTransactionDocument([deleteTarget.doc_no], docType);
       setDeleteTarget(null);
       setNotice({ type: "success", message: "Document deleted successfully" });
-      await loadRows();
+      await loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete document" });
     }
@@ -220,7 +220,7 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
           columns={columns}
           data={rows}
           title={loading ? "Loading" : `${totalRows.toLocaleString()} Documents`}
-          subtitle={docType}
+          subtitle={`${meta.title} List`}
           searchValue={query}
           onSearchChange={(value) => {
             setQuery(value);
@@ -261,7 +261,7 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
             onSaved={async (message) => {
               setEditor(null);
               setNotice({ type: "success", message });
-              await loadRows();
+              await loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false);
             }}
           />
         </div>
@@ -701,7 +701,7 @@ function JVDocument({
           <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading voucher...</div>
         ) : (
           <div className="grid gap-4">
-            {error && <div className="alert error">{error}</div>}
+            <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
             <div className="grid grid-cols-3 gap-3 rounded-md border bg-card p-3 max-xl:grid-cols-2 max-md:grid-cols-1">
               {editMode && (

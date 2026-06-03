@@ -9,6 +9,7 @@ import { Dialog } from "../../components/ui/Dialog";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
+import { NoticeToast } from "../../components/ui/NoticeToast";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { LookupRow } from "../../api/lookups";
 
@@ -648,19 +649,7 @@ cols.push({
       </div>
 
       {/* Notice */}
-      {notice && (
-        <div style={{
-          padding: "9px 14px",
-          borderRadius: "6px",
-          fontSize: "13px",
-          fontWeight: 500,
-          background: notice.type === "success" ? "#e6f9f0" : notice.type === "error" ? "#fdecea" : "#fff4e5",
-          color: notice.type === "success" ? "#0a6640" : notice.type === "error" ? "#a01a1a" : "#92400e",
-          border: `1px solid ${notice.type === "success" ? "#b7ebd4" : notice.type === "error" ? "#f5b3b3" : "#fcd38a"}`,
-        }}>
-          {notice.message}
-        </div>
-      )}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
       {/* Tabs */}
       <div style={{ display: "flex", alignItems: "center", gap: "2px", borderBottom: "2px solid #e5e7eb" }}>

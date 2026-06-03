@@ -503,37 +503,17 @@ type JobField = {
   dropdown?: "principal" | "division" | "department" | "port" | "country";
 };
 
-const jobFields: JobField[] = [
-  { name: "prin_code", label: "Principal Code", required: true, dropdown: "principal" },
-  { name: "dept_code", label: "Department Code", dropdown: "department" },
-  { name: "div_code", label: "Division Code", dropdown: "division" },
-  { name: "job_class", label: "Job Class", required: true },
-  { name: "job_type", label: "Job Type", required: true },
-  { name: "country_origin", label: "Country Origin", dropdown: "country" },
-  { name: "country_destination", label: "Country Destination", dropdown: "country" },
-  { name: "port_code", label: "Port Code", dropdown: "port" },
-  { name: "destination_port", label: "Destination Port", dropdown: "port" },
-  { name: "transport_mode", label: "Transport Mode" },
-  { name: "schedule_date", label: "Schedule Date", type: "date" },
-  { name: "doc_ref", label: "Doc Ref" },
-  { name: "prin_ref2", label: "Principal Ref 2" },
-  { name: "description1", label: "Description" },
-  { name: "remarks", label: "Remarks" },
-];
-
 // ---------------------------------------------------------------------------
 // Add form field configs per tab
 
 const shipmentFormFields: FormField[] = [
   { name: "container_no", label: "Container No", required: true },
-  { name: "vehicle_no", label: "Vehicle No" },
-  { name: "vessel_name", label: "Vessel Name" },
+  { name: "vehicle_no", label: "Vehicle No", required: true },
+  { name: "vessel_name", label: "Vessel Name", required: true },
   { name: "voyage_no", label: "Voyage No" },
   { name: "seal_no", label: "Seal No" },
   { name: "po_no", label: "PO No" },
   { name: "bl_no", label: "BL No" },
-  { name: "arrival_date", label: "Arrival Date", type: "date" },
-  { name: "remarks", label: "Remarks" },
 ];
 
 // Add a new type to FormField
@@ -574,11 +554,6 @@ const receivingFormFields: FormField[] = [
   { name: "doc_ref", label: "Doc Ref" },
 ];
 
-const qualityFormFields: FormField[] = [
-  { name: "prod_code", label: "Product Code", required: true },
-  { name: "clearance", label: "Clearance Status", required: true },
-  { name: "remarks", label: "Remarks" },
-];
 
 const tallyFormFields: FormField[] = [
   { name: "prod_code", label: "Product Code", required: true },
@@ -631,6 +606,7 @@ function InboundJobListing() {
   const { toast } = useToast(); // Add this line
   const companyCode = user?.company_code || "";
   const navigate = useNavigate();
+const [sortKey, setSortKey] = useState(0);
 
   const [rows, setRows] = useState<WmsRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -917,6 +893,7 @@ function InboundJobListing() {
       </div>
 
       <DataTable
+        key={sortKey}
         columns={columns} data={filteredRows}
         title={loading ? "Loading" : `${filteredRows.length} Jobs`}
         subtitle="Inbound Jobs" searchValue={query} onSearchChange={setQuery}
@@ -1024,10 +1001,14 @@ function InboundJobDetail({ jobNo, tab }: { jobNo: string; tab: string }) {
 {/* Header */}
 <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card px-4 py-3">
   <div className="flex min-w-0 items-center gap-3">
-    <Button size="icon" variant="outline" onClick={() => navigate("../..")} title="Back to jobs">
+    <Button
+      size="icon"
+      variant="outline"
+      onClick={() => navigate("/workspace/wms/wms/transactions/inbound/jobs")}
+      title="Back to jobs"
+    >
       <ArrowLeft size={16} />
     </Button>
-
     <div className="min-w-0">
       <p className="eyebrow mb-0.5">Inbound Job</p>
       <h1 className="m-0 truncate text-xl font-semibold leading-tight">{jobNo}</h1>
@@ -1106,6 +1087,7 @@ function InboundOperationalTab({
   job, jobNo, tab, loadingJob,
 }: { job: WmsRow | null; jobNo: string; tab: string; loadingJob: boolean; }) {
   const { user } = useAuth();
+    const { toast } = useToast();
   const prinCode = value(job || {}, "prin_code");
   const companyCode = user?.company_code || "";
 // ADD after existing useState declarations
@@ -1115,13 +1097,32 @@ const [editSaving, setEditSaving] = useState(false);
   const [rows, setRows] = useState<WmsRow[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  // const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState<WmsRow>({});
   const [saving, setSaving] = useState(false);
   // For Quality Clearance process modal
-  const [processOpen, setProcessOpen] = useState(false);
-  const [selectedRows, setSelectedRows] = useState<WmsRow[]>([]);
+const [processOpen, setProcessOpen] = useState(false);
+const [sortKey, setSortKey] = useState(0);
+
+const [clearanceForm, setClearanceForm] = useState({
+  truck_condition: "",
+  container_condition: "",
+  container_type: "",
+  ref_box_temp: "",
+  prod_temp: "",
+  prod_con_acceptance: "",
+});
+const [putawayForm, setPutawayForm] = useState({
+  site_from: "",   site_from_name: "",
+  location_from: "", location_from_name: "",
+  site_to: "",     site_to_name: "",
+  location_to: "", location_to_name: "",
+});
+const [siteOptions,         setSiteOptions]         = useState<DropdownOption[]>([]);
+const [locationFromOptions, setLocationFromOptions] = useState<DropdownOption[]>([]);
+const [locationToOptions,   setLocationToOptions]   = useState<DropdownOption[]>([]);
+const [selectedRows, setSelectedRows] = useState<WmsRow[]>([]);
 // ADD alongside the existing notice state:
 const [modalNotice, setModalNotice] = useState<string | null>(null);
   const config = getInboundTabConfig(tab);
@@ -1287,23 +1288,60 @@ const recalcQuantity = (
   const loadRows = useCallback(async () => {
     if (!config || loadingJob || !prinCode) return;
     setLoading(true);
-    setNotice(null);
+    // setNotice(null);
     try {
       const data = await executeWmsInboundSql(
         config.sql({ companyCode, jobNo, prinCode }),
       );
       setRows(data.map(normalizeRow));
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to load ${config?.title}` });
+      toast.error(error instanceof Error ? error.message : `Unable to load ${config?.title}`);
     } finally { setLoading(false); }
   }, [tab, jobNo, prinCode, loadingJob, companyCode]);
 
   useEffect(() => { void loadRows(); }, [loadRows]);
 
   // Reset form when opening
-  const openAddModal = () => {
+const openAddModal = () => {
     setAddForm({ job_no: jobNo, prin_code: prinCode, company_code: companyCode });
     setAddOpen(true);
+  };
+
+  const openPutawayModal = async () => {
+    // load sites
+    try {
+      const res = await api.post("/api/wms/inbound/executeRawSql", {
+        raw_sql: `SELECT SITE_CODE, SITE_NAME FROM MS_SITE WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY SITE_CODE`,
+      });
+      const data = Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
+      setSiteOptions(data.map((r: Record<string,unknown>) => ({
+        value: String(r["SITE_CODE"] ?? r["site_code"] ?? ""),
+        label: `${r["SITE_CODE"] ?? r["site_code"]} - ${r["SITE_NAME"] ?? r["site_name"]}`,
+      })));
+    } catch { /* ignore */ }
+    setPutawayForm({ site_from: "", site_from_name: "", location_from: "", location_from_name: "", site_to: "", site_to_name: "", location_to: "", location_to_name: "" });
+    setLocationFromOptions([]);
+    setLocationToOptions([]);
+    setModalNotice(null);
+    setProcessOpen(true);
+  };
+
+  const loadLocations = async (siteCode: string, target: "from" | "to") => {
+    if (!siteCode) {
+      target === "from" ? setLocationFromOptions([]) : setLocationToOptions([]);
+      return;
+    }
+    try {
+      const res = await api.post("/api/wms/inbound/executeRawSql", {
+        raw_sql: `SELECT * FROM MS_LOCATION WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' AND SITE_CODE = '${sqlEscape(siteCode)}' ORDER BY LOCATION_CODE`,
+      });
+      const data = Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
+      const opts = data.map((r: Record<string,unknown>) => ({
+        value: String(r["LOCATION_CODE"] ?? r["location_code"] ?? ""),
+        label: `${r["LOCATION_CODE"] ?? r["location_code"]}`
+      }));
+      target === "from" ? setLocationFromOptions(opts) : setLocationToOptions(opts);
+    } catch { /* ignore */ }
   };
 // Add this helper just above saveAdd:
 const stripUiFields = (form: WmsRow): WmsRow => {
@@ -1360,7 +1398,7 @@ const saveAdd = async (e: FormEvent) => {
     });
     setAddOpen(false);
     setModalNotice(null);
-    setNotice({ type: "success", message: `${config.title} added successfully` });
+    toast.success(`${config.title} added successfully`);
     await loadRows();
   } catch (error) {
     setModalNotice(error instanceof Error ? error.message : `Unable to add ${config?.title}`);
@@ -1416,7 +1454,7 @@ const saveEdit = async (e: FormEvent) => {
 }
     setEditOpen(false);
     setModalNotice(null);
-    setNotice({ type: "success", message: `${tab === "packing_details" ? "Packing detail" : "Receiving detail"} updated successfully` });
+    toast.success(`${tab === "packing_details" ? "Packing detail" : "Receiving detail"} updated successfully`);
     await loadRows();
   } catch (error) {
     setModalNotice(error instanceof Error ? error.message : "Unable to update record");
@@ -1442,7 +1480,7 @@ const saveEdit = async (e: FormEvent) => {
       case "putway_details":
         return (
           <Button size="sm" variant="outline"
-            onClick={() => setProcessOpen(true)}
+            onClick={openPutawayModal}
             disabled={selectedRows.length === 0}>
             <Truck size={14} /> Process Putaway
           </Button>
@@ -1514,9 +1552,10 @@ const columns = makeColumns(
 );
   return (
     <section className="grid gap-3">
-      {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>}
+      {/* {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>} */}
 
       <DataTable
+        key={sortKey}
         columns={columns} data={rows}
         title={loading ? "Loading" : `${rows.length} Rows`}
         subtitle={config.title} searchValue={query} onSearchChange={setQuery}
@@ -1529,7 +1568,7 @@ const columns = makeColumns(
         }
         onRowSelectionChange={
           (tab === "quality_clearance" || tab === "putway_details" || tab === "job_confirmation")
-            ? (sel) => setSelectedRows(sel)
+            ? setSelectedRows
             : undefined
         }
       />
@@ -1857,46 +1896,312 @@ const columns = makeColumns(
   </Dialog>
 )}
       {/* Process Modal (Quality Clearance / Putaway / Confirmation) */}
-      <Dialog open={processOpen} compact
-        title={
-          tab === "quality_clearance" ? "Process Quality Clearance"
-          : tab === "putway_details" ? "Process Putaway"
-          : "Process Job Confirmation"
-        }
-        description={`Processing ${selectedRows.length} selected row(s)`}
-        onClose={() => setProcessOpen(false)}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setProcessOpen(false)}>Close</Button>
-            <Button onClick={async () => {
+{/* Quality Clearance — form modal with PUT */}
+      {tab === "quality_clearance" && (
+        <Dialog
+          wide
+          open={processOpen}
+          title="Process Quality Clearance"
+          description={`Processing ${selectedRows.length} selected row(s)`}
+          onClose={() => { setProcessOpen(false); setModalNotice(null); }}
+        >
+          <form
+            className="grid gap-3"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setModalNotice(null);
+              if (!clearanceForm.prod_con_acceptance.trim()) {
+                setModalNotice("Product Condition Acceptance is required.");
+                return;
+              }
               setSaving(true);
               try {
-                // call the appropriate process API
-                const endpoint = tab === "quality_clearance" ? "processquality"
-                  : tab === "putway_details" ? "processputaway"
-                  : "processjobconfirm";
-                await postWmsInbound(endpoint, {
-                  job_no: jobNo, prin_code: prinCode, company_code: companyCode,
-                  rows: selectedRows.map((r) => value(r, "packdet_no")),
-                });
+                await Promise.all(
+                  selectedRows.map((r) =>
+                    api.put("/api/wms/inbound/packing_details/clearance", {
+                      company_code:        companyCode,
+                      prin_code:           prinCode,
+                      job_no:              jobNo,
+                      packdet_no:          Number(value(r, "packdet_no")),
+                      clearance:           "Y",
+                      truck_condition:     clearanceForm.truck_condition,
+                      container_condition: clearanceForm.container_condition,
+                      container_type:      clearanceForm.container_type,
+                      ref_box_temp:        clearanceForm.ref_box_temp,
+                      prod_temp:           clearanceForm.prod_temp,
+                      prod_con_acceptance: clearanceForm.prod_con_acceptance,
+                    })
+                  )
+                );
                 setProcessOpen(false);
+                setModalNotice(null);
                 setSelectedRows([]);
-                setNotice({ type: "success", message: "Processed successfully" });
+                setClearanceForm({
+                  truck_condition: "", container_condition: "", container_type: "",
+                  ref_box_temp: "", prod_temp: "", prod_con_acceptance: "",
+                });
+                toast.success("Quality clearance processed successfully");
                 await loadRows();
               } catch (error) {
-                setNotice({ type: "error", message: error instanceof Error ? error.message : "Process failed" });
+                setModalNotice(error instanceof Error ? error.message : "Process failed");
+              } finally {
+                setSaving(false);
+              }
+            }}
+          >
+            {modalNotice && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {modalNotice}
+              </div>
+            )}
+            {selectedRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No rows selected. Close and select rows from the table.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <label className="field">
+                  <span className="text-xs font-medium text-muted-foreground">Truck Condition</span>
+                  <Input
+                    value={clearanceForm.truck_condition}
+                    onChange={(e) => setClearanceForm((c) => ({ ...c, truck_condition: e.target.value }))}
+                    placeholder="Truck Condition"
+                  />
+                </label>
+                <label className="field">
+                  <span className="text-xs font-medium text-muted-foreground">Container Condition</span>
+                  <Input
+                    value={clearanceForm.container_condition}
+                    onChange={(e) => setClearanceForm((c) => ({ ...c, container_condition: e.target.value }))}
+                    placeholder="Container Condition"
+                  />
+                </label>
+                <label className="field">
+                  <span className="text-xs font-medium text-muted-foreground">Container Type</span>
+                  <Input
+                    value={clearanceForm.container_type}
+                    onChange={(e) => setClearanceForm((c) => ({ ...c, container_type: e.target.value }))}
+                    placeholder="Container Type"
+                  />
+                </label>
+                <label className="field">
+                  <span className="text-xs font-medium text-muted-foreground">Refer Box Temperature</span>
+                  <Input
+                    value={clearanceForm.ref_box_temp}
+                    onChange={(e) => setClearanceForm((c) => ({ ...c, ref_box_temp: e.target.value }))}
+                    placeholder="Refer Box Temperature"
+                  />
+                </label>
+                <label className="field">
+                  <span className="text-xs font-medium text-muted-foreground">Product Temperature</span>
+                  <Input
+                    value={clearanceForm.prod_temp}
+                    onChange={(e) => setClearanceForm((c) => ({ ...c, prod_temp: e.target.value }))}
+                    placeholder="Product Temperature"
+                  />
+                </label>
+                <label className="field">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Product Condition Acceptance <strong className="text-destructive">*</strong>
+                  </span>
+                  <Input
+                    value={clearanceForm.prod_con_acceptance}
+                    onChange={(e) => setClearanceForm((c) => ({ ...c, prod_con_acceptance: e.target.value }))}
+                    placeholder="Product Condition Acceptance"
+                  />
+                </label>
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="outline" onClick={() => { setProcessOpen(false); setModalNotice(null); }}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving || selectedRows.length === 0}>
+                <CheckCircle2 size={15} />
+                {saving ? "Processing..." : "Process Quality Clearance"}
+              </Button>
+            </div>
+          </form>
+        </Dialog>
+      )}
+
+      {/* Putaway / Job Confirmation — simple confirm dialog (unchanged) */}
+{/* Putaway Details — form modal with site/location dropdowns */}
+      {tab === "putway_details" && (
+        <Dialog
+          wide
+          open={processOpen}
+          title="Process Putaway"
+          description={`Selected Items: ${selectedRows.length}`}
+          onClose={() => { setProcessOpen(false); setModalNotice(null); }}
+        >
+          <form
+            className="grid gap-4"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setModalNotice(null);
+              if (!putawayForm.site_from)     { setModalNotice("Site From is required.");     return; }
+              // if (!putawayForm.location_from) { setModalNotice("Location From is required."); return; }
+              // if (!putawayForm.location_to)   { setModalNotice("Location To is required.");   return; }
+              setSaving(true);
+              try {
+                await api.put(
+                  `/api/wms/inbound/putway_details/${encodeURIComponent(jobNo)}?prin_code=${encodeURIComponent(prinCode)}`,
+                  {
+                    site_from:     putawayForm.site_from,
+                    site_to:       putawayForm.site_from,   // auto-matched
+                    location_from: putawayForm.location_from,
+                    location_to:   putawayForm.location_to,
+                    packdet_no:    selectedRows.map((r) => value(r, "packdet_no")),
+                  }
+                );
+                setProcessOpen(false);
+                setModalNotice(null);
+                setSelectedRows([]);
+                setPutawayForm({ site_from: "", site_from_name: "", location_from: "", location_from_name: "", site_to: "", site_to_name: "", location_to: "", location_to_name: "" });
+                toast.success("Putaway processed successfully");
+                await loadRows();
+              } catch (error) {
+                setModalNotice(error instanceof Error ? error.message : "Putaway failed");
               } finally { setSaving(false); }
-            }} disabled={saving}>
-              <CheckCircle2 size={15} /> {saving ? "Processing..." : "Confirm"}
-            </Button>
-          </>
-        }>
-        <div className="text-sm text-muted-foreground">
-          {selectedRows.length === 0
-            ? "No rows selected. Close and select rows from the table."
-            : `You are about to process ${selectedRows.length} row(s). This action cannot be undone.`}
-        </div>
-      </Dialog>
+            }}
+          >
+            {modalNotice && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {modalNotice}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              {/* Site From */}
+              <label className="field">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Site From <strong className="text-destructive">*</strong>
+                </span>
+<Select
+                value={putawayForm.site_from}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setPutawayForm((c) => ({
+                    ...c,
+                    site_from: v,
+                    location_from: "",
+                    location_from_name: "",
+                    location_to: "",
+                    location_to_name: "",
+                  }));
+                  void loadLocations(v, "from");
+                  void loadLocations(v, "to");
+                }}
+              >
+                  <option value="">— Select Site —</option>
+                  {siteOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </Select>
+              </label>
+
+              {/* Location From */}
+              <label className="field">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Location From <strong className="text-destructive">*</strong>
+                </span>
+                <Select
+                  value={putawayForm.location_from}
+                  disabled={!putawayForm.site_from}
+                  onChange={(e) => setPutawayForm((c) => ({ ...c, location_from: e.target.value }))}
+                >
+                  <option value="">— Select Location —</option>
+                  {locationFromOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </Select>
+              </label>
+
+              {/* Site To — auto-set, read-only */}
+              <label className="field">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Site To (Auto-set to match Site From)
+                </span>
+                <Select value={putawayForm.site_from} disabled>
+                  <option value="">—</option>
+                  {siteOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </Select>
+                {putawayForm.site_from && (
+                  <span className="mt-1 text-[11px] italic text-primary">
+                    Note: Site To is automatically set to match Site From ({putawayForm.site_from})
+                  </span>
+                )}
+              </label>
+
+              {/* Location To */}
+              <label className="field">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Location To <strong className="text-destructive">*</strong>
+                </span>
+                <Select
+                  value={putawayForm.location_to}
+                  disabled={!putawayForm.site_from}
+                  onChange={(e) => setPutawayForm((c) => ({ ...c, location_to: e.target.value }))}
+                >
+                  <option value="">— Select Location —</option>
+                  {locationToOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </Select>
+              </label>
+            </div>
+
+            <p className="text-sm text-muted-foreground">Selected Items: {selectedRows.length}</p>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="outline" onClick={() => { setProcessOpen(false); setModalNotice(null); }}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving || selectedRows.length === 0}>
+                <Settings2 size={15} />
+                {saving ? "Processing..." : "Process Putaway"}
+              </Button>
+            </div>
+          </form>
+        </Dialog>
+      )}
+
+      {/* Job Confirmation — simple confirm dialog */}
+      {tab === "job_confirmation" && (
+        <Dialog
+          open={processOpen}
+          compact
+          title="Process Job Confirmation"
+          description={`Processing ${selectedRows.length} selected row(s)`}
+          onClose={() => setProcessOpen(false)}
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setProcessOpen(false)}>Close</Button>
+              <Button
+                disabled={saving}
+                onClick={async () => {
+                  setSaving(true);
+                  try {
+                    await api.put(
+                      `/api/wms/inbound/job_confirmation/${encodeURIComponent(jobNo)}?prin_code=${encodeURIComponent(prinCode)}`,
+                      { packdet_no: selectedRows.map((r) => value(r, "packdet_no")) }
+                    );
+                    setProcessOpen(false);
+                    setSelectedRows([]);
+                    toast.success("Job confirmation processed successfully");
+                    await loadRows();
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : "Process failed");
+                  } finally { setSaving(false); }
+                }}
+              >
+                <CheckCircle2 size={15} /> {saving ? "Processing..." : "Confirm"}
+              </Button>
+            </>
+          }
+        >
+          <div className="text-sm text-muted-foreground">
+            {selectedRows.length === 0
+              ? "No rows selected. Close and select rows from the table."
+              : `You are about to process ${selectedRows.length} row(s). This action cannot be undone.`}
+          </div>
+        </Dialog>
+      )}
     </section>
   );
 }
@@ -1927,7 +2232,6 @@ function getInboundTabConfig(tab: string) {
         { key: "seal_no", label: "Seal No", size: 130 },
         { key: "po_no", label: "PO No", size: 130 },
         { key: "bl_no", label: "BL No", size: 130 },
-        { key: "arrival_date", label: "Arrival Date", size: 130 },
       ],
     },
     packing_details: {
@@ -1980,12 +2284,21 @@ function getInboundTabConfig(tab: string) {
         { key: "po_no", label: "PO No", size: 120 },
       ],
     },
-    putway_details: {
+putway_details: {
       title: "Putaway Details", minWidth: 1280,
-      addLabel: "Process Putaway", addEndpoint: "putaway", addFields: putawayFormFields,
-      sql: ({ companyCode, jobNo, prinCode }) =>
-        `SELECT * FROM VW_WM_INB_TT_BATCH_DETS WHERE company_code = '${sqlEscape(companyCode)}' AND job_no = '${sqlEscape(jobNo)}' AND prin_code = '${sqlEscape(prinCode)}' ORDER BY updated_at`,
-      columns: confirmationColumns(),
+      sql: packSql,
+      columns: [
+        { key: "prod_name",          label: "Product",       size: 320 },
+        { key: "qty_string",         label: "Quantity",      size: 150 },
+        { key: "qty_arrived_string", label: "Arrived Qty",   size: 150 },
+        { key: "clearance",          label: "Clearance",     size: 110 },
+        { key: "allocated",          label: "Allocated",     size: 100 },
+        { key: "batch_no",           label: "Batch No",      size: 120 },
+        { key: "lot_no",             label: "Lot No",        size: 120 },
+        { key: "container_no",       label: "Container",     size: 140 },
+        { key: "po_no",              label: "PO No",         size: 120 },
+        { key: "doc_ref",            label: "Doc Ref",       size: 140 },
+      ],
     },
     putway_manual: {
       title: "Putaway Manual", minWidth: 1280,
