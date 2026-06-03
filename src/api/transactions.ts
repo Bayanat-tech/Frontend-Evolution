@@ -515,6 +515,13 @@ export async function openChequeMonitoringReport(params: ReportParams) {
     );
 }
 
+export async function openChequeDateWiseReport(params: ReportParams) {
+    await openReportInTab(
+        `/api/finance/transactions/reports/cheque-date-wise/html`,
+        params
+    );
+}
+
 // ── 2. Detail Dump ────────────────────────────────────────────────────────
 export async function openDetailDumpReport(params: ReportParams) {
     await openReportInTab(
