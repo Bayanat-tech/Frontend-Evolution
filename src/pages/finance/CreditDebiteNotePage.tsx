@@ -696,7 +696,7 @@ function PaymentDocumentEditor({
           <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
         ) : (
           <div className="grid gap-3">
-            {error && <div className="alert error">{error}</div>}
+            <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
             <div className="payment-header-grid grid grid-cols-6 gap-2.5 rounded-md border bg-card p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
               {editMode && <Field label="Doc No"><Input disabled value={form.doc_no || ""} /></Field>}

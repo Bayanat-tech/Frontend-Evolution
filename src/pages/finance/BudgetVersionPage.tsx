@@ -264,7 +264,7 @@ function BudgetVersionEditor({ editor, onClose, onSaved }: { editor: Exclude<Edi
         <h2 className="m-0 text-xl font-semibold tracking-tight">Budget Version</h2>
       </div>
       <form className="grid flex-1 content-start gap-4 overflow-auto p-4" id="budget-version-form" onSubmit={handleSubmit}>
-        {error && <div className="alert error">{error}</div>}
+        <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
         {isEdit && (
           <div className="rounded-md border bg-secondary/40 p-3 text-xs text-muted-foreground">
             Document Type, Budget Year, Division and Version are record keys. To change those values, create a new version and delete the old one.

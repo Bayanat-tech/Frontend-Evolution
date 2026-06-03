@@ -1,31 +1,36 @@
-import React, { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { useToast } from "./AlertToast";
+
+type Notice = { type: "success" | "error" | "info" | "warning"; message: string } | null;
 
 export function AutoDismissAlert({
   notice,
   onClose,
   duration = 4000,
 }: {
-  notice: { type: "success" | "error"; message: string } | null;
+  notice: Notice;
   onClose: () => void;
   duration?: number;
 }) {
+  const { toast } = useToast();
+  const lastNoticeKey = useRef("");
+
   useEffect(() => {
-    if (!notice) return;
-    // auto-dismiss only success messages by default
-    if (notice.type === "success") {
-      const id = setTimeout(() => onClose(), duration);
-      return () => clearTimeout(id);
+    if (!notice) {
+      lastNoticeKey.current = "";
+      return;
     }
-    return;
-  }, [notice, onClose, duration]);
 
-  if (!notice) return null;
+    const key = `${notice.type}:${notice.message}`;
+    if (lastNoticeKey.current === key) return;
+    lastNoticeKey.current = key;
 
-  return (
-    <div className={`alert ${notice.type}`} role={notice.type === "error" ? "alert" : "status"}>
-      {notice.message}
-    </div>
-  );
+    toast[notice.type](notice.message, notice.type === "error" ? undefined : duration);
+    const id = window.setTimeout(onClose, 50);
+    return () => window.clearTimeout(id);
+  }, [duration, notice, onClose, toast]);
+
+  return null;
 }
 
 export default AutoDismissAlert;

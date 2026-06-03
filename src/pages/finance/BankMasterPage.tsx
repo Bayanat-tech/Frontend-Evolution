@@ -228,7 +228,7 @@ function BankEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorState,
         <h2 className="m-0 text-xl font-semibold tracking-tight">Bank</h2>
       </div>
       <form className="grid flex-1 content-start gap-4 overflow-auto p-4" id="bank-master-form" onSubmit={handleSubmit}>
-        {error && <div className="alert error">{error}</div>}
+        <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
         <Field label="Bank Code" value={form.bank_code} onChange={(value) => setField("bank_code", value)} disabled={readOnly || isEdit} />
         <Field label="Bank Name" value={form.bank_name} onChange={(value) => setField("bank_name", value)} disabled={readOnly} />
         <Field label="Short Name" value={form.bank_short_name} onChange={(value) => setField("bank_short_name", value)} disabled={readOnly} />

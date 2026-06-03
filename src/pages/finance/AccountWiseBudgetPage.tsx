@@ -312,7 +312,7 @@ function BudgetEditor({ editor, onClose, onSaved }: { editor: Exclude<EditorStat
         </div>
       </div>
       <form className="grid flex-1 content-start gap-4 overflow-auto py-4" id="account-budget-form" onSubmit={handleSubmit}>
-        {error && <div className="alert error">{error}</div>}
+        <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
         <div className="grid grid-cols-2 gap-3">
           <LookupField
             label="Version"

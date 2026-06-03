@@ -738,7 +738,7 @@ function PaymentDocumentEditor({
           <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
         ) : (
           <div className="grid gap-3">
-            {error && <div className="alert error">{error}</div>}
+            <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
             <div className="commercial-header-shell rounded-md border bg-card">
               <div className="commercial-section-title">
