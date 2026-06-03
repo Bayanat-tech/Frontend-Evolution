@@ -158,7 +158,7 @@ country: {
     routeKeys: ["manufacture", "manufacturer"],
     keyField: "manu_code",
     fields: [
-      { name: "prin_code", label: "Principal Code", required: true, asyncOptions: { endpoint: "principal", labelKey: "prin_name", valueKey: "prin_code" }, width: 150 },
+      { name: "prin_code", label: "Principal Code", required: true, dropdownParam: "DROP_DOWN_PRINCIPAL", dropdownDisplayFields: ["prin_code", "prin_name"], dropdownValueKey: "prin_code", width: 150 },
       { name: "manu_code", label: "Manufacturer Code", required: true, disabledOnEdit: true, width: 180 },
       { name: "manu_name", label: "Manufacturer Name", required: true, width: 280 },
     ],
