@@ -388,12 +388,23 @@ function CommercialEditor({
   const addLine = () => {
   setForm((current) => {
     const newLine = emptyLine(docType, current.detail.length + 1);
-    const withTax = {
-      ...newLine,
-      tx_compntcat_code_1: current.tx_compntcat_code_1 || (isSales ? "11100" : "10100"),
-      tx_compnt_1_expmt:   current.tx_compnt_1_expmt || current.tax_type || "S",
-      tx_compnt_perc_1:    current.tx_compnt_perc_1 ?? 0,
-    };
+    // const withTax = {
+    //   ...newLine,
+    //   tx_compntcat_code_1: current.tx_compntcat_code_1 || (isSales ? "11100" : "10100"),
+    //   tx_compnt_1_expmt:   current.tx_compnt_1_expmt || current.tax_type || "S",
+    //   tx_compnt_perc_1:    current.tx_compnt_perc_1 ?? 0,
+    // };
+    const resolvedExpmt = current.tx_compnt_1_expmt || current.tax_type || "S";
+const resolvedPerc  = (current.tx_compnt_perc_1 != null && current.tx_compnt_perc_1 !== 0)
+  ? current.tx_compnt_perc_1
+  : resolvedExpmt === "S" ? 5 : 0;
+
+const withTax = {
+  ...newLine,
+  tx_compntcat_code_1: current.tx_compntcat_code_1 || (isSales ? "11100" : "10100"),
+  tx_compnt_1_expmt:   resolvedExpmt,
+  tx_compnt_perc_1:    resolvedPerc,
+};
     return { ...current, detail: [...current.detail, withTax] };
   });
 };
@@ -487,33 +498,6 @@ function CommercialEditor({
     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
   }, 50);
 };
-  // const submit = async (event: FormEvent) => {
-  //   event.preventDefault();
-  //   if (!form.doc_date) return setError("Doc Date is required");
-  //   if (!form.div_code) return setError("Division is required");
-  //   if (!form.ac_code) return setError(docType === "PI" || docType === "PO" ? "Supplier is required" : "Customer is required");
-  //   if (!form.curr_code) return setError("Currency is required");
-  //   if (!form.ex_rate) return setError("Exchange Rate is required");
-  //   if (!form.detail.length) return setError("Add at least one detail line");
-  //   setSaving(true);
-  //   setError("");
-  //   try {
-  //     if (docType === "PO") {
-  //       const payload = buildCommercialPayload(form, user?.company_code || "");
-  //       const endpoint = editMode ? "/api/finance/transactions/lpo-update" : "/api/finance/transactions/lpo-document";
-  //       const response = editMode ? await api.put(endpoint, payload) : await api.post(endpoint, payload);
-  //       if (!response.data?.success) throw new Error(response.data?.message || "Unable to save LPO document");
-  //     } else {
-  //       const bulkPayload = buildCommercialBulkAccountEntryPayload(form, user?.company_code || "", user?.loginid || "");
-  //       await upsertBulkAccountEntryApi(bulkPayload);
-  //     }
-  //     await onSaved(editMode ? "Document updated successfully" : "Document created successfully");
-  //   } catch (submitError) {
-  //     setError(submitError instanceof Error ? submitError.message : "Unable to save document");
-  //   } finally {
-  //     setSaving(false);
-  //   }
-  // };
 
   return (
     <form className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
@@ -1001,19 +985,6 @@ function CommercialEditor({
       code1: user?.company_code || "",
     })
   }
-//   onChange={(value, row) => {
-//   const r    = row || {} as Record<string, unknown>;
-//   const perc = Number(getLookupValue(r, "tx_percnt") || 0);
-//   const code = text(getLookupValue(r, "tx_cat_code"));
-//   setForm((c) => ({
-//     ...c,
-//     tx_compntcat_code_1: value,
-//     tx_cat_code: code,
-//     tx_compnt_perc_1: perc,
-//   }));
-//   const nextTaxType = form.tx_compnt_1_expmt || "N";
-//   syncLineTax(value, nextTaxType, perc);
-//  }}
 
  onChange={(value, row) => {
   const r    = row || {} as Record<string, unknown>;
@@ -1021,7 +992,8 @@ function CommercialEditor({
   const code = text(getLookupValue(r, "tx_cat_code"));
 
   setForm((c) => {
-    const resolvedPerc  = perc !== 0 ? perc : (c.tx_compnt_perc_1 ?? 0);
+    const resolvedPerc = perc !== 0 ? perc: c.tx_compnt_perc_1 !== 0 && c.tx_compnt_perc_1 != null? c.tx_compnt_perc_1
+    : (c.tx_compnt_1_expmt || c.tax_type) === "S" ? 5 : 0;
     const resolvedExpmt = c.tx_compnt_1_expmt || c.tax_type || "N";
 
     const updatedDetail = c.detail.map((line) => ({
@@ -1450,7 +1422,8 @@ function mapForm(docType: CommercialType, headerRaw: Record<string, unknown>, de
     tx_compntcat_code_1: text(header.tx_compntcat_code_1),
     // tx_cat_code:         text(header.tx_cat_code),
     tx_cat_code: text(nested(headerRaw, ["Tax Category", "tx_cat_code"]) ?? header.tx_cat_code),
-    tx_compnt_perc_1:    Number(header.tx_compnt_perc_1 || 0),
+    // tx_compnt_perc_1: Number(header.tx_compnt_perc_1 || 0),
+    tx_compnt_perc_1: Number(header.tx_compnt_perc_1 || 0) || (text(header.tx_compnt_1_expmt) === "S" ? 5 : 0),
     print_letter_head: !!header.print_letter_head,
     detail: detailRaw.map((raw, index) => {
       const row = lowerRecord(raw);
@@ -1514,9 +1487,6 @@ function buildCommercialPayload(form: FormState, companyCode: string) {
       job_no: line.job_no || "",
       dept_code: line.dept_code || "",
       div_code: form.div_code,
-      // lcur_amount: Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1) * Number(line.sign_ind || 1),
-      // lcur_amount: Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1),
-
       tx_compnt_amt_1:      Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100,
       tx_compnt_lcuramt_1:  (Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100) * Number(form.ex_rate || 1),
       lcur_amount: Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1),
