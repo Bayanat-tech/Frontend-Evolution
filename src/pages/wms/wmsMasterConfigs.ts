@@ -281,16 +281,24 @@ country: {
     routeKeys: ["alert"],
     keyField: "op_code",
     fields: [
-      { name: "op_type", label: "Operation Type", required: true, width: 150 },
-      { name: "op_code", label: "Operation Code", required: true, width: 160 },
+      { name: "op_type", label: "Operation Type", required: true, width: 150, maxLength: 3 },
+      { name: "op_code", label: "Operation Code", required: true, width: 160, type:"number" },
       { name: "op_desc", label: "Description", required: true, width: 260 },
       { name: "op_sequence", label: "Sequence", type: "number", width: 120 },
       { name: "op_module", label: "Module", width: 130 },
-      { name: "op_mode", label: "Mode", width: 120 },
-      { name: "instruction", label: "Instruction", table: false },
+      { name: "op_mode", label: "Mode", width: 120, maxLength: 1 },
+      { name: "instruction", label: "Instruction", table: false, width: 300, type: "select", options: yesNo},
     ],
-    saveEndpoint: (form, { editMode, original }) =>
-      editMode ? `alert/${original?.op_type || form.op_type}/${original?.op_code || form.op_code}` : "alert",
+    // saveEndpoint: (form, { editMode, original }) =>
+      // editMode ? `alert/${original?.op_type || form.op_type}/${original?.op_code || form.op_code}` : "alert",
+saveEndpoint: (form, { editMode, original }) => {
+  if (editMode && original) {
+    const originalOpCode = original["op_code"] ?? original["opCode"];
+    const originalOpType = original["op_type"] ?? original["opType"];
+    return `alert/${originalOpCode}/${originalOpType}`; // ← no leading slash
+  }
+  return "alert";
+},
     deleteConfig: { mode: "registered", payload: (row) => [{ op_type: row.op_type, op_code: row.op_code, company_code: row.company_code }] },
   },
   principal: {
