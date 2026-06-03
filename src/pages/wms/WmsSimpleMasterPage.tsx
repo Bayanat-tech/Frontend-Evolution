@@ -115,6 +115,24 @@ function getRowDisplayKey(row: Record<string, unknown>, config: WmsSimpleMasterC
   return "";
 }
 
+function getErrorMessage(error: unknown, defaultMessage: string): string {
+  if (error instanceof Error) {
+    // Check if it's an axios error with response data
+    const axiosError = error as any;
+    if (axiosError.response?.data) {
+      const responseData = axiosError.response.data;
+      // Try common error message fields in API responses
+      if (typeof responseData === 'string') return responseData;
+      if (responseData.message) return responseData.message;
+      if (responseData.error) return responseData.error;
+      if (responseData.msg) return responseData.msg;
+    }
+    // Fall back to error message
+    return error.message;
+  }
+  return defaultMessage;
+}
+
 function clearDependentFields(
   fieldName: string,
   newValue: unknown,
@@ -172,30 +190,6 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
     company_code: user?.company_code || "",
   });
 
-  // const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize) => {
-  //   setLoading(true);
-  //   setNotice(null);
-  //   try {
-  //     const hasSearch = Boolean(query.trim() || columnFilters.some((filter) => String(filter.value ?? "").trim()));
-  //     const requestPageIndex = hasSearch ? 0 : nextPageIndex;
-  //     const requestPageSize = hasSearch ? 100000 : nextPageSize;
-  //     const activeFilters = columnFilters
-  //       .map((filter) => ({ field: filter.id, values: String(filter.value ?? "").trim() }))
-  //       .filter((filter) => filter.values);
-  //     const response = await getWmsMaster(config.master, {
-  //       page: requestPageIndex + 1,
-  //       limit: requestPageSize,
-  //       ...(query.trim() ? { search: query.trim() } : {}),
-  //       ...(activeFilters.length ? { filter: JSON.stringify({ search: activeFilters }) } : {}),
-  //     });
-  //     setRows(response.tableData.map(normalizeRow));
-  //     setTotalRows(response.count || response.tableData.length);
-  //   } catch (error) {
-  //     setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to load ${config.title}` });
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
   const loadRows = async (nextPageIndex = pageIndex, nextPageSize = pageSize) => {
     setLoading(true);
     setRows([]); // Clear rows immediately when loading starts
@@ -221,7 +215,7 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
         setTotalRows(response.count || response.tableData.length);
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : `Unable to load ${config.title}`);
+      toast.error(getErrorMessage(error, `Unable to load ${config.title}`));
       setRows([]);
     } finally {
       setLoading(false);
@@ -289,42 +283,8 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
     setFormOpen(true);
   };
 
-  // const saveRecord = async (event: FormEvent) => {
-  //   event.preventDefault();
-  //   const missing = editableFields.find((field) => field.required && !String(form[field.name] ?? "").trim());
-  //   if (missing) {
-  //     setNotice({ type: "error", message: `${missing.label} is required` });
-  //     return;
-  //   }
-  //   setSaving(true);
-  //   setNotice(null);
-  //   try {
-  //     // Transform form data: convert checkboxes and filter out empty non-required fields
-  //     const transformedForm = editableFields.reduce((acc, field) => {
-  //       let value = form[field.name];
-        
-  //       // Convert checkbox values: true → "Y", false/empty → ""
-  //       if (field.type === "checkbox") {
-  //         value = value === true || value === "Y" ? "Y" : "N";
-  //       }
-  //       if (value === "")value = null; // Convert empty strings to null for non-required fields
-  //       acc[field.name] = value;
-  //       return acc;
-  //     }, {} as Record<string, unknown>);
-
-  //     const mapped = config.mapBeforeSave?.(transformedForm, { editMode, original }) || transformedForm;
-  //     const endpoint = config.saveEndpoint?.(mapped, { editMode, original }) || config.gmEndpoint;
-  //     await saveWmsGm(endpoint, { ...mapped, company_code: mapped.company_code || user?.company_code || "" }, editMode ? "put" : "post");
-  //     setFormOpen(false);
-  //     setNotice({ type: "success", message: `${config.title} ${editMode ? "updated" : "added"} successfully` });
-  //     await loadRows(pageIndex, pageSize);
-  //   } catch (error) {
-  //     setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to save ${config.title}` });
-  //   } finally {
-  //     setSaving(false);
-  //   }
-  // };
 const saveRecord = async (event: FormEvent) => {
+  let response;
   event.preventDefault();
   const missing = editableFields.find((field) => field.required && !String(form[field.name] ?? "").trim());
   if (missing) {
@@ -344,44 +304,24 @@ const saveRecord = async (event: FormEvent) => {
     }, {} as Record<string, unknown>);
 
     const finalForm = { ...transformedForm, company_code: transformedForm.company_code || user?.company_code || "" };
-
     if (config.customSave) {
-      await config.customSave(finalForm, { editMode, original, user });
+     response = await config.customSave(finalForm, { editMode, original, user });
     } else {
       const mapped = config.mapBeforeSave?.(finalForm, { editMode, original }) || finalForm;
       const endpoint = config.saveEndpoint?.(mapped, { editMode, original }) || config.gmEndpoint;
-      await saveWmsGm(endpoint, mapped, editMode ? "put" : "post");
+      response = await saveWmsGm(endpoint, mapped, editMode ? "put" : "post");
     }
-
+    console.log("Save response", response);
     setFormOpen(false);
     toast.success(editMode ? "Successfully updated" : "Successfully created");
     await loadRows(pageIndex, pageSize);
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : `Unable to save ${config.title}`);
+    console.log("Save response", response);
+    toast.error(getErrorMessage(error, `Unable to save ${config.title}`));
   } finally {
     setSaving(false);
   }
 };
-  // const confirmDelete = async () => {
-  //   if (!deleteTarget || !config.deleteConfig || config.deleteConfig.mode === "disabled") return;
-  //   setSaving(true);
-  //   setNotice(null);
-  //   try {
-  //     const payload = config.deleteConfig.payload(deleteTarget);
-  //     if (config.deleteConfig.mode === "registered") {
-  //       await deleteWmsGm(config.gmEndpoint, payload);
-  //     } else {
-  //       await deleteWmsGmRaw(config.gmEndpoint, payload, config.deleteConfig.mode === "rawDelete" ? "delete" : "post");
-  //     }
-  //     setDeleteTarget(null);
-  //     setNotice({ type: "success", message: `${config.title} deleted successfully` });
-  //     await loadRows(pageIndex, pageSize);
-  //   } catch (error) {
-  //     setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to delete ${config.title}` });
-  //   } finally {
-  //     setSaving(false);
-  //   }
-  // };
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setSaving(true);
@@ -401,7 +341,7 @@ const saveRecord = async (event: FormEvent) => {
       toast.success("Successfully deleted");
       await loadRows(pageIndex, pageSize);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : `Unable to delete ${config.title}`);
+      toast.error(getErrorMessage(error, `Unable to delete ${config.title}`));
     } finally {
       setSaving(false);
     }

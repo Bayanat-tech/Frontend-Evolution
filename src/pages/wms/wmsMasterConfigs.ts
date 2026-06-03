@@ -28,7 +28,7 @@ export const wmsSimpleMasterConfigs: Record<string, WmsSimpleMasterConfig> = {
     routeKeys: ["producttype", "product_type", "product-type"],
     keyField: "prodtype_code",
     fields: [
-      { name: "prodtype_code", label: "Product Type Code", required: true, type: "number", disabledOnEdit: true, width: 170 },
+      { name: "prodtype_code", label: "Product Type Code", required: true, type: "text", disabledOnEdit: true, width: 170 },
       { name: "prodtype_desc", label: "Product Type Description", required: true, width: 280 },
     ],
     deleteConfig: { mode: "registered", payload: (row) => [row.prodtype_code] },
