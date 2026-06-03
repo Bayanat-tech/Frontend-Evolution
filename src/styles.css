@@ -7,6 +7,15 @@
   --app-control-font-size: 13px;
   --app-table-font-size: 13px;
   --app-label-font-size: 12px;
+  --app-control-height: 40px;
+  --app-button-height: 38px;
+  --app-button-sm-height: 32px;
+  --app-button-icon-size: 36px;
+  --app-content-padding-y: 22px;
+  --app-content-padding-x: 26px;
+  --app-sidebar-width: 248px;
+  --app-sidebar-collapsed-width: 76px;
+  --app-sidebar-top-height: 72px;
   --background: 220 33% 98%;
   --foreground: 238 28% 14%;
   --card: 0 0% 100%;
@@ -67,6 +76,86 @@ body {
   font-variation-settings: normal;
   -webkit-font-smoothing: antialiased;
   text-rendering: geometricPrecision;
+}
+
+@media (min-width: 1200px) and (max-width: 1800px) and (min-height: 760px) {
+  :root {
+    --app-control-font-size: 12px;
+    --app-table-font-size: 12px;
+    --app-label-font-size: 11px;
+    --app-control-height: 36px;
+    --app-button-height: 34px;
+    --app-button-sm-height: 30px;
+    --app-button-icon-size: 32px;
+    --app-content-padding-y: 16px;
+    --app-content-padding-x: 18px;
+    --app-sidebar-width: 232px;
+    --app-sidebar-collapsed-width: 68px;
+    --app-sidebar-top-height: 64px;
+  }
+
+  .workspace-search {
+    height: 34px;
+    border-radius: 10px;
+  }
+
+  .sidebar-logo-wrap {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+    border-radius: 13px;
+  }
+
+  .sidebar-logo {
+    width: 34px;
+    height: 34px;
+  }
+
+  .sidebar-brand-copy strong {
+    font-size: 15px;
+  }
+
+  .sidebar-brand-copy small {
+    font-size: 9px;
+  }
+
+  .nav-item {
+    min-height: 34px;
+    padding-block: 7px;
+    font-size: 12px;
+  }
+
+  .data-table-shell {
+    border-radius: 10px;
+  }
+
+  .data-table-header,
+  .data-table-actions,
+  .data-table-pagination,
+  .data-table-pager {
+    font-size: 12px;
+  }
+
+  .data-table-scroll {
+    max-height: min(72dvh, 700px);
+  }
+
+  .payment-workbench .ui-input,
+  .payment-workbench .ui-select,
+  .commercial-editor .ui-input,
+  .commercial-editor .ui-select {
+    font-size: 12px;
+  }
+
+  .payment-workbench table tbody tr,
+  .commercial-editor table tbody tr {
+    height: 32px;
+  }
+
+  .commercial-command-header {
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
 }
 
 button,
@@ -169,7 +258,7 @@ footer,
 }
 
 .ui-button {
-  min-height: 38px;
+  min-height: var(--app-button-height);
   border-radius: 10px;
   border: 1px solid transparent;
   padding: 0 14px;
@@ -242,14 +331,14 @@ footer,
 }
 
 .ui-button-sm {
-  min-height: 32px;
+  min-height: var(--app-button-sm-height);
   padding: 0 10px;
   font-size: 12px;
 }
 
 .ui-button-icon {
-  width: 36px;
-  min-height: 36px;
+  width: var(--app-button-icon-size);
+  min-height: var(--app-button-icon-size);
   padding: 0;
 }
 
@@ -265,7 +354,7 @@ footer,
 
 .ui-input,
 .ui-select {
-  height: 40px;
+  height: var(--app-control-height);
   padding: 0 12px;
 }
 
@@ -925,7 +1014,7 @@ footer,
 }
 
 .sidebar {
-  width: 248px;
+  width: var(--app-sidebar-width);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -935,11 +1024,11 @@ footer,
 }
 
 .sidebar.collapsed {
-  width: 76px;
+  width: var(--app-sidebar-collapsed-width);
 }
 
 .sidebar-top {
-  min-height: 72px;
+  min-height: var(--app-sidebar-top-height);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1215,7 +1304,7 @@ footer,
 }
 
 .workspace-content {
-  padding: 22px 26px;
+  padding: var(--app-content-padding-y) var(--app-content-padding-x);
 }
 
 .workspace-content .breadcrumb a {
