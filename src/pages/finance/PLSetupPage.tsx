@@ -214,7 +214,7 @@ function PLSetupEditor({ editor, onClose, onSaved }: { editor: Exclude<Editor, n
         <h2 className="m-0 text-xl font-semibold tracking-tight">P&L Setting</h2>
       </div>
       <form className="grid flex-1 content-start gap-4 overflow-auto p-4" id="pl-setup-form" onSubmit={submit}>
-        {error && <div className="alert error">{error}</div>}
+        <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
         <label className="field"><span>PL Code</span><Input value={form.pl_code} onChange={(event) => setField("pl_code", event.target.value)} disabled={isEdit} /></label>
         <label className="field"><span>PL Name</span><Input value={form.pl_name} onChange={(event) => setField("pl_name", event.target.value)} /></label>
         <label className="field">

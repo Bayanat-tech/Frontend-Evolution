@@ -7,6 +7,7 @@ import TaskCharacterAppraisalTab from "./Taskcharacterappraisaltab";
 import TaskGoalAppraisalTab      from "./Taskgoalappraisaltab";
 import TaskSkillAppraisalTab     from "./Taskskillappraisaltab";
 import AppraiserCommentsTab      from "./Appraisercommentstab";
+import { NoticeToast } from "../../components/ui/NoticeToast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SelectedTab = "task_details" | "characteristics" | "goals" | "skill" | "comments";
@@ -439,7 +440,7 @@ const AppraisalViewTabsPage: React.FC = () => {
     <div style={S.container}>
 
       {/* Notice */}
-      {notice && <div style={S.notice(notice.type)}>{notice.message}</div>}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
       {/* ── Header ───────────────────────────────────────────────────────── */}
       <div style={S.header}>

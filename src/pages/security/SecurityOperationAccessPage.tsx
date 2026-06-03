@@ -5,6 +5,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
+import { NoticeToast } from "../../components/ui/NoticeToast";
 import { cn } from "../../lib/utils";
 import { useAuth } from "../../state/AuthContext";
 
@@ -183,7 +184,7 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
         </Button>
       </div>
 
-      {notice && <div className={notice.type === "error" ? "alert error" : notice.type === "success" ? "alert success" : "alert"}>{notice.message}</div>}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
       <Card className="overflow-visible">
         <CardHeader className="border-b bg-muted/40">

@@ -5,6 +5,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { LookupField } from "../../components/ui/LookupField";
+import { NoticeToast } from "../../components/ui/NoticeToast";
 import { useAuth } from "../../state/AuthContext";
 import type { LookupRow } from "../../api/lookups";
 
@@ -262,12 +263,7 @@ export function KpiAssignmentPage() {
         </div>
       </div>
 
-      {/* Notice */}
-      {notice && (
-        <div className={notice.type === "error" ? "alert error" : "alert success"}>
-          {notice.message}
-        </div>
-      )}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
       {/* Filters */}
       <Card>

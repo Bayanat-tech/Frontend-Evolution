@@ -503,37 +503,17 @@ type JobField = {
   dropdown?: "principal" | "division" | "department" | "port" | "country";
 };
 
-const jobFields: JobField[] = [
-  { name: "prin_code", label: "Principal Code", required: true, dropdown: "principal" },
-  { name: "dept_code", label: "Department Code", dropdown: "department" },
-  { name: "div_code", label: "Division Code", dropdown: "division" },
-  { name: "job_class", label: "Job Class", required: true },
-  { name: "job_type", label: "Job Type", required: true },
-  { name: "country_origin", label: "Country Origin", dropdown: "country" },
-  { name: "country_destination", label: "Country Destination", dropdown: "country" },
-  { name: "port_code", label: "Port Code", dropdown: "port" },
-  { name: "destination_port", label: "Destination Port", dropdown: "port" },
-  { name: "transport_mode", label: "Transport Mode" },
-  { name: "schedule_date", label: "Schedule Date", type: "date" },
-  { name: "doc_ref", label: "Doc Ref" },
-  { name: "prin_ref2", label: "Principal Ref 2" },
-  { name: "description1", label: "Description" },
-  { name: "remarks", label: "Remarks" },
-];
-
 // ---------------------------------------------------------------------------
 // Add form field configs per tab
 
 const shipmentFormFields: FormField[] = [
   { name: "container_no", label: "Container No", required: true },
-  { name: "vehicle_no", label: "Vehicle No" },
-  { name: "vessel_name", label: "Vessel Name" },
+  { name: "vehicle_no", label: "Vehicle No", required: true },
+  { name: "vessel_name", label: "Vessel Name", required: true },
   { name: "voyage_no", label: "Voyage No" },
   { name: "seal_no", label: "Seal No" },
   { name: "po_no", label: "PO No" },
   { name: "bl_no", label: "BL No" },
-  { name: "arrival_date", label: "Arrival Date", type: "date" },
-  { name: "remarks", label: "Remarks" },
 ];
 
 // Add a new type to FormField
@@ -574,11 +554,6 @@ const receivingFormFields: FormField[] = [
   { name: "doc_ref", label: "Doc Ref" },
 ];
 
-const qualityFormFields: FormField[] = [
-  { name: "prod_code", label: "Product Code", required: true },
-  { name: "clearance", label: "Clearance Status", required: true },
-  { name: "remarks", label: "Remarks" },
-];
 
 const tallyFormFields: FormField[] = [
   { name: "prod_code", label: "Product Code", required: true },
@@ -631,6 +606,7 @@ function InboundJobListing() {
   const { toast } = useToast(); // Add this line
   const companyCode = user?.company_code || "";
   const navigate = useNavigate();
+const [sortKey, setSortKey] = useState(0);
 
   const [rows, setRows] = useState<WmsRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -917,6 +893,7 @@ function InboundJobListing() {
       </div>
 
       <DataTable
+        key={sortKey}
         columns={columns} data={filteredRows}
         title={loading ? "Loading" : `${filteredRows.length} Jobs`}
         subtitle="Inbound Jobs" searchValue={query} onSearchChange={setQuery}
@@ -1024,10 +1001,14 @@ function InboundJobDetail({ jobNo, tab }: { jobNo: string; tab: string }) {
 {/* Header */}
 <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card px-4 py-3">
   <div className="flex min-w-0 items-center gap-3">
-    <Button size="icon" variant="outline" onClick={() => navigate("../..")} title="Back to jobs">
+    <Button
+      size="icon"
+      variant="outline"
+      onClick={() => navigate("/workspace/wms/wms/transactions/inbound/jobs")}
+      title="Back to jobs"
+    >
       <ArrowLeft size={16} />
     </Button>
-
     <div className="min-w-0">
       <p className="eyebrow mb-0.5">Inbound Job</p>
       <h1 className="m-0 truncate text-xl font-semibold leading-tight">{jobNo}</h1>
@@ -1122,6 +1103,8 @@ const [editSaving, setEditSaving] = useState(false);
   const [saving, setSaving] = useState(false);
   // For Quality Clearance process modal
 const [processOpen, setProcessOpen] = useState(false);
+const [sortKey, setSortKey] = useState(0);
+
 const [clearanceForm, setClearanceForm] = useState({
   truck_condition: "",
   container_condition: "",
@@ -1572,6 +1555,7 @@ const columns = makeColumns(
       {/* {notice && <div className={notice.type === "error" ? "alert error" : "alert success"}>{notice.message}</div>} */}
 
       <DataTable
+        key={sortKey}
         columns={columns} data={rows}
         title={loading ? "Loading" : `${rows.length} Rows`}
         subtitle={config.title} searchValue={query} onSearchChange={setQuery}
@@ -2248,7 +2232,6 @@ function getInboundTabConfig(tab: string) {
         { key: "seal_no", label: "Seal No", size: 130 },
         { key: "po_no", label: "PO No", size: 130 },
         { key: "bl_no", label: "BL No", size: 130 },
-        { key: "arrival_date", label: "Arrival Date", size: 130 },
       ],
     },
     packing_details: {

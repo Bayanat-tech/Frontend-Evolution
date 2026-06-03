@@ -268,7 +268,7 @@ function BankCodeEditor({
         <h2 className="m-0 text-xl font-semibold tracking-tight">Bank Code</h2>
       </div>
       <form className="grid flex-1 content-start gap-4 overflow-auto p-4" id="bank-code-form" onSubmit={handleSubmit}>
-        {error && <div className="alert error">{error}</div>}
+        <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
         <LookupField
           label="Account"
           value={form.ac_code}
