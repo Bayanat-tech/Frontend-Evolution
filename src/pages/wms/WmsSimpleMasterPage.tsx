@@ -40,6 +40,7 @@ export type WmsMasterField = {
   width?: number;
   colSpan?: number;
   align?: "left" | "center" | "right";
+  maxLength?: number;
 };
 
 export type WmsDeleteConfig = {
