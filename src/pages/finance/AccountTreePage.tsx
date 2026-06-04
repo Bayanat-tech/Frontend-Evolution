@@ -280,7 +280,6 @@ export function AccountTreePage() {
     <section className="finance-page grid gap-4">
       <div className="finance-toolbar flex flex-wrap items-center justify-between gap-4">
         <div>
-          {/* <p className="eyebrow">Finance Master</p> */}
           <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">A/C Tree</h1>
         </div>
         <div className="toolbar-actions flex flex-wrap items-center justify-end gap-2">
@@ -297,7 +296,7 @@ export function AccountTreePage() {
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      <div className="account-tree-layout grid min-h-[620px] grid-cols-[minmax(340px,40%)_1fr] gap-4 max-lg:grid-cols-1">
+      <div className="account-tree-layout grid grid-cols-[minmax(340px,40%)_1fr] gap-4 max-lg:grid-cols-1 items-start"> 
         <Card className="tree-panel flex min-w-0 flex-col overflow-hidden">
           <CardHeader className="tree-panel-head flex-row items-center justify-between gap-3 space-y-0 border-b">
             <div>
@@ -517,9 +516,6 @@ function AccountNodeEditor({ dialog, onClose, onSaved }: { dialog: DialogState; 
         const data = await getAccountTreeNode(level, node.id);
         if (!active) return;
 
-        // if (level === 5) {
-        //   setAccountForm(mapAccountDataToForm(data, node.parent_code || ""));
-        // }
         if (level === 5) {
   const form = mapAccountDataToForm(data, node.parent_code || "");
 
@@ -556,9 +552,9 @@ function AccountNodeEditor({ dialog, onClose, onSaved }: { dialog: DialogState; 
           if (level === 3) setDescription(String(normalized.l3_description || node.label));
           if (level === 4) {
             setDescription(String(normalized.l4_description || node.label));
-            setL4Type(String(normalized.l4_type || "N"));
-            setL4Bill(String(normalized.l4_bill || "N"));
-            setL4Job(String(normalized.l4_job || "N"));
+            setL4Type(String(normalized.l4_type ?? "N"));
+            setL4Bill(String(normalized.l4_bill ?? "N"));
+            setL4Job(String(normalized.l4_job ?? "N"));
           }
         }
       } catch (err) {
@@ -605,7 +601,7 @@ function AccountNodeEditor({ dialog, onClose, onSaved }: { dialog: DialogState; 
   };
 
   return (
-    <div className="account-editor flex h-full min-h-[620px] flex-col">
+      <div className="account-editor flex flex-col"> 
       <div className="flex items-start justify-between gap-4 border-b p-4">
         <div>
           <p className="eyebrow">{isEdit ? "Modify Node" : "Create Node"}</p>
@@ -933,7 +929,8 @@ function buildAccountPayload(form: AccountFormState, context: AccountTreeNode | 
     bank_ac_code: form.bank_ac_code,
     bank_name: form.bank_name,
     bank_swift: form.bank_swift,
-    contract_expry_date: form.contract_expry_date || null,
+    // contract_expry_date: form.contract_expry_date || null,
+    contract_expry_date: form.contract_expry_date ? new Date(form.contract_expry_date) : null,
     ac_infze: form.ac_infze,
     salesman_code: form.salesman_code,
     sector_code: form.sector_code,
