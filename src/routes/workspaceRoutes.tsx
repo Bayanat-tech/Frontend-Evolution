@@ -20,8 +20,7 @@ import { FinanceUtilityMasterPage, financeUtilityConfigs } from "../pages/financ
 import { PaymentDocumentPage } from "../pages/finance/PaymentDocumentPage";
 import { PLSetupPage } from "../pages/finance/PLSetupPage";
 import { PrepaidRegisterPage } from "../pages/finance/PrepaidRegisterPage";
-import { WmsCountryPage } from "../pages/wms/WmsCountryPage";
-import { WmsInboundPage } from "../pages/wms/WmsInboundPage";
+import { WmsInboundPage } from "../pages/wms/inbound/WmsInboundPage";
 import { WmsOutboundPage } from "../pages/wms/WmsOutboundPage";
 import { WmsSimpleMasterPage } from "../pages/wms/WmsSimpleMasterPage";
 import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
@@ -51,6 +50,11 @@ import {
   OxSimpleMasterPage,
   oxMaintMasterConfigs,
 } from "../pages/oxmaint/OxMaintPages";
+import { SalaryAdvancePage } from "../pages/hr/SalaryAdvancePage";
+import { TrainingFeedbackPage } from "../pages/hr/Hrtrainingfeedbackpage";
+import { Leaf } from "lucide-react";
+import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics";
+import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -73,6 +77,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Finance Account Tree",
     match: ({ pathname }) => isAccountTreeRoute(pathname),
     element: () => <AccountTreePage />,
+  },
+  {
+    name: "Finance Account Report",
+    match: ({ pathname }) => isAccountReportRoute(pathname),
+    element: () => <LedgerBasics />,
   },
   {
     name: "Finance Bank Master",
@@ -184,11 +193,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isWmsOutboundRoute(pathname),
     element: () => <WmsOutboundPage />,
   },
-  {
-    name: "WMS Country Master",
-    match: ({ pathname }) => isWmsCountryRoute(pathname),
-    element: () => <WmsCountryPage />,
+   {
+    name: "WMS Billing Activity Master",
+    match: ({ pathname }) => isWmsBillingActRoute(pathname),
+    element: () => <WmsBillingActPage />,
   },
+  
   {
     name: "WMS Simple Master",
     match: ({ pathname }) => Boolean(getWmsSimpleMasterConfig(pathname)),
@@ -371,7 +381,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: "Oxmaint",
     match: (context) => isOxMaintRoute(context),
-    element: () => <OxMaintDashboard />,
+    element: (context) => getOxMaintElement(context),
   },
   {
     name: "HR Pay Units",
@@ -393,6 +403,18 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => isHrRoute(context) && isHrLeaveCancelRoute(context),
     element: () => <HrLeaveCancelPage />,
   },
+  {
+    name: "HR Warning Letter",
+    match: (context) => isHrRoute(context) && isHrMemosAndFormsWarningLetterRoute(context),
+    element: () => <SalaryAdvancePage />,
+  },
+
+  {
+  name: "HR Training Feedback",
+  match: (context) => isHrRoute(context) && isHrTrainingFeedbackRoute(context),
+  element: () => <TrainingFeedbackPage />,
+  },
+
   {
     name: "HR Payroll Account Setup",
     match: (context) => isHrRoute(context) && isHrPayrollAccountSetupRoute(context),
@@ -479,6 +501,11 @@ function isAccountTreeRoute(pathname: string) {
     normalized.includes("/finance/accounts/masters/ac_tree") ||
     normalized.includes("/finance/accounts/masters/a/c_tree")
   );
+}
+
+function isAccountReportRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts/reports/account-report/detailed-reports/ledger-basic");
 }
 
 function getCreditDebitNoteDocType(pathname: string) {
@@ -579,7 +606,10 @@ function isWmsCountryRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/wms/") && normalized.includes("/country");
 }
-
+function isWmsBillingActRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/wms/") && normalized.includes("/principal_masters") && (normalized.includes("/billing_activity"));
+}
 function isWmsInboundRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   if (!normalized.includes("/wms/")) return false;
@@ -758,12 +788,35 @@ function isApplicationProgressRoute(context: WorkspaceRouteContext) {
   return (
     compact.includes("applicationprogress") ||
     compact.includes("appprogress") ||
-    matchText.includes("app_progress")
+    matchText.includes("app_progress") ||
+    matchText.includes("application_progress")
   );
 }
 
 function isOxMaintRoute(context: WorkspaceRouteContext) {
-  return context.pathname.toLowerCase().includes("/oxmaint");
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return (
+    matchText.includes("/oxmaint") ||
+    compact.includes("oxmaint") ||
+    compact.includes("assetinventory") ||
+    compact.includes("inspectionform") ||
+    compact.includes("inspectionreport") ||
+    compact.includes("assettype") ||
+    compact.includes("siteproject")
+  );
+}
+
+function getOxMaintElement(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  if (compact.includes("assetinventory")) return <OxAssetInventoryPage />;
+  if (compact.includes("inspectionreport")) return <OxInspectionReportPage />;
+  if (compact.includes("inspectionform")) return <OxInspectionFormPage />;
+  if (compact.includes("assettype")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.assetType} />;
+  if (compact.includes("siteproject")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.siteProject} />;
+  if (compact.includes("status") || matchText.includes("/status")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.status} />;
+  return <OxMaintDashboard />;
 }
 
 function getHrMasterConfig(context: WorkspaceRouteContext) {
@@ -817,4 +870,23 @@ function isHrLeaveCancelRoute(context: WorkspaceRouteContext) {
 function isHrPayrollAccountSetupRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
   return compact.includes("payrollaccountsetup") || compact.includes("payrollaccountssetup") || compact.includes("payrollacsetup");
+}
+
+function isHrMemosAndFormsWarningLetterRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  return (
+    (normalized.includes("memos") || normalized.includes("memo_and_forms") || normalized.includes("memo-and-forms") || normalized.includes("memosandforms") || normalized.includes("memo and forms")) &&
+    (normalized.includes("forms") || normalized.includes("memo_and_forms") || normalized.includes("memo-and-forms") || normalized.includes("memo and forms")) &&
+    (normalized.includes("warning letter") || normalized.includes("warning-letter") || normalized.includes("warning_letter") || normalized.includes("warning"))
+  );
+}
+
+function isHrTrainingFeedbackRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("trainingfeedback") ||
+    normalized.includes("training_feedback") ||
+    normalized.includes("training-feedback")
+  );
 }

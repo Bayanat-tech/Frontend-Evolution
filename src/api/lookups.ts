@@ -22,6 +22,7 @@ export type DynamicQueryParams = {
   code8?: string;
   code9?: string;
   code10?: string;
+  code20?:string;
   number1?: number;
   number2?: number;
   number3?: number;
@@ -35,6 +36,7 @@ export type DynamicQueryParams = {
 export type DynamicMutationParams = {
   parameter: string;
   loginid: string;
+
   val1s1?: string;
   val1s2?: string;
   val1s3?: string;
@@ -77,21 +79,25 @@ export type DynamicMutationParams = {
   val1n5?: number;
   val1n6?: number;
   val1n7?: number;
+
   val1d1?: string | null;
   val1d2?: string | null;
   val1d3?: string | null;
   val1d4?: string | null;
   val1d5?: string | null;
+
   wval1s1?: string;
   wval1s2?: string;
   wval1s3?: string;
   wval1s4?: string;
   wval1s5?: string;
+
   wval1n1?: number;
   wval1n2?: number;
   wval1n3?: number;
   wval1n4?: number;
   wval1n5?: number;
+
   wval1d1?: string | null;
   wval1d2?: string | null;
   wval1d3?: string | null;
@@ -125,6 +131,12 @@ export async function getMasterLookup(appCode: string, master: string) {
 
 export async function getDynamicLookup(params: DynamicQueryParams) {
   const response = await api.post<ApiResponse<LookupRow[]>>("/api/wms/common/proc_build_dynamic_sql_common", params);
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load lookup data");
+  return response.data.data || [];
+}
+
+export async function getDynamicLookupaccount(params: DynamicQueryParams) {
+  const response = await api.post<ApiResponse<LookupRow[]>>("/api/wms/common/proc_build_dynamic_sql_common20", params);
   if (!response.data.success) throw new Error(response.data.message || "Unable to load lookup data");
   return response.data.data || [];
 }

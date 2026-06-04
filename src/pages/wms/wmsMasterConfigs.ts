@@ -14,9 +14,9 @@ const activeInactive = [
 ];
 
 const transportMode = [
-  { label: "Sea", value: "S" },
-  { label: "Air", value: "A" },
-  { label: "Road", value: "R" },
+  { label: "Sea", value: "Sea" },
+  { label: "Air", value: "Air" },
+  { label: "Road", value: "Road" },
 ];
 
 export const wmsSimpleMasterConfigs: Record<string, WmsSimpleMasterConfig> = {
@@ -28,7 +28,7 @@ export const wmsSimpleMasterConfigs: Record<string, WmsSimpleMasterConfig> = {
     routeKeys: ["producttype", "product_type", "product-type"],
     keyField: "prodtype_code",
     fields: [
-      { name: "prodtype_code", label: "Product Type Code", required: true, type: "number", disabledOnEdit: true, width: 170 },
+      { name: "prodtype_code", label: "Product Type Code", required: true, type: "text", disabledOnEdit: true, width: 170 },
       { name: "prodtype_desc", label: "Product Type Description", required: true, width: 280 },
     ],
     deleteConfig: { mode: "registered", payload: (row) => [row.prodtype_code] },
@@ -40,18 +40,18 @@ country: {
   gmEndpoint: "country",
   routeKeys: ["country"],
   keyField: "country_code",
-  formTabs: [
-    { key: "basic", label: "Basic Info" },
-    { key: "extra", label: "Extra Details" },
-  ],
+  // formTabs: [
+  //   { key: "basic", label: "Basic Info" },
+  //   { key: "extra", label: "Extra Details" },
+  // ],
   fields: [
-    { name: "country_code", label: "Country Code", required: true, disabledOnEdit: true, width: 150, tab: "basic" },
-    { name: "country_name", label: "Country Name", required: true, width: 260, tab: "basic" },
-    { name: "gcc_flag",     label: "GCC",           type: "select", options: yesNo, width: 100, tab: "basic" },
-    { name: "short_desc",   label: "Short Description", width: 200, tab: "extra" },
-    { name: "nationality",  label: "Nationality",   width: 180, tab: "extra" },
+    { name: "country_code", label: "Country Code", required: true, disabledOnEdit: true, width: 150 },
+    { name: "country_name", label: "Country Name", required: true, width: 260 },
+    { name: "country_gcc",     label: "GCC",           type: "select", options: yesNo, width: 100 },
+    { name: "short_desc",   label: "Short Description", width: 200 },
+    { name: "nationality",  label: "Nationality",   width: 180 },
   ],
-  defaults: { gcc_flag: "N" },
+  defaults: { country_gcc: "N" },
   deleteConfig: { mode: "registered", payload: (row) => [row.country_code] },
 },
   activitygroup: {
@@ -63,19 +63,19 @@ country: {
     routeKeys: ["activitygroup", "activity_group", "activity-group"],
     keyField: "activity_group_code",
     fields: [
-      { name: "activity_group_code", label: "Activity Group Code", required: true, disabledOnEdit: true, width: 180 },
+      { name: "activity_group_code", label: "Activity Group Code", required: true, disabledOnEdit: true, width: 180, maxLength: 5 },
       { name: "act_group_name", label: "Activity Group Name", required: true, width: 260 },
       { name: "mandatory_flag", label: "Mandatory", type: "select", options: yesNo, width: 120 },
       { name: "validate_flag", label: "Validate", type: "select", options: yesNo, width: 120 },
-      { name: "act_group_type", label: "Group Type", width: 140 },
-      { name: "account_code", label: "Account Code", width: 150 },
+      { name: "act_group_type", label: "Group Type", width: 140, maxLength: 2 },
+      { name: "account_code", label: "Account Code", dropdownParam: "Account_AC_CODE_Serach", dropdownDisplayFields:["ac_code","ac_name"],dropdownValueKey: "ac_code", width: 150 },
       { name: "alternate_accode", label: "Alternate Account", width: 160 },
       { name: "exp_account_code", label: "Expense Account", width: 160 },
       { name: "freight_flag", label: "Freight", type: "select", options: yesNo, width: 110 },
       { name: "sw_flag", label: "SW Flag", type: "select", options: yesNo, width: 110 },
       { name: "rpt_group_name", label: "Report Group", width: 180 },
       { name: "sort_order", label: "Sort Order", type: "number", width: 120 },
-      { name: "cost_group", label: "Cost Group", width: 140 },
+      { name: "cost_group", label: "Cost Group", width: 140, maxLength: 1 },
     ],
     defaults: { mandatory_flag: "N", validate_flag: "N", freight_flag: "N", sw_flag: "N" },
     deleteConfig: { mode: "registered", payload: (row) => [row.activity_group_code] },
@@ -90,7 +90,7 @@ country: {
     fields: [
       { name: "activity_subgroup_code", label: "Sub Group Code", required: true, disabledOnEdit: true, width: 170 },
       { name: "act_subgroup_name", label: "Sub Group Name", required: true, width: 260 },
-      { name: "act_group_code", label: "Activity Group Code", required: true, width: 180 },
+      { name: "act_group_code", label: "Activity Group Code", required: true, width: 180, maxLength: 5, dropdownParam: 'DROP_DOWN_ACTIVITY_GROUP', dropdownDisplayFields: ['activity_group_code','act_group_name'], dropdownLabelKey: 'act_group_name', dropdownValueKey: 'activity_group_code' },
     ],
     deleteConfig: { mode: "registered", payload: (row) => [row.activity_subgroup_code] },
   },
@@ -158,7 +158,7 @@ country: {
     routeKeys: ["manufacture", "manufacturer"],
     keyField: "manu_code",
     fields: [
-      { name: "prin_code", label: "Principal Code", required: true, asyncOptions: { endpoint: "principal", labelKey: "prin_name", valueKey: "prin_code" }, width: 150 },
+      { name: "prin_code", label: "Principal Code", required: true, dropdownParam: "DROP_DOWN_PRINCIPAL", dropdownDisplayFields: ["prin_code", "prin_name"], dropdownValueKey: "prin_code", width: 150 },
       { name: "manu_code", label: "Manufacturer Code", required: true, disabledOnEdit: true, width: 180 },
       { name: "manu_name", label: "Manufacturer Name", required: true, width: 280 },
     ],
@@ -172,10 +172,11 @@ country: {
     routeKeys: ["moc2"],
     keyField: "charge_code",
     fields: [
-      { name: "charge_code", label: "Charge Code", required: true, width: 150 },
+      { name: "charge_code", label: "Charge Code", required: true, width: 150, maxLength: 4 },
       { name: "description", label: "Description", required: true, width: 260 },
-      { name: "charge_type", label: "Charge Type", required: true, width: 140 },
-      { name: "activity_group_code", label: "Activity Group", required: true, width: 170 },
+      { name: "charge_type", label: "Charge Type", required: true, width: 140, disabledOnEdit: true },
+      { name: "activity_group_code", label: "Activity Group", dropdownParam: 'DROP_DOWN_ACTIVITY_GROUP', 
+        dropdownDisplayFields: ['activity_group_code','act_group_name'], dropdownLabelKey: 'act_group_name', dropdownValueKey: 'activity_group_code', required: true, width: 170 },
     ],
     deleteConfig: { mode: "registered", payload: (row) => [{ charge_code: row.charge_code, charge_type: row.charge_type, company_code: row.company_code }] },
   },
@@ -217,7 +218,7 @@ country: {
     fields: [
       { name: "port_code", label: "Port Code", required: true, disabledOnEdit: true, width: 140 },
       { name: "port_name", label: "Port Name", required: true, width: 260 },
-      { name: "country_code", label: "Country Code", width: 150 },
+      { name: "country_code", label: "Country Code", width: 150, dropdownParam: "DROP_DOWN_COUNTRY", dropdownDisplayFields: ["country_code", "country_name"], dropdownValueKey: "country_code", dropdownDisplaySeparator: " - " },
       { name: "trp_mode", label: "Transport Mode", type: "select", options: transportMode, width: 150 },
     ],
     deleteConfig: { mode: "registered", payload: (row) => [row.port_code] },
@@ -280,16 +281,24 @@ country: {
     routeKeys: ["alert"],
     keyField: "op_code",
     fields: [
-      { name: "op_type", label: "Operation Type", required: true, width: 150 },
-      { name: "op_code", label: "Operation Code", required: true, width: 160 },
+      { name: "op_type", label: "Operation Type", required: true, width: 150, maxLength: 3 },
+      { name: "op_code", label: "Operation Code", required: true, width: 160, type:"number" },
       { name: "op_desc", label: "Description", required: true, width: 260 },
       { name: "op_sequence", label: "Sequence", type: "number", width: 120 },
       { name: "op_module", label: "Module", width: 130 },
-      { name: "op_mode", label: "Mode", width: 120 },
-      { name: "instruction", label: "Instruction", table: false },
+      { name: "op_mode", label: "Mode", width: 120, maxLength: 1 },
+      { name: "instruction", label: "Instruction", table: false, width: 300, type: "select", options: yesNo},
     ],
-    saveEndpoint: (form, { editMode, original }) =>
-      editMode ? `alert/${original?.op_type || form.op_type}/${original?.op_code || form.op_code}` : "alert",
+    // saveEndpoint: (form, { editMode, original }) =>
+      // editMode ? `alert/${original?.op_type || form.op_type}/${original?.op_code || form.op_code}` : "alert",
+saveEndpoint: (form, { editMode, original }) => {
+  if (editMode && original) {
+    const originalOpCode = original["op_code"] ?? original["opCode"];
+    const originalOpType = original["op_type"] ?? original["opType"];
+    return `alert/${originalOpCode}/${originalOpType}`; // ← no leading slash
+  }
+  return "alert";
+},
     deleteConfig: { mode: "registered", payload: (row) => [{ op_type: row.op_type, op_code: row.op_code, company_code: row.company_code }] },
   },
   principal: {
@@ -330,17 +339,21 @@ country: {
       { name: "prin_faxno1", label: "Company Fax 1", tab: "contact-info", section: "CONTACT INFORMATION" },
       { name: "prin_faxno2", label: "Company Fax 2", tab: "contact-info", section: "CONTACT INFORMATION" },
       { name: "prin_faxno3", label: "Company Fax 3", tab: "contact-info", section: "CONTACT INFORMATION" },
-      { name: "prin_cont1", label: "Contact Person", tab: "contact-info", section: "CONTACT INFORMATION" },
-      { name: "prin_cont_telno1", label: "Telephone", tab: "contact-info", section: "CONTACT INFORMATION" },
+      { name: "prin_contact1", label: "Contact Person 1", tab: "contact-info", section: "CONTACT INFORMATION" },
+      { name: "prin_contact2", label: "Contact Person 2", tab: "contact-info", section: "CONTACT INFORMATION" },
+      { name: "prin_contact3", label: "Contact Person 3", tab: "contact-info", section: "CONTACT INFORMATION" },
+      { name: "prin_telno1", label: "Telephone 1", tab: "contact-info", section: "CONTACT INFORMATION" },
+      { name: "prin_telno2", label: "Telephone 2", tab: "contact-info", section: "CONTACT INFORMATION" },
+      { name: "prin_telno3", label: "Telephone 3", tab: "contact-info", section: "CONTACT INFORMATION" },
       // Basic Info Tab - Organization
       { name: "div_code", label: "Division", required: true, dropdownParam: "DROP_DOWN_DIVISION", dropdownDisplayFields: ["div_code", "div_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "div_code", dropdownCodeMap: { company_code: "code1" }, tab: "organization", section: "ORGANIZATION" },
       { name: "prin_dept_code", label: "Department", required: true, dropdownParam: "DROP_DOWN_DEPT_BASED_ON_DIV", dropdownDisplayFields: ["dept_code", "dept_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "dept_code", dropdownCodeMap: { div_code: "code1" }, tab: "organization", section: "ORGANIZATION" },
       { name: "prin_acref", label: "Reference", tab: "organization", section: "ORGANIZATION" },
       { name: "auto_generate_product_code", label: "Auto Generate Product Code", type: "checkbox", tab: "organization", section: "ORGANIZATION" },
       // Account Info Tab - Company Registration Information
-      { name: "trn_no", label: "Tax Registered No.",type: "number", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
+      { name: "trn_no", label: "Tax Registered No.", type: "text", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
       { name: "trn_exp_date", label: "Tax Reg. Expiry Date", type: "date", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
-      { name: "comm_reg_no", type:"number", label: "Commercial Reg. No.", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
+      { name: "comm_reg_no", label: "Commercial Reg. No.", type: "text", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
       { name: "comm_reg_exp_date", label: "Commercial Reg. Expiry", type: "date", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
       { name: "prin_lic_no", label: "License No.", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
       { name: "prin_lic_type", label: "License Type", tab: "account-info", section: "COMPANY REGISTRATION INFORMATION" },
@@ -372,35 +385,44 @@ country: {
       { name: "storage_productwise", label: "Product Wise Storage", type: "checkbox", tab: "settings", section: "PRODUCT AND SHIPMENT SETTINGS" },
       { name: "dir_shpmnt", label: "Direct Shipment", type: "checkbox", tab: "settings", section: "PRODUCT AND SHIPMENT SETTINGS" },
       { name: "perpectual_confirm_allow", label: "Perpetual Confirm Allow", type: "checkbox", tab: "settings", section: "PRODUCT AND SHIPMENT SETTINGS" },
-      { name: "validate_expdate", label: "Outbound Validate Exp Date", type: "text", tab: "settings", section: "PRODUCT AND SHIPMENT SETTINGS" },
-      { name: "minperiod_exppick", label: "Outbound Min Exp Period", type: "text", tab: "settings", section: "PRODUCT AND SHIPMENT SETTINGS" },
+      { name: "validate_expdate", label: "Outbound Validate Exp Date", type: "date", tab: "settings", section: "PRODUCT AND SHIPMENT SETTINGS" },
+      { name: "minperiod_exppick", label: "Outbound Min Exp Period", type: "number", tab: "settings", section: "PRODUCT AND SHIPMENT SETTINGS" },
       { name: "rcpt_exp_limit", label: "Inbound Exp Limit (days)", type: "number", tab: "settings", section: "PRODUCT AND SHIPMENT SETTINGS" },
       // Storage Info Tab - Location
       { name: "pref_site", label: "Preferred Site", dropdownParam: "DROP_DOWN_SITE", dropdownDisplayFields: ["site_code", "site_name"], dropdownValueKey: "site_code", tab: "storage-info", section: "LOCATION" },
       { name: "pref_loc_from", label: "Location From", dropdownParam: "DROP_DOWN_LOCATION", dropdownCodeMap: { preferred_site: "code1" }, dropdownDisplayFields: ["location_code", "location_name"], dropdownValueKey: "location_code", tab: "storage-info", section: "LOCATION" },
       { name: "pref_loc_to", label: "Location To", dropdownParam: "DROP_DOWN_LOCATION", dropdownCodeMap: { preferred_site: "code1", location_from: "code2" }, dropdownDisplayFields: ["location_code", "location_name"], dropdownValueKey: "location_code", tab: "storage-info", section: "LOCATION" },
-      { name: "pref_aisle_from", label: "Aisle From", tab: "storage-info", section: "LOCATION" },
-      { name: "pref_aisle_to", label: "Aisle To", tab: "storage-info", section: "LOCATION" },
-      { name: "pref_col_from", label: "Column From", tab: "storage-info", section: "LOCATION" },
-      { name: "pref_col_to", label: "Column To", tab: "storage-info", section: "LOCATION" },
+      { name: "pref_aisle_from", label: "Aisle From", type: "text", tab: "storage-info", section: "LOCATION" },
+      { name: "pref_aisle_to", label: "Aisle To", type: "text", tab: "storage-info", section: "LOCATION" },
+      { name: "pref_col_from", label: "Column From", type: "number", tab: "storage-info", section: "LOCATION" },
+      { name: "pref_col_to", label: "Column To", type: "number", tab: "storage-info", section: "LOCATION" },
       // Storage Info Tab - Site, Service and Storage Details
       { name: "pref_ht_from", label: "Height From", type: "number", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
       { name: "pref_ht_to", label: "Height To", type: "number", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
       { name: "prin_siteind", label: "Default Site Ind", dropdownParam: "DROP_DOWN_SITE_IND", dropdownDisplayFields: ["site_ind", "ind_desc"],
         dropdownDisplaySeparator: " - ", dropdownValueKey: "site_ind", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
       { name: "service_date", label: "Service Date", type: "date", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
-      { name: "storage_type", label: "Storage Type", type: "select", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
-      { name: "default_foc", label: "Default Foc", type: "select", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "storage_type", label: "Storage Type", type: "text", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "default_foc", label: "Default FOC", type: "text", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      // Storage Info Tab - Additional Fields
+      { name: "pri_grnno", label: "GRN Number", type: "number", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "prin_license", label: "License", type: "text", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "backorder_pick", label: "Backorder Pick", type: "text", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "box_no", label: "Box Number", type: "text", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "storage_slab_bill", label: "Storage Slab Bill", type: "text", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "free_storage", label: "Free Storage", type: "text", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "displ_siteind_faltarea", label: "Display Site Indicator", type: "text", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
+      { name: "inb_jobwise_bill", label: "Inbound Job Wise Bill", type: "text", tab: "storage-info", section: "SITE, SERVICE AND STORAGE DETAILS" },
     ],
     saveEndpoint: (form, { editMode, original }) => (editMode ? `principal/${original?.prin_code || form.prin_code}` : "principal"),
-    // customSave: async (form, context) => {
-    //   const { user } = context;
-    //   const typedUser = user as { loginid: string };
-    //   await msPrincipalServiceInstance.upsertMsPrincipalApi({
-    //     data: form as any,
-    //     loginid: typedUser.loginid,
-    //   });
-    // },
+    customSave: async (form, context) => {
+      const { user } = context;
+      const typedUser = user as { loginid: string };
+      await msPrincipalServiceInstance.upsertMsPrincipalApi({
+        data: form as any,
+        loginid: typedUser.loginid,
+      });
+    },
     deleteConfig: { mode: "disabled", payload: () => null, reason: "Delete endpoint is not registered in the existing backend" },
   },
   customer: {
@@ -462,72 +484,6 @@ country: {
       { key: "manufacture-validation", label: "Manufacture & Validation" },
       { key: "category-product", label: "Category & Product" },
     ],
-    // fields: [
-    //   // Product Details Tab - Principal Info
-    //   { name: "prin_code", label: "Principal Code", required: true, dropdownParam: "DROP_DOWN_PRINCIPAL", dropdownDisplayFields:["prin_code","prin_name"],dropdownDisplaySeparator: " - ",dropdownValueKey: "prin_code", width: 150, tab: "product-details", section: "PRINCIPAL INFO" },
-    //   { name: "group_code", label: "Group Code", required: true, dropdownParam: "DROP_DOWN_GROUP", dropdownCodeMap: { prin_code: "code1" },dropdownDisplayFields: ["group_code", "group_name"],dropdownDisplaySeparator: " - ",dropdownValueKey: "group_code", width: 140, tab: "product-details", section: "PRINCIPAL INFO" },
-    //   { name: "brand_code", label: "Brand Code", required: true, dropdownParam: "DROP_DOWN_BRAND", dropdownCodeMap: { prin_code: "code1", group_code: "code2" },dropdownDisplayFields: ["brand_code", "brand_name"],dropdownDisplaySeparator: " - ",dropdownValueKey: "brand_code", width: 140, tab: "product-details", section: "PRINCIPAL INFO" },
-
-    //   // Product Details Tab - Product Info
-    //   { name: "prod_code", label: "Product Code", disabledOnEdit: true, width: 160, tab: "product-details", section: "PRODUCT INFO" },
-    //   { name: "prod_name", label: "Product Name", required: true, width: 320, tab: "product-details", section: "PRODUCT INFO", colSpan: 2 },
-    //   { name: "model", label: "Model #", tab: "product-details", section: "PRODUCT INFO" },
-    //   { name: "variant", label: "Variant", tab: "product-details", section: "PRODUCT INFO" },
-
-    //   // UOM & Volume Tab - Unit of Measurement
-    //   { name: "no_of_uoms", label: "No. of UOMs", type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-    //   { name: "p_uom", label: "Primary UOM", required: true, dropdownParam: "DROP_DOWN_UOM", width: 140, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-    //   { name: "l_uom", label: "Lowest UOM", required: true, dropdownParam: "DROP_DOWN_UOM", width: 130, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-    //   { name: "units_prim_pack", label: "Units/Prim Pack", required: true, type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-    //   { name: "def_units_palette", label: "Def. Units/Pallette", required: true, type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-    //   { name: "qty_as_wt", label: "Qty As Wt", type: "checkbox", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-
-    //   // UOM & Volume Tab - Volume
-    //   { name: "length", label: "Length", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-    //   { name: "width", label: "Width", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-    //   { name: "height", label: "Height", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-    //   { name: "volume", label: "Volume", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-    //   { name: "gross_weight", label: "Gross Weight", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-    //   { name: "net_weight", label: "Net Weight", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-    //   { name: "layers", label: "Layers", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-    //   { name: "carton_layer", label: "Carton / Layer", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-
-    //   // Manufacture & Validation Tab - Manufacturer
-    //   { name: "harmonize_code", label: "Harmonize Code", dropdownParam: "DROP_DOWN_HARMONIZE", dropdownCodeMap: { prin_code: "code1", group_code: "code2", brand_code: "code3" }, tab: "manufacture-validation", section: "MANUFACTURER" },
-    //   { name: "imco_code", label: "IMCO Code", tab: "manufacture-validation", section: "MANUFACTURER" },
-    //   { name: "manufacturer", label: "Manufacturer", dropdownParam: "DROP_DOWN_MANUFACTURER", dropdownCodeMap: { prin_code: "code1" }, tab: "manufacture-validation", section: "MANUFACTURER" },
-    //   { name: "alt_prod_code", label: "Alternate Prod Code", tab: "manufacture-validation", section: "MANUFACTURER" },
-    //   { name: "default_site_ind", label: "Default Site Ind", required: true, dropdownParam: "DROP_DOWN_SITE", tab: "manufacture-validation", section: "MANUFACTURER" },
-    //   { name: "batch_type", label: "Batch Type", type: "number", tab: "manufacture-validation", section: "MANUFACTURER" },
-
-    //   // Manufacture & Validation Tab - Validation
-    //   { name: "mfg_exp_dt", label: "Mfg/Exp Dt", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
-    //   { name: "supp_cd", label: "Supp. cd", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
-    //   { name: "lot_no", label: "Lot No", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
-    //   { name: "kitting", label: "Kitting", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
-    //   { name: "serialize", label: "Serialize", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
-    //   { name: "receipt_exp_limit", label: "Receipt Exp Limit", type: "number", tab: "manufacture-validation", section: "VALIDATION" },
-    //   { name: "min_period_exp_pick", label: "Min Period Exp Pick", type: "number", tab: "manufacture-validation", section: "VALIDATION" },
-
-    //   // Category & Product Tab - Category
-    //   { name: "category_abc", label: "Category ABC", type: "select", options: [{ label: "A", value: "A" }, { label: "B", value: "B" }, { label: "C", value: "C" }], tab: "category-product", section: "CATEGORY" },
-    //   { name: "prod_status", label: "Status", required: true, type: "select", options: [{ label: "Active", value: "Active" }, { label: "Inactive", value: "Inactive" }], tab: "category-product", section: "CATEGORY" },
-    //   { name: "prod_type", label: "Product Type", dropdownParam: "DROP_DOWN_PRODUCT_TYPE", tab: "category-product", section: "CATEGORY" },
-    //   { name: "prod_stage", label: "Product Stage", tab: "category-product", section: "CATEGORY" },
-    //   { name: "base_price", label: "Base Price", type: "number", tab: "category-product", section: "CATEGORY" },
-    //   { name: "def_pick_wave", label: "Def. Pick Wave", type: "select", options: [{ label: "Wave 1", value: "1" }, { label: "Wave 2", value: "2" }, { label: "Wave 3", value: "3" }], tab: "category-product", section: "CATEGORY" },
-    //   { name: "shelf_life_days", label: "Shelf Life (Days)", type: "number", tab: "category-product", section: "CATEGORY" },
-
-    //   // Category & Product Tab - Flags
-    //   { name: "co_packed", label: "Co-packed", type: "checkbox", tab: "category-product", section: "FLAGS" },
-    //   { name: "barcode_print", label: "Barcode Print", type: "checkbox", tab: "category-product", section: "FLAGS" },
-    //   { name: "hazmat_class", label: "Hazmat Class", type: "checkbox", tab: "category-product", section: "FLAGS" },
-    //   { name: "food_ind", label: "Food Ind", type: "checkbox", tab: "category-product", section: "FLAGS" },
-    //   { name: "pharma_ind", label: "Pharma Ind", type: "checkbox", tab: "category-product", section: "FLAGS" },
-
-    //   // Category & Product Tab - Putaway Preference
-    //   { name: "special_instructions", label: "Special Instructions", type: "textarea", tab: "category-product", section: "PUTAWAY PREFERENCE" },
-    // ],
     fields: [
       // Product Details Tab - Principal Info
       { name: "prin_code", label: "Principal Code", required: true, dropdownParam: "DROP_DOWN_PRINCIPAL", dropdownDisplayFields:["prin_code","prin_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "prin_code", width: 150, tab: "product-details", section: "PRINCIPAL INFO" },
@@ -541,7 +497,7 @@ country: {
       { name: "variant_code", label: "Variant", tab: "product-details", section: "PRODUCT INFO" },
 
       // UOM & Volume Tab - Unit of Measurement
-      { name: "uom_count", label: "No. of UOMs", type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
+      { name: "uom_count", label: "No. of UOMs", type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT", required : true },
       { name: "p_uom", label: "Primary UOM", required: true, dropdownParam: "DROP_DOWN_UOM", dropdownDisplayFields: ["uom_code", "uom_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "uom_code", width: 140, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
       { name: "l_uom", label: "Lowest UOM", required: true, dropdownParam: "DROP_DOWN_UOM", dropdownDisplayFields: ["uom_code", "uom_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "uom_code", width: 130, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
       { name: "uppp", label: "Units/Prim Pack", required: true, type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
@@ -577,7 +533,7 @@ country: {
 
       // Category & Product Tab - Category
       { name: "category_abc", label: "Category ABC", type: "select", options: [{ label: "A", value: "A" }, { label: "B", value: "B" }, { label: "C", value: "C" }], tab: "category-product", section: "CATEGORY" },
-      { name: "prod_status", label: "Status", required: true, type: "select", options: [{ label: "Active", value: "Active" }, { label: "Inactive", value: "Inactive" }], tab: "category-product", section: "CATEGORY" },
+      { name: "prod_status", label: "Status", required: true, type: "select", options: [{ label: "Active", value: "A" }, { label: "Inactive", value: "I" }], tab: "category-product", section: "CATEGORY" },
       { name: "prod_type", label: "Product Type", dropdownParam: "DROP_DOWN_PRODUCT_TYPE", tab: "category-product", section: "CATEGORY" },
       { name: "product_stage", label: "Product Stage", tab: "category-product", section: "CATEGORY" },
       { name: "base_price", label: "Base Price", type: "number", tab: "category-product", section: "CATEGORY" },
@@ -727,12 +683,12 @@ country: {
     fields: [
       { name: "curr_code", label: "Currency Code", required: true, disabledOnEdit: true, width: 130 },
       { name: "curr_name", label: "Currency Name", required: true, width: 220 },
-      { name: "ex_rate", label: "Exchange Rate", type: "number", width: 130 },
-      { name: "division", label: "Division", required: true, width: 130 },
-      { name: "subdivision", label: "Sub Division", type: "number", required: true, width: 130 },
+      { name: "ex_rate", label: "Exchange Rate", type: "text", width: 130 },
+      { name: "division", label: "Division", dropdownParam: "DROP_DOWN_DIVISION", dropdownDisplayFields: ["div_code", "div_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "div_code", required: true, width: 130 },
+      { name: "subdivision", label: "Sub Division", type: "text", required: true, width: 130 },
       { name: "curr_sign", label: "Currency Sign", width: 120 },
     ],
-    defaults: { ex_rate: 1, subdivision: 100 },
+    defaults: { ex_rate: "1", subdivision: "100" },
     deleteConfig: { mode: "registered", payload: (row) => [row.curr_code] },
   },
   uom: {
@@ -827,7 +783,7 @@ country: {
     gmEndpoint: "line",
     keyField: "line_code",
     fields: [
-      { name: "line_code", label: "Line Code", required: true, disabledOnEdit: true, width: 140 },
+      { name: "line_code", label: "Line Code", hideOnAdd: true, disabledOnEdit: true, width: 140 },
       { name: "line_name", label: "Line Name", required: true, width: 260 },
     ],
     deleteConfig: { mode: "registered", payload: (row) => [row.line_code] },
@@ -875,10 +831,15 @@ country: {
       { name: "address", label: "Address", table: false },
       { name: "fax_no", label: "Fax No", table: false },
     ],
-    mapBeforeSave: (form, { editMode, original }) => ({
-      ...form,
-      ...(editMode ? { old_airline_code: original?.airline_code || form.airline_code } : {}),
-    }),
+    mapBeforeSave: (form, { editMode, original }) => {
+      if (editMode && original) {
+        return {
+          ...form,
+          old_airline_code: original["airline_code"], // capture original code
+        };
+      }
+      return form;
+    },
     deleteConfig: { mode: "registered", payload: (row) => [{ airline_code: row.airline_code, company_code: row.company_code }] },
   },
 

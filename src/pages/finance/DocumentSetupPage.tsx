@@ -76,9 +76,9 @@ export function DocumentSetupPage() {
   const companyCode = user?.company_code || "";
   const loginId = user?.loginid || "";
 
-  const loadDocs = async () => {
+  const loadDocs = async (clearNotice = true) => {
     setLoadingDocs(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const rows = await getDynamicLookup({
         parameter: "MS_AC_SETUP_DOC",
@@ -93,14 +93,14 @@ export function DocumentSetupPage() {
     }
   };
 
-  const loadDetails = async (doc: DocumentRow) => {
+  const loadDetails = async (doc: DocumentRow, clearNotice = true) => {
     setSelected(doc);
     setDocForm(doc);
     setDirtyHeader({});
     setDirtyDetail({});
     setActiveGrid(null);
     setLoadingDetails(true);
-    setNotice(null);
+    if (clearNotice) setNotice(null);
     try {
       const [headers, details] = await Promise.all([
         getDynamicLookup({ parameter: "MS_AC_SETUP_DOC_ACCODE_HDR", loginid: loginId, code1: doc.doc_id }),
@@ -206,8 +206,8 @@ export function DocumentSetupPage() {
       setDirtyHeader({});
       setDirtyDetail({});
       setActiveGrid(null);
-      await loadDocs();
-      await loadDetails(docForm);
+      await loadDocs(false);
+      await loadDetails(docForm, false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save document setup" });
     } finally {
@@ -232,7 +232,7 @@ export function DocumentSetupPage() {
       });
       setDeleteTarget(null);
       setNotice({ type: "success", message: "Document account deleted" });
-      if (selected) await loadDetails(selected);
+      if (selected) await loadDetails(selected, false);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete account row" });
     }

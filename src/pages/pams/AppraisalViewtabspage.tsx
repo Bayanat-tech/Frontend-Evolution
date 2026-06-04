@@ -7,6 +7,8 @@ import TaskCharacterAppraisalTab from "./Taskcharacterappraisaltab";
 import TaskGoalAppraisalTab      from "./Taskgoalappraisaltab";
 import TaskSkillAppraisalTab     from "./Taskskillappraisaltab";
 import AppraiserCommentsTab      from "./Appraisercommentstab";
+import PerformanceReportDesign   from "./Performancereportdesign";
+import { NoticeToast } from "../../components/ui/NoticeToast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SelectedTab = "task_details" | "characteristics" | "goals" | "skill" | "comments";
@@ -18,7 +20,6 @@ function text(val: unknown): string {
   return String(val);
 }
 
-// Rating → label + professional color set
 function getRatingMeta(rating: number): { label: string; numColor: string; labelColor: string } {
   if (rating === 5) return { label: "Exceptional",        numColor: "#16a34a", labelColor: "#16a34a" };
   if (rating === 4) return { label: "Above Expectations", numColor: "#2563eb", labelColor: "#2563eb" };
@@ -35,8 +36,6 @@ const S = {
     padding: "12px",
     fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   },
-
-  // ── Header — light blue background (as in current UI) ─────────────────────
   header: {
     display: "flex" as const,
     alignItems: "center" as const,
@@ -50,8 +49,6 @@ const S = {
     minHeight: "52px",
     flexWrap: "wrap" as const,
   },
-
-  // ── Back arrow — dark blue to match header text ────────────────────────────
   backBtn: {
     display: "inline-flex" as const,
     alignItems: "center" as const,
@@ -68,7 +65,6 @@ const S = {
     flexShrink: 0,
     transition: "background 0.15s",
   },
-
   docTitle: {
     fontSize: "0.85rem",
     fontWeight: 700,
@@ -76,7 +72,6 @@ const S = {
     flexShrink: 0,
     letterSpacing: "0.01em",
   },
-
   divider: {
     width: "1px",
     height: "28px",
@@ -84,8 +79,6 @@ const S = {
     margin: "0 2px",
     flexShrink: 0,
   },
-
-  // ── Avatar — solid dark blue bg, white initial ─────────────────────────────
   avatar: {
     width: "30px",
     height: "30px",
@@ -100,7 +93,6 @@ const S = {
     color: "#fff",
     flexShrink: 0,
   },
-
   empName: {
     fontSize: "0.85rem",
     fontWeight: 700,
@@ -113,14 +105,10 @@ const S = {
     whiteSpace: "nowrap" as const,
     fontWeight: 500,
   },
-
-  // ── Final Rating chip — solid dark bg, high-contrast text ─────────────────
   ratingChipWrap: {
     marginLeft: "auto",
     flexShrink: 0,
   },
-
-  // Tab bar
   tabBar: {
     background: "#f8fafc",
     borderBottom: "1px solid #e5e7eb",
@@ -142,7 +130,6 @@ const S = {
     transition: "all 0.15s",
     borderRadius: "4px 4px 0 0",
   }),
-
   panel: {
     border: "1px solid #e5e7eb",
     borderTop: "none",
@@ -153,7 +140,6 @@ const S = {
     boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
     marginBottom: "10px",
   },
-
   btnRow: {
     display: "flex" as const,
     justifyContent: "space-between" as const,
@@ -193,85 +179,137 @@ const S = {
     whiteSpace: "nowrap" as const,
     transition: "background 0.15s",
   },
-
   overlay: {
-    position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.35)",
-    display: "flex" as const, alignItems: "center" as const,
-    justifyContent: "center" as const, zIndex: 9999,
+    position: "fixed" as const,
+    inset: 0,
+    background: "rgba(0,0,0,0.35)",
+    display: "flex" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    zIndex: 9999,
   },
   modal: {
-    background: "#fff", borderRadius: "10px", padding: "20px",
-    width: "400px", maxWidth: "95vw",
+    background: "#fff",
+    borderRadius: "10px",
+    padding: "20px",
+    width: "400px",
+    maxWidth: "95vw",
     boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-    display: "flex" as const, flexDirection: "column" as const, gap: "14px",
+    display: "flex" as const,
+    flexDirection: "column" as const,
+    gap: "14px",
   },
   modalTitle: { fontSize: "16px", fontWeight: 700, color: "#111827", marginBottom: "4px" },
   label: {
-    fontSize: "12px", color: "#6b7280", fontWeight: 600,
-    marginBottom: "4px", display: "block" as const,
+    fontSize: "12px",
+    color: "#6b7280",
+    fontWeight: 600,
+    marginBottom: "4px",
+    display: "block" as const,
   },
   select: {
-    width: "100%", padding: "8px 10px", border: "1px solid #d1d5db",
-    borderRadius: "6px", fontSize: "13px", background: "#fff", color: "#111827",
+    width: "100%",
+    padding: "8px 10px",
+    border: "1px solid #d1d5db",
+    borderRadius: "6px",
+    fontSize: "13px",
+    background: "#fff",
+    color: "#111827",
   },
   textarea: {
-    width: "100%", padding: "8px 10px", border: "1px solid #d1d5db",
-    borderRadius: "6px", fontSize: "13px", resize: "vertical" as const,
-    minHeight: "80px", fontFamily: "inherit", color: "#111827",
+    width: "100%",
+    padding: "8px 10px",
+    border: "1px solid #d1d5db",
+    borderRadius: "6px",
+    fontSize: "13px",
+    resize: "vertical" as const,
+    minHeight: "80px",
+    fontFamily: "inherit",
+    color: "#111827",
     boxSizing: "border-box" as const,
   },
-  modalBtnRow: { display: "flex" as const, justifyContent: "flex-end" as const, gap: "8px" },
-
+  modalBtnRow: {
+    display: "flex" as const,
+    justifyContent: "flex-end" as const,
+    gap: "8px",
+  },
   notice: (type: "success" | "error" | "warning"): React.CSSProperties => ({
-    padding: "10px 14px", borderRadius: "6px", fontSize: "13px",
-    fontWeight: 500, marginBottom: "12px",
+    padding: "10px 14px",
+    borderRadius: "6px",
+    fontSize: "13px",
+    fontWeight: 500,
+    marginBottom: "12px",
     background: type === "success" ? "#e6f9f0" : type === "error" ? "#fdecea" : "#fff4e5",
     color:      type === "success" ? "#0a6640"  : type === "error" ? "#a01a1a" : "#92400e",
     border: `1px solid ${type === "success" ? "#b7ebd4" : type === "error" ? "#f5b3b3" : "#fcd38a"}`,
   }),
+  reportModalOverlay: {
+    position: "fixed" as const,
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    display: "flex" as const,
+    justifyContent: "center" as const,
+    alignItems: "center" as const,
+    zIndex: 10000,
+    padding: "20px",
+  },
+  reportModalContent: {
+    backgroundColor: "#fff",
+    borderRadius: "8px",
+    width: "90%",
+    maxWidth: "1200px",
+    height: "90%",
+    display: "flex" as const,
+    flexDirection: "column" as const,
+    overflow: "hidden" as const,
+  },
+  reportModalHeader: {
+    display: "flex" as const,
+    justifyContent: "space-between" as const,
+    alignItems: "center" as const,
+    padding: "15px 20px",
+    borderBottom: "1px solid #e5e7eb",
+    backgroundColor: "#f8fafc",
+  },
+  reportModalBody: {
+    flex: 1,
+    overflow: "auto" as const,
+    padding: "20px",
+  },
+  reportModalFooter: {
+    padding: "15px 20px",
+    borderTop: "1px solid #e5e7eb",
+    display: "flex" as const,
+    justifyContent: "flex-end" as const,
+    gap: "10px",
+  },
+  closeModalBtn: {
+    background: "none",
+    border: "none",
+    fontSize: "24px",
+    cursor: "pointer" as const,
+    color: "#6b7280",
+    padding: "0 8px",
+    lineHeight: 1,
+  },
 };
 
 // ─── Final Rating Chip ────────────────────────────────────────────────────────
 const RatingChip: React.FC<{ rating: number }> = ({ rating }) => {
   const meta = getRatingMeta(rating);
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "6px",
-        background: "rgba(8,42,137,0.12)",
-        border: "1px solid rgba(8,42,137,0.20)",
-        padding: "4px 12px",
-        borderRadius: "10px",
-        flexShrink: 0,
-      }}
-    >
+    <div style={{
+      display: "flex", alignItems: "center", gap: "6px",
+      background: "rgba(8,42,137,0.12)", border: "1px solid rgba(8,42,137,0.20)",
+      padding: "4px 12px", borderRadius: "10px", flexShrink: 0,
+    }}>
       <span style={{ fontSize: "0.68rem", fontWeight: 600, color: "#082A89", opacity: 0.75, letterSpacing: "0.04em" }}>
         Final Rating:
       </span>
-      <span
-        style={{
-          fontSize: "1.05rem",
-          fontWeight: 800,
-          color: meta.numColor,
-          lineHeight: 1,
-          minWidth: "14px",
-          textAlign: "center",
-        }}
-      >
+      <span style={{ fontSize: "1.05rem", fontWeight: 800, color: meta.numColor, lineHeight: 1, minWidth: "14px", textAlign: "center" }}>
         {rating}
       </span>
-      <span
-        style={{
-          fontSize: "0.72rem",
-          fontWeight: 700,
-          color: meta.labelColor,
-          borderLeft: "1px solid rgba(8,42,137,0.20)",
-          paddingLeft: "8px",
-          letterSpacing: "0.02em",
-        }}
-      >
+      <span style={{ fontSize: "0.72rem", fontWeight: 700, color: meta.labelColor, borderLeft: "1px solid rgba(8,42,137,0.20)", paddingLeft: "8px", letterSpacing: "0.02em" }}>
         {meta.label}
       </span>
     </div>
@@ -292,10 +330,9 @@ const AppraisalViewTabsPage: React.FC = () => {
   const docNo        = getDocNoFromPath();
   const employeeCode = searchParams.get("employee_code") ?? "";
   const employeeName = searchParams.get("employee_name") ?? "";
-  const mode         = searchParams.get("mode") ?? "view";
 
-  const { user }    = useAuth();
-  const loginid     = user?.loginid || user?.username || "";
+  const { user }  = useAuth();
+  const loginid   = user?.loginid || user?.username || "";
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [selectedTab,    setSelectedTab]    = useState<SelectedTab>("task_details");
@@ -309,6 +346,12 @@ const AppraisalViewTabsPage: React.FC = () => {
   const [sentBackLevels, setSentBackLevels] = useState<Row[]>([]);
   const [notice,         setNotice]         = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
   const [loading,        setLoading]        = useState(true);
+  const [showReportModal,setShowReportModal] = useState(false);
+  
+
+  const [currentUserLevel, setCurrentUserLevel] = useState<number>(0);
+  // ── State mein add karo (existing states ke saath) ──
+  const [userFlowLevel, setUserFlowLevel] = useState<number>(0);
 
   // ── Refs ───────────────────────────────────────────────────────────────────
   const taskRowsRef         = useRef<Row[]>([]);
@@ -317,56 +360,110 @@ const AppraisalViewTabsPage: React.FC = () => {
   const skillRowsRef        = useRef<Row[]>([]);
   const appraiserCommentRef = useRef<string>("");
   const appraiseeCommentRef = useRef<string>("");
+  const reportPrintRef      = useRef<HTMLDivElement>(null);
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const isFinalized              = finalApproved === "YES";
-  const readOnly                 = isFinalized;                                    // ← mode check hatao
   const showSaveSubmitButtons    = !isFinalized && flowLevel >= 1 && flowLevel <= 2;
   const showApproveRejectButtons = !isFinalized && flowLevel >= 3 && flowLevel <= 7;
   const finalRating              = Math.round((taskTotal + characterTotal) / 2);
   const showFinalRating          = taskTotal > 0 && characterTotal > 0;
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!docNo || !employeeCode) { setLoading(false); return; }
-    const fetchInitialData = async () => {
-      try {
-        const [flowRes, levelRes, commentRes] = await Promise.all([
-          pamsSelect({ parameter: "get_appraisal_flow_level", loginid, code1: docNo }),
-          pamsSelect({ parameter: "sentback_levels",          loginid, code1: docNo }),
-          pamsSelect({ parameter: "appraisal_comments",       loginid, code1: docNo }),
-        ]);
-        if (flowRes.length > 0) {
-          setFlowLevel(Number(flowRes[0].FLOW_LEVEL_RUNNING ?? 0));
-          setFinalApproved(text(flowRes[0].FINAL_APPROVED) || "NO");
-        }
-        setSentBackLevels(levelRes as Row[]);
-        if (levelRes.length > 0) setSentBackLevel(text(levelRes[0].FLOW_RUNNING_LEVEL) || "1");
-        if (commentRes.length > 0) {
-          appraiserCommentRef.current = text(commentRes[0].APPRAISER_COMMENTS);
-          appraiseeCommentRef.current = text(commentRes[0].APPRAISEE_COMMENTS);
-        }
-      } catch {
-        // silent
-      } finally {
-        setLoading(false);
-      }
-    };
-    void fetchInitialData();
-  }, [docNo, employeeCode, loginid]);
+  // ⭐ Function to determine current user's level
+  const determineUserLevel = (flowRunningLevel: number) => {
+    const currentLoginId = loginid.trim();
+    const empCode = employeeCode.trim();
+    
+    // Employee
+    if (currentLoginId === empCode) return 0;
+    
+    // Based on workflow level, determine who is supposed to act
+    // Level 1 = Supervisor, Level 2 = Dept Head, Level 3 = COO, Level 4 = CEO, Level 5 = HR
+    return flowRunningLevel;
+  };
 
-  // ── Save ratings ───────────────────────────────────────────────────────────
-  const saveRatings = async () => {
-    const allRows = [...taskRowsRef.current, ...charRowsRef.current, ...goalRowsRef.current, ...skillRowsRef.current];
-    if (!allRows.length) return;
-    setNotice(null);
+  // ── Fetch ──────────────────────────────────────────────────────────────────
+  // ── useEffect mein fetchInitialData replace karo ──
+useEffect(() => {
+  if (!docNo || !employeeCode) { setLoading(false); return; }
+  const fetchInitialData = async () => {
     try {
-      await pamsUpdateRatings(allRows as Record<string, unknown>[]);
-      setNotice({ type: "success", message: "Ratings saved successfully" });
-    } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save ratings" });
+      const [flowRes, levelRes, commentRes, historyRes] = await Promise.all([
+        pamsSelect({ parameter: "get_appraisal_flow_level",    loginid, code1: docNo }),
+        pamsSelect({ parameter: "sentback_levels",              loginid, code1: docNo }),
+        pamsSelect({ parameter: "appraisal_comments",           loginid, code1: docNo }),
+        pamsSelect({ parameter: "get_appraisal_flow_with_name", loginid, code1: docNo }),
+      ]);
+
+      let currentFlowLevel = 0;
+      let nextActionBy     = "";
+
+      if (flowRes.length > 0) {
+        currentFlowLevel = Number(flowRes[0].FLOW_LEVEL_RUNNING ?? 0);
+        nextActionBy     = text(flowRes[0].NEXT_ACTION_BY ?? "").trim().toUpperCase();
+        setFlowLevel(currentFlowLevel);
+        setFinalApproved(text(flowRes[0].FINAL_APPROVED) || "NO");
+      }
+
+      // ── userFlowLevel decide karo ──────────────────────────────────
+      // Case 1: PENDING tab — NEXT_ACTION_BY === loginid
+      //         → user ki baari hai → editable → userFlowLevel = 0
+      //
+      // Case 2: IN PROGRESS / CLOSED tab — user ne pehle action kiya tha
+      //         → history mein dhundo jis FLOW_LEVEL pe usne action kiya
+      //         → woh level set karo taaki APPRAISER_COMMENTS{N} dikhao
+      //
+      // Case 3: User ka is doc se koi relation nahi
+      //         → readonly → userFlowLevel = currentFlowLevel
+      // ─────────────────────────────────────────────────────────────
+
+      const isMyTurn = nextActionBy === loginid.trim().toUpperCase();
+
+      if (isMyTurn) {
+        // PENDING — meri baari hai, editable
+        setUserFlowLevel(0);
+      } else {
+        // History mein dhundo — jis FLOW_LEVEL pe maine action kiya tha
+        const histRows = historyRes as Row[];
+        const myAction = histRows.find(
+          (h) =>
+            String(h.ACTION_BY ?? "").trim().toUpperCase() ===
+              loginid.trim().toUpperCase()
+        );
+
+        if (myAction) {
+          // Mera action mila — us level ka comment dikhao
+          setUserFlowLevel(Number(myAction.FLOW_LEVEL ?? 1));
+        } else {
+          // Koi relation nahi — readonly
+          setUserFlowLevel(currentFlowLevel);
+        }
+      }
+
+      setSentBackLevels(levelRes as Row[]);
+      if (levelRes.length > 0)
+        setSentBackLevel(text(levelRes[0].FLOW_RUNNING_LEVEL) || "1");
+
+      if (commentRes.length > 0) {
+        appraiserCommentRef.current = text(commentRes[0].APPRAISER_COMMENTS);
+        appraiseeCommentRef.current = text(commentRes[0].APPRAISEE_COMMENTS);
+      }
+
+      // Debug — kaam karne ke baad hatao
+      console.log("=== FLOW DEBUG ===");
+      console.log("nextActionBy:", nextActionBy);
+      console.log("loginid:", loginid.trim().toUpperCase());
+      console.log("isMyTurn:", isMyTurn);
+      console.log("historyRes:", historyRes);
+
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
     }
   };
+  void fetchInitialData();
+}, [docNo, employeeCode, loginid]);
 
   // ── Validation ─────────────────────────────────────────────────────────────
   const validateBeforeSubmit = (): string[] => {
@@ -390,7 +487,12 @@ const AppraisalViewTabsPage: React.FC = () => {
     setNotice(null);
     try {
       if (action === "D" || action === "S" || action === "A") {
-        const allRows = [...taskRowsRef.current, ...charRowsRef.current, ...goalRowsRef.current, ...skillRowsRef.current];
+        const allRows = [
+          ...taskRowsRef.current,
+          ...charRowsRef.current,
+          ...goalRowsRef.current,
+          ...skillRowsRef.current,
+        ];
         if (allRows.length > 0) await pamsUpdateRatings(allRows as Record<string, unknown>[]);
         if (appraiserCommentRef.current.trim())
           await pamsSelect({ parameter: "update_appraiser_comments", loginid, code1: docNo, code2: employeeCode, code3: appraiserCommentRef.current.trim() });
@@ -398,7 +500,11 @@ const AppraisalViewTabsPage: React.FC = () => {
           await pamsSelect({ parameter: "update_appraisee_comments", loginid, code1: docNo, code2: employeeCode, code3: appraiseeCommentRef.current.trim() });
       }
       await pamsSelect({ parameter: "update_appraisal_status", loginid, code1: docNo, code2: employeeCode, code3: action, code4: "" });
-      const msg = action === "D" ? "Saved as draft" : action === "S" ? "Submitted successfully" : action === "A" ? "Approved successfully" : "Rejected successfully";
+      const msg =
+        action === "D" ? "Saved as draft" :
+        action === "S" ? "Submitted successfully" :
+        action === "A" ? "Approved successfully" :
+                         "Rejected successfully";
       setNotice({ type: "success", message: msg });
       setTimeout(() => navigate(-1), 900);
     } catch (err: unknown) {
@@ -413,7 +519,7 @@ const AppraisalViewTabsPage: React.FC = () => {
       return;
     }
     try {
-      await pamsSelect({ parameter: "update_appraisal_status", loginid, code1: docNo, code2: employeeCode, code3: "SB", code4: sentBackLevel });
+      await pamsSelect({ parameter: "update_appraisal_status", loginid, code1: docNo, code2: employeeCode, code3: "SB", code4: `${sentBackLevel}~${sentBackReason.trim()}` });
       setNotice({ type: "success", message: "Appraisal sent back successfully" });
       setSentBackPopup(false);
       setSentBackReason("");
@@ -422,6 +528,33 @@ const AppraisalViewTabsPage: React.FC = () => {
     } catch (err: unknown) {
       setNotice({ type: "error", message: err instanceof Error ? err.message : "Something went wrong" });
     }
+  };
+
+  // ── Print handler ──────────────────────────────────────────────────────────
+  const handlePrintReport = () => {
+    if (!reportPrintRef.current) return;
+    const fileName = `Performance-Report-${docNo}-${new Date().toISOString().slice(0, 10)}`;
+    const printStyles = `
+      @page { size: A4 portrait; margin: 10mm 8mm; }
+      * { box-sizing: border-box; }
+      body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        margin: 0; padding: 0;
+        font-family: Arial, sans-serif;
+        background: #fff;
+      }
+      thead { display: table-header-group; }
+    `;
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(
+      `<!DOCTYPE html><html><head><title>${fileName}</title><style>${printStyles}</style></head><body>${reportPrintRef.current.outerHTML}</body></html>`
+    );
+    win.document.close();
+    win.focus();
+    win.print();
+    win.close();
   };
 
   if (loading) {
@@ -439,12 +572,10 @@ const AppraisalViewTabsPage: React.FC = () => {
     <div style={S.container}>
 
       {/* Notice */}
-      {notice && <div style={S.notice(notice.type)}>{notice.message}</div>}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
       {/* ── Header ───────────────────────────────────────────────────────── */}
       <div style={S.header}>
-
-        {/* Back button */}
         <button
           style={S.backBtn}
           onClick={() => navigate(-1)}
@@ -455,24 +586,18 @@ const AppraisalViewTabsPage: React.FC = () => {
           ←
         </button>
 
-        {/* Doc title */}
         <span style={S.docTitle}>Appraisal: {docNo}</span>
         <span style={S.divider} />
 
-        {/* Avatar */}
         <div style={S.avatar}>
           {(employeeName?.[0] ?? employeeCode?.[0] ?? "?").toUpperCase()}
         </div>
 
-        {/* Employee info */}
         <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", minWidth: 0, flex: 1 }}>
           <span style={S.empName}>{employeeName || employeeCode || "—"}</span>
-          {employeeCode && (
-            <span style={S.empId}>ID: {employeeCode}</span>
-          )}
+          {employeeCode && <span style={S.empId}>ID: {employeeCode}</span>}
         </div>
 
-        {/* Final Rating chip — solid dark background, always visible */}
         {showFinalRating && (
           <div style={S.ratingChipWrap}>
             <RatingChip rating={finalRating} />
@@ -531,11 +656,13 @@ const AppraisalViewTabsPage: React.FC = () => {
         </div>
         <div style={{ display: selectedTab === "comments"        ? "block" : "none" }}>
           <AppraiserCommentsTab
-            docNo={docNo} employeeCode={employeeCode}
+            docNo={docNo}
+            employeeCode={employeeCode}
             isVisible={selectedTab === "comments"}
             taskTotal={taskTotal}
             characterTotal={characterTotal}
             flowLevel={flowLevel}
+            userFlowLevel={userFlowLevel}
             onAppraiserCommentChange={(val) => { appraiserCommentRef.current = val; }}
             onAppraiseeCommentChange={(val)  => { appraiseeCommentRef.current = val; }}
           />
@@ -575,7 +702,7 @@ const AppraisalViewTabsPage: React.FC = () => {
         </div>
 
         <div style={S.btnGroup}>
-          <button style={S.outlineBtn} onClick={() => window.print()}>🖨️ Print</button>
+          <button style={S.outlineBtn} onClick={() => setShowReportModal(true)}>🖨️ Print</button>
           <button style={S.outlineBtn} disabled>📎 Attach</button>
           <button style={S.outlineBtn} onClick={() => navigate(-1)}>🚪 Exit</button>
         </div>
@@ -586,7 +713,6 @@ const AppraisalViewTabsPage: React.FC = () => {
         <div style={S.overlay} onClick={() => setSentBackPopup(false)}>
           <div style={S.modal} onClick={(e) => e.stopPropagation()}>
             <div style={S.modalTitle}>Send Back Appraisal</div>
-
             <div>
               <label style={S.label}>Send Back To Level</label>
               <select style={S.select} value={sentBackLevel} onChange={(e) => setSentBackLevel(e.target.value)}>
@@ -601,7 +727,6 @@ const AppraisalViewTabsPage: React.FC = () => {
                 )}
               </select>
             </div>
-
             <div>
               <label style={S.label}>Reason</label>
               <textarea
@@ -611,14 +736,60 @@ const AppraisalViewTabsPage: React.FC = () => {
                 placeholder="Enter reason for sending back..."
               />
             </div>
-
             <div style={S.modalBtnRow}>
-              <button style={S.outlineBtn} onClick={() => setSentBackPopup(false)}>Cancel</button>
-              <button style={S.solidBtn()} onClick={() => void handleSentBack()}>Confirm Send Back</button>
+              <button type="button" style={S.outlineBtn} onClick={() => setSentBackPopup(false)}>Cancel</button>
+              <button type="button" style={S.solidBtn()} onClick={() => void handleSentBack()}>Confirm Send Back</button>
             </div>
           </div>
         </div>
       )}
+
+      {/* ── Report Modal ──────────────────────────────────────────────────── */}
+      {showReportModal && (
+        <div style={S.reportModalOverlay} onClick={() => setShowReportModal(false)}>
+          <div style={S.reportModalContent} onClick={(e) => e.stopPropagation()}>
+
+            {/* Header */}
+            <div style={S.reportModalHeader}>
+              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#082A89" }}>
+                Performance Report — {docNo}
+              </h3>
+              <button
+                style={S.closeModalBtn}
+                onClick={() => setShowReportModal(false)}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#082A89"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#6b7280"; }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Body — report renders here; ref captures the inner div for printing */}
+            <div style={S.reportModalBody}>
+              <PerformanceReportDesign
+                required_values={{
+                  doc_no:        docNo ?? "",
+                  employee_code: employeeCode,
+                  company_code:  "BSG",
+                }}
+                printRef={reportPrintRef}
+              />
+            </div>
+
+            {/* Footer */}
+            <div style={S.reportModalFooter}>
+              <button style={S.outlineBtn} onClick={() => setShowReportModal(false)}>
+                Close
+              </button>
+              <button style={S.solidBtn()} onClick={handlePrintReport}>
+                🖨️ Print Report
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
