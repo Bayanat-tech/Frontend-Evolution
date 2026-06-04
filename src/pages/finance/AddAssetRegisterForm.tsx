@@ -396,13 +396,13 @@ export function AddAssetRegisterForm({
         {/* ==================== ASSET DETAILS ==================== */}
         <Section title="Asset Details">
           <div className="grid grid-cols-4 gap-3">
-            <Field label="Asset ID" value={form.asset_id}
-              onChange={(v) => set("asset_id", v)} disabled={isReadOnly || isEdit} />
+            {/* <Field label="Asset ID11" value={form.asset_id}
+              onChange={(v) => set("asset_id", v)} disabled={isReadOnly || isEdit} /> */}
 
-            <div className="col-span-2">
+            {/* <div className="col-span-2"> */}
               <Field label="Asset Name" value={form.asset_name}
                 onChange={(v) => set("asset_name", v)} disabled={isReadOnly} required />
-            </div>
+            {/* </div> */}
 
             <Field label="Alias Name" value={form.alias_name}
               onChange={(v) => set("alias_name", v)} disabled={isReadOnly} />
