@@ -269,7 +269,7 @@ export function AddAssetRegisterForm({
         // PRIMARY
         val1s1: companyCode,
         val1s2: isEdit ? form.asset_id : "",
-        // TEXT
+        // TEXT 
         val1s3: form.asset_name,
         val1s4: form.asset_group_code,
         val1s5: form.dprc_commence_date,
