@@ -93,7 +93,6 @@ export function BudgetVersionPage() {
     { accessorKey: "budget_year", header: "Year" },
     { accessorKey: "div_code", header: "Division" },
     { accessorKey: "version", header: "Version" },
-    { accessorKey: "user_id", header: "User" },
     {
       accessorKey: "remarks",
       header: "Remarks",
@@ -117,13 +116,13 @@ export function BudgetVersionPage() {
     if (!deleteTarget) return;
     try {
       await executeDynamicDelete({
-  parameter: "BUDGET_VERSION_DELETE",
-  loginid: user?.loginid || "",
-  code1: deleteTarget.company_code,
-  code2: deleteTarget.doc_type,
-  code3: deleteTarget.budget_year,
-  code4: deleteTarget.version,   // ← VERSION here, no code5 needed
-});
+        parameter: "BUDGET_VERSION_DELETE",
+        loginid: user?.loginid || "",
+        code1: deleteTarget.company_code,
+        code2: deleteTarget.doc_type,
+        code3: deleteTarget.budget_year,
+        code4: deleteTarget.version,
+      });
       setDeleteTarget(null);
       setNotice({ type: "success", message: "Budget version deleted successfully" });
       await loadRows(false);
@@ -207,6 +206,9 @@ function BudgetVersionEditor({ editor, onClose, onSaved }: { editor: Exclude<Edi
   const { user } = useAuth();
   const readOnly = editor.mode === "view";
   const isEdit = editor.mode === "edit";
+
+  const originalRow = editor.row;
+
   const [form, setForm] = useState<BudgetVersionRow>(() => ({
     ...EMPTY_ROW,
     company_code: user?.company_code || "",
@@ -229,33 +231,33 @@ function BudgetVersionEditor({ editor, onClose, onSaved }: { editor: Exclude<Edi
     }
 
     try {
-  setSaving(true);
-  await executeDynamicMutation({
-    parameter: "BUDGET_VERSION_INS_UPD",
-    loginid: user?.loginid || "",
-    val1s1: isEdit ? form.company_code : undefined,
-    val1s2: form.doc_type,
-    val1s3: form.budget_year,
-    val1s4: form.div_code,
-    val1s5: form.version,
-    val1s6: form.remarks,
-    val1s7: form.user_id || user?.loginid || "",
-    val1s8: "",
-    val1s9: "",
-    val1s10: "",
-    val1d1: null,
-    wval1s1: isEdit ? "" : form.company_code,
-    wval1s2: "",
-    wval1s3: "",
-    wval1s4: "",
-    wval1s5: "",
-  } as Parameters<typeof executeDynamicMutation>[0]);
-  await onSaved();
-} catch (err) {
-  setError(err instanceof Error ? err.message : "Unable to save budget version");
-} finally {
-  setSaving(false);
-}
+      setSaving(true);
+      await executeDynamicMutation({
+        parameter: "BUDGET_VERSION_INS_UPD",
+        loginid: user?.loginid || "",
+        val1s1: isEdit ? form.company_code : undefined,
+        val1s2: form.doc_type,
+        val1s3: form.budget_year,
+        val1s4: form.div_code,
+        val1s5: form.version,
+        val1s6: form.remarks,
+        val1s7: form.user_id || user?.loginid || "",
+        val1s8: "",
+        val1s9: "",
+        val1s10: "",
+        val1d1: null,
+        wval1s1: isEdit ? originalRow!.company_code : form.company_code,
+        wval1s2: isEdit ? originalRow!.doc_type : "",
+        wval1s3: isEdit ? originalRow!.budget_year : "",
+        wval1s4: isEdit ? originalRow!.version : "",
+        wval1s5: "",
+      } as Parameters<typeof executeDynamicMutation>[0]);
+      await onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save budget version");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -266,18 +268,11 @@ function BudgetVersionEditor({ editor, onClose, onSaved }: { editor: Exclude<Edi
       </div>
       <form className="grid flex-1 content-start gap-4 overflow-auto py-4" id="budget-version-form" onSubmit={handleSubmit}>
         {error && <div className="alert error">{error}</div>}
-        {isEdit && (
-          <div className="rounded-md border bg-secondary/40 p-3 text-xs text-muted-foreground">
-            Document Type, Budget Year, Division and Version are record keys. To change those values, create a new version and delete the old one.
-          </div>
-        )}
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Document Type" value={form.doc_type} onChange={(value) => setField("doc_type", value)} disabled={readOnly || isEdit} />
-          <Field label="Budget Year" value={form.budget_year} onChange={(value) => setField("budget_year", value)} disabled={readOnly || isEdit} />
-          <Field label="Division Code" value={form.div_code} onChange={(value) => setField("div_code", value)} disabled={readOnly || isEdit} />
-          <Field label="Version" value={form.version} onChange={(value) => setField("version", value)} disabled={readOnly || isEdit} />
-          <Field label="User ID" value={form.user_id} onChange={(value) => setField("user_id", value)} disabled />
-          <Field label="User Date" type="date" value={dateInput(form.user_dt)} onChange={(value) => setField("user_dt", value)} disabled={readOnly} />
+          <Field label="Document Type" value={form.doc_type} onChange={(value) => setField("doc_type", value)} disabled={readOnly} />
+          <Field label="Budget Year" value={form.budget_year} onChange={(value) => setField("budget_year", value)} disabled={readOnly} />
+          <Field label="Division Code" value={form.div_code} onChange={(value) => setField("div_code", value)} disabled={readOnly} />
+          <Field label="Version" value={form.version} onChange={(value) => setField("version", value)} disabled={readOnly} />
         </div>
         <label className="field">
           <span>Remarks</span>
