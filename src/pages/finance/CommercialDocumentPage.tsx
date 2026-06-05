@@ -30,6 +30,7 @@ import { Button } from "../../components/ui/Button";
 import { CardContent, CardHeader } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
+import { ExportCSVButton } from "../../components/ui/ExportCSVButton";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
@@ -255,6 +256,7 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
           <Select className="w-44" value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
             {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
           </Select>
+          <ExportCSVButton data={rows} columns={columns} filename={`${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`} />
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}><RefreshCw size={15} /></Button>
           <Button title={meta.addLabel} onClick={() => setDivisionPicker(true)}><Plus size={15} /> Add</Button>
         </div>
@@ -279,6 +281,7 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
         density="grid"
         enablePagination
         manualPagination
+        enableExport={false}
         initialSorting={[{ id: "doc_date", desc: true }]}
         pageIndex={pageIndex}
         pageSize={pageSize}

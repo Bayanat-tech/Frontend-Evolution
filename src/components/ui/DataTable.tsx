@@ -17,6 +17,7 @@ import { ArrowDown, ArrowDownUp, ArrowUp, CalendarDays, ChevronDown, ChevronLeft
 import { ReactNode, UIEvent, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "../../lib/utils";
 import { Button } from "./Button";
+import { ExportCSVButton } from "./ExportCSVButton";
 import { Input } from "./Input";
 import { Skeleton } from "./Skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./Table";
@@ -49,6 +50,8 @@ export type DataTableProps<TData, TValue> = {
   manualFiltering?: boolean;
   enableColumnFilters?: boolean;
   enableColumnVisibility?: boolean;
+  enableExport?: boolean;
+  exportFilename?: string;
   rowClassName?: (row: TData) => string;
   onRowClick?: (row: TData) => void;
   getRowId?: (row: TData, index: number) => string;
@@ -112,6 +115,8 @@ export function DataTable<TData, TValue>({
   manualFiltering = false,
   enableColumnFilters = true,
   enableColumnVisibility = false,
+  enableExport,
+  exportFilename,
   rowClassName,
   onRowClick,
   getRowId,
@@ -186,6 +191,8 @@ export function DataTable<TData, TValue>({
   });
 
   const visibleRows = manualFiltering ? table.getCoreRowModel().rows : manualPagination ? table.getSortedRowModel().rows : enablePagination ? table.getRowModel().rows : table.getFilteredRowModel().rows;
+  const exportRows = (manualPagination || manualFiltering ? table.getCoreRowModel().rows : table.getFilteredRowModel().rows).map((row) => row.original);
+  const showExport = enableExport ?? Boolean(onSearchChange || enablePagination || manualPagination);
   const skeletonRows = useMemo(() => Array.from({ length: Math.min(pageSize, 100) }), [pageSize]);
   const heightValue = typeof height === "number" ? `${height}px` : height;
   const responsiveMinWidth = minWidth ?? Math.max(760, enhancedColumns.length * 140);
@@ -253,7 +260,7 @@ export function DataTable<TData, TValue>({
   return (
     <div className="data-table-wrap grid w-full min-w-0 max-w-full gap-2">
       <div className="data-table-shell w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-[#aebbd0] bg-card shadow-[0_8px_22px_rgba(15,23,42,0.07)]">
-      {(onSearchChange || toolbar || enableColumnVisibility) && (
+      {(onSearchChange || toolbar || enableColumnVisibility || showExport) && (
         <div className="data-table-header grid gap-2 border-b border-[#c7d2e3] bg-white px-3 py-2">
           <div className="data-table-actions flex w-full flex-wrap items-center justify-between gap-2">
             {onSearchChange && (
@@ -291,7 +298,14 @@ export function DataTable<TData, TValue>({
                 {toolbar}
               </div>
             )}
-            {!onSearchChange && !toolbar && <span className="min-h-1 flex-1" />}
+            {showExport && (
+              <ExportCSVButton
+                columns={enhancedColumns}
+                data={exportRows}
+                filename={exportFilename ?? `${slugifyFilename(_title || "table")}.csv`}
+              />
+            )}
+            {!onSearchChange && !toolbar && !showExport && <span className="min-h-1 flex-1" />}
             </div>
         </div>
       )}
@@ -407,6 +421,14 @@ export function DataTable<TData, TValue>({
       </div>
     </div>
   );
+}
+
+function slugifyFilename(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "table";
 }
 
 function ColumnFilterButton<TData, TValue>({

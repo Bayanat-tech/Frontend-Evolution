@@ -40,6 +40,26 @@ const fieldLabels: Record<string, string> = {
 };
 
 const standardFields = ["standard_1", "standard_2", "standard_3", "standard_4", "standard_5", "standard_6", "standard_7"];
+const dateFields = new Set(["start_date", "est_completion_date", "end_date"]);
+
+const toDateInputValue = (value: unknown) => {
+  if (!value) return "";
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  const date = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const normalizeProgressRow = (row: ProgressRow): ProgressRow => {
+  const normalized = { ...row };
+  dateFields.forEach((field) => {
+    normalized[field] = toDateInputValue(normalized[field]);
+  });
+  return applyProgressCalculations(normalized);
+};
 
 const emptyProgressRow = (module: string): ProgressRow => ({
   module,
@@ -99,7 +119,7 @@ export function ApplicationProgressPage() {
         code1: companyCode,
         code2: module,
       });
-      setRows(data.map((row) => applyProgressCalculations(row as ProgressRow)));
+      setRows(data.map((row) => normalizeProgressRow(row as ProgressRow)));
       setDirtyRows({});
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load application progress" });
@@ -133,7 +153,7 @@ export function ApplicationProgressPage() {
       current.map((row, index) => {
         const rowId = String(row.id ?? index);
         if (rowId !== id) return row;
-        const next = applyProgressCalculations({ ...row, ...patch });
+        const next = normalizeProgressRow({ ...row, ...patch });
         setDirtyRows((prev) => ({ ...prev, [rowId]: next }));
         return next;
       }),
@@ -187,7 +207,7 @@ export function ApplicationProgressPage() {
           <Input
             className="h-7 min-w-[130px] border-transparent bg-transparent px-1 shadow-none focus-visible:border-input"
             type={type}
-            value={String(row.original[field] ?? "")}
+            value={type === "date" ? toDateInputValue(row.original[field]) : String(row.original[field] ?? "")}
             onChange={(event) => updateRow(rowId, { [field]: type === "number" ? Number(event.target.value) : event.target.value })}
           />
         );
@@ -385,12 +405,12 @@ function ProgressEditor({
 
   useEffect(() => {
     if (!editor) return;
-    setForm(applyProgressCalculations(editor.mode === "edit" && editor.row ? { ...emptyProgressRow(module), ...editor.row } : emptyProgressRow(module)));
+    setForm(normalizeProgressRow(editor.mode === "edit" && editor.row ? { ...emptyProgressRow(module), ...editor.row } : emptyProgressRow(module)));
   }, [editor, module]);
 
   if (!editor) return null;
 
-  const setField = (field: string, value: unknown) => setForm((current) => applyProgressCalculations({ ...current, [field]: value }));
+  const setField = (field: string, value: unknown) => setForm((current) => normalizeProgressRow({ ...current, [field]: value }));
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
