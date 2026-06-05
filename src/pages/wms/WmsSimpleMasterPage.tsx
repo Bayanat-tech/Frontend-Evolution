@@ -354,11 +354,11 @@ const saveRecord = async (event: FormEvent) => {
           <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">{config.title}</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => loadRows()}>
-            <RefreshCw size={15} /> Refresh
+          <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => loadRows()}>
+            <RefreshCw size={15} />
           </Button>
-          <Button onClick={openAdd}>
-            <Plus size={15} /> Add {config.title}
+          <Button title={`Add ${config.title}`} onClick={openAdd}>
+            <Plus size={15} /> Add
           </Button>
         </div>
       </div>

@@ -263,9 +263,9 @@ export function WmsDataTable<TData, TValue>({
       <div className="data-table-shell w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-[#aebbd0] bg-card shadow-[0_8px_22px_rgba(15,23,42,0.07)]">
       {(onSearchChange || toolbar || enableColumnVisibility) && (
         <div className="data-table-header grid gap-2 border-b border-[#c7d2e3] bg-white px-3 py-2">
-          <div className="data-table-actions flex w-full flex-wrap items-center gap-2">
+          <div className="data-table-actions flex w-full flex-wrap items-center justify-between gap-2">
             {onSearchChange && (
-              <label className="data-table-search flex h-10 min-w-[260px] flex-1 items-center gap-2 rounded-full border border-[#aebbd0] bg-[#fbfdff] px-3 text-muted-foreground shadow-inner">
+              <label className="data-table-search flex h-10 w-full min-w-[260px] max-w-[520px] items-center gap-2 rounded-full border border-[#aebbd0] bg-[#fbfdff] px-3 text-muted-foreground shadow-inner">
                 <Search size={16} />
                 <Input
                   className="h-8 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"

@@ -255,8 +255,8 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
           <Select className="w-44" value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
             {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
           </Select>
-          <Button variant="outline" onClick={() => void loadRows()}><RefreshCw size={15} /> Refresh</Button>
-          <Button onClick={() => setDivisionPicker(true)}><Plus size={15} /> {meta.addLabel}</Button>
+          <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}><RefreshCw size={15} /></Button>
+          <Button title={meta.addLabel} onClick={() => setDivisionPicker(true)}><Plus size={15} /> Add</Button>
         </div>
       </div>
 

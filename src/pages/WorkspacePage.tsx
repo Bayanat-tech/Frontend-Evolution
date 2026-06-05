@@ -2,6 +2,7 @@ import {
   Activity,
   Anchor,
   Archive,
+  ArrowLeft,
   BadgeDollarSign,
   Ban,
   BarChart3,
@@ -70,10 +71,8 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
     return menuTree.find((item) => item.title.toLowerCase().replace(/\s+/g, "-") === appCode) || menuTree[0];
   }, [appCode, menuTree]);
 
-  const leaves = useMemo(() => flattenLeaves(activeApp?.children || []), [activeApp]);
-  const activeLeaf = leaves.find((leaf) => {
-    return isPathActive(cleanPath(leaf.url_path), location.pathname);
-  });
+  const activeMenuPath = useMemo(() => findActiveMenuPath(activeApp?.children || [], location.pathname), [activeApp, location.pathname]);
+  const appRouteTarget = getMenuNodeTarget(activeApp, appCode || "");
 
   const handleLogout = () => {
     logout();
@@ -128,6 +127,19 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
             />
           ))}
         </nav>
+
+        <div className={cn("sidebar-footer", collapsed && "collapsed")}>
+          {!collapsed && (
+            <div className="sidebar-company-card">
+              <span>Company</span>
+              <strong>{user?.company_code || "Company"}</strong>
+            </div>
+          )}
+          <Link className={cn("sidebar-switch-module", collapsed && "icon-only")} to="/apps" title="Switch Module" aria-label="Switch Module">
+            <ArrowLeft size={15} />
+            {!collapsed && "Switch Module"}
+          </Link>
+        </div>
       </aside>
 
       <section className="workspace-main">
@@ -136,18 +148,20 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
             <Search size={16} />
             <input placeholder="Search menu, reports, forms..." />
           </div>
-          <button className="icon-button" onClick={onToggleTheme} title={dark ? "Light mode" : "Dark mode"}>
-            {dark ? <Sun size={17} /> : <Moon size={17} />}
-          </button>
-          <div className="header-user compact">
-            <div className="avatar">{(user?.username || user?.loginid || "U").slice(0, 2).toUpperCase()}</div>
-            <div>
-              <strong>{user?.username || user?.loginid}</strong>
-              <span>{user?.company_code || "Company"}</span>
-            </div>
-            <button className="icon-button" onClick={handleLogout}>
-              <LogOut size={17} />
+          <div className="workspace-header-actions">
+            <button className="icon-button" onClick={onToggleTheme} title={dark ? "Light mode" : "Dark mode"}>
+              {dark ? <Sun size={17} /> : <Moon size={17} />}
             </button>
+            <div className="header-user compact">
+              <div className="avatar">{(user?.username || user?.loginid || "U").slice(0, 2).toUpperCase()}</div>
+              <div>
+                <strong>{user?.username || user?.loginid}</strong>
+                <span>{user?.company_code || "Company"}</span>
+              </div>
+              <button className="icon-button" onClick={handleLogout}>
+                <LogOut size={17} />
+              </button>
+            </div>
           </div>
         </header>
 
@@ -156,14 +170,30 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
             <Link to="/apps">
               <Home size={14} /> Home
             </Link>
-            <ChevronRight size={14} />
-            <span>{titleCase(activeApp?.title || "Workspace")}</span>
-            {activeLeaf && (
+            {activeApp && (
               <>
                 <ChevronRight size={14} />
-                <span>{titleCase(activeLeaf.title)}</span>
+                {appRouteTarget ? (
+                  <Link to={appRouteTarget}>{titleCase(activeApp.title)}</Link>
+                ) : (
+                  <span>{titleCase(activeApp.title)}</span>
+                )}
               </>
             )}
+            {activeMenuPath.map((node, index) => {
+              const isLast = index === activeMenuPath.length - 1;
+              const target = getMenuNodeTarget(node, appCode || "");
+              return (
+                <span className="breadcrumb-segment" key={node.id || `${node.title}-${index}`}>
+                  <ChevronRight size={14} />
+                  {isLast || !target ? (
+                    <span className={isLast ? "breadcrumb-current" : undefined}>{titleCase(node.title)}</span>
+                  ) : (
+                    <Link to={target}>{titleCase(node.title)}</Link>
+                  )}
+                </span>
+              );
+            })}
           </nav>
 
           {workspaceRoute}
@@ -306,6 +336,25 @@ function isMenuNodeActive(item: MenuNode, pathname: string): boolean {
   const path = cleanPath(item.url_path);
   if (isPathActive(path, pathname)) return true;
   return Boolean(item.children?.some((child) => isMenuNodeActive(child, pathname)));
+}
+
+function findActiveMenuPath(items: MenuNode[], pathname: string): MenuNode[] {
+  for (const item of items) {
+    const path = cleanPath(item.url_path);
+    if (isPathActive(path, pathname)) return [item];
+    const childPath = findActiveMenuPath(item.children || [], pathname);
+    if (childPath.length) return [item, ...childPath];
+  }
+  return [];
+}
+
+function getMenuNodeTarget(item: MenuNode | undefined, appCode: string): string | null {
+  if (!item || !appCode) return null;
+  const directPath = cleanPath(item.url_path);
+  if (directPath) return `/workspace/${appCode}/${directPath}`;
+  const firstLeaf = flattenLeaves(item.children || [])[0];
+  const firstLeafPath = cleanPath(firstLeaf?.url_path);
+  return firstLeafPath ? `/workspace/${appCode}/${firstLeafPath}` : null;
 }
 
 function isPathActive(menuPath: string, pathname: string): boolean {
