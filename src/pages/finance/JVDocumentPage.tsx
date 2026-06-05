@@ -662,6 +662,16 @@ function JVDocument({
       });
     });
   };
+  const isBalanced =
+  Number(creditTotal.toFixed(3)) ===
+  Number(debitTotal.toFixed(3));
+  console.log({
+  disabled,
+  loading,
+  detailLength: form.detail.length,
+  creditTotal,
+  debitTotal,
+});
 
   return (
     <form className="payment-workbench grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
@@ -914,7 +924,7 @@ function JVDocument({
         </div>
         <div className="flex items-center gap-2">
           <Button disabled={saving} type="button" variant="outline" onClick={onClose}>Close</Button>
-          <Button disabled={disabled || loading || form.detail.length === 0 || creditTotal !== debitTotal} type="submit">
+          <Button disabled={disabled || loading || form.detail.length === 0 || !isBalanced} type="submit">
             <Save size={15} /> {saving ? "Saving..." : "Save"}
           </Button>
         </div>
