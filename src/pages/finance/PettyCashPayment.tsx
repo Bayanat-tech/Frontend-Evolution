@@ -199,17 +199,18 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
 
   return (
     <section className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="m-0 text-2xl font-semibold tracking-tight">{meta.title}</h1>
           <p className="m-0 mt-1 text-sm text-muted-foreground">{meta.subtitle}</p>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Select className="w-44" value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
-            {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
-          </Select>
-          <Button variant="outline" onClick={() => void loadRows()}><RefreshCw size={15} /> Refresh</Button>
-          <Button onClick={() => setDivisionPicker(true)}><Plus size={15} /> {meta.addLabel}</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
+            <RefreshCw size={15} />
+          </Button>
+          <Button title={meta.addLabel} onClick={() => setDivisionPicker(true)}>
+            <Plus size={15} /> Add
+          </Button>
         </div>
       </div>
 
@@ -235,6 +236,15 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
           enablePagination
           manualPagination
           manualFiltering
+          toolbar={
+            <div className="flex items-center gap-2">
+              <Select className="h-10 w-36" value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
+                {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
+              </Select>
+            </div>
+          }
+          enableExport
+          exportFilename={`${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`}
           pageIndex={pageIndex}
           pageSize={pageSize}
           totalRows={totalRows}
