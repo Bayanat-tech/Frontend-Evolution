@@ -2134,6 +2134,104 @@ footer,
   display: none;
 }
 
+.finance-list-page {
+  gap: 14px;
+}
+
+.finance-list-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #aebbd0;
+}
+
+.finance-list-title {
+  min-width: 0;
+}
+
+.finance-list-title h1 {
+  color: #0f172a;
+  font-size: clamp(22px, 1.65vw, 28px);
+  line-height: 1.15;
+}
+
+.finance-list-title p {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.finance-list-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.finance-list-page .data-table-shell {
+  border-color: #aebbd0;
+  border-radius: 14px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.055);
+}
+
+.finance-list-page .data-table-header {
+  padding: 10px 12px;
+  background: #ffffff;
+}
+
+.finance-list-page .data-table-actions {
+  align-items: center;
+  gap: 10px;
+}
+
+.finance-list-page .data-table-search {
+  max-width: min(740px, 100%) !important;
+}
+
+.finance-list-page .data-table-toolbar {
+  margin-left: auto;
+}
+
+.finance-list-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.finance-period-control {
+  display: inline-flex;
+  height: 38px;
+  min-width: 132px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #d7e1ef;
+  border-radius: 999px;
+  background: #f8fbff;
+  padding: 3px 5px 3px 12px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.finance-period-control .ui-select {
+  height: 30px;
+  min-height: 30px;
+  width: 82px;
+  border: 0;
+  border-left: 1px solid #d7e1ef;
+  border-radius: 0;
+  background: transparent;
+  padding-left: 9px;
+  color: #172033;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: none;
+}
+
 .commercial-header-footer {
   min-height: 38px;
   min-width: 0;
@@ -2204,12 +2302,12 @@ footer,
 }
 
 .finance-lines-table .finance-amount-cell {
-  width: 150px;
-  min-width: 150px;
+  width: 164px;
+  min-width: 164px;
 }
 
 .finance-money-input {
-  min-width: 128px;
+  min-width: 142px;
   text-align: right;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -2223,6 +2321,26 @@ footer,
   .finance-lines-table .finance-sticky-col {
     position: static;
     box-shadow: none;
+  }
+
+  .finance-list-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .finance-list-actions {
+    width: 100%;
+  }
+
+  .finance-list-page .data-table-toolbar,
+  .finance-list-controls,
+  .finance-period-control {
+    width: 100%;
+  }
+
+  .finance-period-control .ui-select {
+    flex: 1;
+    width: 100%;
   }
 }
 

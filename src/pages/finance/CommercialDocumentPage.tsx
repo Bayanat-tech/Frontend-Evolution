@@ -246,10 +246,12 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
   ], []);
 
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="m-0 text-2xl font-semibold tracking-tight">{meta.title}</h1>
-        <div className="flex items-center gap-2">
+    <section className="finance-list-page grid gap-4">
+      <div className="finance-list-heading">
+        <div className="finance-list-title">
+          <h1 className="m-0 text-2xl font-semibold tracking-tight">{meta.title}</h1>
+        </div>
+        <div className="finance-list-actions">
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
@@ -279,10 +281,13 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
         enablePagination
         manualPagination
         toolbar={
-          <div className="flex items-center gap-2">
-            <Select className="h-10 w-36" value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
+          <div className="finance-list-controls">
+            <label className="finance-period-control">
+              <span>FY</span>
+              <Select value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
               {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
-            </Select>
+              </Select>
+            </label>
           </div>
         }
         enableExport
