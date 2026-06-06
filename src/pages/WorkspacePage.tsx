@@ -64,7 +64,9 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   const location = useLocation();
   const navigate = useNavigate();
   const { user, menuTree, logout } = useAuth();
-  const [collapsed, setCollapsed] = useState(() => (typeof window !== "undefined" ? window.innerWidth <= 768 : false));
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== "undefined" ? window.innerWidth <= 768 : false));
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const activeApp = useMemo(() => {
@@ -81,20 +83,40 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (window.innerWidth <= 768) setCollapsed(true);
+    setMobileMenuOpen(false);
   }, [location.pathname]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const media = window.matchMedia("(max-width: 768px)");
+    const syncMobileState = () => {
+      setIsMobile(media.matches);
+      if (!media.matches) setMobileMenuOpen(false);
+    };
+    syncMobileState();
+    media.addEventListener("change", syncMobileState);
+    return () => media.removeEventListener("change", syncMobileState);
+  }, []);
+
   const workspaceRoute = resolveWorkspaceRoute({ pathname: location.pathname, activeApp });
+  const displayCollapsed = isMobile ? false : collapsed;
+  const toggleSidebar = () => {
+    if (isMobile) {
+      setMobileMenuOpen((value) => !value);
+      return;
+    }
+    setCollapsed((value) => !value);
+  };
 
   return (
     <div className="workspace">
-      <aside className={collapsed ? "sidebar collapsed" : "sidebar"}>
+      <aside className={cn("sidebar", displayCollapsed && "collapsed", isMobile && "mobile-sidebar", mobileMenuOpen && "mobile-open")}>
         <div className="sidebar-top">
-          <Link to="/apps" className={collapsed ? "sidebar-brand logo-only" : "sidebar-brand"} title="Bayanat Technology">
+          <Link to="/apps" className={displayCollapsed ? "sidebar-brand logo-only" : "sidebar-brand"} title="Bayanat Technology">
             <span className="sidebar-logo-wrap">
               <img src="/bayanat-logo.png" alt="Bayanat Technology" className="sidebar-logo" />
             </span>
-            {!collapsed && (
+            {!displayCollapsed && (
               <span className="sidebar-brand-copy">
                 <strong>Bayanat</strong>
                 <small>Technology</small>
@@ -103,22 +125,22 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
           </Link>
           <button
             className="icon-button sidebar-toggle"
-            onClick={() => setCollapsed((v) => !v)}
-            title={collapsed ? "Expand menu" : "Collapse menu"}
-            aria-label={collapsed ? "Expand menu" : "Collapse menu"}
+            onClick={toggleSidebar}
+            title={isMobile ? (mobileMenuOpen ? "Close menu" : "Open menu") : displayCollapsed ? "Expand menu" : "Collapse menu"}
+            aria-label={isMobile ? (mobileMenuOpen ? "Close menu" : "Open menu") : displayCollapsed ? "Expand menu" : "Collapse menu"}
           >
-            {collapsed ? <Menu size={17} /> : <PanelLeftClose size={17} />}
+            {isMobile ? mobileMenuOpen ? <PanelLeftClose size={17} /> : <Menu size={17} /> : displayCollapsed ? <Menu size={17} /> : <PanelLeftClose size={17} />}
           </button>
         </div>
 
-        {!collapsed && <p className="sidebar-label">{titleCase(activeApp?.title || "Workspace")}</p>}
+        {!displayCollapsed && <p className="sidebar-label">{titleCase(activeApp?.title || "Workspace")}</p>}
 
         <nav className="sidebar-nav">
           {(activeApp?.children || []).map((item) => (
             <MenuItem
               key={item.id || item.title}
               item={item}
-              collapsed={collapsed}
+              collapsed={displayCollapsed}
               expanded={expanded}
               setExpanded={setExpanded}
               appCode={appCode || ""}
@@ -128,21 +150,32 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
           ))}
         </nav>
 
-        <div className={cn("sidebar-footer", collapsed && "collapsed")}>
-          {!collapsed && (
+        <div className={cn("sidebar-footer", displayCollapsed && "collapsed")}>
+          {!displayCollapsed && (
             <div className="sidebar-company-card">
               <span>Company</span>
               <strong>{user?.company_code || "Company"}</strong>
             </div>
           )}
-          <Link className={cn("sidebar-switch-module", collapsed && "icon-only")} to="/apps" title="Switch Module" aria-label="Switch Module">
+          <Link className={cn("sidebar-switch-module", displayCollapsed && "icon-only")} to="/apps" title="Switch Module" aria-label="Switch Module">
             <ArrowLeft size={15} />
-            {!collapsed && "Switch Module"}
+            {!displayCollapsed && "Switch Module"}
           </Link>
         </div>
       </aside>
+      {isMobile && mobileMenuOpen && <button className="sidebar-backdrop" type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)} />}
 
       <section className="workspace-main">
+        <div className="mobile-appbar">
+          <Link to="/apps" className="mobile-brand" aria-label="Bayanat Technology">
+            <span className="sidebar-logo-wrap">
+              <img src="/bayanat-logo.png" alt="Bayanat Technology" className="sidebar-logo" />
+            </span>
+          </Link>
+          <button className="icon-button" type="button" onClick={() => setMobileMenuOpen(true)} aria-label="Open menu" title="Open menu">
+            <Menu size={19} />
+          </button>
+        </div>
         <header className="workspace-header">
           <div className="workspace-search">
             <Search size={16} />
