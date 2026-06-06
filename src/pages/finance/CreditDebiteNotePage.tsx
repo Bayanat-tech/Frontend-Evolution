@@ -877,46 +877,36 @@ function PaymentDocumentEditor({
                 </Button>
               </div>
               <div className="max-h-[43vh] overflow-auto">
-                <table className="w-full min-w-[2200px] text-sm">
+                <table className="finance-lines-table w-full min-w-[2140px] text-sm">
                   <thead className="sticky top-0 bg-primary text-xs text-primary-foreground">
                     <tr>
-                      <th className="px-2 py-2 text-left">No</th>
+                      <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
+                      <th className="finance-sticky-col finance-col-div px-2 py-2 text-left">Division</th>
+                      <th className="finance-sticky-col finance-col-account px-2 py-2 text-left">Account</th>
                       <th className="px-2 py-2 text-left">Select</th>
-                      <th className="px-2 py-2 text-left">Division</th>
-                      <th className="px-2 py-2 text-left">Account</th>
-                      <th className="px-2 py-2 text-left">A/c Name</th>
                       <th className="px-2 py-2 text-left">Description</th>
                       <th className="px-2 py-2 text-left">Currency</th>
                       <th className="px-2 py-2 text-left">Ex Rate</th>
-                      <th className="px-2 py-2 text-left">Amount</th>
+                      <th className="finance-amount-cell px-2 py-2 text-left">Amount</th>
                       <th className="px-2 py-2 text-left">Cr/Dr</th>
                       <th className="px-2 py-2 text-left">Tax Code</th>
                       <th className="px-2 py-2 text-left">Tax Type</th>
                       <th className="px-2 py-2 text-left">Tax %</th>
-                      <th className="px-2 py-2 text-left">Tax Amt</th>
+                      <th className="finance-amount-cell px-2 py-2 text-left">Tax Amt</th>
                       <th className="px-2 py-2 text-left">Job No</th>
                       <th className="px-2 py-2 text-left">Dept</th>
-                      <th className="px-2 py-2 text-left">Base Amount</th>
+                      <th className="finance-amount-cell px-2 py-2 text-left">Base Amount</th>
                       <th className="px-2 py-2 text-left">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {form.detail.length === 0 ? (
-                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={18}>No detail lines yet</td></tr>
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={17}>No detail lines yet</td></tr>
                     ) : form.detail.map((detail) => (
                       <tr className={selectedDetail?.id === detail.id ? "border-t bg-primary/5" : "border-t odd:bg-muted/20"} key={detail.id}>
-                        <td className="px-2 py-1 text-xs">{detail.serial_no}</td>
-                        <td className="px-2 py-1 text-center">
-                          <input
-                            checked={selectedDetail?.id === detail.id}
-                            className="h-4 w-4 accent-[var(--primary)]"
-                            disabled={!detail.ac_code}
-                            onChange={() => setSelectedDetailId(detail.id)}
-                            type="radio"
-                          />
-                        </td>
-                        <td className="w-32 px-2 py-1"><Input disabled value={detail.div_code || form.div_code} /></td>
-                        <td className="w-[200px] px-2 py-1">
+                        <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{detail.serial_no}</td>
+                        <td className="finance-sticky-col finance-col-div w-32 px-2 py-1"><Input disabled value={detail.div_code || form.div_code} /></td>
+                        <td className="finance-sticky-col finance-col-account finance-account-cell w-[430px] px-2 py-1">
                           <LookupField
                             label="Detail Account"
                             compact
@@ -938,7 +928,15 @@ function PaymentDocumentEditor({
 
                           />
                         </td>
-                        <td className="w-[220px] px-2 py-1"><Input disabled value={detail.ac_name || ""} /></td>
+                        <td className="px-2 py-1 text-center">
+                          <input
+                            checked={selectedDetail?.id === detail.id}
+                            className="h-4 w-4 accent-[var(--primary)]"
+                            disabled={!detail.ac_code}
+                            onChange={() => setSelectedDetailId(detail.id)}
+                            type="radio"
+                          />
+                        </td>
                         <td className="w-[220px] px-2 py-1"><Input disabled={disabled} value={detail.remarks || ""} onChange={(event) => updateDetail(detail.id, { remarks: event.target.value })} /></td>
                         <td className="w-[210px] px-2 py-1">
                           <LookupField
@@ -959,8 +957,8 @@ function PaymentDocumentEditor({
                             onChange={(value, row) => updateDetail(detail.id, { curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(row?.ex_rate ?? form.ex_rate ?? 1) })}
                           />
                         </td>
-                        <td className="w-28 px-2 py-1"><Input disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
-                        <td className="w-32 px-2 py-1"><Input disabled={disabled} type="number" step="0.001" value={formatNumber(detail.amount)} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
+                        <td className="w-28 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
+                        <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.001" value={formatNumber(detail.amount)} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
                         <td className="w-28 px-2 py-1">
                           <Select className="h-9" disabled={disabled} value={detail.sign_ind} onChange={(event) => updateDetail(detail.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
                             <option value={1}>Dr</option>
@@ -1011,10 +1009,10 @@ function PaymentDocumentEditor({
                           </Select>
                         </td>
                         <td className="w-24 px-2 py-1"><Input disabled={disabled} type="number" value={detail.tx_compnt_perc_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
-                        <td className="w-28 px-2 py-1"><Input disabled={disabled} type="number" value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
+                        <td className="finance-amount-cell w-32 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                         <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
                         <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
-                        <td className="w-32 px-2 py-1"><Input disabled value={formatNumber((Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1)))} /></td>
+                        <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled value={formatNumber((Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1)))} /></td>
                         <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
                       </tr>
                     ))}

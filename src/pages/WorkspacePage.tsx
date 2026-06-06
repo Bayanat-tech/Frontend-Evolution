@@ -227,6 +227,7 @@ function MenuItem({
   const to = path ? `/workspace/${appCode}/${path}` : "#";
   const active = isMenuNodeActive(item, pathname);
   const shouldRenderChildren = !collapsed && expanded[key];
+  const displayTitle = titleCase(item.title);
 
   if (hasChildren) {
     return (
@@ -234,11 +235,12 @@ function MenuItem({
         <button
           className={cn("nav-item", active && "active", collapsed && "icon-only", `nav-level-${level}`)}
           onClick={() => setExpanded((prev) => ({ ...prev, [key]: !prev[key] }))}
-          title={collapsed ? titleCase(item.title) : undefined}
+          title={displayTitle}
+          aria-label={displayTitle}
         >
           <span className="nav-link-copy">
             <MenuIcon item={item} level={level} className="nav-leading-icon" />
-            {!collapsed && <span>{titleCase(item.title)}</span>}
+            {!collapsed && <span title={displayTitle}>{displayTitle}</span>}
           </span>
           {!collapsed && (expanded[key] ? <ChevronDown size={15} /> : <ChevronRight size={15} />)}
         </button>
@@ -263,10 +265,10 @@ function MenuItem({
   }
 
   return (
-    <Link className={cn("nav-item", active && "active", collapsed && "icon-only", `nav-level-${level}`)} to={to} title={collapsed ? titleCase(item.title) : undefined}>
+    <Link className={cn("nav-item", active && "active", collapsed && "icon-only", `nav-level-${level}`)} to={to} title={displayTitle} aria-label={displayTitle}>
       <span className="nav-link-copy">
         <MenuIcon item={item} level={level} className="nav-leading-icon" />
-        {!collapsed && <span>{titleCase(item.title)}</span>}
+        {!collapsed && <span title={displayTitle}>{displayTitle}</span>}
       </span>
     </Link>
   );
