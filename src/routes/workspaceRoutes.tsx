@@ -56,6 +56,7 @@ import { Leaf } from "lucide-react";
 import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics";
 import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
 import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
+import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseReport";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -83,6 +84,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Finance Account Report",
     match: ({ pathname }) => isAccountReportRoute(pathname),
     element: () => <LedgerBasics />,
+  },
+  
+  {
+    name: "Finance Ageing Report",
+    match: ({ pathname }) => isAgeingReportRoute(pathname),
+    element: () => <PeriodWisePage />,
   },
   {
     name: "Finance Bank Master",
@@ -516,6 +523,13 @@ function isAccountReportRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts/reports/account-report/detailed-reports/ledger-basic");
 }
+
+function isAgeingReportRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/finance/accounts_report/ageing/period_wise") || normalized.includes("/finance/accounts/reports/ageing/period_wise/PeriodWisePage");
+}
+
+
 
 function getCreditDebitNoteDocType(pathname: string) {
   const normalized = pathname.toLowerCase();
