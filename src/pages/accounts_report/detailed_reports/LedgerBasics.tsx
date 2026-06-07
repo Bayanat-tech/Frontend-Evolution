@@ -230,7 +230,7 @@ export default function FinanceReportFilter() {
         code8: amountTo || "",
         // remarks / filterLedger / acPayee can be passed as extra codes if your backend supports them
         code9: acPayee || "",
-        code10: filterLedger ? "Y" : "N",
+        code10: String(formatDate(dateFrom)),
         code20: "RAWSQL", // used for report-specific flags like "RAWSQL" or "DATE_WISE"
         parameter: "Account_Report_Transaction", // overridden per report
     });
@@ -520,8 +520,13 @@ export default function FinanceReportFilter() {
                     {activeTab === "group" && (
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 44px 1fr", gap: 10 }}>
                             <div>
-                                <div style={{ marginBottom: 6 }}>
-                                    <input
+                                
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                                    <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Available groups</span>
+                                    <span style={badgeStyle}>{groupLeftItems.length}</span>
+                                </div>
+                                <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 220, overflowY: "auto" }}>
+                                     <input
                                         type="text"
                                         placeholder="Search groups..."
                                         value={groupSearchLeft}
@@ -530,16 +535,10 @@ export default function FinanceReportFilter() {
                                             width: "100%",
                                             border: "0.5px solid #e5e7eb",
                                             borderRadius: 6,
-                                            padding: 8,
+                                            padding: 2,
                                             marginBottom: 8,
                                         }}
                                     />
-                                </div>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                                    <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Available groups</span>
-                                    <span style={badgeStyle}>{groupLeftItems.length}</span>
-                                </div>
-                                <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 220, overflowY: "auto" }}>
                                     <table>
                                         <thead><tr><th style={{ ...thStyle, width: 90 }}>L4 code</th><th style={thStyle}>Description</th></tr></thead>
                                         <tbody>
@@ -576,7 +575,7 @@ export default function FinanceReportFilter() {
                                             width: "100%",
                                             border: "0.5px solid #e5e7eb",
                                             borderRadius: 6,
-                                            padding: 8,
+                                            padding: 2,
                                             marginBottom: 8,
                                         }}
                                     />
@@ -614,7 +613,7 @@ export default function FinanceReportFilter() {
                                             width: "100%",
                                             border: "0.5px solid #e5e7eb",
                                             borderRadius: 6,
-                                            padding: 8,
+                                            padding: 2,
                                             marginBottom: 8,
                                         }}
                                     />
@@ -654,7 +653,7 @@ export default function FinanceReportFilter() {
                                             width: "100%",
                                             border: "0.5px solid #e5e7eb",
                                             borderRadius: 6,
-                                            padding: 8,
+                                            padding: 2,
                                             marginBottom: 8,
                                         }}
                                     />

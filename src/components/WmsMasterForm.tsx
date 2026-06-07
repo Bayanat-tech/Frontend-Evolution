@@ -30,14 +30,38 @@ type Props = {
   onCancel: () => void;
 };
 
+type FieldError = {
+  [key: string]: string;
+};
+
 export function WmsMasterForm({
   fields, tabs, fieldsPerRow = 2, form, editMode, saving, user, onChange, onSave, onCancel,
 }: Props) {
   const [activeTab, setActiveTab] = useState(tabs?.[0]?.key ?? "__default");
+  const [fieldErrors, setFieldErrors] = useState<FieldError>({})
 
   useEffect(() => {
     setActiveTab(tabs?.[0]?.key ?? "__default");
   }, [tabs]);
+
+  const validateField = (field: WmsMasterField, value: unknown): string => {
+    if (field.maxLength && typeof value === 'string' && value.length > field.maxLength) {
+      return `Maximum ${field.maxLength} characters allowed`;
+    }
+    return "";
+  };
+
+  const handleFieldChange = (name: string, value: unknown) => {
+    const field = fields.find((f) => f.name === name);
+    if (field) {
+      const error = validateField(field, value);
+      setFieldErrors((prev) => ({
+        ...prev,
+        [name]: error,
+      }));
+    }
+    onChange(name, value);
+  };
 
 const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOption[]> => {
   if (!field.dropdownParam) return [];
@@ -159,6 +183,7 @@ const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOptio
                     ? "col-span-full"
                     : "";
                 const isCheckbox = field.type === "checkbox";
+                const hasError = fieldErrors[field.name];
 
                 return isCheckbox ? (
                   <div
@@ -169,24 +194,41 @@ const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOptio
                       field, form[field.name],
                       Boolean(editMode && field.disabledOnEdit) || Boolean(field.disabledWhen?.(form)),
                       form,
-                      onChange,
+                      handleFieldChange,
                       loadDropdownOptions
                     )}
                   </div>
                 ) : (
                   <label key={field.name} className={`group flex flex-col gap-0.5 ${spanClass}`}>
-                    <span className="text-[10px] font-medium text-muted-foreground group-focus-within:text-primary transition-colors">
-                      {field.label}
-                      {field.required === true && (
-                        <strong className="text-destructive ml-0.5 font-bold"> *</strong>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-medium text-muted-foreground group-focus-within:text-primary transition-colors">
+                        {field.label}
+                        {field.required === true && (
+                          <strong className="text-destructive ml-0.5 font-bold"> *</strong>
+                        )}
+                        {field.maxLength && typeof form[field.name] === 'string' && (form[field.name] as string).length > field.maxLength && (
+                          <span className="text-destructive ml-1 font-bold text-xs">●</span>
+                        )}
+                      </span>
+                      {field.maxLength && typeof form[field.name] === 'string' && (
+                        <span className={`text-[9px] font-medium ${
+                          (form[field.name] as string).length > field.maxLength
+                            ? 'text-destructive'
+                            : 'text-muted-foreground'
+                        }`}>
+                          {(form[field.name] as string).length}/{field.maxLength}
+                        </span>
                       )}
-                    </span>
+                    </div>
                     {renderInput(
                       field, form[field.name],
                       Boolean(editMode && field.disabledOnEdit) || Boolean(field.disabledWhen?.(form)),
                       form,
-                      onChange,
+                      handleFieldChange,
                       loadDropdownOptions
+                    )}
+                    {hasError && (
+                      <span className="text-[9px] text-destructive font-medium">{hasError}</span>
                     )}
                   </label>
                 );
@@ -428,8 +470,13 @@ if (field.type === "select" || field.asyncOptions || field.dropdownParam) {
   if (field.type === "textarea") {
     return (
       <textarea
-        className="w-full rounded border border-input bg-background px-2 py-1 text-[11px] text-foreground placeholder:text-muted-foreground/50 transition-colors focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary disabled:opacity-50 resize-none"
+        className={`w-full rounded border bg-background px-2 py-1 text-[11px] text-foreground placeholder:text-muted-foreground/50 transition-colors focus:outline-none focus:ring-1 focus:border-primary disabled:opacity-50 resize-none ${
+          field.maxLength && String(value ?? "").length > field.maxLength
+            ? "border-destructive focus:ring-destructive"
+            : "border-input focus:ring-primary"
+        }`}
         disabled={disabled}
+        maxLength={field.maxLength}
         rows={3}
         value={String(value ?? "")}
         onChange={(e) => onChange(field.name, e.target.value)}
@@ -478,6 +525,7 @@ if (field.type === "select" || field.asyncOptions || field.dropdownParam) {
     );
   }
 
+  const hasError = field.maxLength && String(value ?? "").length > field.maxLength;
   return (
     <Input
       disabled={disabled}
@@ -494,7 +542,8 @@ if (field.type === "select" || field.asyncOptions || field.dropdownParam) {
           field.type === "number" ? Number(e.target.value || 0) : e.target.value
         )
       }
-      className={baseInputClass}
+      style={hasError ? { borderColor: "#dc2626", borderWidth: "2px" } : {}}
+      className=""
     />
   );
 }
