@@ -191,7 +191,7 @@ async function pamsProc(params: PamsProcedureParams): Promise<Row[]> {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export function KpiItemPage() {
+export function KpiActivityPage() {
   const { user } = useAuth();
   const loginid = user?.loginid ?? "";
   const companyCode = user?.company_code ?? "";
