@@ -27,7 +27,7 @@ import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
 import { SecurityAssignmentPage, securityAssignmentConfigs } from "../pages/security/SecurityAssignmentPage";
 import { SecurityMasterPage, securityMasterConfigs } from "../pages/security/SecurityMasterPage";
 import { SecurityOperationAccessPage } from "../pages/security/SecurityOperationAccessPage";
-import { KpiItemPage } from "../pages/pams/KpiActivityPage";
+import { KpiActivityPage } from "../pages/pams/KpiActivityPage";
 import MyTaskPage from "../pages/pams/MyTaskpage";
 import AppraisalViewTabsPage from "../pages/pams/AppraisalViewtabspage";
 import { KpiGroupPage } from "../pages/pams/KpiGroupPage";
@@ -55,6 +55,7 @@ import { TrainingFeedbackPage } from "../pages/hr/Hrtrainingfeedbackpage";
 import { Leaf } from "lucide-react";
 import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics";
 import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
+import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -219,6 +220,8 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => Boolean(getSecurityMasterConfig(context)),
     element: (context) => <SecurityMasterPage config={getSecurityMasterConfig(context)!} />,
   },
+
+  //// PAMS Routes
   {
     name: "PAMS Dashboard",
     match: ({ pathname }) => isPamsRoute(pathname) && pathname.toLowerCase().includes("/dashboard"),
@@ -362,11 +365,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isPamsRoute(pathname) && isPamsKpiGroupRoute(pathname),
     element: () => <KpiGroupPage />,
   },
-  // ── PAMS KPI Item — must be BEFORE PAMS Master so kpi_item route match ho pehle ──
+
   {
     name: "PAMS KPI Item",
     match: ({ pathname }) => isPamsRoute(pathname) && isPamsKpiItemRoute(pathname),
-    element: () => <KpiItemPage />,
+    element: () => <KpiActivityPage />,
   },
   {
     name: "PAMS Master",
@@ -374,9 +377,15 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: (context) => <PamsMasterPage config={getPamsMasterConfig(context)!} />,
   },
   {
+    name: "Appraisal Weightage Master",
+    match: ({ pathname }) => isPamsRoute(pathname) && isPamsAppraisalWeightageRoute(pathname),
+    element: () => <AppraisalWeightageMaster />,
+  },
+  {
     name: "Application Progress",
     match: (context) => isApplicationProgressRoute(context),
     element: () => <ApplicationProgressPage />,
+
   },
   {
     name: "Oxmaint",
@@ -747,6 +756,12 @@ function isPamsAppraisalDivisionSummaryRoute(pathname: string) {
   return normalized.includes("/appraisal_listing") ||
          normalized.includes("/appraisal-listing");
 }
+
+function isPamsAppraisalWeightageRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/appraisal_weightage") || 
+         normalized.includes("/appraisal_weightage");
+} 
 
 
 function getPamsMasterConfig(context: WorkspaceRouteContext) {
