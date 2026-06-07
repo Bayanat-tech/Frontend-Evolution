@@ -306,7 +306,7 @@ function mapBudgetVersion(row: LookupRow): BudgetVersionRow {
     user_id: String(getLookupValue(row, "user_id") || ""),
     user_dt: String(getLookupValue(row, "user_dt") || ""),
     remarks: String(getLookupValue(row, "remarks") || ""),
-  };
+  };  
 }
 
 function dateInput(value: unknown) {
