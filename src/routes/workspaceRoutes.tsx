@@ -20,14 +20,14 @@ import { FinanceUtilityMasterPage, financeUtilityConfigs } from "../pages/financ
 import { PaymentDocumentPage } from "../pages/finance/PaymentDocumentPage";
 import { PLSetupPage } from "../pages/finance/PLSetupPage";
 import { PrepaidRegisterPage } from "../pages/finance/PrepaidRegisterPage";
-import { WmsInboundPage } from "../pages/wms/WmsInboundPage";
+import { WmsInboundPage } from "../pages/wms/inbound/WmsInboundPage";
 import { WmsOutboundPage } from "../pages/wms/WmsOutboundPage";
 import { WmsSimpleMasterPage } from "../pages/wms/WmsSimpleMasterPage";
 import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
 import { SecurityAssignmentPage, securityAssignmentConfigs } from "../pages/security/SecurityAssignmentPage";
 import { SecurityMasterPage, securityMasterConfigs } from "../pages/security/SecurityMasterPage";
 import { SecurityOperationAccessPage } from "../pages/security/SecurityOperationAccessPage";
-import { KpiItemPage } from "../pages/pams/KpiActivityPage";
+import { KpiActivityPage } from "../pages/pams/KpiActivityPage";
 import MyTaskPage from "../pages/pams/MyTaskpage";
 import AppraisalViewTabsPage from "../pages/pams/AppraisalViewtabspage";
 import { KpiGroupPage } from "../pages/pams/KpiGroupPage";
@@ -41,11 +41,21 @@ import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDe
 import { HrMasterPage } from "../pages/hr/HrMasterPage";
 import { hrMasterConfigs } from "../pages/hr/hrMasterConfigs";
 import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrPayUnitsPage } from "../pages/hr/HrProcessPages";
+import { ApplicationProgressPage } from "../pages/applicationProgress/ApplicationProgressPage";
+import {
+  OxAssetInventoryPage,
+  OxInspectionFormPage,
+  OxInspectionReportPage,
+  OxMaintDashboard,
+  OxSimpleMasterPage,
+  oxMaintMasterConfigs,
+} from "../pages/oxmaint/OxMaintPages";
 import { SalaryAdvancePage } from "../pages/hr/SalaryAdvancePage";
 import { TrainingFeedbackPage } from "../pages/hr/Hrtrainingfeedbackpage";
 import { Leaf } from "lucide-react";
 import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics";
 import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
+import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -210,6 +220,8 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => Boolean(getSecurityMasterConfig(context)),
     element: (context) => <SecurityMasterPage config={getSecurityMasterConfig(context)!} />,
   },
+
+  //// PAMS Routes
   {
     name: "PAMS Dashboard",
     match: ({ pathname }) => isPamsRoute(pathname) && pathname.toLowerCase().includes("/dashboard"),
@@ -353,16 +365,32 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isPamsRoute(pathname) && isPamsKpiGroupRoute(pathname),
     element: () => <KpiGroupPage />,
   },
-  // ── PAMS KPI Item — must be BEFORE PAMS Master so kpi_item route match ho pehle ──
+
   {
     name: "PAMS KPI Item",
     match: ({ pathname }) => isPamsRoute(pathname) && isPamsKpiItemRoute(pathname),
-    element: () => <KpiItemPage />,
+    element: () => <KpiActivityPage />,
   },
   {
     name: "PAMS Master",
     match: (context) => Boolean(getPamsMasterConfig(context)),
     element: (context) => <PamsMasterPage config={getPamsMasterConfig(context)!} />,
+  },
+  {
+    name: "Appraisal Weightage Master",
+    match: ({ pathname }) => isPamsRoute(pathname) && isPamsAppraisalWeightageRoute(pathname),
+    element: () => <AppraisalWeightageMaster />,
+  },
+  {
+    name: "Application Progress",
+    match: (context) => isApplicationProgressRoute(context),
+    element: () => <ApplicationProgressPage />,
+
+  },
+  {
+    name: "Oxmaint",
+    match: (context) => isOxMaintRoute(context),
+    element: (context) => getOxMaintElement(context),
   },
   {
     name: "HR Pay Units",
@@ -729,6 +757,12 @@ function isPamsAppraisalDivisionSummaryRoute(pathname: string) {
          normalized.includes("/appraisal-listing");
 }
 
+function isPamsAppraisalWeightageRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/appraisal_weightage") || 
+         normalized.includes("/appraisal_weightage");
+} 
+
 
 function getPamsMasterConfig(context: WorkspaceRouteContext) {
   if (!isPamsRoute(context.pathname)) return null;
@@ -751,6 +785,53 @@ function getPamsMatchText(context: WorkspaceRouteContext) {
     return path && pathname.includes(path);
   });
   return [pathname, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
+}
+
+function getGenericMatchText(context: WorkspaceRouteContext) {
+  const pathname = context.pathname.toLowerCase();
+  const leaves = collectMenuLeaves(context.activeApp?.children || []);
+  const activeLeaf = leaves.find((leaf) => {
+    const path = (leaf.url_path || "").replace(/^\/+/, "").toLowerCase();
+    return path && pathname.includes(path);
+  });
+  return [pathname, context.activeApp?.title, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
+}
+
+function isApplicationProgressRoute(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("applicationprogress") ||
+    compact.includes("appprogress") ||
+    matchText.includes("app_progress") ||
+    matchText.includes("application_progress")
+  );
+}
+
+function isOxMaintRoute(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return (
+    matchText.includes("/oxmaint") ||
+    compact.includes("oxmaint") ||
+    compact.includes("assetinventory") ||
+    compact.includes("inspectionform") ||
+    compact.includes("inspectionreport") ||
+    compact.includes("assettype") ||
+    compact.includes("siteproject")
+  );
+}
+
+function getOxMaintElement(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  if (compact.includes("assetinventory")) return <OxAssetInventoryPage />;
+  if (compact.includes("inspectionreport")) return <OxInspectionReportPage />;
+  if (compact.includes("inspectionform")) return <OxInspectionFormPage />;
+  if (compact.includes("assettype")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.assetType} />;
+  if (compact.includes("siteproject")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.siteProject} />;
+  if (compact.includes("status") || matchText.includes("/status")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.status} />;
+  return <OxMaintDashboard />;
 }
 
 function getHrMasterConfig(context: WorkspaceRouteContext) {

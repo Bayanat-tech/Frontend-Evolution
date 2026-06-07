@@ -14,10 +14,41 @@ import { NoticeToast } from "../../components/ui/NoticeToast";
 type SelectedTab = "task_details" | "characteristics" | "goals" | "skill" | "comments";
 type Row = Record<string, unknown>;
 
+// ─── Weightage type ───────────────────────────────────────────────────────────
+interface WeightageConfig {
+  taskPct: number;      // e.g. 70
+  charPct: number;      // e.g. 30
+  isHrDefined: boolean; // true = HR ne set kiya, false = default logic
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function text(val: unknown): string {
   if (val === null || val === undefined) return "";
   return String(val);
+}
+
+function num(val: unknown): number {
+  const n = Number(val);
+  return isFinite(n) ? n : 0;
+}
+
+// ─── Final Rating calculation ─────────────────────────────────────────────────
+//
+//  HR weightage defined  →  (taskTotal × taskPct/100) + (charTotal × charPct/100)
+//  Default (no HR record)→  Math.round((taskTotal + charTotal) / 2)
+//
+function calcFinalRating(
+  taskTotal: number,
+  charTotal: number,
+  cfg: WeightageConfig
+): number {
+  if (taskTotal === 0 && charTotal === 0) return 0;
+  if (cfg.isHrDefined) {
+    const raw = (taskTotal * cfg.taskPct) / 100 + (charTotal * cfg.charPct) / 100;
+    return Math.round(raw);
+  }
+  // default — purana logic
+  return Math.round((taskTotal + charTotal) / 2);
 }
 
 function getRatingMeta(rating: number): { label: string; numColor: string; labelColor: string } {
@@ -107,6 +138,18 @@ const S = {
   },
   ratingChipWrap: {
     marginLeft: "auto",
+    flexShrink: 0,
+  },
+  // ── Weightage info pill ──
+  weightageInfo: {
+    fontSize: "0.68rem",
+    fontWeight: 600,
+    color: "#082A89",
+    background: "rgba(8,42,137,0.08)",
+    border: "1px solid rgba(8,42,137,0.15)",
+    borderRadius: "6px",
+    padding: "3px 8px",
+    whiteSpace: "nowrap" as const,
     flexShrink: 0,
   },
   tabBar: {
@@ -295,7 +338,10 @@ const S = {
 };
 
 // ─── Final Rating Chip ────────────────────────────────────────────────────────
-const RatingChip: React.FC<{ rating: number }> = ({ rating }) => {
+const RatingChip: React.FC<{ rating: number; weightageConfig: WeightageConfig }> = ({
+  rating,
+  weightageConfig,
+}) => {
   const meta = getRatingMeta(rating);
   return (
     <div style={{
@@ -311,6 +357,12 @@ const RatingChip: React.FC<{ rating: number }> = ({ rating }) => {
       </span>
       <span style={{ fontSize: "0.72rem", fontWeight: 700, color: meta.labelColor, borderLeft: "1px solid rgba(8,42,137,0.20)", paddingLeft: "8px", letterSpacing: "0.02em" }}>
         {meta.label}
+      </span>
+      {/* Show formula used */}
+      <span style={{ fontSize: "0.62rem", color: "#082A89", opacity: 0.55, borderLeft: "1px solid rgba(8,42,137,0.15)", paddingLeft: "8px" }}>
+        {weightageConfig.isHrDefined
+          ? `T${weightageConfig.taskPct}% / C${weightageConfig.charPct}%`
+          : ''}
       </span>
     </div>
   );
@@ -331,8 +383,9 @@ const AppraisalViewTabsPage: React.FC = () => {
   const employeeCode = searchParams.get("employee_code") ?? "";
   const employeeName = searchParams.get("employee_name") ?? "";
 
-  const { user }  = useAuth();
-  const loginid   = user?.loginid || user?.username || "";
+  const { user }    = useAuth();
+  const loginid     = user?.loginid || user?.username || "";
+  const companyCode = user?.company_code || "";
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [selectedTab,    setSelectedTab]    = useState<SelectedTab>("task_details");
@@ -346,12 +399,16 @@ const AppraisalViewTabsPage: React.FC = () => {
   const [sentBackLevels, setSentBackLevels] = useState<Row[]>([]);
   const [notice,         setNotice]         = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
   const [loading,        setLoading]        = useState(true);
-  const [showReportModal,setShowReportModal] = useState(false);
-  
+  const [showReportModal,setShowReportModal]= useState(false);
+  const [userFlowLevel,  setUserFlowLevel]  = useState<number>(0);
 
-  const [currentUserLevel, setCurrentUserLevel] = useState<number>(0);
-  // ── State mein add karo (existing states ke saath) ──
-  const [userFlowLevel, setUserFlowLevel] = useState<number>(0);
+  // ── Weightage config state ─────────────────────────────────────────────────
+  // Default: 50/50 average jab tak HR ka record nahi milta
+  const [weightageConfig, setWeightageConfig] = useState<WeightageConfig>({
+    taskPct: 50,
+    charPct: 50,
+    isHrDefined: false,
+  });
 
   // ── Refs ───────────────────────────────────────────────────────────────────
   const taskRowsRef         = useRef<Row[]>([]);
@@ -366,104 +423,89 @@ const AppraisalViewTabsPage: React.FC = () => {
   const isFinalized              = finalApproved === "YES";
   const showSaveSubmitButtons    = !isFinalized && flowLevel >= 1 && flowLevel <= 2;
   const showApproveRejectButtons = !isFinalized && flowLevel >= 3 && flowLevel <= 7;
-  const finalRating              = Math.round((taskTotal + characterTotal) / 2);
-  const showFinalRating          = taskTotal > 0 && characterTotal > 0;
 
-  // ⭐ Function to determine current user's level
-  const determineUserLevel = (flowRunningLevel: number) => {
-    const currentLoginId = loginid.trim();
-    const empCode = employeeCode.trim();
-    
-    // Employee
-    if (currentLoginId === empCode) return 0;
-    
-    // Based on workflow level, determine who is supposed to act
-    // Level 1 = Supervisor, Level 2 = Dept Head, Level 3 = COO, Level 4 = CEO, Level 5 = HR
-    return flowRunningLevel;
-  };
+  // ── Final rating — dono logics ─────────────────────────────────────────────
+  const finalRating    = calcFinalRating(taskTotal, characterTotal, weightageConfig);
+  const showFinalRating = taskTotal > 0 && characterTotal > 0;
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
-  // ── useEffect mein fetchInitialData replace karo ──
-useEffect(() => {
-  if (!docNo || !employeeCode) { setLoading(false); return; }
-  const fetchInitialData = async () => {
-    try {
-      const [flowRes, levelRes, commentRes, historyRes] = await Promise.all([
-        pamsSelect({ parameter: "get_appraisal_flow_level",    loginid, code1: docNo }),
-        pamsSelect({ parameter: "sentback_levels",              loginid, code1: docNo }),
-        pamsSelect({ parameter: "appraisal_comments",           loginid, code1: docNo }),
-        pamsSelect({ parameter: "get_appraisal_flow_with_name", loginid, code1: docNo }),
-      ]);
+  // ── Fetch all initial data ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (!docNo || !employeeCode) { setLoading(false); return; }
 
-      let currentFlowLevel = 0;
-      let nextActionBy     = "";
+    const fetchInitialData = async () => {
+      try {
+        const [flowRes, levelRes, commentRes, historyRes, weightageRes] = await Promise.all([
+          pamsSelect({ parameter: "get_appraisal_flow_level",    loginid, code1: docNo }),
+          pamsSelect({ parameter: "sentback_levels",              loginid, code1: docNo }),
+          pamsSelect({ parameter: "appraisal_comments",           loginid, code1: docNo }),
+          pamsSelect({ parameter: "get_appraisal_flow_with_name", loginid, code1: docNo }),
+          // ── HR weightage fetch — company level, dept = ALL ──
+          pamsSelect({
+            parameter: "appraisal_weightage_active",
+            loginid,
+            code1: companyCode,
+            code2: "ALL",   // department code — ALL matlab company-wide
+          }),
+        ]);
 
-      if (flowRes.length > 0) {
-        currentFlowLevel = Number(flowRes[0].FLOW_LEVEL_RUNNING ?? 0);
-        nextActionBy     = text(flowRes[0].NEXT_ACTION_BY ?? "").trim().toUpperCase();
-        setFlowLevel(currentFlowLevel);
-        setFinalApproved(text(flowRes[0].FINAL_APPROVED) || "NO");
-      }
+        // ── Flow level ──────────────────────────────────────────────────────
+        let currentFlowLevel = 0;
+        let nextActionBy     = "";
 
-      // ── userFlowLevel decide karo ──────────────────────────────────
-      // Case 1: PENDING tab — NEXT_ACTION_BY === loginid
-      //         → user ki baari hai → editable → userFlowLevel = 0
-      //
-      // Case 2: IN PROGRESS / CLOSED tab — user ne pehle action kiya tha
-      //         → history mein dhundo jis FLOW_LEVEL pe usne action kiya
-      //         → woh level set karo taaki APPRAISER_COMMENTS{N} dikhao
-      //
-      // Case 3: User ka is doc se koi relation nahi
-      //         → readonly → userFlowLevel = currentFlowLevel
-      // ─────────────────────────────────────────────────────────────
-
-      const isMyTurn = nextActionBy === loginid.trim().toUpperCase();
-
-      if (isMyTurn) {
-        // PENDING — meri baari hai, editable
-        setUserFlowLevel(0);
-      } else {
-        // History mein dhundo — jis FLOW_LEVEL pe maine action kiya tha
-        const histRows = historyRes as Row[];
-        const myAction = histRows.find(
-          (h) =>
-            String(h.ACTION_BY ?? "").trim().toUpperCase() ===
-              loginid.trim().toUpperCase()
-        );
-
-        if (myAction) {
-          // Mera action mila — us level ka comment dikhao
-          setUserFlowLevel(Number(myAction.FLOW_LEVEL ?? 1));
-        } else {
-          // Koi relation nahi — readonly
-          setUserFlowLevel(currentFlowLevel);
+        if (flowRes.length > 0) {
+          currentFlowLevel = num(flowRes[0].FLOW_LEVEL_RUNNING);
+          nextActionBy     = text(flowRes[0].NEXT_ACTION_BY).trim().toUpperCase();
+          setFlowLevel(currentFlowLevel);
+          setFinalApproved(text(flowRes[0].FINAL_APPROVED) || "NO");
         }
+
+        // ── Weightage config ────────────────────────────────────────────────
+        // Agar HR ne koi active record save kiya hai toh use karo
+        // Nahi toh default logic (isHrDefined = false → average)
+        if (weightageRes.length > 0) {
+          const wRow = weightageRes[0];
+          setWeightageConfig({
+            taskPct:     num(wRow.TASK_PCT),
+            charPct:     num(wRow.CHARACTER_PCT),
+            isHrDefined: true,
+          });
+        } else {
+          // No HR record — default average formula
+          setWeightageConfig({ taskPct: 50, charPct: 50, isHrDefined: false });
+        }
+
+        // ── User flow level ─────────────────────────────────────────────────
+        const isMyTurn = nextActionBy === loginid.trim().toUpperCase();
+        if (isMyTurn) {
+          setUserFlowLevel(0);
+        } else {
+          const histRows = historyRes as Row[];
+          const myAction = histRows.find(
+            (h) => text(h.ACTION_BY).trim().toUpperCase() === loginid.trim().toUpperCase()
+          );
+          setUserFlowLevel(myAction ? num(myAction.FLOW_LEVEL) : currentFlowLevel);
+        }
+
+        // ── Sent back levels ────────────────────────────────────────────────
+        setSentBackLevels(levelRes as Row[]);
+        if (levelRes.length > 0)
+          setSentBackLevel(text(levelRes[0].FLOW_RUNNING_LEVEL) || "1");
+
+        // ── Comments ────────────────────────────────────────────────────────
+        if (commentRes.length > 0) {
+          appraiserCommentRef.current = text(commentRes[0].APPRAISER_COMMENTS);
+          appraiseeCommentRef.current = text(commentRes[0].APPRAISEE_COMMENTS);
+        }
+
+      } catch {
+        // silent
+      } finally {
+        setLoading(false);
       }
+    };
 
-      setSentBackLevels(levelRes as Row[]);
-      if (levelRes.length > 0)
-        setSentBackLevel(text(levelRes[0].FLOW_RUNNING_LEVEL) || "1");
-
-      if (commentRes.length > 0) {
-        appraiserCommentRef.current = text(commentRes[0].APPRAISER_COMMENTS);
-        appraiseeCommentRef.current = text(commentRes[0].APPRAISEE_COMMENTS);
-      }
-
-      // Debug — kaam karne ke baad hatao
-      console.log("=== FLOW DEBUG ===");
-      console.log("nextActionBy:", nextActionBy);
-      console.log("loginid:", loginid.trim().toUpperCase());
-      console.log("isMyTurn:", isMyTurn);
-      console.log("historyRes:", historyRes);
-
-    } catch {
-      // silent
-    } finally {
-      setLoading(false);
-    }
-  };
-  void fetchInitialData();
-}, [docNo, employeeCode, loginid]);
+    void fetchInitialData();
+  }, [docNo, employeeCode, loginid, companyCode]);
 
   // ── Validation ─────────────────────────────────────────────────────────────
   const validateBeforeSubmit = (): string[] => {
@@ -530,7 +572,7 @@ useEffect(() => {
     }
   };
 
-  // ── Print handler ──────────────────────────────────────────────────────────
+  // ── Print ──────────────────────────────────────────────────────────────────
   const handlePrintReport = () => {
     if (!reportPrintRef.current) return;
     const fileName = `Performance-Report-${docNo}-${new Date().toISOString().slice(0, 10)}`;
@@ -574,7 +616,7 @@ useEffect(() => {
       {/* Notice */}
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      {/* ── Header ───────────────────────────────────────────────────────── */}
+      {/* ── Header ── */}
       <div style={S.header}>
         <button
           style={S.backBtn}
@@ -598,14 +640,21 @@ useEffect(() => {
           {employeeCode && <span style={S.empId}>ID: {employeeCode}</span>}
         </div>
 
+        {/* Weightage pill — always visible so HR aur employee dono dekh sakein */}
+        {/* <span style={S.weightageInfo}>
+          {weightageConfig.isHrDefined
+            ? `Task ${weightageConfig.taskPct}% · Char ${weightageConfig.charPct}%`
+            : "Default: Avg"}
+        </span> */}
+
         {showFinalRating && (
           <div style={S.ratingChipWrap}>
-            <RatingChip rating={finalRating} />
+            <RatingChip rating={finalRating} weightageConfig={weightageConfig} />
           </div>
         )}
       </div>
 
-      {/* ── Tab bar ──────────────────────────────────────────────────────── */}
+      {/* ── Tab bar ── */}
       <div style={S.tabBar}>
         {(
           [
@@ -622,7 +671,7 @@ useEffect(() => {
         ))}
       </div>
 
-      {/* ── Tab content ───────────────────────────────────────────────────── */}
+      {/* ── Tab panels ── */}
       <div style={S.panel}>
         <div style={{ display: selectedTab === "task_details"    ? "block" : "none" }}>
           <TaskDetailsAppraisalTab
@@ -663,13 +712,14 @@ useEffect(() => {
             characterTotal={characterTotal}
             flowLevel={flowLevel}
             userFlowLevel={userFlowLevel}
+            weightageConfig={weightageConfig}
             onAppraiserCommentChange={(val) => { appraiserCommentRef.current = val; }}
             onAppraiseeCommentChange={(val)  => { appraiseeCommentRef.current = val; }}
           />
         </div>
       </div>
 
-      {/* ── Action buttons ────────────────────────────────────────────────── */}
+      {/* ── Action buttons ── */}
       <div style={S.btnRow}>
         <div style={S.btnGroup}>
           {showSaveSubmitButtons && (
@@ -700,7 +750,6 @@ useEffect(() => {
             </>
           )}
         </div>
-
         <div style={S.btnGroup}>
           <button style={S.outlineBtn} onClick={() => setShowReportModal(true)}>🖨️ Print</button>
           <button style={S.outlineBtn} disabled>📎 Attach</button>
@@ -708,7 +757,7 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* ── Sent Back Modal ───────────────────────────────────────────────── */}
+      {/* ── Sent Back Modal ── */}
       {sentBackPopup && (
         <div style={S.overlay} onClick={() => setSentBackPopup(false)}>
           <div style={S.modal} onClick={(e) => e.stopPropagation()}>
@@ -744,12 +793,10 @@ useEffect(() => {
         </div>
       )}
 
-      {/* ── Report Modal ──────────────────────────────────────────────────── */}
+      {/* ── Report Modal ── */}
       {showReportModal && (
         <div style={S.reportModalOverlay} onClick={() => setShowReportModal(false)}>
           <div style={S.reportModalContent} onClick={(e) => e.stopPropagation()}>
-
-            {/* Header */}
             <div style={S.reportModalHeader}>
               <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#082A89" }}>
                 Performance Report — {docNo}
@@ -763,8 +810,6 @@ useEffect(() => {
                 ×
               </button>
             </div>
-
-            {/* Body — report renders here; ref captures the inner div for printing */}
             <div style={S.reportModalBody}>
               <PerformanceReportDesign
                 required_values={{
@@ -775,17 +820,10 @@ useEffect(() => {
                 printRef={reportPrintRef}
               />
             </div>
-
-            {/* Footer */}
             <div style={S.reportModalFooter}>
-              <button style={S.outlineBtn} onClick={() => setShowReportModal(false)}>
-                Close
-              </button>
-              <button style={S.solidBtn()} onClick={handlePrintReport}>
-                🖨️ Print Report
-              </button>
+              <button style={S.outlineBtn} onClick={() => setShowReportModal(false)}>Close</button>
+              <button style={S.solidBtn()} onClick={handlePrintReport}>🖨️ Print Report</button>
             </div>
-
           </div>
         </div>
       )}

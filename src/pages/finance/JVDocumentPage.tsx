@@ -199,17 +199,18 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
 
   return (
     <section className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="m-0 text-2xl font-semibold tracking-tight">{meta.title}</h1>
           <p className="m-0 mt-1 text-sm text-muted-foreground">{meta.subtitle}</p>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Select className="w-44" value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
-            {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
-          </Select>
-          <Button variant="outline" onClick={() => void loadRows()}><RefreshCw size={15} /> Refresh</Button>
-          <Button onClick={() => setDivisionPicker(true)}><Plus size={15} /> {meta.addLabel}</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
+            <RefreshCw size={15} />
+          </Button>
+          <Button title={meta.addLabel} onClick={() => setDivisionPicker(true)}>
+            <Plus size={15} /> Add
+          </Button>
         </div>
       </div>
 
@@ -235,6 +236,15 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
           enablePagination
           manualPagination
           manualFiltering
+          toolbar={
+            <div className="flex items-center gap-2">
+              <Select className="h-10 w-36" value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
+                {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
+              </Select>
+            </div>
+          }
+          enableExport
+          exportFilename={`${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`}
           pageIndex={pageIndex}
           pageSize={pageSize}
           totalRows={totalRows}
@@ -662,6 +672,16 @@ function JVDocument({
       });
     });
   };
+  const isBalanced =
+  Number(creditTotal.toFixed(3)) ===
+  Number(debitTotal.toFixed(3));
+  console.log({
+  disabled,
+  loading,
+  detailLength: form.detail.length,
+  creditTotal,
+  debitTotal,
+});
 
   return (
     <form className="payment-workbench grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
@@ -762,42 +782,32 @@ function JVDocument({
                 </Button>
               </div>
               <div className="max-h-[43vh] overflow-auto">
-                <table className="w-full min-w-[2200px] text-sm">
+                <table className="finance-lines-table w-full min-w-[2000px] text-sm">
                   <thead className="sticky top-0 bg-primary text-xs text-primary-foreground">
                     <tr>
-                      <th className="px-2 py-2 text-left">No</th>
+                      <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
+                      <th className="finance-sticky-col finance-col-div px-2 py-2 text-left">Division</th>
+                      <th className="finance-sticky-col finance-col-account px-2 py-2 text-left">Account</th>
                       <th className="px-2 py-2 text-left">Select</th>
-                      <th className="px-2 py-2 text-left">Division</th>
-                      <th className="px-2 py-2 text-left">Account</th>
-                      <th className="px-2 py-2 text-left">A/c Name</th>
                       <th className="px-2 py-2 text-left">Description</th>
                       <th className="px-2 py-2 text-left">Currency</th>
                       <th className="px-2 py-2 text-left">Ex Rate</th>
-                      <th className="px-2 py-2 text-left">Amount</th>
+                      <th className="finance-amount-cell px-2 py-2 text-left">Amount</th>
                       <th className="px-2 py-2 text-left">Cr/Dr</th>
                       <th className="px-2 py-2 text-left">Job No</th>
                       <th className="px-2 py-2 text-left">Dept</th>
-                      <th className="px-2 py-2 text-left">Base Amount</th>
+                      <th className="finance-amount-cell px-2 py-2 text-left">Base Amount</th>
                       <th className="px-2 py-2 text-left">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {form.detail.length === 0 ? (
-                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={18}>No detail lines yet</td></tr>
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={13}>No detail lines yet</td></tr>
                     ) : form.detail.map((detail) => (
                       <tr className={selectedDetail?.id === detail.id ? "border-t bg-primary/5" : "border-t odd:bg-muted/20"} key={detail.id}>
-                        <td className="px-2 py-1 text-xs">{detail.serial_no}</td>
-                        <td className="px-2 py-1 text-center">
-                          <input
-                            checked={selectedDetail?.id === detail.id}
-                            className="h-4 w-4 accent-[var(--primary)]"
-                            disabled={!detail.ac_code}
-                            onChange={() => setSelectedDetailId(detail.id)}
-                            type="radio"
-                          />
-                        </td>
-                        <td className="w-32 px-2 py-1"><Input disabled value={detail.div_code || form.div_code} /></td>
-                        <td className="w-[260px] px-2 py-1">
+                        <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{detail.serial_no}</td>
+                        <td className="finance-sticky-col finance-col-div w-32 px-2 py-1"><Input disabled value={detail.div_code || form.div_code} /></td>
+                        <td className="finance-sticky-col finance-col-account finance-account-cell w-[430px] px-2 py-1">
                           <LookupField
                             label="Detail Account"
                             compact
@@ -818,7 +828,15 @@ function JVDocument({
                             onChange={(value, row) => void selectDetailAccount(detail, value, row)}
                           />
                         </td>
-                        <td className="w-[220px] px-2 py-1"><Input disabled value={detail.ac_name || ""} /></td>
+                        <td className="px-2 py-1 text-center">
+                          <input
+                            checked={selectedDetail?.id === detail.id}
+                            className="h-4 w-4 accent-[var(--primary)]"
+                            disabled={!detail.ac_code}
+                            onChange={() => setSelectedDetailId(detail.id)}
+                            type="radio"
+                          />
+                        </td>
                         <td className="w-[220px] px-2 py-1"><Input disabled={disabled} value={detail.remarks || ""} onChange={(event) => updateDetail(detail.id, { remarks: event.target.value })} /></td>
                         <td className="w-[210px] px-2 py-1">
                           <LookupField
@@ -839,8 +857,8 @@ function JVDocument({
                             onChange={(value, row) => updateDetail(detail.id, { curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(row?.ex_rate ?? form.ex_rate ?? 1) })}
                           />
                         </td>
-                        <td className="w-28 px-2 py-1"><Input disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
-                        <td className="w-32 px-2 py-1"><Input disabled={disabled} type="number" step="0.001" value={formatNumber(detail.amount)} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
+                        <td className="w-28 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
+                        <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.001" value={formatNumber(detail.amount)} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
                         <td className="w-28 px-2 py-1">
                           <Select className="h-9" disabled={disabled} value={detail.sign_ind} onChange={(event) => updateDetail(detail.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
                             <option value={1}>Dr</option>
@@ -849,7 +867,7 @@ function JVDocument({
                         </td>
                         <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
                         <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
-                        <td className="w-32 px-2 py-1"><Input disabled value={formatNumber((Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1)))} /></td>
+                        <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled value={formatNumber((Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1)))} /></td>
                         <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
                       </tr>
                     ))}
@@ -914,7 +932,7 @@ function JVDocument({
         </div>
         <div className="flex items-center gap-2">
           <Button disabled={saving} type="button" variant="outline" onClick={onClose}>Close</Button>
-          <Button disabled={disabled || loading || form.detail.length === 0 || creditTotal !== debitTotal} type="submit">
+          <Button disabled={disabled || loading || form.detail.length === 0 || !isBalanced} type="submit">
             <Save size={15} /> {saving ? "Saving..." : "Save"}
           </Button>
         </div>

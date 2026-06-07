@@ -246,17 +246,18 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
   ], []);
 
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
+    <section className="finance-list-page grid gap-4">
+      <div className="finance-list-heading">
+        <div className="finance-list-title">
           <h1 className="m-0 text-2xl font-semibold tracking-tight">{meta.title}</h1>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Select className="w-44" value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
-            {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
-          </Select>
-          <Button variant="outline" onClick={() => void loadRows()}><RefreshCw size={15} /> Refresh</Button>
-          <Button onClick={() => setDivisionPicker(true)}><Plus size={15} /> {meta.addLabel}</Button>
+        <div className="finance-list-actions">
+          <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
+            <RefreshCw size={15} />
+          </Button>
+          <Button title={meta.addLabel} onClick={() => setDivisionPicker(true)}>
+            <Plus size={15} /> Add
+          </Button>
         </div>
       </div>
 
@@ -279,6 +280,18 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
         density="grid"
         enablePagination
         manualPagination
+        toolbar={
+          <div className="finance-list-controls">
+            <label className="finance-period-control">
+              <span>FY</span>
+              <Select value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
+              {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
+              </Select>
+            </label>
+          </div>
+        }
+        enableExport
+        exportFilename={`${meta.title.toLowerCase().replace(/\s+/g, "-")}-${fyPeriod || "documents"}.csv`}
         initialSorting={[{ id: "doc_date", desc: true }]}
         pageIndex={pageIndex}
         pageSize={pageSize}
@@ -1096,13 +1109,12 @@ const withTax = {
                 <Button disabled={isCancelled} size="sm" type="button" variant="outline" onClick={addLine}><Plus size={14} /> Add Line</Button>
               </div>
               <div className="commercial-lines-scroll overflow-auto">
-                <table className="w-full min-w-[2140px] text-[12px]">
+                <table className="finance-lines-table w-full min-w-[2100px] text-[12px]">
                   <thead className="sticky top-0 bg-primary text-xs text-primary-foreground">
                     <tr>
-                      <th className="px-2 py-2 text-left">No</th>
-                      <th className="px-2 py-2 text-left">Division</th>
-                      <th className="px-2 py-2 text-left">Account</th>
-                      <th className="px-2 py-2 text-left">A/c Name</th>
+                      <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
+                      <th className="finance-sticky-col finance-col-div px-2 py-2 text-left">Division</th>
+                      <th className="finance-sticky-col finance-col-account px-2 py-2 text-left">Account</th>
                       {isPO && <th className="px-2 py-2 text-left">Product Code</th>}
                       <th className="px-2 py-2 text-left">Description</th>
                       {isPO && <th className="px-2 py-2 text-left">Cost Code</th>}
@@ -1110,27 +1122,27 @@ const withTax = {
                       <th className="px-2 py-2 text-left">Ex Rate</th>
                       <th className="px-2 py-2 text-left">Qty</th>
                       <th className="px-2 py-2 text-left">Price</th>
-                      <th className="px-2 py-2 text-left">Amount</th>
+                      <th className="finance-amount-cell px-2 py-2 text-left">Amount</th>
                       <th className="px-2 py-2 text-left">Cr/Dr</th>
                       <th className="px-2 py-2 text-left">Tax Code</th>
                       <th className="px-2 py-2 text-left">Tax Type</th>
                       <th className="px-2 py-2 text-left">Tax %</th>
-                      <th className="px-2 py-2 text-left">Tax Amt</th>
+                      <th className="finance-amount-cell px-2 py-2 text-left">Tax Amt</th>
                       <th className="px-2 py-2 text-left">Job</th>
                       {isPO && <th className="px-2 py-2 text-left">Dept.</th>}
                       {isPO && <th className="px-2 py-2 text-left">Remarks</th>}
-                      <th className="px-2 py-2 text-left">Base Amount</th>
+                      <th className="finance-amount-cell px-2 py-2 text-left">Base Amount</th>
                       <th className="px-2 py-2 text-left">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {form.detail.length === 0 ? (
-                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={18}>No lines yet</td></tr>
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={isPO ? 21 : 17}>No lines yet</td></tr>
                      ) : form.detail.filter((line) => Number(line.serial_no) < 9000).map((line) => (
                       <tr className="border-t odd:bg-muted/20" key={line.id}>
-                        <td className="px-2 py-1 text-xs">{line.serial_no}</td>
-                        <td className="w-32 px-2 py-1"><Input disabled value={form.div_code} /></td>
-                        <td className="w-[260px] px-2 py-1">
+                        <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{line.serial_no}</td>
+                        <td className="finance-sticky-col finance-col-div px-2 py-1"><Input disabled value={form.div_code} /></td>
+                        <td className="finance-sticky-col finance-col-account finance-account-cell px-2 py-1">
                           <LookupField
                             label="Line Account"
                             required
@@ -1152,7 +1164,6 @@ const withTax = {
   )}
 
                         </td>
-                        <td className="w-[240px] px-2 py-1"><Input disabled value={line.ac_name || ""} /></td>
                         {isPO && (
   <td className="w-36 px-2 py-1">
     <Input disabled={isCancelled}
@@ -1188,10 +1199,10 @@ const withTax = {
                           />
   
                         </td>
-                        <td className="w-40 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input text-right tabular-nums" type="number" step="0.0001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></td>
-                        <td className="w-36 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input text-right tabular-nums" type="number" value={line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
-                        <td className="w-44 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input text-right tabular-nums" type="number" step="0.001" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
-                        <td className="w-56 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input text-right tabular-nums" type="number" step="0.001" value={line.amount} 
+                        <td className="w-40 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></td>
+                        <td className="w-36 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" value={line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
+                        <td className="w-44 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
+                        <td className="finance-amount-cell px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" value={line.amount} 
                         // onChange={(event) => updateLine(line.id, { amount: Number(event.target.value || 0) })} /></td>
                         onChange={(e) => {
     const amount = Number(e.target.value || 0);
@@ -1222,14 +1233,14 @@ const withTax = {
   <option value="E">Exempt</option>
 </Select>
                         </td>
-                        <td className="w-36 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input text-right tabular-nums" type="number" value={line.tx_compnt_perc_1 ?? 0} 
+                        <td className="w-36 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" value={line.tx_compnt_perc_1 ?? 0} 
                         // onChange={(event) => updateLine(line.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
                         onChange={(e) => {
     const perc   = Number(e.target.value || 0);
     const taxAmt = (Number(line.amount || 0) * perc) / 100;
     updateLine(line.id, { tx_compnt_perc_1: perc, tx_compnt_amt_1: taxAmt });
   }} /></td>
-                        <td className="w-52 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input text-right tabular-nums" type="number" 
+                        <td className="finance-amount-cell px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" 
                         // value={line.tx_compnt_amt_1 ?? 0}  onChange={(event) => updateLine(line.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                         value={((Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100).toFixed(3)} /></td>
                         <td className="w-40 px-2 py-1"><Input disabled={isCancelled} value={line.job_no || ""} onChange={(event) => updateLine(line.id, { job_no: event.target.value })} /></td>
@@ -1239,9 +1250,9 @@ const withTax = {
 {isPO && (
   <td className="w-[260px] px-2 py-1"> <Input disabled={isCancelled}  value={line.other_remarks || ""}  onChange={(e) => updateLine(line.id, { other_remarks: e.target.value })} /> </td>
 )}
-                        <td className="w-56 px-2 py-1">
+                        <td className="finance-amount-cell px-2 py-1">
                           {/* <Input disabled value={formatAmount(Number(line.amount || 0) * Number(form.ex_rate || 1) * Number(line.sign_ind || 1))} /> */}
-                          <Input className="commercial-number-input text-right tabular-nums" disabled value={formatAmount(Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1))} />
+                          <Input className="commercial-number-input finance-money-input" disabled value={formatAmount(Math.abs(Number(line.amount || 0)) * Number(form.ex_rate || 1))} />
                           </td>
                         <td className="px-2 py-1"><Button disabled={isCancelled} size="icon" type="button" variant="ghost" onClick={() => removeLine(line.id)}><X size={14} /></Button></td>
                       </tr>
