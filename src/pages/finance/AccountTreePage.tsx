@@ -150,7 +150,7 @@ const ACCOUNT_FORM_SECTIONS: Array<{
       { name: "dept_code", label: "Department Code" },
       { name: "curr_code", label: "Currency Code" },
       { name: "pl_bl_code", label: "BS / PL Code" },
-      { name: "ac_status", label: "Status" },
+      // { name: "ac_status", label: "Status" },
     ],
   },
   {
@@ -200,7 +200,7 @@ const ACCOUNT_FORM_SECTIONS: Array<{
       { name: "bi_exp_type", label: "BI Exp Type" },
       { name: "bi_pl_bs_ind", label: "BI PL BS IND" },
       { name: "bi_dept", label: "BI Dept" },
-      { name: "exp_alloc", label: "Expense Allocation" },
+      // { name: "exp_alloc", label: "Expense Allocation" },
       { name: "exp_type_description", label: "Exp Type Description" },
       { name: "exp_subtype_description", label: "Exp SubType Description" },
     ],
@@ -208,10 +208,10 @@ const ACCOUNT_FORM_SECTIONS: Array<{
   {
     title: "Approval",
     fields: [
-      { name: "cr_no", label: "CR No" },
-      { name: "apprval_factor", label: "Approval Factor" },
-      { name: "request_number", label: "Request Number" },
-      { name: "ac_type", label: "Account Type" },
+      // { name: "cr_no", label: "CR No" },
+      // { name: "apprval_factor", label: "Approval Factor" },
+      // { name: "request_number", label: "Request Number" },
+      // { name: "ac_type", label: "Account Type" },
       { name: "ac_active", label: "Active", type: "flag" },
     ],
   },
@@ -616,6 +616,7 @@ function AccountNodeEditor({ dialog, onClose, onSaved }: { dialog: DialogState; 
           Back to Details
         </Button>
       </div>
+
 
       <form id="account-node-form" className="account-node-form min-h-0 flex-1 overflow-auto p-4" onSubmit={handleSubmit}>
         <NoticeToast notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
