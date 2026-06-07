@@ -25,7 +25,7 @@ export function ExportCSVButton<T>({ data, columns, filename = "export.csv" }: E
 
   const resolveCols = (cols: any[]) =>
     cols
-      .filter((c) => !c.meta?.noExport)
+      .filter((c) => !c.meta?.noExport && (c.accessorKey || c.accessorFn || (c.id && c.id !== "actions")))
       .map((c) => ({
         header: c.meta?.exportHeader ?? (typeof c.header === "string" ? c.header : c.accessorKey ?? c.id ?? String(c.id ?? "")),
         accessorKey: c.accessorKey,
@@ -76,8 +76,9 @@ export function ExportCSVButton<T>({ data, columns, filename = "export.csv" }: E
   };
 
   return (
-    <Button size="icon" variant="outline" onClick={onClick} title="Export CSV" aria-label="Export CSV">
-      <Download size={14} />
+    <Button className="rounded-full px-3" size="sm" variant="outline" onClick={onClick} title="Export CSV" aria-label="Export CSV">
+      <Download size={13} />
+      Export
     </Button>
   );
 }

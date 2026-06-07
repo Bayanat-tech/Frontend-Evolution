@@ -36,6 +36,53 @@ const countryLookup = {
   loadOptions: async () => (await getWmsMaster("country", { page: 1, limit: 100000 })).tableData,
 };
 
+
+
+const mainBankLookup = {
+  columns: [
+    { field: "main_bank_code", header: "Code" },
+    { field: "main_bank_name", header: "Bank Name" },
+    { field: "main_bank_short_name", header: "Short Name" },
+  ],
+  valueField: "main_bank_code",
+  displayFields: ["main_bank_code", "main_bank_name"],
+  loadOptions: (context: { loginid: string; companyCode: string }) =>
+    getDynamicLookup({
+      parameter: "MST_HR_Main_Bank",
+      loginid: context.loginid,
+      code1: context.companyCode,
+      code2: "",
+      code3: "",
+      code4: "",
+      number1: 0,
+      number2: 0,
+      number3: 0,
+      number4: 0,
+      date1: null,
+      date2: null,
+      date3: null,
+      date4: null,
+    }),
+};
+
+
+
+const religionLookup = {
+  columns: [
+    { field: "religion_code", header: "Code" },
+    { field: "religion_name", header: "Religion Name" },
+  ],
+  valueField: "religion_code",
+  displayFields: ["religion_code", "religion_name"],
+  loadOptions: (context: { loginid: string; companyCode: string }) =>
+    getDynamicLookup({
+      parameter: "MST_HR_MS_HR_RELIGION",
+      loginid: context.loginid,
+      code1: "",
+      code2: "",
+    }),
+};
+
 export const hrMasterConfigs: Record<string, HrMasterConfig> = {
   department: {
     title: "Department Master",
@@ -141,27 +188,166 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     subtitle: "Maintain HR bank code, address, contact, company account and remarks.",
     master: "bank",
     gmEndpoint: "bank",
-    routeKeys: ["bank", "banks", "bank_master", "banks_master", "main_bank", "main_banks", "hrbank", "hr_bank"],
-    keyField: "bank_code",
+    routeKeys: ["bank", "bank_master", "banks_master", "main_bank", "main_banks", "hrbank", "hr_bank"],
+    keyField: "main_bank_code",  
+    source: "dynamic",
+    mutationMode: "column90",
+    listQuery: (context) => ({
+        parameter: "MST_HR_Main_Bank",
+        loginid: context.loginid,
+        code1: context.companyCode,
+        code2: "",
+        code3: "",
+        code4: "",
+        number1: 0,
+        number2: 0,
+        number3: 0,
+        number4: 0,
+        date1: null,
+        date2: null,
+        date3: null,
+        date4: null,
+    }),
+
+buildSave: (form, context) => {
+    console.log("_edit_key:", form._edit_key);
+    console.log("main_bank_code:", form.main_bank_code);
+    return {
+        parameter: "mst_hr_main_bank_ins_upd",
+        loginid: context.loginid,
+        val1s1: context.companyCode,
+        val1s2: form._edit_key
+    ? String(form._edit_key)           
+    : text(form, "main_bank_code"),    
+val1s18: form._edit_key
+    ? text(form, "main_bank_code")     
+    : "",    
+        val1s3: text(form, "main_bank_name"),
+        val1s4: text(form, "main_bank_short_name"),
+        val1s5: text(form, "main_bank_addr1"),
+        val1s6: text(form, "main_bank_addr2"),
+        val1s7: text(form, "main_bank_addr3"),
+        val1s8: text(form, "country_code"),
+        val1s9: text(form, "phone"),
+        val1s10: text(form, "fax"),
+        val1s11: text(form, "email"),
+        val1s12: text(form, "current_acc_code"),
+        val1s13: text(form, "payer_bk_short_name"),
+        val1s14: text(form, "remarks"),
+        val1s15: text(form, "payer_ac_iban"),
+        val1s16: text(form, "status", "A"),
+        val1s17: text(form, "bk_bic_swift"),
+    };
+},
+buildDelete: (row, context) => ({
+        parameter: "MST_HR_DEL_MAIN_BANK",
+        loginid: context.loginid,
+        code1: context.companyCode,
+        code2: text(row, "main_bank_code")
+    }),
     fields: [
-      { name: "bank_code", label: "Bank Code", required: true, disabledOnEdit: true, width: 140 },
-      { name: "bank_name", label: "Bank Name", required: true, width: 280 },
-      { name: "bank_short_name", label: "Short Name", width: 150 },
-      { name: "main_bank_code", label: "Main Bank Code", required: true, width: 160 },
-      { name: "country_code", label: "Country", lookup: countryLookup, required: true, width: 120 },
-      { name: "phone", label: "Phone", width: 150 },
-      { name: "fax", label: "Fax", width: 140 },
-      { name: "email", label: "Email", type: "email", width: 220 },
-      { name: "bank_addr1", label: "Address 1", required: true, table: false },
-      { name: "bank_addr2", label: "Address 2", table: false },
-      { name: "bank_addr3", label: "Address 3", table: false },
-      { name: "company_flag", label: "Company Flag", type: "select", options: yesNo, table: false },
-      { name: "comp_acct_code", label: "Company Account Code", table: false },
-      { name: "remarks", label: "Remarks", table: false },
+        { name: "main_bank_name", label: "Bank Name", required: true, width: 280 },
+        { name: "main_bank_code", label: "Bank Code",required: true, width: 140 },
+        { name: "main_bank_short_name", label: "Short Name", width: 150 },
+       
+        { name: "payer_bk_short_name", label: "Bank Short Name", table: false },
+        { name: "payer_ac_iban", label: "Bank IBAN", table: false },
+        { name: "bk_bic_swift", label: "Bank BIC/Swift", table: false },
+      
+        { name: "main_bank_addr1", label: "Address", required: true, table: false },
+        { name: "main_bank_addr2", label: "Address 2", table: false },
+        { name: "main_bank_addr3", label: "Address 3", table: false },
+        { name: "country_code", label: "Country Code", lookup: countryLookup, required: true, table: false },
+        { name: "phone", label: "Phone", table: false },
+        { name: "fax", label: "Fax", table: false },
+        { name: "email", label: "Email", type: "email", table: false },
+
+        { name: "remarks", label: "Remarks", table: false },
+        { name: "status", label: "Status", type: "select", options: activeInactive, required: true, table: false },
     ],
-    defaults: { company_flag: "N" },
+    defaults: { status: "A" },
     deleteMode: "master",
-  },
+},
+
+hrbank: {
+    title: "Bank",
+    subtitle: "Maintain HR bank code, address, contact and remarks.",
+    master: "hrbank",
+    gmEndpoint: "hrbank",
+    routeKeys: ["hrbank", "hr_bank", "bank", "banks"],
+    keyField: "bank_code",
+    source: "dynamic",
+    mutationMode: "column90",
+    listQuery: (context) => ({
+        parameter: "MST_HR_Bank",
+        loginid: context.loginid,
+        code1: context.companyCode,
+        code2: "",
+        code3: "",
+        code4: "",
+        number1: 0,
+        number2: 0,
+        number3: 0,
+        number4: 0,
+        date1: null,
+        date2: null,
+        date3: null,
+        date4: null,
+    }),
+    buildSave: (form, context) => ({
+        parameter: "mst_hr_bank_ins_upd",
+        loginid: context.loginid,
+        val1s1: context.companyCode,
+         val1s2: form._edit_key
+        ? String(form._edit_key)
+        : "",  
+        val1s3: text(form, "bank_name"),
+        val1s4: text(form, "bank_short_name"),
+        val1s5: text(form, "main_bank_code"),
+        val1s6: text(form, "company_flag", "N"),
+        val1s7: text(form, "bank_addr1"),
+        val1s8: text(form, "bank_addr2"),
+        val1s9: text(form, "bank_addr3"),
+        val1s10: text(form, "country_code"),
+        val1s11: text(form, "phone"),
+        val1s12: text(form, "fax"),
+        val1s13: text(form, "email"),
+        val1s14: text(form, "comp_acct_code"),
+        val1s15: text(form, "remarks"),
+        val1s16: text(form, "status", "A"),
+        val1s17: form._edit_key
+            ? text(form, "bank_code")
+            : "",
+    }),
+    buildDelete: (row, context) => ({
+        parameter: "MST_HR_DEL_BANK",
+        loginid: context.loginid,
+        code1: context.companyCode,
+        code2: text(row, "bank_code"),
+    }),
+    fields: [
+      
+      { name: "bank_code", label: "Bank Code", hideOnAdd: true, disabledOnEdit: true, width: 140 },
+        { name: "bank_name", label: "Bank Name", required: true, width: 280 },
+        { name: "bank_short_name", label: "Short Name", width: 150 },
+        { name: "main_bank_code", label: "Main Bank Code", width: 160, table: false, required: true, lookup: mainBankLookup },
+        { name: "company_flag", label: "Company Branch", type: "select", options: yesNo, width: 150, table: false },
+
+       
+        { name: "bank_addr1", label: "Address", required: true, table: false },
+        { name: "bank_addr2", label: "Address 2", table: false },
+        { name: "bank_addr3", label: "Address 3", table: false },
+        { name: "country_code", label: "Country Code", lookup: countryLookup, required: true, table: false },
+        { name: "phone", label: "Phone", table: false },
+        { name: "fax", label: "Fax", table: false },
+        { name: "email", label: "Email", type: "email", table: false },
+        { name: "remarks", label: "Remarks", table: false },
+        { name: "status", label: "Status", type: "select", options: activeInactive, required: true, table: false },
+    ],
+    defaults: { status: "A", company_flag: "N" },
+    deleteMode: "master",
+},
+  
   sponsor: {
     title: "Sponsor Master",
     subtitle: "Maintain sponsor trade license, immigration, visa allocation and block status.",
@@ -297,7 +483,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     }),
     buildDelete: (row, context) => ({ parameter: "MST_HR_DEL_RELIGION", loginid: context.loginid, code1: text(row, "religion_code") }),
     fields: [
-      { name: "religion_code", label: "Religion Code", disabledOnEdit: true, width: 150 },
+      { name: "religion_code", label: "Religion Code", disabledOnEdit: true,  disabledOnAdd: true, width: 150 },
       { name: "religion_name", label: "Religion Name", required: true, width: 260 },
       { name: "religion_short_name", label: "Short Name", width: 150 },
       { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
@@ -328,8 +514,9 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     }),
     buildDelete: (row, context) => ({ parameter: "MST_HR_DEL_CASTE", loginid: context.loginid, code1: text(row, "caste_code"), code2: text(row, "religion_code") }),
     fields: [
-      { name: "caste_code", label: "Caste Code", required: true, disabledOnEdit: true, width: 140 },
-      { name: "religion_code", label: "Religion Code", required: true, disabledOnEdit: true, width: 150 },
+    { name: "caste_code", label: "Caste Code", disabledOnEdit: true, disabledOnAdd: true, width: 140 },
+      // { name: "religion_code", label: "Religion Code", required: true, disabledOnEdit: true, width: 150 },
+      { name: "religion_code", label: "Religion", required: true, lookup: religionLookup, width: 150 },
       { name: "caste_name", label: "Caste Name", required: true, width: 260 },
       { name: "caste_short_name", label: "Short Name", width: 150 },
       { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },

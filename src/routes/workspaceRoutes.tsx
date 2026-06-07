@@ -20,7 +20,7 @@ import { FinanceUtilityMasterPage, financeUtilityConfigs } from "../pages/financ
 import { PaymentDocumentPage } from "../pages/finance/PaymentDocumentPage";
 import { PLSetupPage } from "../pages/finance/PLSetupPage";
 import { PrepaidRegisterPage } from "../pages/finance/PrepaidRegisterPage";
-import { WmsInboundPage } from "../pages/wms/WmsInboundPage";
+import { WmsInboundPage } from "../pages/wms/inbound/WmsInboundPage";
 import { WmsOutboundPage } from "../pages/wms/WmsOutboundPage";
 import { WmsSimpleMasterPage } from "../pages/wms/WmsSimpleMasterPage";
 import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
@@ -41,6 +41,17 @@ import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDe
 import { HrMasterPage } from "../pages/hr/HrMasterPage";
 import { hrMasterConfigs } from "../pages/hr/hrMasterConfigs";
 import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrPayUnitsPage } from "../pages/hr/HrProcessPages";
+import { ApplicationProgressPage } from "../pages/applicationProgress/ApplicationProgressPage";
+import {
+  OxAssetInventoryPage,
+  OxInspectionFormPage,
+  OxInspectionReportPage,
+  OxMaintDashboard,
+  OxSimpleMasterPage,
+  oxMaintMasterConfigs,
+} from "../pages/oxmaint/OxMaintPages";
+import { SalaryAdvancePage } from "../pages/hr/SalaryAdvancePage";
+import { TrainingFeedbackPage } from "../pages/hr/Hrtrainingfeedbackpage";
 import { Leaf } from "lucide-react";
 import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics";
 import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
@@ -371,6 +382,17 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <AppraisalWeightageMaster />,
   },
   {
+    name: "Application Progress",
+    match: (context) => isApplicationProgressRoute(context),
+    element: () => <ApplicationProgressPage />,
+
+  },
+  {
+    name: "Oxmaint",
+    match: (context) => isOxMaintRoute(context),
+    element: (context) => getOxMaintElement(context),
+  },
+  {
     name: "HR Pay Units",
     match: (context) => isHrRoute(context) && isHrPayUnitsRoute(context),
     element: () => <HrPayUnitsPage mode="units" />,
@@ -390,6 +412,18 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => isHrRoute(context) && isHrLeaveCancelRoute(context),
     element: () => <HrLeaveCancelPage />,
   },
+  {
+    name: "HR Warning Letter",
+    match: (context) => isHrRoute(context) && isHrMemosAndFormsWarningLetterRoute(context),
+    element: () => <SalaryAdvancePage />,
+  },
+
+  {
+  name: "HR Training Feedback",
+  match: (context) => isHrRoute(context) && isHrTrainingFeedbackRoute(context),
+  element: () => <TrainingFeedbackPage />,
+  },
+
   {
     name: "HR Payroll Account Setup",
     match: (context) => isHrRoute(context) && isHrPayrollAccountSetupRoute(context),
@@ -753,6 +787,53 @@ function getPamsMatchText(context: WorkspaceRouteContext) {
   return [pathname, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
 }
 
+function getGenericMatchText(context: WorkspaceRouteContext) {
+  const pathname = context.pathname.toLowerCase();
+  const leaves = collectMenuLeaves(context.activeApp?.children || []);
+  const activeLeaf = leaves.find((leaf) => {
+    const path = (leaf.url_path || "").replace(/^\/+/, "").toLowerCase();
+    return path && pathname.includes(path);
+  });
+  return [pathname, context.activeApp?.title, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
+}
+
+function isApplicationProgressRoute(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("applicationprogress") ||
+    compact.includes("appprogress") ||
+    matchText.includes("app_progress") ||
+    matchText.includes("application_progress")
+  );
+}
+
+function isOxMaintRoute(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return (
+    matchText.includes("/oxmaint") ||
+    compact.includes("oxmaint") ||
+    compact.includes("assetinventory") ||
+    compact.includes("inspectionform") ||
+    compact.includes("inspectionreport") ||
+    compact.includes("assettype") ||
+    compact.includes("siteproject")
+  );
+}
+
+function getOxMaintElement(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  if (compact.includes("assetinventory")) return <OxAssetInventoryPage />;
+  if (compact.includes("inspectionreport")) return <OxInspectionReportPage />;
+  if (compact.includes("inspectionform")) return <OxInspectionFormPage />;
+  if (compact.includes("assettype")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.assetType} />;
+  if (compact.includes("siteproject")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.siteProject} />;
+  if (compact.includes("status") || matchText.includes("/status")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.status} />;
+  return <OxMaintDashboard />;
+}
+
 function getHrMasterConfig(context: WorkspaceRouteContext) {
   const matchText = getHrMatchText(context);
   if (!isHrRoute(context)) return null;
@@ -804,4 +885,23 @@ function isHrLeaveCancelRoute(context: WorkspaceRouteContext) {
 function isHrPayrollAccountSetupRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
   return compact.includes("payrollaccountsetup") || compact.includes("payrollaccountssetup") || compact.includes("payrollacsetup");
+}
+
+function isHrMemosAndFormsWarningLetterRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  return (
+    (normalized.includes("memos") || normalized.includes("memo_and_forms") || normalized.includes("memo-and-forms") || normalized.includes("memosandforms") || normalized.includes("memo and forms")) &&
+    (normalized.includes("forms") || normalized.includes("memo_and_forms") || normalized.includes("memo-and-forms") || normalized.includes("memo and forms")) &&
+    (normalized.includes("warning letter") || normalized.includes("warning-letter") || normalized.includes("warning_letter") || normalized.includes("warning"))
+  );
+}
+
+function isHrTrainingFeedbackRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("trainingfeedback") ||
+    normalized.includes("training_feedback") ||
+    normalized.includes("training-feedback")
+  );
 }
