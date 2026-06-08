@@ -285,7 +285,6 @@ const AppraisalWeightageMaster: React.FC = () => {
 
   // ── Delete single row ─────────────────────────────────────────────────────
   const handleDeleteRow = async (code: string) => {
-    if (!window.confirm("Delete this weightage configuration?")) return;
     setDeleting(code);
     setErrorMsg("");
     try {
@@ -482,7 +481,7 @@ const AppraisalWeightageMaster: React.FC = () => {
 
           {/* Effective Period — LookupField */}
           <div style={S.field}>
-            <span style={S.label}>Effective Period <span style={{ color: "#c62828" }}>*</span></span>
+            <span style={S.label}>Sel Period <span style={{ color: "#c62828" }}>*</span></span>
             <LookupField
               compact
               label="Effective Period"
@@ -547,9 +546,6 @@ const AppraisalWeightageMaster: React.FC = () => {
                 setDeptDisplay(row ? text(row.dept_name) : (val || "All Departments"));
               }}
             />
-            {divCode === "ALL" && (
-              <span style={{ fontSize: "10px", color: "#aaa" }}>Select a division first</span>
-            )}
           </div>
 
         </div>
