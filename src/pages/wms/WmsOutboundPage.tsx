@@ -28,7 +28,6 @@ const detailTabs = [
   { label: "Picking Details", value: "picking_details" },
   { label: "Cancel Picking", value: "cancel_picking" },
   { label: "Job Confirmation", value: "job_confirmation" },
-  { label: "Activity Billing", value: "activity_billing" },
 ];
 
 const outboundJobsPath = "/workspace/wms/wms/transactions/outbound/jobs_oub";
@@ -90,14 +89,14 @@ const orderDetailFields = [
   { name: "prod_code", label: "Product Code", required: true },
   { name: "prod_name", label: "Product Name" },
   { name: "site_code", label: "Site Code", required: true },
-  { name: "loc_code_from", label: "Location From", required: true },
-  { name: "loc_code_to", label: "Location To", required: true },
+  { name: "loc_code_from", label: "Location From"},
+  { name: "loc_code_to", label: "Location To" },
   { name: "p_uom", label: "P UOM" },
   { name: "qty_puom", label: "P Qty", type: "number", required: true },
   { name: "l_uom", label: "L UOM" },
   { name: "qty_luom", label: "L Qty", type: "number" },
   { name: "quantity", label: "Quantity", type: "number" },
-  { name: "lot_no", label: "Lot No", required: true },
+  { name: "lot_no", label: "Lot No" },
   { name: "batch_no", label: "Batch No" },
   { name: "expiry_from", label: "Expiry From", type: "date" },
   { name: "expiry_to", label: "Expiry To", type: "date" },
@@ -363,69 +362,113 @@ function OutboundJobListing() {
 function OutboundJobDetail({ jobNo, tab }: { jobNo: string; tab: string }) {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const principalCode = new URLSearchParams(location.search).get("principal_code") || "";
   const [job, setJob] = useState<WmsRow | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadJob = async () => {
     setLoading(true);
     try {
-      const data = await getWmsOutbound<WmsRow>(`job/${encodeURIComponent(jobNo)}`);
-      setJob(normalizeRow(data || {}));
-    } catch {
-      const fallback = await executeWmsInboundSql(`SELECT * FROM VW_TI_JOB WHERE JOB_NO = '${sqlEscape(jobNo)}' AND COMPANY_CODE = '${sqlEscape(user?.company_code || "")}'`);
-      setJob(normalizeRow(fallback[0] || { job_no: jobNo }));
+      const data = await executeWmsInboundSql(
+        `SELECT * FROM TO_ORDER
+         WHERE JOB_NO       = '${sqlEscape(jobNo)}' AND PRIN_CODE = '${sqlEscape(principalCode)}'
+           AND COMPANY_CODE = '${sqlEscape(user?.company_code || "")}'`
+      );
+      setJob(normalizeRow(data[0] || { job_no: jobNo, prin_code: principalCode }));
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    void loadJob();
-  }, [jobNo]);
+  useEffect(() => { void loadJob(); }, [jobNo]);
 
   const activeTab = detailTabs.some((item) => item.value === tab) ? tab : "order_entry";
+  const jobClass = jobClassLabels[value(job || {}, "job_class")] || value(job || {}, "job_class") || "Normal";
+  const status = isCanceled(job || {}) ? "Canceled" : hasDate(value(job || {}, "confirm_date")) ? "Confirmed" : "In Progress";
+  const jobDate = formatDate(value(job || {}, "job_date"));
 
   return (
     <section className="grid gap-3">
-      <div className="rounded-md border bg-card">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b p-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <Button size="icon" variant="outline" onClick={() => navigate(outboundJobsPath)} title="Back to jobs"><ArrowLeft size={16} /></Button>
-            <div className="min-w-0">
-              <h1 className="m-0 truncate text-xl font-semibold">Outbound Job {jobNo}</h1>
+      {/* ── Job Header — matching inbound style exactly ── */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <Button size="icon" variant="outline" onClick={() => navigate(outboundJobsPath)} title="Back to jobs">
+            <ArrowLeft size={16} />
+          </Button>
+          <div className="min-w-0">
+            <p className="m-0 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Outbound Job</p>
+            <h1 className="m-0 truncate text-2xl font-bold text-foreground">{jobNo}</h1>
+          </div>
+          {/* Principal chip */}
+          <div className="hidden items-center gap-1 rounded-md border bg-background px-3 py-1.5 sm:flex">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Principal</span>
+            <span className="ml-1.5 text-sm font-bold text-foreground">
+              {value(job || {}, "prin_code") || principalCode || "-"}
+            </span>
+          </div>
+          {/* Job Date chip */}
+          {jobDate && (
+            <div className="hidden items-center gap-1 rounded-md border bg-background px-3 py-1.5 sm:flex">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Job Date</span>
+              <span className="ml-1.5 text-sm font-bold text-foreground">{jobDate}</span>
             </div>
-            {job && <JobClassPill code={value(job, "job_class")} />}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={loadJob}><RefreshCw size={14} /> Refresh</Button>
-            <Button size="sm" variant="outline"><Printer size={14} /> Print</Button>
-          </div>
+          )}
+          {/* Job Class badge */}
+          <span className="rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+            {jobClass}
+          </span>
+          {/* Status badge */}
+          <span className={
+            status === "Canceled"
+              ? "rounded-full border border-red-300 bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700"
+              : status === "Confirmed"
+              ? "rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700"
+              : "rounded-full border border-blue-300 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700"
+          }>
+            {status}
+          </span>
         </div>
-        <div className="grid gap-2 p-3 md:grid-cols-5">
-          <Info label="Principal" value={`${value(job || {}, "prin_code")} ${value(job || {}, "prin_name") ? `- ${value(job || {}, "prin_name")}` : ""}`} />
-          <Info label="Job Date" value={formatDate(value(job || {}, "job_date"))} />
-          <Info label="Document Ref" value={value(job || {}, "doc_ref")} />
-          <Info label="Status" value={isCanceled(job || {}) ? "Canceled" : hasDate(value(job || {}, "confirm_date")) ? "Confirmed" : "In Progress"} />
-          <Info label="Company" value={user?.company_code || ""} />
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={loadJob}><RefreshCw size={14} /> Refresh</Button>
+          <Button size="sm" variant="outline"><Printer size={14} /> Print</Button>
         </div>
       </div>
 
+      {/* ── Tab Strip ── */}
       <div className="flex gap-2 overflow-x-auto rounded-md border bg-card p-2">
         {detailTabs.map((item) => (
-          <Link className={item.value === activeTab ? "ui-button ui-button-default ui-button-sm" : "ui-button ui-button-outline ui-button-sm"} key={item.value} to={outboundJobTabPath(jobNo, item.value, job)}>
+          <Link
+            className={item.value === activeTab ? "ui-button ui-button-default ui-button-sm" : "ui-button ui-button-outline ui-button-sm"}
+            key={item.value}
+            to={outboundJobTabPath(jobNo, item.value, job || { prin_code: principalCode } as WmsRow)}
+          >
             {item.label}
           </Link>
         ))}
       </div>
 
-      <OutboundOperationalTab job={job} jobNo={jobNo} tab={activeTab} loadingJob={loading} />
+      <OutboundOperationalTab
+        job={job}
+        jobNo={jobNo}
+        tab={activeTab}
+        loadingJob={loading}
+        principalCode={principalCode}
+      />
     </section>
   );
 }
 
-function OutboundOperationalTab({ job, jobNo, tab, loadingJob }: { job: WmsRow | null; jobNo: string; tab: string; loadingJob: boolean }) {
+
+
+function OutboundOperationalTab({ job, jobNo, tab, loadingJob, principalCode  }: { job: WmsRow | null; jobNo: string; tab: string; loadingJob: boolean, principalCode ?: string }) {
+  const [pickModalOpen, setPickModalOpen] = useState(false);
+const [pickPreference, setPickPreference] = useState("job_no");
+const [pickCriteria, setPickCriteria] = useState("fifo");
+const [leastQty, setLeastQty] = useState(false);
+const [ignoreMinExp, setIgnoreMinExp] = useState(false);
   const { user } = useAuth();
-  const prinCode = value(job || {}, "prin_code");
+  const prinCode = value(job || {}, "prin_code") || principalCode || "";
   const [rows, setRows] = useState<WmsRow[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
@@ -439,24 +482,29 @@ function OutboundOperationalTab({ job, jobNo, tab, loadingJob }: { job: WmsRow |
   const [pickOptions, setPickOptions] = useState({ preference: "job_no", min_qty: "N", exp_period: "0", confirm_date: new Date().toISOString().slice(0, 10) });
 
   const config = getOutboundTabConfig(tab);
-  const loadRows = async (clearNotice = true) => {
-    if (!config || loadingJob) return;
-    setLoading(true);
-    if (clearNotice) setNotice(null);
-    setSelection({});
-    try {
-      const data = await executeWmsInboundSql(config.sql({ companyCode: user?.company_code || "", jobNo, prinCode }));
-      setRows(data.map(normalizeRow));
-    } catch (error) {
-      setNotice({ type: "error", message: processMessage(`Unable to load ${config.title}.`, error) });
-    } finally {
-      setLoading(false);
-    }
-  };
+const loadRows = async (clearNotice = true) => {
+  if (!config || loadingJob) return;
+  setLoading(true);
+  if (clearNotice) setNotice(null);
+  setSelection({});
+  try {
+    const res = await executeWmsInboundSql(
+      config.sql({ companyCode: user?.company_code || "", jobNo, prinCode })
+    );
+    // handle both plain array and wrapped { data: [] } response
+    const data = Array.isArray(res) ? res : Array.isArray((res as any)?.data) ? (res as any).data : [];
+    setRows(data.map(normalizeRow));
+  } catch (error) {
+    setNotice({ type: "error", message: processMessage(`Unable to load ${config.title}.`, error) });
+  } finally {
+    setLoading(false);
+  }
+};
 
-  useEffect(() => {
-    void loadRows();
-  }, [tab, jobNo, prinCode, loadingJob]);
+useEffect(() => {
+  if (!prinCode) return; // ← add this guard
+  void loadRows();
+}, [tab, jobNo, prinCode, loadingJob]);
 
   if (!config) return <Card><CardContent className="p-6 text-sm text-muted-foreground">This outbound tab is not configured yet.</CardContent></Card>;
 
@@ -494,7 +542,19 @@ function OutboundOperationalTab({ job, jobNo, tab, loadingJob }: { job: WmsRow |
           setNotice({ type: "error", message: "Picking validation has issues. Review the issue list before picking." });
           return;
         }
-        await putWmsOutbound(`picking_details/pick_order/${encodeURIComponent(jobNo)}`, { serial_no: selectedPayloadKeys }, { prin_code: prinCode, preference: pickOptions.preference || "job_no", pick: "Y", min_qty: pickOptions.min_qty, exp_period: pickOptions.exp_period });
+      await putWmsOutbound(
+        `picking_details/pick_order/${encodeURIComponent(jobNo)}`,
+        { serial_no: selectedPayloadKeys },
+        {
+          prin_code:  prinCode,
+          preference: pickPreference,
+          pick:       "Y",
+          min_qty:    leastQty ? "Y" : "N",
+          exp_period: ignoreMinExp ? "0" : pickOptions.exp_period,
+          pick_criteria: pickCriteria,
+        }
+      );
+
       } else if (mode === "CONFIRM") {
         await putWmsOutbound(`picking_details/confirm_order/${encodeURIComponent(jobNo)}`, { serial_no: selectedPayloadKeys }, { prin_code: prinCode, confirm_date: pickOptions.confirm_date });
       } else {
@@ -543,8 +603,94 @@ function OutboundOperationalTab({ job, jobNo, tab, loadingJob }: { job: WmsRow |
       {tab === "order_entry" && <Button size="sm" variant="outline" onClick={() => setOrderDialog({ open: true, row: null })}><Plus size={14} /> Add Order</Button>}
       {tab === "order_details" && <Button size="sm" variant="outline" onClick={() => setDetailDialog({ open: true, row: null })}><Plus size={14} /> Add Detail</Button>}
       {tab === "order_details" && <EdiImportButton jobNo={jobNo} prinCode={prinCode} companyCode={user?.company_code || ""} loginid={user?.loginid || ""} onDone={loadRows} onNotice={setNotice} />}
-      {tab === "picking_details" && <PickToolbar options={pickOptions} setOptions={setPickOptions} onPick={() => runPickAction("PICK")} disabled={loading} />}
-      {tab === "cancel_picking" && <Button size="sm" variant="outline" onClick={() => runPickAction("CANCEL")} disabled={loading}><Ban size={14} /> Cancel Selected</Button>}
+{tab === "picking_details" && (
+  <>
+    <Button size="sm" variant="outline" onClick={() => setPickModalOpen(true)}>
+      <PackageCheck size={14} /> Pick Orders
+    </Button>
+    <Dialog
+      open={pickModalOpen}
+      title="Picking Option"
+      wide
+      onClose={() => setPickModalOpen(false)}
+      footer={
+        <>
+          <Button variant="outline" onClick={() => setPickModalOpen(false)}>Cancel</Button>
+          <Button onClick={() => { setPickModalOpen(false); runPickAction("PICK"); }}>Ok</Button>
+        </>
+      }
+    >
+      <div className="grid grid-cols-2 gap-6 p-2">
+        {/* Preference */}
+        <div>
+          <p className="mb-3 text-sm font-semibold text-foreground">Preference</p>
+          <div className="grid gap-2">
+            {[
+              { label: "None",            value: "job_no" },
+              { label: "Full Pallete",    value: "full_pallete" },
+              { label: "Mixed Pallete",   value: "mixed_pallete" },
+              { label: "Lead To Max Load",value: "lead_to_max_load" },
+            ].map((opt) => (
+              <label key={opt.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="radio"
+                  className="accent-primary"
+                  checked={pickPreference === opt.value}
+                  onChange={() => setPickPreference(opt.value)}
+                />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+          <div className="mt-4 grid gap-2">
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" className="accent-primary" checked={leastQty} onChange={(e) => setLeastQty(e.target.checked)} />
+              Least Qty
+            </label>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" className="accent-primary" checked={ignoreMinExp} onChange={(e) => setIgnoreMinExp(e.target.checked)} />
+              Ignore Minimum Exp Period
+            </label>
+          </div>
+        </div>
+
+        {/* Pick Criteria */}
+        <div>
+          <p className="mb-3 text-sm font-semibold text-foreground">Pick Criteria</p>
+          <div className="grid gap-2">
+            {[
+              { label: "FIFO",               value: "fifo" },
+              { label: "FEFO",               value: "fefo" },
+              { label: "Document Reference", value: "doc_ref" },
+              { label: "Lot Number",         value: "lot_no" },
+              { label: "Manufacture Date",   value: "production_date" },
+              { label: "Expiry Date",        value: "expiry_date" },
+              { label: "LIFO",               value: "lifo" },
+              { label: "LEFO",               value: "lefo" },
+              { label: "Unit Price",         value: "unit_price" },
+              { label: "Manufacturer",       value: "manufacturer" },
+              { label: "Country of Origin",  value: "country_origin" },
+              { label: "Site/Location Code", value: "location_code" },
+              { label: "WM - PICKWAVE",      value: "wm_pickwave" },
+              { label: "WM - FINAL PICK WAVE", value: "wm_final_pickwave" },
+              { label: "SA - PICK WAVE",     value: "sa_pickwave" },
+            ].map((opt) => (
+              <label key={opt.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="radio"
+                  className="accent-primary"
+                  checked={pickCriteria === opt.value}
+                  onChange={() => setPickCriteria(opt.value)}
+                />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+    </Dialog>
+  </>
+)}      {tab === "cancel_picking" && <Button size="sm" variant="outline" onClick={() => runPickAction("CANCEL")} disabled={loading}><Ban size={14} /> Cancel Selected</Button>}
       {tab === "job_confirmation" && <ConfirmToolbar options={pickOptions} setOptions={setPickOptions} onConfirm={() => runPickAction("CONFIRM")} disabled={loading} />}
       <Button size="sm" variant="outline" onClick={() => loadRows()}><RefreshCw size={14} /> Refresh</Button>
     </div>
@@ -701,7 +847,8 @@ function OrderDetailDialog({ open, row, job, onClose, onDone, onNotice }: { open
   const [form, setForm] = useState<WmsRow>({});
   const [saving, setSaving] = useState(false);
   const companyCode = value(job || {}, "company_code") || user?.company_code || "";
-  const prinCode = value(job || {}, "prin_code");
+const location = useLocation();
+const prinCode = value(job || {}, "prin_code") || new URLSearchParams(location.search).get("principal_code") || "";
   const jobNo = value(job || {}, "job_no");
 
   useEffect(() => {
@@ -1765,10 +1912,13 @@ function sqlEscape(input: string) {
 }
 
 async function loadOutboundCustomers(companyCode: string, prinCode: string) {
-  const rows = await executeWmsInboundSql(`SELECT CUST_CODE, CUST_NAME FROM MS_CUSTOMER WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' AND PRIN_CODE = '${sqlEscape(prinCode)}' ORDER BY CUST_CODE`);
+  const rows = await executeWmsInboundSql(
+    `SELECT * FROM MS_CUSTOMER
+     WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
+       AND PRIN_CODE    = '${sqlEscape(prinCode)}'`
+  );
   return normalizeLookupRows(rows);
 }
-
 async function loadCurrencies() {
   const response = await getWmsMaster("currency", { page: 1, limit: 100000 });
   return normalizeLookupRows(response.tableData);
@@ -1840,7 +1990,7 @@ async function loadPortLookup() {
 }
 
 async function loadOrderEntryOptions(companyCode: string, prinCode: string, jobNo: string) {
-  const rows = await executeWmsInboundSql(`SELECT ORDER_NO, CUST_CODE, CUST_NAME FROM TO_ORDER WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' AND PRIN_CODE = '${sqlEscape(prinCode)}' AND JOB_NO = '${sqlEscape(jobNo)}' ORDER BY ORDER_NO`);
+  const rows = await executeWmsInboundSql(`SELECT * FROM TO_ORDER WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' AND PRIN_CODE = '${sqlEscape(prinCode)}' AND JOB_NO = '${sqlEscape(jobNo)}' ORDER BY ORDER_NO`);
   return normalizeLookupRows(rows);
 }
 

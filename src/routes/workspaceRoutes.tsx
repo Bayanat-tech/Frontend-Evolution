@@ -622,23 +622,30 @@ function isWmsBillingActRoute(pathname: string) {
 function isWmsInboundRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   if (!normalized.includes("/wms/")) return false;
- 
-  // Case 1: listing page — /wms/.../inbound/jobs (any depth)
+
   const isListing =
     normalized.includes("/inbound") &&
     (normalized.includes("/jobs") || normalized.includes("/inboundjob"));
- 
-  // Case 2: detail page — /wms/.../view/{jobNo}/{tab}
-  // The navigate() call in WmsInboundPage does `navigate("view/IB.../shipment_details")`
-  // which resolves relative to the listing, producing /workspace/wms/.../view/IB.../...
-  const isDetail = normalized.includes("/view/");
- 
+
+  // Only match /view/ if it's under an inbound path OR the job no starts with ib
+  const isDetail =
+    normalized.includes("/inbound") && normalized.includes("/view/");
+
   return isListing || isDetail;
 }
 
 function isWmsOutboundRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  return normalized.includes("/wms/") && normalized.includes("/outbound") && (normalized.includes("/jobs") || normalized.includes("/job") || normalized.includes("jobs_oub"));
+  if (!normalized.includes("/wms/")) return false;
+
+  const isListing =
+    normalized.includes("/outbound") &&
+    (normalized.includes("/jobs") || normalized.includes("/job") || normalized.includes("jobs_oub"));
+
+  const isDetail =
+    normalized.includes("/outbound") && normalized.includes("/view/");
+
+  return isListing || isDetail;
 }
 
 function getWmsSimpleMasterConfig(pathname: string) {

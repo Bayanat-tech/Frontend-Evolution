@@ -33,7 +33,6 @@ export const packingFormFields: FormField[] = [
   { name: "doc_ref",         label: "Doc Ref" },
   { name: "mfg_date",        label: "Production Date",   type: "date" },
   { name: "exp_date",        label: "Expiry Date",       type: "date" },
-  { name: "country_origin",  label: "Country of Origin", lookup: "country" },
   { name: "manufacturer",    label: "Manufacturer",      lookup: "manufacturer" },
   { name: "shelf_life_date", label: "Shelf Life (Date)", type: "date" },
   { name: "shelf_life_days", label: "Shelf Life Days",   type: "number" },
