@@ -56,7 +56,7 @@ import { Leaf } from "lucide-react";
 import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics";
 import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
 import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
-import { FirstGroup, SecondGroup, ThirdGroup } from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
+import { AcGroup, FirstGroup, SecondGroup, ThirdGroup } from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -98,6 +98,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Finance Trail Balance L4 Report",
     match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/third_group"),
     element: () => <ThirdGroup />,
+  },
+  {
+    name: "Finance AC trial balance report",
+    match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/a/c_wise"),
+    element: () => <AcGroup />,
   },
   {
     name: "Finance Bank Master",
