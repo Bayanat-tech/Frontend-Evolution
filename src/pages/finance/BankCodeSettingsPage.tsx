@@ -1,4 +1,4 @@
-import { Edit2, Eye, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Edit2, Eye, RefreshCw, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
@@ -26,7 +26,6 @@ type BankCodeFormState = {
 };
 
 type EditorState =
-  | { mode: "create"; row?: undefined }
   | { mode: "edit"; row: LookupRow }
   | { mode: "view"; row: LookupRow }
   | null;
@@ -154,7 +153,6 @@ export function BankCodeSettingsPage() {
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Button variant="outline" onClick={() => void loadRows()}><RefreshCw size={15} /> Refresh</Button>
-          <Button onClick={() => setEditor({ mode: "create" })}><Plus size={15} /> Create Bank Code</Button>
         </div>
       </div>
 
@@ -178,17 +176,16 @@ export function BankCodeSettingsPage() {
       {editor && (
         <Dialog
           open
-          title={`${editor.mode === "create" ? "Create" : editor.mode === "edit" ? "Edit" : "View"} Bank Code`}
+          title={`${editor.mode === "edit" ? "Edit" : "View"} Bank Code`}
           description="Bank account details"
           onClose={() => setEditor(null)}
         >
-
           <BankCodeEditor
             editor={editor}
             onClose={() => setEditor(null)}
             onSaved={async () => {
               setEditor(null);
-              setNotice({ type: "success", message: editor.mode === "edit" ? "Bank code updated successfully" : "Bank code added successfully" });
+              setNotice({ type: "success", message: "Bank code updated successfully" });
               await loadRows(false);
             }}
           />
@@ -267,7 +264,7 @@ function BankCodeEditor({
   return (
     <div className="flex min-h-[380px] flex-col">
       <div className="border-b pb-3">
-        <p className="eyebrow">{editor.mode === "create" ? "Create" : editor.mode === "edit" ? "Modify" : "View"}</p>
+        <p className="eyebrow">{editor.mode === "edit" ? "Modify" : "View"}</p>
         <h2 className="m-0 text-xl font-semibold tracking-tight">Bank Code</h2>
       </div>
       <form className="grid flex-1 content-start gap-4 overflow-auto py-4" id="bank-code-form" onSubmit={handleSubmit}>
