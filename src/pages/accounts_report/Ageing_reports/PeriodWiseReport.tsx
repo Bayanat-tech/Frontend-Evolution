@@ -9,12 +9,14 @@ import {
     ChevronsRight,
     ChevronsLeft,
     BarChart2,
+    Loader2,
 } from "lucide-react";
 
 import { getDynamicLookup, getDynamicLookupaccount } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 // import ReportDialogPage from "report/ReportDialogPage";
-import PeriodWiseReport from "./PeriodWiseReport";
+// import PeriodWiseReport from "./PeriodWiseReport";
+import { openDuedatewiseDetailReport, openDuedatewiseSummaryReport, openInvdatewiseDetailReport, openInvdatewiseSummaryReport, openOutstandingListReport } from "../../../api/transactions";
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 const getRowKey = (row: any, tab: "acCode" | "group" | "salesman"): string => {
@@ -174,6 +176,68 @@ const PeriodWisePage: React.FC = () => {
     // ── Track which tabs have been fetched (reset on division change) ─────────
     const [fetchedTabs, setFetchedTabs] = useState<Set<string>>(new Set());
 
+    
+const [generating, setGenerating] = useState(false);
+const [reportError, setReportError] = useState<string | null>(null);
+
+
+const handleGenerate = async () => {
+    if (!division) {
+        setReportError("Please select a Division before generating.");
+        return;
+    }
+    setReportError(null);
+    setGenerating(true);
+    try {
+      const params = {
+   parameter: outstandingList
+        ? "Account_Report_VW_PERIODWISE_OUTSTD_LIST"
+        : dateType === "due" && option === "summary"
+        ? "Account_Report_VW_PERIODWISE_DUEDATE_SUMMARY"
+        : dateType === "due" && option === "detail"
+        ? "Account_Report_VW_PERIODWISE_DUEDATE_DETAIL"
+        : option === "summary"
+        ? "Account_Report_VW_PERIODWISE_INV_SUMMARY"
+        : "Account_Report_VW_PERIODWISE_INV_DETAIL",
+    loginid:  user?.loginid || user?.username || "ADMIN",
+    code1:    user?.company_code || "",
+    code2:    division,
+    code3:    accountRightItems.length > 0 ? accountRightItems.map((r) => r.ac_code).join(",") : "All",
+    code4:    groupRightItems.length > 0 ? groupRightItems.map((r) => r.l4_code).join(",") : "All",
+    code5:    salesmanRightItems.length > 0 ? salesmanRightItems.map((r) => r.salesman_code).join(",") : "All",
+    code6:    formatDateOracle(asOnDate),
+    code7:    dateType,
+    code8:    option,
+    code9:    String(ages[0]),
+    code10:   String(ages[1]),
+    code11:   String(ages[2]),
+    code12:   String(ages[3]),
+    code13:   String(ages[4]),
+    code14:   String(ages[5]),
+    code15:   String(outstandingList),
+    code16:   String(salesmanWise),
+};
+
+if (outstandingList) {
+    await openOutstandingListReport(params);
+} else if (dateType === "due" && option === "summary") {
+    await openDuedatewiseSummaryReport(params);
+} else if (dateType === "due" && option === "detail") {
+    await openDuedatewiseDetailReport(params);
+} else if (option === "summary") {
+    await openInvdatewiseSummaryReport(params);
+} else {
+    await openInvdatewiseDetailReport(params);
+}
+
+    } catch (err: any) {
+        setReportError("Failed to generate report. Check console.");
+        console.error(err);
+    } finally {
+        setGenerating(false);
+    }
+};
+
     // ── Fetch division list on mount ──────────────────────────────────────────
     useEffect(() => {
         const fetchDivisions = async () => {
@@ -191,12 +255,9 @@ const PeriodWisePage: React.FC = () => {
         fetchDivisions();
     }, []);
 
-    // ── When division changes: reset all tab data + fetched flags,
-    //    then fetch whichever tab is currently active ──────────────────────────
     useEffect(() => {
         if (!division) return;
 
-        // Reset everything
         setGroupLeftItems([]); setGroupRightItems([]);
         setGroupLeftSelected(new Set()); setGroupRightSelected(new Set());
         setAccountLeftItems([]); setAccountRightItems([]);
@@ -214,7 +275,7 @@ const PeriodWisePage: React.FC = () => {
     // ── When tab changes: fetch that tab's data if not yet fetched ────────────
     useEffect(() => {
         if (!division) return;
-        if (fetchedTabs.has(activeTab)) return; // already fetched, skip
+        if (fetchedTabs.has(activeTab)) return; 
 
         if (activeTab === "acCode") fetchAccounts(division);
         else if (activeTab === "group") fetchGroups(division);
@@ -903,24 +964,20 @@ const PeriodWisePage: React.FC = () => {
                         </button>
                         <button
                             className="action-btn-primary"
-                            onClick={() => setReportOpen(true)}
+                            onClick={handleGenerate}         
+                            disabled={generating}
                             style={{ padding: "7px 16px", border: "0.5px solid #185FA5", background: "#185FA5", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#fff" }}
                         >
-                            <Printer size={13} /> Generate report
+                            {generating
+        ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Generating...</>
+        : <><Printer size={13} /> Generate report</>
+    }
                         </button>
                     </div>
                 </div>
             </div>
 
-            {/* ── Report Dialog ── */}
-            {/* {reportOpen && (
-                <ReportDialogPage
-                    Report={PeriodWiseReport}
-                    required_values={reportValues}
-                    title="Period Wise Report"
-                    onClose={() => setReportOpen(false)}
-                />
-            )} */}
+            
         </div>
     );
 };
