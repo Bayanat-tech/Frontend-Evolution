@@ -8,6 +8,7 @@ export interface ReportDialogPageProps {
   required_values: any;
   onClose?: () => void;
   title?: string;
+  excel?: () => void;
 }
 
 const ReportDialogPage = ({
@@ -15,6 +16,7 @@ const ReportDialogPage = ({
   required_values,
   onClose,
   title,
+  excel,
 }: ReportDialogPageProps) => {
   const reportRef = useRef<HTMLDivElement>(null);
 
@@ -90,6 +92,11 @@ const ReportDialogPage = ({
 
         {/* Footer */}
         <div className="flex justify-end gap-2 border-t p-4 print:hidden">
+          <Button 
+          onClick={excel} 
+          className="rounded bg-green-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-700">
+            Excel
+          </Button>
           <Button
             onClick={handlePrint}
             className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"

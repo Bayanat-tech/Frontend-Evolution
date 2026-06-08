@@ -23,6 +23,8 @@ export interface ReportFilterPageProps<T extends AnyRow> {
   selectorSelectedLabel?: string;
   formValueKey: string;
   reportEndpoint: string;
+  excelEndpoint?: string;
+  excelFileName?: string;
 }
 
 type FormState = {
@@ -63,7 +65,9 @@ export const FirstGroup = () => (
     selectorAvailableLabel="Available L2 Codes"
     selectorSelectedLabel="Selected L2 Codes"
     formValueKey="l2_code"
-    reportEndpoint="api/finance/transactions/report/trailbalance/l2"
+    reportEndpoint="api/finance/transactions/report/trailbalance/html/l2"
+    excelEndpoint="api/finance/transactions/report/trialbalance/excel/l2"
+    excelFileName="TrailBalance_L2.xlsx"
   />
 );
 
@@ -80,6 +84,7 @@ export const SecondGroup = () => (
     selectorSelectedLabel="Selected L3 Codes"
     formValueKey="l3_code"
     reportEndpoint="api/finance/transactions/report/trailbalance/l3"
+    excelEndpoint="api/finance/transactions/report/trialbalance/excel/l3"
   />
 );
 
@@ -96,6 +101,7 @@ export const ThirdGroup = () => (
     selectorSelectedLabel="Selected L4 Codes"
     formValueKey="l4_code"
     reportEndpoint="api/finance/transactions/report/trailbalance/l4"
+    excelEndpoint="api/finance/transactions/report/trialbalance/excel/l4"
   />
 );
 
@@ -110,6 +116,8 @@ function TrailBalanceReports<T extends AnyRow>({
   selectorSelectedLabel = "Selected Items",
   formValueKey,
   reportEndpoint,
+  excelEndpoint,
+  excelFileName,
 }: ReportFilterPageProps<T>) {
   const { user } = useAuth();
 
@@ -256,8 +264,41 @@ function TrailBalanceReports<T extends AnyRow>({
       setReportLoading(false);
     }
   };
+  const handleExcel = async () => {
+    if (!excelEndpoint) return;
+    try {
+      const payload = {
+        company_code:   user?.company_code ?? "",
+        division_code:  form.division_code,
+        from_date:      form.from_date,
+        to_date:        form.to_date,
+        [formValueKey]: selectedRows.map((r) => r[selectorValueField]),
+      };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+      const response = await api.post(excelEndpoint, payload, {
+        responseType: 'arraybuffer',  
+      });
+
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', excelFileName || 'report.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url); 
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data ||
+        err?.message ||
+        'Failed to download Excel';
+      setReportError(String(msg));
+    }
+  }; 
   return (
     <>
       <section className="grid gap-4">
@@ -441,6 +482,7 @@ function TrailBalanceReports<T extends AnyRow>({
           title={title}
           Report={HtmlReportRenderer}
           required_values={{ html: reportHtml }}
+          excel={handleExcel}
           onClose={() => setReportHtml(null)}
         />
       )}
