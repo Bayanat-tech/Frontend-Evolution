@@ -55,6 +55,7 @@ import { TrainingFeedbackPage } from "../pages/hr/Hrtrainingfeedbackpage";
 import { Leaf } from "lucide-react";
 import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics";
 import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
+import ProfitLossPage from "../pages/accounts_report/ProfitLossPage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -182,6 +183,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Finance Allocated Invoice",
     match: ({ pathname }) => isAllocatedInvoiceRoute(pathname),
     element: () => <AllocatedInvoicePage />,
+  },
+  {
+    name : "Profit and Loss",
+    match: ({pathname}) => isProfitLossRoute(pathname),
+    element: () => <ProfitLossPage/>
   },
   {
     name: "WMS Inbound",
@@ -600,6 +606,11 @@ function isChequeDepositRoute(pathname: string) {
 function isAllocatedInvoiceRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/finance/accounts/transactions/allocated_invoice") || normalized.includes("/finance/accounts/transactions/allocated-invoice");
+}
+
+function isProfitLossRoute(pathname:string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/finance/finance/accounts_report/profit_and_loss/profit_and_loss")
 }
 
 function isWmsCountryRoute(pathname: string) {
