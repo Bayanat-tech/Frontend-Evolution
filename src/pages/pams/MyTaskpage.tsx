@@ -92,13 +92,12 @@ function computeFinalRating(
   charScore: number,
   weightage: ActiveWeightage | null
 ): number {
-  if (!weightage || !weightage.isHrDefined) {
-    // Default fallback: simple average (50/50)
-    return Math.round((taskScore + charScore) / 2);
+  if (weightage?.isHrDefined) {
+    // Active weightage hai → weighted formula
+    return Math.round((taskScore * weightage.taskPct / 100) + (charScore * weightage.charPct / 100));
   }
-  const tw = (taskScore * weightage.taskPct) / 100;
-  const cw = (charScore * weightage.charPct) / 100;
-  return Math.round(tw + cw);
+  // Koi active weightage nahi → old logic
+  return Math.round((taskScore + charScore) / 2);
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────

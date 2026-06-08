@@ -192,36 +192,36 @@ const S = {
     marginTop: "8px",
   },
   btnGroup: { display: "flex" as const, gap: "8px", flexWrap: "wrap" as const },
-  solidBtn: (color = "#E8F0FF"): React.CSSProperties => ({
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "6px",
-    padding: "6px 14px",
-    background: color,
-    color: "#082A89",
-    border: "none",
-    borderRadius: "5px",
-    fontSize: "12.5px",
-    fontWeight: 600,
-    cursor: "pointer",
-    whiteSpace: "nowrap" as const,
-    transition: "opacity 0.15s",
-  }),
-  outlineBtn: {
-    display: "inline-flex" as const,
-    alignItems: "center" as const,
-    gap: "5px",
-    padding: "6px 13px",
-    background: "#fff",
-    color: "#374151",
-    border: "1px solid #d1d5db",
-    borderRadius: "5px",
-    fontSize: "12.5px",
-    fontWeight: 500,
-    cursor: "pointer" as const,
-    whiteSpace: "nowrap" as const,
-    transition: "background 0.15s",
-  },
+ solidBtn: (color = "#E8F0FF"): React.CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+  padding: "6px 14px",
+  background: color,
+  color: "#082A89",
+  border: "none",
+  borderRadius: "5px",
+  fontSize: "12.5px",
+  fontWeight: 600,
+  cursor: "pointer",
+  whiteSpace: "nowrap" as const,
+  transition: "background 0.18s, transform 0.1s",  // ← sirf yeh badla
+}),
+outlineBtn: {
+  display: "inline-flex" as const,
+  alignItems: "center" as const,
+  gap: "5px",
+  padding: "6px 13px",
+  background: "#fff",
+  color: "#374151",
+  border: "1px solid #d1d5db",
+  borderRadius: "5px",
+  fontSize: "12.5px",
+  fontWeight: 500,
+  cursor: "pointer" as const,
+  whiteSpace: "nowrap" as const,
+  transition: "background 0.18s, transform 0.1s",  // ← sirf yeh badla
+},
   overlay: {
     position: "fixed" as const,
     inset: 0,
@@ -335,6 +335,7 @@ const S = {
     padding: "0 8px",
     lineHeight: 1,
   },
+  
 };
 
 // ─── Final Rating Chip ────────────────────────────────────────────────────────
@@ -720,42 +721,91 @@ const AppraisalViewTabsPage: React.FC = () => {
       </div>
 
       {/* ── Action buttons ── */}
-      <div style={S.btnRow}>
-        <div style={S.btnGroup}>
-          {showSaveSubmitButtons && (
-            <>
-              <button style={S.solidBtn()} onClick={() => void handleAction("D")}>
-                💾 Save as Draft
-              </button>
-              <button
-                style={S.solidBtn()}
-                onClick={() => {
-                  const missing = validateBeforeSubmit();
-                  if (missing.length > 0) {
-                    setNotice({ type: "warning", message: `Please fill before submitting: ${missing.join(" | ")}` });
-                    return;
-                  }
-                  void handleAction("S");
-                }}
-              >
-                ➤ Submit
-              </button>
-            </>
-          )}
-          {showApproveRejectButtons && (
-            <>
-              <button style={S.solidBtn("#E8F0FF")} onClick={() => void handleAction("A")}>✔️ Approve</button>
-              <button style={S.solidBtn("#E8F0FF")} onClick={() => void handleAction("R")}>✗ Reject</button>
-              <button style={S.solidBtn("#E8F0FF")} onClick={() => setSentBackPopup(true)}>↩ Send Back</button>
-            </>
-          )}
-        </div>
-        <div style={S.btnGroup}>
-          <button style={S.outlineBtn} onClick={() => setShowReportModal(true)}>🖨️ Print</button>
-          <button style={S.outlineBtn} disabled>📎 Attach</button>
-          <button style={S.outlineBtn} onClick={() => navigate(-1)}>🚪 Exit</button>
-        </div>
-      </div>
+      {/* ── Action buttons ── */}
+<div style={S.btnRow}>
+  <div style={S.btnGroup}>
+    {showSaveSubmitButtons && (
+      <>
+        <button
+          style={S.solidBtn()}
+          onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
+          onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
+          onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+          onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+          onClick={() => void handleAction("D")}
+        >
+          💾 Save as Draft
+        </button>
+        <button
+          style={S.solidBtn()}
+          onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
+          onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
+          onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+          onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+          onClick={() => {
+            const missing = validateBeforeSubmit();
+            if (missing.length > 0) {
+              setNotice({ type: "warning", message: `Please fill before submitting: ${missing.join(" | ")}` });
+              return;
+            }
+            void handleAction("S");
+          }}
+        >
+          ➤ Submit
+        </button>
+      </>
+    )}
+    {showApproveRejectButtons && (
+      <>
+        <button
+          style={S.solidBtn("#E8F0FF")}
+          onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
+          onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
+          onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+          onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+          onClick={() => void handleAction("A")}
+        >✔️ Approve</button>
+        <button
+          style={S.solidBtn("#E8F0FF")}
+          onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
+          onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
+          onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+          onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+          onClick={() => void handleAction("R")}
+        >✗ Reject</button>
+        <button
+          style={S.solidBtn("#E8F0FF")}
+          onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
+          onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
+          onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+          onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+          onClick={() => setSentBackPopup(true)}
+        >↩ Send Back</button>
+      </>
+    )}
+  </div>
+  <div style={S.btnGroup}>
+    <button
+      style={S.solidBtn("#E8F0FF")}
+          onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
+          onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
+          onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+          onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+      onClick={() => setShowReportModal(true)}
+    >🖨️ Print</button>
+    {/* <button style={S.outlineBtn} disabled>📎 Attach</button> */}
+    <button
+      style={S.solidBtn("#E8F0FF")}
+          onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
+          onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
+          onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+          onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+      onClick={() => navigate(-1)}
+    >🚪 Exit</button>
+  </div>
+</div>
+
+      
 
       {/* ── Sent Back Modal ── */}
       {sentBackPopup && (
