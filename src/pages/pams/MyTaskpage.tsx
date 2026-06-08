@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../state/AuthContext";
 import { pamsSelect, pamsDelete, pamsSave } from "../../api/pams";
-import { CheckCircle, Eye, Edit2, Trash2, X, Save } from "lucide-react";
+import { CheckCircle, Eye, Edit2, X, Save } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
@@ -30,6 +30,13 @@ interface FormData {
   APPRAISAL_TO: string;
   COMPANY_CODE: string;
   [key: string]: unknown;
+}
+
+// Active weightage config fetched from appraisal_weightage_list
+interface ActiveWeightage {
+  taskPct: number;
+  charPct: number;
+  isHrDefined: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -79,6 +86,20 @@ function normalizeRow(row: Row): Row {
   return normalized;
 }
 
+// ─── Compute final rating using active weightage ──────────────────────────────
+function computeFinalRating(
+  taskScore: number,
+  charScore: number,
+  weightage: ActiveWeightage | null
+): number {
+  if (weightage?.isHrDefined) {
+    // Active weightage hai → weighted formula
+    return Math.round((taskScore * weightage.taskPct / 100) + (charScore * weightage.charPct / 100));
+  }
+  // Koi active weightage nahi → old logic
+  return Math.round((taskScore + charScore) / 2);
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   const navigate     = useNavigate();
@@ -94,7 +115,10 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   const [notice,       setNotice]       = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
   const [query,        setQuery]        = useState("");
-  
+
+  // ── Active weightage config — fetched once on mount ────────────────────────
+  const [activeWeightage, setActiveWeightage] = useState<ActiveWeightage | null>(null);
+
   // Dialog state for Edit/View
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState(false);
@@ -118,6 +142,32 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   const currentTabRef = useRef(initialTab);
 
   const statusFilter = TAB_STATUS[activeTab];
+
+  // ── Fetch active weightage config ──────────────────────────────────────────
+  // This ensures Avg Score in the table uses the SAME formula as AppraiserCommentsTab
+  useEffect(() => {
+    if (!companyCode) return;
+    pamsSelect({ parameter: "appraisal_weightage_list", loginid, code1: companyCode })
+      .then((data) => {
+        const rows = data as unknown as Array<Record<string, unknown>>;
+        const active = rows?.find((r) => String(r.IS_ACTIVE) === "Y");
+        if (active) {
+          const taskPct = Number(active.TASK_PCT || 0);
+          const charPct = Number(active.CHARACTER_PCT || 0);
+          setActiveWeightage({
+            taskPct,
+            charPct,
+            isHrDefined: taskPct > 0 && charPct > 0,
+          });
+        } else {
+          // No active weightage — use default 50/50
+          setActiveWeightage({ taskPct: 50, charPct: 50, isHrDefined: false });
+        }
+      })
+      .catch(() => {
+        setActiveWeightage({ taskPct: 50, charPct: 50, isHrDefined: false });
+      });
+  }, [companyCode, loginid]);
 
   // Load periods and employees for lookup
   useEffect(() => {
@@ -151,7 +201,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       });
       const normalizedData = data.map(normalizeRow);
       setRows(normalizedData);
-      
+
       const initSelected: Record<string, boolean> = {};
       normalizedData.forEach((row) => {
         initSelected[text(row.APPRAISAL_DOC_NO)] = false;
@@ -176,13 +226,12 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     setQuery("");
   }, [activeTab]);
 
-    const openAppraisalTabsPage = (row: Row, mode: "view" | "edit" = "view") => {
+  const openAppraisalTabsPage = (row: Row, mode: "view" | "edit" = "view") => {
     const docNo = text(row.APPRAISAL_DOC_NO);
     const employeeCode = text(row.EMPLOYEE_CODE);
     const employeeName = encodeURIComponent(text(row.EMPLOYEE_NAME));
     const designation = encodeURIComponent(text(row.DESG_NAME));
     const department = encodeURIComponent(text(row.DEPT_NAME));
-    
     navigate(
       `/workspace/pams/appraisal/view/${docNo}?employee_code=${employeeCode}&employee_name=${employeeName}&designation=${designation}&department=${department}&mode=${mode}`
     );
@@ -260,12 +309,10 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
 
   const saveRecord = async () => {
     if (!editMode) return;
-    
     if (!formData.EMPLOYEE_CODE || !formData.PERIOD_NUMBER) {
       setNotice({ type: "error", message: "Employee and period are required" });
       return;
     }
-    
     setSaving(true);
     setNotice(null);
     try {
@@ -296,11 +343,11 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   const handleDelete = async (row: Row) => {
     if (!window.confirm("Are you sure you want to delete this appraisal?")) return;
     try {
-      await pamsDelete({ 
-        parameter: "delete_appraisal_hdr", 
-        loginid, 
-        code1: text(row.APPRAISAL_DOC_NO), 
-        code2: text(row.COMPANY_CODE) 
+      await pamsDelete({
+        parameter: "delete_appraisal_hdr",
+        loginid,
+        code1: text(row.APPRAISAL_DOC_NO),
+        code2: text(row.COMPANY_CODE)
       });
       setNotice({ type: "success", message: "Appraisal deleted successfully" });
       void fetchData(activeTab);
@@ -312,18 +359,18 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   // ── Bulk approve ───────────────────────────────────────────────────────────
   const handleBulkApprove = async () => {
     const ids = Object.entries(selectedRows).filter(([, v]) => v).map(([id]) => id);
-    if (!ids.length) { 
-      setNotice({ type: "warning", message: "Please select at least one appraisal!" }); 
-      return; 
+    if (!ids.length) {
+      setNotice({ type: "warning", message: "Please select at least one appraisal!" });
+      return;
     }
     try {
-      await pamsSelect({ 
-        parameter: "proc_update_pams_doc_status_bulk", 
-        loginid, 
-        code1: companyCode, 
-        code2: ids.join(","), 
-        code3: "A", 
-        code4: "" 
+      await pamsSelect({
+        parameter: "proc_update_pams_doc_status_bulk",
+        loginid,
+        code1: companyCode,
+        code2: ids.join(","),
+        code3: "A",
+        code4: ""
       });
       setNotice({ type: "success", message: "Appraisals approved successfully!" });
       setSelectedRows({});
@@ -340,13 +387,10 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
 
   const toggleSelectAll = (checked: boolean) => {
     const next: Record<string, boolean> = {};
-    rows.forEach((row) => {
-      next[text(row.APPRAISAL_DOC_NO)] = checked;
-    });
+    rows.forEach((row) => { next[text(row.APPRAISAL_DOC_NO)] = checked; });
     setSelectedRows(next);
   };
 
-  // Helper function to convert date to YYYY-MM-DD
   function dateToString(value: unknown): string {
     if (!value) return "";
     const d = new Date(String(value));
@@ -358,7 +402,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   const columns = useMemo<ColumnDef<Row>[]>(() => {
     const cols: ColumnDef<Row>[] = [];
 
-    // Appraisal Doc No column with Checkbox inside
     cols.push({
       accessorKey: "APPRAISAL_DOC_NO",
       header: "Appraisal Doc No",
@@ -366,49 +409,31 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       cell: ({ row }) => {
         const id = text(row.original.APPRAISAL_DOC_NO);
         if (!id) return null;
-
         return (
           <div
             onClick={(e) => {
-              if ((e.target as HTMLElement).tagName !== 'INPUT') {
-                // Open AppraisalViewTabsPage with tabs
+              if ((e.target as HTMLElement).tagName !== "INPUT") {
                 openAppraisalTabsPage(row.original, "view");
               }
             }}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis'
+              display: "flex", alignItems: "center", gap: "8px",
+              cursor: "pointer", whiteSpace: "nowrap",
+              overflow: "hidden", textOverflow: "ellipsis",
             }}
           >
             {isHRApprover && (
               <input
                 type="checkbox"
                 checked={!!selectedRows[id]}
-                onChange={(e) => {
-                  e.stopPropagation();
-                  toggleSelect(id, e.target.checked);
-                }}
-                style={{
-                  width: '16px',
-                  height: '16px',
-                  cursor: 'pointer',
-                  accentColor: '#082A89'
-                }}
+                onChange={(e) => { e.stopPropagation(); toggleSelect(id, e.target.checked); }}
+                style={{ width: "16px", height: "16px", cursor: "pointer", accentColor: "#082A89" }}
               />
             )}
             <span
               style={{
-                color: "#082A89",
-                fontWeight: 600,
-                fontSize: "0.82rem",
-                cursor: "pointer",
-                display: 'inline-block',
-                minWidth: 80
+                color: "#082A89", fontWeight: 600, fontSize: "0.82rem",
+                cursor: "pointer", display: "inline-block", minWidth: 80,
               }}
               onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
               onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
@@ -457,124 +482,105 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       },
     });
 
-    // cols.push({
-    //   accessorKey: "APPRAISAL_FROM",
-    //   header: "From",
-    //   size: 110,
-    //   cell: ({ row }) => fmtDate(row.original.APPRAISAL_FROM),
-    // });
+    cols.push({
+      accessorKey: "PERIOD_RANGE",
+      header: "Period Range",
+      size: 210,
+      cell: ({ row }) => {
+        const from = fmtDate(row.original.APPRAISAL_FROM);
+        const to   = fmtDate(row.original.APPRAISAL_TO);
+        if (from === "NA" && to === "NA") return <span style={{ color: "#9ca3af" }}>—</span>;
+        return (
+          <span style={{ whiteSpace: "nowrap", fontSize: "0.8rem" }}>
+            <span style={{ color: "#374151" }}>{from}</span>
+            <span style={{ color: "#9ca3af", margin: "0 4px" }}>→</span>
+            <span style={{ color: "#374151" }}>{to}</span>
+          </span>
+        );
+      },
+    });
 
-    // cols.push({
-    //   accessorKey: "APPRAISAL_TO",
-    //   header: "To",
-    //   size: 110,
-    //   cell: ({ row }) => fmtDate(row.original.APPRAISAL_TO),
-    // });
+    // ── Avg Score ─────────────────────────────────────────────────────────────
+    // DB SP (Trn_appraisal) ab TASK_TOTAL + CHAR_TOTAL return karta hai
+    // VW_KPI_APPRAISAL_DATA se per-appraisal scores.
+    // Client-side activeWeightage se recompute → same formula as AppraiserCommentsTab.
+    cols.push({
+      accessorKey: "FINAL_RATING",
+      header: "Avg Score",
+      size: 110,
+      cell: ({ row }) => {
+        // Direct se DB fields use karo — SP ne TASK_TOTAL aur CHAR_TOTAL diye hain
+        const taskScore = Number(row.original.TASK_TOTAL ?? row.original.task_total ?? 0);
+        const charScore = Number(row.original.CHAR_TOTAL ?? row.original.char_total ?? 0);
+
+        let avg: number;
+        if (taskScore > 0 || charScore > 0) {
+          // Recompute using active weightage — same formula as AppraiserCommentsTab
+          avg = computeFinalRating(taskScore, charScore, activeWeightage);
+        } else {
+          // Fallback: TASK_TOTAL still 0 means no ratings given yet → show FINAL_RATING from DB
+          avg = Math.round(Number(row.original.FINAL_RATING || 0));
+        }
+
+        if (!avg) return <span style={{ color: "#9ca3af" }}>—</span>;
+
+        let bg = "#f3f4f6", color = "#374151", border = "#d1d5db";
+        if (avg >= 5)      { bg = "#e8f0fe"; color = "#0a6640"; border = "#b3caf5"; }
+        else if (avg >= 4) { bg = "#e6f9f0"; color = "#0e0ed1"; border = "#b7ebd4"; }
+        else if (avg >= 3) { bg = "#f3e8fe"; color = "#6b21a8"; border = "#d9b3f5"; }
+        else if (avg >= 2) { bg = "#fff4e5"; color = "#0e9289"; border = "#fcd38a"; }
+        else if (avg >= 1) { bg = "#fdecea"; color = "#d80a0a"; border = "#f5b3b3"; }
+
+        return (
+          <span style={{
+            display: "inline-block", padding: "2px 12px", borderRadius: "999px",
+            fontSize: "0.75rem", fontWeight: 700,
+            background: bg, color, border: `1px solid ${border}`,
+          }}>
+            {avg}
+          </span>
+        );
+      },
+    });
 
     cols.push({
-  accessorKey: "PERIOD_RANGE",
-  header: "Period Range",
-  size: 210,
-  cell: ({ row }) => {
-    const from = fmtDate(row.original.APPRAISAL_FROM);
-    const to   = fmtDate(row.original.APPRAISAL_TO);
-    if (from === "NA" && to === "NA") return <span style={{ color: "#9ca3af" }}>—</span>;
-    return (
-      <span style={{ whiteSpace: "nowrap", fontSize: "0.8rem" }}>
-        <span style={{ color: "#374151" }}>{from}</span>
-        <span style={{ color: "#9ca3af", margin: "0 4px" }}>→</span>
-        <span style={{ color: "#374151" }}>{to}</span>
-      </span>
-    );
-  },
-});
+      accessorKey: "NEXT_ACTION_BY",
+      header: "Next Action By",
+      size: 190,
+      cell: ({ row }) => {
+        const code = text(row.original.NEXT_ACTION_BY);
+        const name = text(row.original.NEXT_ACTION_BY_NAME);
+        if (!code) return <span style={{ color: "#9ca3af" }}>—</span>;
+        return (
+          <span style={{ fontWeight: 500, whiteSpace: "nowrap" }}>
+            {code} {name ? `- ${name}` : ""}
+          </span>
+        );
+      },
+    });
 
-    // ── Avg Score — uses FINAL_RATING from VW_EMPLOYEE_FINAL_RATING ──────────────
-cols.push({
-  accessorKey: "FINAL_RATING",
-  header: "Avg Score",
-  size: 110,
-  cell: ({ row }) => {
-    const avg = Math.round(Number(row.original.FINAL_RATING || 0));
-    if (!avg) return <span style={{ color: "#9ca3af" }}>—</span>;
-
-    let bg = "#f3f4f6", color = "#374151", border = "#d1d5db";
-    if (avg >= 5)      { bg = "#e8f0fe"; color = "#1a4fa0"; border = "#b3caf5"; }
-    else if (avg >= 4) { bg = "#e6f9f0"; color = "#0a6640"; border = "#b7ebd4"; }
-    else if (avg >= 3) { bg = "#f3e8fe"; color = "#6b21a8"; border = "#d9b3f5"; }
-    else if (avg >= 2) { bg = "#fff4e5"; color = "#92400e"; border = "#fcd38a"; }
-    else if (avg >= 1) { bg = "#fdecea"; color = "#a01a1a"; border = "#f5b3b3"; }
-
-    return (
-      <span style={{
-        display: "inline-block",
-        padding: "2px 12px",
-        borderRadius: "999px",
-        fontSize: "0.75rem",
-        fontWeight: 700,
-        background: bg, color,
-        border: `1px solid ${border}`,
-      }}>
-        {avg}
-      </span>
-    );
-  },
-});
-
-// ── Next Action By ────────────────────────────────────────────────────────────
-cols.push({
-  accessorKey: "NEXT_ACTION_BY",
-  header: "Next Action By",
-  size: 190,
-  cell: ({ row }) => {
-    const code = text(row.original.NEXT_ACTION_BY);
-    const name = text(row.original.NEXT_ACTION_BY_NAME);
-
-    if (!code) {
-      return <span style={{ color: "#9ca3af" }}>—</span>;
-    }
-
-    return (
-      <span style={{ fontWeight: 500, whiteSpace: "nowrap" }}>
-        {code} {name ? `- ${name}` : ""}
-      </span>
-    );
-  },
-});
-
-// ── Sent Back Remarks — only meaningful on SENT BACK tab ─────────────────────
-cols.push({
-  accessorKey: "SENT_BACK_REASON",
-  header: "Sent Back Remarks",
-  size: 230,
-  cell: ({ row }) => {
-    const reason = text(row.original.SENT_BACK_REASON);
-    const by     = text(row.original.SENT_BACK_BY);
-    if (!reason) return <span style={{ color: "#9ca3af" }}>—</span>;
-    return (
-      <div style={{ lineHeight: 1.4 }}>
-        <div
-          title={reason}
-          style={{
-            maxWidth: "210px",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            fontSize: "0.8rem",
-            fontWeight: 500,
-          }}
-        >
-          {reason}
-        </div>
-        {by && (
-          <div style={{ fontSize: "0.7rem", color: "#9ca3af", marginTop: "2px" }}>
-            by {by}
+    cols.push({
+      accessorKey: "SENT_BACK_REASON",
+      header: "Sent Back Remarks",
+      size: 230,
+      cell: ({ row }) => {
+        const reason = text(row.original.SENT_BACK_REASON);
+        const by     = text(row.original.SENT_BACK_BY);
+        if (!reason) return <span style={{ color: "#9ca3af" }}>—</span>;
+        return (
+          <div style={{ lineHeight: 1.4 }}>
+            <div title={reason} style={{
+              maxWidth: "210px", overflow: "hidden",
+              textOverflow: "ellipsis", whiteSpace: "nowrap",
+              fontSize: "0.8rem", fontWeight: 500,
+            }}>
+              {reason}
+            </div>
+            {by && <div style={{ fontSize: "0.7rem", color: "#9ca3af", marginTop: "2px" }}>by {by}</div>}
           </div>
-        )}
-      </div>
-    );
-  },
-});
+        );
+      },
+    });
 
     cols.push({
       accessorKey: "LAST_ACTION",
@@ -588,15 +594,9 @@ cols.push({
         );
         return (
           <span style={{
-            display: "inline-block",
-            padding: "2px 10px",
-            borderRadius: "999px",
-            fontSize: "0.7rem",
-            fontWeight: 700,
-            whiteSpace: "nowrap",
-            background: status.bg,
-            color: status.color,
-            border: `1px solid ${status.border}`,
+            display: "inline-block", padding: "2px 10px", borderRadius: "999px",
+            fontSize: "0.7rem", fontWeight: 700, whiteSpace: "nowrap",
+            background: status.bg, color: status.color, border: `1px solid ${status.border}`,
           }}>
             {status.label || "—"}
           </span>
@@ -604,7 +604,7 @@ cols.push({
       },
     });
 
-    // Actions column with Edit and View only (no Delete)
+    // Actions column — Edit + View only (no Delete per original spec)
     cols.push({
       id: "actions",
       header: "Actions",
@@ -612,18 +612,14 @@ cols.push({
       cell: ({ row }) => (
         <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
           <Button
-            size="sm"
-            variant="ghost"
-            title="Edit"
+            size="sm" variant="ghost" title="Edit"
             onClick={() => openEditDialog(row.original)}
             style={{ padding: "4px", height: "28px", width: "28px" }}
           >
             <Edit2 size={14} />
           </Button>
           <Button
-            size="sm"
-            variant="ghost"
-            title="View"
+            size="sm" variant="ghost" title="View"
             onClick={() => openViewDialog(row.original)}
             style={{ padding: "4px", height: "28px", width: "28px" }}
           >
@@ -634,7 +630,7 @@ cols.push({
     });
 
     return cols;
-  }, [isHRApprover, selectedRows]);
+  }, [isHRApprover, selectedRows, activeWeightage]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -658,17 +654,14 @@ cols.push({
             key={index}
             onClick={() => handleTabChange(index)}
             style={{
-              padding: "8px 20px",
-              fontSize: "14px",
+              padding: "8px 20px", fontSize: "14px",
               fontWeight: activeTab === index ? 700 : 500,
               color: activeTab === index ? "#082A89" : "#6b7280",
               background: activeTab === index ? "#f0f4ff" : "transparent",
               border: "none",
               borderBottom: activeTab === index ? "2px solid #082A89" : "2px solid transparent",
-              borderRadius: "8px 8px 0 0",
-              cursor: "pointer",
-              marginBottom: "-2px",
-              whiteSpace: "nowrap",
+              borderRadius: "8px 8px 0 0", cursor: "pointer",
+              marginBottom: "-2px", whiteSpace: "nowrap",
             }}
           >
             {label}
@@ -683,12 +676,7 @@ cols.push({
             type="checkbox"
             checked={rows.length > 0 && rows.every((row) => selectedRows[text(row.APPRAISAL_DOC_NO)])}
             onChange={(e) => toggleSelectAll(e.target.checked)}
-            style={{
-              width: '16px',
-              height: '16px',
-              cursor: 'pointer',
-              accentColor: '#082A89'
-            }}
+            style={{ width: "16px", height: "16px", cursor: "pointer", accentColor: "#082A89" }}
           />
           <span style={{ fontSize: "12px", color: "#6b7280" }}>
             Select All ({rows.length} records)
@@ -724,7 +712,7 @@ cols.push({
         </div>
       )}
 
-      {/* Edit/View Dialog with LookupField */}
+      {/* Edit/View Dialog */}
       <Dialog
         open={dialogOpen}
         wide
@@ -753,28 +741,15 @@ cols.push({
               </div>
             </CardHeader>
             <CardContent className="grid max-w-full grid-cols-1 gap-3 pt-4 lg:grid-cols-2">
-              {/* Appraisal Doc No */}
               <div className="field">
                 <span>Appraisal Doc No</span>
-                <Input 
-                  disabled 
-                  value={formData.APPRAISAL_DOC_NO || "Auto generated"} 
-                  onChange={() => {}} 
-                />
+                <Input disabled value={formData.APPRAISAL_DOC_NO || "Auto generated"} onChange={() => {}} />
               </div>
-
-              {/* Appraisal Doc Date */}
               <div className="field">
                 <span>Appraisal Doc Date</span>
-                <Input 
-                  disabled={viewMode} 
-                  type="date" 
-                  value={formData.APPRAISAL_DOC_DATE} 
-                  onChange={(e) => updateFormField("APPRAISAL_DOC_DATE", e.target.value)} 
-                />
+                <Input disabled={viewMode} type="date" value={formData.APPRAISAL_DOC_DATE}
+                  onChange={(e) => updateFormField("APPRAISAL_DOC_DATE", e.target.value)} />
               </div>
-
-              {/* Employee LookupField */}
               <div className="min-w-0 lg:col-span-2">
                 <div className="field">
                   <span>Employee <strong className="text-destructive">*</strong></span>
@@ -798,8 +773,6 @@ cols.push({
                   />
                 </div>
               </div>
-
-              {/* Period Number */}
               <div className="field">
                 <span>Period Number <strong className="text-destructive">*</strong></span>
                 <select
@@ -816,14 +789,10 @@ cols.push({
                   ))}
                 </select>
               </div>
-
-              {/* Appraisal From */}
               <div className="field">
                 <span>Appraisal From</span>
                 <Input disabled type="date" value={formData.APPRAISAL_FROM} onChange={() => {}} />
               </div>
-
-              {/* Appraisal To */}
               <div className="field">
                 <span>Appraisal To</span>
                 <Input disabled type="date" value={formData.APPRAISAL_TO} onChange={() => {}} />
