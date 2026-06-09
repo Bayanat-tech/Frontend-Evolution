@@ -70,6 +70,7 @@ export type DynamicMutationParams = {
   val1s31?: string;
   val1s32?: string;
   val1s33?: string;
+  val1s90?: string;
 
   val1n1?: number;
   val1n2?: number;
