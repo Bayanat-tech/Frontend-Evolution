@@ -44,7 +44,6 @@ import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrP
 import { ApplicationProgressPage } from "../pages/applicationProgress/ApplicationProgressPage";
 import {
   OxAssetInventoryPage,
-  OxInspectionFormPage,
   OxInspectionReportPage,
   OxMaintDashboard,
   OxSimpleMasterPage,
@@ -58,6 +57,7 @@ import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
 import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
 import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseReport";
 import { AcGroup, FirstGroup, SecondGroup, ThirdGroup } from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
+import InspectionFormPage from "../pages/oxmaint/inspection_form/InspectionFormMainPage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -867,7 +867,7 @@ function getOxMaintElement(context: WorkspaceRouteContext) {
   const compact = matchText.replace(/[^a-z0-9]/g, "");
   if (compact.includes("assetinventory")) return <OxAssetInventoryPage />;
   if (compact.includes("inspectionreport")) return <OxInspectionReportPage />;
-  if (compact.includes("inspectionform")) return <OxInspectionFormPage />;
+  if (compact.includes("inspectionform")) return <InspectionFormPage />;
   if (compact.includes("assettype")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.assetType} />;
   if (compact.includes("siteproject")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.siteProject} />;
   if (compact.includes("status") || matchText.includes("/status")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.status} />;
