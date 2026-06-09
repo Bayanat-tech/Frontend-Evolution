@@ -3,7 +3,6 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { executeDynamicDelete, executeDynamicMutation, getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
@@ -94,7 +93,6 @@ export function BudgetVersionPage() {
     { accessorKey: "budget_year", header: "Year" },
     { accessorKey: "div_code", header: "Division" },
     { accessorKey: "version", header: "Version" },
-    { accessorKey: "user_id", header: "User" },
     {
       accessorKey: "remarks",
       header: "Remarks",
@@ -123,8 +121,7 @@ export function BudgetVersionPage() {
         code1: deleteTarget.company_code,
         code2: deleteTarget.doc_type,
         code3: deleteTarget.budget_year,
-        code4: deleteTarget.div_code,
-        code5: deleteTarget.version,
+        code4: deleteTarget.version,
       });
       setDeleteTarget(null);
       setNotice({ type: "success", message: "Budget version deleted successfully" });
@@ -149,36 +146,39 @@ export function BudgetVersionPage() {
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-      <div className="grid min-h-[620px] grid-cols-[minmax(0,1fr)_390px] gap-4 max-xl:grid-cols-1">
-        <DataTable
-          columns={columns}
-          data={filteredRows}
-          title={loading ? "Loading" : `${filteredRows.length} Records`}
-          subtitle="Versions"
-          searchValue={query}
-          onSearchChange={setQuery}
-          searchPlaceholder="Search budget version..."
-          loading={loading}
-          emptyText="No budget versions found"
-          height={590}
-          density="grid"
-          getRowId={(row, index) => `${row.company_code}_${row.doc_type}_${row.budget_year}_${row.div_code}_${row.version}_${index}`}
-        />
+      <DataTable
+        columns={columns}
+        data={filteredRows}
+        title={loading ? "Loading" : `${filteredRows.length} Records`}
+        subtitle="Versions"
+        searchValue={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="Search budget version..."
+        loading={loading}
+        emptyText="No budget versions found"
+        height={670}
+        density="grid"
+        getRowId={(row, index) => `${row.company_code}_${row.doc_type}_${row.budget_year}_${row.div_code}_${row.version}_${index}`}
+      />
 
-        <Card className="overflow-hidden">
-          {editor ? (
-            <BudgetVersionEditor editor={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); setNotice({ type: "success", message: editor.mode === "edit" ? "Budget version updated successfully" : "Budget version added successfully" }); await loadRows(false); }} />
-          ) : (
-            <div className="grid min-h-[620px] place-items-center p-8 text-center text-muted-foreground">
-              <div>
-                <p className="eyebrow">No Form Open</p>
-                <h2 className="m-0 text-lg font-semibold text-foreground">Select a record or add one</h2>
-                <p className="mt-2 text-sm">The form opens here so your list stays visible.</p>
-              </div>
-            </div>
-          )}
-        </Card>
-      </div>
+      {editor && (
+        <Dialog
+          open
+          title={`${editor.mode === "create" ? "Create" : editor.mode === "edit" ? "Edit" : "View"} Budget Version`}
+          description="Budget version details"
+          onClose={() => setEditor(null)}
+        >
+          <BudgetVersionEditor
+            editor={editor}
+            onClose={() => setEditor(null)}
+            onSaved={async () => {
+              setEditor(null);
+              setNotice({ type: "success", message: editor.mode === "edit" ? "Budget version updated successfully" : "Budget version added successfully" });
+              await loadRows(false);
+            }}
+          />
+        </Dialog>
+      )}
 
       {deleteTarget && (
         <Dialog
@@ -206,6 +206,9 @@ function BudgetVersionEditor({ editor, onClose, onSaved }: { editor: Exclude<Edi
   const { user } = useAuth();
   const readOnly = editor.mode === "view";
   const isEdit = editor.mode === "edit";
+
+  const originalRow = editor.row;
+
   const [form, setForm] = useState<BudgetVersionRow>(() => ({
     ...EMPTY_ROW,
     company_code: user?.company_code || "",
@@ -242,11 +245,11 @@ function BudgetVersionEditor({ editor, onClose, onSaved }: { editor: Exclude<Edi
         val1s8: "",
         val1s9: "",
         val1s10: "",
-        val1d1: form.user_dt || null,
-        wval1s1: isEdit ? "" : form.company_code,
-        wval1s2: "",
-        wval1s3: "",
-        wval1s4: "",
+        val1d1: null,
+        wval1s1: isEdit ? originalRow!.company_code : form.company_code,
+        wval1s2: isEdit ? originalRow!.doc_type : "",
+        wval1s3: isEdit ? originalRow!.budget_year : "",
+        wval1s4: isEdit ? originalRow!.version : "",
         wval1s5: "",
       } as Parameters<typeof executeDynamicMutation>[0]);
       await onSaved();
@@ -258,30 +261,25 @@ function BudgetVersionEditor({ editor, onClose, onSaved }: { editor: Exclude<Edi
   };
 
   return (
-    <div className="flex min-h-[620px] flex-col">
-      <div className="border-b p-4">
+    <div className="flex min-h-[480px] flex-col">
+      <div className="border-b pb-3">
         <p className="eyebrow">{editor.mode === "create" ? "Create" : editor.mode === "edit" ? "Modify" : "View"}</p>
         <h2 className="m-0 text-xl font-semibold tracking-tight">Budget Version</h2>
       </div>
-      <form className="grid flex-1 content-start gap-4 overflow-auto p-4" id="budget-version-form" onSubmit={handleSubmit}>
+      <form className="grid flex-1 content-start gap-4 overflow-auto py-4" id="budget-version-form" onSubmit={handleSubmit}>
         {error && <div className="alert error">{error}</div>}
-        {isEdit && (
-          <div className="rounded-md border bg-secondary/40 p-3 text-xs text-muted-foreground">
-            Document Type, Budget Year, Division and Version are record keys. To change those values, create a new version and delete the old one.
-          </div>
-        )}
-        <Field label="Document Type" value={form.doc_type} onChange={(value) => setField("doc_type", value)} disabled={readOnly || isEdit} />
-        <Field label="Budget Year" value={form.budget_year} onChange={(value) => setField("budget_year", value)} disabled={readOnly || isEdit} />
-        <Field label="Division Code" value={form.div_code} onChange={(value) => setField("div_code", value)} disabled={readOnly || isEdit} />
-        <Field label="Version" value={form.version} onChange={(value) => setField("version", value)} disabled={readOnly || isEdit} />
-        <Field label="User ID" value={form.user_id} onChange={(value) => setField("user_id", value)} disabled />
-        <Field label="User Date" type="date" value={dateInput(form.user_dt)} onChange={(value) => setField("user_dt", value)} disabled={readOnly} />
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Document Type" value={form.doc_type} onChange={(value) => setField("doc_type", value)} disabled={readOnly} />
+          <Field label="Budget Year" value={form.budget_year} onChange={(value) => setField("budget_year", value)} disabled={readOnly} />
+          <Field label="Division Code" value={form.div_code} onChange={(value) => setField("div_code", value)} disabled={readOnly} />
+          <Field label="Version" value={form.version} onChange={(value) => setField("version", value)} disabled={readOnly} />
+        </div>
         <label className="field">
           <span>Remarks</span>
           <textarea className="ui-textarea" value={form.remarks} onChange={(event) => setField("remarks", event.target.value)} disabled={readOnly} />
         </label>
       </form>
-      <div className="flex items-center justify-end gap-2 border-t bg-card p-4">
+      <div className="flex items-center justify-end gap-2 border-t bg-card pt-4">
         <Button variant="outline" onClick={onClose}>Close</Button>
         {!readOnly && <Button disabled={saving} type="submit" form="budget-version-form">{saving ? <span className="spinner small" /> : "Save"}</Button>}
       </div>
@@ -308,7 +306,7 @@ function mapBudgetVersion(row: LookupRow): BudgetVersionRow {
     user_id: String(getLookupValue(row, "user_id") || ""),
     user_dt: String(getLookupValue(row, "user_dt") || ""),
     remarks: String(getLookupValue(row, "remarks") || ""),
-  };
+  };  
 }
 
 function dateInput(value: unknown) {

@@ -103,6 +103,7 @@ export function makeColumns(
   columns: { key: string; label: string; size?: number }[],
   selectable = false,
   onEdit?: (row: WmsRow) => void,
+  onDelete?: (row: WmsRow) => void,
 ): ColumnDef<WmsRow>[] {
   const cols: ColumnDef<WmsRow>[] = columns.map((col) => ({
     accessorKey: col.key,
@@ -111,19 +112,37 @@ export function makeColumns(
     cell:        ({ row }) => formatCellValue(row.original, col.key),
   }));
 
-  if (onEdit) {
+  if (onEdit || onDelete) {
     cols.push({
-      id:                "actions",
-      header:            "",
-      size:              60,
+      id:                 "actions",
+      header:             "",
+      size:               80,
       enableColumnFilter: false,
       cell: ({ row }) => (
-        <button
-          className="rounded px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
-          onClick={() => onEdit(row.original)}
-        >
-          Edit
-        </button>
+        <div className="flex items-center gap-1">
+          {onEdit && (
+            <button
+              className="rounded p-1 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
+              title="Edit"
+              onClick={() => onEdit(row.original)}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+          )}
+          {onDelete && (
+            <button
+              className="rounded p-1 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors"
+              title="Delete"
+              onClick={() => onDelete(row.original)}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              </svg>
+            </button>
+          )}
+        </div>
       ),
     });
   }
@@ -171,12 +190,35 @@ export function recalcQuantity(
 }
 
 export function stripUiFields(form: WmsRow): WmsRow {
+  // 1. lowercase all keys (handles uppercase DB response keys)
+  const lowercased = Object.fromEntries(
+    Object.entries(form).map(([k, v]) => [k.toLowerCase(), v])
+  );
+
+  // 2. strip UI-only / computed fields
   const {
     uom_count,
     prod_code_display,
     country_origin_display,
     manufacturer_display,
+    qty_string,
+    qty_arrived_string,
+    qty_netarrived_string,
+    qty_tally_string,
+    qty_confirm_string,
+    receive_qty_string,
+    net_receive_string,
+    prod_name,
+    allocated,
+    clearance,
+    selected,
+    updated_at,
+    updated_by,
+    created_at,
+    created_by,
+    packdet_no,
     ...payload
-  } = form;
+  } = lowercased;
+
   return payload;
 }
