@@ -55,13 +55,14 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
     () => Array.from(new Set(screenOptions.map((screen) => String(screen.app_code ?? "")).filter(Boolean))).sort().map((appCode) => ({ app_code: appCode })),
     [screenOptions],
   );
+  const assignableScreens = useMemo(() => getAssignableScreens(screenOptions), [screenOptions]);
   const filteredScreens = useMemo(
-    () => screenOptions.filter((screen) => !selectedApp || String(screen.app_code ?? "") === selectedApp),
-    [screenOptions, selectedApp],
+    () => assignableScreens.filter((screen) => !selectedApp || String(screen.app_code ?? "") === selectedApp),
+    [assignableScreens, selectedApp],
   );
   const selectedScreenRow = useMemo(
-    () => screenOptions.find((screen) => String(screen.serial_no ?? "") === selectedScreen),
-    [screenOptions, selectedScreen],
+    () => assignableScreens.find((screen) => String(screen.serial_no ?? "") === selectedScreen),
+    [assignableScreens, selectedScreen],
   );
   const selectedPrincipalRow = useMemo(
     () => principalOptions.find((option) => String(option[isRoleMode ? "role_id" : "loginid"] ?? "") === selectedPrincipal),
@@ -245,7 +246,7 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,340px)]">
         <Card className="overflow-hidden">
           <CardHeader className="border-b">
             <div>
@@ -291,23 +292,23 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0 overflow-hidden">
           <CardHeader>
             <div>
               <p className="eyebrow">Summary</p>
               <h2 className="m-0 text-base font-semibold">Selected Access</h2>
             </div>
           </CardHeader>
-          <CardContent className="grid gap-3 text-sm">
+          <CardContent className="grid min-w-0 gap-3 text-sm">
             <SummaryRow label={principalLabel} value={selectedPrincipalRow ? formatPrincipal(selectedPrincipalRow, isRoleMode) : "Not selected"} />
             <SummaryRow label="App" value={selectedApp || String(selectedScreenRow?.app_code ?? "All")} />
             <SummaryRow label="Screen" value={selectedScreenRow ? String(selectedScreenRow.level3 || selectedScreenRow.level2 || selectedScreenRow.level1 || selectedScreenRow.serial_no) : "Not selected"} />
             <SummaryRow label="Company" value={String(selectedScreenRow?.company_code || user?.company_code || "")} />
             <div className="mt-2 grid gap-2">
-              <Button disabled={!canLoadPermissions || saving || permissionLoading} onClick={saveAccess}>
+              <Button className="w-full justify-center" disabled={!canLoadPermissions || saving || permissionLoading} onClick={saveAccess}>
                 <Save size={15} /> {saving ? "Saving..." : "Save Access"}
               </Button>
-              <Button disabled={!hasExisting || saving} variant="destructive" onClick={deleteAccess}>
+              <Button className="w-full justify-center" disabled={!hasExisting || saving} variant="destructive" onClick={deleteAccess}>
                 <Trash2 size={15} /> Delete Access
               </Button>
             </div>
@@ -366,9 +367,9 @@ function buildDeletePayload(mode: "role" | "user", selectedPrincipal: string, se
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border bg-muted/20 p-2">
+    <div className="min-w-0 rounded-md border bg-muted/20 p-2">
       <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{label}</div>
-      <div className="mt-1 truncate font-semibold text-foreground" title={value}>{value}</div>
+      <div className="mt-1 break-words text-[13px] font-semibold leading-snug text-foreground" title={value}>{value}</div>
     </div>
   );
 }
@@ -567,4 +568,39 @@ function formatPrincipal(row: OptionRow, isRoleMode: boolean) {
 
 function formatScreen(row: OptionRow) {
   return [row.serial_no, row.level3 || row.level2 || row.level1].filter(Boolean).join(" - ");
+}
+
+function getAssignableScreens(rows: OptionRow[]) {
+  const level3Parents = new Set(
+    rows
+      .filter((row) => hasText(row.level3))
+      .map((row) => menuLevelKey(row.app_code, row.level1, row.level2)),
+  );
+  const bySerial = new Map<string, OptionRow>();
+
+  rows.forEach((row) => {
+    const serialNo = String(row.serial_no ?? "").trim();
+    if (!serialNo) return;
+
+    const hasLevel3 = hasText(row.level3);
+    const isLeafLevel2 = hasText(row.level2) && !hasLevel3 && !level3Parents.has(menuLevelKey(row.app_code, row.level1, row.level2));
+    if (hasLevel3 || isLeafLevel2) {
+      bySerial.set(serialNo, row);
+    }
+  });
+
+  return Array.from(bySerial.values()).sort((left, right) => {
+    const leftSerial = Number(left.serial_no);
+    const rightSerial = Number(right.serial_no);
+    if (Number.isFinite(leftSerial) && Number.isFinite(rightSerial)) return leftSerial - rightSerial;
+    return String(left.serial_no ?? "").localeCompare(String(right.serial_no ?? ""));
+  });
+}
+
+function hasText(value: unknown) {
+  return String(value ?? "").trim().length > 0;
+}
+
+function menuLevelKey(...parts: unknown[]) {
+  return parts.map((part) => String(part ?? "").trim().toLowerCase()).join("||");
 }
