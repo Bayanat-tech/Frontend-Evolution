@@ -58,6 +58,8 @@ import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
 import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
 import { AcGroup, FirstGroup, SecondGroup, ThirdGroup } from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
 import { RJVDocumentEditor } from "../pages/finance/RJVDocuments";
+import { AlmsSimpleMasterConfigs } from "../pages/almswf/almsMasterConfig";
+import { AlmsSimpleMasterPage } from "../pages/almswf/AlmsMasterPage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -230,6 +232,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "WMS Simple Master",
     match: ({ pathname }) => Boolean(getWmsSimpleMasterConfig(pathname)),
     element: ({ pathname }) => <WmsSimpleMasterPage config={getWmsSimpleMasterConfig(pathname)!} />,
+  },
+    {
+    name: "ALMS Simple Master",
+    match: ({ pathname }) => Boolean(getAlmsSimpleMasterConfig(pathname)),
+    element: ({ pathname }) => <AlmsSimpleMasterPage config={getAlmsSimpleMasterConfig(pathname)!} />,
   },
   {
     name: "Security Operation Access",
@@ -682,6 +689,15 @@ function getWmsSimpleMasterConfig(pathname: string) {
   const normalized = pathname.toLowerCase();
   if (!normalized.includes("/wms/")) return null;
   const matches = Object.values(wmsSimpleMasterConfigs)
+    .flatMap((config) => (config.routeKeys || [config.master]).map((key) => ({ config, key: key.toLowerCase() })))
+    .sort((a, b) => b.key.length - a.key.length);
+  return matches.find(({ key }) => normalized.includes(`/${key}`) || normalized.includes(`/${key.replace(/_/g, "-")}`))?.config || null;
+}
+
+function getAlmsSimpleMasterConfig(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  if (!normalized.includes("/almswf/")) return null;
+  const matches = Object.values(AlmsSimpleMasterConfigs)
     .flatMap((config) => (config.routeKeys || [config.master]).map((key) => ({ config, key: key.toLowerCase() })))
     .sort((a, b) => b.key.length - a.key.length);
   return matches.find(({ key }) => normalized.includes(`/${key}`) || normalized.includes(`/${key.replace(/_/g, "-")}`))?.config || null;
