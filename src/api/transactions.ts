@@ -561,6 +561,59 @@ export async function openAccountPayeeWiseReport(params: ReportParams) {
         params
     );
 }
+// -------Ageing Report----------------------
+export async function openInvdatewiseDetailReport(params: ReportParams) {
+    await openReportInTab(
+       `/api/finance/transactions/reports/InvdatewiseDetail/html`,
+        params
+    );
+}
+
+export async function openInvdatewiseSummaryReport(params: ReportParams) {
+    await openReportInTab(
+        `/api/finance/transactions/reports/InvdatewiseSummary/html`,
+        params
+    );
+}
+
+export async function openDuedatewiseDetailReport(params: ReportParams)
+{
+  await openReportInTab(
+
+    `/api/finance/transactions/reports/DuedatewiseDetail/html`,
+    params
+  )
+}
+
+export async function openDuedatewiseSummaryReport(params: ReportParams) {
+    await openReportInTab(
+        "/api/finance/transactions/reports/DuedatewiseSummary/html",
+        params
+    );
+}
+
+export async function openOutstandingListReport(params: ReportParams) {
+    await openReportInTab(
+        "/api/finance/transactions/reports/OutstandingList/html",
+        params
+    );
+}
+
+
+
+// export const openInvdatewiseDetailReport = async (params: any): Promise<void> => {
+//     const response = await fetch("/api/finance/transactions/reports/InvdatewiseDetail/html", {
+//         method: "POST",
+//         headers: { "Content-Type": "application/json" },
+//         body: JSON.stringify(params),
+//     });
+//     if (!response.ok) throw new Error(`Report failed: ${response.statusText}`);
+//     const html = await response.text();
+//     const win = window.open("", "_blank");
+//     if (win) { win.document.write(html); win.document.close(); }
+// };
+
+
 
 export async function downloadDocumentReportExcel(docType: TransactionType | string, docNo: string) {
   if (!docNo) return;

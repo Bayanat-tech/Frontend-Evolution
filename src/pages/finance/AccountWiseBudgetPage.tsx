@@ -110,11 +110,6 @@ export function AccountWiseBudgetPage() {
   }, [rows, query]);
 
   const columns = useMemo<ColumnDef<BudgetRow>[]>(() => [
-    {
-      accessorKey: "doc_no",
-      header: "Doc No",
-      cell: ({ getValue }) => <span className="font-medium">{String(getValue() || "-")}</span>,
-    },
     { accessorKey: "doc_type", header: "Type" },
     {
       accessorKey: "doc_date",
