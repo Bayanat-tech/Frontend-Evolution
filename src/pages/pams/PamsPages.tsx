@@ -280,7 +280,7 @@ export function PamsDashboardPage() {
   );
 }
 
-export function PamsMasterPage({ config }: { config: PamsMasterConfig }) {
+export function PamsMasterPage({ config, extraActions, hideRefresh, headerActions, }: { config: PamsMasterConfig; extraActions?: (row: Row, reload: () => void) => ReactNode; hideRefresh?: boolean; headerActions?: ReactNode; }) {
   const { user } = useAuth();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -325,12 +325,13 @@ export function PamsMasterPage({ config }: { config: PamsMasterConfig }) {
     {
       id: "actions",
       header: "Actions",
-      size: 110,
+      size: extraActions ? 200 : 110,
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
           <Button size="icon" variant="ghost" title="View" onClick={() => openView(row.original)}><Eye size={14} /></Button>
           <Button size="icon" variant="ghost" title="Edit" onClick={() => openEdit(row.original)}><Edit2 size={14} /></Button>
           <Button size="icon" variant="ghost" title="Delete" disabled={!config.deleteParameter} onClick={() => setDeleteTarget(row.original)}><Trash2 size={14} /></Button>
+          {extraActions?.(row.original, loadRows)}
         </div>
       ),
     },
@@ -454,8 +455,22 @@ export function PamsMasterPage({ config }: { config: PamsMasterConfig }) {
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{config.subtitle}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => void loadRows()}><RefreshCw size={15} /> Refresh</Button>
-          <Button disabled={!config.saveParameter} onClick={openAdd}><Plus size={15} /> Add</Button>
+          {!hideRefresh && <Button
+      size="sm"
+      variant="outline"
+      onClick={() => void loadRows()}
+    >
+      <RefreshCw size={13} /> Refresh
+    </Button>}
+          <Button
+            size="sm"
+            variant="default"
+            disabled={!config.saveParameter}
+            onClick={openAdd}
+          >
+            <Plus size={13} /> Add
+          </Button>
+          {headerActions}
         </div>
       </div>
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
@@ -508,6 +523,103 @@ export function PamsMasterPage({ config }: { config: PamsMasterConfig }) {
         <p className="m-0 text-sm text-muted-foreground">Please confirm to delete the selected record.</p>
       </Dialog>
     </section>
+  );
+}
+
+export function PeriodProcessButton() {
+  const { user } = useAuth();
+  const loginid = user?.loginid || user?.username || "";
+  const companyCode = user?.company_code || "";
+  const [notifying, setNotifying] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [resultMsg, setResultMsg] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  const notifyHods = async () => {
+    setNotifying(true);
+    setResultMsg(null);
+    try {
+      const result = await pamsCommonProcedure({
+        parameter: "PROC_NOTIFY_HOD_FOR_PERIOD",
+        loginid,
+        val1s1: companyCode,
+        val1s2: "ALL",   // procedure ab ALL handle karta hai
+        val1s3: loginid,
+      });
+
+      // result.data mein out_msg aa sakta hai backend se
+      const msg = (result as Record<string, unknown>)?.out_msg
+        || (result as Record<string, unknown>)?.message
+        || "Notification sent successfully for all periods";
+
+      setResultMsg({ type: "success", message: String(msg) });
+    } catch (error) {
+      setResultMsg({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to send HOD notifications",
+      });
+    } finally {
+      setNotifying(false);
+    }
+  };
+
+  const handleClose = () => {
+    setConfirmOpen(false);
+    setResultMsg(null);
+  };
+
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="default"
+        disabled={notifying}
+        onClick={() => setConfirmOpen(true)}
+        title="Send notification to all HODs for all periods"
+      >
+        {notifying
+          ? <><RefreshCw size={13} className="animate-spin" /> Sending...</>
+          : <><Send size={13} /> Process</>
+        }
+      </Button>
+
+      <Dialog
+        open={confirmOpen}
+        compact
+        title="Notify HODs"
+        onClose={handleClose}
+        footer={
+          resultMsg ? (
+            <Button variant="outline" onClick={handleClose}>Close</Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={handleClose}>Cancel</Button>
+              <Button disabled={notifying} onClick={() => void notifyHods()}>
+                <Send size={14} /> {notifying ? "Sending..." : "Yes, Send Notification"}
+              </Button>
+            </>
+          )
+        }
+      >
+        <div className="grid gap-3 text-sm text-muted-foreground">
+          {resultMsg ? (
+            <div className={`rounded-md px-3 py-2 text-sm font-medium ${resultMsg.type === "success"
+              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+              : "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300"
+              }`}>
+              {resultMsg.message}
+            </div>
+          ) : (
+            <>
+              <p className="m-0">
+                This will send an email to <strong>all Department Heads</strong> to generate
+                KPI appraisal documents for their employees across <strong>all active periods</strong>.
+              </p>
+              <p className="m-0">Do you want to proceed?</p>
+            </>
+          )}
+        </div>
+      </Dialog>
+    </>
   );
 }
 
