@@ -540,8 +540,11 @@ function isAccountTreeRoute(pathname: string) {
 
 function isAccountReportRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts/reports/account-report/detailed-reports/ledger-basic");
+  return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts/reports/account-report/detailed-reports/ledger-basic")||
+  normalized.includes("/finance/accounts_report/detailed_reports/a/c_statement") || normalized.includes("/finance/accounts/reports/account-report/detailed-reports/a/c_statement")
 }
+
+
 
 function isAgeingReportRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
