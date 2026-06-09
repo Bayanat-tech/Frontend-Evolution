@@ -93,39 +93,29 @@ export function BankCodeSettingsPage() {
     {
       accessorFn: (row) => String(getLookupValue(row, "ac_code") || ""),
       id: "ac_code",
-      header: "Account Code",
+      header: "Bank Code",
       cell: ({ getValue }) => <span className="font-medium">{String(getValue() || "")}</span>,
     },
     {
       accessorFn: (row) => String(getLookupValue(row, "ac_name") || ""),
       id: "ac_name",
-      header: "Account Name",
+      header: "A/c Name",
     },
     {
       accessorFn: (row) => String(getLookupValue(row, "bank_ac_code") || ""),
       id: "bank_ac_code",
-      header: "Bank A/C Code",
-    },
-    {
-      accessorFn: (row) => String(getLookupValue(row, "last_cheque_no") || ""),
-      id: "last_cheque_no",
-      header: "Last Cheque No",
-    },
-    {
-      accessorFn: (row) => String(getLookupValue(row, "chq_template") || ""),
-      id: "chq_template",
-      header: "Cheque Template",
-    },
-    {
-      accessorFn: (row) => String(getLookupValue(row, "words_length") || ""),
-      id: "words_length",
-      header: "Words Length",
+      header: "Bank A/C",
     },
     {
       accessorFn: (row) => String(getLookupValue(row, "bank_address") || ""),
       id: "bank_address",
       header: "Bank Address",
       cell: ({ getValue }) => <span className="block max-w-[220px] truncate">{String(getValue() || "")}</span>,
+    },
+    {
+      accessorFn: (row) => String(getLookupValue(row, "last_cheque_no") || ""),
+      id: "last_cheque_no",
+      header: "Last Cheque No",
     },
     {
       id: "actions",
