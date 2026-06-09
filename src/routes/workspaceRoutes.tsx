@@ -37,7 +37,7 @@ import AppraisalDivisionSummaryReport from "../pages/pams/AppraisalDivisionSumma
 import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
 import { JVDocumentEditor } from "../pages/finance/JVDocumentPage";
 
-import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs } from "../pages/pams/PamsPages";
+import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs, PeriodProcessButton ,  } from "../pages/pams/PamsPages";
 import { HrMasterPage } from "../pages/hr/HrMasterPage";
 import { hrMasterConfigs } from "../pages/hr/hrMasterConfigs";
 import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrPayUnitsPage } from "../pages/hr/HrProcessPages";
@@ -371,6 +371,33 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isPamsRoute(pathname) && isPamsKpiItemRoute(pathname),
     element: () => <KpiActivityPage />,
   },
+
+  // workspaceRoutes array mein, PAMS Master route se PEHLE add karo:
+{
+  name: "PAMS Period Setup",
+  match: ({ pathname, activeApp }) => {
+    if (!isPamsRoute(pathname)) return false;
+    const context = { pathname, activeApp };
+    const normalized = getPamsMatchText(context);
+    const compact = normalized.replace(/[^a-z0-9]/g, "");
+    return (
+      normalized.includes("/period_setup") ||
+      normalized.includes("/period-setup") ||
+      normalized.includes("appraisal_period_setup") ||
+      normalized.includes("appraisalperiodsetup") ||
+      compact.includes("periodsetup") ||
+      compact.includes("periodsetup")
+    );
+  },
+  element: (context) => (
+    <PamsMasterPage
+  config={pamsMasterConfigs.period}
+  hideRefresh={true}
+  headerActions={<PeriodProcessButton />}
+/>
+  ),
+},
+
   {
     name: "PAMS Master",
     match: (context) => Boolean(getPamsMasterConfig(context)),
