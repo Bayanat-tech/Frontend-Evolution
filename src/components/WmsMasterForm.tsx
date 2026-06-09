@@ -171,10 +171,15 @@ const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOptio
                 <div className="h-px flex-1 bg-border" />
               </div>
             )}
-            <div
-              className="grid gap-x-3 gap-y-2"
-              style={{ gridTemplateColumns: `repeat(${fieldsPerRow}, minmax(0, 1fr))` }}
-            >
+            {/* Responsive grid: <sm = 1 col, sm–md = 2 cols, >md = fieldsPerRow */}
+            <div className="wms-fields-grid grid gap-x-3 gap-y-3 grid-cols-1 sm:grid-cols-2">
+              <style>{`
+                @media (min-width: 768px) {
+                  .wms-fields-grid {
+                    grid-template-columns: repeat(${fieldsPerRow}, minmax(0, 1fr)) !important;
+                  }
+                }
+              `}</style>
               {sectionFields.map((field) => {
                 const spanClass =
                   field.colSpan === 1
@@ -274,7 +279,43 @@ const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOptio
       {hasTabs ? (
         <Card className="overflow-hidden border-border shadow-sm">
           {/* Tab Strip */}
-          <div className="flex items-center bg-muted/40 border-b border-border px-3 gap-0 overflow-x-auto">
+          {/* Mobile (<md): centered row of numbered circles connected by chevrons */}
+          {/* Desktop (md+): left-aligned full label tabs */}
+
+          {/* Mobile tab strip */}
+          <div className="flex md:hidden items-center justify-center bg-muted/40 border-b border-border px-3 py-2 gap-1 flex-nowrap">
+            {tabs!.map((tab, index) => {
+              const completed = isTabCompleted(tab.key);
+              const hasErrors = !completed && hasTabErrors(tab.key);
+              const isCurrent = activeTab === tab.key;
+
+              return (
+                <div key={tab.key} className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab(tab.key)}
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-bold transition-all
+                      ${completed
+                        ? "bg-green-500 text-white"
+                        : isCurrent
+                        ? "bg-primary text-primary-foreground ring-2 ring-primary/30"
+                        : hasErrors
+                        ? "bg-amber-400 text-white"
+                        : "bg-muted-foreground/20 text-muted-foreground"
+                      }`}
+                  >
+                    {completed ? <CheckCircle2 size={10} /> : index + 1}
+                  </button>
+                  {index < tabs!.length - 1 && (
+                    <ChevronRight size={10} className="text-muted-foreground/40 shrink-0" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop tab strip */}
+          <div className="hidden md:flex items-center bg-muted/40 border-b border-border px-3 gap-0">
             {tabs!.map((tab, index) => {
               const completed = isTabCompleted(tab.key);
               const hasErrors = !completed && hasTabErrors(tab.key);
@@ -285,7 +326,7 @@ const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOptio
                   <button
                     type="button"
                     onClick={() => setActiveTab(tab.key)}
-                    className={`relative flex items-center gap-1.5 px-3 py-2 text-[10px] font-medium transition-all
+                    className={`relative flex items-center gap-1.5 px-3 py-2 text-[10px] font-medium transition-all whitespace-nowrap
                       ${isCurrent
                         ? "text-primary after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-primary after:rounded-t-full"
                         : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
@@ -306,7 +347,6 @@ const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOptio
                     </span>
                     <span>{tab.label}</span>
                   </button>
-
                   {index < tabs!.length - 1 && (
                     <ChevronRight size={11} className="text-muted-foreground/40 mx-0.5 shrink-0" />
                   )}
@@ -315,14 +355,15 @@ const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOptio
             })}
           </div>
 
-          <CardContent className="px-4 py-3">
+          {/* MOBILE CHANGE: tighter padding on mobile */}
+          <CardContent className="px-3 sm:px-4 py-3">
             {renderFields(activeTab)}
           </CardContent>
         </Card>
       ) : (
         /* ── Single Section Form ── */
         <Card className="overflow-hidden border-border shadow-sm">
-          <CardHeader className="bg-muted/30 border-b border-border px-4 py-2">
+          <CardHeader className="bg-muted/30 border-b border-border px-3 sm:px-4 py-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="h-3.5 w-1 rounded-full bg-primary" />
@@ -342,7 +383,8 @@ const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOptio
               )}
             </div>
           </CardHeader>
-          <CardContent className="px-4 py-3">
+          {/* MOBILE CHANGE: tighter padding on mobile */}
+          <CardContent className="px-3 sm:px-4 py-3">
             {renderFields()}
           </CardContent>
         </Card>
@@ -350,10 +392,11 @@ const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOptio
 
       {/* ── Action Row ── */}
       <div className="flex items-center justify-between gap-2 pt-0.5">
+        {/* MOBILE CHANGE: taller touch target on mobile */}
         <button
           type="button"
           onClick={onCancel}
-          className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-3 py-1.5 text-[10px] font-medium text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground transition-colors"
+          className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-3 py-2 sm:py-1.5 min-h-[36px] sm:min-h-0 text-[10px] font-medium text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground transition-colors"
         >
           <X size={11} /> Cancel
         </button>
@@ -366,10 +409,11 @@ const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOptio
             </span>
           )}
 
+          {/* MOBILE CHANGE: taller touch target on mobile */}
           <button
             disabled={saving}
             type="submit"
-            className={`inline-flex items-center gap-1 rounded-md px-4 py-1.5 text-[10px] font-semibold shadow-sm transition-all
+            className={`inline-flex items-center gap-1 rounded-md px-4 py-2 sm:py-1.5 min-h-[36px] sm:min-h-0 text-[10px] font-semibold shadow-sm transition-all
               ${saving
                 ? "bg-primary/60 text-primary-foreground cursor-not-allowed"
                 : editMode
@@ -429,7 +473,7 @@ function renderInput(
   loadDropdownOptions: (field: WmsMasterField) => Promise<DropdownOption[]>,
 ) {
   const baseInputClass =
-    "h-6 w-full rounded border border-input bg-background px-2 text-[11px] text-foreground placeholder:text-muted-foreground/50 transition-colors focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed";
+    "h-8 sm:h-6 w-full rounded border border-input bg-background px-2 text-[11px] text-foreground placeholder:text-muted-foreground/50 transition-colors focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed";
 
 if (field.type === "select" || field.asyncOptions || field.dropdownParam) {
   if (!field.asyncOptions && !field.dropdownParam && field.options) {
@@ -470,7 +514,7 @@ if (field.type === "select" || field.asyncOptions || field.dropdownParam) {
   if (field.type === "textarea") {
     return (
       <textarea
-        className={`w-full rounded border bg-background px-2 py-1 text-[11px] text-foreground placeholder:text-muted-foreground/50 transition-colors focus:outline-none focus:ring-1 focus:border-primary disabled:opacity-50 resize-none ${
+        className={`w-full rounded border bg-background px-2 py-1.5 sm:py-1 text-[11px] text-foreground placeholder:text-muted-foreground/50 transition-colors focus:outline-none focus:ring-1 focus:border-primary disabled:opacity-50 resize-none ${
           field.maxLength && String(value ?? "").length > field.maxLength
             ? "border-destructive focus:ring-destructive"
             : "border-input focus:ring-primary"
@@ -487,7 +531,8 @@ if (field.type === "select" || field.asyncOptions || field.dropdownParam) {
   if (field.type === "checkbox") {
     const isChecked = value === true || value === "true" || value === "Y";
     return (
-      <label className="inline-flex items-center gap-2 cursor-pointer select-none group">
+      /* MOBILE CHANGE: larger tap area for checkbox */
+      <label className="inline-flex items-center gap-2 cursor-pointer select-none group min-h-[36px] sm:min-h-0">
         <input
           type="checkbox"
           checked={isChecked}
@@ -495,8 +540,9 @@ if (field.type === "select" || field.asyncOptions || field.dropdownParam) {
           onChange={(e) => onChange(field.name, e.target.checked)}
           className="sr-only"
         />
+        {/* MOBILE CHANGE: slightly larger checkbox box on mobile */}
         <div
-          className={`relative flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border-2 transition-all
+          className={`relative flex h-4 w-4 sm:h-3.5 sm:w-3.5 shrink-0 items-center justify-center rounded-sm border-2 transition-all
             ${isChecked
               ? "bg-primary border-primary"
               : "border-input bg-background group-hover:border-primary/50"

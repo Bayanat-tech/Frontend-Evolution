@@ -1,4 +1,4 @@
-import { Edit2, Eye, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Edit2, Eye, RefreshCw, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
@@ -10,7 +10,6 @@ import {
   LookupRow,
 } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
@@ -22,12 +21,13 @@ type BankCodeFormState = {
   ac_code: string;
   ac_name: string;
   bank_ac_code: string;
-  last_cheque_no: string;
   bank_address: string;
+  last_cheque_no: string;
+  chq_template: string;
+  words_length: string;
 };
 
 type EditorState =
-  | { mode: "create"; row?: undefined }
   | { mode: "edit"; row: LookupRow }
   | { mode: "view"; row: LookupRow }
   | null;
@@ -36,8 +36,10 @@ const EMPTY_FORM: BankCodeFormState = {
   ac_code: "",
   ac_name: "",
   bank_ac_code: "",
-  last_cheque_no: "",
   bank_address: "",
+  last_cheque_no: "",
+  chq_template: "",
+  words_length: "",
 };
 
 export function BankCodeSettingsPage() {
@@ -54,7 +56,7 @@ export function BankCodeSettingsPage() {
     if (clearNotice) setNotice(null);
     try {
       const data = await getDynamicLookup({
-        parameter: "AC_BANK_CODE_PAGE",
+        parameter: "BANK_CODE_SETTINGS_PAGE",
         loginid: user?.loginid || "",
         code1: user?.company_code || "",
         code2: "NULL",
@@ -91,29 +93,29 @@ export function BankCodeSettingsPage() {
     {
       accessorFn: (row) => String(getLookupValue(row, "ac_code") || ""),
       id: "ac_code",
-      header: "Account Code",
+      header: "Bank Code",
       cell: ({ getValue }) => <span className="font-medium">{String(getValue() || "")}</span>,
     },
     {
       accessorFn: (row) => String(getLookupValue(row, "ac_name") || ""),
       id: "ac_name",
-      header: "Account Name",
+      header: "A/c Name",
     },
     {
       accessorFn: (row) => String(getLookupValue(row, "bank_ac_code") || ""),
       id: "bank_ac_code",
-      header: "Bank A/C Code",
-    },
-    {
-      accessorFn: (row) => String(getLookupValue(row, "last_cheque_no") || ""),
-      id: "last_cheque_no",
-      header: "Last Cheque",
+      header: "Bank A/C",
     },
     {
       accessorFn: (row) => String(getLookupValue(row, "bank_address") || ""),
       id: "bank_address",
       header: "Bank Address",
-      cell: ({ getValue }) => <span className="block max-w-[260px] truncate">{String(getValue() || "")}</span>,
+      cell: ({ getValue }) => <span className="block max-w-[220px] truncate">{String(getValue() || "")}</span>,
+    },
+    {
+      accessorFn: (row) => String(getLookupValue(row, "last_cheque_no") || ""),
+      id: "last_cheque_no",
+      header: "Last Cheque No",
     },
     {
       id: "actions",
@@ -155,42 +157,44 @@ export function BankCodeSettingsPage() {
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Button variant="outline" onClick={() => void loadRows()}><RefreshCw size={15} /> Refresh</Button>
-          <Button onClick={() => setEditor({ mode: "create" })}><Plus size={15} /> Create Bank Code</Button>
         </div>
       </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-      <div className="grid min-h-[620px] grid-cols-[minmax(0,1fr)_390px] gap-4 max-xl:grid-cols-1">
-        <DataTable
-          columns={columns}
-          data={filteredRows}
-          title={loading ? "Loading" : `${filteredRows.length} Records`}
-          subtitle="Bank Accounts"
-          searchValue={query}
-          onSearchChange={setQuery}
-          searchPlaceholder="Search bank code..."
-          loading={loading}
-          emptyText="No bank codes found"
-          height={590}
-          density="grid"
-          getRowId={(row, index) => `${getLookupValue(row, "ac_code") || index}`}
-        />
+      <DataTable
+        columns={columns}
+        data={filteredRows}
+        title={loading ? "Loading" : `${filteredRows.length} Records`}
+        subtitle="Bank Accounts"
+        searchValue={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="Search bank code..."
+        loading={loading}
+        emptyText="No bank codes found"
+        height={670}
+        density="grid"
+        getRowId={(row, index) => `${getLookupValue(row, "ac_code") || index}`}
+      />
 
-        <Card className="overflow-hidden">
-          {editor ? (
-            <BankCodeEditor editor={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); setNotice({ type: "success", message: editor.mode === "edit" ? "Bank code updated successfully" : "Bank code added successfully" }); await loadRows(false); }} />
-          ) : (
-            <div className="grid min-h-[620px] place-items-center p-8 text-center text-muted-foreground">
-              <div>
-                <p className="eyebrow">No Form Open</p>
-                <h2 className="m-0 text-lg font-semibold text-foreground">Select a record or create one</h2>
-                <p className="mt-2 text-sm">The form opens here so the table remains visible.</p>
-              </div>
-            </div>
-          )}
-        </Card>
-      </div>
+      {editor && (
+        <Dialog
+          open
+          title={`${editor.mode === "edit" ? "Edit" : "View"} Bank Code`}
+          description="Bank account details"
+          onClose={() => setEditor(null)}
+        >
+          <BankCodeEditor
+            editor={editor}
+            onClose={() => setEditor(null)}
+            onSaved={async () => {
+              setEditor(null);
+              setNotice({ type: "success", message: "Bank code updated successfully" });
+              await loadRows(false);
+            }}
+          />
+        </Dialog>
+      )}
 
       {deleteTarget && (
         <Dialog
@@ -231,7 +235,8 @@ function BankCodeEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const setField = (field: keyof BankCodeFormState, value: string) => setForm((prev) => ({ ...prev, [field]: value }));
+  const setField = (field: keyof BankCodeFormState, value: string) =>
+    setForm((prev) => ({ ...prev, [field]: value }));
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -251,7 +256,9 @@ function BankCodeEditor({
         val1s2: user?.company_code || "",
         val1s3: form.bank_ac_code,
         val1s4: form.bank_address,
+        val1s5: form.chq_template,
         val1n1: Number(form.last_cheque_no || 0),
+        val1n2: Number(form.words_length || 0),
       });
       await onSaved();
     } catch (err) {
@@ -262,12 +269,12 @@ function BankCodeEditor({
   };
 
   return (
-    <div className="flex min-h-[620px] flex-col">
-      <div className="border-b p-4">
-        <p className="eyebrow">{editor.mode === "create" ? "Create" : editor.mode === "edit" ? "Modify" : "View"}</p>
+    <div className="flex min-h-[420px] flex-col">
+      <div className="border-b pb-3">
+        <p className="eyebrow">{editor.mode === "edit" ? "Modify" : "View"}</p>
         <h2 className="m-0 text-xl font-semibold tracking-tight">Bank Code</h2>
       </div>
-      <form className="grid flex-1 content-start gap-4 overflow-auto p-4" id="bank-code-form" onSubmit={handleSubmit}>
+      <form className="grid flex-1 content-start gap-4 overflow-auto py-4" id="bank-code-form" onSubmit={handleSubmit}>
         {error && <div className="alert error">{error}</div>}
         <LookupField
           label="Account"
@@ -289,22 +296,36 @@ function BankCodeEditor({
             }));
           }}
         />
-        <label className="field">
-          <span>Bank Account Code</span>
-          <Input value={form.bank_ac_code} onChange={(event) => setField("bank_ac_code", event.target.value)} disabled={readOnly} />
-        </label>
-        <label className="field">
-          <span>Last Cheque No</span>
-          <Input type="number" value={form.last_cheque_no} onChange={(event) => setField("last_cheque_no", event.target.value)} disabled={readOnly} />
-        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="field">
+            <span>Bank Account Code</span>
+            <Input value={form.bank_ac_code} onChange={(e) => setField("bank_ac_code", e.target.value)} disabled={readOnly} />
+          </label>
+          <label className="field">
+            <span>Last Cheque No</span>
+            <Input type="number" value={form.last_cheque_no} onChange={(e) => setField("last_cheque_no", e.target.value)} disabled={readOnly} />
+          </label>
+          <label className="field">
+            <span>Cheque Template</span>
+            <Input value={form.chq_template} onChange={(e) => setField("chq_template", e.target.value)} disabled={readOnly} />
+          </label>
+          <label className="field">
+            <span>Words Length</span>
+            <Input type="number" value={form.words_length} onChange={(e) => setField("words_length", e.target.value)} disabled={readOnly} />
+          </label>
+        </div>
         <label className="field">
           <span>Bank Address</span>
-          <textarea className="ui-textarea" value={form.bank_address} onChange={(event) => setField("bank_address", event.target.value)} disabled={readOnly} />
+          <textarea className="ui-textarea" value={form.bank_address} onChange={(e) => setField("bank_address", e.target.value)} disabled={readOnly} />
         </label>
       </form>
-      <div className="flex items-center justify-end gap-2 border-t bg-card p-4">
+      <div className="flex items-center justify-end gap-2 border-t bg-card pt-4">
         <Button variant="outline" onClick={onClose}>Close</Button>
-        {!readOnly && <Button disabled={saving} type="submit" form="bank-code-form">{saving ? <span className="spinner small" /> : "Save"}</Button>}
+        {!readOnly && (
+          <Button disabled={saving} type="submit" form="bank-code-form">
+            {saving ? <span className="spinner small" /> : "Save"}
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -316,7 +337,9 @@ function mapBankCodeForm(row?: LookupRow): BankCodeFormState {
     ac_code: String(getLookupValue(row, "ac_code") || ""),
     ac_name: String(getLookupValue(row, "ac_name") || ""),
     bank_ac_code: String(getLookupValue(row, "bank_ac_code") || ""),
-    last_cheque_no: String(getLookupValue(row, "last_cheque_no") || ""),
     bank_address: String(getLookupValue(row, "bank_address") || ""),
+    last_cheque_no: String(getLookupValue(row, "last_cheque_no") || ""),
+    chq_template: String(getLookupValue(row, "chq_template") || ""),
+    words_length: String(getLookupValue(row, "words_length") || ""),
   };
 }

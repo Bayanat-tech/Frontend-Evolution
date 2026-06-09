@@ -27,7 +27,7 @@ import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
 import { SecurityAssignmentPage, securityAssignmentConfigs } from "../pages/security/SecurityAssignmentPage";
 import { SecurityMasterPage, securityMasterConfigs } from "../pages/security/SecurityMasterPage";
 import { SecurityOperationAccessPage } from "../pages/security/SecurityOperationAccessPage";
-import { KpiItemPage } from "../pages/pams/KpiActivityPage";
+import { KpiActivityPage } from "../pages/pams/KpiActivityPage";
 import MyTaskPage from "../pages/pams/MyTaskpage";
 import AppraisalViewTabsPage from "../pages/pams/AppraisalViewtabspage";
 import { KpiGroupPage } from "../pages/pams/KpiGroupPage";
@@ -41,11 +41,23 @@ import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDe
 import { HrMasterPage } from "../pages/hr/HrMasterPage";
 import { hrMasterConfigs } from "../pages/hr/hrMasterConfigs";
 import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrPayUnitsPage } from "../pages/hr/HrProcessPages";
+import { ApplicationProgressPage } from "../pages/applicationProgress/ApplicationProgressPage";
+import {
+  OxAssetInventoryPage,
+  OxInspectionFormPage,
+  OxInspectionReportPage,
+  OxMaintDashboard,
+  OxSimpleMasterPage,
+  oxMaintMasterConfigs,
+} from "../pages/oxmaint/OxMaintPages";
 import { SalaryAdvancePage } from "../pages/hr/SalaryAdvancePage";
 import { TrainingFeedbackPage } from "../pages/hr/Hrtrainingfeedbackpage";
 import { Leaf } from "lucide-react";
 import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics";
 import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
+import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
+import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseReport";
+import { AcGroup, FirstGroup, SecondGroup, ThirdGroup } from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -73,6 +85,30 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Finance Account Report",
     match: ({ pathname }) => isAccountReportRoute(pathname),
     element: () => <LedgerBasics />,
+  },
+  
+  {
+    name: "Finance Ageing Report",
+    match: ({ pathname }) => isAgeingReportRoute(pathname),
+    element: () => <PeriodWisePage />},
+  { name: "Finance Trail Balance L2 Report",
+    match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/first_group"),
+    element: () => <FirstGroup />,
+  },
+  {
+    name: "Finance Trail Balance L3 Report",
+    match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/second_group"),
+    element: () => <SecondGroup />,
+  },
+  {
+    name: "Finance Trail Balance L4 Report",
+    match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/third_group"),
+    element: () => <ThirdGroup />,
+  },
+  {
+    name: "Finance AC trial balance report",
+    match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/a/c_wise"),
+    element: () => <AcGroup />,
   },
   {
     name: "Finance Bank Master",
@@ -210,6 +246,8 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => Boolean(getSecurityMasterConfig(context)),
     element: (context) => <SecurityMasterPage config={getSecurityMasterConfig(context)!} />,
   },
+
+  //// PAMS Routes
   {
     name: "PAMS Dashboard",
     match: ({ pathname }) => isPamsRoute(pathname) && pathname.toLowerCase().includes("/dashboard"),
@@ -353,16 +391,32 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isPamsRoute(pathname) && isPamsKpiGroupRoute(pathname),
     element: () => <KpiGroupPage />,
   },
-  // ── PAMS KPI Item — must be BEFORE PAMS Master so kpi_item route match ho pehle ──
+
   {
     name: "PAMS KPI Item",
     match: ({ pathname }) => isPamsRoute(pathname) && isPamsKpiItemRoute(pathname),
-    element: () => <KpiItemPage />,
+    element: () => <KpiActivityPage />,
   },
   {
     name: "PAMS Master",
     match: (context) => Boolean(getPamsMasterConfig(context)),
     element: (context) => <PamsMasterPage config={getPamsMasterConfig(context)!} />,
+  },
+  {
+    name: "Appraisal Weightage Master",
+    match: ({ pathname }) => isPamsRoute(pathname) && isPamsAppraisalWeightageRoute(pathname),
+    element: () => <AppraisalWeightageMaster />,
+  },
+  {
+    name: "Application Progress",
+    match: (context) => isApplicationProgressRoute(context),
+    element: () => <ApplicationProgressPage />,
+
+  },
+  {
+    name: "Oxmaint",
+    match: (context) => isOxMaintRoute(context),
+    element: (context) => getOxMaintElement(context),
   },
   {
     name: "HR Pay Units",
@@ -489,6 +543,13 @@ function isAccountReportRoute(pathname: string) {
   return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts/reports/account-report/detailed-reports/ledger-basic");
 }
 
+function isAgeingReportRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/finance/accounts_report/ageing/period_wise") || normalized.includes("/finance/accounts/reports/ageing/period_wise/PeriodWisePage");
+}
+
+
+
 function getCreditDebitNoteDocType(pathname: string) {
   const normalized = pathname.toLowerCase();
   if (
@@ -594,23 +655,30 @@ function isWmsBillingActRoute(pathname: string) {
 function isWmsInboundRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   if (!normalized.includes("/wms/")) return false;
- 
-  // Case 1: listing page — /wms/.../inbound/jobs (any depth)
+
   const isListing =
     normalized.includes("/inbound") &&
     (normalized.includes("/jobs") || normalized.includes("/inboundjob"));
- 
-  // Case 2: detail page — /wms/.../view/{jobNo}/{tab}
-  // The navigate() call in WmsInboundPage does `navigate("view/IB.../shipment_details")`
-  // which resolves relative to the listing, producing /workspace/wms/.../view/IB.../...
-  const isDetail = normalized.includes("/view/");
- 
+
+  // Only match /view/ if it's under an inbound path OR the job no starts with ib
+  const isDetail =
+    normalized.includes("/inbound") && normalized.includes("/view/");
+
   return isListing || isDetail;
 }
 
 function isWmsOutboundRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  return normalized.includes("/wms/") && normalized.includes("/outbound") && (normalized.includes("/jobs") || normalized.includes("/job") || normalized.includes("jobs_oub"));
+  if (!normalized.includes("/wms/")) return false;
+
+  const isListing =
+    normalized.includes("/outbound") &&
+    (normalized.includes("/jobs") || normalized.includes("/job") || normalized.includes("jobs_oub"));
+
+  const isDetail =
+    normalized.includes("/outbound") && normalized.includes("/view/");
+
+  return isListing || isDetail;
 }
 
 function getWmsSimpleMasterConfig(pathname: string) {
@@ -729,6 +797,12 @@ function isPamsAppraisalDivisionSummaryRoute(pathname: string) {
          normalized.includes("/appraisal-listing");
 }
 
+function isPamsAppraisalWeightageRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/appraisal_weightage") || 
+         normalized.includes("/appraisal_weightage");
+} 
+
 
 function getPamsMasterConfig(context: WorkspaceRouteContext) {
   if (!isPamsRoute(context.pathname)) return null;
@@ -751,6 +825,53 @@ function getPamsMatchText(context: WorkspaceRouteContext) {
     return path && pathname.includes(path);
   });
   return [pathname, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
+}
+
+function getGenericMatchText(context: WorkspaceRouteContext) {
+  const pathname = context.pathname.toLowerCase();
+  const leaves = collectMenuLeaves(context.activeApp?.children || []);
+  const activeLeaf = leaves.find((leaf) => {
+    const path = (leaf.url_path || "").replace(/^\/+/, "").toLowerCase();
+    return path && pathname.includes(path);
+  });
+  return [pathname, context.activeApp?.title, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
+}
+
+function isApplicationProgressRoute(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("applicationprogress") ||
+    compact.includes("appprogress") ||
+    matchText.includes("app_progress") ||
+    matchText.includes("application_progress")
+  );
+}
+
+function isOxMaintRoute(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return (
+    matchText.includes("/oxmaint") ||
+    compact.includes("oxmaint") ||
+    compact.includes("assetinventory") ||
+    compact.includes("inspectionform") ||
+    compact.includes("inspectionreport") ||
+    compact.includes("assettype") ||
+    compact.includes("siteproject")
+  );
+}
+
+function getOxMaintElement(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  if (compact.includes("assetinventory")) return <OxAssetInventoryPage />;
+  if (compact.includes("inspectionreport")) return <OxInspectionReportPage />;
+  if (compact.includes("inspectionform")) return <OxInspectionFormPage />;
+  if (compact.includes("assettype")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.assetType} />;
+  if (compact.includes("siteproject")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.siteProject} />;
+  if (compact.includes("status") || matchText.includes("/status")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.status} />;
+  return <OxMaintDashboard />;
 }
 
 function getHrMasterConfig(context: WorkspaceRouteContext) {
