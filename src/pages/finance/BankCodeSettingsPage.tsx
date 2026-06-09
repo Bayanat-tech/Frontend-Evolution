@@ -21,8 +21,10 @@ type BankCodeFormState = {
   ac_code: string;
   ac_name: string;
   bank_ac_code: string;
-  last_cheque_no: string;
   bank_address: string;
+  last_cheque_no: string;
+  chq_template: string;
+  words_length: string;
 };
 
 type EditorState =
@@ -34,8 +36,10 @@ const EMPTY_FORM: BankCodeFormState = {
   ac_code: "",
   ac_name: "",
   bank_ac_code: "",
-  last_cheque_no: "",
   bank_address: "",
+  last_cheque_no: "",
+  chq_template: "",
+  words_length: "",
 };
 
 export function BankCodeSettingsPage() {
@@ -105,13 +109,23 @@ export function BankCodeSettingsPage() {
     {
       accessorFn: (row) => String(getLookupValue(row, "last_cheque_no") || ""),
       id: "last_cheque_no",
-      header: "Last Cheque",
+      header: "Last Cheque No",
+    },
+    {
+      accessorFn: (row) => String(getLookupValue(row, "chq_template") || ""),
+      id: "chq_template",
+      header: "Cheque Template",
+    },
+    {
+      accessorFn: (row) => String(getLookupValue(row, "words_length") || ""),
+      id: "words_length",
+      header: "Words Length",
     },
     {
       accessorFn: (row) => String(getLookupValue(row, "bank_address") || ""),
       id: "bank_address",
       header: "Bank Address",
-      cell: ({ getValue }) => <span className="block max-w-[260px] truncate">{String(getValue() || "")}</span>,
+      cell: ({ getValue }) => <span className="block max-w-[220px] truncate">{String(getValue() || "")}</span>,
     },
     {
       id: "actions",
@@ -231,7 +245,8 @@ function BankCodeEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const setField = (field: keyof BankCodeFormState, value: string) => setForm((prev) => ({ ...prev, [field]: value }));
+  const setField = (field: keyof BankCodeFormState, value: string) =>
+    setForm((prev) => ({ ...prev, [field]: value }));
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -251,7 +266,9 @@ function BankCodeEditor({
         val1s2: user?.company_code || "",
         val1s3: form.bank_ac_code,
         val1s4: form.bank_address,
+        val1s5: form.chq_template,
         val1n1: Number(form.last_cheque_no || 0),
+        val1n2: Number(form.words_length || 0),
       });
       await onSaved();
     } catch (err) {
@@ -262,7 +279,7 @@ function BankCodeEditor({
   };
 
   return (
-    <div className="flex min-h-[380px] flex-col">
+    <div className="flex min-h-[420px] flex-col">
       <div className="border-b pb-3">
         <p className="eyebrow">{editor.mode === "edit" ? "Modify" : "View"}</p>
         <h2 className="m-0 text-xl font-semibold tracking-tight">Bank Code</h2>
@@ -292,21 +309,33 @@ function BankCodeEditor({
         <div className="grid grid-cols-2 gap-3">
           <label className="field">
             <span>Bank Account Code</span>
-            <Input value={form.bank_ac_code} onChange={(event) => setField("bank_ac_code", event.target.value)} disabled={readOnly} />
+            <Input value={form.bank_ac_code} onChange={(e) => setField("bank_ac_code", e.target.value)} disabled={readOnly} />
           </label>
           <label className="field">
             <span>Last Cheque No</span>
-            <Input type="number" value={form.last_cheque_no} onChange={(event) => setField("last_cheque_no", event.target.value)} disabled={readOnly} />
+            <Input type="number" value={form.last_cheque_no} onChange={(e) => setField("last_cheque_no", e.target.value)} disabled={readOnly} />
+          </label>
+          <label className="field">
+            <span>Cheque Template</span>
+            <Input value={form.chq_template} onChange={(e) => setField("chq_template", e.target.value)} disabled={readOnly} />
+          </label>
+          <label className="field">
+            <span>Words Length</span>
+            <Input type="number" value={form.words_length} onChange={(e) => setField("words_length", e.target.value)} disabled={readOnly} />
           </label>
         </div>
         <label className="field">
           <span>Bank Address</span>
-          <textarea className="ui-textarea" value={form.bank_address} onChange={(event) => setField("bank_address", event.target.value)} disabled={readOnly} />
+          <textarea className="ui-textarea" value={form.bank_address} onChange={(e) => setField("bank_address", e.target.value)} disabled={readOnly} />
         </label>
       </form>
       <div className="flex items-center justify-end gap-2 border-t bg-card pt-4">
         <Button variant="outline" onClick={onClose}>Close</Button>
-        {!readOnly && <Button disabled={saving} type="submit" form="bank-code-form">{saving ? <span className="spinner small" /> : "Save"}</Button>}
+        {!readOnly && (
+          <Button disabled={saving} type="submit" form="bank-code-form">
+            {saving ? <span className="spinner small" /> : "Save"}
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -318,7 +347,9 @@ function mapBankCodeForm(row?: LookupRow): BankCodeFormState {
     ac_code: String(getLookupValue(row, "ac_code") || ""),
     ac_name: String(getLookupValue(row, "ac_name") || ""),
     bank_ac_code: String(getLookupValue(row, "bank_ac_code") || ""),
-    last_cheque_no: String(getLookupValue(row, "last_cheque_no") || ""),
     bank_address: String(getLookupValue(row, "bank_address") || ""),
+    last_cheque_no: String(getLookupValue(row, "last_cheque_no") || ""),
+    chq_template: String(getLookupValue(row, "chq_template") || ""),
+    words_length: String(getLookupValue(row, "words_length") || ""),
   };
 }
