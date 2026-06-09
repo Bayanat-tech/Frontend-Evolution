@@ -57,6 +57,7 @@ import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics
 import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
 import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
 import { AcGroup, FirstGroup, SecondGroup, ThirdGroup } from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
+import { RJVDocumentEditor } from "../pages/finance/RJVDocuments";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -148,6 +149,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Finance Journal Voucher",
     match: ({ pathname }) => isJournalVoucherRoute(pathname),
     element: () => <JVDocumentEditor docType={"JV"}  />,
+  },
+    {
+    name: "Finance RV Voucher",
+    match: ({ pathname }) => isRVoucherRoute(pathname),
+    element: () => <RJVDocumentEditor docType={"RJV"}  />,
   },
   {
     name: "Finance Bank Reconciliation",
@@ -584,6 +590,17 @@ function isJournalVoucherRoute(pathname: string) {
     normalized.includes("/finance/accounts/transactions/journal")
   );
 }
+
+
+function isRVoucherRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.includes("/finance/accounts/transactions/rjv") ||
+    normalized.includes("/finance/accounts/transactions/provisional") ||
+    normalized.includes("/finance/accounts/transactions/journal")
+  );
+}
+
 
 function isBankReconciliationRoute(pathname: string) {
   const normalized = pathname.toLowerCase();

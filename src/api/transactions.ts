@@ -6,7 +6,7 @@ type ApiResponse<T> = {
   message?: string;
 };
 
-export type TransactionType = "BP" | "BR" | "CR" | "CP" | "CN" | "DN" | "PO" | "PI" | "SI" | "SV" | "JV";
+export type TransactionType = "BP" | "BR" | "CR" | "CP" | "CN" | "DN" | "PO" | "PI" | "SI" | "SV" | "JV" | "RJV" ;
 
 export type TransactionDocumentRow = {
   company_code?: string;
