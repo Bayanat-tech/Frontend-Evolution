@@ -58,6 +58,7 @@ import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
 import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
 import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseReport";
 import { AcGroup, FirstGroup, SecondGroup, ThirdGroup } from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
+import StockTransferPage from "../pages/wms/stock transfer/StockTransferPage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -139,6 +140,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Finance Budget Version",
     match: ({ pathname }) => isBudgetVersionRoute(pathname),
     element: () => <BudgetVersionPage />,
+  },
+    {
+    name: "Stock Transfer",
+    match: ({ pathname }) => isStockTransferRoute(pathname),
+    element: () => <StockTransferPage />,
   },
   {
     name: "Finance Account Wise Budget",
@@ -656,6 +662,10 @@ function getAssetSaleMode(pathname: string) {
 
 function isAssetTransferRoute(pathname: string) {
   return pathname.toLowerCase().includes("/finance/a/c_others/assets/asset_transfer");
+}
+
+function isStockTransferRoute(pathname: string) { 
+   return pathname.toLowerCase().includes("wms/activity/request/stock_transfer");
 }
 
 function isAssetDepreciationRoute(pathname: string) {
