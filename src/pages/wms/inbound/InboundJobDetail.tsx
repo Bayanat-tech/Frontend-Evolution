@@ -1,7 +1,7 @@
 import { ArrowLeft, Printer, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { getWmsInbound, executeWmsInboundSql } from "../../../api/wms";
+import { getWmsInbound, executeWmsInboundSql, getJobDetailsReport } from "../../../api/wms";
 import { Button } from "../../../components/ui/Button";
 import { useAuth } from "../../../state/AuthContext";
 import { cn } from "../../../lib/utils";
@@ -12,8 +12,20 @@ import {
   value, normalizeRow, formatDate, sqlEscape,
   isCanceled, hasDate, locationSearchPrincipal, JobClassPill,
 } from "../../../utils/inboundHelpers";
+import { Dialog } from "../../../components/ui/Dialog";
 
 type Props = { jobNo: string; tab: string };
+
+type TReport = {
+  id: number;
+  reportTitle: string;
+  apiFn: (prinCode: string, jobNo: string) => Promise<string>;
+};
+
+// ── Single merged list — no need for two separate arrays ──────────────────────
+const REPORTS: TReport[] = [
+  { id: 1, reportTitle: "Job Details Report", apiFn: getJobDetailsReport },
+];
 
 export function InboundJobDetail({ jobNo, tab }: Props) {
   const { user }      = useAuth();
@@ -24,6 +36,55 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
 
   const basePath = location.pathname.split("/").slice(0, -1).join("/");
 
+  // ── Report dialog state ───────────────────────────────────────────────────
+  const [listOpen,        setListOpen]        = useState(false);
+  const [reportOpen,      setReportOpen]      = useState(false);
+  const [selectedReport,  setSelectedReport]  = useState<TReport | null>(null);
+  const [reportHtml,      setReportHtml]      = useState<string>("");
+  const [reportLoading,   setReportLoading]   = useState(false);
+  const [reportError,     setReportError]     = useState<string>("");
+
+  // ── Fetch the HTML whenever a report is selected ──────────────────────────
+  useEffect(() => {
+    if (!selectedReport) return;
+
+    const prinCode = value(job || {}, "prin_code");
+    if (!prinCode) {
+      setReportError("Principal code is not available for this job.");
+      return;
+    }
+console.log(selectedReport);
+    setReportHtml("");
+    setReportError("");
+    setReportLoading(true);
+
+    selectedReport
+      .apiFn(String(prinCode),jobNo)
+      .then((html) => setReportHtml(html))
+      .catch((err) => {
+        console.error("Report API error:", err);
+        setReportError("Failed to load report. Please try again.");
+      })
+      .finally(() => setReportLoading(false));
+  }, [selectedReport]);
+
+  // ── Click handlers ────────────────────────────────────────────────────────
+  const openListDialog = () => setListOpen(true);
+
+  const selectReport = (rp: TReport) => {
+    setListOpen(false);      // close list
+    setSelectedReport(rp);   // triggers the useEffect above
+    setReportOpen(true);     // open report dialog
+  };
+
+  const closeReportDialog = () => {
+    setReportOpen(false);
+    setSelectedReport(null);
+    setReportHtml("");
+    setReportError("");
+  };
+
+  // ── Job loader ────────────────────────────────────────────────────────────
   const loadJob = async () => {
     setLoading(true);
     try {
@@ -38,13 +99,15 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
       } catch {
         setJob(normalizeRow({ job_no: jobNo }));
       }
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { void loadJob(); }, [jobNo]);
 
   const availableTabs = getTabsForJob(value(job || {}, "job_class"));
-  const activeTab     = availableTabs.some((t:any) => t.value === tab) ? tab : "shipment_details";
+  const activeTab     = availableTabs.some((t: any) => t.value === tab) ? tab : "shipment_details";
 
   const jobStatus   = isCanceled(job || {}) ? "Canceled"
     : hasDate(value(job || {}, "confirm_date")) ? "Confirmed" : "In Progress";
@@ -56,7 +119,7 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
   return (
     <section className="grid gap-3">
 
-      {/* Header */}
+      {/* ── Header ── */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <Button size="icon" variant="outline"
@@ -105,14 +168,19 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={loadJob}><RefreshCw size={14} /> Refresh</Button>
-          <Button size="sm" variant="outline"><Printer size={14} /> Print</Button>
+          <Button size="sm" variant="outline" onClick={loadJob}>
+            <RefreshCw size={14} /> Refresh
+          </Button>
+          {/* Fix: onClick was on the icon, not the Button */}
+          <Button size="sm" variant="outline" onClick={openListDialog}>
+            <Printer size={14} /> Print
+          </Button>
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* ── Tabs ── */}
       <div className="flex gap-2 overflow-x-auto rounded-md border bg-card p-2">
-        {availableTabs.map((item:any) => (
+        {availableTabs.map((item: any) => (
           <Link
             key={item.value}
             className={
@@ -127,8 +195,64 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
         ))}
       </div>
 
-      {/* Tab content */}
+      {/* ── Tab content ── */}
       <InboundOperationalTab job={job} jobNo={jobNo} tab={activeTab} loadingJob={loading} />
+
+      {/* ── Dialog 1: Report list ── */}
+      <Dialog
+        open={listOpen}
+        title="Select Report"
+        compact
+        onClose={() => setListOpen(false)}
+      >
+        <div className="flex flex-col gap-1 p-2">
+          {REPORTS.map((rp) => (
+            <button
+              key={rp.id}
+              onClick={() => selectReport(rp)}
+              className="flex items-center gap-2 rounded-md border border-border px-3 py-2.5 text-left text-sm font-medium hover:bg-muted transition-colors"
+            >
+              <Printer size={14} className="text-muted-foreground shrink-0" />
+              {rp.reportTitle}
+            </button>
+          ))}
+        </div>
+      </Dialog>
+
+      {/* ── Dialog 2: Report viewer ── */}
+      <Dialog
+        open={reportOpen}
+        title={selectedReport?.reportTitle ?? "Report"}
+        wide
+        onClose={closeReportDialog}
+      >
+        <div className="flex flex-col" style={{ height: "75vh" }}>
+          {/* Loading */}
+          {reportLoading && (
+            <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground gap-2">
+              <RefreshCw size={14} className="animate-spin" />
+              Loading report…
+            </div>
+          )}
+
+          {/* Error */}
+          {!reportLoading && reportError && (
+            <div className="flex flex-1 items-center justify-center text-sm text-red-600">
+              {reportError}
+            </div>
+          )}
+
+          {/* Report iframe — renders the full backend HTML */}
+          {!reportLoading && !reportError && reportHtml && (
+            <iframe
+              srcDoc={reportHtml}
+              title={selectedReport?.reportTitle}
+              className="flex-1 w-full rounded border-0"
+              style={{ minHeight: 0 }}
+            />
+          )}
+        </div>
+      </Dialog>
 
     </section>
   );

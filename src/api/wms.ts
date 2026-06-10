@@ -156,3 +156,8 @@ export async function upsertMsActivityBillingApi<TPayload extends Record<string 
   return response.data;
 }
  
+export async function getJobDetailsReport(prinCode: string , jobNo: string) {
+  const response = await api.get(`/api/wms/inbound/reports/job-details/${jobNo}?prin_code=${prinCode}`,{ responseType: "text" });
+  if (!response.data) throw new Error (`Unable to fetch Job Details Report`);
+  return response.data
+}
