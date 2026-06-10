@@ -150,7 +150,7 @@ const ACCOUNT_FORM_SECTIONS: Array<{
       { name: "dept_code", label: "Department Code" },
       { name: "curr_code", label: "Currency Code" },
       { name: "pl_bl_code", label: "BS / PL Code" },
-      { name: "ac_status", label: "Status" },
+      // { name: "ac_status", label: "Status" },
     ],
   },
   {
@@ -200,20 +200,18 @@ const ACCOUNT_FORM_SECTIONS: Array<{
       { name: "bi_exp_type", label: "BI Exp Type" },
       { name: "bi_pl_bs_ind", label: "BI PL BS IND" },
       { name: "bi_dept", label: "BI Dept" },
-      { name: "exp_alloc", label: "Expense Allocation" },
-      { name: "exp_type_code", label: "Exp Type Code" },
+      // { name: "exp_alloc", label: "Expense Allocation" },
       { name: "exp_type_description", label: "Exp Type Description" },
-      { name: "exp_subtype_code", label: "Exp SubType Code" },
       { name: "exp_subtype_description", label: "Exp SubType Description" },
     ],
   },
   {
     title: "Approval",
     fields: [
-      { name: "cr_no", label: "CR No" },
-      { name: "apprval_factor", label: "Approval Factor" },
-      { name: "request_number", label: "Request Number" },
-      { name: "ac_type", label: "Account Type" },
+      // { name: "cr_no", label: "CR No" },
+      // { name: "apprval_factor", label: "Approval Factor" },
+      // { name: "request_number", label: "Request Number" },
+      // { name: "ac_type", label: "Account Type" },
       { name: "ac_active", label: "Active", type: "flag" },
     ],
   },
@@ -282,7 +280,6 @@ export function AccountTreePage() {
     <section className="finance-page grid gap-4">
       <div className="finance-toolbar flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="eyebrow">Finance Master</p>
           <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">A/C Tree</h1>
         </div>
         <div className="toolbar-actions flex flex-wrap items-center justify-end gap-2">
@@ -299,7 +296,7 @@ export function AccountTreePage() {
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      <div className="account-tree-layout grid min-h-[620px] grid-cols-[minmax(340px,40%)_1fr] gap-4 max-lg:grid-cols-1">
+      <div className="account-tree-layout grid grid-cols-[minmax(340px,40%)_1fr] gap-4 max-lg:grid-cols-1 items-start"> 
         <Card className="tree-panel flex min-w-0 flex-col overflow-hidden">
           <CardHeader className="tree-panel-head flex-row items-center justify-between gap-3 space-y-0 border-b">
             <div>
@@ -494,6 +491,7 @@ function AccountNodeEditor({ dialog, onClose, onSaved }: { dialog: DialogState; 
   const [l4Type, setL4Type] = useState("N");
   const [l4Bill, setL4Bill] = useState("N");
   const [l4Job, setL4Job] = useState("N");
+  const { user } = useAuth();
   const [accountForm, setAccountForm] = useState<AccountFormState>({
     ...EMPTY_ACCOUNT_FORM,
     l4_code: level === 5 ? parent?.id || node?.parent_code || "" : "",
@@ -519,16 +517,44 @@ function AccountNodeEditor({ dialog, onClose, onSaved }: { dialog: DialogState; 
         if (!active) return;
 
         if (level === 5) {
-          setAccountForm(mapAccountDataToForm(data, node.parent_code || ""));
-        } else {
+  const form = mapAccountDataToForm(data, node.parent_code || "");
+
+  if (form.exp_type_code && !form.exp_type_description) {
+    try {
+      const results = await getDynamicLookup({
+        parameter: "AC_EXPSTYPE_EXPSTYPE_MASTER",
+        loginid: user?.loginid || "",
+        code1: user?.company_code || "",
+      });
+      const found = results.find((r: any) => r.exp_type_code === form.exp_type_code);
+      if (found) form.exp_type_description = String(found.exp_type_description || "");
+    } catch (_) {}
+  }
+
+  if (form.exp_subtype_code && !form.exp_subtype_description) {
+    try {
+      const results = await getDynamicLookup({
+        parameter: "AC_EXPSTYPE_EXPSUBTYPE_MASTER",
+        loginid: user?.loginid || "",
+        code1: user?.company_code || "",
+        code2: form.exp_type_code,
+      });
+      const found = results.find((r: any) => r.exp_subtype_code === form.exp_subtype_code);
+      if (found) form.exp_subtype_description = String(found.exp_subtype_description || "");
+    } catch (_) {}
+  }
+
+  setAccountForm(form);
+}
+         else {
           const normalized = normalizeRecord(data);
           if (level === 2) setDescription(String(normalized.l2_description || node.label));
           if (level === 3) setDescription(String(normalized.l3_description || node.label));
           if (level === 4) {
             setDescription(String(normalized.l4_description || node.label));
-            setL4Type(String(normalized.l4_type || "N"));
-            setL4Bill(String(normalized.l4_bill || "N"));
-            setL4Job(String(normalized.l4_job || "N"));
+            setL4Type(String(normalized.l4_type ?? "N"));
+            setL4Bill(String(normalized.l4_bill ?? "N"));
+            setL4Job(String(normalized.l4_job ?? "N"));
           }
         }
       } catch (err) {
@@ -575,7 +601,7 @@ function AccountNodeEditor({ dialog, onClose, onSaved }: { dialog: DialogState; 
   };
 
   return (
-    <div className="account-editor flex h-full min-h-[620px] flex-col">
+      <div className="account-editor flex flex-col"> 
       <div className="flex items-start justify-between gap-4 border-b p-4">
         <div>
           <p className="eyebrow">{isEdit ? "Modify Node" : "Create Node"}</p>
@@ -590,6 +616,7 @@ function AccountNodeEditor({ dialog, onClose, onSaved }: { dialog: DialogState; 
           Back to Details
         </Button>
       </div>
+
 
       <form id="account-node-form" className="account-node-form min-h-0 flex-1 overflow-auto p-4" onSubmit={handleSubmit}>
         <NoticeToast notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
@@ -903,7 +930,8 @@ function buildAccountPayload(form: AccountFormState, context: AccountTreeNode | 
     bank_ac_code: form.bank_ac_code,
     bank_name: form.bank_name,
     bank_swift: form.bank_swift,
-    contract_expry_date: form.contract_expry_date || null,
+    // contract_expry_date: form.contract_expry_date || null,
+    contract_expry_date: form.contract_expry_date ? new Date(form.contract_expry_date) : null,
     ac_infze: form.ac_infze,
     salesman_code: form.salesman_code,
     sector_code: form.sector_code,

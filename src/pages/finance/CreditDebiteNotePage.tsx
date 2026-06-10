@@ -1,5 +1,5 @@
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { Ban, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { Ban, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import {
@@ -26,6 +26,8 @@ import {
   TransactionType,
   upsertBulkAccountEntryApi,
   getFinanceOutstanding,
+  openDocumentReport,
+  downloadDocumentReportExcel,
 } from "../../api/transactions";
 import { getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { Badge } from "../../components/ui/Badge";
@@ -235,10 +237,13 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
           manualPagination
           manualFiltering
           toolbar={
-            <div className="flex items-center gap-2">
-              <Select className="h-10 w-36" value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
+            <div className="finance-list-controls">
+              <label className="finance-period-control">
+                <span>FY</span>
+                <Select value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
                 {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
-              </Select>
+                </Select>
+              </label>
             </div>
           }
           enableExport
@@ -334,6 +339,7 @@ function PaymentDocumentEditor({
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<TransactionHeader>(() => emptyHeader(docType, editor));
   const [selectedDetailId, setSelectedDetailId] = useState<string>("");
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [childLoading, setChildLoading] = useState(false);
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
@@ -427,7 +433,7 @@ function PaymentDocumentEditor({
   const total = form.detail.reduce((sum, row) => sum + (Number(row.amount) || 0) * row.sign_ind, 0);
 
   const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0) * row.sign_ind, 0);
-
+  const isCancelled = form.canceled === "Y";
   const updateField = (field: keyof TransactionHeader, value: string | number) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
@@ -672,27 +678,48 @@ function PaymentDocumentEditor({
   };
 
   return (
-    <form className="payment-workbench grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
-      <CardHeader className="border-b bg-primary px-5 py-2.5 text-primary-foreground shadow-sm">
-        <div className="flex min-h-12 items-center justify-between gap-4">
+    <form className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`} onSubmit={submit}>
+      <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
+        <div className="flex min-h-10 items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
             <div>
               <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
                 {editMode ? "Edit Document" : "New Document"}
               </p>
-              <h2 className="m-0 text-lg font-semibold leading-tight text-primary-foreground">{DOCUMENT_META[docType].title}</h2>
+              <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">{DOCUMENT_META[docType].title}</h2>
             </div>
-            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1">
+            <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
               <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
               <strong className="block text-sm leading-tight text-primary-foreground">{form.doc_no || "New"}</strong>
             </div>
-            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1">
+            <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
               <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
-              <strong className="block text-sm leading-tight text-primary-foreground">{formatAmount(total)}</strong>
+              <strong className="block text-sm leading-tight text-primary-foreground">{formatAmount(total + totalTax)}</strong>
             </div>
+            {form.div_code && (
+              <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
+                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Division</span>
+                <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}</strong>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
+            {form.doc_no && form.doc_no !== "0" && (
+              <>
+                <Button type="button" variant="secondary" onClick={() => void openDocumentReport(form.doc_type, form.doc_no || "")}>
+                  <Printer size={15} /> Print
+                </Button>
+                <Button aria-label="Excel" type="button" variant="secondary" size="icon" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
+                  <Download size={15} />
+                </Button>
+                {form.canceled !== "Y" && (
+                  <Button type="button" variant="secondary" onClick={() => setCancelConfirmOpen(true)} disabled={saving}>
+                    <Ban size={15} /> Cancel
+                  </Button>
+                )}
+              </>
+            )}
             <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
               <Paperclip size={15} /> Files
             </Button>
@@ -700,14 +727,31 @@ function PaymentDocumentEditor({
           </div>
         </div>
       </CardHeader>
+      {isCancelled && (
+        <div className="cancelled-document-banner" role="status">
+          <div>
+            <span className="cancelled-document-kicker">Cancelled Document</span>
+            <strong>{form.doc_no || DOCUMENT_META[docType].title}</strong>
+          </div>
+          <p>This document is cancelled and opened in read-only mode. You can still print, export, and view attachments.</p>
+        </div>
+      )}
+
 
       <CardContent className="min-h-0 overflow-auto p-3">
         {loading ? (
           <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
         ) : (
-          <div className="grid gap-3">
+          <div className="shrink-0 border-b bg-background ">
             <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
-
+ <div className="commercial-header-shell rounded-md border bg-card">
+              <div className="commercial-section-title">
+                <div>
+                  <p className="eyebrow m-0">Header</p>
+                   <h3 className="m-0 text-sm font-semibold leading-tight">Credit/Debit Note Information</h3>
+                </div>
+                <span></span>
+              </div>
             <div className="payment-header-grid grid grid-cols-6 gap-2.5 rounded-md border bg-card p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
               {editMode && <Field label="Doc No"><Input disabled value={form.doc_no || ""} /></Field>}
               <Field label="Doc Date"><Input disabled={disabled} required type="date" value={dateInput(form.doc_date)} onChange={(event) => updateField("doc_date", event.target.value)} /></Field>
@@ -875,9 +919,16 @@ function PaymentDocumentEditor({
 
 
             </div>
+              <div className="commercial-header-footer flex items-center justify-between gap-3 border-t bg-secondary/30 px-3 py-2">
+                <div className="min-w-0 truncate text-xs text-muted-foreground">
+                  <span>Doc: {form.doc_no || "-"}</span>
+                </div>
+               
+              </div>
+             </div>
 
-            <div className="rounded-md border bg-card">
-              <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
+            <div className="commercial-lines-card rounded-md border bg-card">
+               <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
                 <div>
                   <p className="eyebrow m-0">Details</p>
                   <h3 className="m-0 text-sm font-semibold leading-tight">Accounting Lines</h3>
@@ -886,7 +937,7 @@ function PaymentDocumentEditor({
                   <Plus size={14} /> Add Line
                 </Button>
               </div>
-              <div className="max-h-[43vh] overflow-auto">
+              <div className="commercial-lines-scroll max-h-[43vh] overflow-auto">
                 <table className="finance-lines-table w-full min-w-[2140px] text-sm">
                   <thead className="sticky top-0 bg-primary text-xs text-primary-foreground">
                     <tr>
