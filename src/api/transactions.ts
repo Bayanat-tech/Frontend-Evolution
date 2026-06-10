@@ -599,6 +599,22 @@ export async function openOutstandingListReport(params: ReportParams) {
     );
 }
 
+// ---------AC_statement report-----
+
+// export async function openAcStatementReport(params: ReportParams) {
+//     await openReportInTab(
+//         `/api/finance/transactions/reports/AcStatement/html`,
+//         params
+//     );
+// }
+
+export async function openAcStatementReport(params: ReportParams) {
+    await openReportInTab(
+        `/api/finance/transactions/reports/AcStatementReport/html`,  // correct
+        params
+    );
+}
+
 
 
 // export const openInvdatewiseDetailReport = async (params: any): Promise<void> => {

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ChevronRight,
   ChevronsRight,
@@ -6,19 +6,16 @@ import {
   ChevronsLeft,
   Printer,
   RotateCcw,
+  BarChart2,
+  Loader2,
 } from "lucide-react";
 import { useAuth } from "../../../state/AuthContext";
-import { getDynamicFinanceLookup, getDynamicLookup } from "../../../api/lookups";
-import { Select } from "../../../components/ui/Select";
-import { Button } from "../../../components/ui/Button";
+import { getDynamicLookup, getDynamicLookupaccount } from "../../../api/lookups";
 import ReportDialogPage from "../../../components/ReportDialogPage";
-// import { AgGridReact } from "ag-grid-react";
-// import type { ColDef } from "ag-grid-community";
+import { openAcStatementReport } from "../../../api/transactions";
 // import { useQuery } from "@tanstack/react-query";
+// import { getDynamicLookup, getDynamicLookupaccount } from "../../api/lookups";
 // import { useAuth } from "../../state/AuthContext";
-// import { Button } from "../../components/ui/Button";
-// import { Select } from "../../components/ui/Select";
-// import { getDynamicLookup, getDynamicFinanceLookup } from "../../api/lookups";
 // import ReportDialogPage from "../../report/ReportDialogPage";
 // import AC_StatementReport from "./AC_StatementReport";
 
@@ -40,198 +37,282 @@ function formatDisplay(iso: string) {
   return `${d}/${m}/${y}`;
 }
 
-// ─── Column Defs ──────────────────────────────────────────────────────────────
 
-const defaultColDef: ColDef = { sortable: true, filter: true, resizable: true };
-
-const groupColumnDefs: ColDef[] = [
-  {
-    headerCheckboxSelection: true,
-    checkboxSelection: true,
-    filter: false,
-    maxWidth: 50,
-    pinned: "left",
-    headerCheckboxSelectionFilteredOnly: true,
-  },
-  { headerName: "L4 Code", field: "l4_code", flex: 1 },
-  { headerName: "Description", field: "description", flex: 3 },
-];
-
-const acCodeColumnDefs: ColDef[] = [
-  {
-    headerCheckboxSelection: true,
-    checkboxSelection: true,
-    filter: false,
-    maxWidth: 50,
-    pinned: "left",
-    headerCheckboxSelectionFilteredOnly: true,
-  },
-  { headerName: "AC Code", field: "ac_code", flex: 1 },
-  { headerName: "AC Name", field: "ac_name", flex: 2 },
-  { headerName: "Currency", field: "curr_code", flex: 1 },
-];
-
-// ─── Transfer Button ──────────────────────────────────────────────────────────
-
-function TransferBtn({
-  onClick,
-  disabled,
-  title,
-  children,
-}: {
-  onClick: () => void;
-  disabled: boolean;
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      title={title}
-      onClick={onClick}
-      disabled={disabled}
-      className="flex h-8 w-8 items-center justify-center rounded border border-border bg-card text-muted-foreground transition hover:border-primary hover:text-primary disabled:pointer-events-none disabled:opacity-30"
-    >
-      {children}
-    </button>
-  );
+function formatDateOracle(iso: string) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+  return `${d}-${months[parseInt(m, 10) - 1]}-${y}`;
 }
+
+// ─── Shared styles (same as PeriodWisePage) ───────────────────────────────────
+
+const thStyle: React.CSSProperties = {
+  padding: "7px 10px",
+  textAlign: "left",
+  fontWeight: 500,
+  fontSize: 11,
+  background: "#185FA5",
+  color: "#fff",
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: "6px 10px",
+  fontSize: 11,
+  borderBottom: "0.5px solid #e5e7eb",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  maxWidth: 0,
+};
+
+const rowStyle = (sel: boolean): React.CSSProperties => ({
+  cursor: "pointer",
+  background: sel ? "#E6F1FB" : "transparent",
+  color: sel ? "#0C447C" : "inherit",
+});
+
+const transferBtnStyle: React.CSSProperties = {
+  width: 32,
+  height: 32,
+  border: "0.5px solid #d1d5db",
+  background: "#fff",
+  borderRadius: 6,
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#6b7280",
+};
+
+const fieldLabelStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 500,
+  color: "#6b7280",
+  marginBottom: 5,
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+};
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  fontSize: 12,
+  padding: "6px 9px",
+  border: "0.5px solid #d1d5db",
+  borderRadius: 6,
+  background: "#fff",
+  color: "#111827",
+  boxSizing: "border-box",
+};
+
+const badgeStyle: React.CSSProperties = {
+  background: "#E6F1FB",
+  color: "#0C447C",
+  fontSize: 10,
+  fontWeight: 500,
+  padding: "2px 8px",
+  borderRadius: 20,
+};
+
+const radioLabelStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 5,
+  fontSize: 12,
+  cursor: "pointer",
+  color: "#374151",
+};
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function AC_StatementReportPage() {
+export default function AC_StatementPage() {
   const { user } = useAuth();
   const companyCode = user?.company_code ?? "";
   const loginId = user?.loginid ?? "";
 
-  const leftGridRef = useRef<any>(null);
-  const rightGridRef = useRef<any>(null);
+  // ── Division state ──────────────────────────────────────────────────────────
+  const [divisionList, setDivisionList] = useState<any[]>([]);
+  const [division, setDivision] = useState("");
+  const [divisionDisplay, setDivisionDisplay] = useState("");
+  const [divisionSearch, setDivisionSearch] = useState("");
+  const [showDivisionDropdown, setShowDivisionDropdown] = useState(false);
 
+  // ── A/C Code transfer state ─────────────────────────────────────────────────
+  const [acLeftItems, setAcLeftItems] = useState<any[]>([]);
+  const [acRightItems, setAcRightItems] = useState<any[]>([]);
+  const [acLeftSelected, setAcLeftSelected] = useState(new Set<string>());
+  const [acRightSelected, setAcRightSelected] = useState(new Set<string>());
+  const [acSearchLeft, setAcSearchLeft] = useState("");
+  const [acSearchRight, setAcSearchRight] = useState("");
+
+  // ── Group transfer state ────────────────────────────────────────────────────
+  const [groupLeftItems, setGroupLeftItems] = useState<any[]>([]);
+  const [groupRightItems, setGroupRightItems] = useState<any[]>([]);
+  const [groupLeftSelected, setGroupLeftSelected] = useState(new Set<string>());
+  const [groupRightSelected, setGroupRightSelected] = useState(new Set<string>());
+  const [groupSearchLeft, setGroupSearchLeft] = useState("");
+  const [groupSearchRight, setGroupSearchRight] = useState("");
+
+  // ── Other state ─────────────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<"acCode" | "group">("group");
+  const [currency, setCurrency] = useState<"local" | "foreign">("local");
   const [dateFrom, setDateFrom] = useState(startOfMonthISO());
   const [dateTo, setDateTo] = useState(todayISO());
-  const [currency, setCurrency] = useState<"local" | "foreign">("local");
-  const [division, setDivision] = useState("");
-  const [activeTab, setActiveTab] = useState<"acCode" | "group">("group");
-  const [selected, setSelected] = useState<any[]>([]);
-  const [highlightedLeft, setHighlightedLeft] = useState<string[]>([]);
-  const [highlightedRight, setHighlightedRight] = useState<string[]>([]);
   const [reportOpen, setReportOpen] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
 
-  // ── Queries ───────────────────────────────────────────────────────────────
+  // ── Track fetched tabs ──────────────────────────────────────────────────────
+  const [fetchedTabs, setFetchedTabs] = useState<Set<string>>(new Set());
 
-  const { data: divisionData } = useQuery({
-    queryKey: ["division-list", companyCode],
-    queryFn: () =>
-      getDynamicLookup({
-        parameter: "Account_division",
-        loginid: loginId,
-        code1: companyCode,
-        code2: "", code3: "", code4: "",
-        number1: 0, number2: 0, number3: 0, number4: 0,
-        date1: null, date2: null, date3: null, date4: null,
-      }),
-  });
+  // ── Fetch divisions on mount ────────────────────────────────────────────────
+  useEffect(() => {
+    getDynamicLookup({
+      parameter: "Account_division",
+      loginid: loginId,
+      code1: companyCode,
+      code2: "", code3: "", code4: "",
+      number1: 0, number2: 0, number3: 0, number4: 0,
+      date1: null, date2: null, date3: null, date4: null,
+    })
+      .then((res) => setDivisionList(res || []))
+      .catch(console.error);
+  }, []);
 
-  const { data: acCodeData } = useQuery({
-    queryKey: ["ac-code-list", companyCode, division],
-    enabled: !!division,
-    queryFn: () =>
-      getDynamicFinanceLookup({
+  // ── On division change: reset all, fetch active tab ────────────────────────
+  useEffect(() => {
+    if (!division) return;
+    setAcLeftItems([]); setAcRightItems([]);
+    setAcLeftSelected(new Set()); setAcRightSelected(new Set());
+    setGroupLeftItems([]); setGroupRightItems([]);
+    setGroupLeftSelected(new Set()); setGroupRightSelected(new Set());
+    setFetchedTabs(new Set());
+
+    if (activeTab === "acCode") fetchAccounts(division);
+    else fetchGroups(division);
+  }, [division]);
+
+  // ── On tab change: fetch if not yet fetched ─────────────────────────────────
+  useEffect(() => {
+    if (!division || fetchedTabs.has(activeTab)) return;
+    if (activeTab === "acCode") fetchAccounts(division);
+    else fetchGroups(division);
+  }, [activeTab]);
+
+  const fetchAccounts = async (div: string) => {
+    try {
+      const res = await getDynamicLookupaccount({
         parameter: "Account_Report_AC",
-        loginid: loginId,
         code1: companyCode,
-        code2: division,
-        code3: "", code4: "",
-        number1: 0, number2: 0, number3: 0, number4: 0,
-        date1: null, date2: null, date3: null, date4: null,
-      }),
-  });
+        code2: div,
+      });
+      const unique = Array.from(
+        new Map((res || []).map((i: any) => [i.ac_code, i])).values()
+      ) as any[];
+      setAcLeftItems(unique);
+      setAcRightItems([]);
+      setAcLeftSelected(new Set());
+      setAcRightSelected(new Set());
+      setFetchedTabs((p) => new Set(p).add("acCode"));
+    } catch (e) { console.error(e); }
+  };
 
-  const { data: groupData } = useQuery({
-    queryKey: ["group-list", companyCode, division],
-    enabled: !!division,
-    queryFn: () =>
-      getDynamicFinanceLookup({
+  const fetchGroups = async (div: string) => {
+    try {
+      const res = await getDynamicLookupaccount({
         parameter: "Account_Report_Group",
-        loginid: loginId,
         code1: companyCode,
-        code2: division,
-        code3: "", code4: "",
-        number1: 0, number2: 0, number3: 0, number4: 0,
-        date1: null, date2: null, date3: null, date4: null,
-      }),
-  });
+        code2: div,
+      });
+      setGroupLeftItems(res || []);
+      setGroupRightItems([]);
+      setGroupLeftSelected(new Set());
+      setGroupRightSelected(new Set());
+      setFetchedTabs((p) => new Set(p).add("group"));
+    } catch (e) { console.error(e); }
+  };
 
-  const availableData: any[] =
-    activeTab === "acCode" ? (acCodeData ?? []) : (groupData ?? []);
-  const selectedKeys = new Set(selected.map((r) => getRowKey(r, activeTab)));
-  const filteredAvailable = availableData.filter(
-    (r) => !selectedKeys.has(getRowKey(r, activeTab))
+  // ── Generic transfer helpers ────────────────────────────────────────────────
+  const toggleSel = (code: string, set: React.Dispatch<React.SetStateAction<Set<string>>>) => {
+    set((prev) => {
+      const next = new Set(prev);
+      next.has(code) ? next.delete(code) : next.add(code);
+      return next;
+    });
+  };
+
+  const moveToRight = (
+    leftItems: any[], rightItems: any[], leftSelected: Set<string>, keyField: string,
+    setLeft: any, setRight: any, setLeftSel: any
+  ) => {
+    if (!leftSelected.size) return;
+    const moving = leftItems.filter((i) => leftSelected.has(i[keyField]));
+    setRight([...rightItems, ...moving]);
+    setLeft(leftItems.filter((i) => !leftSelected.has(i[keyField])));
+    setLeftSel(new Set());
+  };
+
+  const moveAllToRight = (
+    leftItems: any[], rightItems: any[],
+    setLeft: any, setRight: any, setLeftSel: any
+  ) => {
+    setRight([...rightItems, ...leftItems]);
+    setLeft([]);
+    setLeftSel(new Set());
+  };
+
+  const moveToLeft = (
+    leftItems: any[], rightItems: any[], rightSelected: Set<string>, keyField: string,
+    setLeft: any, setRight: any, setRightSel: any
+  ) => {
+    if (!rightSelected.size) return;
+    const moving = rightItems.filter((i) => rightSelected.has(i[keyField]));
+    setLeft([...leftItems, ...moving]);
+    setRight(rightItems.filter((i) => !rightSelected.has(i[keyField])));
+    setRightSel(new Set());
+  };
+
+  const moveAllToLeft = (
+    leftItems: any[], rightItems: any[],
+    setLeft: any, setRight: any, setRightSel: any
+  ) => {
+    setLeft([...leftItems, ...rightItems]);
+    setRight([]);
+    setRightSel(new Set());
+  };
+
+  // ── Reset ───────────────────────────────────────────────────────────────────
+  const handleReset = () => {
+    setAcLeftItems([...acLeftItems, ...acRightItems]);
+    setAcRightItems([]);
+    setAcLeftSelected(new Set()); setAcRightSelected(new Set());
+    setGroupLeftItems([...groupLeftItems, ...groupRightItems]);
+    setGroupRightItems([]);
+    setGroupLeftSelected(new Set()); setGroupRightSelected(new Set());
+  };
+
+  // ── Filtered lists ──────────────────────────────────────────────────────────
+  const filteredAcLeft = acLeftItems.filter(
+    (i) => i.ac_code?.toLowerCase().includes(acSearchLeft.toLowerCase()) ||
+            i.ac_name?.toLowerCase().includes(acSearchLeft.toLowerCase())
+  );
+  const filteredAcRight = acRightItems.filter(
+    (i) => i.ac_code?.toLowerCase().includes(acSearchRight.toLowerCase()) ||
+            i.ac_name?.toLowerCase().includes(acSearchRight.toLowerCase())
+  );
+  const filteredGroupLeft = groupLeftItems.filter(
+    (i) => i.l4_code?.toLowerCase().includes(groupSearchLeft.toLowerCase()) ||
+            i.description?.toLowerCase().includes(groupSearchLeft.toLowerCase())
+  );
+  const filteredGroupRight = groupRightItems.filter(
+    (i) => i.l4_code?.toLowerCase().includes(groupSearchRight.toLowerCase()) ||
+            i.description?.toLowerCase().includes(groupSearchRight.toLowerCase())
+  );
+  const filteredDivisions = divisionList.filter((d: any) =>
+    `${d.div_code} ${d.div_name}`.toLowerCase().includes(divisionSearch.toLowerCase())
   );
 
-  // ── Clear helpers ─────────────────────────────────────────────────────────
-
-  const clearLeft = () => {
-    setHighlightedLeft([]);
-    leftGridRef.current?.api?.deselectAll();
-  };
-  const clearRight = () => {
-    setHighlightedRight([]);
-    rightGridRef.current?.api?.deselectAll();
-  };
-
-  // ── Transfer logic ────────────────────────────────────────────────────────
-
-  const moveRight = () => {
-    const moving = filteredAvailable.filter((r) =>
-      highlightedLeft.includes(getRowKey(r, activeTab))
-    );
-    if (!moving.length) return;
-    setSelected((p) => [...p, ...moving]);
-    clearLeft();
-  };
-
-  const moveAllRight = () => {
-    setSelected((p) => {
-      const existing = new Set(p.map((r) => getRowKey(r, activeTab)));
-      return [...p, ...filteredAvailable.filter((r) => !existing.has(getRowKey(r, activeTab)))];
-    });
-    clearLeft();
-  };
-
-  const moveLeft = () => {
-    const removing = new Set(highlightedRight);
-    setSelected((p) => p.filter((r) => !removing.has(getRowKey(r, activeTab))));
-    clearRight();
-  };
-
-  const moveAllLeft = () => {
-    setSelected([]);
-    clearRight();
-  };
-
-  const handleReset = () => {
-    setSelected([]);
-    clearLeft();
-    clearRight();
-  };
-
-  // ── AG Grid handlers ──────────────────────────────────────────────────────
-
-  const onLeftSelectionChanged = (e: any) => {
-    const keys: string[] = [];
-    e.api.forEachNode((node: any) => {
-      if (node.isSelected()) keys.push(getRowKey(node.data, activeTab));
-    });
-    setHighlightedLeft(keys);
-  };
-
-  const onRightSelectionChanged = (e: any) => {
-    setHighlightedRight(e.api.getSelectedRows().map((r: any) => getRowKey(r, activeTab)));
-  };
-
-  // ── Report values ─────────────────────────────────────────────────────────
-
+  // ── Report values ───────────────────────────────────────────────────────────
   const reportValues = {
     loginid: loginId,
     company_code: companyCode,
@@ -243,238 +324,402 @@ export default function AC_StatementReportPage() {
     division: division || "All",
     ac_codes:
       activeTab === "acCode"
-        ? selected.length > 0
-          ? selected.map((r) => getRowKey(r, "acCode")).join(",")
-          : "All"
+        ? acRightItems.length > 0 ? acRightItems.map((r) => r.ac_code).join(",") : "All"
         : "All",
     l4_codes:
       activeTab === "group"
-        ? selected.length > 0
-          ? selected.map((r) => getRowKey(r, "group")).join(",")
-          : "All"
+        ? groupRightItems.length > 0 ? groupRightItems.map((r) => r.l4_code).join(",") : "All"
         : "All",
-    selected_groups: selected.map((r) => getRowKey(r, activeTab)),
+    selected_groups:
+      activeTab === "acCode"
+        ? acRightItems.map((r) => r.ac_code)
+        : groupRightItems.map((r) => r.l4_code),
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  const handleGenerate = async () => {
+    if (!division) { 
+        setReportError("Please select a Division before generating."); 
+        return; 
+    }
+    setReportError(null);
+    setGenerating(true);
+    try {
+        const params = {
+            parameter: "Account_Report_AC_StatementReport",
+            loginid:   loginId,
+            code1:     companyCode,
+            code2:     division,
+            code3:     activeTab === "acCode"
+                           ? (acRightItems.length > 0 ? acRightItems.map((r) => r.ac_code).join(",") : "All")
+                           : "All",
+            code4:     activeTab === "group"
+                           ? (groupRightItems.length > 0 ? groupRightItems.map((r) => r.l4_code).join(",") : "All")
+                           : "All",
+            code5:     formatDateOracle(dateFrom),
+            code6:     formatDateOracle(dateTo),
+        };
+        await openAcStatementReport(params);
+    } catch (err: any) {
+        setReportError("Failed to generate report.");
+        console.error(err);
+    } finally {
+        setGenerating(false);
+    }
+};
+
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <section className="flex flex-col gap-4 h-full">
+    <div style={{ background: "#f3f4f6", padding: "16px", fontFamily: "system-ui, sans-serif", minHeight: "100%" }}>
+      <style>{`
+        .tf-btn:hover { background: #f0f7ff !important; border-color: #185FA5 !important; color: #185FA5 !important; }
+        .tab-ac { padding: 7px 18px; border: none; background: none; cursor: pointer; font-size: 12px; font-weight: 500; color: #9ca3af; border-bottom: 2px solid transparent; margin-bottom: -0.5px; }
+        .tab-ac.active { color: #185FA5; border-bottom-color: #185FA5; }
+        .action-btn:hover { background: #f9fafb !important; }
+        .action-btn-primary:hover { background: #0C447C !important; border-color: #0C447C !important; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        tbody tr:last-child td { border-bottom: none !important; }
+        tbody tr:hover td { background: #f9fafb; }
+        .div-option:hover { background: #f0f7ff; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
 
-      {/* ── Page header ───────────────────────────────────────────────────── */}
-      <div>
-        <p className="eyebrow">Finance Reports</p>
-        <h1 className="m-0 text-2xl font-semibold tracking-tight">AC Statement</h1>
-      </div>
+      <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
 
-      {/* ── Filter row ────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-3 gap-3">
-
-        {/* Date Range */}
-        <div className="rounded-lg border bg-card p-3">
-          <p className="eyebrow mb-2">Date Range</p>
-          <div className="flex gap-2">
-            <label className="field flex-1">
-              <span>From</span>
-              <input
-                type="date"
-                className="ui-input"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-              />
-            </label>
-            <label className="field flex-1">
-              <span>To</span>
-              <input
-                type="date"
-                className="ui-input"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-              />
-            </label>
+        {/* ══ Card 1: Filters ══════════════════════════════════════════════════ */}
+        <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "20px 24px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
+            <BarChart2 size={18} color="#185FA5" />
+            <span style={{ fontSize: 15, fontWeight: 500, color: "#111827" }}>AC Statement filter</span>
           </div>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 20, alignItems: "flex-start" }}>
+
+            {/* Date range */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 260, flex: "1 1 260px" }}>
+              <div>
+                <div style={fieldLabelStyle}>Date Range</div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ ...fieldLabelStyle, marginBottom: 3 }}>From</div>
+                    <input
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ ...fieldLabelStyle, marginBottom: 3 }}>To</div>
+                    <input
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Division searchable dropdown */}
+              <div style={{ position: "relative" }}>
+                <div style={fieldLabelStyle}>Division</div>
+                <input
+                  type="text"
+                  placeholder="Search division..."
+                  value={divisionSearch !== "" ? divisionSearch : divisionDisplay}
+                  onChange={(e) => { setDivisionSearch(e.target.value); setShowDivisionDropdown(true); }}
+                  onFocus={() => setShowDivisionDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowDivisionDropdown(false), 150)}
+                  style={inputStyle}
+                />
+                {showDivisionDropdown && filteredDivisions.length > 0 && (
+                  <div style={{
+                    position: "absolute", zIndex: 100, top: "calc(100% + 2px)", left: 0, right: 0,
+                    background: "#fff", border: "0.5px solid #d1d5db", borderRadius: 6,
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 200, overflowY: "auto",
+                  }}>
+                    {filteredDivisions.map((d: any) => (
+                      <div
+                        key={d.div_code}
+                        className="div-option"
+                        style={{ padding: "7px 12px", fontSize: 12, cursor: "pointer" }}
+                        onMouseDown={() => {
+                          setDivision(d.div_code);
+                          setDivisionDisplay(`${d.div_code} - ${d.div_name}`);
+                          setDivisionSearch("");
+                          setShowDivisionDropdown(false);
+                        }}
+                      >
+                        <span style={{ fontWeight: 500 }}>{d.div_code}</span>
+                        <span style={{ color: "#6b7280", marginLeft: 6 }}>{d.div_name}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Currency */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 200, flex: "1 1 200px" }}>
+              <fieldset style={{ border: "0.5px solid #d1d5db", borderRadius: 6, padding: "6px 12px 10px", margin: 0 }}>
+                <legend style={{ fontSize: 10, color: "#6b7280", padding: "0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Currency
+                </legend>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {(["local", "foreign"] as const).map((val) => (
+                    <label key={val} style={radioLabelStyle}>
+                      <input
+                        type="radio"
+                        name="currency"
+                        value={val}
+                        checked={currency === val}
+                        onChange={() => setCurrency(val)}
+                        style={{ accentColor: "#185FA5" }}
+                      />
+                      {val === "local" ? "Local Currency" : "Foreign Currency"}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            </div>
+
+          </div>
+
+          {reportError && (
+            <div style={{ marginTop: 12, fontSize: 12, color: "#dc2626", background: "#fef2f2", border: "0.5px solid #fecaca", borderRadius: 6, padding: "6px 12px" }}>
+              {reportError}
+            </div>
+          )}
         </div>
 
-        {/* Currency */}
-        <div className="rounded-lg border bg-card p-3">
-          <p className="eyebrow mb-2">Currency</p>
-          <div className="flex gap-4 pt-1">
-            {(["local", "foreign"] as const).map((val) => (
-              <label key={val} className="flex cursor-pointer items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="currency"
-                  value={val}
-                  checked={currency === val}
-                  onChange={() => setCurrency(val)}
-                  className="accent-primary"
-                />
-                {val === "local" ? "Local Currency" : "Foreign Currency"}
-              </label>
+        {/* ══ Card 2: Transfer tables ══════════════════════════════════════════ */}
+        <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "20px 24px" }}>
+
+          {/* Tabs */}
+          <div style={{ display: "flex", borderBottom: "0.5px solid #e5e7eb", marginBottom: 14 }}>
+            {([["acCode", "A/c Code"], ["group", "Group"]] as [typeof activeTab, string][]).map(([tab, label]) => (
+              <button
+                key={tab}
+                className={`tab-ac ${activeTab === tab ? "active" : ""}`}
+                onClick={() => { setActiveTab(tab); }}
+              >
+                {label}
+              </button>
             ))}
           </div>
-        </div>
 
-        {/* Division */}
-        <div className="rounded-lg border bg-card p-3">
-          <p className="eyebrow mb-2">Division</p>
-          <label className="field">
-            <span>Select Division</span>
-            <Select
-              value={division}
-              onChange={(e) => {
-                setDivision(e.target.value);
-                setSelected([]);
-                clearLeft();
-                clearRight();
-              }}
-            >
-              <option value="">— All Divisions —</option>
-              {(divisionData ?? []).map((d: any) => (
-                <option key={d.div_code} value={d.div_code}>
-                  {d.div_code} – {d.div_name}
-                </option>
-              ))}
-            </Select>
-          </label>
-        </div>
-      </div>
+          {/* ── A/C Code tab ── */}
+          {activeTab === "acCode" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 44px 1fr", gap: 10 }}>
+              {/* Available */}
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Available accounts</span>
+                  <span style={badgeStyle}>{acLeftItems.length}</span>
+                </div>
+                <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden" }}>
+                  <input
+                    type="text"
+                    placeholder="Search accounts..."
+                    value={acSearchLeft}
+                    onChange={(e) => setAcSearchLeft(e.target.value)}
+                    style={{ width: "100%", border: "none", borderBottom: "0.5px solid #e5e7eb", padding: "5px 9px", fontSize: 12, boxSizing: "border-box", outline: "none" }}
+                  />
+                  <div style={{ maxHeight: 280, overflowY: "auto" }}>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th style={{ ...thStyle, width: 90 }}>A/C Code</th>
+                          <th style={thStyle}>AC Name</th>
+                          <th style={{ ...thStyle, width: 70 }}>Currency</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredAcLeft.map((row) => (
+                          <tr key={row.ac_code} style={rowStyle(acLeftSelected.has(row.ac_code))} onClick={() => toggleSel(row.ac_code, setAcLeftSelected)}>
+                            <td style={tdStyle}>{row.ac_code}</td>
+                            <td style={tdStyle}>{row.ac_name}</td>
+                            <td style={tdStyle}>{row.curr_code}</td>
+                          </tr>
+                        ))}
+                        {filteredAcLeft.length === 0 && (
+                          <tr><td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af", padding: 16 }}>
+                            {division ? "No data" : "Select a division first"}
+                          </td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
 
-      {/* ── Transfer list card ────────────────────────────────────────────── */}
-      <div className="flex flex-1 flex-col rounded-lg border bg-card">
+              {/* Arrows */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, paddingTop: 28 }}>
+                <button className="tf-btn" style={transferBtnStyle} title="Move all →" onClick={() => moveAllToRight(acLeftItems, acRightItems, setAcLeftItems, setAcRightItems, setAcLeftSelected)}><ChevronsRight size={14} /></button>
+                <button className="tf-btn" style={transferBtnStyle} title="Move selected →" onClick={() => moveToRight(acLeftItems, acRightItems, acLeftSelected, "ac_code", setAcLeftItems, setAcRightItems, setAcLeftSelected)}><ChevronRight size={14} /></button>
+                <button className="tf-btn" style={transferBtnStyle} title="Move selected ←" onClick={() => moveToLeft(acLeftItems, acRightItems, acRightSelected, "ac_code", setAcLeftItems, setAcRightItems, setAcRightSelected)}><ChevronLeft size={14} /></button>
+                <button className="tf-btn" style={transferBtnStyle} title="Move all ←" onClick={() => moveAllToLeft(acLeftItems, acRightItems, setAcLeftItems, setAcRightItems, setAcRightSelected)}><ChevronsLeft size={14} /></button>
+              </div>
 
-        {/* Tabs */}
-        <div className="flex border-b">
-          {(["group", "acCode"] as const).map((tab) => (
+              {/* Selected */}
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Selected accounts</span>
+                  <span style={badgeStyle}>{acRightItems.length}</span>
+                </div>
+                <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden" }}>
+                  <input
+                    type="text"
+                    placeholder="Search accounts..."
+                    value={acSearchRight}
+                    onChange={(e) => setAcSearchRight(e.target.value)}
+                    style={{ width: "100%", border: "none", borderBottom: "0.5px solid #e5e7eb", padding: "5px 9px", fontSize: 12, boxSizing: "border-box", outline: "none" }}
+                  />
+                  <div style={{ maxHeight: 280, overflowY: "auto" }}>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th style={{ ...thStyle, width: 90 }}>A/C Code</th>
+                          <th style={thStyle}>AC Name</th>
+                          <th style={{ ...thStyle, width: 70 }}>Currency</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredAcRight.map((row) => (
+                          <tr key={row.ac_code} style={rowStyle(acRightSelected.has(row.ac_code))} onClick={() => toggleSel(row.ac_code, setAcRightSelected)}>
+                            <td style={tdStyle}>{row.ac_code}</td>
+                            <td style={tdStyle}>{row.ac_name}</td>
+                            <td style={tdStyle}>{row.curr_code}</td>
+                          </tr>
+                        ))}
+                        {filteredAcRight.length === 0 && (
+                          <tr><td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af", padding: 16 }}>No accounts selected</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Group tab ── */}
+          {activeTab === "group" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 44px 1fr", gap: 10 }}>
+              {/* Available */}
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Available groups</span>
+                  <span style={badgeStyle}>{groupLeftItems.length}</span>
+                </div>
+                <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden" }}>
+                  <input
+                    type="text"
+                    placeholder="Search groups..."
+                    value={groupSearchLeft}
+                    onChange={(e) => setGroupSearchLeft(e.target.value)}
+                    style={{ width: "100%", border: "none", borderBottom: "0.5px solid #e5e7eb", padding: "5px 9px", fontSize: 12, boxSizing: "border-box", outline: "none" }}
+                  />
+                  <div style={{ maxHeight: 280, overflowY: "auto" }}>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th style={{ ...thStyle, width: 90 }}>L4 Code</th>
+                          <th style={thStyle}>Description</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredGroupLeft.map((row) => (
+                          <tr key={row.l4_code} style={rowStyle(groupLeftSelected.has(row.l4_code))} onClick={() => toggleSel(row.l4_code, setGroupLeftSelected)}>
+                            <td style={tdStyle}>{row.l4_code}</td>
+                            <td style={tdStyle}>{row.description}</td>
+                          </tr>
+                        ))}
+                        {filteredGroupLeft.length === 0 && (
+                          <tr><td colSpan={2} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af", padding: 16 }}>
+                            {division ? "No data" : "Select a division first"}
+                          </td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* Arrows */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, paddingTop: 28 }}>
+                <button className="tf-btn" style={transferBtnStyle} title="Move all →" onClick={() => moveAllToRight(groupLeftItems, groupRightItems, setGroupLeftItems, setGroupRightItems, setGroupLeftSelected)}><ChevronsRight size={14} /></button>
+                <button className="tf-btn" style={transferBtnStyle} title="Move selected →" onClick={() => moveToRight(groupLeftItems, groupRightItems, groupLeftSelected, "l4_code", setGroupLeftItems, setGroupRightItems, setGroupLeftSelected)}><ChevronRight size={14} /></button>
+                <button className="tf-btn" style={transferBtnStyle} title="Move selected ←" onClick={() => moveToLeft(groupLeftItems, groupRightItems, groupRightSelected, "l4_code", setGroupLeftItems, setGroupRightItems, setGroupRightSelected)}><ChevronLeft size={14} /></button>
+                <button className="tf-btn" style={transferBtnStyle} title="Move all ←" onClick={() => moveAllToLeft(groupLeftItems, groupRightItems, setGroupLeftItems, setGroupRightItems, setGroupRightSelected)}><ChevronsLeft size={14} /></button>
+              </div>
+
+              {/* Selected */}
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Selected groups</span>
+                  <span style={badgeStyle}>{groupRightItems.length}</span>
+                </div>
+                <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden" }}>
+                  <input
+                    type="text"
+                    placeholder="Search groups..."
+                    value={groupSearchRight}
+                    onChange={(e) => setGroupSearchRight(e.target.value)}
+                    style={{ width: "100%", border: "none", borderBottom: "0.5px solid #e5e7eb", padding: "5px 9px", fontSize: 12, boxSizing: "border-box", outline: "none" }}
+                  />
+                  <div style={{ maxHeight: 280, overflowY: "auto" }}>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th style={{ ...thStyle, width: 90 }}>L4 Code</th>
+                          <th style={thStyle}>Description</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredGroupRight.map((row) => (
+                          <tr key={row.l4_code} style={rowStyle(groupRightSelected.has(row.l4_code))} onClick={() => toggleSel(row.l4_code, setGroupRightSelected)}>
+                            <td style={tdStyle}>{row.l4_code}</td>
+                            <td style={tdStyle}>{row.description}</td>
+                          </tr>
+                        ))}
+                        {filteredGroupRight.length === 0 && (
+                          <tr><td colSpan={2} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af", padding: 16 }}>No groups selected</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Action bar */}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16, paddingTop: 14, borderTop: "0.5px solid #e5e7eb" }}>
             <button
-              key={tab}
-              type="button"
-              onClick={() => {
-                setActiveTab(tab);
-                clearLeft();
-                clearRight();
-              }}
-              className={[
-                "px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px",
-                activeTab === tab
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
-              ].join(" ")}
+              className="action-btn"
+              onClick={handleReset}
+              style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151" }}
             >
-              {tab === "acCode" ? "A/C Code" : "Group"}
+              <RotateCcw size={13} /> Reset
             </button>
-          ))}
-        </div>
-
-        <div className="flex flex-1 flex-col gap-3 p-3">
-
-          {/* Transfer area */}
-          <div className="flex gap-2 flex-1 items-stretch min-h-0">
-
-            {/* Available grid */}
-            <div className="flex flex-1 flex-col gap-1">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Available
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {filteredAvailable.length} records
-                </span>
-              </div>
-              <div className="ag-theme-alpine flex-1" style={{ height: 400 }}>
-                <AgGridReact
-                  ref={leftGridRef}
-                  columnDefs={activeTab === "acCode" ? acCodeColumnDefs : groupColumnDefs}
-                  defaultColDef={defaultColDef}
-                  rowData={filteredAvailable}
-                  getRowId={(p) => getRowKey(p.data, activeTab)}
-                  rowSelection="multiple"
-                  suppressCellFocus
-                  enableCellTextSelection
-                  onSelectionChanged={onLeftSelectionChanged}
-                  rowHeight={28}
-                  headerHeight={32}
-                />
-              </div>
-            </div>
-
-            {/* Transfer buttons */}
-            <div className="flex flex-col items-center justify-center gap-2 px-1">
-              <TransferBtn
-                title="Move selected →"
-                onClick={moveRight}
-                disabled={highlightedLeft.length === 0}
-              >
-                <ChevronRight size={15} />
-              </TransferBtn>
-              <TransferBtn
-                title="Move all →"
-                onClick={moveAllRight}
-                disabled={filteredAvailable.length === 0}
-              >
-                <ChevronsRight size={15} />
-              </TransferBtn>
-
-              <div className="my-1 h-px w-6 bg-border" />
-
-              <TransferBtn
-                title="Move selected ←"
-                onClick={moveLeft}
-                disabled={highlightedRight.length === 0}
-              >
-                <ChevronLeft size={15} />
-              </TransferBtn>
-              <TransferBtn
-                title="Move all ←"
-                onClick={moveAllLeft}
-                disabled={selected.length === 0}
-              >
-                <ChevronsLeft size={15} />
-              </TransferBtn>
-            </div>
-
-            {/* Selected grid */}
-            <div className="flex flex-1 flex-col gap-1">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Selected
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {selected.length} records
-                </span>
-              </div>
-              <div className="ag-theme-alpine flex-1" style={{ height: 400 }}>
-                <AgGridReact
-                  ref={rightGridRef}
-                  columnDefs={activeTab === "acCode" ? acCodeColumnDefs : groupColumnDefs}
-                  defaultColDef={defaultColDef}
-                  rowData={selected}
-                  getRowId={(p) => getRowKey(p.data, activeTab)}
-                  rowSelection="multiple"
-                  suppressCellFocus
-                  enableCellTextSelection
-                  onSelectionChanged={onRightSelectionChanged}
-                  rowHeight={28}
-                  headerHeight={32}
-                />
-              </div>
-            </div>
+            <button
+              className="action-btn-primary"
+              onClick={handleGenerate}
+              disabled={generating}
+              style={{ padding: "7px 16px", border: "0.5px solid #185FA5", background: "#185FA5", cursor: generating ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#fff", opacity: generating ? 0.7 : 1 }}
+            >
+              {generating
+                ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Generating...</>
+                : <><Printer size={13} /> Generate Report</>
+              }
+            </button>
           </div>
-
-          {/* Action row */}
-          <div className="flex items-center justify-end gap-2 border-t pt-3">
-            <Button variant="outline" onClick={handleReset}>
-              <RotateCcw size={15} /> Reset
-            </Button>
-            <Button onClick={() => setReportOpen(true)}>
-              <Printer size={15} /> Generate Report
-            </Button>
-          </div>
-
         </div>
       </div>
 
-      {/* ── Report Dialog ─────────────────────────────────────────────────── */}
+      {/* ── Report Dialog ─────────────────────────────────────────────────────── */}
       {/* {reportOpen && (
         <ReportDialogPage
           Report={AC_StatementReport}
@@ -483,10 +728,6 @@ export default function AC_StatementReportPage() {
           onClose={() => setReportOpen(false)}
         />
       )} */}
-    </section>
+    </div>
   );
-}
-
-function useQuery(arg0: { queryKey: string[]; queryFn: () => any; }): { data: any; } {
-  throw new Error("Function not implemented.");
 }

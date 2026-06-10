@@ -58,6 +58,7 @@ import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
 import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
 import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseReport";
 import { AcGroup, FirstGroup, SecondGroup, ThirdGroup } from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
+import AC_StatementPage from "../pages/accounts_report/detailed_reports/AC_StatementReportPage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -86,6 +87,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isAccountReportRoute(pathname),
     element: () => <LedgerBasics />,
   },
+
+
+  {
+  name: "Finance AC Statement",
+  match: ({ pathname }) => isAcStatementRoute(pathname),
+  element: () => <AC_StatementPage />,
+},
   
   {
     name: "Finance Ageing Report",
@@ -540,9 +548,23 @@ function isAccountTreeRoute(pathname: string) {
 
 function isAccountReportRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts/reports/account-report/detailed-reports/ledger-basic")||
-  normalized.includes("/finance/accounts_report/detailed_reports/a/c_statement") || normalized.includes("/finance/accounts/reports/account-report/detailed-reports/a/c_statement")
+  return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts/reports/account-report/detailed-reports/ledger-basic")
+  
 }
+
+
+function isAcStatementRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/finance/accounts_report/detailed_reports/a/c_statement") ||
+         normalized.includes("/finance/accounts_report/detailed_reports/a%2fc_statement") ||
+         normalized.includes("/finance/accounts/reports/account-report/detailed-reports/a/c-statement");
+}
+
+
+// function isAccountReportRoute(pathname: string) {
+//   const normalized = pathname.toLowerCase();
+//   return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts_report/detailed_reports/a/c_statement")
+// }
 
 
 
