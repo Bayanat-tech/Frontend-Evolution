@@ -1,7 +1,12 @@
-import { ArrowLeft, Printer, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowLeft, FileSpreadsheet, Printer, RefreshCw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { getWmsInbound, executeWmsInboundSql, getJobDetailsReport } from "../../../api/wms";
+import {
+  getWmsInbound,
+  executeWmsInboundSql,
+  getJobDetailsReport,
+  downloadJobDetailsReportExcel,
+} from "../../../api/wms";
 import { Button } from "../../../components/ui/Button";
 import { useAuth } from "../../../state/AuthContext";
 import { cn } from "../../../lib/utils";
@@ -22,7 +27,6 @@ type TReport = {
   apiFn: (prinCode: string, jobNo: string) => Promise<string>;
 };
 
-// ── Single merged list — no need for two separate arrays ──────────────────────
 const REPORTS: TReport[] = [
   { id: 1, reportTitle: "Job Details Report", apiFn: getJobDetailsReport },
 ];
@@ -37,14 +41,18 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
   const basePath = location.pathname.split("/").slice(0, -1).join("/");
 
   // ── Report dialog state ───────────────────────────────────────────────────
-  const [listOpen,        setListOpen]        = useState(false);
-  const [reportOpen,      setReportOpen]      = useState(false);
-  const [selectedReport,  setSelectedReport]  = useState<TReport | null>(null);
-  const [reportHtml,      setReportHtml]      = useState<string>("");
-  const [reportLoading,   setReportLoading]   = useState(false);
-  const [reportError,     setReportError]     = useState<string>("");
+  const [listOpen,       setListOpen]       = useState(false);
+  const [reportOpen,     setReportOpen]     = useState(false);
+  const [selectedReport, setSelectedReport] = useState<TReport | null>(null);
+  const [reportHtml,     setReportHtml]     = useState<string>("");
+  const [reportLoading,  setReportLoading]  = useState(false);
+  const [reportError,    setReportError]    = useState<string>("");
+  const [excelLoading,   setExcelLoading]   = useState(false);
 
-  // ── Fetch the HTML whenever a report is selected ──────────────────────────
+  // Ref to the iframe — used to fire window.print() inside it via postMessage
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // ── Fetch HTML when a report is selected ──────────────────────────────────
   useEffect(() => {
     if (!selectedReport) return;
 
@@ -53,13 +61,13 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
       setReportError("Principal code is not available for this job.");
       return;
     }
-console.log(selectedReport);
+
     setReportHtml("");
     setReportError("");
     setReportLoading(true);
 
     selectedReport
-      .apiFn(String(prinCode),jobNo)
+      .apiFn(String(prinCode), jobNo)
       .then((html) => setReportHtml(html))
       .catch((err) => {
         console.error("Report API error:", err);
@@ -68,13 +76,41 @@ console.log(selectedReport);
       .finally(() => setReportLoading(false));
   }, [selectedReport]);
 
-  // ── Click handlers ────────────────────────────────────────────────────────
+  // ── Toolbar handlers ──────────────────────────────────────────────────────
+
+  /**
+   * Print — sends postMessage into the iframe.
+   * The iframe's embedded <script> calls window.print() on receipt.
+   * User sees the native browser print dialog; "Save as PDF" is a destination.
+   */
+  const handlePrint = () => {
+    iframeRef.current?.contentWindow?.postMessage("print", "*");
+  };
+
+  /**
+   * Excel — fetches the binary blob from the backend and triggers a download.
+   * No new tab opened; no browser print dialog.
+   */
+  const handleExcel = async () => {
+    const prinCode = value(job || {}, "prin_code");
+    if (!prinCode) return;
+    setExcelLoading(true);
+    try {
+      await downloadJobDetailsReportExcel(String(prinCode), jobNo);
+    } catch (err) {
+      console.error("Excel export error:", err);
+    } finally {
+      setExcelLoading(false);
+    }
+  };
+
+  // ── Dialog helpers ────────────────────────────────────────────────────────
   const openListDialog = () => setListOpen(true);
 
   const selectReport = (rp: TReport) => {
-    setListOpen(false);      // close list
-    setSelectedReport(rp);   // triggers the useEffect above
-    setReportOpen(true);     // open report dialog
+    setListOpen(false);
+    setSelectedReport(rp);
+    setReportOpen(true);
   };
 
   const closeReportDialog = () => {
@@ -115,6 +151,8 @@ console.log(selectedReport);
   const statusColor = jobStatus === "Canceled"  ? "text-red-600 bg-red-50 border-red-200"
     : jobStatus === "Confirmed" ? "text-emerald-600 bg-emerald-50 border-emerald-200"
     : "text-blue-600 bg-blue-50 border-blue-200";
+
+  const reportReady = !reportLoading && !reportError && !!reportHtml;
 
   return (
     <section className="grid gap-3">
@@ -171,7 +209,6 @@ console.log(selectedReport);
           <Button size="sm" variant="outline" onClick={loadJob}>
             <RefreshCw size={14} /> Refresh
           </Button>
-          {/* Fix: onClick was on the icon, not the Button */}
           <Button size="sm" variant="outline" onClick={openListDialog}>
             <Printer size={14} /> Print
           </Button>
@@ -227,9 +264,33 @@ console.log(selectedReport);
         onClose={closeReportDialog}
       >
         <div className="flex flex-col" style={{ height: "75vh" }}>
+
+          {/* Toolbar — only visible when the report has loaded */}
+          {reportReady && (
+            <div className="flex shrink-0 items-center gap-2 border-b bg-muted/40 px-3 py-2">
+              {/* Print / Save as PDF — fires window.print() inside the iframe */}
+              <Button size="sm" variant="outline" onClick={handlePrint}>
+                <Printer size={13} /> Print / Save as PDF
+              </Button>
+
+              {/* Excel — direct binary download, no new tab */}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleExcel}
+                disabled={excelLoading}
+              >
+                {excelLoading
+                  ? <RefreshCw size={13} className="animate-spin" />
+                  : <FileSpreadsheet size={13} />}
+                {excelLoading ? "Exporting…" : "Export Excel"}
+              </Button>
+            </div>
+          )}
+
           {/* Loading */}
           {reportLoading && (
-            <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground gap-2">
+            <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
               <RefreshCw size={14} className="animate-spin" />
               Loading report…
             </div>
@@ -242,15 +303,17 @@ console.log(selectedReport);
             </div>
           )}
 
-          {/* Report iframe — renders the full backend HTML */}
-          {!reportLoading && !reportError && reportHtml && (
+          {/* Report iframe */}
+          {reportReady && (
             <iframe
+              ref={iframeRef}
               srcDoc={reportHtml}
               title={selectedReport?.reportTitle}
               className="flex-1 w-full rounded border-0"
               style={{ minHeight: 0 }}
             />
           )}
+
         </div>
       </Dialog>
 

@@ -156,8 +156,36 @@ export async function upsertMsActivityBillingApi<TPayload extends Record<string 
   return response.data;
 }
  
-export async function getJobDetailsReport(prinCode: string , jobNo: string) {
-  const response = await api.get(`/api/wms/inbound/reports/job-details/${jobNo}?prin_code=${prinCode}`,{ responseType: "text" });
-  if (!response.data) throw new Error (`Unable to fetch Job Details Report`);
-  return response.data
+export async function getJobDetailsReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/job-details/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+ 
+/**
+ * Downloads a .xlsx directly — no new tab, no print dialog.
+ * Uses responseType:"arraybuffer" to avoid any string encoding of the binary.
+ */
+export async function downloadJobDetailsReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/job-details/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }  // arraybuffer, not "blob" — avoids axios blob quirks
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Job_${jobNo}_Details.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
