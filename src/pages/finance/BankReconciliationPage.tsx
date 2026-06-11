@@ -2,7 +2,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { RefreshCw, Save, Search } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
-import { getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
+import { getDynamicLookupaccount, getLookupValue, LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
@@ -58,7 +58,7 @@ export function BankReconciliationPage() {
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
-    void getDynamicLookup({ parameter: "BANK_RECONCILIATION_GET_DOCUMENT_TYPE", loginid: user?.loginid || "" })
+    void getDynamicLookupaccount({ parameter: "BANK_RECONCILIATION_GET_DOCUMENT_TYPE", loginid: user?.loginid || "" })
       .then(setDocTypes)
       .catch(() => setDocTypes([]));
   }, [user?.loginid]);
@@ -68,7 +68,7 @@ export function BankReconciliationPage() {
     setLoading(true);
     setNotice(null);
     try {
-      const data = await getDynamicLookup({
+      const data = await getDynamicLookupaccount({
         parameter: "BANK_RECONCILIATION_GET_DETAIL_DATA",
         loginid: user?.loginid || "",
         code1: user?.company_code || "",
@@ -171,7 +171,7 @@ export function BankReconciliationPage() {
             columns={[{ field: "div_code", header: "Code" }, { field: "div_name", header: "Name" }]}
             valueField="div_code"
             displayFields={["div_code", "div_name"]}
-            loadOptions={() => getDynamicLookup({ parameter: "BANK_RECONCILIATION_GET_DIVISION", loginid: user?.loginid || "", code1: user?.company_code || "" })}
+            loadOptions={() => getDynamicLookupaccount({ parameter: "BANK_RECONCILIATION_GET_DIVISION", loginid: user?.loginid || "", code1: user?.company_code || "" })}
             onChange={(value, row) => setFilters((current) => ({ ...current, division: value, divisionName: String(getLookupValue(row || {}, "div_name") || "") }))}
           />
           <LookupField
@@ -181,7 +181,7 @@ export function BankReconciliationPage() {
             columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
             valueField="ac_code"
             displayFields={["ac_code", "ac_name"]}
-            loadOptions={() => getDynamicLookup({ parameter: "BANK_RECONCILIATION_GET_BANK_ACCOUNT", loginid: user?.loginid || "" })}
+            loadOptions={() => getDynamicLookupaccount({ parameter: "BANK_RECONCILIATION_GET_BANK_ACCOUNT", loginid: user?.loginid || "" })}
             onChange={(value, row) => setFilters((current) => ({ ...current, bankAccount: value, bankAccountName: String(getLookupValue(row || {}, "ac_name") || "") }))}
           />
           <label className="field"><span>Document Type</span><Select value={filters.docType} onChange={(event) => setFilters((current) => ({ ...current, docType: event.target.value }))}><option value="">All</option>{docTypes.map((type, index) => <option key={`${getLookupValue(type, "doc_id")}_${index}`} value={String(getLookupValue(type, "doc_id") || "")}>{String(getLookupValue(type, "doc_id") || "")}</option>)}</Select></label>

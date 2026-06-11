@@ -37,7 +37,7 @@ import AppraisalDivisionSummaryReport from "../pages/pams/AppraisalDivisionSumma
 import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
 import { JVDocumentEditor } from "../pages/finance/JVDocumentPage";
 
-import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs } from "../pages/pams/PamsPages";
+import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs, PeriodProcessButton ,  } from "../pages/pams/PamsPages";
 import { HrMasterPage } from "../pages/hr/HrMasterPage";
 import { hrMasterConfigs } from "../pages/hr/hrMasterConfigs";
 import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrPayUnitsPage } from "../pages/hr/HrProcessPages";
@@ -56,6 +56,9 @@ import { Leaf } from "lucide-react";
 import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics";
 import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
 import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
+import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseReport";
+import { AcGroup, FirstGroup, SecondGroup, ThirdGroup } from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
+import StockTransferPage from "../pages/wms/stock transfer/StockTransferPage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -83,6 +86,30 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Finance Account Report",
     match: ({ pathname }) => isAccountReportRoute(pathname),
     element: () => <LedgerBasics />,
+  },
+  
+  {
+    name: "Finance Ageing Report",
+    match: ({ pathname }) => isAgeingReportRoute(pathname),
+    element: () => <PeriodWisePage />},
+  { name: "Finance Trail Balance L2 Report",
+    match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/first_group"),
+    element: () => <FirstGroup />,
+  },
+  {
+    name: "Finance Trail Balance L3 Report",
+    match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/second_group"),
+    element: () => <SecondGroup />,
+  },
+  {
+    name: "Finance Trail Balance L4 Report",
+    match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/third_group"),
+    element: () => <ThirdGroup />,
+  },
+  {
+    name: "Finance AC trial balance report",
+    match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/a/c_wise"),
+    element: () => <AcGroup />,
   },
   {
     name: "Finance Bank Master",
@@ -113,6 +140,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Finance Budget Version",
     match: ({ pathname }) => isBudgetVersionRoute(pathname),
     element: () => <BudgetVersionPage />,
+  },
+    {
+    name: "Stock Transfer",
+    match: ({ pathname }) => isStockTransferRoute(pathname),
+    element: () => <StockTransferPage />,
   },
   {
     name: "Finance Account Wise Budget",
@@ -371,6 +403,33 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isPamsRoute(pathname) && isPamsKpiItemRoute(pathname),
     element: () => <KpiActivityPage />,
   },
+
+  // workspaceRoutes array mein, PAMS Master route se PEHLE add karo:
+{
+  name: "PAMS Period Setup",
+  match: ({ pathname, activeApp }) => {
+    if (!isPamsRoute(pathname)) return false;
+    const context = { pathname, activeApp };
+    const normalized = getPamsMatchText(context);
+    const compact = normalized.replace(/[^a-z0-9]/g, "");
+    return (
+      normalized.includes("/period_setup") ||
+      normalized.includes("/period-setup") ||
+      normalized.includes("appraisal_period_setup") ||
+      normalized.includes("appraisalperiodsetup") ||
+      compact.includes("periodsetup") ||
+      compact.includes("periodsetup")
+    );
+  },
+  element: (context) => (
+    <PamsMasterPage
+  config={pamsMasterConfigs.period}
+  hideRefresh={true}
+  headerActions={<PeriodProcessButton />}
+/>
+  ),
+},
+
   {
     name: "PAMS Master",
     match: (context) => Boolean(getPamsMasterConfig(context)),
@@ -517,6 +576,13 @@ function isAccountReportRoute(pathname: string) {
   return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts/reports/account-report/detailed-reports/ledger-basic");
 }
 
+function isAgeingReportRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/finance/accounts_report/ageing/period_wise") || normalized.includes("/finance/accounts/reports/ageing/period_wise/PeriodWisePage");
+}
+
+
+
 function getCreditDebitNoteDocType(pathname: string) {
   const normalized = pathname.toLowerCase();
   if (
@@ -598,6 +664,10 @@ function isAssetTransferRoute(pathname: string) {
   return pathname.toLowerCase().includes("/finance/a/c_others/assets/asset_transfer");
 }
 
+function isStockTransferRoute(pathname: string) { 
+   return pathname.toLowerCase().includes("wms/activity/request/stock_transfer");
+}
+
 function isAssetDepreciationRoute(pathname: string) {
   return pathname.toLowerCase().includes("/finance/a/c_others/assets/asset_depreciation");
 }
@@ -622,23 +692,30 @@ function isWmsBillingActRoute(pathname: string) {
 function isWmsInboundRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   if (!normalized.includes("/wms/")) return false;
- 
-  // Case 1: listing page — /wms/.../inbound/jobs (any depth)
+
   const isListing =
     normalized.includes("/inbound") &&
     (normalized.includes("/jobs") || normalized.includes("/inboundjob"));
- 
-  // Case 2: detail page — /wms/.../view/{jobNo}/{tab}
-  // The navigate() call in WmsInboundPage does `navigate("view/IB.../shipment_details")`
-  // which resolves relative to the listing, producing /workspace/wms/.../view/IB.../...
-  const isDetail = normalized.includes("/view/");
- 
+
+  // Only match /view/ if it's under an inbound path OR the job no starts with ib
+  const isDetail =
+    normalized.includes("/inbound") && normalized.includes("/view/");
+
   return isListing || isDetail;
 }
 
 function isWmsOutboundRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  return normalized.includes("/wms/") && normalized.includes("/outbound") && (normalized.includes("/jobs") || normalized.includes("/job") || normalized.includes("jobs_oub"));
+  if (!normalized.includes("/wms/")) return false;
+
+  const isListing =
+    normalized.includes("/outbound") &&
+    (normalized.includes("/jobs") || normalized.includes("/job") || normalized.includes("jobs_oub"));
+
+  const isDetail =
+    normalized.includes("/outbound") && normalized.includes("/view/");
+
+  return isListing || isDetail;
 }
 
 function getWmsSimpleMasterConfig(pathname: string) {

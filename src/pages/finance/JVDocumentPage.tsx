@@ -1,12 +1,13 @@
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { Ban, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { Ban, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import {
   cancelTransactionDocument,
-  deleteTransactionDocument,
   Division,
   FyPeriod,
+  getCompanyInfo,
+  getDefaultFyPeriod,
   getCheque,
   getChildTableName,
   getDivisions,
@@ -26,6 +27,8 @@ import {
   TransactionType,
   upsertBulkAccountEntryApi,
   getFinanceOutstanding,
+  openDocumentReport,
+  downloadDocumentReportExcel,
 } from "../../api/transactions";
 import { getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { Badge } from "../../components/ui/Badge";
@@ -75,19 +78,18 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
   const [totalRows, setTotalRows] = useState(0);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<EditorState>(null);
-  const [deleteTarget, setDeleteTarget] = useState<TransactionDocumentRow | null>(null);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
   const loadLookups = async () => {
-    const [fyData, divisionData] = await Promise.all([getFyPeriods(), getDivisions()]);
+    const [fyData, divisionData, companyInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
     setFyPeriods(fyData);
     setDivisions(divisionData);
-    setFyPeriod((current) => current || fyData[0]?.fy_period || "");
+    setFyPeriod((current) => current || getDefaultFyPeriod(fyData, companyInfo));
   };
 
-   const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize, nextColumnFilters = columnFilters, clearNotice = true) => {
+  const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize, nextColumnFilters = columnFilters, clearNotice = true) => {
     if (!nextFy) return;
     setLoading(true);
     if (clearNotice) setNotice(null);
@@ -151,17 +153,17 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
           <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })} title="Edit">
             <Edit2 size={15} />
           </Button>
-          <Button size="icon" variant="ghost" onClick={() => window.print()} title="Print">
+          <Button size="icon" variant="ghost" onClick={() => void openDocumentReport(row.original.doc_type || docType, row.original.doc_no)} title="Print">
             <Printer size={15} />
+          </Button>
+          <Button size="icon" variant="ghost" onClick={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)} title="Export Excel">
+            <Download size={15} />
           </Button>
           {row.original.canceled !== "Y" && (
             <Button size="icon" variant="ghost" onClick={() => setCancelTarget(row.original)} title="Cancel">
               <Ban size={15} />
             </Button>
           )}
-          <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(row.original)} title="Delete">
-            <Trash2 size={15} />
-          </Button>
         </div>
       ),
     },
@@ -184,27 +186,14 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
     }
   };
 
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
-    try {
-      await deleteTransactionDocument([deleteTarget.doc_no], docType);
-      setDeleteTarget(null);
-      setNotice({ type: "success", message: "Document deleted successfully" });
-      await loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false);
-    } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete document" });
-    }
-  };
-
-
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
+    <section className="finance-list-page grid gap-4">
+      <div className="finance-list-heading">
+        <div className="finance-list-title">
           <h1 className="m-0 text-2xl font-semibold tracking-tight">{meta.title}</h1>
           <p className="m-0 mt-1 text-sm text-muted-foreground">{meta.subtitle}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="finance-list-actions">
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
@@ -237,10 +226,13 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
           manualPagination
           manualFiltering
           toolbar={
-            <div className="flex items-center gap-2">
-              <Select className="h-10 w-36" value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
+            <div className="finance-list-controls">
+              <label className="finance-period-control">
+                <span>FY</span>
+                <Select value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
                 {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
-              </Select>
+                </Select>
+              </label>
             </div>
           }
           enableExport
@@ -248,6 +240,7 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
           pageIndex={pageIndex}
           pageSize={pageSize}
           totalRows={totalRows}
+          initialSorting={[{ id: "doc_date", desc: true }]}
           columnFilters={columnFilters}
           onColumnFiltersChange={(filters) => {
             setColumnFilters(filters);
@@ -271,6 +264,11 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
             onSaved={async (message) => {
               setEditor(null);
               setNotice({ type: "success", message });
+              await loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false);
+            }}
+            onCancelled={async () => {
+              setEditor(null);
+              setNotice({ type: "success", message: "Document cancelled successfully" });
               await loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false);
             }}
           />
@@ -308,15 +306,6 @@ export function JVDocumentEditor({ docType }: { docType: TransactionType }) {
         onClose={() => setCancelTarget(null)}
         onConfirm={() => void confirmCancel()}
       />
-      <ConfirmDialog
-        open={Boolean(deleteTarget)}
-        tone="danger"
-        title="Delete Document"
-        description="This action cannot be undone."
-        actionLabel="Delete"
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => void confirmDelete()}
-      />
     </section>
   );
 }
@@ -326,21 +315,25 @@ function JVDocument({
   editor,
   onClose,
   onSaved,
+  onCancelled,
 }: {
   docType: TransactionType;
   editor: EditorState;
   onClose: () => void;
   onSaved: (message: string) => Promise<void>;
+  onCancelled: () => Promise<void>;
 }) {
   const { user } = useAuth();
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<TransactionHeader>(() => emptyHeader(docType, editor));
   const [selectedDetailId, setSelectedDetailId] = useState<string>("");
   const [childLoading, setChildLoading] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [error, setError] = useState("");
+  const [showHeaderDetails, setShowHeaderDetails] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -426,7 +419,24 @@ function JVDocument({
   }, [form.detail.map((d) => d.amount).join(",")]);
 
   const disabled = form.canceled === "Y" || saving;
+  const isCancelled = form.canceled === "Y";
+  const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0) * row.sign_ind, 0);
   const total = form.detail.reduce((sum, row) => sum + (Number(row.amount) || 0) * row.sign_ind, 0);
+
+  const cancelCurrentDocument = async () => {
+    if (!form.doc_no || form.doc_no === "0" || form.canceled === "Y") return;
+    setSaving(true);
+    setError("");
+    try {
+      await cancelTransactionDocument(form.doc_no, form.doc_type);
+      setCancelConfirmOpen(false);
+      await onCancelled();
+    } catch (cancelError) {
+      setError(cancelError instanceof Error ? cancelError.message : "Unable to cancel document");
+    } finally {
+      setSaving(false);
+    }
+  };
   const creditTotal = form.detail.reduce((sum, row) => sum + (row.sign_ind === -1 ? Number(row.amount) || 0 : 0), 0);
   const debitTotal = form.detail.reduce((sum, row) => sum + (row.sign_ind === 1 ? Number(row.amount) || 0 : 0), 0);
 
@@ -673,105 +683,137 @@ function JVDocument({
     });
   };
   const isBalanced =
-  Number(creditTotal.toFixed(3)) ===
-  Number(debitTotal.toFixed(3));
+    Number(creditTotal.toFixed(3)) ===
+    Number(debitTotal.toFixed(3));
   console.log({
-  disabled,
-  loading,
-  detailLength: form.detail.length,
-  creditTotal,
-  debitTotal,
-});
+    disabled,
+    loading,
+    detailLength: form.detail.length,
+    creditTotal,
+    debitTotal,
+  });
 
   return (
-    <form className="payment-workbench grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
-      <CardHeader className="border-b bg-primary px-5 py-2.5 text-primary-foreground shadow-sm">
-        <div className="flex min-h-12 items-center justify-between gap-4">
+ <form className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`} onSubmit={submit}>
+      <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
+        <div className="flex min-h-10 items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
             <div>
               <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                {editMode ? "Edit Voucher" : "New Voucher"}
+                {editMode ? "Edit Document" : "New Document"}
               </p>
-              <h2 className="m-0 text-lg font-semibold leading-tight text-primary-foreground">Journal Voucher</h2>
+              <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">{DOCUMENT_META[docType].title}</h2>
             </div>
-            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1">
+            <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
               <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
               <strong className="block text-sm leading-tight text-primary-foreground">{form.doc_no || "New"}</strong>
             </div>
-            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1">
-              <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Balance</span>
-              <strong className={`block text-sm leading-tight ${Math.abs(total) > 0.001 ? "text-red-300" : "text-green-300"}`}>
-                {formatAmount(total)}
-              </strong>
+            <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
+              <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
+              <strong className="block text-sm leading-tight text-primary-foreground">{formatAmount(total)}</strong>
             </div>
+            {form.div_code && (
+              <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
+                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Division</span>
+                <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}</strong>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
+            {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
+            {form.doc_no && form.doc_no !== "0" && (
+              <>
+                <Button type="button" variant="secondary" onClick={() => void openDocumentReport(form.doc_type, form.doc_no || "")}>
+                  <Printer size={15} /> Print
+                </Button>
+                <Button aria-label="Excel" type="button" variant="secondary" size="icon" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
+                  <Download size={15} />
+                </Button>
+                {form.canceled !== "Y" && (
+                  <Button type="button" variant="secondary" onClick={() => setCancelConfirmOpen(true)} disabled={saving}>
+                    <Ban size={15} /> Cancel
+                  </Button>
+                )}
+              </>
+            )}
             <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
               <Paperclip size={15} /> Files
             </Button>
-            <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}>
-              <X size={16} />
-            </Button>
+            <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
           </div>
         </div>
       </CardHeader>
+      {isCancelled && (
+        <div className="cancelled-document-banner" role="status">
+          <div>
+            <span className="cancelled-document-kicker">Cancelled Document</span>
+            <strong>{form.doc_no || DOCUMENT_META[docType].title}</strong>
+          </div>
+          <p>This document is cancelled and opened in read-only mode. You can still print, export, and view attachments.</p>
+        </div>
+      )}
 
-      <CardContent className="min-h-0 overflow-auto p-4">
+      <CardContent className="min-h-0 overflow-auto p-3">
         {loading ? (
           <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading voucher...</div>
         ) : (
-          <div className="grid gap-4">
+          <div className="shrink-0 border-b bg-background ">
             <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
-            <div className="grid grid-cols-3 gap-3 rounded-md border bg-card p-3 max-xl:grid-cols-2 max-md:grid-cols-1">
-              {editMode && (
-                <Field label="Doc No">
-                  <Input disabled value={form.doc_no || ""} />
-                </Field>
-              )}
-              <Field label="Date">
-                <Input
-                  type="date"
-                  value={dateInput(form.doc_date)}
-                  onChange={(e) => setForm((c) => ({ ...c, doc_date: e.target.value }))}
+            <div className="commercial-header-shell rounded-md border bg-card">
+              <div className="commercial-section-title">
+                <div>
+                  <p className="eyebrow m-0">Header</p>
+                   <h3 className="m-0 text-sm font-semibold leading-tight">JV Information</h3>
+                </div>
+                <span></span>
+              </div>
+              <div className={`commercial-header-panel payment-header-grid relative grid grid-cols-4 gap-2.5 p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1 ${showHeaderDetails ? "is-expanded" : "is-collapsed"}`}>
+                {editMode && (
+                  <Field label="Doc No"><Input disabled value={form.doc_no || ""} /></Field>
+                )}
+                <Field label="Doc Date"><Input disabled={disabled} required type="date" value={dateInput(form.doc_date)} onChange={(event) => updateField("doc_date", event.target.value)} /></Field>
+                <LookupField
+                  label="Division"
+                  value={form.div_code}
+                  displayValue={form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}
+                  columns={[{ field: "div_code", header: "Code" }, { field: "div_name", header: "Name" }]}
+                  valueField="div_code"
+                  displayFields={["div_code", "div_name"]}
+                  loadOptions={() => getDynamicLookup({ parameter: "Account_division", code1: user?.company_code, loginid: user?.loginid || user?.username || "ADMIN" })}
+                  disabled={disabled}
+                  onChange={async (value, row) => {
+                    setForm((current) => ({ ...current, div_code: value, div_name: text(getLookupValue(row || {}, "div_name")) }));
+                  }}
                 />
-              </Field>
-              <Field label="Division">
-                <Input disabled value={`${form.div_code}${form.div_name ? ` - ${form.div_name}` : ""}`} />
-              </Field>
-              <LookupField
-                label="Currency"
-                value={form.curr_code}
-                displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
-                columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
-                valueField="curr_code"
-                displayFields={["curr_code", "curr_name"]}
-                loadOptions={getCurrencyRows}
-                onChange={(value, row) =>
-                  setForm((c) => ({
-                    ...c,
-                    curr_code: value,
-                    curr_name: text(getLookupValue(row || {}, "curr_name")),
-                  }))
-                }
-              />
-              <Field label="Exchange Rate">
-                <Input
-                  type="number"
-                  value={form.ex_rate}
-                  onChange={(e) => setForm((c) => ({ ...c, ex_rate: Number(e.target.value || 1) }))}
+                <LookupField
+                  label="Currency"  
+                  value={form.curr_code}
+                  displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
+                  columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
+                  valueField="curr_code"
+                  displayFields={["curr_code", "curr_name"]}
+                  loadOptions={getCurrencyRows}
+                  disabled={disabled}
+                  onChange={(value, row) => setForm((current) => ({ ...current, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(row?.ex_rate ?? 1) }))}
                 />
-              </Field>
-              <label className="field col-span-2 max-md:col-span-1">
-                <span>Remarks</span>
-                <Input
-                  value={form.remarks || ""}
-                  onChange={(e) => setForm((c) => ({ ...c, remarks: e.target.value }))}
-                />
-              </label>
+                <Field label="Exchange Rate"><Input disabled={disabled} required type="number" style={{ textAlign: "right" }} step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} /></Field>
+                <label className="field col-span-2 max-md:col-span-1">
+                  <span>Remarks</span>
+                  <Input disabled={disabled} value={form.remarks || ""} onChange={(event) => updateField("remarks", event.target.value)} />
+                </label>
+              </div>
+              <div className="commercial-header-footer flex items-center justify-between gap-3 border-t bg-secondary/30 px-3 py-2">
+                <div className="min-w-0 truncate text-xs text-muted-foreground">
+                  <span>Doc: {form.doc_no || "-"}</span>
+                </div>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setShowHeaderDetails((value) => !value)}>
+                  {showHeaderDetails ? "Hide Details" : "Show Details"}
+                </Button>
+              </div>
             </div>
 
-            <div className="rounded-md border bg-card">
+            <div className="commercial-lines-card rounded-md border bg-card">
               <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-2">
                 <div>
                   <p className="eyebrow">Details</p>
@@ -781,8 +823,8 @@ function JVDocument({
                   <Plus size={14} /> Add Line
                 </Button>
               </div>
-              <div className="max-h-[43vh] overflow-auto">
-                <table className="finance-lines-table w-full min-w-[2000px] text-sm">
+              <div className="commercial-lines-scroll max-h-[43vh] overflow-auto">
+                <table className="finance-lines-table w-full min-w-[2140px] text-sm">
                   <thead className="sticky top-0 bg-primary text-xs text-primary-foreground">
                     <tr>
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
@@ -794,6 +836,7 @@ function JVDocument({
                       <th className="px-2 py-2 text-left">Ex Rate</th>
                       <th className="finance-amount-cell px-2 py-2 text-left">Amount</th>
                       <th className="px-2 py-2 text-left">Cr/Dr</th>
+                      <th className="px-2 py-2 text-left">Tax Type</th>
                       <th className="px-2 py-2 text-left">Job No</th>
                       <th className="px-2 py-2 text-left">Dept</th>
                       <th className="finance-amount-cell px-2 py-2 text-left">Base Amount</th>
@@ -802,7 +845,7 @@ function JVDocument({
                   </thead>
                   <tbody>
                     {form.detail.length === 0 ? (
-                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={13}>No detail lines yet</td></tr>
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={14}>No detail lines yet</td></tr>
                     ) : form.detail.map((detail) => (
                       <tr className={selectedDetail?.id === detail.id ? "border-t bg-primary/5" : "border-t odd:bg-muted/20"} key={detail.id}>
                         <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{detail.serial_no}</td>
@@ -865,6 +908,27 @@ function JVDocument({
                             <option value={-1}>Cr</option>
                           </Select>
                         </td>
+                        <td className="w-28 px-2 py-1">
+                          <Select
+                            disabled={disabled}
+                            value={detail.tx_compnt_1_expmt || "N"}
+                            onChange={(event) => {
+                              const taxType = event.target.value;
+                              const taxPerc = taxType === "S" ? 5 : 0;
+                              const taxAmt = taxType === "S" ? (Number(detail.amount) || 0) * (taxPerc / 100) : 0;
+                              updateDetail(detail.id, {
+                                tx_compnt_1_expmt: taxType,
+                                tx_compnt_perc_1: taxPerc,
+                                tx_compnt_amt_1: taxAmt,
+                              });
+                            }}
+                          >
+                            <option value="N">No Tax</option>
+                            <option value="S">Std Tax</option>
+                            <option value="Z">Zero</option>
+                            <option value="E">Exempt</option>
+                          </Select>
+                        </td>
                         <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
                         <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
                         <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled value={formatNumber((Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1)))} /></td>
@@ -879,6 +943,15 @@ function JVDocument({
                 <strong className={Math.abs(total) > 0.001 ? "text-destructive" : "text-emerald-600"}>
                   {formatAmount(total)}
                 </strong>
+
+              </div>
+              <div className="flex items-center justify-end gap-8  px-3 py-1.5 text-sm">
+                <span className="text-muted-foreground">Tax</span>
+                <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(totalTax)}</strong>
+              </div>
+              <div className="flex items-center justify-end gap-8 border-t px-3 py-1.5 text-sm">
+                <span className="text-muted-foreground">Net Total</span>
+                <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{(formatAmount(total + totalTax))}</strong>
               </div>
             </div>
             <div className="rounded-md border bg-card">
@@ -948,6 +1021,15 @@ function JVDocument({
         loginId={user?.loginid || user?.username || ""}
         flowLevel={2}
         readOnly={form.canceled === "Y"}
+      />
+      <ConfirmDialog
+        open={cancelConfirmOpen}
+        tone="danger"
+        title="Cancel Document"
+        description="This will mark the current document as cancelled."
+        actionLabel="Cancel Document"
+        onClose={() => setCancelConfirmOpen(false)}
+        onConfirm={() => void cancelCurrentDocument()}
       />
     </form>
   );
