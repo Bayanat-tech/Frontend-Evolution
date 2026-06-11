@@ -610,7 +610,23 @@ export async function openOutstandingListReport(params: ReportParams) {
 
 export async function openAcStatementReport(params: ReportParams) {
     await openReportInTab(
-        `/api/finance/transactions/reports/AcStatementReport/html`,  // correct
+        "/api/finance/transactions/reports/AcStatementReport/html",  
+        params
+    );
+}
+
+
+export async function openOutstandingStatementDetailReport(params: ReportParams) {
+    await openReportInTab(
+        "/api/finance/transactions/reports/OutstandingDetailReport/html",  
+        params
+    );
+}
+
+
+export async function openOutstandingStatementSummaryReport(params: ReportParams) {
+    await openReportInTab(
+        "/api/finance/transactions/reports/OutstandingSummaryReport/html", 
         params
     );
 }

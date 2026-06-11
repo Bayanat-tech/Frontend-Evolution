@@ -59,6 +59,7 @@ import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
 import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseReport";
 import { AcGroup, FirstGroup, SecondGroup, ThirdGroup } from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
 import AC_StatementPage from "../pages/accounts_report/detailed_reports/AC_StatementReportPage";
+import OutstandingStatementPage from "../pages/accounts_report/detailed_reports/OutstandingStatementPage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -94,6 +95,14 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   match: ({ pathname }) => isAcStatementRoute(pathname),
   element: () => <AC_StatementPage />,
 },
+
+
+{
+  name: "Finance Outstanding Statement",
+  match: ({ pathname }) => isOutstandingStatementRoute(pathname),
+  element: () => <OutstandingStatementPage />,
+},
+
   
   {
     name: "Finance Ageing Report",
@@ -558,6 +567,13 @@ function isAcStatementRoute(pathname: string) {
   return normalized.includes("/finance/accounts_report/detailed_reports/a/c_statement") ||
          normalized.includes("/finance/accounts_report/detailed_reports/a%2fc_statement") ||
          normalized.includes("/finance/accounts/reports/account-report/detailed-reports/a/c-statement");
+}
+
+function isOutstandingStatementRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/finance/accounts_report/detailed_reports/outstanding_statement") ||
+         normalized.includes("/finance/accounts_report/detailed_reports/outstanding-statement") ||
+         normalized.includes("/finance/accounts/reports/account-report/detailed-reports/outstanding-statement");
 }
 
 
