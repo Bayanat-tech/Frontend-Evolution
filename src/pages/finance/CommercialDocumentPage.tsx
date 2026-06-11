@@ -731,7 +731,7 @@ const withTax = {
 
   {/* ── Supplier Code + Name — PO / PI  & ── Customer Code + Name — SI / SV ──── */}
   {/* field: ac_code / ac_name — same in all tables ── */}
-  <div className="field">
+  <div className="field commercial-party-primary">
   <LookupField
     label={isSales ? "Customer" : "Supplier"} required
     value={form.ac_code}
