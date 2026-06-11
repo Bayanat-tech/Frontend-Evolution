@@ -6,6 +6,8 @@ import {
   executeWmsInboundSql,
   getJobDetailsReport,
   downloadJobDetailsReportExcel,
+  getPutawayReport,
+  downloadPutawayReportExcel,
 } from "../../../api/wms";
 import { Button } from "../../../components/ui/Button";
 import { useAuth } from "../../../state/AuthContext";
@@ -22,13 +24,25 @@ import { Dialog } from "../../../components/ui/Dialog";
 type Props = { jobNo: string; tab: string };
 
 type TReport = {
-  id: number;
-  reportTitle: string;
-  apiFn: (prinCode: string, jobNo: string) => Promise<string>;
+  id:           number;
+  reportTitle:  string;
+  apiFn:        (prinCode: string, jobNo: string) => Promise<string>;
+  excelFn?:     (prinCode: string, jobNo: string) => Promise<void>;
 };
 
 const REPORTS: TReport[] = [
-  { id: 1, reportTitle: "Job Details Report", apiFn: getJobDetailsReport },
+  {
+    id:          1,
+    reportTitle: "Job Details Report",
+    apiFn:       getJobDetailsReport,
+    excelFn:     downloadJobDetailsReportExcel,
+  },
+  {
+    id:          2,
+    reportTitle: "Putaway Report",
+    apiFn:       getPutawayReport,
+    excelFn:     downloadPutawayReportExcel,
+  },
 ];
 
 export function InboundJobDetail({ jobNo, tab }: Props) {
@@ -78,25 +92,17 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
 
   // ── Toolbar handlers ──────────────────────────────────────────────────────
 
-  /**
-   * Print — sends postMessage into the iframe.
-   * The iframe's embedded <script> calls window.print() on receipt.
-   * User sees the native browser print dialog; "Save as PDF" is a destination.
-   */
   const handlePrint = () => {
     iframeRef.current?.contentWindow?.postMessage("print", "*");
   };
 
-  /**
-   * Excel — fetches the binary blob from the backend and triggers a download.
-   * No new tab opened; no browser print dialog.
-   */
   const handleExcel = async () => {
+    if (!selectedReport?.excelFn) return;
     const prinCode = value(job || {}, "prin_code");
     if (!prinCode) return;
     setExcelLoading(true);
     try {
-      await downloadJobDetailsReportExcel(String(prinCode), jobNo);
+      await selectedReport.excelFn(String(prinCode), jobNo);
     } catch (err) {
       console.error("Excel export error:", err);
     } finally {
@@ -152,7 +158,8 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
     : jobStatus === "Confirmed" ? "text-emerald-600 bg-emerald-50 border-emerald-200"
     : "text-blue-600 bg-blue-50 border-blue-200";
 
-  const reportReady = !reportLoading && !reportError && !!reportHtml;
+  const reportReady   = !reportLoading && !reportError && !!reportHtml;
+  const hasExcelExport = !!selectedReport?.excelFn;
 
   return (
     <section className="grid gap-3">
@@ -273,18 +280,20 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
                 <Printer size={13} /> Print / Save as PDF
               </Button>
 
-              {/* Excel — direct binary download, no new tab */}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleExcel}
-                disabled={excelLoading}
-              >
-                {excelLoading
-                  ? <RefreshCw size={13} className="animate-spin" />
-                  : <FileSpreadsheet size={13} />}
-                {excelLoading ? "Exporting…" : "Export Excel"}
-              </Button>
+              {/* Excel — only rendered if the selected report has an excelFn */}
+              {hasExcelExport && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleExcel}
+                  disabled={excelLoading}
+                >
+                  {excelLoading
+                    ? <RefreshCw size={13} className="animate-spin" />
+                    : <FileSpreadsheet size={13} />}
+                  {excelLoading ? "Exporting…" : "Export Excel"}
+                </Button>
+              )}
             </div>
           )}
 
