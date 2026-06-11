@@ -600,6 +600,17 @@ export async function openOutstandingListReport(params: ReportParams) {
 }
 
 
+// ---------profite and loss report------------------
+
+
+
+export async function openProfitLossReport(params: ReportParams) {
+    await openReportInTab(
+        `/api/finance/transactions/reports/getProfitLossReport/html`,
+        params
+    );
+}
+
 
 // export const openInvdatewiseDetailReport = async (params: any): Promise<void> => {
 //     const response = await fetch("/api/finance/transactions/reports/InvdatewiseDetail/html", {

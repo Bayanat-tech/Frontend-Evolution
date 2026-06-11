@@ -1,57 +1,33 @@
 "use client";
 
-import React, { Component, useState } from "react";
-import { BarChart2, RotateCcw, Printer } from "lucide-react";
-import dayjs from "dayjs";
+import React, { useState, useEffect } from "react";
+import { BarChart2, RotateCcw, Printer, Loader2 } from "lucide-react";
 
 import { useAuth } from "../../state/AuthContext";
-import { Division } from "../../api/transactions";
-import { LookupField } from "../../components/ui/LookupField";
-import { getDynamicLookup, getDynamicLookupaccount } from "../../api/lookups";
-import { buildPrintHTML, ReportValues } from "./Profitlossreport";
+import { getDynamicLookup } from "../../api/lookups";
+import { openProfitLossReport } from "../../api/transactions";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 type PnlOption = "period" | "month" | "monthwise";
 
-interface PnlRow {
-    h_code: string;
-    h_name: string;
-    pl_code: string;
-    pl_name: string;
-    lcur_amount: number;
-    s_order: number;
-}
+// ─── Date helpers ───────────────────────────────────────────────────────────────
 
-// ─── Error boundary ────────────────────────────────────────────────────────────
+const getStartOfMonth = (): string => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-01`;
+};
 
-class ReportErrorBoundary extends Component<
-    { children: React.ReactNode },
-    { hasError: boolean; message: string }
-> {
-    constructor(props: any) {
-        super(props);
-        this.state = { hasError: false, message: "" };
-    }
-    static getDerivedStateFromError(error: any) {
-        return { hasError: true, message: error?.message ?? "Unknown error" };
-    }
-    render() {
-        if (this.state.hasError)
-            return (
-                <div style={{
-                    padding: "10px 14px", background: "#fef2f2",
-                    border: "0.5px solid #fca5a5", borderRadius: 6,
-                    fontSize: 12, color: "#b91c1c",
-                    display: "flex", flexDirection: "column" as const, gap: 4,
-                }}>
-                    <span>⚠ Report failed to render.</span>
-                    <span style={{ fontSize: 11, color: "#9b1c1c" }}>{this.state.message}</span>
-                </div>
-            );
-        return this.props.children;
-    }
-}
+const getToday = (): string => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+};
+
+const formatDisplay = (iso: string): string => {
+    if (!iso) return "";
+    const [y, m, d] = iso.split("-");
+    return `${d}/${m}/${y}`;
+};
 
 // ─── Shared styles ──────────────────────────────────────────────────────────────
 
@@ -75,53 +51,78 @@ const inputStyle: React.CSSProperties = {
     boxSizing: "border-box",
 };
 
+const radioLabelStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+    fontSize: 12,
+    cursor: "pointer",
+    color: "#374151",
+};
+
+// ─── Parameter map ──────────────────────────────────────────────────────────────
+// Maps the UI option to the procedure parameter name expected by the backend
+
+const PARAMETER_MAP: Record<PnlOption, string> = {
+    period:    "Account_Report_VW_PROFIT_AND_LOSS",
+    month:     "Account_Report_VW_PROFIT_AND_LOSS",
+    monthwise: "Account_Report_VW_PROFIT_AND_LOSS",
+};
+
 // ─── Main Component ─────────────────────────────────────────────────────────────
 
-const ProfitLossPage: React.FC = () => {
+export default function ProfitLossPage() {
     const { user } = useAuth();
+    const companyCode = user?.company_code ?? "";
+    const loginId     = user?.loginid ?? user?.username ?? "ADMIN";
 
-    const [option, setOption] = useState<PnlOption>("period");
-    const [division, setDivision] = useState<Division[]>([]);
-    const [dateFrom, setDateFrom] = useState(dayjs().startOf("month").format("YYYY-MM-DD"));
-    const [dateTo, setDateTo] = useState(dayjs().format("YYYY-MM-DD"));
+    // ── Division (searchable dropdown) ──────────────────────────────────────────
+    const [divisionList,         setDivisionList]         = useState<any[]>([]);
+    const [division,             setDivision]             = useState("");
+    const [divisionDisplay,      setDivisionDisplay]      = useState("");
+    const [divisionSearch,       setDivisionSearch]       = useState("");
+    const [showDivisionDropdown, setShowDivisionDropdown] = useState(false);
+
+    // ── Filter state ────────────────────────────────────────────────────────────
+    const [option,      setOption]      = useState<PnlOption>("period");
+    const [dateFrom,    setDateFrom]    = useState(getStartOfMonth());
+    const [dateTo,      setDateTo]      = useState(getToday());
     const [reportError, setReportError] = useState<string | null>(null);
-    const [generating, setGenerating] = useState(false);
+    const [generating,  setGenerating]  = useState(false);
 
-    const formatDate = (date: string) => {
-        if (!date) return "";
-        const d = new Date(date);
-        return [
-            String(d.getDate()).padStart(2, "0"),
-            String(d.getMonth() + 1).padStart(2, "0"),
-            d.getFullYear(),
-        ].join("/");
-    };
+    // ── Fetch divisions on mount ─────────────────────────────────────────────────
+    useEffect(() => {
+        getDynamicLookup({
+            parameter: "Account_division",
+            loginid: loginId,
+            code1: companyCode,
+            code2: "", code3: "", code4: "",
+            number1: 0, number2: 0, number3: 0, number4: 0,
+            date1: null, date2: null, date3: null, date4: null,
+        })
+            .then((res) => setDivisionList(res || []))
+            .catch(console.error);
+    }, []);
 
-    const reportValues: ReportValues = {
-        company_code: user?.company_code ?? "",
-        option,
-        division: division[0]?.div_code || "All",
-        date_from: dateFrom,
-        date_to: dateTo,
-    };
+    const filteredDivisions = divisionList.filter((d: any) =>
+        `${d.div_code} ${d.div_name}`.toLowerCase().includes(divisionSearch.toLowerCase())
+    );
 
+    // ── Reset ───────────────────────────────────────────────────────────────────
     const handleReset = () => {
         setOption("period");
-        setDivision([]);
-        setDateFrom(dayjs().startOf("month").format("YYYY-MM-DD"));
-        setDateTo(dayjs().format("YYYY-MM-DD"));
+        setDivision("");
+        setDivisionDisplay("");
+        setDivisionSearch("");
+        setDateFrom(getStartOfMonth());
+        setDateTo(getToday());
         setReportError(null);
         setGenerating(false);
     };
 
-    /**
-     * Fetches P&L data, builds the full HTML string, and opens it
-     * in a new popup window. The popup contains its own Print button
-     * so only the report is printed — not the parent page.
-     */
+    // ── Generate ────────────────────────────────────────────────────────────────
     const handleGenerate = async () => {
-        // ── Validation ──────────────────────────────────────────────────────
-        if (!division[0]?.div_code) {
+        if (!division) {
             setReportError("Please select a Division before generating.");
             return;
         }
@@ -134,87 +135,44 @@ const ProfitLossPage: React.FC = () => {
         setGenerating(true);
 
         try {
-            // ── Fetch data ───────────────────────────────────────────────────
-            const response = await getDynamicLookupaccount({
-                parameter: "Account_Report_PROFIT_AND_LOSS_VW_PROFIT_AND_LOSS",
-                loginid: user?.loginid ?? user?.username ?? "ADMIN",
-                code1: reportValues.company_code,
-                code2: reportValues.division,
-                code3: reportValues.date_from,
-                code4: reportValues.date_to,
+            await openProfitLossReport({
+                parameter: PARAMETER_MAP[option],
+                loginid:   loginId,
+                code1:     companyCode,   // company_code
+                code2:     division,      // div_code
+                code3:     dateFrom,      // date_from  (YYYY-MM-DD)
+                code4:     dateTo,        // date_to    (YYYY-MM-DD)
             });
-
-            const data: PnlRow[] = Array.isArray(response)
-                ? (response as unknown as PnlRow[])
-                : [];
-
-            if (!data.length) {
-                setReportError("No data found for the selected criteria.");
-                return;
-            }
-
-            // ── Build HTML & open popup ──────────────────────────────────────
-            const html = buildPrintHTML(data, reportValues);
-
-            const popup = window.open(
-                "",
-                "PnLReport",
-                "width=960,height=760,scrollbars=yes,resizable=yes,toolbar=no,menubar=no,location=no"
-            );
-
-            if (!popup) {
-                setReportError(
-                    "Popup was blocked by your browser. Please allow popups for this site and try again."
-                );
-                return;
-            }
-
-            popup.document.open();
-            popup.document.write(html);
-            popup.document.close();
-            popup.focus();
-
         } catch (err: any) {
-            setReportError(
-                err?.message ?? "An unexpected error occurred while generating the report."
-            );
+            setReportError(err?.message ?? "Failed to generate report. Please try again.");
+            console.error(err);
         } finally {
             setGenerating(false);
         }
     };
 
     const optionRows: { value: PnlOption; label: string }[] = [
-        { value: "period", label: "P&L for the period" },
-        { value: "month", label: "P&L for the month" },
-        { value: "monthwise", label: "P&L month wise" },
+        { value: "period",    label: "P&L for the period" },
+        { value: "month",     label: "P&L for the month"  },
+        { value: "monthwise", label: "P&L month wise"     },
     ];
 
-    const summaryRows: [string, string][] = [
-        ["Report type", option === "period" ? "Period" : option === "month" ? "Month" : "Month wise"],
-        ["Division", division[0]?.div_code || "All"],
-        ["From", formatDate(dateFrom) || "—"],
-        ["To", formatDate(dateTo) || "—"],
-    ];
-
+    // ─── Render ────────────────────────────────────────────────────────────────
     return (
-        <div style={{ background: "#f3f4f6", padding: "16px", fontFamily: "system-ui, sans-serif" }}>
+        <div style={{ background: "#f3f4f6", padding: "16px", fontFamily: "system-ui, sans-serif", minHeight: "100%" }}>
             <style>{`
-                .action-btn:hover          { background: #f9fafb !important; }
-                .action-btn-primary:hover  { background: #0C447C !important; border-color: #0C447C !important; }
-                .pnl-radio-row             { display:flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer; }
-                .pnl-radio-row input[type="radio"] { accent-color: #185FA5; }
-                .pnl-radio-row span        { font-size:12px; color:#374151; }
+                .action-btn:hover         { background: #f9fafb !important; }
+                .action-btn-primary:hover { background: #0C447C !important; border-color: #0C447C !important; }
+                .div-option:hover         { background: #f0f7ff; }
+                @keyframes spin           { to { transform: rotate(360deg); } }
             `}</style>
 
-            <div style={{ maxWidth: 900, margin: "0 auto" }}>
+            <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
 
-                {/* ── Filter card ── */}
-                <div style={{
-                    background: "#fff", border: "0.5px solid #e5e7eb",
-                    borderRadius: 12, padding: "20px 24px",
-                }}>
+                {/* ══ Card 1 — Filters ══════════════════════════════════════════════ */}
+                <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "20px 24px" }}>
 
-                    {/* Title */}
+                    {/* Card title */}
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
                         <BarChart2 size={18} color="#185FA5" />
                         <span style={{ fontSize: 15, fontWeight: 500, color: "#111827" }}>
@@ -222,109 +180,152 @@ const ProfitLossPage: React.FC = () => {
                         </span>
                     </div>
 
-                    {/* 3-col grid */}
-                    <div style={{ display: "grid", gridTemplateColumns: "200px 1fr 200px", gap: 24 }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 20, alignItems: "flex-start" }}>
 
-                        {/* Col 1 — Option */}
-                        <div>
-                            <div style={fieldLabelStyle}>Option</div>
-                            {optionRows.map(({ value, label }) => (
-                                <label key={value} className="pnl-radio-row">
-                                    <input
-                                        type="radio"
-                                        name="pnlOption"
-                                        value={value}
-                                        checked={option === value}
-                                        onChange={() => setOption(value)}
-                                    />
-                                    <span>{label}</span>
-                                </label>
-                            ))}
-                        </div>
+                        {/* ── Left column: Date range + Division ── */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 260, flex: "1 1 260px" }}>
 
-                        {/* Col 2 — Division + Dates */}
-                        <div style={{ borderLeft: "0.5px solid #e5e7eb", paddingLeft: 24 }}>
-                            <div style={{ marginBottom: 16 }}>
-                                <div style={fieldLabelStyle}>Division</div>
-                                <LookupField
-                                    label="Division *"
-                                    value={division[0]?.div_code || ""}
-                                    displayValue={division[0]?.div_name || ""}
-                                    columns={[
-                                        { field: "div_code", header: "Code" },
-                                        { field: "div_name", header: "Name" },
-                                    ]}
-                                    valueField="div_code"
-                                    displayFields={["div_code", "div_name"]}
-                                    loadOptions={() =>
-                                        getDynamicLookup({
-                                            parameter: "Account_division",
-                                            code1: user?.company_code,
-                                            loginid: user?.loginid || user?.username || "ADMIN",
-                                        })
-                                    }
-                                    onChange={(val: any) => {
-                                        setDivision([{ div_code: val, div_name: "" }]);
-                                    }}
-                                />
-                            </div>
-
-                            <div style={fieldLabelStyle}>Date range</div>
-                            <div style={{
-                                display: "grid", gridTemplateColumns: "36px 1fr",
-                                alignItems: "center", gap: "8px 8px",
-                            }}>
-                                <span style={{ fontSize: 12, color: "#6b7280" }}>From</span>
-                                <input
-                                    type="date"
-                                    style={inputStyle}
-                                    value={dateFrom}
-                                    onChange={(e) => setDateFrom(e.target.value)}
-                                />
-                                <span style={{ fontSize: 12, color: "#6b7280" }}>To</span>
-                                <input
-                                    type="date"
-                                    style={inputStyle}
-                                    value={dateTo}
-                                    onChange={(e) => setDateTo(e.target.value)}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Col 3 — Summary */}
-                        <div style={{ borderLeft: "0.5px solid #e5e7eb", paddingLeft: 24 }}>
-                            <div style={fieldLabelStyle}>Summary</div>
-                            <div style={{
-                                background: "#f9fafb", border: "0.5px solid #e5e7eb",
-                                borderRadius: 8, padding: "12px 14px",
-                                fontSize: 12, color: "#374151", lineHeight: 2,
-                            }}>
-                                {summaryRows.map(([k, v]) => (
-                                    <div key={k} style={{ display: "flex", justifyContent: "space-between" }}>
-                                        <span style={{ color: "#6b7280" }}>{k}</span>
-                                        <span style={{ fontWeight: 500 }}>{v}</span>
+                            {/* Date range */}
+                            <div>
+                                <div style={fieldLabelStyle}>Date Range</div>
+                                <div style={{ display: "flex", gap: 10 }}>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ ...fieldLabelStyle, marginBottom: 3 }}>From</div>
+                                        <input
+                                            type="date"
+                                            value={dateFrom}
+                                            max={dateTo || undefined}
+                                            onChange={(e) => setDateFrom(e.target.value)}
+                                            style={inputStyle}
+                                        />
                                     </div>
-                                ))}
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ ...fieldLabelStyle, marginBottom: 3 }}>To</div>
+                                        <input
+                                            type="date"
+                                            value={dateTo}
+                                            min={dateFrom || undefined}
+                                            onChange={(e) => setDateTo(e.target.value)}
+                                            style={inputStyle}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Division searchable dropdown */}
+                            <div style={{ position: "relative" }}>
+                                <div style={fieldLabelStyle}>Division</div>
+                                <input
+                                    type="text"
+                                    placeholder="Search division..."
+                                    value={divisionSearch !== "" ? divisionSearch : divisionDisplay}
+                                    onChange={(e) => { setDivisionSearch(e.target.value); setShowDivisionDropdown(true); }}
+                                    onFocus={() => setShowDivisionDropdown(true)}
+                                    onBlur={() => setTimeout(() => setShowDivisionDropdown(false), 150)}
+                                    style={inputStyle}
+                                />
+                                {showDivisionDropdown && filteredDivisions.length > 0 && (
+                                    <div style={{
+                                        position: "absolute", zIndex: 100, top: "calc(100% + 2px)", left: 0, right: 0,
+                                        background: "#fff", border: "0.5px solid #d1d5db", borderRadius: 6,
+                                        boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 200, overflowY: "auto",
+                                    }}>
+                                        {filteredDivisions.map((d: any) => (
+                                            <div
+                                                key={d.div_code}
+                                                className="div-option"
+                                                style={{ padding: "7px 12px", fontSize: 12, cursor: "pointer" }}
+                                                onMouseDown={() => {
+                                                    setDivision(d.div_code);
+                                                    setDivisionDisplay(`${d.div_code} - ${d.div_name}`);
+                                                    setDivisionSearch("");
+                                                    setShowDivisionDropdown(false);
+                                                    setReportError(null);
+                                                }}
+                                            >
+                                                <span style={{ fontWeight: 500 }}>{d.div_code}</span>
+                                                <span style={{ color: "#6b7280", marginLeft: 6 }}>{d.div_name}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
+
+                        {/* ── Right column: Report option fieldset ── */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 200, flex: "1 1 200px" }}>
+                            <fieldset style={{ border: "0.5px solid #d1d5db", borderRadius: 6, padding: "6px 12px 12px", margin: 0 }}>
+                                <legend style={{ fontSize: 10, color: "#6b7280", padding: "0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                    Report Option
+                                </legend>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
+                                    {optionRows.map(({ value, label }) => (
+                                        <label key={value} style={radioLabelStyle}>
+                                            <input
+                                                type="radio"
+                                                name="pnlOption"
+                                                value={value}
+                                                checked={option === value}
+                                                onChange={() => setOption(value)}
+                                                style={{ accentColor: "#185FA5" }}
+                                            />
+                                            {label}
+                                        </label>
+                                    ))}
+                                </div>
+                            </fieldset>
+                        </div>
+
                     </div>
 
                     {/* Error banner */}
                     {reportError && (
                         <div style={{
-                            marginTop: 14, padding: "8px 14px",
-                            background: "#fef2f2", border: "0.5px solid #fca5a5",
-                            borderRadius: 6, fontSize: 12, color: "#b91c1c",
-                            display: "flex", alignItems: "center", gap: 8,
+                            marginTop: 12, fontSize: 12, color: "#dc2626",
+                            background: "#fef2f2", border: "0.5px solid #fecaca",
+                            borderRadius: 6, padding: "6px 12px",
                         }}>
-                            <span>⚠</span> {reportError}
+                            ⚠ {reportError}
                         </div>
                     )}
+                </div>
+
+                {/* ══ Card 2 — Summary + Action bar ════════════════════════════════ */}
+                <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "20px 24px" }}>
+
+                    {/* Summary panel */}
+                    <div style={{ marginBottom: 16 }}>
+                        <div style={fieldLabelStyle}>Report Summary</div>
+                        <div style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+                            gap: "12px 24px",
+                            background: "#f9fafb",
+                            border: "0.5px solid #e5e7eb",
+                            borderRadius: 8,
+                            padding: "14px 16px",
+                            marginTop: 8,
+                        }}>
+                            {[
+                                ["Report Type", option === "period" ? "Period" : option === "month" ? "Month" : "Month Wise"],
+                                ["Division",    divisionDisplay || "—"],
+                                ["From",        formatDisplay(dateFrom) || "—"],
+                                ["To",          formatDisplay(dateTo)   || "—"],
+                            ].map(([k, v]) => (
+                                <div key={k}>
+                                    <div style={{ fontSize: 10, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>
+                                        {k}
+                                    </div>
+                                    <div style={{ fontSize: 13, fontWeight: 500, color: "#111827" }}>{v}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
 
                     {/* Action bar */}
                     <div style={{
                         display: "flex", justifyContent: "flex-end", gap: 8,
-                        marginTop: 20, paddingTop: 14, borderTop: "0.5px solid #e5e7eb",
+                        paddingTop: 14, borderTop: "0.5px solid #e5e7eb",
                     }}>
                         <button
                             className="action-btn"
@@ -332,15 +333,14 @@ const ProfitLossPage: React.FC = () => {
                             disabled={generating}
                             style={{
                                 padding: "7px 16px", border: "0.5px solid #d1d5db",
-                                background: "#fff", cursor: "pointer", display: "flex",
-                                alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6,
-                                color: "#374151", opacity: generating ? 0.6 : 1,
+                                background: "#fff", cursor: generating ? "not-allowed" : "pointer",
+                                display: "flex", alignItems: "center", gap: 6,
+                                fontSize: 12, borderRadius: 6, color: "#374151",
+                                opacity: generating ? 0.6 : 1,
                             }}
                         >
                             <RotateCcw size={13} /> Reset
                         </button>
-
-                        <div style={{ width: "0.5px", background: "#e5e7eb", alignSelf: "stretch" }} />
 
                         <button
                             className="action-btn-primary"
@@ -348,14 +348,16 @@ const ProfitLossPage: React.FC = () => {
                             disabled={generating}
                             style={{
                                 padding: "7px 16px", border: "0.5px solid #185FA5",
-                                background: "#185FA5", cursor: generating ? "wait" : "pointer",
+                                background: "#185FA5", cursor: generating ? "not-allowed" : "pointer",
                                 display: "flex", alignItems: "center", gap: 6,
                                 fontSize: 12, borderRadius: 6, color: "#fff",
                                 opacity: generating ? 0.7 : 1,
                             }}
                         >
-                            <Printer size={13} />
-                            {generating ? "Generating…" : "Generate Report"}
+                            {generating
+                                ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Generating…</>
+                                : <><Printer size={13} /> Generate Report</>
+                            }
                         </button>
                     </div>
                 </div>
@@ -363,6 +365,4 @@ const ProfitLossPage: React.FC = () => {
             </div>
         </div>
     );
-};
-
-export default ProfitLossPage;
+}

@@ -55,11 +55,12 @@ import { TrainingFeedbackPage } from "../pages/hr/Hrtrainingfeedbackpage";
 import { Leaf } from "lucide-react";
 import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics";
 import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
-import ProfitLossPage from "../pages/accounts_report/ProfitLossPage";
+// import ProfitLossPage from "../pages/accounts_report/ProfitLossPage";
 import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
 import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseReport";
 import { AcGroup, FirstGroup, SecondGroup, ThirdGroup } from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
 import StockTransferPage from "../pages/wms/stock transfer/StockTransferPage";
+import ProfitLossPage from "../pages/accounts_report/ProfitLossPage";
 
 type WorkspaceRouteContext = {
   pathname: string;
