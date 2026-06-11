@@ -269,7 +269,7 @@ function BankCodeEditor({
   };
 
   return (
-    <div className="flex min-h-[420px] flex-col">
+    <div className="flex min-h-[360px] flex-col">
       <div className="border-b pb-3">
         <p className="eyebrow">{editor.mode === "edit" ? "Modify" : "View"}</p>
         <h2 className="m-0 text-xl font-semibold tracking-tight">Bank Code</h2>
@@ -304,14 +304,6 @@ function BankCodeEditor({
           <label className="field">
             <span>Last Cheque No</span>
             <Input type="number" value={form.last_cheque_no} onChange={(e) => setField("last_cheque_no", e.target.value)} disabled={readOnly} />
-          </label>
-          <label className="field">
-            <span>Cheque Template</span>
-            <Input value={form.chq_template} onChange={(e) => setField("chq_template", e.target.value)} disabled={readOnly} />
-          </label>
-          <label className="field">
-            <span>Words Length</span>
-            <Input type="number" value={form.words_length} onChange={(e) => setField("words_length", e.target.value)} disabled={readOnly} />
           </label>
         </div>
         <label className="field">

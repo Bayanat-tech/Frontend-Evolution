@@ -98,6 +98,13 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
     return () => media.removeEventListener("change", syncMobileState);
   }, []);
 
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    const shouldLock = isMobile && mobileMenuOpen;
+    document.body.classList.toggle("mobile-menu-lock", shouldLock);
+    return () => document.body.classList.remove("mobile-menu-lock");
+  }, [isMobile, mobileMenuOpen]);
+
   const workspaceRoute = resolveWorkspaceRoute({ pathname: location.pathname, activeApp });
   const displayCollapsed = isMobile ? false : collapsed;
   const toggleSidebar = () => {

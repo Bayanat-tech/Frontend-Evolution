@@ -3,7 +3,6 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { executeCommonProcedure, getDynamicLookup, getLookupValue, LookupRow, postFinance } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
@@ -134,35 +133,39 @@ export function PLSetupPage() {
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-      <div className="grid min-h-[620px] grid-cols-[minmax(0,1fr)_390px] gap-4 max-xl:grid-cols-1">
-        <DataTable
-          columns={columns}
-          data={filteredRows}
-          title={loading ? "Loading" : `${filteredRows.length} Records`}
-          subtitle="Setup Records"
-          searchValue={query}
-          onSearchChange={setQuery}
-          searchPlaceholder="Search P&L setup..."
-          loading={loading}
-          emptyText="No P&L setup records found"
-          height={590}
-          density="grid"
-          getRowId={(row, index) => `${getLookupValue(row, "pl_code") || index}`}
-        />
+      <DataTable
+        columns={columns}
+        data={filteredRows}
+        title={loading ? "Loading" : `${filteredRows.length} Records`}
+        subtitle="Setup Records"
+        searchValue={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="Search P&L setup..."
+        loading={loading}
+        emptyText="No P&L setup records found"
+        height={670}
+        density="grid"
+        getRowId={(row, index) => `${getLookupValue(row, "pl_code") || index}`}
+      />
 
-        <Card className="overflow-hidden">
-          {editor ? (
-            <PLSetupEditor editor={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); setNotice({ type: "success", message: editor.mode === "edit" ? "P&L setup updated successfully" : "P&L setup added successfully" }); await loadRows(false); }} />
-          ) : (
-            <div className="grid min-h-[620px] place-items-center p-8 text-center text-muted-foreground">
-              <div>
-                <p className="eyebrow">No Form Open</p>
-                <h2 className="m-0 text-lg font-semibold text-foreground">Create or edit a setup record</h2>
-              </div>
-            </div>
-          )}
-        </Card>
-      </div>
+      {editor && (
+        <Dialog
+          open
+          title={`${editor.mode === "create" ? "Create" : "Edit"} P&L Setting`}
+          description="P&L setup details"
+          onClose={() => setEditor(null)}
+        >
+          <PLSetupEditor
+            editor={editor}
+            onClose={() => setEditor(null)}
+            onSaved={async () => {
+              setEditor(null);
+              setNotice({ type: "success", message: editor.mode === "edit" ? "P&L setup updated successfully" : "P&L setup added successfully" });
+              await loadRows(false);
+            }}
+          />
+        </Dialog>
+      )}
 
       {deleteTarget && (
         <Dialog
@@ -172,7 +175,13 @@ export function PLSetupPage() {
           title="Delete P&L Setup"
           description="This action cannot be undone."
           onClose={() => setDeleteTarget(null)}
-          footer={<><Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button><Button variant="destructive" onClick={() => void handleDelete()}>Delete</Button></>}
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+              <Button variant="destructive" onClick={() => void handleDelete()}>Delete</Button>
+              
+            </>
+          }
         >
           <p className="modal-copy">Delete <strong>{String(getLookupValue(deleteTarget, "pl_code") || "")}</strong>?</p>
         </Dialog>
@@ -187,6 +196,7 @@ function PLSetupEditor({ editor, onClose, onSaved }: { editor: Exclude<Editor, n
   const [form, setForm] = useState<PLForm>(() => mapPLForm(editor.mode === "edit" ? editor.row : undefined, user?.company_code || ""));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
   const setField = (field: keyof PLForm, value: string) => setForm((prev) => ({ ...prev, [field]: value }));
 
   const submit = async (event: FormEvent) => {
@@ -208,30 +218,46 @@ function PLSetupEditor({ editor, onClose, onSaved }: { editor: Exclude<Editor, n
   };
 
   return (
-    <div className="flex min-h-[620px] flex-col">
-      <div className="border-b p-4">
+    <div className="flex min-h-[360px] flex-col">
+      <div className="border-b pb-3">
         <p className="eyebrow">{isEdit ? "Modify" : "Create"}</p>
         <h2 className="m-0 text-xl font-semibold tracking-tight">P&L Setting</h2>
       </div>
-      <form className="grid flex-1 content-start gap-4 overflow-auto p-4" id="pl-setup-form" onSubmit={submit}>
+      <form className="grid flex-1 content-start gap-4 overflow-auto py-4" id="pl-setup-form" onSubmit={submit}>
         {error && <div className="alert error">{error}</div>}
-        <label className="field"><span>PL Code</span><Input value={form.pl_code} onChange={(event) => setField("pl_code", event.target.value)} disabled={isEdit} /></label>
-        <label className="field"><span>PL Name</span><Input value={form.pl_name} onChange={(event) => setField("pl_name", event.target.value)} /></label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="field">
+            <span>PL Code</span>
+            <Input value={form.pl_code} onChange={(e) => setField("pl_code", e.target.value)} disabled={isEdit} />
+          </label>
+          <label className="field">
+            <span>PL Type</span>
+            <Select value={form.pl_type} onChange={(e) => setField("pl_type", e.target.value)} disabled={isEdit}>
+              <option value="">Select type</option>
+              <option value="P">P</option>
+              <option value="L">L</option>
+              <option value="B">B</option>
+            </Select>
+          </label>
+          <label className="field">
+            <span>H Code</span>
+            <Input value={form.h_code} onChange={(e) => setField("h_code", e.target.value)} disabled={isEdit} />
+          </label>
+          <label className="field">
+            <span>Previous Code</span>
+            <Input value={form.prv_code} onChange={(e) => setField("prv_code", e.target.value)} disabled={isEdit} />
+          </label>
+        </div>
         <label className="field">
-          <span>PL Type</span>
-          <Select value={form.pl_type} onChange={(event) => setField("pl_type", event.target.value)} disabled={isEdit}>
-            <option value="">Select type</option>
-            <option value="P">P</option>
-            <option value="L">L</option>
-            <option value="B">B</option>
-          </Select>
+          <span>PL Name</span>
+          <Input value={form.pl_name} onChange={(e) => setField("pl_name", e.target.value)} />
         </label>
-        <label className="field"><span>H Code</span><Input value={form.h_code} onChange={(event) => setField("h_code", event.target.value)} disabled={isEdit} /></label>
-        <label className="field"><span>Previous Code</span><Input value={form.prv_code} onChange={(event) => setField("prv_code", event.target.value)} disabled={isEdit} /></label>
       </form>
-      <div className="flex items-center justify-end gap-2 border-t bg-card p-4">
+      <div className="flex items-center justify-end gap-2 border-t bg-card pt-4">
         <Button variant="outline" onClick={onClose}>Close</Button>
-        <Button disabled={saving} type="submit" form="pl-setup-form">{saving ? <span className="spinner small" /> : "Save"}</Button>
+        <Button disabled={saving} type="submit" form="pl-setup-form">
+          {saving ? <span className="spinner small" /> : "Save"}
+        </Button>
       </div>
     </div>
   );
