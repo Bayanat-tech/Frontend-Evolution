@@ -612,6 +612,15 @@ export async function openProfitLossReport(params: ReportParams) {
 }
 
 
+// ----------Visa Expiry Listing Report----------------
+export async function openVisaExpiryReport(params: ReportParams) {
+    await openReportInTab(
+        `/api/finance/transactions/reports/getVisaExpiryReport/html`,
+        params
+    );
+}
+
+
 // export const openInvdatewiseDetailReport = async (params: any): Promise<void> => {
 //     const response = await fetch("/api/finance/transactions/reports/InvdatewiseDetail/html", {
 //         method: "POST",

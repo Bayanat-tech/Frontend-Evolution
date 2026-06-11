@@ -61,6 +61,7 @@ import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseRe
 import { AcGroup, FirstGroup, SecondGroup, ThirdGroup } from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
 import StockTransferPage from "../pages/wms/stock transfer/StockTransferPage";
 import ProfitLossPage from "../pages/accounts_report/ProfitLossPage";
+import VisaExpiryListingPage from "../pages/hr/Reports/Visaexpirylistingpage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -223,6 +224,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({pathname}) => isProfitLossRoute(pathname),
     element: () => <ProfitLossPage/>
   },
+{
+    name : "Visa Expiry Listing Report",
+    match: ({pathname}) => isVisaExpiryListingRoute(pathname),
+    element: () => <VisaExpiryListingPage/>
+  },
+
   {
     name: "WMS Inbound",
     match: ({ pathname }) => isWmsInboundRoute(pathname),
@@ -692,6 +699,13 @@ function isProfitLossRoute(pathname:string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/finance/finance/accounts_report/profit_and_loss/profit_and_loss")
 }
+
+function isVisaExpiryListingRoute(pathname:string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("hr/reports/employee/visa_expiry_listing") || 
+          normalized.includes("hr/reports/employee/visa-expiry-listing");
+}
+
 
 function isWmsCountryRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
