@@ -156,3 +156,20 @@ export async function upsertMsActivityBillingApi<TPayload extends Record<string 
   return response.data;
 }
  
+export async function getAllStockTransfers() {
+  const response = await api.get<ApiResponse<unknown[]>>("/api/wms/stocktransfer/getAllStockTransfers");
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load stock transfers");
+  return response.data.data || [];
+}
+
+export async function createSTN(payload: {
+  prin_code: string;
+  description: string;
+  stn_date: string;
+  user_id: string;
+  company_code: string;
+}) {
+  const response = await api.post<ApiResponse<unknown>>("/api/wms/stocktransfer/createSTN", payload);
+  if (!response.data.success) throw new Error(response.data.message || "Unable to create STN");
+  return response.data;
+}

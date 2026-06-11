@@ -306,7 +306,7 @@ function AssetSaleEditor({ editor, title, companyCode, loginId, onClose, onSaved
       <form className="grid flex-1 content-start gap-4 overflow-auto p-4" id="asset-sale-form" onSubmit={handleSubmit}>
         <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Doc No" value={form.doc_no} onChange={(value) => setField("doc_no", value)} disabled={readOnly} numeric />
+          {/* <Field label="Doc No" value={form.doc_no} onChange={(value) => setField("doc_no", value)} disabled={readOnly} numeric /> */}
           <Field label="Doc Date" type="date" value={form.doc_date} onChange={(value) => setField("doc_date", value)} disabled={readOnly} />
           <Lookup label="Division" parameter="Account_division" value={form.div_code} displayValue={display(form.div_code, form.div_name)} valueField="div_code" displayFields={["div_code", "div_name"]} columns={[{ field: "div_code", header: "Division" }, { field: "div_name", header: "Name" }]} companyCode={companyCode} disabled={readOnly} onSelect={(value, row) => { setField("div_code", value); setField("div_name", String(getLookupValue(row || {}, "div_name") || "")); }} />
           <Lookup label="Asset *" parameter="AC_ASSETS_SearchID" value={form.asset_id} displayValue={display(form.asset_id, form.asset_name)} valueField="asset_id" displayFields={["asset_id", "asset_name"]} columns={[{ field: "asset_id", header: "Asset ID" }, { field: "asset_name", header: "Asset Name" }]} companyCode={companyCode} disabled={readOnly} onSelect={(value, row) => { setField("asset_id", value); setField("asset_name", String(getLookupValue(row || {}, "asset_name") || "")); }} />

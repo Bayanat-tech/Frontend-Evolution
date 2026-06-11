@@ -28,15 +28,16 @@ export function AssetDepreciationPage() {
   const [year, month] = monthYear ? monthYear.split("-") : ["", ""];
 
   const columns = useMemo<ColumnDef<DepRow>[]>(() => [
-    col("doc_no", "Doc No", 110),
-    col("doc_date", "Doc Date", 120),
     col("asset_id", "Asset ID", 130),
     col("asset_name", "Asset Name", 220),
+    col("reg_no", "Reg No", 110),
+    col("purchase_date", "Purchase Date", 120),
+    col("quantity", "Quantity", 100),
+    col("amount", "pur.Amount", 120),
     col("dprc_percentage", "Dep. %", 90),
-    col("dprc_amount", "Dep. Amount", 130),
+    col("accdprc_amount", "Accu Amount", 120),
+    col("dprc_amount", "Dprc Amount", 130),
     col("wd_value", "WD Value", 120),
-    col("amount", "Amount", 120),
-    col("asset_group_code", "Group", 110),
     col("last_dprc_date", "Last Dep.", 120),
     col("div_code", "Division", 100),
   ], []);
@@ -49,9 +50,8 @@ export function AssetDepreciationPage() {
         parameter: "AC_ASSETS_RETRIEVE_BUTTON",
         loginid: loginId,
         code1: companyCode,
-        code2: docType,
-        code3: docNo,
-        code4: division,
+        code2: division,
+       
       });
       setRows(data.map(normalize));
     } catch (error) {
@@ -137,8 +137,6 @@ export function AssetDepreciationPage() {
         <CardContent className="grid gap-3 pt-4 md:grid-cols-4">
           <label className="field"><span>Month</span><Input type="month" value={monthYear} onChange={(event) => { setMonthYear(event.target.value); const [y, m] = event.target.value.split("-"); setDocNo(y && m ? `${y}${m}` : ""); }} /></label>
           <LookupField label="Division" value={division} displayValue={division ? `${division}${divisionName ? ` - ${divisionName}` : ""}` : ""} columns={[{ field: "div_code", header: "Division" }, { field: "div_name", header: "Name" }]} valueField="div_code" displayFields={["div_code", "div_name"]} loadOptions={() => getDynamicLookup({ parameter: "AC_ASSETS_DEPRECIATION_DIVISION_LIST", loginid: loginId, code1: companyCode })} onChange={(value, row) => { setDivision(value); setDivisionName(String(getLookupValue(row || {}, "div_name") || "")); }} />
-          <label className="field"><span>Doc Type</span><Input value={docType} disabled /></label>
-          <label className="field"><span>Doc No</span><Input value={docNo} onChange={(event) => setDocNo(event.target.value)} /></label>
         </CardContent>
       </Card>
 

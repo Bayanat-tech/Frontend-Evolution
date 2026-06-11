@@ -2,6 +2,7 @@ import { executeDynamicMutation } from "../../api/lookups";
 import { executeWmsInboundSql } from "../../api/wms";
 import msPrincipalServiceInstance from "../../api/principal";
 import type { WmsSimpleMasterConfig } from "./WmsSimpleMasterPage";
+import { api } from "../../api/client";
 
 const yesNo = [
   { label: "No", value: "N" },
@@ -519,7 +520,7 @@ saveEndpoint: (form, { editMode, original }) => {
       { name: "imco_code", label: "IMCO Code", tab: "manufacture-validation", section: "MANUFACTURER" },
       { name: "manu_code", label: "Manufacturer", dropdownParam: "DROP_DOWN_MANUFACTURER", dropdownCodeMap: { prin_code: "code1" }, dropdownDisplayFields: ["manu_code", "manu_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "manu_code", tab: "manufacture-validation", section: "MANUFACTURER" },
       { name: "alt_prod_code", label: "Alternate Prod Code", tab: "manufacture-validation", section: "MANUFACTURER" },
-      { name: "site_ind", label: "Default Site Ind", required: true, dropdownParam: "DROP_DOWN_SITE",dropdownDisplayFields: ["site_ind", "site_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "site_code", tab: "manufacture-validation", section: "MANUFACTURER" },
+      { name: "site_ind", label: "Default Site Ind", required: true, dropdownParam: "DROP_DOWN_SITE_IND",dropdownDisplayFields: ["site_ind", "ind_desc"], dropdownDisplaySeparator: " - ", dropdownValueKey: "site_ind", tab: "manufacture-validation", section: "MANUFACTURER" },
       { name: "batch_type", label: "Batch Type", type: "number", tab: "manufacture-validation", section: "MANUFACTURER" },
 
       // Manufacture & Validation Tab - Validation
@@ -585,6 +586,14 @@ saveEndpoint: (form, { editMode, original }) => {
         count: data.length,
       };
     },
+customSave: async (form, context) => {
+  const { user } = context;
+  const typedUser = user as { loginid: string };
+  await api.post('api/wms/inbound/upsertMsProduct', {
+    ...form,
+    loginid: typedUser.loginid,
+  });
+},
   },
   site: {
     title: "Site Master",
