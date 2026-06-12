@@ -382,48 +382,88 @@ const OutstandingStatementPage: React.FC = () => {
   };
 
 
-  const handleGenerate = async () => {
-    if (!division) { 
-      setReportError("Please select a Division before generating."); 
-      return; 
-    }
-    setReportError(null);
-    setGenerating(true);
-    try {
-      const params = {
-        parameter: reportType === "detail" 
-          ? "Account_Report_Outstanding_Detail" 
-          : "Account_Report_Outstanding_Summary",
-        loginid:   user?.loginid ?? '',
-        code1:     user?.company_code ?? '',
-        code2:     division,
-        code3:     activeTab === "acCode"
-                    ? (acRightItems.length > 0 ? acRightItems.map((r) => r.ac_code).join(",") : "All")
-                    : "All",
-        code4:     activeTab === "group"
-                    ? (groupRightItems.length > 0 ? groupRightItems.map((r) => r.l4_code).join(",") : "All")
-                    : "All",
-        code5:     formatDateOracle(dateFrom),
-        code6:     formatDateOracle(dateTo),
-        currency:  reportType,
-      };
+  // const handleGenerate = async () => {
+  //   if (!division) { 
+  //     setReportError("Please select a Division before generating."); 
+  //     return; 
+  //   }
+  //   setReportError(null);
+  //   setGenerating(true);
+  //   try {
+  //     const params = {
+  //       parameter: reportType === "detail" 
+  //         ? "Account_Report_Outstanding_Detail" 
+  //         : "Account_Report_Outstanding_Summary",
+  //       loginid:   user?.loginid ?? '',
+  //       code1:     user?.company_code ?? '',
+  //       code2:     division,
+  //       code3:     activeTab === "acCode"
+  //                   ? (acRightItems.length > 0 ? acRightItems.map((r) => r.ac_code).join(",") : "All")
+  //                   : "All",
+  //       code4:     activeTab === "group"
+  //                   ? (groupRightItems.length > 0 ? groupRightItems.map((r) => r.l4_code).join(",") : "All")
+  //                   : "All",
+  //       code5:     formatDateOracle(dateFrom),
+  //       code6:     formatDateOracle(dateTo),
+  //       currency:  reportType,
+  //     };
       
-      if (reportType === "detail") {
-        await openOutstandingStatementDetailReport(params);
-      } else {
-        await openOutstandingStatementSummaryReport(params);
-      }
-    } catch (err: any) {
-      setReportError("Failed to generate report.");
-      console.error(err);
-    } finally {
-      setGenerating(false);
-    }
-  };
+  //     if (reportType === "detail") {
+  //       await openOutstandingStatementDetailReport(params);
+  //     } else {
+  //       await openOutstandingStatementSummaryReport(params);
+  //     }
+  //   } catch (err: any) {
+  //     setReportError("Failed to generate report.");
+  //     console.error(err);
+  //   } finally {
+  //     setGenerating(false);
+  //   }
+  // };
 
 
   // ─── Render ───────────────────────────────────────────────────────────────
+const handleGenerate = async () => {
+  if (!division) {
+    setReportError("Please select a Division before generating.");
+    return;
+  }
+  setReportError(null);
+  setGenerating(true);
+  try {
+    const params = {   
+  parameter: reportType === 'detail'
+               ? 'Account_Report_Outstanding_Detail'
+               : 'Account_Report_Outstanding_Summary',
+  loginid:  user?.loginid ?? '',
+  code1:    user?.company_code ?? '',
+  code2:    division,
+  code3:    activeTab === 'acCode'
+              ? (acRightItems.length > 0
+                  ? acRightItems.map((r) => r.ac_code).join(',')
+                  : 'All')
+              : 'All',
+  code4:    activeTab === 'group'
+              ? (groupRightItems.length > 0
+                  ? groupRightItems.map((r) => r.l4_code).join(',')
+                  : 'All')
+              : 'All',
+  code5:    'OMR',
+  code6:    formatDateOracle(dateFrom),
+};
 
+    if (reportType === 'detail') {
+      await openOutstandingStatementDetailReport(params);
+    } else {
+      await openOutstandingStatementSummaryReport(params);
+    }
+  } catch (err: any) {
+    setReportError("Failed to generate report.");
+    console.error(err);
+  } finally {
+    setGenerating(false);
+  }
+};
 
   return (
     <div style={{ background: '#f3f4f6', padding: '16px', fontFamily: 'system-ui, sans-serif', minHeight: '100%' }}>
