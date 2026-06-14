@@ -379,7 +379,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
   };
 
   return (
-    <section className="grid gap-4">
+    <section className="security-page grid gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="m-0 text-2xl font-semibold text-foreground">{config.title}</h1>

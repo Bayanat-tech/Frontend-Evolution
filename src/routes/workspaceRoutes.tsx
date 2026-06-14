@@ -60,6 +60,7 @@ import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
 import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseReport";
 import { AcGroup, FirstGroup, SecondGroup, ThirdGroup } from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
 import StockTransferPage from "../pages/wms/stock transfer/StockTransferPage";
+import { StockTransferViewPage } from "../pages/wms/stock transfer/GetStockTransferPage";
 import ProfitLossPage from "../pages/accounts_report/ProfitLossPage";
 import VisaExpiryListingPage from "../pages/hr/Reports/Visaexpirylistingpage";
 
@@ -144,11 +145,17 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isBudgetVersionRoute(pathname),
     element: () => <BudgetVersionPage />,
   },
+      {
+    name: "Stock Transfer View",
+    match: ({ pathname }) => isStockTransferViewRoute(pathname),
+    element: () => <StockTransferViewPage />,   
+  },
     {
     name: "Stock Transfer",
     match: ({ pathname }) => isStockTransferRoute(pathname),
     element: () => <StockTransferPage />,
   },
+
   {
     name: "Finance Account Wise Budget",
     match: ({ pathname }) => isAccountWiseBudgetRoute(pathname),
@@ -678,10 +685,21 @@ function isAssetTransferRoute(pathname: string) {
   return pathname.toLowerCase().includes("/finance/a/c_others/assets/asset_transfer");
 }
 
-function isStockTransferRoute(pathname: string) { 
-   return pathname.toLowerCase().includes("wms/activity/request/stock_transfer");
+function isStockTransferRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.includes("wms/activity/request/stock_transfer") &&
+    !normalized.includes("/view/")  // ← add this
+  );
 }
 
+function isStockTransferViewRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.includes("wms/activity/request/stock_transfer") &&
+    normalized.includes("/view/")
+  );
+}
 function isAssetDepreciationRoute(pathname: string) {
   return pathname.toLowerCase().includes("/finance/a/c_others/assets/asset_depreciation");
 }
