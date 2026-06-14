@@ -599,6 +599,14 @@ export async function openOutstandingListReport(params: ReportParams) {
     );
 }
 
+// ── Balance Sheet Report ──────────────────────────────────────────────────
+export async function openBalanceSheetReport(params: ReportParams) {
+    await openReportInTab(
+        `/api/finance/transactions/reports/balance-sheet/html`,
+        params
+    );
+}
+
 
 
 // export const openInvdatewiseDetailReport = async (params: any): Promise<void> => {

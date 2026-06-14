@@ -60,6 +60,8 @@ import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseRe
 import { AcGroup, FirstGroup, SecondGroup, ThirdGroup } from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
 import StockTransferPage from "../pages/wms/stock transfer/StockTransferPage";
 
+import BalanceSheetReportFilter from "../pages/accounts_report/detailed_reports/BalanceSheetReportFilter";
+
 type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -87,7 +89,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isAccountReportRoute(pathname),
     element: () => <LedgerBasics />,
   },
-  
+  {
+    name: "Finance Balance Sheet",
+    match: ({ pathname }) => isBalanceSheetRoute(pathname),
+    element: () => <BalanceSheetReportFilter />,
+  },
   {
     name: "Finance Ageing Report",
     match: ({ pathname }) => isAgeingReportRoute(pathname),
@@ -576,6 +582,15 @@ function isAccountReportRoute(pathname: string) {
   return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts/reports/account-report/detailed-reports/ledger-basic");
 }
 
+function isBalanceSheetRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.includes("/finance/accounts_report/balance_sheet/balance_sheet") ||
+    normalized.includes("/finance/accounts_report/balance_sheet") ||
+    normalized.includes("/finance/accounts/reports/account-report/balance-sheet")
+  );
+}
+
 function isAgeingReportRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/finance/accounts_report/ageing/period_wise") || normalized.includes("/finance/accounts/reports/ageing/period_wise/PeriodWisePage");
@@ -982,3 +997,4 @@ function isHrTrainingFeedbackRoute(context: WorkspaceRouteContext) {
     normalized.includes("training-feedback")
   );
 }
+
