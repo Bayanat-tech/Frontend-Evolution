@@ -357,6 +357,7 @@ export default function AC_StatementPage() {
                            : "All",
             code5:     formatDateOracle(dateFrom),
             code6:     formatDateOracle(dateTo),
+            code20: "ROWSQL"
         };
         await openAcStatementReport(params);
     } catch (err: any) {

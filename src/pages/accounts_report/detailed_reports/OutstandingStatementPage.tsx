@@ -450,7 +450,11 @@ const handleGenerate = async () => {
               : 'All',
   code5:    'OMR',
   code6:    formatDateOracle(dateFrom),
+  code20: "RAWSQL",
+   
 };
+
+console.log("Report params------:", params);
 
     if (reportType === 'detail') {
       await openOutstandingStatementDetailReport(params);
@@ -726,7 +730,7 @@ const handleGenerate = async () => {
                 </div>
               </div>
             </div>
-          )}
+           )}
 
 
           {/* ── Group tab ── */}
