@@ -62,6 +62,9 @@ import AC_StatementPage from "../pages/accounts_report/detailed_reports/AC_State
 import OutstandingStatementPage from "../pages/accounts_report/detailed_reports/OutstandingStatementPage";
 import StockTransferPage from "../pages/wms/stock transfer/StockTransferPage";
 import { StockTransferViewPage } from "../pages/wms/stock transfer/GetStockTransferPage";
+import { RJVDocumentEditor } from "../pages/finance/RJVDocuments";
+import { AlmsSimpleMasterConfigs } from "../pages/almswf/almsMasterConfig";
+import { AlmsSimpleMasterPage } from "../pages/almswf/AlmsMasterPage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -185,6 +188,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isJournalVoucherRoute(pathname),
     element: () => <JVDocumentEditor docType={"JV"}  />,
   },
+    {
+    name: "Finance RV Voucher",
+    match: ({ pathname }) => isRVoucherRoute(pathname),
+    element: () => <RJVDocumentEditor docType={"RJV"}  />,
+  },
   {
     name: "Finance Bank Reconciliation",
     match: ({ pathname }) => isBankReconciliationRoute(pathname),
@@ -260,6 +268,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "WMS Simple Master",
     match: ({ pathname }) => Boolean(getWmsSimpleMasterConfig(pathname)),
     element: ({ pathname }) => <WmsSimpleMasterPage config={getWmsSimpleMasterConfig(pathname)!} />,
+  },
+    {
+    name: "ALMS Simple Master",
+    match: ({ pathname }) => Boolean(getAlmsSimpleMasterConfig(pathname)),
+    element: ({ pathname }) => <AlmsSimpleMasterPage config={getAlmsSimpleMasterConfig(pathname)!} />,
   },
   {
     name: "Security Operation Access",
@@ -679,6 +692,17 @@ function isJournalVoucherRoute(pathname: string) {
   );
 }
 
+
+function isRVoucherRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.includes("/finance/accounts/transactions/rjv") ||
+    normalized.includes("/finance/accounts/transactions/provisional") ||
+    normalized.includes("/finance/accounts/transactions/journal")
+  );
+}
+
+
 function isBankReconciliationRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/finance/accounts/transactions/bank_reconciliation") || normalized.includes("/finance/accounts/transactions/bank-reconciliation");
@@ -781,6 +805,15 @@ function getWmsSimpleMasterConfig(pathname: string) {
   const normalized = pathname.toLowerCase();
   if (!normalized.includes("/wms/")) return null;
   const matches = Object.values(wmsSimpleMasterConfigs)
+    .flatMap((config) => (config.routeKeys || [config.master]).map((key) => ({ config, key: key.toLowerCase() })))
+    .sort((a, b) => b.key.length - a.key.length);
+  return matches.find(({ key }) => normalized.includes(`/${key}`) || normalized.includes(`/${key.replace(/_/g, "-")}`))?.config || null;
+}
+
+function getAlmsSimpleMasterConfig(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  if (!normalized.includes("/almswf/")) return null;
+  const matches = Object.values(AlmsSimpleMasterConfigs)
     .flatMap((config) => (config.routeKeys || [config.master]).map((key) => ({ config, key: key.toLowerCase() })))
     .sort((a, b) => b.key.length - a.key.length);
   return matches.find(({ key }) => normalized.includes(`/${key}`) || normalized.includes(`/${key.replace(/_/g, "-")}`))?.config || null;
