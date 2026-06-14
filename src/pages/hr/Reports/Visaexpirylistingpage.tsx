@@ -6,7 +6,6 @@ import {
     RotateCcw,
     Printer,
     Loader2,
-    Search,
     ChevronUp,
     ChevronDown,
 } from "lucide-react";
@@ -37,13 +36,7 @@ const getNextMonth = (): string => {
     return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
 };
 
-const formatDisplay = (iso: string): string => {
-    if (!iso) return "—";
-    const [y, m, d] = iso.split("-");
-    return `${d}/${m}/${y}`;
-};
-
-// ─── Shared styles (identical palette to ProfitLossPage) ─────────────────────────
+// ─── Shared styles ────────────────────────────────────────────────────────────────
 
 const fieldLabelStyle: React.CSSProperties = {
     fontSize: 11,
@@ -74,7 +67,7 @@ const radioLabelStyle: React.CSSProperties = {
     color: "#374151",
 };
 
-// ─── Searchable Dropdown (same pattern as ProfitLossPage division) ────────────────
+// ─── Searchable Dropdown ──────────────────────────────────────────────────────────
 
 interface SearchableDropdownProps {
     label: string;
@@ -91,19 +84,33 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
     options,
     placeholder = "Search...",
 }) => {
-    const [search, setSearch]     = useState("");
-    const [open, setOpen]         = useState(false);
-    const [display, setDisplay]   = useState("");
+    const [search, setSearch]   = useState("");
+    const [open, setOpen]       = useState(false);
+    const [display, setDisplay] = useState("");
 
     useEffect(() => {
-        if (!value) { setDisplay(""); setSearch(""); }
+        if (!value) {
+            setDisplay("");
+            setSearch("");
+        } else {
+            setDisplay(`${value.code} - ${value.name}`);
+        }
     }, [value]);
 
-    const filtered = options.filter(
-        (o) =>
-            o.code.toLowerCase().includes(search.toLowerCase()) ||
-            o.name.toLowerCase().includes(search.toLowerCase())
-    );
+    const filtered = options.filter((o) => {
+        if (!search) return true;
+        const q = search.toLowerCase();
+        return (
+            o.code.toLowerCase().includes(q) ||
+            o.name.toLowerCase().includes(q)
+        );
+    });
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setSearch(e.target.value);
+        setOpen(true);
+        if (value) onChange(null);
+    };
 
     return (
         <div style={{ position: "relative" }}>
@@ -112,21 +119,23 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
                 type="text"
                 placeholder={placeholder}
                 value={search !== "" ? search : display}
-                onChange={(e) => { setSearch(e.target.value); setOpen(true); }}
+                onChange={handleInputChange}
                 onFocus={() => setOpen(true)}
                 onBlur={() => setTimeout(() => setOpen(false), 150)}
                 style={inputStyle}
             />
-            {open && filtered.length > 0 && (
+            {open && (
                 <div style={{
                     position: "absolute", zIndex: 200, top: "calc(100% + 2px)", left: 0, right: 0,
                     background: "#fff", border: "0.5px solid #d1d5db", borderRadius: 6,
                     boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 180, overflowY: "auto",
                 }}>
-                    {/* Clear option */}
                     <div
                         className="dd-option"
-                        style={{ padding: "6px 12px", fontSize: 11, color: "#9ca3af", cursor: "pointer", borderBottom: "0.5px solid #f3f4f6" }}
+                        style={{
+                            padding: "6px 12px", fontSize: 11, color: "#9ca3af",
+                            cursor: "pointer", borderBottom: "0.5px solid #f3f4f6",
+                        }}
                         onMouseDown={() => {
                             onChange(null);
                             setDisplay("");
@@ -136,22 +145,29 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
                     >
                         — All —
                     </div>
-                    {filtered.map((o) => (
-                        <div
-                            key={o.code}
-                            className="dd-option"
-                            style={{ padding: "7px 12px", fontSize: 12, cursor: "pointer" }}
-                            onMouseDown={() => {
-                                onChange(o);
-                                setDisplay(`${o.code} - ${o.name}`);
-                                setSearch("");
-                                setOpen(false);
-                            }}
-                        >
-                            <span style={{ fontWeight: 500 }}>{o.code}</span>
-                            <span style={{ color: "#6b7280", marginLeft: 6 }}>{o.name}</span>
+
+                    {filtered.length === 0 ? (
+                        <div style={{ padding: "8px 12px", fontSize: 12, color: "#9ca3af" }}>
+                            No results found
                         </div>
-                    ))}
+                    ) : (
+                        filtered.map((o) => (
+                            <div
+                                key={o.code}
+                                className="dd-option"
+                                style={{ padding: "7px 12px", fontSize: 12, cursor: "pointer" }}
+                                onMouseDown={() => {
+                                    onChange(o);
+                                    setDisplay(`${o.code} - ${o.name}`);
+                                    setSearch("");
+                                    setOpen(false);
+                                }}
+                            >
+                                <span style={{ fontWeight: 500 }}>{o.code}</span>
+                                <span style={{ color: "#6b7280", marginLeft: 6 }}>{o.name}</span>
+                            </div>
+                        ))
+                    )}
                 </div>
             )}
         </div>
@@ -165,7 +181,8 @@ const fetchLookup = async (
     loginId: string,
     companyCode: string,
     codeKey: string,
-    nameKey: string
+    nameKey: string,
+    extraNameKey?: string
 ): Promise<LookupOption[]> => {
     try {
         const res = await getDynamicLookup({
@@ -176,10 +193,26 @@ const fetchLookup = async (
             number1: 0, number2: 0, number3: 0, number4: 0,
             date1: null, date2: null, date3: null, date4: null,
         });
+
+        if (Array.isArray(res) && res.length > 0) {
+            console.log(`[${parameter}] First record keys:`, Object.keys(res[0]));
+            console.log(`[${parameter}] First record sample:`, res[0]);
+        } else {
+            console.warn(`[${parameter}] Empty or non-array response:`, res);
+        }
+
         return Array.isArray(res)
-            ? res.map((x: any) => ({ code: x[codeKey], name: x[nameKey] }))
+            ? res
+                .filter((x: any) => x[codeKey] != null && String(x[codeKey]).trim() !== "")
+                .map((x: any) => ({
+                    code: String(x[codeKey]),
+                    name: extraNameKey && x[extraNameKey]
+                        ? `${x[nameKey] ?? ""} (${x[extraNameKey]})`
+                        : x[nameKey] ?? "",
+                }))
             : [];
-    } catch {
+    } catch (err) {
+        console.error(`[${parameter}] Fetch error:`, err);
         return [];
     }
 };
@@ -210,14 +243,14 @@ export default function VisaExpiryListingPage() {
     const [sponsor,     setSponsor]     = useState<LookupOption | null>(null);
 
     // ── Date + radio ──────────────────────────────────────────────────────────────
-    const [visaExpiryFrom,  setVisaExpiryFrom]  = useState(getToday());
-    const [visaExpiryTo,    setVisaExpiryTo]    = useState(getNextMonth());
-    const [employeeFilter,  setEmployeeFilter]  = useState<EmployeeFilter>("A");
+    const [visaExpiryFrom, setVisaExpiryFrom] = useState(getToday());
+    const [visaExpiryTo,   setVisaExpiryTo]   = useState(getNextMonth());
+    const [employeeFilter, setEmployeeFilter] = useState<EmployeeFilter>("A");
 
     // ── UI state ──────────────────────────────────────────────────────────────────
-    const [generating,   setGenerating]   = useState(false);
-    const [reportError,  setReportError]  = useState<string | null>(null);
-    const [filtersOpen,  setFiltersOpen]  = useState(true);
+    const [generating,  setGenerating]  = useState(false);
+    const [reportError, setReportError] = useState<string | null>(null);
+    const [filtersOpen, setFiltersOpen] = useState(true);
 
     // ── Fetch all lookups on mount ────────────────────────────────────────────────
     useEffect(() => {
@@ -272,16 +305,16 @@ export default function VisaExpiryListingPage() {
                 parameter: "HR_VISA_EXPIRY_REPORT",
                 loginid:   loginId,
                 code1:     companyCode,
-                code2:     division?.code    ?? "",   // div_code
-                code3:     department?.code  ?? "",   // dept_code
-                code4:     section?.code     ?? "",   // section_code
-                code5:     grade?.code       ?? "",   // grade_code
-                code6:     designation?.code ?? "",   // desg_code
-                code7:     employee?.code    ?? "",   // emp_id
-                code8:     sponsor?.code     ?? "",   // sponsor_code
-                code9:     employeeFilter,             // A | ALL
-                date1:     visaExpiryFrom,             // visa_expiry_from
-                date2:     visaExpiryTo,               // visa_expiry_to
+                code2:     division?.code    ?? "",
+                code3:     department?.code  ?? "",
+                code4:     section?.code     ?? "",
+                code5:     grade?.code       ?? "",
+                code6:     designation?.code ?? "",
+                code7:     employee?.code    ?? "",
+                code8:     sponsor?.code     ?? "",
+                code9:     employeeFilter,
+                date1:     visaExpiryFrom,
+                date2:     visaExpiryTo,
             });
         } catch (err: any) {
             setReportError(err?.message ?? "Failed to generate report. Please try again.");
@@ -304,14 +337,15 @@ export default function VisaExpiryListingPage() {
 
             <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
 
-                {/* ══ Card 1 — Filters ═══════════════════════════════════════════════ */}
+                {/* ══ Card — Filters + Action bar ════════════════════════════════════ */}
                 <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
 
                     {/* Card header — collapsible */}
                     <div
                         style={{
                             display: "flex", alignItems: "center", justifyContent: "space-between",
-                            padding: "16px 24px", cursor: "pointer", borderBottom: filtersOpen ? "0.5px solid #e5e7eb" : "none",
+                            padding: "16px 24px", cursor: "pointer",
+                            borderBottom: filtersOpen ? "0.5px solid #e5e7eb" : "none",
                         }}
                         onClick={() => setFiltersOpen((p) => !p)}
                     >
@@ -323,7 +357,10 @@ export default function VisaExpiryListingPage() {
                         </div>
                         <button
                             className="collapse-btn"
-                            style={{ background: "none", border: "none", cursor: "pointer", padding: "4px 6px", borderRadius: 6, color: "#6b7280" }}
+                            style={{
+                                background: "none", border: "none", cursor: "pointer",
+                                padding: "4px 6px", borderRadius: 6, color: "#6b7280",
+                            }}
                         >
                             {filtersOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                         </button>
@@ -358,7 +395,7 @@ export default function VisaExpiryListingPage() {
                                     />
                                 </div>
 
-                                {/* ── Col 2: Grade, Designation, Employee, Sponsor ── */}
+                                {/* ── Col 2: Grade, Sponsor, Designation, Employee ── */}
                                 <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 240, flex: "1 1 240px" }}>
                                     <SearchableDropdown
                                         label="Grade"
@@ -366,13 +403,6 @@ export default function VisaExpiryListingPage() {
                                         onChange={setGrade}
                                         options={gradeOptions}
                                         placeholder="Search grade..."
-                                    />
-                                    <SearchableDropdown
-                                        label="Designation"
-                                        value={designation}
-                                        onChange={setDesignation}
-                                        options={designationOptions}
-                                        placeholder="Search designation..."
                                     />
                                     <SearchableDropdown
                                         label="Employee Code"
@@ -388,6 +418,14 @@ export default function VisaExpiryListingPage() {
                                         options={sponsorOptions}
                                         placeholder="Search sponsor..."
                                     />
+                                    <SearchableDropdown
+                                        label="Designation"
+                                        value={designation}
+                                        onChange={setDesignation}
+                                        options={designationOptions}
+                                        placeholder="Search designation..."
+                                    />
+                                    
                                 </div>
 
                                 {/* ── Col 3: Visa Expiry dates + Employee type ── */}
@@ -395,7 +433,10 @@ export default function VisaExpiryListingPage() {
 
                                     {/* Visa Expiry date range */}
                                     <fieldset style={{ border: "0.5px solid #d1d5db", borderRadius: 6, padding: "6px 12px 12px", margin: 0 }}>
-                                        <legend style={{ fontSize: 10, color: "#6b7280", padding: "0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                        <legend style={{
+                                            fontSize: 10, color: "#6b7280", padding: "0 4px",
+                                            textTransform: "uppercase", letterSpacing: "0.05em",
+                                        }}>
                                             Visa Expiry
                                         </legend>
                                         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
@@ -424,7 +465,10 @@ export default function VisaExpiryListingPage() {
 
                                     {/* Employee type radio */}
                                     <fieldset style={{ border: "0.5px solid #d1d5db", borderRadius: 6, padding: "6px 12px 12px", margin: 0 }}>
-                                        <legend style={{ fontSize: 10, color: "#6b7280", padding: "0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                        <legend style={{
+                                            fontSize: 10, color: "#6b7280", padding: "0 4px",
+                                            textTransform: "uppercase", letterSpacing: "0.05em",
+                                        }}>
                                             Employee Type
                                         </legend>
                                         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
@@ -465,91 +509,47 @@ export default function VisaExpiryListingPage() {
                                     ⚠ {reportError}
                                 </div>
                             )}
+
+                            {/* Action bar */}
+                            <div style={{
+                                display: "flex", justifyContent: "flex-end", gap: 8,
+                                paddingTop: 20, marginTop: 20, borderTop: "0.5px solid #e5e7eb",
+                            }}>
+                                <button
+                                    className="action-btn"
+                                    onClick={handleReset}
+                                    disabled={generating}
+                                    style={{
+                                        padding: "7px 16px", border: "0.5px solid #d1d5db",
+                                        background: "#fff", cursor: generating ? "not-allowed" : "pointer",
+                                        display: "flex", alignItems: "center", gap: 6,
+                                        fontSize: 12, borderRadius: 6, color: "#374151",
+                                        opacity: generating ? 0.6 : 1,
+                                    }}
+                                >
+                                    <RotateCcw size={13} /> Reset
+                                </button>
+
+                                <button
+                                    className="action-btn-primary"
+                                    onClick={handleGenerate}
+                                    disabled={generating}
+                                    style={{
+                                        padding: "7px 16px", border: "0.5px solid #185FA5",
+                                        background: "#185FA5", cursor: generating ? "not-allowed" : "pointer",
+                                        display: "flex", alignItems: "center", gap: 6,
+                                        fontSize: 12, borderRadius: 6, color: "#fff",
+                                        opacity: generating ? 0.7 : 1,
+                                    }}
+                                >
+                                    {generating
+                                        ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Generating…</>
+                                        : <><Printer size={13} /> Generate Report</>
+                                    }
+                                </button>
+                            </div>
                         </div>
                     )}
-                </div>
-
-                {/* ══ Card 2 — Summary + Action bar ══════════════════════════════════ */}
-                <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "20px 24px" }}>
-
-                    {/* Summary panel */}
-                    <div style={{ marginBottom: 16 }}>
-                        <div style={fieldLabelStyle}>Report Summary</div>
-                        <div style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-                            gap: "12px 24px",
-                            background: "#f9fafb",
-                            border: "0.5px solid #e5e7eb",
-                            borderRadius: 8,
-                            padding: "14px 16px",
-                            marginTop: 8,
-                        }}>
-                            {[
-                                ["Division",      division?.name    || "All"],
-                                ["Department",    department?.name  || "All"],
-                                ["Section",       section?.name     || "All"],
-                                ["Grade",         grade?.name       || "All"],
-                                ["Designation",   designation?.name || "All"],
-                                ["Employee",      employee?.name    || "All"],
-                                ["Sponsor",       sponsor?.name     || "All"],
-                                ["Expiry From",   formatDisplay(visaExpiryFrom)],
-                                ["Expiry To",     formatDisplay(visaExpiryTo)],
-                                ["Emp. Type",     employeeFilter === "A" ? "Active" : "All"],
-                            ].map(([k, v]) => (
-                                <div key={k}>
-                                    <div style={{ fontSize: 10, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>
-                                        {k}
-                                    </div>
-                                    <div style={{
-                                        fontSize: 12, fontWeight: 500, color: "#111827",
-                                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                                    }}>
-                                        {v}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Action bar */}
-                    <div style={{
-                        display: "flex", justifyContent: "flex-end", gap: 8,
-                        paddingTop: 14, borderTop: "0.5px solid #e5e7eb",
-                    }}>
-                        <button
-                            className="action-btn"
-                            onClick={handleReset}
-                            disabled={generating}
-                            style={{
-                                padding: "7px 16px", border: "0.5px solid #d1d5db",
-                                background: "#fff", cursor: generating ? "not-allowed" : "pointer",
-                                display: "flex", alignItems: "center", gap: 6,
-                                fontSize: 12, borderRadius: 6, color: "#374151",
-                                opacity: generating ? 0.6 : 1,
-                            }}
-                        >
-                            <RotateCcw size={13} /> Reset
-                        </button>
-
-                        <button
-                            className="action-btn-primary"
-                            onClick={handleGenerate}
-                            disabled={generating}
-                            style={{
-                                padding: "7px 16px", border: "0.5px solid #185FA5",
-                                background: "#185FA5", cursor: generating ? "not-allowed" : "pointer",
-                                display: "flex", alignItems: "center", gap: 6,
-                                fontSize: 12, borderRadius: 6, color: "#fff",
-                                opacity: generating ? 0.7 : 1,
-                            }}
-                        >
-                            {generating
-                                ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Generating…</>
-                                : <><Printer size={13} /> Generate Report</>
-                            }
-                        </button>
-                    </div>
                 </div>
 
             </div>

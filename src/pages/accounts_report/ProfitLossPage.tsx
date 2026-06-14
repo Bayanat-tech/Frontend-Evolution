@@ -61,12 +61,11 @@ const radioLabelStyle: React.CSSProperties = {
 };
 
 // ─── Parameter map ──────────────────────────────────────────────────────────────
-// Maps the UI option to the procedure parameter name expected by the backend
 
 const PARAMETER_MAP: Record<PnlOption, string> = {
     period:    "Account_Report_VW_PROFIT_AND_LOSS",
-    month:     "Account_Report_VW_PROFIT_AND_LOSS",
-    monthwise: "Account_Report_VW_PROFIT_AND_LOSS",
+    month:     "",
+    monthwise: "",
 };
 
 // ─── Main Component ─────────────────────────────────────────────────────────────
@@ -76,7 +75,7 @@ export default function ProfitLossPage() {
     const companyCode = user?.company_code ?? "";
     const loginId     = user?.loginid ?? user?.username ?? "ADMIN";
 
-    // ── Division (searchable dropdown) ──────────────────────────────────────────
+    // ── Division ────────────────────────────────────────────────────────────────
     const [divisionList,         setDivisionList]         = useState<any[]>([]);
     const [division,             setDivision]             = useState("");
     const [divisionDisplay,      setDivisionDisplay]      = useState("");
@@ -84,13 +83,13 @@ export default function ProfitLossPage() {
     const [showDivisionDropdown, setShowDivisionDropdown] = useState(false);
 
     // ── Filter state ────────────────────────────────────────────────────────────
-    const [option,      setOption]      = useState<PnlOption>("period");
+    const [option]      = useState<PnlOption>("period");
     const [dateFrom,    setDateFrom]    = useState(getStartOfMonth());
     const [dateTo,      setDateTo]      = useState(getToday());
     const [reportError, setReportError] = useState<string | null>(null);
     const [generating,  setGenerating]  = useState(false);
 
-    // ── Fetch divisions on mount ─────────────────────────────────────────────────
+    // ── Fetch divisions ─────────────────────────────────────────────────────────
     useEffect(() => {
         getDynamicLookup({
             parameter: "Account_division",
@@ -110,7 +109,6 @@ export default function ProfitLossPage() {
 
     // ── Reset ───────────────────────────────────────────────────────────────────
     const handleReset = () => {
-        setOption("period");
         setDivision("");
         setDivisionDisplay("");
         setDivisionSearch("");
@@ -138,10 +136,10 @@ export default function ProfitLossPage() {
             await openProfitLossReport({
                 parameter: PARAMETER_MAP[option],
                 loginid:   loginId,
-                code1:     companyCode,   // company_code
-                code2:     division,      // div_code
-                code3:     dateFrom,      // date_from  (YYYY-MM-DD)
-                code4:     dateTo,        // date_to    (YYYY-MM-DD)
+                code1:     companyCode,
+                code2:     division,
+                code3:     dateFrom,
+                code4:     dateTo,
             });
         } catch (err: any) {
             setReportError(err?.message ?? "Failed to generate report. Please try again.");
@@ -150,12 +148,6 @@ export default function ProfitLossPage() {
             setGenerating(false);
         }
     };
-
-    const optionRows: { value: PnlOption; label: string }[] = [
-        { value: "period",    label: "P&L for the period" },
-        { value: "month",     label: "P&L for the month"  },
-        { value: "monthwise", label: "P&L month wise"     },
-    ];
 
     // ─── Render ────────────────────────────────────────────────────────────────
     return (
@@ -173,7 +165,7 @@ export default function ProfitLossPage() {
                 <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "20px 24px" }}>
 
                     {/* Card title */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
                         <BarChart2 size={18} color="#185FA5" />
                         <span style={{ fontSize: 15, fontWeight: 500, color: "#111827" }}>
                             Profit &amp; Loss Filter
@@ -182,35 +174,8 @@ export default function ProfitLossPage() {
 
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 20, alignItems: "flex-start" }}>
 
-                        {/* ── Left column: Date range + Division ── */}
+                        {/* ── Col 1: Division → Date Range ── */}
                         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 260, flex: "1 1 260px" }}>
-
-                            {/* Date range */}
-                            <div>
-                                <div style={fieldLabelStyle}>Date Range</div>
-                                <div style={{ display: "flex", gap: 10 }}>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ ...fieldLabelStyle, marginBottom: 3 }}>From</div>
-                                        <input
-                                            type="date"
-                                            value={dateFrom}
-                                            max={dateTo || undefined}
-                                            onChange={(e) => setDateFrom(e.target.value)}
-                                            style={inputStyle}
-                                        />
-                                    </div>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ ...fieldLabelStyle, marginBottom: 3 }}>To</div>
-                                        <input
-                                            type="date"
-                                            value={dateTo}
-                                            min={dateFrom || undefined}
-                                            onChange={(e) => setDateTo(e.target.value)}
-                                            style={inputStyle}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
 
                             {/* Division searchable dropdown */}
                             <div style={{ position: "relative" }}>
@@ -250,28 +215,70 @@ export default function ProfitLossPage() {
                                     </div>
                                 )}
                             </div>
+
+                            {/* ── Date Range — From and To side by side in one line ── */}
+                            <fieldset style={{ border: "0.5px solid #d1d5db", borderRadius: 6, padding: "6px 12px 12px", margin: 0 }}>
+                                <legend style={{ fontSize: 10, color: "#6b7280", padding: "0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                    Date Range
+                                </legend>
+                                <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+                                    {/* From */}
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ ...fieldLabelStyle, marginBottom: 3 }}>From</div>
+                                        <input
+                                            type="date"
+                                            value={dateFrom}
+                                            max={dateTo || undefined}
+                                            onChange={(e) => setDateFrom(e.target.value)}
+                                            style={inputStyle}
+                                        />
+                                    </div>
+                                    {/* To */}
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ ...fieldLabelStyle, marginBottom: 3 }}>To</div>
+                                        <input
+                                            type="date"
+                                            value={dateTo}
+                                            min={dateFrom || undefined}
+                                            onChange={(e) => setDateTo(e.target.value)}
+                                            style={inputStyle}
+                                        />
+                                    </div>
+                                </div>
+                            </fieldset>
                         </div>
 
-                        {/* ── Right column: Report option fieldset ── */}
+                        {/* ── Col 2: Report Option — only "period" shown, others hidden ── */}
                         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 200, flex: "1 1 200px" }}>
                             <fieldset style={{ border: "0.5px solid #d1d5db", borderRadius: 6, padding: "6px 12px 12px", margin: 0 }}>
                                 <legend style={{ fontSize: 10, color: "#6b7280", padding: "0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                                     Report Option
                                 </legend>
                                 <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
-                                    {optionRows.map(({ value, label }) => (
-                                        <label key={value} style={radioLabelStyle}>
-                                            <input
-                                                type="radio"
-                                                name="pnlOption"
-                                                value={value}
-                                                checked={option === value}
-                                                onChange={() => setOption(value)}
-                                                style={{ accentColor: "#185FA5" }}
-                                            />
-                                            {label}
-                                        </label>
-                                    ))}
+
+                                    {/* Only "period" visible */}
+                                    <label style={{ ...radioLabelStyle, cursor: "default" }}>
+                                        <input
+                                            type="radio"
+                                            name="pnlOption"
+                                            value="period"
+                                            checked
+                                            readOnly
+                                            style={{ accentColor: "#185FA5" }}
+                                        />
+                                        P&amp;L for the period
+                                    </label>
+
+                                    {/* Hidden — preserved for future use */}
+                                    <label style={{ display: "none" }}>
+                                        <input type="radio" name="pnlOption" value="month" readOnly />
+                                        P&amp;L for the month
+                                    </label>
+                                    <label style={{ display: "none" }}>
+                                        <input type="radio" name="pnlOption" value="monthwise" readOnly />
+                                        P&amp;L month wise
+                                    </label>
+
                                 </div>
                             </fieldset>
                         </div>
@@ -293,7 +300,6 @@ export default function ProfitLossPage() {
                 {/* ══ Card 2 — Summary + Action bar ════════════════════════════════ */}
                 <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "20px 24px" }}>
 
-                    {/* Summary panel */}
                     <div style={{ marginBottom: 16 }}>
                         <div style={fieldLabelStyle}>Report Summary</div>
                         <div style={{
@@ -307,7 +313,7 @@ export default function ProfitLossPage() {
                             marginTop: 8,
                         }}>
                             {[
-                                ["Report Type", option === "period" ? "Period" : option === "month" ? "Month" : "Month Wise"],
+                                ["Report Type", "P&L for the Period"],
                                 ["Division",    divisionDisplay || "—"],
                                 ["From",        formatDisplay(dateFrom) || "—"],
                                 ["To",          formatDisplay(dateTo)   || "—"],
