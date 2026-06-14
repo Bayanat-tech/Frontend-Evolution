@@ -150,28 +150,28 @@ export function InboundOperationalTab({ job, jobNo, tab, loadingJob }: Props) {
         };
       }
 
-      case "country":
-        return {
-          valueField:    "COUNTRY_CODE",
-          displayFields: ["COUNTRY_CODE", "COUNTRY_NAME"],
-          columns: [
-            { field: "COUNTRY_CODE", header: "Code" },
-            { field: "COUNTRY_NAME", header: "Country" },
-          ],
-          loadOptions: async () => {
-            const res = await api.post("/api/wms/inbound/executeRawSql", {
-              raw_sql: `SELECT COUNTRY_CODE, COUNTRY_NAME FROM MS_COUNTRY ORDER BY COUNTRY_NAME`,
-            });
-            return Array.isArray(res.data?.data) ? res.data.data
-                 : Array.isArray(res.data)        ? res.data : [];
-          },
-          onChange: (val: string, row: Record<string, unknown> | null) =>
-            setFormData((cur:any) => ({
-              ...cur,
-              country_origin: val,
-              country_origin_display: row ? `${row["COUNTRY_CODE"] ?? ""} - ${row["COUNTRY_NAME"] ?? ""}` : "",
-            })),
-        };
+      // case "country":
+      //   return {
+      //     valueField:    "COUNTRY_CODE",
+      //     displayFields: ["COUNTRY_CODE", "COUNTRY_NAME"],
+      //     columns: [
+      //       { field: "COUNTRY_CODE", header: "Code" },
+      //       { field: "COUNTRY_NAME", header: "Country" },
+      //     ],
+      //     loadOptions: async () => {
+      //       const res = await api.post("/api/wms/inbound/executeRawSql", {
+      //         raw_sql: `SELECT COUNTRY_CODE, COUNTRY_NAME FROM MS_COUNTRY ORDER BY COUNTRY_NAME`,
+      //       });
+      //       return Array.isArray(res.data?.data) ? res.data.data
+      //            : Array.isArray(res.data)        ? res.data : [];
+      //     },
+      //     onChange: (val: string, row: Record<string, unknown> | null) =>
+      //       setFormData((cur:any) => ({
+      //         ...cur,
+      //         country_origin: val,
+      //         country_origin_display: row ? `${row["COUNTRY_CODE"] ?? ""} - ${row["COUNTRY_NAME"] ?? ""}` : "",
+      //       })),
+      //   };
 
       case "manufacturer":
         return {
@@ -211,7 +211,9 @@ export function InboundOperationalTab({ job, jobNo, tab, loadingJob }: Props) {
       const data = await executeWmsInboundSql(
         config.sql({ companyCode, jobNo, prinCode }),
       );
-      setRows(data.map(normalizeRow));
+setRows(data.map(normalizeRow).filter((row) =>
+  tab !== "putway_details" || String(value(row, "allocated") || "").toUpperCase() !== "Y"
+));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : `Unable to load ${config?.title}`);
     } finally { setLoading(false); }
@@ -307,11 +309,12 @@ export function InboundOperationalTab({ job, jobNo, tab, loadingJob }: Props) {
     setEditSaving(true);
     try {
       if (tab === "packing_details") {
-        await patchWmsInbound("packing_details", {
-          ...stripUiFields(editForm), job_no: jobNo, prin_code: prinCode,
-          company_code: companyCode, packdet_no: String(editForm.packdet_no || ""),
-        });
-      } else if (tab === "receiving_details") {
+        await api.put(
+          `/api/wms/inbound/packing_details/${encodeURIComponent(String(editForm.packdet_no || ""))}?prin_code=${encodeURIComponent(prinCode)}&job_no=${encodeURIComponent(jobNo)}`,
+          { ...stripUiFields(editForm), company_code: companyCode },
+        );
+      }
+      else if (tab === "receiving_details") {
         await api.put(
           `/api/wms/inbound/packing_details/receiving?prin_code=${encodeURIComponent(prinCode)}&job_no=${encodeURIComponent(jobNo)}&packdet_no=${encodeURIComponent(String(editForm.packdet_no))}`,
           { qty1_arrived: Number(editForm.qty1_arrived), qty2_arrived: Number(editForm.qty2_arrived) },
@@ -355,6 +358,22 @@ export function InboundOperationalTab({ job, jobNo, tab, loadingJob }: Props) {
     </div>
   );
 
+const handleDelete = async (row: WmsRow) => {
+  if (!confirm("Delete this record? This cannot be undone.")) return;
+  try {
+    await api.post("/api/wms/inbound/packing_details/delete", {
+      packing_details: [{ packdet_no: Number(value(row, "packdet_no")) }],
+      prin_code:    prinCode,
+      job_no:       jobNo,
+      company_code: companyCode,
+    });
+    // remove instantly from local state
+    setRows((prev) => prev.filter((r) => value(r, "packdet_no") !== value(row, "packdet_no")));
+    toast.success("Record deleted successfully");
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : "Delete failed");
+  }
+};
   const columns = makeColumns(
     config.columns,
     tab === "quality_clearance" || tab === "putway_details" || tab === "job_confirmation",
@@ -363,11 +382,22 @@ export function InboundOperationalTab({ job, jobNo, tab, loadingJob }: Props) {
           if (tab === "packing_details") {
             setEditForm({ ...row, uom_count: Number(row.uom_count ?? 1), uppp: Number(row.uppp ?? 1), qty_puom: Number(row.qty_puom ?? 0), qty_luom: Number(row.qty_luom ?? 0), quantity: Number(row.quantity ?? 0) });
           } else {
-            setEditForm({ packdet_no: row.packdet_no, prod_name: row.prod_name, batch_no: row.batch_no, lot_no: row.lot_no, po_no: row.po_no, doc_ref: row.doc_ref, qty1_arrived: Number(row.qty1_arrived ?? row.qty_arrived ?? 0), qty2_arrived: Number(row.qty2_arrived ?? 0) });
-          }
+setEditForm({
+  packdet_no: row.packdet_no,
+  prod_name: row.prod_name,
+  batch_no: row.batch_no,
+  lot_no: row.lot_no,
+  po_no: row.po_no,
+  doc_ref: row.doc_ref,
+  qty_luom: Number(row.qty_luom ?? 0),        // ← add this
+  qty1_arrived: Number(row.qty1_arrived ?? row.qty_arrived ?? 0),
+  qty2_arrived: Number(row.qty2_arrived ?? 0),
+});          }
           setEditOpen(true);
         }
       : undefined,
+       tab === "packing_details" ? handleDelete : undefined,
+       
   );
 
   // ── field renderer (shared between add / edit modals) ───────────────────
@@ -388,7 +418,6 @@ export function InboundOperationalTab({ job, jobNo, tab, loadingJob }: Props) {
             ? (val, row) => {
                 if      (field.name === "prod_code")     setData((c) => ({ ...c, prod_code:   val, uom: row ? String(row["UOM_CODE"] ?? c.uom ?? "") : String(c.uom ?? "") }));
                 else if (field.name === "container_no")  setData((c) => ({ ...c, container_no: val }));
-                else if (field.name === "country_origin") setData((c) => ({ ...c, country_origin: val, country_origin_display: row ? `${row["COUNTRY_CODE"] ?? ""} - ${row["COUNTRY_NAME"] ?? ""}` : "" }));
                 else if (field.name === "manufacturer")  setData((c) => ({ ...c, manufacturer: val, manufacturer_display: row ? `${row["MANU_CODE"] ?? ""} - ${row["MANU_NAME"] ?? ""}` : "" }));
               }
             : lp.onChange
@@ -422,8 +451,28 @@ export function InboundOperationalTab({ job, jobNo, tab, loadingJob }: Props) {
         loading={loading || loadingJob} height="calc(100vh - 365px)"
         minWidth={config.minWidth} density="grid" enablePagination pageSize={75}
         toolbar={toolbar}
+        rowClassName={
+  tab === "quality_clearance"
+    ? (row) => String(value(row as WmsRow, "clearance") || "").toUpperCase() === "Y"
+        ? "opacity-50 pointer-events-none bg-muted/40"
+        : ""
+    : undefined
+}
         getRowId={(row, index) => `${tab}_${value(row, "packdet_no") || value(row, "container_no") || value(row, "key_number") || index}`}
-        onRowSelectionChange={(tab === "quality_clearance" || tab === "putway_details" || tab === "job_confirmation") ? setSelectedRows : undefined}
+onRowSelectionChange={
+  (tab === "quality_clearance" || tab === "putway_details" || tab === "job_confirmation")
+    ? (selected) => {
+        if (tab === "quality_clearance") {
+          // filter out rows already cleared
+          setSelectedRows(selected.filter(
+            (r) => String(value(r, "clearance") || "").toUpperCase() !== "Y"
+          ));
+        } else {
+          setSelectedRows(selected);
+        }
+      }
+    : undefined
+}
       />
 
       {/* ── Add Modal ── */}
@@ -490,6 +539,7 @@ export function InboundOperationalTab({ job, jobNo, tab, loadingJob }: Props) {
                   <label className="field">
                     <span className="text-xs font-medium text-muted-foreground">Quantity (Secondary)</span>
                     <Input type="number" min="0" step="1" value={Number(editForm.qty2_arrived ?? 0)}
+                         disabled={Number(editForm.qty_luom ?? 0) === 0}
                       onChange={(e) => setEditForm((c:any) => ({ ...c, qty2_arrived: e.target.value === "" ? 0 : Number(e.target.value) }))} />
                   </label>
                 </div>

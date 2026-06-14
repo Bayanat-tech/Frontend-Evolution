@@ -1,12 +1,13 @@
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { Ban, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { Ban, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import {
   cancelTransactionDocument,
-  deleteTransactionDocument,
   Division,
   FyPeriod,
+  getCompanyInfo,
+  getDefaultFyPeriod,
   getCheque,
   getChildTableName,
   getDivisions,
@@ -77,16 +78,15 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
   const [totalRows, setTotalRows] = useState(0);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<EditorState>(null);
-  const [deleteTarget, setDeleteTarget] = useState<TransactionDocumentRow | null>(null);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
     const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
   const loadLookups = async () => {
-    const [fyData, divisionData] = await Promise.all([getFyPeriods(), getDivisions()]);
+    const [fyData, divisionData, companyInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
     setFyPeriods(fyData);
     setDivisions(divisionData);
-    setFyPeriod((current) => current || fyData[0]?.fy_period || "");
+    setFyPeriod((current) => current || getDefaultFyPeriod(fyData, companyInfo));
   };
 
     const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize, nextColumnFilters = columnFilters, clearNotice = true) => {
@@ -151,17 +151,17 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
           <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })} title="Edit">
             <Edit2 size={15} />
           </Button>
-          <Button size="icon" variant="ghost" onClick={() => window.print()} title="Print">
+          <Button size="icon" variant="ghost" onClick={() => void openDocumentReport(row.original.doc_type || docType, row.original.doc_no)} title="Print">
             <Printer size={15} />
+          </Button>
+          <Button size="icon" variant="ghost" onClick={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)} title="Export Excel">
+            <Download size={15} />
           </Button>
           {row.original.canceled !== "Y" && (
             <Button size="icon" variant="ghost" onClick={() => setCancelTarget(row.original)} title="Cancel">
               <Ban size={15} />
             </Button>
           )}
-          <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(row.original)} title="Delete">
-            <Trash2 size={15} />
-          </Button>
         </div>
       ),
     },
@@ -184,27 +184,14 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
     }
   };
 
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
-    try {
-      await deleteTransactionDocument([deleteTarget.doc_no], docType);
-      setDeleteTarget(null);
-      setNotice({ type: "success", message: "Document deleted successfully" });
-      await loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false);
-    } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete document" });
-    }
-  };
-
-
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
+    <section className="finance-list-page grid gap-4">
+      <div className="finance-list-heading">
+        <div className="finance-list-title">
           <h1 className="m-0 text-2xl font-semibold tracking-tight">{meta.title}</h1>
           <p className="m-0 mt-1 text-sm text-muted-foreground">{meta.subtitle}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="finance-list-actions">
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
@@ -251,6 +238,7 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
           pageIndex={pageIndex}
           pageSize={pageSize}
           totalRows={totalRows}
+          initialSorting={[{ id: "doc_date", desc: true }]}
           columnFilters={columnFilters}
           onColumnFiltersChange={(filters) => {
             setColumnFilters(filters);
@@ -274,6 +262,11 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
             onSaved={async (message) => {
               setEditor(null);
               setNotice({ type: "success", message });
+              await loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false);
+            }}
+            onCancelled={async () => {
+              setEditor(null);
+              setNotice({ type: "success", message: "Document cancelled successfully" });
               await loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false);
             }}
           />
@@ -311,15 +304,6 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
         onClose={() => setCancelTarget(null)}
         onConfirm={() => void confirmCancel()}
       />
-      <ConfirmDialog
-        open={Boolean(deleteTarget)}
-        tone="danger"
-        title="Delete Document"
-        description="This action cannot be undone."
-        actionLabel="Delete"
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => void confirmDelete()}
-      />
     </section>
   );
 }
@@ -329,11 +313,13 @@ function PaymentDocumentEditor({
   editor,
   onClose,
   onSaved,
+  onCancelled,
 }: {
   docType: TransactionType;
   editor: EditorState;
   onClose: () => void;
   onSaved: (message: string) => Promise<void>;
+  onCancelled: () => Promise<void>;
 }) {
   const { user } = useAuth();
   const editMode = editor?.mode === "edit";
@@ -434,6 +420,21 @@ function PaymentDocumentEditor({
 
   const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0) * row.sign_ind, 0);
   const isCancelled = form.canceled === "Y";
+
+  const cancelCurrentDocument = async () => {
+    if (!form.doc_no || form.doc_no === "0" || form.canceled === "Y") return;
+    setSaving(true);
+    setError("");
+    try {
+      await cancelTransactionDocument(form.doc_no, form.doc_type);
+      setCancelConfirmOpen(false);
+      await onCancelled();
+    } catch (cancelError) {
+      setError(cancelError instanceof Error ? cancelError.message : "Unable to cancel document");
+    } finally {
+      setSaving(false);
+    }
+  };
   const updateField = (field: keyof TransactionHeader, value: string | number) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
@@ -1161,6 +1162,15 @@ function PaymentDocumentEditor({
         loginId={user?.loginid || user?.username || ""}
         flowLevel={2}
         readOnly={form.canceled === "Y"}
+      />
+      <ConfirmDialog
+        open={cancelConfirmOpen}
+        tone="danger"
+        title="Cancel Document"
+        description="This will mark the current document as cancelled."
+        actionLabel="Cancel Document"
+        onClose={() => setCancelConfirmOpen(false)}
+        onConfirm={() => void cancelCurrentDocument()}
       />
     </form>
   );
