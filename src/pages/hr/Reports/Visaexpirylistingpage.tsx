@@ -84,8 +84,8 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
     options,
     placeholder = "Search...",
 }) => {
-    const [search, setSearch]   = useState("");
-    const [open, setOpen]       = useState(false);
+    const [search, setSearch] = useState("");
+    const [open, setOpen] = useState(false);
     const [display, setDisplay] = useState("");
 
     useEffect(() => {
@@ -222,33 +222,33 @@ const fetchLookup = async (
 export default function VisaExpiryListingPage() {
     const { user } = useAuth();
     const companyCode = user?.company_code ?? "";
-    const loginId     = user?.loginid ?? user?.username ?? "ADMIN";
+    const loginId = user?.loginid ?? user?.username ?? "ADMIN";
 
     // ── Lookup options ────────────────────────────────────────────────────────────
-    const [divisionOptions,    setDivisionOptions]    = useState<LookupOption[]>([]);
-    const [departmentOptions,  setDepartmentOptions]  = useState<LookupOption[]>([]);
-    const [sectionOptions,     setSectionOptions]     = useState<LookupOption[]>([]);
-    const [gradeOptions,       setGradeOptions]       = useState<LookupOption[]>([]);
+    const [divisionOptions, setDivisionOptions] = useState<LookupOption[]>([]);
+    const [departmentOptions, setDepartmentOptions] = useState<LookupOption[]>([]);
+    const [sectionOptions, setSectionOptions] = useState<LookupOption[]>([]);
+    const [gradeOptions, setGradeOptions] = useState<LookupOption[]>([]);
     const [designationOptions, setDesignationOptions] = useState<LookupOption[]>([]);
-    const [employeeOptions,    setEmployeeOptions]    = useState<LookupOption[]>([]);
-    const [sponsorOptions,     setSponsorOptions]     = useState<LookupOption[]>([]);
+    const [employeeOptions, setEmployeeOptions] = useState<LookupOption[]>([]);
+    const [sponsorOptions, setSponsorOptions] = useState<LookupOption[]>([]);
 
     // ── Selected filter values ────────────────────────────────────────────────────
-    const [division,    setDivision]    = useState<LookupOption | null>(null);
-    const [department,  setDepartment]  = useState<LookupOption | null>(null);
-    const [section,     setSection]     = useState<LookupOption | null>(null);
-    const [grade,       setGrade]       = useState<LookupOption | null>(null);
+    const [division, setDivision] = useState<LookupOption | null>(null);
+    const [department, setDepartment] = useState<LookupOption | null>(null);
+    const [section, setSection] = useState<LookupOption | null>(null);
+    const [grade, setGrade] = useState<LookupOption | null>(null);
     const [designation, setDesignation] = useState<LookupOption | null>(null);
-    const [employee,    setEmployee]    = useState<LookupOption | null>(null);
-    const [sponsor,     setSponsor]     = useState<LookupOption | null>(null);
+    const [employee, setEmployee] = useState<LookupOption | null>(null);
+    const [sponsor, setSponsor] = useState<LookupOption | null>(null);
 
     // ── Date + radio ──────────────────────────────────────────────────────────────
     const [visaExpiryFrom, setVisaExpiryFrom] = useState(getToday());
-    const [visaExpiryTo,   setVisaExpiryTo]   = useState(getNextMonth());
+    const [visaExpiryTo, setVisaExpiryTo] = useState(getNextMonth());
     const [employeeFilter, setEmployeeFilter] = useState<EmployeeFilter>("A");
 
     // ── UI state ──────────────────────────────────────────────────────────────────
-    const [generating,  setGenerating]  = useState(false);
+    const [generating, setGenerating] = useState(false);
     const [reportError, setReportError] = useState<string | null>(null);
     const [filtersOpen, setFiltersOpen] = useState(true);
 
@@ -256,13 +256,13 @@ export default function VisaExpiryListingPage() {
     useEffect(() => {
         const load = async () => {
             const [div, dept, sec, grd, desig, emp, spon] = await Promise.all([
-                fetchLookup("AC_ASSETS_DEPRECIATION_DIVISION_LIST", loginId, companyCode, "div_code",     "div_name"),
-                fetchLookup("HR_CAM_DEPARTMENT_DEPTCODE",           loginId, companyCode, "dept_code",    "dept_short_name"),
-                fetchLookup("AC_ASSETS_SECTION",                    loginId, companyCode, "section_code", "section_name"),
-                fetchLookup("AC_ASSETS_HR_GRADE_LIST",              loginId, companyCode, "grade_code",   "grade_name"),
-                fetchLookup("MST_HR_MS_HR_DESIGNATION_LIST",        loginId, companyCode, "desg_code",    "desg_name"),
-                fetchLookup("AC_ASSETS_HR_EMPLOYEE_LIST",           loginId, companyCode, "emp_id",       "emp_name"),
-                fetchLookup("AC_ASSETS_HR_SPONSOR",                 loginId, companyCode, "sponsor_name", "sponsor_short_name"),
+                fetchLookup("AC_ASSETS_DEPRECIATION_DIVISION_LIST", loginId, companyCode, "div_code", "div_name"),
+                fetchLookup("HR_CAM_DEPARTMENT_DEPTCODE", loginId, companyCode, "dept_code", "dept_short_name"),
+                fetchLookup("AC_ASSETS_SECTION", loginId, companyCode, "section_code", "section_name"),
+                fetchLookup("AC_ASSETS_HR_GRADE_LIST", loginId, companyCode, "grade_code", "grade_name"),
+                fetchLookup("MST_HR_MS_HR_DESIGNATION_LIST", loginId, companyCode, "desg_code", "desg_name"),
+                fetchLookup("AC_ASSETS_HR_EMPLOYEE_LIST", loginId, companyCode, "emp_id", "emp_name"),
+                fetchLookup("AC_ASSETS_HR_SPONSOR", loginId, companyCode, "sponsor_name", "sponsor_short_name"),
             ]);
             setDivisionOptions(div);
             setDepartmentOptions(dept);
@@ -284,8 +284,8 @@ export default function VisaExpiryListingPage() {
         setDesignation(null);
         setEmployee(null);
         setSponsor(null);
-        setVisaExpiryFrom(getToday());
-        setVisaExpiryTo(getNextMonth());
+        setVisaExpiryFrom("");
+        setVisaExpiryTo("");
         setEmployeeFilter("A");
         setReportError(null);
     };
@@ -302,19 +302,19 @@ export default function VisaExpiryListingPage() {
 
         try {
             await openVisaExpiryReport({
-                parameter: "HR_VISA_EXPIRY_REPORT",
-                loginid:   loginId,
-                code1:     companyCode,
-                code2:     division?.code    ?? "",
-                code3:     department?.code  ?? "",
-                code4:     section?.code     ?? "",
-                code5:     grade?.code       ?? "",
-                code6:     designation?.code ?? "",
-                code7:     employee?.code    ?? "",
-                code8:     sponsor?.code     ?? "",
-                code9:     employeeFilter,
-                date1:     visaExpiryFrom,
-                date2:     visaExpiryTo,
+                parameter: "Hr_Report_VISA_EXPIRY_REPORT",
+                loginid: loginId,
+                code1: companyCode,
+                code2: division?.code ?? "",
+                code3: department?.code ?? "",
+                code4: section?.code ?? "",
+                code5: grade?.code ?? "",
+                code6: designation?.code ?? "",
+                code7: employee?.code ?? "",
+                code8: sponsor?.code ?? "",
+                code9: employeeFilter,
+                date1: visaExpiryFrom,
+                date2: visaExpiryTo,
             });
         } catch (err: any) {
             setReportError(err?.message ?? "Failed to generate report. Please try again.");
@@ -395,7 +395,7 @@ export default function VisaExpiryListingPage() {
                                     />
                                 </div>
 
-                                {/* ── Col 2: Grade, Sponsor, Designation, Employee ── */}
+                                {/* ── Col 2: Grade, Employee, Sponsor, Designation ── */}
                                 <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 240, flex: "1 1 240px" }}>
                                     <SearchableDropdown
                                         label="Grade"
@@ -425,7 +425,6 @@ export default function VisaExpiryListingPage() {
                                         options={designationOptions}
                                         placeholder="Search designation..."
                                     />
-                                    
                                 </div>
 
                                 {/* ── Col 3: Visa Expiry dates + Employee type ── */}
