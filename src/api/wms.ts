@@ -209,16 +209,50 @@ export async function downloadPutawayReportExcel(
   const url  = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href     = url;
+  link.download = `Putaway_job_${jobNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export async function getGrnReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/Grn-report/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+ 
+export async function downloadGrnReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/Grn-report/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
   link.download = `Job_${jobNo}_Details.xlsx`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
-}export async function getAllStockTransfers() {
+}
+
+export async function getAllStockTransfers() {
   const response = await api.get<ApiResponse<unknown[]>>("/api/wms/stocktransfer/getAllStockTransfers");
   if (!response.data.success) throw new Error(response.data.message || "Unable to load stock transfers");
   return response.data.data || [];
 }
+
+
 
 export async function createSTN(payload: {
   prin_code: string;

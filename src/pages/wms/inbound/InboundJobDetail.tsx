@@ -8,6 +8,8 @@ import {
   downloadJobDetailsReportExcel,
   getPutawayReport,
   downloadPutawayReportExcel,
+  getGrnReport,
+  downloadGrnReportExcel,
 } from "../../../api/wms";
 import { Button } from "../../../components/ui/Button";
 import { useAuth } from "../../../state/AuthContext";
@@ -42,6 +44,12 @@ const REPORTS: TReport[] = [
     reportTitle: "Putaway Report",
     apiFn:       getPutawayReport,
     excelFn:     downloadPutawayReportExcel,
+  },
+    {
+    id:          3,
+    reportTitle: "Goods Recipt Note Report",
+    apiFn:       getGrnReport,
+    excelFn:     downloadGrnReportExcel,
   },
 ];
 
