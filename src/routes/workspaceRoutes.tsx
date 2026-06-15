@@ -44,7 +44,6 @@ import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrP
 import { ApplicationProgressPage } from "../pages/applicationProgress/ApplicationProgressPage";
 import {
   OxAssetInventoryPage,
-  OxInspectionFormPage,
   OxInspectionReportPage,
   OxMaintDashboard,
   OxSimpleMasterPage,
@@ -57,9 +56,12 @@ import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics
 import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
 import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
 import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseReport";
-import { AcGroup, FirstGroup, SecondGroup, ThirdGroup } from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
+//import { AcGroup, FirstGroup, SecondGroup, ThirdGroup } from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
 import AC_StatementPage from "../pages/accounts_report/detailed_reports/AC_StatementReportPage";
 import OutstandingStatementPage from "../pages/accounts_report/detailed_reports/OutstandingStatementPage";
+import InspectionFormPage from "../pages/oxmaint/inspection_form/InspectionFormMainPage";
+import AssignUserDiv from "../pages/finance/AssignUserDiv";
+import TrialBalancePage from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
 import StockTransferPage from "../pages/wms/stock transfer/StockTransferPage";
 import { StockTransferViewPage } from "../pages/wms/stock transfer/GetStockTransferPage";
 import { RJVDocumentEditor } from "../pages/finance/RJVDocuments";
@@ -83,6 +85,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: "Finance Assign User Div",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/finance/finance/utilities/assign_user_division"),
+    element: () => <AssignUserDiv />
+  },
   {
     name: "Finance Account Tree",
     match: ({ pathname }) => isAccountTreeRoute(pathname),
@@ -115,22 +122,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <PeriodWisePage />},
   { name: "Finance Trail Balance L2 Report",
     match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/first_group"),
-    element: () => <FirstGroup />,
-  },
-  {
-    name: "Finance Trail Balance L3 Report",
-    match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/second_group"),
-    element: () => <SecondGroup />,
-  },
-  {
-    name: "Finance Trail Balance L4 Report",
-    match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/third_group"),
-    element: () => <ThirdGroup />,
-  },
-  {
-    name: "Finance AC trial balance report",
-    match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/a/c_wise"),
-    element: () => <AcGroup />,
+    element: () => <TrialBalancePage />,
   },
   {
     name: "Finance Bank Master",
@@ -996,7 +988,7 @@ function getOxMaintElement(context: WorkspaceRouteContext) {
   const compact = matchText.replace(/[^a-z0-9]/g, "");
   if (compact.includes("assetinventory")) return <OxAssetInventoryPage />;
   if (compact.includes("inspectionreport")) return <OxInspectionReportPage />;
-  if (compact.includes("inspectionform")) return <OxInspectionFormPage />;
+  if (compact.includes("inspectionform")) return <InspectionFormPage />;
   if (compact.includes("assettype")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.assetType} />;
   if (compact.includes("siteproject")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.siteProject} />;
   if (compact.includes("status") || matchText.includes("/status")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.status} />;
