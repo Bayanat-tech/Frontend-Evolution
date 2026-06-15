@@ -10,6 +10,9 @@ import TransferForm from "./AddStockTransferForm";
 
 type WmsRow = Record<string, unknown>;
 
+// ── Base path for stock transfer — keep in one place ──────────────────────────
+const STN_BASE = "/workspace/wms/activity/request/stock_transfer";
+
 function val(row: WmsRow, key: string) {
   return String(row[key] ?? row[key.toUpperCase()] ?? "");
 }
@@ -77,6 +80,14 @@ export function StockTransferPage() {
 
   useEffect(() => { void loadRows(); }, []);
 
+  // ── Build absolute detail URL ──
+  function detailUrl(row: WmsRow) {
+    const stn = val(row, "stn_no");
+    const prin = val(row, "prin_code");
+    // const co = val(row, "company_code");
+    return `${STN_BASE}/view/${stn}?principal_code=${prin}`;
+  }
+
   const columns = useMemo<ColumnDef<WmsRow>[]>(() => [
     {
       accessorKey: "stn_no",
@@ -85,9 +96,7 @@ export function StockTransferPage() {
       cell: ({ row }) => (
         <button
           className="font-semibold text-primary hover:underline"
-          onClick={() =>
-            navigate(`view/${val(row.original, "stn_no")}?principal_code=${val(row.original, "prin_code")}&company_code=${val(row.original, "company_code")}`)
-          }
+          onClick={() => navigate(detailUrl(row.original))}
         >
           {val(row.original, "stn_no")}
         </button>
@@ -131,9 +140,7 @@ export function StockTransferPage() {
           size="icon"
           variant="ghost"
           title="View transfer"
-          onClick={() =>
-            navigate(`view/${val(row.original, "stn_no")}?principal_code=${val(row.original, "prin_code")}&company_code=${val(row.original, "company_code")}`)
-          }
+          onClick={() => navigate(detailUrl(row.original))}
         >
           <Eye size={14} />
         </Button>

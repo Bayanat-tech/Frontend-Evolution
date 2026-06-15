@@ -44,7 +44,6 @@ import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrP
 import { ApplicationProgressPage } from "../pages/applicationProgress/ApplicationProgressPage";
 import {
   OxAssetInventoryPage,
-  OxInspectionFormPage,
   OxInspectionReportPage,
   OxMaintDashboard,
   OxSimpleMasterPage,
@@ -57,8 +56,17 @@ import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics
 import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
 import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
 import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseReport";
-import { AcGroup, FirstGroup, SecondGroup, ThirdGroup } from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
+// import { AcGroup, FirstGroup, SecondGroup, ThirdGroup } from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
+import AC_StatementPage from "../pages/accounts_report/detailed_reports/AC_StatementReportPage";
+import OutstandingStatementPage from "../pages/accounts_report/detailed_reports/OutstandingStatementPage";
+import InspectionFormPage from "../pages/oxmaint/inspection_form/InspectionFormMainPage";
+import AssignUserDiv from "../pages/finance/AssignUserDiv";
+import TrialBalancePage from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
 import StockTransferPage from "../pages/wms/stock transfer/StockTransferPage";
+import { StockTransferViewPage } from "../pages/wms/stock transfer/GetStockTransferPage";
+import { RJVDocumentEditor } from "../pages/finance/RJVDocuments";
+import { AlmsSimpleMasterConfigs } from "../pages/almswf/almsMasterConfig";
+import { AlmsSimpleMasterPage } from "../pages/almswf/AlmsMasterPage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -78,6 +86,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 
 export const workspaceRoutes: WorkspaceRoute[] = [
   {
+    name: "Finance Assign User Div",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/finance/finance/utilities/assign_user_division"),
+    element: () => <AssignUserDiv />
+  },
+  {
     name: "Finance Account Tree",
     match: ({ pathname }) => isAccountTreeRoute(pathname),
     element: () => <AccountTreePage />,
@@ -87,6 +100,21 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isAccountReportRoute(pathname),
     element: () => <LedgerBasics />,
   },
+
+
+  {
+  name: "Finance AC Statement",
+  match: ({ pathname }) => isAcStatementRoute(pathname),
+  element: () => <AC_StatementPage />,
+},
+
+
+{
+  name: "Finance Outstanding Statement",
+  match: ({ pathname }) => isOutstandingStatementRoute(pathname),
+  element: () => <OutstandingStatementPage />,
+},
+
   
   {
     name: "Finance Ageing Report",
@@ -94,22 +122,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <PeriodWisePage />},
   { name: "Finance Trail Balance L2 Report",
     match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/first_group"),
-    element: () => <FirstGroup />,
-  },
-  {
-    name: "Finance Trail Balance L3 Report",
-    match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/second_group"),
-    element: () => <SecondGroup />,
-  },
-  {
-    name: "Finance Trail Balance L4 Report",
-    match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/third_group"),
-    element: () => <ThirdGroup />,
-  },
-  {
-    name: "Finance AC trial balance report",
-    match: ({ pathname }) => pathname.toLowerCase().includes("finance/finance/accounts_report/trial_balance/a/c_wise"),
-    element: () => <AcGroup />,
+    element: () => <TrialBalancePage />,
   },
   {
     name: "Finance Bank Master",
@@ -141,11 +154,17 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isBudgetVersionRoute(pathname),
     element: () => <BudgetVersionPage />,
   },
+      {
+    name: "Stock Transfer View",
+    match: ({ pathname }) => isStockTransferViewRoute(pathname),
+    element: () => <StockTransferViewPage />,   
+  },
     {
     name: "Stock Transfer",
     match: ({ pathname }) => isStockTransferRoute(pathname),
     element: () => <StockTransferPage />,
   },
+
   {
     name: "Finance Account Wise Budget",
     match: ({ pathname }) => isAccountWiseBudgetRoute(pathname),
@@ -160,6 +179,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Finance Journal Voucher",
     match: ({ pathname }) => isJournalVoucherRoute(pathname),
     element: () => <JVDocumentEditor docType={"JV"}  />,
+  },
+    {
+    name: "Finance RV Voucher",
+    match: ({ pathname }) => isRVoucherRoute(pathname),
+    element: () => <RJVDocumentEditor docType={"RJV"}  />,
   },
   {
     name: "Finance Bank Reconciliation",
@@ -236,6 +260,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "WMS Simple Master",
     match: ({ pathname }) => Boolean(getWmsSimpleMasterConfig(pathname)),
     element: ({ pathname }) => <WmsSimpleMasterPage config={getWmsSimpleMasterConfig(pathname)!} />,
+  },
+    {
+    name: "ALMS Simple Master",
+    match: ({ pathname }) => Boolean(getAlmsSimpleMasterConfig(pathname)),
+    element: ({ pathname }) => <AlmsSimpleMasterPage config={getAlmsSimpleMasterConfig(pathname)!} />,
   },
   {
     name: "Security Operation Access",
@@ -573,8 +602,32 @@ function isAccountTreeRoute(pathname: string) {
 
 function isAccountReportRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts/reports/account-report/detailed-reports/ledger-basic");
+  return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts/reports/account-report/detailed-reports/ledger-basic")
+  
 }
+
+
+function isAcStatementRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/finance/accounts_report/detailed_reports/a/c_statement") ||
+         normalized.includes("/finance/accounts_report/detailed_reports/a%2fc_statement") ||
+         normalized.includes("/finance/accounts/reports/account-report/detailed-reports/a/c-statement");
+}
+
+function isOutstandingStatementRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/finance/accounts_report/detailed_reports/outstanding_statement") ||
+         normalized.includes("/finance/accounts_report/detailed_reports/outstanding-statement") ||
+         normalized.includes("/finance/accounts/reports/account-report/detailed-reports/outstanding-statement");
+}
+
+
+// function isAccountReportRoute(pathname: string) {
+//   const normalized = pathname.toLowerCase();
+//   return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts_report/detailed_reports/a/c_statement")
+// }
+
+
 
 function isAgeingReportRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -631,6 +684,17 @@ function isJournalVoucherRoute(pathname: string) {
   );
 }
 
+
+function isRVoucherRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.includes("/finance/accounts/transactions/rjv") ||
+    normalized.includes("/finance/accounts/transactions/provisional") ||
+    normalized.includes("/finance/accounts/transactions/journal")
+  );
+}
+
+
 function isBankReconciliationRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/finance/accounts/transactions/bank_reconciliation") || normalized.includes("/finance/accounts/transactions/bank-reconciliation");
@@ -664,10 +728,21 @@ function isAssetTransferRoute(pathname: string) {
   return pathname.toLowerCase().includes("/finance/a/c_others/assets/asset_transfer");
 }
 
-function isStockTransferRoute(pathname: string) { 
-   return pathname.toLowerCase().includes("wms/activity/request/stock_transfer");
+function isStockTransferRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.includes("wms/activity/request/stock_transfer") &&
+    !normalized.includes("/view/")  // ← add this
+  );
 }
 
+function isStockTransferViewRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.includes("wms/activity/request/stock_transfer") &&
+    normalized.includes("/view/")
+  );
+}
 function isAssetDepreciationRoute(pathname: string) {
   return pathname.toLowerCase().includes("/finance/a/c_others/assets/asset_depreciation");
 }
@@ -722,6 +797,15 @@ function getWmsSimpleMasterConfig(pathname: string) {
   const normalized = pathname.toLowerCase();
   if (!normalized.includes("/wms/")) return null;
   const matches = Object.values(wmsSimpleMasterConfigs)
+    .flatMap((config) => (config.routeKeys || [config.master]).map((key) => ({ config, key: key.toLowerCase() })))
+    .sort((a, b) => b.key.length - a.key.length);
+  return matches.find(({ key }) => normalized.includes(`/${key}`) || normalized.includes(`/${key.replace(/_/g, "-")}`))?.config || null;
+}
+
+function getAlmsSimpleMasterConfig(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  if (!normalized.includes("/almswf/")) return null;
+  const matches = Object.values(AlmsSimpleMasterConfigs)
     .flatMap((config) => (config.routeKeys || [config.master]).map((key) => ({ config, key: key.toLowerCase() })))
     .sort((a, b) => b.key.length - a.key.length);
   return matches.find(({ key }) => normalized.includes(`/${key}`) || normalized.includes(`/${key.replace(/_/g, "-")}`))?.config || null;
@@ -904,7 +988,7 @@ function getOxMaintElement(context: WorkspaceRouteContext) {
   const compact = matchText.replace(/[^a-z0-9]/g, "");
   if (compact.includes("assetinventory")) return <OxAssetInventoryPage />;
   if (compact.includes("inspectionreport")) return <OxInspectionReportPage />;
-  if (compact.includes("inspectionform")) return <OxInspectionFormPage />;
+  if (compact.includes("inspectionform")) return <InspectionFormPage />;
   if (compact.includes("assettype")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.assetType} />;
   if (compact.includes("siteproject")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.siteProject} />;
   if (compact.includes("status") || matchText.includes("/status")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.status} />;
