@@ -161,7 +161,7 @@ export function LookupField({
     setQuery("");
     setPage(1);
   };
-
+  
   const currentText =
     displayValue ||
     (multiSelect
@@ -253,7 +253,6 @@ export function LookupField({
               <Table>
                 <TableHeader className="sticky top-0 z-10 bg-[#edf4ff]">
                   <TableRow>
-                    <TableHead className="w-10 text-center">Select</TableHead>
                     {columns.map((column) => (
                       <TableHead key={column.field}>{column.header}</TableHead>
                     ))}
@@ -262,13 +261,13 @@ export function LookupField({
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell className="px-3 py-8 text-center text-muted-foreground" colSpan={columns.length + 1}>
+                      <TableCell className="px-3 py-8 text-center text-muted-foreground" colSpan={columns.length}>
                         Loading...
                       </TableCell>
                     </TableRow>
                   ) : pagedRows.length === 0 ? (
                     <TableRow>
-                      <TableCell className="px-3 py-8 text-center text-muted-foreground" colSpan={columns.length + 1}>
+                      <TableCell className="px-3 py-8 text-center text-muted-foreground" colSpan={columns.length}>
                         No records found
                       </TableCell>
                     </TableRow>
@@ -283,6 +282,7 @@ export function LookupField({
                           className={selected ? "cursor-pointer bg-primary/10" : "cursor-pointer hover:bg-accent"}
                           key={`${rowValue || index}`}
                           onClick={() => selectRow(row)}
+                          aria-selected={selected}
                         >
                           <TableCell className="px-3 py-1.5 text-center">
                             <input

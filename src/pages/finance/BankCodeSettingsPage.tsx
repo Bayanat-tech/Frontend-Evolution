@@ -93,39 +93,29 @@ export function BankCodeSettingsPage() {
     {
       accessorFn: (row) => String(getLookupValue(row, "ac_code") || ""),
       id: "ac_code",
-      header: "Account Code",
+      header: "Bank Code",
       cell: ({ getValue }) => <span className="font-medium">{String(getValue() || "")}</span>,
     },
     {
       accessorFn: (row) => String(getLookupValue(row, "ac_name") || ""),
       id: "ac_name",
-      header: "Account Name",
+      header: "A/c Name",
     },
     {
       accessorFn: (row) => String(getLookupValue(row, "bank_ac_code") || ""),
       id: "bank_ac_code",
-      header: "Bank A/C Code",
-    },
-    {
-      accessorFn: (row) => String(getLookupValue(row, "last_cheque_no") || ""),
-      id: "last_cheque_no",
-      header: "Last Cheque No",
-    },
-    {
-      accessorFn: (row) => String(getLookupValue(row, "chq_template") || ""),
-      id: "chq_template",
-      header: "Cheque Template",
-    },
-    {
-      accessorFn: (row) => String(getLookupValue(row, "words_length") || ""),
-      id: "words_length",
-      header: "Words Length",
+      header: "Bank A/C",
     },
     {
       accessorFn: (row) => String(getLookupValue(row, "bank_address") || ""),
       id: "bank_address",
       header: "Bank Address",
       cell: ({ getValue }) => <span className="block max-w-[220px] truncate">{String(getValue() || "")}</span>,
+    },
+    {
+      accessorFn: (row) => String(getLookupValue(row, "last_cheque_no") || ""),
+      id: "last_cheque_no",
+      header: "Last Cheque No",
     },
     {
       id: "actions",
@@ -279,7 +269,7 @@ function BankCodeEditor({
   };
 
   return (
-    <div className="flex min-h-[420px] flex-col">
+    <div className="flex min-h-[360px] flex-col">
       <div className="border-b pb-3">
         <p className="eyebrow">{editor.mode === "edit" ? "Modify" : "View"}</p>
         <h2 className="m-0 text-xl font-semibold tracking-tight">Bank Code</h2>
@@ -314,14 +304,6 @@ function BankCodeEditor({
           <label className="field">
             <span>Last Cheque No</span>
             <Input type="number" value={form.last_cheque_no} onChange={(e) => setField("last_cheque_no", e.target.value)} disabled={readOnly} />
-          </label>
-          <label className="field">
-            <span>Cheque Template</span>
-            <Input value={form.chq_template} onChange={(e) => setField("chq_template", e.target.value)} disabled={readOnly} />
-          </label>
-          <label className="field">
-            <span>Words Length</span>
-            <Input type="number" value={form.words_length} onChange={(e) => setField("words_length", e.target.value)} disabled={readOnly} />
           </label>
         </div>
         <label className="field">

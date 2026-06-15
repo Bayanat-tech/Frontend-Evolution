@@ -603,6 +603,13 @@ export async function taxOutInReport(params: ReportParams) {
     await openReportInTab(
         "/api/finance/transactions/reports/tax-vat-out-ledger/html",
         params
+// ---------AC_statement report-----
+    )}
+
+export async function openAcStatementReport(params: ReportParams) {
+    await openReportInTab(
+        "/api/finance/transactions/reports/AcStatementReport/html",  
+        params
     );
 }
 
@@ -611,6 +618,20 @@ export async function taxOutInReport(params: ReportParams) {
 export async function taxOutInSummaryReport(params: ReportParams) {
     await openReportInTab(
         "/api/finance/transactions/reports/tax-vat-out-ledger-summary/html",
+        params
+    );
+}
+export async function openOutstandingStatementDetailReport(params: ReportParams) {
+    await openReportInTab(
+        "/api/finance/transactions/reports/OutstandingDetailReport/html",  
+        params
+    );
+}
+
+
+export async function openOutstandingStatementSummaryReport(params: ReportParams) {
+    await openReportInTab(
+        "/api/finance/transactions/reports/OutstandingSummaryReport/html", 
         params
     );
 }
