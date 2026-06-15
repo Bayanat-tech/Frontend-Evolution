@@ -382,8 +382,17 @@ const handleDelete = async (row: WmsRow) => {
           if (tab === "packing_details") {
             setEditForm({ ...row, uom_count: Number(row.uom_count ?? 1), uppp: Number(row.uppp ?? 1), qty_puom: Number(row.qty_puom ?? 0), qty_luom: Number(row.qty_luom ?? 0), quantity: Number(row.quantity ?? 0) });
           } else {
-            setEditForm({ packdet_no: row.packdet_no, prod_name: row.prod_name, batch_no: row.batch_no, lot_no: row.lot_no, po_no: row.po_no, doc_ref: row.doc_ref, qty1_arrived: Number(row.qty1_arrived ?? row.qty_arrived ?? 0), qty2_arrived: Number(row.qty2_arrived ?? 0) });
-          }
+setEditForm({
+  packdet_no: row.packdet_no,
+  prod_name: row.prod_name,
+  batch_no: row.batch_no,
+  lot_no: row.lot_no,
+  po_no: row.po_no,
+  doc_ref: row.doc_ref,
+  qty_luom: Number(row.qty_luom ?? 0),        // ← add this
+  qty1_arrived: Number(row.qty1_arrived ?? row.qty_arrived ?? 0),
+  qty2_arrived: Number(row.qty2_arrived ?? 0),
+});          }
           setEditOpen(true);
         }
       : undefined,
@@ -442,8 +451,28 @@ const handleDelete = async (row: WmsRow) => {
         loading={loading || loadingJob} height="calc(100vh - 365px)"
         minWidth={config.minWidth} density="grid" enablePagination pageSize={75}
         toolbar={toolbar}
+        rowClassName={
+  tab === "quality_clearance"
+    ? (row) => String(value(row as WmsRow, "clearance") || "").toUpperCase() === "Y"
+        ? "opacity-50 pointer-events-none bg-muted/40"
+        : ""
+    : undefined
+}
         getRowId={(row, index) => `${tab}_${value(row, "packdet_no") || value(row, "container_no") || value(row, "key_number") || index}`}
-        onRowSelectionChange={(tab === "quality_clearance" || tab === "putway_details" || tab === "job_confirmation") ? setSelectedRows : undefined}
+onRowSelectionChange={
+  (tab === "quality_clearance" || tab === "putway_details" || tab === "job_confirmation")
+    ? (selected) => {
+        if (tab === "quality_clearance") {
+          // filter out rows already cleared
+          setSelectedRows(selected.filter(
+            (r) => String(value(r, "clearance") || "").toUpperCase() !== "Y"
+          ));
+        } else {
+          setSelectedRows(selected);
+        }
+      }
+    : undefined
+}
       />
 
       {/* ── Add Modal ── */}
@@ -510,6 +539,7 @@ const handleDelete = async (row: WmsRow) => {
                   <label className="field">
                     <span className="text-xs font-medium text-muted-foreground">Quantity (Secondary)</span>
                     <Input type="number" min="0" step="1" value={Number(editForm.qty2_arrived ?? 0)}
+                         disabled={Number(editForm.qty_luom ?? 0) === 0}
                       onChange={(e) => setEditForm((c:any) => ({ ...c, qty2_arrived: e.target.value === "" ? 0 : Number(e.target.value) }))} />
                   </label>
                 </div>
