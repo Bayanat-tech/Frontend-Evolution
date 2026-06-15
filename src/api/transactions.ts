@@ -620,6 +620,14 @@ export async function openVisaExpiryReport(params: ReportParams) {
     );
 }
 
+// ---------DN Summary Report----------------
+export async function openDNSummaryReport(params: ReportParams) {
+    await openReportInTab(
+        `/api/finance/transactions/reports/getDnsummaryreport/html`,
+        params
+    );
+}
+
 
 // export const openInvdatewiseDetailReport = async (params: any): Promise<void> => {
 //     const response = await fetch("/api/finance/transactions/reports/InvdatewiseDetail/html", {

@@ -63,6 +63,7 @@ import StockTransferPage from "../pages/wms/stock transfer/StockTransferPage";
 import { StockTransferViewPage } from "../pages/wms/stock transfer/GetStockTransferPage";
 import ProfitLossPage from "../pages/accounts_report/ProfitLossPage";
 import VisaExpiryListingPage from "../pages/hr/Reports/Visaexpirylistingpage";
+import Dnsummaryreportpage from "../pages/wms/Reports/Dnsummaryreportpage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -236,6 +237,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({pathname}) => isVisaExpiryListingRoute(pathname),
     element: () => <VisaExpiryListingPage/>
   },
+{
+    name : "DN Summary Report",
+    match: ({pathname}) => isDnRoute(pathname),
+    element: () => <Dnsummaryreportpage/>
+  },
+
+  
 
   {
     name: "WMS Inbound",
@@ -717,6 +725,16 @@ function isProfitLossRoute(pathname:string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/finance/finance/accounts_report/profit_and_loss/profit_and_loss")
 }
+
+
+function isDnRoute(pathname:string) {  
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/wms/wms/reports/summary%20report/dn_summary")
+   || normalized.includes("/wms/wms/reports/summary_report/dn_summary");
+}
+
+
+
 
 function isVisaExpiryListingRoute(pathname:string) {
   const normalized = pathname.toLowerCase();
