@@ -37,7 +37,7 @@ function formatDisplay(iso: string) {
 function formatDateOracle(iso: string) {
   if (!iso) return "";
   const [y, m, d] = iso.split("-");
-  const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+  const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
   return `${d}-${months[parseInt(m, 10) - 1]}-${y}`;
 }
 
@@ -137,9 +137,9 @@ export default function AC_StatementPage() {
   const [groupSearchRight, setGroupSearchRight] = useState("");
 
   // ── Other state ─────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<"acCode" | "group">("group");
+  const [activeTab, setActiveTab] = useState<"acCode" | "group">("acCode");
   const [currency, setCurrency] = useState<"local" | "foreign">("local");
-  const [dateFrom, setDateFrom] = useState(startOfMonthISO());
+  const [dateFrom, setDateFrom] = useState(`${new Date().getFullYear()}-01-01`);
   const [dateTo, setDateTo] = useState(todayISO());
   const [reportOpen, setReportOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -247,11 +247,11 @@ export default function AC_StatementPage() {
   // ── Filtered lists ──────────────────────────────────────────────────────────
   const filteredAcLeft = acLeftItems.filter(
     (i) => i.ac_code?.toLowerCase().includes(acSearchLeft.toLowerCase()) ||
-            i.ac_name?.toLowerCase().includes(acSearchLeft.toLowerCase())
+      i.ac_name?.toLowerCase().includes(acSearchLeft.toLowerCase())
   );
   const filteredGroupLeft = groupLeftItems.filter(
     (i) => i.l4_code?.toLowerCase().includes(groupSearchLeft.toLowerCase()) ||
-            i.description?.toLowerCase().includes(groupSearchLeft.toLowerCase())
+      i.description?.toLowerCase().includes(groupSearchLeft.toLowerCase())
   );
   const filteredDivisions = divisionList.filter((d: any) =>
     `${d.div_code} ${d.div_name}`.toLowerCase().includes(divisionSearch.toLowerCase())
@@ -282,41 +282,41 @@ export default function AC_StatementPage() {
   };
 
   const handleGenerate = async () => {
-    if (!division) { 
-        setReportError("Please select a Division before generating."); 
-        return; 
+    if (!division) {
+      setReportError("Please select a Division before generating.");
+      return;
     }
     setReportError(null);
     setGenerating(true);
     try {
-        const params = {
-            parameter: "Account_Report_AC_StatementReport",
-            loginid:   loginId,
-            code1:     companyCode,
-            code2:     division,
-            code3:     activeTab === "acCode"
-                           ? (acLeftSelected.size > 0 ? Array.from(acLeftSelected).join(",") : "All")
-                           : "All",
-            code4:     activeTab === "group"
-                           ? (groupLeftSelected.size > 0 ? Array.from(groupLeftSelected).join(",") : "All")
-                           : "All",
-            code5:     formatDateOracle(dateFrom),
-            code6:     formatDateOracle(dateTo),
-            code20: "ROWSQL"
-        };
-        await openAcStatementReport(params);
+      const params = {
+        parameter: "Account_Report_AC_StatementReport",
+        loginid: loginId,
+        code1: companyCode,
+        code2: division,
+        code3: activeTab === "acCode"
+          ? (acLeftSelected.size > 0 ? Array.from(acLeftSelected).join(",") : "All")
+          : "All",
+        code4: activeTab === "group"
+          ? (groupLeftSelected.size > 0 ? Array.from(groupLeftSelected).join(",") : "All")
+          : "All",
+        code5: formatDateOracle(dateFrom),
+        code6: formatDateOracle(dateTo),
+        code20: "ROWSQL"
+      };
+      await openAcStatementReport(params);
     } catch (err: any) {
-        setReportError("Failed to generate report.");
-        console.error(err);
+      setReportError("Failed to generate report.");
+      console.error(err);
     } finally {
-        setGenerating(false);
+      setGenerating(false);
     }
-};
+  };
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ background: "#f3f4f6", padding: "16px", fontFamily: "system-ui, sans-serif", }}>
+    <div style={{ background: "#f3f4f6", padding: "6px 10px", fontFamily: "system-ui, sans-serif", }}>
       <style>{`
         .tf-btn:hover { background: #f0f7ff !important; border-color: #185FA5 !important; color: #185FA5 !important; }
         .tab-ac { padding: 7px 18px; border: none; background: none; cursor: pointer; font-size: 12px; font-weight: 500; color: #9ca3af; border-bottom: 2px solid transparent; margin-bottom: -0.5px; }
@@ -341,6 +341,44 @@ export default function AC_StatementPage() {
 
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-start" }}>
 
+            {/* Division searchable dropdown */}
+            <div style={{ position: "relative", flex: "1 1 220px", minWidth: 220 }}>
+              <div style={{ ...fieldLabelStyle, marginBottom: 1 }}>Division</div>
+              <input
+                type="text"
+                placeholder="Search division..."
+                value={divisionSearch !== "" ? divisionSearch : divisionDisplay}
+                onChange={(e) => { setDivisionSearch(e.target.value); setShowDivisionDropdown(true); }}
+                onFocus={() => setShowDivisionDropdown(true)}
+                onBlur={() => setTimeout(() => setShowDivisionDropdown(false), 150)}
+                style={inputStyle}
+              />
+              {showDivisionDropdown && filteredDivisions.length > 0 && (
+                <div style={{
+                  position: "absolute", zIndex: 100, top: "calc(100% + 2px)", left: 0, right: 0,
+                  background: "#fff", border: "0.5px solid #d1d5db", borderRadius: 6,
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 150, overflowY: "auto",
+                }}>
+                  {filteredDivisions.map((d: any) => (
+                    <div
+                      key={d.div_code}
+                      className="div-option"
+                      style={{ padding: "7px 12px", fontSize: 12, cursor: "pointer" }}
+                      onMouseDown={() => {
+                        setDivision(d.div_code);
+                        setDivisionDisplay(`${d.div_code} - ${d.div_name}`);
+                        setDivisionSearch("");
+                        setShowDivisionDropdown(false);
+                      }}
+                    >
+                      <span style={{ fontWeight: 500 }}>{d.div_code}</span>
+                      <span style={{ color: "#6b7280", marginLeft: 6 }}>{d.div_name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* From */}
             <div style={{ flex: "1 1 140px", minWidth: 140 }}>
               <div style={{ ...fieldLabelStyle, marginBottom: 1 }}>From</div>
@@ -363,43 +401,7 @@ export default function AC_StatementPage() {
               />
             </div>
 
-            {/* Division searchable dropdown */}
-            <div style={{ position: "relative", flex: "1 1 220px", minWidth: 220 }}>
-              <div style={{ ...fieldLabelStyle, marginBottom: 1 }}>Division</div>
-              <input
-                type="text"
-                placeholder="Search division..."
-                value={divisionSearch !== "" ? divisionSearch : divisionDisplay}
-                onChange={(e) => { setDivisionSearch(e.target.value); setShowDivisionDropdown(true); }}
-                onFocus={() => setShowDivisionDropdown(true)}
-                onBlur={() => setTimeout(() => setShowDivisionDropdown(false), 150)}
-                style={inputStyle}
-              />
-              {showDivisionDropdown && filteredDivisions.length > 0 && (
-                <div style={{
-                  position: "absolute", zIndex: 100, top: "calc(100% + 2px)", left: 0, right: 0,
-                  background: "#fff", border: "0.5px solid #d1d5db", borderRadius: 6,
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 200, overflowY: "auto",
-                }}>
-                  {filteredDivisions.map((d: any) => (
-                    <div
-                      key={d.div_code}
-                      className="div-option"
-                      style={{ padding: "7px 12px", fontSize: 12, cursor: "pointer" }}
-                      onMouseDown={() => {
-                        setDivision(d.div_code);
-                        setDivisionDisplay(`${d.div_code} - ${d.div_name}`);
-                        setDivisionSearch("");
-                        setShowDivisionDropdown(false);
-                      }}
-                    >
-                      <span style={{ fontWeight: 500 }}>{d.div_code}</span>
-                      <span style={{ color: "#6b7280", marginLeft: 6 }}>{d.div_name}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+
 
             {/* Currency */}
             <div style={{ flex: "1 1 220px", minWidth: 220 }}>
@@ -473,7 +475,7 @@ export default function AC_StatementPage() {
                   style={{ ...inputStyle, fontSize: 12 }}
                 />
               </div>
-              <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 200, overflowY: "auto" }}>
+              <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 150, overflowY: "auto" }}>
                 <table>
                   <thead>
                     <tr>
@@ -545,7 +547,7 @@ export default function AC_StatementPage() {
                   style={{ ...inputStyle, fontSize: 12 }}
                 />
               </div>
-              <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 200, overflowY: "auto" }}>
+              <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 150, overflowY: "auto" }}>
                 <table>
                   <thead>
                     <tr>
@@ -593,7 +595,7 @@ export default function AC_StatementPage() {
           )}
 
           {/* Action bar */}
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16, paddingTop: 14, borderTop: "0.5px solid #e5e7eb" }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8, paddingTop: 8, borderTop: "0.5px solid #e5e7eb" }}>
             <button
               className="action-btn"
               onClick={handleReset}
@@ -615,16 +617,6 @@ export default function AC_StatementPage() {
           </div>
         </div>
       </div>
-
-      {/* ── Report Dialog ─────────────────────────────────────────────────────── */}
-      {/* {reportOpen && (
-        <ReportDialogPage
-          Report={AC_StatementReport}
-          required_values={reportValues}
-          title="AC Statement"
-          onClose={() => setReportOpen(false)}
-        />
-      )} */}
     </div>
   );
 }
