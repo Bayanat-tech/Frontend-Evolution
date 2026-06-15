@@ -61,6 +61,7 @@ import { AcGroup, FirstGroup, SecondGroup, ThirdGroup } from "../pages/accounts_
 import { RJVDocumentEditor } from "../pages/finance/RJVDocuments";
 import { AlmsSimpleMasterConfigs } from "../pages/almswf/almsMasterConfig";
 import { AlmsSimpleMasterPage } from "../pages/almswf/AlmsMasterPage";
+import TaxReportFilter from "../pages/accounts_report/tax_report/TaxReport";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -88,6 +89,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Finance Account Report",
     match: ({ pathname }) => isAccountReportRoute(pathname),
     element: () => <LedgerBasics />,
+  },
+   {
+    name: "Finance Tax Report",
+    match: ({ pathname }) => isTaxReportRoute(pathname),
+    element: () => <TaxReportFilter />,
   },
   
   {
@@ -554,6 +560,11 @@ function isAccountTreeRoute(pathname: string) {
 function isAccountReportRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts/reports/account-report/detailed-reports/ledger-basic");
+}
+
+function isTaxReportRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/finance/accounts_report/tax_report") || normalized.includes("/finance/accounts/reports/tax-report");
 }
 
 function isAgeingReportRoute(pathname: string) {

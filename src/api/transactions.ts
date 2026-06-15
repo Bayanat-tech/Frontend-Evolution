@@ -599,6 +599,22 @@ export async function openOutstandingListReport(params: ReportParams) {
     );
 }
 
+export async function taxOutInReport(params: ReportParams) {
+    await openReportInTab(
+        "/api/finance/transactions/reports/tax-vat-out-ledger/html",
+        params
+    );
+}
+
+
+
+export async function taxOutInSummaryReport(params: ReportParams) {
+    await openReportInTab(
+        "/api/finance/transactions/reports/tax-vat-out-ledger-summary/html",
+        params
+    );
+}
+
 
 
 // export const openInvdatewiseDetailReport = async (params: any): Promise<void> => {
