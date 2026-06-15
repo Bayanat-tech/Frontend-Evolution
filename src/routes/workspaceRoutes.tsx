@@ -37,7 +37,7 @@ import AppraisalDivisionSummaryReport from "../pages/pams/AppraisalDivisionSumma
 import { CreditDebiteNotePage } from "../pages/finance/CreditDebiteNotePage";
 import { JVDocumentEditor } from "../pages/finance/JVDocumentPage";
 
-import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs } from "../pages/pams/PamsPages";
+import { PamsAppraisalViewPage, PamsBulkAppraisalPage, PamsDashboardPage, PamsDepartmentAssignmentPage, PamsMasterPage, PamsReportPage, PamsTaskPage, pamsMasterConfigs, PeriodProcessButton ,  } from "../pages/pams/PamsPages";
 import { HrMasterPage } from "../pages/hr/HrMasterPage";
 import { hrMasterConfigs } from "../pages/hr/hrMasterConfigs";
 import { HrLeaveCancelPage, HrPayrollAccountSetupPage, HrPayrollProcessPage, HrPayUnitsPage } from "../pages/hr/HrProcessPages";
@@ -59,6 +59,8 @@ import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseRe
 import InspectionFormPage from "../pages/oxmaint/inspection_form/InspectionFormMainPage";
 import AssignUserDiv from "../pages/finance/AssignUserDiv";
 import TrialBalancePage from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
+import StockTransferPage from "../pages/wms/stock transfer/StockTransferPage";
+import { StockTransferViewPage } from "../pages/wms/stock transfer/GetStockTransferPage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -131,6 +133,17 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isBudgetVersionRoute(pathname),
     element: () => <BudgetVersionPage />,
   },
+      {
+    name: "Stock Transfer View",
+    match: ({ pathname }) => isStockTransferViewRoute(pathname),
+    element: () => <StockTransferViewPage />,   
+  },
+    {
+    name: "Stock Transfer",
+    match: ({ pathname }) => isStockTransferRoute(pathname),
+    element: () => <StockTransferPage />,
+  },
+
   {
     name: "Finance Account Wise Budget",
     match: ({ pathname }) => isAccountWiseBudgetRoute(pathname),
@@ -388,6 +401,33 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isPamsRoute(pathname) && isPamsKpiItemRoute(pathname),
     element: () => <KpiActivityPage />,
   },
+
+  // workspaceRoutes array mein, PAMS Master route se PEHLE add karo:
+{
+  name: "PAMS Period Setup",
+  match: ({ pathname, activeApp }) => {
+    if (!isPamsRoute(pathname)) return false;
+    const context = { pathname, activeApp };
+    const normalized = getPamsMatchText(context);
+    const compact = normalized.replace(/[^a-z0-9]/g, "");
+    return (
+      normalized.includes("/period_setup") ||
+      normalized.includes("/period-setup") ||
+      normalized.includes("appraisal_period_setup") ||
+      normalized.includes("appraisalperiodsetup") ||
+      compact.includes("periodsetup") ||
+      compact.includes("periodsetup")
+    );
+  },
+  element: (context) => (
+    <PamsMasterPage
+  config={pamsMasterConfigs.period}
+  hideRefresh={true}
+  headerActions={<PeriodProcessButton />}
+/>
+  ),
+},
+
   {
     name: "PAMS Master",
     match: (context) => Boolean(getPamsMasterConfig(context)),
@@ -622,6 +662,21 @@ function isAssetTransferRoute(pathname: string) {
   return pathname.toLowerCase().includes("/finance/a/c_others/assets/asset_transfer");
 }
 
+function isStockTransferRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.includes("wms/activity/request/stock_transfer") &&
+    !normalized.includes("/view/")  // ← add this
+  );
+}
+
+function isStockTransferViewRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.includes("wms/activity/request/stock_transfer") &&
+    normalized.includes("/view/")
+  );
+}
 function isAssetDepreciationRoute(pathname: string) {
   return pathname.toLowerCase().includes("/finance/a/c_others/assets/asset_depreciation");
 }
