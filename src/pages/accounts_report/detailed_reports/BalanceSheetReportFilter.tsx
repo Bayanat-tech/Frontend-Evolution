@@ -59,7 +59,7 @@ export default function BalanceSheetReportFilter() {
         setGenerating(true);
 
         const params = {
-            parameter: "Account_Balance_Sheet",
+            parameter: "BALANCE_SHEET_REPORT_MAIN",
             loginid: user?.loginid || user?.username || "ADMIN",
             code1: user?.company_code || "",
             code2: division[0]?.div_code || "",
