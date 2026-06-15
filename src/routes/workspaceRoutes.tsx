@@ -67,6 +67,7 @@ import { StockTransferViewPage } from "../pages/wms/stock transfer/GetStockTrans
 import { RJVDocumentEditor } from "../pages/finance/RJVDocuments";
 import { AlmsSimpleMasterConfigs } from "../pages/almswf/almsMasterConfig";
 import { AlmsSimpleMasterPage } from "../pages/almswf/AlmsMasterPage";
+import TransactionReportPage from "../pages/wms/Stock_Reports/Transaction_report";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -164,6 +165,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isStockTransferRoute(pathname),
     element: () => <StockTransferPage />,
   },
+
+  {
+    name: "WMS Stock Transaction Report",
+    match: ({ pathname }) => isTransactionReportRoute(pathname),
+    element: () => <TransactionReportPage />,
+  },
+
 
   {
     name: "Finance Account Wise Budget",
@@ -734,6 +742,14 @@ function isStockTransferRoute(pathname: string) {
     normalized.includes("wms/activity/request/stock_transfer") &&
     !normalized.includes("/view/")  // ← add this
   );
+}
+
+
+
+function isTransactionReportRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/wms/reports/stock%20report/transaction_report") ||
+         normalized.includes("/wms/reports/stock%20report/transaction-report");
 }
 
 function isStockTransferViewRoute(pathname: string) {
