@@ -1,6 +1,7 @@
 import { api } from "./client";
 
 type ApiResponse<T> = {
+  includes(arg0: string): unknown;
   success: boolean;
   data?: T;
   message?: string;

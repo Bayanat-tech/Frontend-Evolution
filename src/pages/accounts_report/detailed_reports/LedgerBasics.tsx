@@ -18,15 +18,16 @@ import { useAuth } from "../../../state/AuthContext";
 import { LookupField } from "../../../components/ui/LookupField";
 import {
     Division,
-    openChequeMonitoringReport,
+    // openChequeMonitoringReport,
     openChequeDateWiseReport,
-    openDetailDumpReport,
-    openLedgerWithDetailsReport,
-    openLedgerOppositeEntryReport,
-    openSummaryDumpReport,
+    // openDetailDumpReport,
+    // openLedgerWithDetailsReport,
+    // openLedgerOppositeEntryReport,
+    // openSummaryDumpReport,
     openAccountPayeeWiseReport,
 
 } from "../../../api/transactions";
+import { FloatLabelInput } from "../../../lib/InputStyle";
 
 export default function FinanceReportFilter() {
     const { user } = useAuth();
@@ -74,12 +75,13 @@ export default function FinanceReportFilter() {
     };
 
     const [options, setOptions] = useState({
-        chequeDateWise: false,
-        chequeBookMonitoring: true,
-        ledgerWithDetails: false,
-        ledgerWithOppositeEntry: false,
-        summaryDump: false,
-        detailDump: false,
+        // default to cheque date wise selected
+        chequeDateWise: true,
+        // chequeBookMonitoring: true,
+        // ledgerWithDetails: false,
+        // ledgerWithOppositeEntry: false,
+        // summaryDump: false,
+        // detailDump: false,
         acPayeeWise: false,
     });
 
@@ -124,10 +126,19 @@ export default function FinanceReportFilter() {
         }
     };
 
+    // Make options mutually-exclusive: selecting one will deselect others.
     const toggleOption = (key: keyof typeof options) => {
-        setOptions((prev) => ({ ...prev, [key]: !prev[key] }));
+        setOptions((prev) => {
+            const next: Record<string, boolean> = {};
+            Object.keys(prev).forEach((k) => {
+                next[k] = k === key;
+            });
+            return next as typeof prev;
+        });
         setReportError(null);
     };
+
+    const getItemKey = (item: any) => item.l4_code || item.ac_code || "";
 
     const toggleSelection = (
         code: string,
@@ -140,45 +151,17 @@ export default function FinanceReportFilter() {
         });
     };
 
-    const moveToRight = (
-        leftItems: any[], rightItems: any[], leftSelected: Set<string>,
-        setLeftItems: any, setRightItems: any, setLeftSelected: any
+    const toggleAllSelection = (
+        items: any[],
+        selected: Set<string>,
+        setSelected: React.Dispatch<React.SetStateAction<Set<string>>>,
+        keyField: string
     ) => {
-        if (leftSelected.size === 0) return;
-        const moving = leftItems.filter((i) => leftSelected.has(i.l4_code || i.ac_code));
-        setRightItems([...rightItems, ...moving]);
-        setLeftItems(leftItems.filter((i) => !leftSelected.has(i.l4_code || i.ac_code)));
-        setLeftSelected(new Set());
+        const itemKeys = new Set(items.map((item) => item[keyField]));
+        const allSelected = items.length > 0 && items.every((item) => selected.has(item[keyField]));
+        setSelected(allSelected ? new Set() : itemKeys);
     };
 
-    const moveToLeft = (
-        leftItems: any[], rightItems: any[], rightSelected: Set<string>,
-        setLeftItems: any, setRightItems: any, setRightSelected: any
-    ) => {
-        if (rightSelected.size === 0) return;
-        const moving = rightItems.filter((i) => rightSelected.has(i.l4_code || i.ac_code));
-        setLeftItems([...leftItems, ...moving]);
-        setRightItems(rightItems.filter((i) => !rightSelected.has(i.l4_code || i.ac_code)));
-        setRightSelected(new Set());
-    };
-
-    const moveAllToRight = (
-        leftItems: any[], rightItems: any[],
-        setLeftItems: any, setRightItems: any, setLeftSelected: any
-    ) => {
-        setRightItems([...rightItems, ...leftItems]);
-        setLeftItems([]);
-        setLeftSelected(new Set());
-    };
-
-    const moveAllToLeft = (
-        leftItems: any[], rightItems: any[],
-        setLeftItems: any, setRightItems: any, setRightSelected: any
-    ) => {
-        setLeftItems([...leftItems, ...rightItems]);
-        setRightItems([]);
-        setRightSelected(new Set());
-    };
 
 
     const filteredGroupLeft = groupLeftItems.filter(
@@ -187,23 +170,12 @@ export default function FinanceReportFilter() {
             item.description?.toLowerCase().includes(groupSearchLeft.toLowerCase())
     );
 
-    const filteredGroupRight = groupRightItems.filter(
-        (item) =>
-            item.l4_code?.toLowerCase().includes(groupSearchRight.toLowerCase()) ||
-            item.description?.toLowerCase().includes(groupSearchRight.toLowerCase())
-    );
-
     const filteredAccountLeft = accountLeftItems.filter(
         (item) =>
             item.ac_code?.toLowerCase().includes(accountSearchLeft.toLowerCase()) ||
             item.ac_name?.toLowerCase().includes(accountSearchLeft.toLowerCase())
     );
 
-    const filteredAccountRight = accountRightItems.filter(
-        (item) =>
-            item.ac_code?.toLowerCase().includes(accountSearchRight.toLowerCase()) ||
-            item.ac_name?.toLowerCase().includes(accountSearchRight.toLowerCase())
-    );
 
     const handleReset = () => {
         setGroupLeftItems([...groupLeftItems, ...groupRightItems]);
@@ -222,8 +194,8 @@ export default function FinanceReportFilter() {
         loginid: user?.loginid || user?.username || "ADMIN",
         code1: user?.company_code || "",
         code2: division[0]?.div_code || "",
-        code3: accountRightItems.map((i) => i.ac_code).join(",") || "All",
-        code4: groupRightItems.map((i) => i.l4_code).join(",") || "All",
+        code3: Array.from(accountLeftSelected).join(",") || "All",
+        code4: Array.from(groupLeftSelected).join(",") || "All",
         code5: String(formatDate(dateFrom)),
         code6: String(formatDate(dateTo)),
         code7: amountFrom || "",
@@ -254,12 +226,12 @@ export default function FinanceReportFilter() {
 
         // Map each checkbox to its API function
         const reportMap: { key: keyof typeof options; fn: (p: any) => Promise<void>; label: string }[] = [
-            { key: "chequeBookMonitoring", fn: openChequeMonitoringReport, label: "Cheque Book Monitoring" },
+            // { key: "chequeBookMonitoring", fn: openChequeMonitoringReport, label: "Cheque Book Monitoring" },
             { key: "chequeDateWise", fn: openChequeDateWiseReport, label: "Cheque Date Wise" },
-            { key: "detailDump", fn: openDetailDumpReport, label: "Detail Dump" },
-            { key: "ledgerWithDetails", fn: openLedgerWithDetailsReport, label: "Ledger With Details" },
-            { key: "ledgerWithOppositeEntry", fn: openLedgerOppositeEntryReport, label: "Ledger Opposite Entry" },
-            { key: "summaryDump", fn: openSummaryDumpReport, label: "Summary Dump" },
+            // { key: "detailDump", fn: openDetailDumpReport, label: "Detail Dump" },
+            // { key: "ledgerWithDetails", fn: openLedgerWithDetailsReport, label: "Ledger With Details" },
+            // { key: "ledgerWithOppositeEntry", fn: openLedgerOppositeEntryReport, label: "Ledger Opposite Entry" },
+            // { key: "summaryDump", fn: openSummaryDumpReport, label: "Summary Dump" },
             { key: "acPayeeWise", fn: openAccountPayeeWiseReport, label: "Account Payee Wise" },
         ];
 
@@ -392,99 +364,98 @@ export default function FinanceReportFilter() {
                     borderRadius: 12,
                     padding: "20px 24px",
                 }}>
-                    {/* ── page title ── */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
-                        <BarChart2 size={18} color="#185FA5" />
-                        <span style={{ fontSize: 15, fontWeight: 500, color: "#111827" }}>Finance report filter</span>
-                    </div>
+                    {/* ── top filters ── */}
+                    {/* ── top filters ── */}
+                    <div style={{ display: "grid", gridTemplateColumns: "4fr 1fr", gap: 12, marginBottom: 16, alignItems: "start" }}>
 
-                    {/* ── top 3-col grid ── */}
-                    <div style={{ display: "grid", gridTemplateColumns: "200px 1fr 190px", gap: 20, marginBottom: 16 }}>
+                        {/* LEFT 80% */}
+                        <div style={{ display: "grid", gap: 3 }}>
 
-                        {/* col 1 – division + date */}
-                        <div>
-                            <div style={{ ...fieldLabelStyle, marginBottom: 6 }}>Division</div>
-                            <div style={{ marginBottom: 14 }}>
-                                <LookupField
-                                    label="Division *"
-                                    value={division[0]?.div_code || ""}
-                                    displayValue={division[0]?.div_name || ""}
-                                    columns={[{ field: "div_code", header: "Code" }, { field: "div_name", header: "Name" }]}
-                                    valueField="div_code"
-                                    displayFields={["div_code", "div_name"]}
-                                    loadOptions={() => getDynamicLookup({
-                                        parameter: "Account_division",
-                                        code1: user?.company_code,
-                                        loginid: user?.loginid || user?.username || "ADMIN",
-                                    })}
-                                    onChange={(val) => {
-                                        setDivision([{ div_code: val, div_name: "" }]);
-                                    }}
-                                />
+                            {/* Left Row 1 */}
+                            <div style={{ display: "grid", gridTemplateColumns: "200px 140px 140px 1fr 1fr", gap: 12, alignItems: "start" }}>
+                                <div>
+                                    <div style={{ position: "relative", }}>
+                                        <span style={{
+                                            position: "absolute",
+                                            top: -8,
+                                            left: 10,
+                                            fontSize: 11,
+                                            color: "#6b7280",
+                                            background: "#fff",
+                                            padding: "0 4px",
+                                            zIndex: 1,
+                                            fontFamily: "system-ui, sans-serif",
+                                        }}>
+                                            Division
+                                        </span>
+                                        <div style={{ borderRadius: 6, padding: "1px 0" }}>
+                                            <LookupField
+                                                label=""
+                                                value={division[0]?.div_code || ""}
+                                                displayValue={division[0]?.div_name || ""}
+                                                columns={[{ field: "div_code", header: "Code" }, { field: "div_name", header: "Name" }]}
+                                                valueField="div_code"
+                                                displayFields={["div_code", "div_name"]}
+                                                loadOptions={() => getDynamicLookup({
+                                                    parameter: "Account_division",
+                                                    code1: user?.company_code,
+                                                    loginid: user?.loginid || user?.username || "ADMIN",
+                                                })}
+                                                onChange={(val) => setDivision([{ div_code: val, div_name: "" }])}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                                <FloatLabelInput label="From" value={dateFrom} type="date" onChange={(e) => setDateFrom(e.target.value)} />
+                                <FloatLabelInput label="To" value={dateTo} type="date" onChange={(e) => setDateTo(e.target.value)} />
+                                <FloatLabelInput label="Amount from" value={amountFrom} onChange={(e) => setAmountFrom(e.target.value)} />
+                                <FloatLabelInput label="Amount to" value={amountTo} onChange={(e) => setAmountTo(e.target.value)} />
                             </div>
 
-                            <div style={fieldLabelStyle}>Date range</div>
-                            <div style={{ display: "grid", gridTemplateColumns: "36px 1fr", alignItems: "center", gap: "6px 8px" }}>
-                                <span style={{ fontSize: 12, color: "#6b7280" }}>From</span>
-                                <input type="date" style={inputStyle} value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-                                <span style={{ fontSize: 12, color: "#6b7280" }}>To</span>
-                                <input type="date" style={inputStyle} value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+                            {/* Left Row 2 */}
+                            <div style={{ display: "grid", gridTemplateColumns: "0.5fr 0.5fr", gap: 12, alignItems: "end" }}>
+                                <FloatLabelInput label="Remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
+                                <div style={{ position: "relative", marginTop: 6 }}>
+                                    <span style={{
+                                        position: "absolute", top: -8, left: 10, fontSize: 11,
+                                        color: "#6b7280", background: "#fff", padding: "0 4px", zIndex: 1,
+                                    }}>A/c payee</span>
+                                    <div style={{ borderRadius: 6, padding: "1px 0" }}>
+                                        <LookupField
+                                            label=""
+                                            value={acPayee}
+                                            columns={[{ field: "ac_payee", header: "Payee" }, { field: "ac_ref", header: "Reference" }]}
+                                            valueField="ac_payee"
+                                            displayFields={["ac_payee", "ac_ref"]}
+                                            loadOptions={() =>
+                                                getDynamicLookupaccount({
+                                                    parameter: "Account_Report_AC_PAYEE",
+                                                    code1: user?.company_code,
+                                                    loginid: user?.loginid || user?.username || "ADMIN",
+                                                })
+                                            }
+                                            onChange={(val) => setAcPayee(val)}
+                                            multiSelect
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        {/* col 2 – filters + payee */}
-                        <div>
-                            <div style={fieldLabelStyle}>Filters</div>
-                            <div style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: "7px 10px", alignItems: "center", marginBottom: 14 }}>
-                                <span style={{ fontSize: 12, color: "#6b7280" }}>Amount from</span>
-                                <input style={inputStyle} value={amountFrom} onChange={(e) => setAmountFrom(e.target.value)} />
-                                <span style={{ fontSize: 12, color: "#6b7280" }}>Amount to</span>
-                                <input style={inputStyle} value={amountTo} onChange={(e) => setAmountTo(e.target.value)} />
-                                <span style={{ fontSize: 12, color: "#6b7280" }}>Remarks</span>
-                                <input style={inputStyle} value={remarks} onChange={(e) => setRemarks(e.target.value)} />
-                                <span />
-                                <label style={{ ...checkRowStyle, margin: 0 }}>
-                                    <input type="checkbox" checked={filterLedger} onChange={() => setFilterLedger(!filterLedger)} style={{ accentColor: "#185FA5" }} />
-                                    <span style={{ fontSize: 12 }}>Filter ledger</span>
-                                </label>
-                            </div>
-
-                            <div style={{ height: "0.5px", background: "#e5e7eb", margin: "14px 0" }} />
-
-                            <div style={fieldLabelStyle}>A/c payee</div>
-                            <LookupField
-                                label="Ac Payee"
-                                value={acPayee}
-                                displayValue={acPayee}
-                                columns={[{ field: "ac_payee", header: "Payee" }, { field: "ac_ref", header: "Reference" }]}
-                                valueField="ac_payee"
-                                displayFields={["ac_payee", "ac_ref"]}
-                                loadOptions={() =>
-                                    getDynamicLookupaccount({
-                                        parameter: "Account_Report_AC_PAYEE",
-                                        code1: user?.company_code,
-                                        loginid: user?.loginid || user?.username || "ADMIN",
-                                    })
-                                }
-                                onChange={(val) => setAcPayee(val)}
-                            />
-                        </div>
-
-                        {/* col 3 – options */}
-                        <div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                        {/* RIGHT 20% — Report Options */}
+                        <div style={{
+                            border: "1px solid #d1d5db",
+                            borderRadius: 8,
+                            padding: "10px 14px",
+                            background: "#f9fafb",
+                            alignSelf: "stretch",
+                        }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                                 <span style={fieldLabelStyle}>Report options</span>
-                                {selectedCount > 0 && (
-                                    <span style={badgeStyle}>{selectedCount} selected</span>
-                                )}
+                                {selectedCount > 0 && <span style={badgeStyle}>{selectedCount} selected</span>}
                             </div>
                             {([
                                 ["chequeDateWise", "Cheque date wise"],
-                                ["chequeBookMonitoring", "Cheque book monitoring"],
-                                ["ledgerWithDetails", "Ledger with details"],
-                                ["ledgerWithOppositeEntry", "Ledger with opposite entry"],
-                                ["summaryDump", "Summary dump"],
-                                ["detailDump", "Detail dump"],
                                 ["acPayeeWise", "A/c payee wise"],
                             ] as [keyof typeof options, string][]).map(([key, label]) => (
                                 <label key={key} style={checkRowStyle}>
@@ -498,6 +469,7 @@ export default function FinanceReportFilter() {
                                 </label>
                             ))}
                         </div>
+
                     </div>
 
                     {/* ── divider ── */}
@@ -505,170 +477,143 @@ export default function FinanceReportFilter() {
 
                     {/* ── tabs ── */}
                     <div style={{ display: "flex", borderBottom: "0.5px solid #e5e7eb", marginBottom: 14 }}>
-                        {["group", "acCode"].map((tab) => (
+                        {["acCode", "group"].map((tab) => (
                             <button
                                 key={tab}
                                 className={`tab-btn-r ${activeTab === tab ? "active" : ""}`}
                                 onClick={() => setActiveTab(tab)}
                             >
-                                {tab === "group" ? "Group" : "A/c code"}
+                                {tab === "acCode" ? "A/c code" : "Group"}
                             </button>
                         ))}
                     </div>
 
-                    {/* ── group tab ── */}
-                    {activeTab === "group" && (
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 44px 1fr", gap: 10 }}>
-                            <div>
-                                
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                                    <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Available groups</span>
-                                    <span style={badgeStyle}>{groupLeftItems.length}</span>
-                                </div>
-                                <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 220, overflowY: "auto" }}>
-                                     <input
-                                        type="text"
-                                        placeholder="Search groups..."
-                                        value={groupSearchLeft}
-                                        onChange={(e) => setGroupSearchLeft(e.target.value)}
-                                        style={{
-                                            width: "100%",
-                                            border: "0.5px solid #e5e7eb",
-                                            borderRadius: 6,
-                                            padding: 2,
-                                            marginBottom: 8,
-                                        }}
-                                    />
-                                    <table>
-                                        <thead><tr><th style={{ ...thStyle, width: 90 }}>L4 code</th><th style={thStyle}>Description</th></tr></thead>
-                                        <tbody>
-                                            {filteredGroupLeft.map((row) => (
-                                                <tr key={row.l4_code} style={rowStyle(groupLeftSelected.has(row.l4_code))} onClick={() => toggleSelection(row.l4_code, setGroupLeftSelected)}>
-                                                    <td style={tdStyle}>{row.l4_code}</td>
-                                                    <td style={tdStyle}>{row.description}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                    {/* ── account tab ── */}
+                    {activeTab === "acCode" && (
+                        <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                                <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                    Accounts
+                                </span>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                    {accountLeftSelected.size > 0 && (
+                                        <span style={badgeStyle}>{accountLeftSelected.size} selected</span>
+                                    )}
+                                    <span style={badgeStyle}>{accountLeftItems.length} total</span>
                                 </div>
                             </div>
-
-                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, paddingTop: 28 }}>
-                                <button className="tf-btn" style={transferBtnStyle} onClick={() => moveAllToRight(groupLeftItems, groupRightItems, setGroupLeftItems, setGroupRightItems, setGroupLeftSelected)}><ChevronsRight size={14} /></button>
-                                <button className="tf-btn" style={transferBtnStyle} onClick={() => moveToRight(groupLeftItems, groupRightItems, groupLeftSelected, setGroupLeftItems, setGroupRightItems, setGroupLeftSelected)}><ChevronRight size={14} /></button>
-                                <button className="tf-btn" style={transferBtnStyle} onClick={() => moveToLeft(groupLeftItems, groupRightItems, groupRightSelected, setGroupLeftItems, setGroupRightItems, setGroupRightSelected)}><ChevronLeft size={14} /></button>
-                                <button className="tf-btn" style={transferBtnStyle} onClick={() => moveAllToLeft(groupLeftItems, groupRightItems, setGroupLeftItems, setGroupRightItems, setGroupRightSelected)}><ChevronsLeft size={14} /></button>
+                            <div style={{ marginBottom: 8 }}>
+                                <input
+                                    type="text"
+                                    placeholder="Search accounts..."
+                                    value={accountSearchLeft}
+                                    onChange={(e) => setAccountSearchLeft(e.target.value)}
+                                    style={{ ...inputStyle, fontSize: 12 }}
+                                />
                             </div>
-
-                            <div>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                                    <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Selected groups</span>
-                                    <span style={badgeStyle}>{groupRightItems.length}</span>
-                                </div>
-                                <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 220, overflowY: "auto" }}>
-                                    <input
-                                        type="text"
-                                        placeholder="Search groups..."
-                                        value={groupSearchRight}
-                                        onChange={(e) => setGroupSearchRight(e.target.value)}
-                                        style={{
-                                            width: "100%",
-                                            border: "0.5px solid #e5e7eb",
-                                            borderRadius: 6,
-                                            padding: 2,
-                                            marginBottom: 8,
-                                        }}
-                                    />
-                                    <table>
-                                        <thead><tr><th style={{ ...thStyle, width: 90 }}>L4 code</th><th style={thStyle}>Description</th></tr></thead>
-                                        <tbody>
-                                            {filteredGroupRight.map((row) => (
-                                                <tr key={row.l4_code} style={rowStyle(groupRightSelected.has(row.l4_code))} onClick={() => toggleSelection(row.l4_code, setGroupRightSelected)}>
-                                                    <td style={tdStyle}>{row.l4_code}</td>
-                                                    <td style={tdStyle}>{row.description}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
+                            <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 260, overflowY: "auto" }}>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th style={{ ...thStyle, width: 36 }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={accountLeftItems.length > 0 && accountLeftItems.every(i => accountLeftSelected.has(i.ac_code))}
+                                                    onChange={() => toggleAllSelection(accountLeftItems, accountLeftSelected, setAccountLeftSelected, "ac_code")}
+                                                    style={{ accentColor: "#fff", cursor: "pointer" }}
+                                                />
+                                            </th>
+                                            <th style={{ ...thStyle, width: 100 }}>A/c code</th>
+                                            <th style={thStyle}>Description</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredAccountLeft.map((row) => (
+                                            <tr
+                                                key={row.ac_code}
+                                                style={rowStyle(accountLeftSelected.has(row.ac_code))}
+                                                onClick={() => toggleSelection(row.ac_code, setAccountLeftSelected)}
+                                            >
+                                                <td style={{ ...tdStyle, width: 36 }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={accountLeftSelected.has(row.ac_code)}
+                                                        onChange={() => toggleSelection(row.ac_code, setAccountLeftSelected)}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        style={{ accentColor: "#185FA5", cursor: "pointer" }}
+                                                    />
+                                                </td>
+                                                <td style={tdStyle}>{row.ac_code}</td>
+                                                <td style={tdStyle}>{row.ac_name}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     )}
 
-                    {/* ── account tab ── */}
-                    {activeTab === "acCode" && (
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 44px 1fr", gap: 10 }}>
-                            <div>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                                    <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Available accounts</span>
-                                    <span style={badgeStyle}>{accountLeftItems.length}</span>
-                                </div>
-                                <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 220, overflowY: "auto" }}>
-                                    <input
-                                        type="text"
-                                        placeholder="Search accounts..."
-                                        value={accountSearchLeft}
-                                        onChange={(e) => setAccountSearchLeft(e.target.value)}
-                                        style={{
-                                            width: "100%",
-                                            border: "0.5px solid #e5e7eb",
-                                            borderRadius: 6,
-                                            padding: 2,
-                                            marginBottom: 8,
-                                        }}
-                                    />
-                                    <table>
-                                        <thead><tr><th style={{ ...thStyle, width: 90 }}>A/c code</th><th style={thStyle}>Description</th></tr></thead>
-                                        <tbody>
-                                            {filteredAccountLeft.map((row) => (
-                                                <tr key={row.ac_code} style={rowStyle(accountLeftSelected.has(row.ac_code))} onClick={() => toggleSelection(row.ac_code, setAccountLeftSelected)}>
-                                                    <td style={tdStyle}>{row.ac_code}</td>
-                                                    <td style={tdStyle}>{row.ac_name}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                    {/* ── group tab ── */}
+                    {activeTab === "group" && (
+                        <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                                <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                    Groups
+                                </span>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                    {groupLeftSelected.size > 0 && (
+                                        <span style={badgeStyle}>{groupLeftSelected.size} selected</span>
+                                    )}
+                                    <span style={badgeStyle}>{groupLeftItems.length} total</span>
                                 </div>
                             </div>
-
-                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, paddingTop: 28 }}>
-                                <button className="tf-btn" style={transferBtnStyle} onClick={() => moveAllToRight(accountLeftItems, accountRightItems, setAccountLeftItems, setAccountRightItems, setAccountLeftSelected)}><ChevronsRight size={14} /></button>
-                                <button className="tf-btn" style={transferBtnStyle} onClick={() => moveToRight(accountLeftItems, accountRightItems, accountLeftSelected, setAccountLeftItems, setAccountRightItems, setAccountLeftSelected)}><ChevronRight size={14} /></button>
-                                <button className="tf-btn" style={transferBtnStyle} onClick={() => moveToLeft(accountLeftItems, accountRightItems, accountRightSelected, setAccountLeftItems, setAccountRightItems, setAccountRightSelected)}><ChevronLeft size={14} /></button>
-                                <button className="tf-btn" style={transferBtnStyle} onClick={() => moveAllToLeft(accountLeftItems, accountRightItems, setAccountLeftItems, setAccountRightItems, setAccountRightSelected)}><ChevronsLeft size={14} /></button>
+                            <div style={{ marginBottom: 8 }}>
+                                <input
+                                    type="text"
+                                    placeholder="Search groups..."
+                                    value={groupSearchLeft}
+                                    onChange={(e) => setGroupSearchLeft(e.target.value)}
+                                    style={{ ...inputStyle, fontSize: 12 }}
+                                />
                             </div>
-
-                            <div>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                                    <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Selected accounts</span>
-                                    <span style={badgeStyle}>{accountRightItems.length}</span>
-                                </div>
-                                <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 220, overflowY: "auto" }}>
-                                    <input
-                                        type="text"
-                                        placeholder="Search accounts..."
-                                        value={accountSearchRight}
-                                        onChange={(e) => setAccountSearchRight(e.target.value)}
-                                        style={{
-                                            width: "100%",
-                                            border: "0.5px solid #e5e7eb",
-                                            borderRadius: 6,
-                                            padding: 2,
-                                            marginBottom: 8,
-                                        }}
-                                    />
-                                    <table>
-                                        <thead><tr><th style={{ ...thStyle, width: 90 }}>A/c code</th><th style={thStyle}>Description</th></tr></thead>
-                                        <tbody>
-                                            {filteredAccountRight.map((row) => (
-                                                <tr key={row.ac_code} style={rowStyle(accountRightSelected.has(row.ac_code))} onClick={() => toggleSelection(row.ac_code, setAccountRightSelected)}>
-                                                    <td style={tdStyle}>{row.ac_code}</td>
-                                                    <td style={tdStyle}>{row.ac_name}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
+                            <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 260, overflowY: "auto" }}>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th style={{ ...thStyle, width: 36 }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={groupLeftItems.length > 0 && groupLeftItems.every(i => groupLeftSelected.has(i.l4_code))}
+                                                    onChange={() => toggleAllSelection(groupLeftItems, groupLeftSelected, setGroupLeftSelected, "l4_code")}
+                                                    style={{ accentColor: "#fff", cursor: "pointer" }}
+                                                />
+                                            </th>
+                                            <th style={{ ...thStyle, width: 100 }}>L4 code</th>
+                                            <th style={thStyle}>Description</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredGroupLeft.map((row) => (
+                                            <tr
+                                                key={row.l4_code}
+                                                style={rowStyle(groupLeftSelected.has(row.l4_code))}
+                                                onClick={() => toggleSelection(row.l4_code, setGroupLeftSelected)}
+                                            >
+                                                <td style={{ ...tdStyle, width: 36 }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={groupLeftSelected.has(row.l4_code)}
+                                                        onChange={() => toggleSelection(row.l4_code, setGroupLeftSelected)}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        style={{ accentColor: "#185FA5", cursor: "pointer" }}
+                                                    />
+                                                </td>
+                                                <td style={tdStyle}>{row.l4_code}</td>
+                                                <td style={tdStyle}>{row.description}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     )}

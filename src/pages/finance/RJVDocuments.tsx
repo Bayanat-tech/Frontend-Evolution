@@ -1,5 +1,5 @@
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { Ban, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { Ban, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import {
@@ -26,6 +26,8 @@ import {
   TransactionType,
   upsertBulkAccountEntryApi,
   getFinanceOutstanding,
+  openDocumentReport,
+  downloadDocumentReportExcel,
 } from "../../api/transactions";
 import { getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { Badge } from "../../components/ui/Badge";
@@ -57,13 +59,13 @@ const DOCUMENT_META: Record<TransactionType, { title: string; subtitle: string; 
   SI: { title: "Sales", subtitle: "Sales invoice document", addLabel: "Add Sales" },
   SV: { title: "Service Invoice", subtitle: "Service billing document", addLabel: "Add Service" },
   JV: { title: "Journal Voucher", subtitle: "General ledger journal", addLabel: "Add Voucher" },
-  RJV: { title: "Journal Voucher", subtitle: "Reverse ledger journal", addLabel: "Add Voucher" },
+   RJV: { title: "RJournal Voucher", subtitle: "General ledger journal", addLabel: "Add RVoucher" },
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
 const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
-export function PettyCashPaymentDocumentEditor({ docType }: { docType: TransactionType }) {
+export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
   const meta = DOCUMENT_META[docType];
   const [rows, setRows] = useState<TransactionDocumentRow[]>([]);
   const [fyPeriods, setFyPeriods] = useState<FyPeriod[]>([]);
@@ -79,7 +81,7 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
   const [deleteTarget, setDeleteTarget] = useState<TransactionDocumentRow | null>(null);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
-    const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
   const loadLookups = async () => {
     const [fyData, divisionData] = await Promise.all([getFyPeriods(), getDivisions()]);
@@ -199,13 +201,13 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
 
 
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
+    <section className="finance-list-page grid gap-4">
+      <div className="finance-list-heading">
+        <div className="finance-list-title">
           <h1 className="m-0 text-2xl font-semibold tracking-tight">{meta.title}</h1>
           <p className="m-0 mt-1 text-sm text-muted-foreground">{meta.subtitle}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="finance-list-actions">
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
@@ -238,10 +240,13 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
           manualPagination
           manualFiltering
           toolbar={
-            <div className="flex items-center gap-2">
-              <Select className="h-10 w-36" value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
+            <div className="finance-list-controls">
+              <label className="finance-period-control">
+                <span>FY</span>
+                <Select value={fyPeriod} onChange={(event) => setFyPeriod(event.target.value)}>
                 {fyPeriods.map((period) => <option key={period.fy_period} value={period.fy_period}>{period.fy_period}</option>)}
-              </Select>
+                </Select>
+              </label>
             </div>
           }
           enableExport
@@ -265,7 +270,7 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
 
       {editor && (
         <div className="fixed inset-0 z-50 bg-background">
-          <PettyCashPaymentDocument
+          <JVDocument
             docType={docType}
             editor={editor}
             onClose={() => setEditor(null)}
@@ -322,7 +327,7 @@ export function PettyCashPaymentDocumentEditor({ docType }: { docType: Transacti
   );
 }
 
-function PettyCashPaymentDocument({
+function JVDocument({
   docType,
   editor,
   onClose,
@@ -338,10 +343,12 @@ function PettyCashPaymentDocument({
   const [form, setForm] = useState<TransactionHeader>(() => emptyHeader(docType, editor));
   const [selectedDetailId, setSelectedDetailId] = useState<string>("");
   const [childLoading, setChildLoading] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [error, setError] = useState("");
+  const [showHeaderDetails, setShowHeaderDetails] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -427,9 +434,11 @@ function PettyCashPaymentDocument({
   }, [form.detail.map((d) => d.amount).join(",")]);
 
   const disabled = form.canceled === "Y" || saving;
+  const isCancelled = form.canceled === "Y";
+  const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0) * row.sign_ind, 0);
   const total = form.detail.reduce((sum, row) => sum + (Number(row.amount) || 0) * row.sign_ind, 0);
-
-  const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0), 0);
+  const creditTotal = form.detail.reduce((sum, row) => sum + (row.sign_ind === -1 ? Number(row.amount) || 0 : 0), 0);
+  const debitTotal = form.detail.reduce((sum, row) => sum + (row.sign_ind === 1 ? Number(row.amount) || 0 : 0), 0);
 
   const updateField = (field: keyof TransactionHeader, value: string | number) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -622,7 +631,6 @@ function PettyCashPaymentDocument({
     event.preventDefault();
     if (!form.doc_date) return setError("Doc Date is required");
     if (!form.div_code) return setError("Division is required");
-    if (!form.ac_code) return setError("Account is required");
     if (!form.curr_code) return setError("Currency is required");
     if (!form.ex_rate) return setError("Exchange Rate is required");
     setSaving(true);
@@ -674,9 +682,19 @@ function PettyCashPaymentDocument({
       });
     });
   };
+  const isBalanced =
+    Number(creditTotal.toFixed(3)) ===
+    Number(debitTotal.toFixed(3));
+  console.log({
+    disabled,
+    loading,
+    detailLength: form.detail.length,
+    creditTotal,
+    debitTotal,
+  });
 
   return (
-    <form className="payment-workbench grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
+ <form className="payment-workbench grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
       <CardHeader className="border-b bg-primary px-5 py-2.5 text-primary-foreground shadow-sm">
         <div className="flex min-h-12 items-center justify-between gap-4">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
@@ -707,124 +725,71 @@ function PettyCashPaymentDocument({
 
       <CardContent className="min-h-0 overflow-auto p-3">
         {loading ? (
-          <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
+          <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading voucher...</div>
         ) : (
-          <div className="grid gap-3">
+          <div className="shrink-0 border-b bg-background ">
             <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
-            <div className="payment-header-grid grid grid-cols-6 gap-2.5 rounded-md border bg-card p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
-              {editMode && <Field label="Doc No"><Input disabled value={form.doc_no || ""} /></Field>}
-              <Field label="Doc Date"><Input disabled={disabled} required type="date" value={dateInput(form.doc_date)} onChange={(event) => updateField("doc_date", event.target.value)} /></Field>
-              <LookupField
-
-                label="Division *"
-                value={form.div_code}
-                displayValue={form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}
-                columns={[{ field: "div_code", header: "Code" }, { field: "div_name", header: "Name" }]}
-                valueField="div_code"
-                displayFields={["div_code", "div_name"]}
-                // loadOptions={() => getDocAccounts(docType, "H", form.div_code)}
-                loadOptions={() => getDynamicLookup({
-                  parameter: "Account_division",
-                  code1: user?.company_code,
-                  loginid: user?.loginid || user?.username || "ADMIN"
-                })}
-                disabled={disabled}
-
-                onChange={async (value, row) => {
-                  setForm((current) => ({
-                    ...current,
-                    div_code: value,
-                    div_name: text(getLookupValue(row || {}, "div_name")),
-                  }));
-
-                }}
-
-              />
-              <LookupField
-                label="Account *"
-                value={form.ac_code}
-                displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
-                valueField="ac_code"
-                displayFields={["ac_code", "ac_name", 'curr_code']}
-                // loadOptions={() => getDocAccounts(docType, "H", form.div_code)}
-                loadOptions={() => getDynamicLookup({
-                  parameter: "Account_AC_CODE_Serach_HDR",
-                  code1: user?.company_code,
-                  code2: "H",
-                  code3: form.doc_type,
-                  code4: form.div_code
-                })}
-                disabled={disabled || !form.div_code}
-
-                onChange={async (value, row) => {
-                  setForm((current) => ({
-                    ...current,
-                    ac_code: value,
-                    ac_name: text(getLookupValue(row || {}, "ac_name")),
-                    curr_code: text(getLookupValue(row || {}, "curr_code")),
-                  }));
-                  if (docType !== "CR" && value) {
-                    const cheque: Record<string, unknown> = await getCheque(value).catch(() => ({}));
-                    setForm((current) => ({
-                      ...current,
-                      cheque_no: text(cheque.cheque_no ?? cheque.CHEQUE_NO ?? current.cheque_no),
-                    }));
-                  }
-                }}
-              />
-              <LookupField
-                label="Currency*"
-                value={form.curr_code}
-                displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
-                columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
-                valueField="curr_code"
-                displayFields={["curr_code", "curr_name"]}
-                loadOptions={() => getDynamicLookup({
-                  parameter: "Account_Currency_CODE_Serach",
-                  code1: user?.company_code,
-                  loginid: user?.loginid || user?.username || "ADMIN"
-                })}
-                disabled={disabled}
-                onChange={(value, row) => setForm((current) => ({
-                  ...current,
-                  curr_code: value,
-                  curr_name: text(getLookupValue(row || {}, "curr_name")),
-                  ex_rate: Number(row?.ex_rate ?? 1),
-                }))}
-              />
-              <Field label="Phone"><Input disabled={disabled} value={form.party_phone || ""} onChange={(event) => updateField("party_phone", event.target.value)} /></Field>
-              <Field label="Exchange Rate*"><Input disabled={disabled} required type="number" step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} /></Field>
-              {docType !== "CR" && (
+            <div className="commercial-header-shell rounded-md border bg-card">
+              <div className="commercial-section-title">
+                <div>
+                  <p className="eyebrow m-0">Header</p>
+                   <h3 className="m-0 text-sm font-semibold leading-tight">JV Information</h3>
+                </div>
+                <span></span>
+              </div>
+              <div className={`commercial-header-panel payment-header-grid relative grid grid-cols-4 gap-2.5 p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1 ${showHeaderDetails ? "is-expanded" : "is-collapsed"}`}>
+                {editMode && (
+                  <Field label="Doc No"><Input disabled value={form.doc_no || ""} /></Field>
+                )}
+                <Field label="Doc Date"><Input disabled={disabled} required type="date" value={dateInput(form.doc_date)} onChange={(event) => updateField("doc_date", event.target.value)} /></Field>
                 <LookupField
-                  label="Bank Account"
-                  value={form.bank_ac_code || ""}
-                  displayValue={form.bank_ac_name ? `${form.bank_ac_code} - ${form.bank_ac_name}` : form.bank_ac_code}
-                  columns={[{ field: "bank_ac_code", header: "Code" }, { field: "bank_ac_name", header: "Name" }]}
-                  valueField="bank_ac_code"
-                  displayFields={["bank_ac_code", "bank_ac_name"]}
-                  loadOptions={() => getDynamicLookup({
-                    parameter: 'BANK_CODE_SETTINGS_BANK_SEARCH', code1: user?.company_code
-                  })}
-                  disabled={disabled || !form.div_code}
-                  onChange={(value, row) => setForm((current) => ({ ...current, bank_ac_code: value, bank_ac_name: text(getLookupValue(row || {}, "bank_ac_name")) }))}
+                  label="Division"
+                  value={form.div_code}
+                  displayValue={form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}
+                  columns={[{ field: "div_code", header: "Code" }, { field: "div_name", header: "Name" }]}
+                  valueField="div_code"
+                  displayFields={["div_code", "div_name"]}
+                  loadOptions={() => getDynamicLookup({ parameter: "Account_division", code1: user?.company_code, loginid: user?.loginid || user?.username || "ADMIN" })}
+                  disabled={disabled}
+                  onChange={async (value, row) => {
+                    setForm((current) => ({ ...current, div_code: value, div_name: text(getLookupValue(row || {}, "div_name")) }));
+                  }}
                 />
-              )}
-              {docType === "CP" && <Field label="Account Payee"><Input disabled={disabled} value={form.ac_payee || ""} onChange={(event) => updateField("ac_payee", event.target.value)} /></Field>}
-              <label className="field col-span-2 max-md:col-span-1">
-                <span>Remarks</span>
-                <Input disabled={disabled} value={form.remarks || ""} onChange={(event) => updateField("remarks", event.target.value)} />
-              </label>
+                <LookupField
+                  label="Currency"  
+                  value={form.curr_code}
+                  displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
+                  columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
+                  valueField="curr_code"
+                  displayFields={["curr_code", "curr_name"]}
+                  loadOptions={getCurrencyRows}
+                  disabled={disabled}
+                  onChange={(value, row) => setForm((current) => ({ ...current, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(row?.ex_rate ?? 1) }))}
+                />
+                <Field label="Exchange Rate"><Input disabled={disabled} required type="number" style={{ textAlign: "right" }} step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} /></Field>
+                <label className="field col-span-2 max-md:col-span-1">
+                  <span>Remarks</span>
+                  <Input disabled={disabled} value={form.remarks || ""} onChange={(event) => updateField("remarks", event.target.value)} />
+                </label>
+              </div>
+              <div className="commercial-header-footer flex items-center justify-between gap-3 border-t bg-secondary/30 px-3 py-2">
+                <div className="min-w-0 truncate text-xs text-muted-foreground">
+                  <span>Doc: {form.doc_no || "-"}</span>
+                </div>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setShowHeaderDetails((value) => !value)}>
+                  {showHeaderDetails ? "Hide Details" : "Show Details"}
+                </Button>
+              </div>
             </div>
 
             <div className="rounded-md border bg-card">
-              <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
+              <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-2">
                 <div>
-                  <p className="eyebrow m-0">Details</p>
-                  <h3 className="m-0 text-sm font-semibold leading-tight">Accounting Lines</h3>
+                  <p className="eyebrow">Details</p>
+                  <h3 className="m-0 text-sm font-semibold">Debit / Credit Lines</h3>
                 </div>
-                <Button disabled={disabled || !form.div_code || !form.curr_code} size="sm" type="button" variant="outline" onClick={addDetailRow}>
+                <Button size="sm" type="button" variant="outline" onClick={addDetailRow} disabled={disabled}>
                   <Plus size={14} /> Add Line
                 </Button>
               </div>
@@ -841,10 +806,7 @@ function PettyCashPaymentDocument({
                       <th className="px-2 py-2 text-left">Ex Rate</th>
                       <th className="finance-amount-cell px-2 py-2 text-left">Amount</th>
                       <th className="px-2 py-2 text-left">Cr/Dr</th>
-                      <th className="px-2 py-2 text-left">Tax Code</th>
                       <th className="px-2 py-2 text-left">Tax Type</th>
-                      <th className="px-2 py-2 text-left">Tax %</th>
-                      <th className="finance-amount-cell px-2 py-2 text-left">Tax Amt</th>
                       <th className="px-2 py-2 text-left">Job No</th>
                       <th className="px-2 py-2 text-left">Dept</th>
                       <th className="finance-amount-cell px-2 py-2 text-left">Base Amount</th>
@@ -853,12 +815,12 @@ function PettyCashPaymentDocument({
                   </thead>
                   <tbody>
                     {form.detail.length === 0 ? (
-                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={17}>No detail lines yet</td></tr>
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={13}>No detail lines yet</td></tr>
                     ) : form.detail.map((detail) => (
                       <tr className={selectedDetail?.id === detail.id ? "border-t bg-primary/5" : "border-t odd:bg-muted/20"} key={detail.id}>
                         <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{detail.serial_no}</td>
-                        <td className="finance-sticky-col finance-col-div px-2 py-1"><Input disabled value={detail.div_code || form.div_code} /></td>
-                        <td className="finance-sticky-col finance-col-account finance-account-cell px-2 py-1">
+                        <td className="finance-sticky-col finance-col-div w-32 px-2 py-1"><Input disabled value={detail.div_code || form.div_code} /></td>
+                        <td className="finance-sticky-col finance-col-account finance-account-cell w-[430px] px-2 py-1">
                           <LookupField
                             label="Detail Account"
                             compact
@@ -908,35 +870,13 @@ function PettyCashPaymentDocument({
                             onChange={(value, row) => updateDetail(detail.id, { curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(row?.ex_rate ?? form.ex_rate ?? 1) })}
                           />
                         </td>
-                        <td className="w-40 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
-                        <td className="finance-amount-cell px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.001" value={formatNumber(detail.amount)} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
+                        <td className="w-28 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
+                        <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.001" value={formatNumber(detail.amount)} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
                         <td className="w-28 px-2 py-1">
                           <Select className="h-9" disabled={disabled} value={detail.sign_ind} onChange={(event) => updateDetail(detail.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
                             <option value={1}>Dr</option>
                             <option value={-1}>Cr</option>
                           </Select>
-                        </td>
-                        <td className="w-32 px-2 py-1">
-                          <LookupField
-                            label="Tax Code"
-                            compact
-                            placeholder="Tax code"
-                            value={detail.tx_compntcat_code_1 || ""}
-                            displayValue={detail.tx_compntcat_code_1 || ""}
-                            columns={[
-                              { field: "tx_compntcat_code", header: "Code" },
-                              { field: "tx_compntcat_name", header: "Name" },
-                            ]}
-                            valueField="tx_compntcat_code"
-                            displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
-                            loadOptions={() => getDynamicLookup({
-                              parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
-                              code1: user?.company_code,
-                              loginid: user?.loginid || user?.username || "ADMIN",
-                            })}
-                            disabled={disabled}
-                            onChange={(value) => updateDetail(detail.id, { tx_compntcat_code_1: value })}
-                          />
                         </td>
                         <td className="w-28 px-2 py-1">
                           <Select
@@ -959,20 +899,21 @@ function PettyCashPaymentDocument({
                             <option value="E">Exempt</option>
                           </Select>
                         </td>
-                        <td className="w-28 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" value={detail.tx_compnt_perc_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
-                        <td className="finance-amount-cell px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                         <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
                         <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
-                        <td className="finance-amount-cell px-2 py-1"><Input className="finance-money-input" disabled value={formatNumber((Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1)))} /></td>
+                        <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled value={formatNumber((Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1)))} /></td>
                         <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <div className="flex items-center justify-end gap-8 border-t px-3 py-1.5 text-sm">
-                <span className="text-muted-foreground">Total</span>
-                <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(total)}</strong>
+              <div className="flex items-center justify-between border-t px-3 py-2 text-sm">
+                <span className="text-muted-foreground">Balance</span>
+                <strong className={Math.abs(total) > 0.001 ? "text-destructive" : "text-emerald-600"}>
+                  {formatAmount(total)}
+                </strong>
+
               </div>
               <div className="flex items-center justify-end gap-8  px-3 py-1.5 text-sm">
                 <span className="text-muted-foreground">Tax</span>
@@ -980,10 +921,9 @@ function PettyCashPaymentDocument({
               </div>
               <div className="flex items-center justify-end gap-8 border-t px-3 py-1.5 text-sm">
                 <span className="text-muted-foreground">Net Total</span>
-                <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(total + totalTax)}</strong>
+                <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{(formatAmount(total + totalTax))}</strong>
               </div>
             </div>
-
             <div className="rounded-md border bg-card">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-secondary/40 px-3 py-1.5">
                 <div>
@@ -1035,7 +975,7 @@ function PettyCashPaymentDocument({
         </div>
         <div className="flex items-center gap-2">
           <Button disabled={saving} type="button" variant="outline" onClick={onClose}>Close</Button>
-          <Button disabled={disabled || loading || form.detail.length === 0} type="submit">
+          <Button disabled={disabled || loading || form.detail.length === 0 || !isBalanced} type="submit">
             <Save size={15} /> {saving ? "Saving..." : "Save"}
           </Button>
         </div>
@@ -1301,9 +1241,11 @@ function ChildAllocationTable({
                     />
                   </td>
                   <td className="px-2 py-1"><Input disabled={disabled} value={text(row.exp_description)} onChange={(event) => onChange(row.id, { exp_description: event.target.value })} /></td>
+
                   <td className="px-2 py-1"><Input disabled={disabled} value={text(row.job_no)} onChange={(event) => onChange(row.id, { job_no: event.target.value })} /></td>
                 </>
               )}
+
               {childTable !== "invoice" && <td className="w-32 px-2 py-1"><Input disabled={disabled} type="number" step="0.001" value={Number(row.amount || 0)} onChange={(event) => onChange(row.id, { amount: Number(event.target.value || 0) })} /></td>}
               {childTable === "invoice" && <td className="w-32 px-2 py-1"><Input disabled value={Number(row.paid_amt || 0)} /></td>}
               <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => onRemove(row.id)}><X size={14} /></Button></td>

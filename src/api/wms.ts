@@ -156,11 +156,103 @@ export async function upsertMsActivityBillingApi<TPayload extends Record<string 
   return response.data;
 }
  
+export async function getJobDetailsReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/job-details/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+ 
+export async function downloadJobDetailsReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/job-details/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }  // arraybuffer, not "blob" — avoids axios blob quirks
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Job_${jobNo}_Details.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export async function getPutawayReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/tally-putaway/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+ 
+export async function downloadPutawayReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/tally-putaway/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }  // arraybuffer, not "blob" — avoids axios blob quirks
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Putaway_job_${jobNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export async function getGrnReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/Grn-report/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+ 
+export async function downloadGrnReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/Grn-report/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Job_${jobNo}_Details.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export async function getAllStockTransfers() {
   const response = await api.get<ApiResponse<unknown[]>>("/api/wms/stocktransfer/getAllStockTransfers");
   if (!response.data.success) throw new Error(response.data.message || "Unable to load stock transfers");
   return response.data.data || [];
 }
+
+
 
 export async function createSTN(payload: {
   prin_code: string;
@@ -172,4 +264,187 @@ export async function createSTN(payload: {
   const response = await api.post<ApiResponse<unknown>>("/api/wms/stocktransfer/createSTN", payload);
   if (!response.data.success) throw new Error(response.data.message || "Unable to create STN");
   return response.data;
+}
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type StnCreatePayload = {
+  prin_code: string;
+  description: string;
+  stn_date: string; // ISO date string "YYYY-MM-DD"
+  user_id: string;
+  company_code: string;
+};
+
+export type StnEditPayload = {
+  prin_code?: string;
+  description?: string;
+  stn_date?: string;
+  allocated?: string;
+  confirmed?: string;
+  cancelled?: string;
+  date_cancelled?: string;
+  user_id?: string;
+};
+
+export type StockTransferDetailPayload = {
+  COMPANY_CODE: string;
+  PRIN_CODE: string;
+  STN_NO: string | number;
+  SERIAL_NO?: number;
+  SEQ_NUMBER?: number;
+  PROD_CODE: string;
+  JOB_NO?: string;
+  DOC_REF?: string | null;
+  FROM_SITE?: string;
+  TO_SITE?: string;
+  FROM_LOC_START?: string | null;
+  FROM_LOC_END?: string | null;
+  TO_LOC_START?: string | null;
+  TO_LOC_END?: string | null;
+  LOT_NO_FROM?: string | null;
+  LOT_NO_TO?: string | null;
+  BATCH_NO_FROM?: string | null;
+  BATCH_NO_TO?: string | null;
+  MFG_DATE_FROM?: string | null;
+  MFG_DATE_TO?: string | null;
+  EXP_DATE_FROM?: string | null;
+  EXP_DATE_TO?: string | null;
+  P_UOM?: string;
+  L_UOM?: string;
+  QTY_PUOM?: number;
+  QTY_LUOM?: number;
+  QUANTITY: number;
+  KEY_NUMBER?: string;
+  PALLET_ID_FROM?: string | null;
+  PALLET_ID_TO?: string | null;
+  USER_ID: string;
+  ALLOCATED?: string;
+  CONFIRMED?: string;
+  SELECTED?: string;
+  PROCESSED?: string;
+  RECEIPT_TYPE?: string;
+  MIXED_PUTAWAY?: string;
+  MULTI_SERIES?: string;
+};
+
+export type ProcessStockTransferPayload = {
+  company_code: string;
+  prin_code: string;
+  stn_no: string | number;
+  user_id: string;
+};
+
+export type ConfirmStockTransferPayload = {
+  company_code: string;
+  principal_code: string;
+  stn_no: number;
+};
+
+export type DeleteStockTransferDetailPayload = {
+  COMPANY_CODE: string;
+  STN_NO: string | number;
+  KEY_NUMBER?: string;
+};
+
+// ─── Service functions ────────────────────────────────────────────────────────
+
+/** GET all STN headers */
+export async function fetchAllStockTransfers() {
+  return getAllStockTransfers();
+}
+
+/** POST create STN header */
+export async function createStockTransferHeader(payload: StnCreatePayload) {
+  return createSTN(payload);
+}
+
+/** PUT edit STN header */
+export async function editStockTransferHeader(
+  stn_no: number,
+  company_code: string,
+  payload: StnEditPayload
+) {
+  // PUT /api/wms/stocktransfer/editSTN/:stn_no/:company_code
+  return putWmsOutbound(`stocktransfer/editSTN/${stn_no}/${company_code}`, payload as Record<string, unknown>);
+}
+
+/** GET STN with all details */
+export async function fetchSTNWithDetails(
+  stn_no: string,
+  company_code: string,
+  prin_code: string
+) {
+  return getWmsStockTransfer<LookupRow[]>("getTSSTNWithDetails", {
+    stn_no,
+    company_code,
+    prin_code,
+  });
+}
+
+/** GET all transfer details for a specific STN */
+export async function getAllStockTransferDetails(
+  stn_no: string,
+  company_code: string,
+  prin_code: string
+) {
+  return getWmsStockTransfer<{ details: LookupRow[]; count: number }>(
+    "getAllStockTransferDetails",
+    { stn_no, company_code, prin_code }
+  );
+}
+
+/** POST create STN detail line */
+export async function createStockTransferDetail(payload: StockTransferDetailPayload) {
+  return postWmsStockTransfer("createSTNDetail", payload as unknown as Record<string, unknown>);
+}
+
+/** PATCH edit STN detail line */
+export async function editStockTransferDetail(payload: StockTransferDetailPayload) {
+  // uses PATCH — postWmsStockTransfer only does POST, so we call patchWmsInbound pattern
+  // but stocktransfer has no patch helper — use putWmsOutbound with the correct prefix
+  // endpoint: api/wms/stocktransfer/editstocktransfer
+  return putWmsOutbound("stocktransfer/editstocktransfer", payload as unknown as Record<string, unknown>);
+}
+
+/** POST process stock transfer */
+export async function processStockTransfer(payload: ProcessStockTransferPayload) {
+  return postWmsStockTransfer("processStockTransfer", payload as Record<string, unknown>);
+}
+
+/** POST confirm stock transfer */
+export async function confirmStockTransfer(payload: ConfirmStockTransferPayload) {
+  return postWmsStockTransfer("confirmStockTransfer", payload as Record<string, unknown>);
+}
+
+/** DELETE stock transfer detail */
+export async function deleteStockTransferDetail(payload: DeleteStockTransferDetailPayload) {
+  // DELETE /api/wms/stocktransfer/deleteStockTransfer with body
+  // No deleteWmsStockTransfer helper exists — use deleteWmsGmRaw pattern from wms.ts
+  // But to keep it in the stocktransfer namespace we call the api client directly via putWmsOutbound trick.
+  // Safest: import api client and call delete with data:
+  const { api } = await import("./client");
+  const response = await api.delete<{ success: boolean; message?: string }>(
+    "/api/wms/stocktransfer/deleteStockTransfer",
+    { data: payload }
+  );
+  if (!response.data.success)
+    throw new Error(response.data.message || "Unable to delete stock transfer detail");
+  return response.data;
+}
+
+/** GET product stock for a principal (used in lookup dropdowns) */
+export async function getProductStock(prin_code: string) {
+  return getWmsStockTransfer<LookupRow[]>("getProductStock", { prin_code });
+}
+
+/** GET TFI batch rows for confirm tab */
+export async function getTfiBatchRows(prin_code: string, stn_no: string) {
+  return getWmsStockTransfer<LookupRow[]>("getTfiBatchRows", { prin_code, stn_no });
+}
+
+/** GET all available stock transfer reports (for print dialog) */
+export async function getAllStockTransReports() {
+  return getWmsStockTransfer<{ reportid: string; reportname: string }[]>(
+    "getAllStockTransReports"
+  );
 }
