@@ -227,15 +227,16 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   }, [activeTab]);
 
   const openAppraisalTabsPage = (row: Row, mode: "view" | "edit" = "view") => {
-    const docNo = text(row.APPRAISAL_DOC_NO);
-    const employeeCode = text(row.EMPLOYEE_CODE);
-    const employeeName = encodeURIComponent(text(row.EMPLOYEE_NAME));
-    const designation = encodeURIComponent(text(row.DESG_NAME));
-    const department = encodeURIComponent(text(row.DEPT_NAME));
-    navigate(
-      `/workspace/pams/appraisal/view/${docNo}?employee_code=${employeeCode}&employee_name=${employeeName}&designation=${designation}&department=${department}&mode=${mode}`
-    );
-  };
+  const docNo = text(row.APPRAISAL_DOC_NO);
+  const employeeCode = text(row.EMPLOYEE_CODE);
+  const employeeName = encodeURIComponent(text(row.EMPLOYEE_NAME));
+  const designation = encodeURIComponent(text(row.DESG_NAME));
+  const department = encodeURIComponent(text(row.DEPT_NAME));
+  navigate(
+    `/workspace/pams/appraisal/view/${docNo}?employee_code=${employeeCode}&employee_name=${employeeName}&designation=${designation}&department=${department}&mode=${mode}`,
+    { state: { prefetchedRow: row } }  
+  );
+};
 
   // ── Dialog Handlers ────────────────────────────────────────────────────────
   const openViewDialog = (row: Row) => {

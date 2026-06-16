@@ -14,11 +14,10 @@ import { NoticeToast } from "../../components/ui/NoticeToast";
 type SelectedTab = "task_details" | "characteristics" | "goals" | "skill" | "comments";
 type Row = Record<string, unknown>;
 
-// ─── Weightage type ───────────────────────────────────────────────────────────
 interface WeightageConfig {
-  taskPct: number;      // e.g. 70
-  charPct: number;      // e.g. 30
-  isHrDefined: boolean; // true = HR ne set kiya, false = default logic
+  taskPct: number;
+  charPct: number;
+  isHrDefined: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -32,22 +31,11 @@ function num(val: unknown): number {
   return isFinite(n) ? n : 0;
 }
 
-// ─── Final Rating calculation ─────────────────────────────────────────────────
-//
-//  HR weightage defined  →  (taskTotal × taskPct/100) + (charTotal × charPct/100)
-//  Default (no HR record)→  Math.round((taskTotal + charTotal) / 2)
-//
-function calcFinalRating(
-  taskTotal: number,
-  charTotal: number,
-  cfg: WeightageConfig
-): number {
+function calcFinalRating(taskTotal: number, charTotal: number, cfg: WeightageConfig): number {
   if (taskTotal === 0 && charTotal === 0) return 0;
   if (cfg.isHrDefined) {
-    const raw = (taskTotal * cfg.taskPct) / 100 + (charTotal * cfg.charPct) / 100;
-    return Math.round(raw);
+    return Math.round((taskTotal * cfg.taskPct) / 100 + (charTotal * cfg.charPct) / 100);
   }
-  // default — purana logic
   return Math.round((taskTotal + charTotal) / 2);
 }
 
@@ -136,11 +124,7 @@ const S = {
     whiteSpace: "nowrap" as const,
     fontWeight: 500,
   },
-  ratingChipWrap: {
-    marginLeft: "auto",
-    flexShrink: 0,
-  },
-  // ── Weightage info pill ──
+  ratingChipWrap: { marginLeft: "auto", flexShrink: 0 },
   weightageInfo: {
     fontSize: "0.68rem",
     fontWeight: 600,
@@ -192,36 +176,36 @@ const S = {
     marginTop: "8px",
   },
   btnGroup: { display: "flex" as const, gap: "8px", flexWrap: "wrap" as const },
- solidBtn: (color = "#E8F0FF"): React.CSSProperties => ({
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "6px",
-  padding: "6px 14px",
-  background: color,
-  color: "#082A89",
-  border: "none",
-  borderRadius: "5px",
-  fontSize: "12.5px",
-  fontWeight: 600,
-  cursor: "pointer",
-  whiteSpace: "nowrap" as const,
-  transition: "background 0.18s, transform 0.1s",  // ← sirf yeh badla
-}),
-outlineBtn: {
-  display: "inline-flex" as const,
-  alignItems: "center" as const,
-  gap: "5px",
-  padding: "6px 13px",
-  background: "#fff",
-  color: "#374151",
-  border: "1px solid #d1d5db",
-  borderRadius: "5px",
-  fontSize: "12.5px",
-  fontWeight: 500,
-  cursor: "pointer" as const,
-  whiteSpace: "nowrap" as const,
-  transition: "background 0.18s, transform 0.1s",  // ← sirf yeh badla
-},
+  solidBtn: (color = "#E8F0FF"): React.CSSProperties => ({
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+    padding: "6px 14px",
+    background: color,
+    color: "#082A89",
+    border: "none",
+    borderRadius: "5px",
+    fontSize: "12.5px",
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap" as const,
+    transition: "background 0.18s, transform 0.1s",
+  }),
+  outlineBtn: {
+    display: "inline-flex" as const,
+    alignItems: "center" as const,
+    gap: "5px",
+    padding: "6px 13px",
+    background: "#fff",
+    color: "#374151",
+    border: "1px solid #d1d5db",
+    borderRadius: "5px",
+    fontSize: "12.5px",
+    fontWeight: 500,
+    cursor: "pointer" as const,
+    whiteSpace: "nowrap" as const,
+    transition: "background 0.18s, transform 0.1s",
+  },
   overlay: {
     position: "fixed" as const,
     inset: 0,
@@ -276,16 +260,6 @@ outlineBtn: {
     justifyContent: "flex-end" as const,
     gap: "8px",
   },
-  notice: (type: "success" | "error" | "warning"): React.CSSProperties => ({
-    padding: "10px 14px",
-    borderRadius: "6px",
-    fontSize: "13px",
-    fontWeight: 500,
-    marginBottom: "12px",
-    background: type === "success" ? "#e6f9f0" : type === "error" ? "#fdecea" : "#fff4e5",
-    color:      type === "success" ? "#0a6640"  : type === "error" ? "#a01a1a" : "#92400e",
-    border: `1px solid ${type === "success" ? "#b7ebd4" : type === "error" ? "#f5b3b3" : "#fcd38a"}`,
-  }),
   reportModalOverlay: {
     position: "fixed" as const,
     top: 0, left: 0, right: 0, bottom: 0,
@@ -314,11 +288,7 @@ outlineBtn: {
     borderBottom: "1px solid #e5e7eb",
     backgroundColor: "#f8fafc",
   },
-  reportModalBody: {
-    flex: 1,
-    overflow: "auto" as const,
-    padding: "20px",
-  },
+  reportModalBody: { flex: 1, overflow: "auto" as const, padding: "20px" },
   reportModalFooter: {
     padding: "15px 20px",
     borderTop: "1px solid #e5e7eb",
@@ -335,7 +305,6 @@ outlineBtn: {
     padding: "0 8px",
     lineHeight: 1,
   },
-  
 };
 
 // ─── Final Rating Chip ────────────────────────────────────────────────────────
@@ -359,21 +328,45 @@ const RatingChip: React.FC<{ rating: number; weightageConfig: WeightageConfig }>
       <span style={{ fontSize: "0.72rem", fontWeight: 700, color: meta.labelColor, borderLeft: "1px solid rgba(8,42,137,0.20)", paddingLeft: "8px", letterSpacing: "0.02em" }}>
         {meta.label}
       </span>
-      {/* Show formula used */}
       <span style={{ fontSize: "0.62rem", color: "#082A89", opacity: 0.55, borderLeft: "1px solid rgba(8,42,137,0.15)", paddingLeft: "8px" }}>
-        {weightageConfig.isHrDefined
-          ? `T${weightageConfig.taskPct}% / C${weightageConfig.charPct}%`
-          : ''}
+        {weightageConfig.isHrDefined ? `T${weightageConfig.taskPct}% / C${weightageConfig.charPct}%` : ""}
       </span>
     </div>
   );
 };
+
+// ─── Skeleton loader — tabs ke saath instant UI ───────────────────────────────
+const HeaderSkeleton: React.FC<{ docNo: string; employeeName: string; employeeCode: string }> = ({
+  docNo, employeeName, employeeCode,
+}) => (
+  <div style={S.header}>
+    <div style={{ ...S.backBtn, opacity: 0.4, cursor: "default" }}>←</div>
+    <span style={S.docTitle}>Appraisal: {docNo}</span>
+    <span style={S.divider} />
+    <div style={S.avatar}>
+      {(employeeName?.[0] ?? employeeCode?.[0] ?? "?").toUpperCase()}
+    </div>
+    <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", minWidth: 0, flex: 1 }}>
+      <span style={S.empName}>{employeeName || employeeCode || "—"}</span>
+      {employeeCode && <span style={S.empId}>ID: {employeeCode}</span>}
+    </div>
+    {/* Rating chip placeholder */}
+    <div style={{
+      marginLeft: "auto", height: "30px", width: "160px",
+      borderRadius: "10px", background: "rgba(8,42,137,0.08)",
+      animation: "pulse 1.5s ease-in-out infinite",
+    }} />
+  </div>
+);
 
 // ─── Component ────────────────────────────────────────────────────────────────
 const AppraisalViewTabsPage: React.FC = () => {
   const navigate       = useNavigate();
   const location       = useLocation();
   const [searchParams] = useSearchParams();
+
+  // ── Prefetched row from MyTaskPage navigate state ──────────────────────────
+  const prefetchedRow = (location.state as { prefetchedRow?: Row } | null)?.prefetchedRow;
 
   const getDocNoFromPath = () => {
     const match = location.pathname.match(/\/(?:appraisal\/)?view\/([^/?]+)/);
@@ -388,10 +381,15 @@ const AppraisalViewTabsPage: React.FC = () => {
   const loginid     = user?.loginid || user?.username || "";
   const companyCode = user?.company_code || "";
 
-  // ── State ──────────────────────────────────────────────────────────────────
+  // ── State — prefetchedRow se seedha initialize karo ────────────────────────
+  // Isse page mount hote hi correct values hongi, "Loading..." nahi dikhega
   const [selectedTab,    setSelectedTab]    = useState<SelectedTab>("task_details");
-  const [flowLevel,      setFlowLevel]      = useState<number>(0);
-  const [finalApproved,  setFinalApproved]  = useState<string>("NO");
+  const [flowLevel,      setFlowLevel]      = useState<number>(
+    prefetchedRow ? num(prefetchedRow.FLOW_LEVEL_RUNNING) : 0
+  );
+  const [finalApproved,  setFinalApproved]  = useState<string>(
+    prefetchedRow ? (text(prefetchedRow.FINAL_APPROVED) || "NO") : "NO"
+  );
   const [taskTotal,      setTaskTotal]      = useState<number>(0);
   const [characterTotal, setCharacterTotal] = useState<number>(0);
   const [sentBackPopup,  setSentBackPopup]  = useState(false);
@@ -399,12 +397,14 @@ const AppraisalViewTabsPage: React.FC = () => {
   const [sentBackReason, setSentBackReason] = useState("");
   const [sentBackLevels, setSentBackLevels] = useState<Row[]>([]);
   const [notice,         setNotice]         = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
-  const [loading,        setLoading]        = useState(true);
+
+  // ── KEY CHANGE: prefetchedRow hai to loading=false se start karo ───────────
+  const [loading,        setLoading]        = useState(!prefetchedRow);
+  const [backgroundRefreshing, setBackgroundRefreshing] = useState(false);
+
   const [showReportModal,setShowReportModal]= useState(false);
   const [userFlowLevel,  setUserFlowLevel]  = useState<number>(0);
 
-  // ── Weightage config state ─────────────────────────────────────────────────
-  // Default: 50/50 average jab tak HR ka record nahi milta
   const [weightageConfig, setWeightageConfig] = useState<WeightageConfig>({
     taskPct: 50,
     charPct: 50,
@@ -424,32 +424,33 @@ const AppraisalViewTabsPage: React.FC = () => {
   const isFinalized              = finalApproved === "YES";
   const showSaveSubmitButtons    = !isFinalized && flowLevel >= 1 && flowLevel <= 2;
   const showApproveRejectButtons = !isFinalized && flowLevel >= 3 && flowLevel <= 7;
+  const finalRating              = calcFinalRating(taskTotal, characterTotal, weightageConfig);
+  const showFinalRating          = taskTotal > 0 && characterTotal > 0;
 
-  // ── Final rating — dono logics ─────────────────────────────────────────────
-  const finalRating    = calcFinalRating(taskTotal, characterTotal, weightageConfig);
-  const showFinalRating = taskTotal > 0 && characterTotal > 0;
-
-  // ── Fetch all initial data ─────────────────────────────────────────────────
+  // ── Fetch — prefetchedRow hai to background mein, nahi to blocking ─────────
   useEffect(() => {
     if (!docNo || !employeeCode) { setLoading(false); return; }
 
     const fetchInitialData = async () => {
+      // Agar prefetchedRow nahi hai to pehle loading dikhao (purana behavior)
+      // Agar hai to silently background mein refresh karo
+      if (!prefetchedRow) setLoading(true);
+      else setBackgroundRefreshing(true);
+
       try {
         const [flowRes, levelRes, commentRes, historyRes, weightageRes] = await Promise.all([
           pamsSelect({ parameter: "get_appraisal_flow_level",    loginid, code1: docNo }),
           pamsSelect({ parameter: "sentback_levels",              loginid, code1: docNo }),
           pamsSelect({ parameter: "appraisal_comments",           loginid, code1: docNo }),
           pamsSelect({ parameter: "get_appraisal_flow_with_name", loginid, code1: docNo }),
-          // ── HR weightage fetch — company level, dept = ALL ──
           pamsSelect({
             parameter: "appraisal_weightage_active",
             loginid,
             code1: companyCode,
-            code2: "ALL",   // department code — ALL matlab company-wide
+            code2: "ALL",
           }),
         ]);
 
-        // ── Flow level ──────────────────────────────────────────────────────
         let currentFlowLevel = 0;
         let nextActionBy     = "";
 
@@ -460,9 +461,6 @@ const AppraisalViewTabsPage: React.FC = () => {
           setFinalApproved(text(flowRes[0].FINAL_APPROVED) || "NO");
         }
 
-        // ── Weightage config ────────────────────────────────────────────────
-        // Agar HR ne koi active record save kiya hai toh use karo
-        // Nahi toh default logic (isHrDefined = false → average)
         if (weightageRes.length > 0) {
           const wRow = weightageRes[0];
           setWeightageConfig({
@@ -471,11 +469,9 @@ const AppraisalViewTabsPage: React.FC = () => {
             isHrDefined: true,
           });
         } else {
-          // No HR record — default average formula
           setWeightageConfig({ taskPct: 50, charPct: 50, isHrDefined: false });
         }
 
-        // ── User flow level ─────────────────────────────────────────────────
         const isMyTurn = nextActionBy === loginid.trim().toUpperCase();
         if (isMyTurn) {
           setUserFlowLevel(0);
@@ -487,12 +483,10 @@ const AppraisalViewTabsPage: React.FC = () => {
           setUserFlowLevel(myAction ? num(myAction.FLOW_LEVEL) : currentFlowLevel);
         }
 
-        // ── Sent back levels ────────────────────────────────────────────────
         setSentBackLevels(levelRes as Row[]);
         if (levelRes.length > 0)
           setSentBackLevel(text(levelRes[0].FLOW_RUNNING_LEVEL) || "1");
 
-        // ── Comments ────────────────────────────────────────────────────────
         if (commentRes.length > 0) {
           appraiserCommentRef.current = text(commentRes[0].APPRAISER_COMMENTS);
           appraiseeCommentRef.current = text(commentRes[0].APPRAISEE_COMMENTS);
@@ -502,11 +496,12 @@ const AppraisalViewTabsPage: React.FC = () => {
         // silent
       } finally {
         setLoading(false);
+        setBackgroundRefreshing(false);
       }
     };
 
     void fetchInitialData();
-  }, [docNo, employeeCode, loginid, companyCode]);
+  }, [docNo, employeeCode, loginid, companyCode]); // prefetchedRow intentionally excluded
 
   // ── Validation ─────────────────────────────────────────────────────────────
   const validateBeforeSubmit = (): string[] => {
@@ -600,6 +595,7 @@ const AppraisalViewTabsPage: React.FC = () => {
     win.close();
   };
 
+  // ── Full-page loading — sirf tab jab prefetchedRow nahi hai ───────────────
   if (loading) {
     return (
       <div style={S.container}>
@@ -614,10 +610,31 @@ const AppraisalViewTabsPage: React.FC = () => {
   return (
     <div style={S.container}>
 
-      {/* Notice */}
+      {/* Pulse animation for skeleton */}
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
+
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
+      {/* Background refresh indicator — subtle, non-blocking */}
+      {backgroundRefreshing && (
+        <div style={{
+          position: "fixed", top: "12px", right: "16px", zIndex: 9998,
+          background: "#082A89", color: "#fff",
+          fontSize: "11px", fontWeight: 600,
+          padding: "4px 10px", borderRadius: "20px",
+          opacity: 0.85,
+        }}>
+          Refreshing...
+        </div>
+      )}
+
       {/* ── Header ── */}
+      {/* Prefetched data se turant render, background fetch baad mein update karega */}
       <div style={S.header}>
         <button
           style={S.backBtn}
@@ -640,13 +657,6 @@ const AppraisalViewTabsPage: React.FC = () => {
           <span style={S.empName}>{employeeName || employeeCode || "—"}</span>
           {employeeCode && <span style={S.empId}>ID: {employeeCode}</span>}
         </div>
-
-        {/* Weightage pill — always visible so HR aur employee dono dekh sakein */}
-        {/* <span style={S.weightageInfo}>
-          {weightageConfig.isHrDefined
-            ? `Task ${weightageConfig.taskPct}% · Char ${weightageConfig.charPct}%`
-            : "Default: Avg"}
-        </span> */}
 
         {showFinalRating && (
           <div style={S.ratingChipWrap}>
@@ -721,91 +731,87 @@ const AppraisalViewTabsPage: React.FC = () => {
       </div>
 
       {/* ── Action buttons ── */}
-      {/* ── Action buttons ── */}
-<div style={S.btnRow}>
-  <div style={S.btnGroup}>
-    {showSaveSubmitButtons && (
-      <>
-        <button
-          style={S.solidBtn()}
-          onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
-          onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
-          onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-          onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-          onClick={() => void handleAction("D")}
-        >
-          💾 Save as Draft
-        </button>
-        <button
-          style={S.solidBtn()}
-          onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
-          onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
-          onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-          onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-          onClick={() => {
-            const missing = validateBeforeSubmit();
-            if (missing.length > 0) {
-              setNotice({ type: "warning", message: `Please fill before submitting: ${missing.join(" | ")}` });
-              return;
-            }
-            void handleAction("S");
-          }}
-        >
-          ➤ Submit
-        </button>
-      </>
-    )}
-    {showApproveRejectButtons && (
-      <>
-        <button
-          style={S.solidBtn("#E8F0FF")}
-          onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
-          onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
-          onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-          onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-          onClick={() => void handleAction("A")}
-        >✔️ Approve</button>
-        <button
-          style={S.solidBtn("#E8F0FF")}
-          onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
-          onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
-          onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-          onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-          onClick={() => void handleAction("R")}
-        >✗ Reject</button>
-        <button
-          style={S.solidBtn("#E8F0FF")}
-          onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
-          onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
-          onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-          onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-          onClick={() => setSentBackPopup(true)}
-        >↩ Send Back</button>
-      </>
-    )}
-  </div>
-  <div style={S.btnGroup}>
-    <button
-      style={S.solidBtn("#E8F0FF")}
-          onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
-          onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
-          onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-          onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-      onClick={() => setShowReportModal(true)}
-    >🖨️ Print</button>
-    {/* <button style={S.outlineBtn} disabled>📎 Attach</button> */}
-    <button
-      style={S.solidBtn("#E8F0FF")}
-          onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
-          onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
-          onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
-          onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-      onClick={() => navigate(-1)}
-    >🚪 Exit</button>
-  </div>
-</div>
-
-      
+      <div style={S.btnRow}>
+        <div style={S.btnGroup}>
+          {showSaveSubmitButtons && (
+            <>
+              <button
+                style={S.solidBtn()}
+                onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
+                onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
+                onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+                onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+                onClick={() => void handleAction("D")}
+              >
+                💾 Save as Draft
+              </button>
+              <button
+                style={S.solidBtn()}
+                onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
+                onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
+                onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+                onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+                onClick={() => {
+                  const missing = validateBeforeSubmit();
+                  if (missing.length > 0) {
+                    setNotice({ type: "warning", message: `Please fill before submitting: ${missing.join(" | ")}` });
+                    return;
+                  }
+                  void handleAction("S");
+                }}
+              >
+                ➤ Submit
+              </button>
+            </>
+          )}
+          {showApproveRejectButtons && (
+            <>
+              <button
+                style={S.solidBtn("#E8F0FF")}
+                onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
+                onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
+                onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+                onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+                onClick={() => void handleAction("A")}
+              >✔️ Approve</button>
+              <button
+                style={S.solidBtn("#E8F0FF")}
+                onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
+                onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
+                onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+                onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+                onClick={() => void handleAction("R")}
+              >✗ Reject</button>
+              <button
+                style={S.solidBtn("#E8F0FF")}
+                onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
+                onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
+                onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+                onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+                onClick={() => setSentBackPopup(true)}
+              >↩ Send Back</button>
+            </>
+          )}
+        </div>
+        <div style={S.btnGroup}>
+          <button
+            style={S.solidBtn("#E8F0FF")}
+            onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
+            onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
+            onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+            onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+            onClick={() => setShowReportModal(true)}
+          >🖨️ Print</button>
+          <button
+            style={S.solidBtn("#E8F0FF")}
+            onMouseEnter={e => (e.currentTarget.style.background = "#d0deff")}
+            onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
+            onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
+            onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+            onClick={() => navigate(-1)}
+          >🚪 Exit</button>
+        </div>
+      </div>
 
       {/* ── Sent Back Modal ── */}
       {sentBackPopup && (
