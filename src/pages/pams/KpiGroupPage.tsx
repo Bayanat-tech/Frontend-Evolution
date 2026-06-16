@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Edit2, Eye, Plus, RefreshCw, Save, Trash2, Upload, X } from "lucide-react";
+import { Edit2, Eye, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { pamsDelete, pamsSave, pamsSelect } from "../../api/pams";
 import { Badge } from "../../components/ui/Badge";
@@ -12,8 +12,6 @@ import { LookupField } from "../../components/ui/LookupField";
 import { NoticeToast } from "../../components/ui/NoticeToast";
 import { useAuth } from "../../state/AuthContext";
 import type { LookupRow } from "../../api/lookups";
-import ImportKpiEdi from "./Importkpiedi";
-
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -88,9 +86,6 @@ export function KpiGroupPage() {
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
-
-  // ── Import dialog state ───────────────────────────────────────────────────
-  const [importOpen, setImportOpen] = useState(false);
 
   // ── Form state ────────────────────────────────────────────────────────────
   const [form, setForm] = useState<KpiForm>({
@@ -352,17 +347,13 @@ export function KpiGroupPage() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => void loadRows()}><RefreshCw size={15} /> Refresh</Button>
-          {/* ── IMPORT BUTTON ── */}
-          <Button variant="outline" onClick={() => setImportOpen(true)}>
-            <Upload size={15} /> Import from Excel
-          </Button>
           <Button onClick={openAdd}><Plus size={15} /> Add KPI</Button>
         </div>
       </div>
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      {/* Table — parameter 'kpi_master' → MS_EAM_KPI sabka data */}
+      {/* Table */}
       <DataTable
         columns={columns}
         data={rows}
@@ -379,24 +370,6 @@ export function KpiGroupPage() {
         pageSize={100}
         getRowId={(row, index) => `${text(row.KPI_CODE)}_${text(row.KPI_TYPE_CODE)}_${index}`}
       />
-
-      {/* ── IMPORT DIALOG ── */}
-      <Dialog
-        open={importOpen}
-        wide
-        title="Import KPI from Excel"
-        description="Upload an Excel file to bulk import KPI records into MS_EAM_KPI."
-        onClose={() => setImportOpen(false)}
-      >
-        <ImportKpiEdi
-          onClose={() => setImportOpen(false)}
-          onSuccess={async () => {
-            setImportOpen(false);
-            setNotice({ type: "success", message: "KPI records imported successfully." });
-            await loadRows(false); // ← table refresh hoga import ke baad
-          }}
-        />
-      </Dialog>
 
       {/* Add / Edit / View Dialog */}
       <Dialog
@@ -415,135 +388,152 @@ export function KpiGroupPage() {
               </div>
             </CardHeader>
             <CardContent className="grid gap-3 pt-4">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_1.5fr]">
-                <Field label="KPI Code">
-                  <Input
-                    disabled
-                    value={form.KPI_CODE || "Auto Generated"}
-                    onChange={() => undefined}
-                    className="bg-muted/40 text-muted-foreground"
-                  />
-                </Field>
-                <Field label="KPI Type Code" required>
-                  <LookupField
-                    compact
-                    disabled={viewMode || editMode}
-                    label="KPI Type Code"
-                    value={form.KPI_TYPE_CODE}
-                    displayValue={findLabel(kpiTypeOptions, "KPI_TYPE_CODE", "KPI_TYPE_DESC", form.KPI_TYPE_CODE)}
-                    placeholder="Select KPI Type"
-                    columns={[
-                      { field: "KPI_TYPE_CODE", header: "Code" },
-                      { field: "KPI_TYPE_DESC", header: "Description" },
-                    ]}
-                    valueField="KPI_TYPE_CODE"
-                    displayFields={["KPI_TYPE_CODE", "KPI_TYPE_DESC"]}
-                    loadOptions={async () => kpiTypeOptions as LookupRow[]}
-                    onChange={(val) => updateField("KPI_TYPE_CODE", val)}
-                  />
-                </Field>
-                <Field label="Division">
-                  <LookupField
-                    compact
-                    disabled={viewMode}
-                    label="Division"
-                    value={form.DIVISION_CODE}
-                    displayValue={findLabel(divisionOptions, "DIV_CODE", "DIV_NAME", form.DIVISION_CODE)}
-                    placeholder="Select Division"
-                    columns={[
-                      { field: "DIV_CODE", header: "Code" },
-                      { field: "DIV_NAME", header: "Name" },
-                    ]}
-                    valueField="DIV_CODE"
-                    displayFields={["DIV_CODE", "DIV_NAME"]}
-                    loadOptions={async () => divisionOptions as LookupRow[]}
-                    onChange={(val) => updateField("DIVISION_CODE", val)}
-                  />
-                </Field>
-              </div>
+  {/* Row 1 - 3 columns with custom widths */}
+  <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_1.5fr]">
+    {/* KPI Code — small width */}
+    <Field label="KPI Code">
+      <Input
+        disabled
+        value={form.KPI_CODE || "Auto Generated"}
+        onChange={() => undefined}
+        className="bg-muted/40 text-muted-foreground"
+      />
+    </Field>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field label="Department">
-                  <LookupField
-                    compact
-                    disabled={viewMode || !form.DIVISION_CODE}
-                    label="Department"
-                    value={form.DEPARTMENT_CODE}
-                    displayValue={findLabel(deptOptions, "DEPT_CODE", "DEPT_NAME", form.DEPARTMENT_CODE)}
-                    placeholder={form.DIVISION_CODE ? "Select Department" : "Select Division first"}
-                    columns={[
-                      { field: "DEPT_CODE", header: "Code" },
-                      { field: "DEPT_NAME", header: "Name" },
-                    ]}
-                    valueField="DEPT_CODE"
-                    displayFields={["DEPT_CODE", "DEPT_NAME"]}
-                    loadOptions={async () => deptOptions as LookupRow[]}
-                    onChange={(val) => updateField("DEPARTMENT_CODE", val)}
-                  />
-                </Field>
-                <Field label="Section">
-                  <LookupField
-                    compact
-                    disabled={viewMode || !form.DEPARTMENT_CODE}
-                    label="Section"
-                    value={form.SECTION_CODE}
-                    displayValue={findLabel(sectionOptions, "SECTION_CODE", "SECTION_NAME", form.SECTION_CODE)}
-                    placeholder={form.DEPARTMENT_CODE ? "Select Section" : "Select Department first"}
-                    columns={[
-                      { field: "SECTION_CODE", header: "Code" },
-                      { field: "SECTION_NAME", header: "Name" },
-                    ]}
-                    valueField="SECTION_CODE"
-                    displayFields={["SECTION_CODE", "SECTION_NAME"]}
-                    loadOptions={async () => sectionOptions as LookupRow[]}
-                    onChange={(val) => updateField("SECTION_CODE", val)}
-                  />
-                </Field>
-              </div>
+    {/* KPI Type Code — small width */}
+    <Field label="KPI Type Code" required>
+      <LookupField
+        compact
+        disabled={viewMode || editMode}
+        label="KPI Type Code"
+        value={form.KPI_TYPE_CODE}
+        displayValue={findLabel(kpiTypeOptions, "KPI_TYPE_CODE", "KPI_TYPE_DESC", form.KPI_TYPE_CODE)}
+        placeholder="Select KPI Type"
+        columns={[
+          { field: "KPI_TYPE_CODE", header: "Code" },
+          { field: "KPI_TYPE_DESC", header: "Description" },
+        ]}
+        valueField="KPI_TYPE_CODE"
+        displayFields={["KPI_TYPE_CODE", "KPI_TYPE_DESC"]}
+        loadOptions={async () => kpiTypeOptions as LookupRow[]}
+        onChange={(val) => updateField("KPI_TYPE_CODE", val)}
+      />
+    </Field>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field label="Designation">
-                  <LookupField
-                    compact
-                    disabled={viewMode || !form.DEPARTMENT_CODE}
-                    label="Designation"
-                    value={form.DESG_CODE}
-                    displayValue={findLabel(desgOptions, "DESG_CODE", "DESG_NAME", form.DESG_CODE)}
-                    placeholder={form.DEPARTMENT_CODE ? "Select Designation" : "Select Department first"}
-                    columns={[
-                      { field: "DESG_CODE", header: "Code" },
-                      { field: "DESG_NAME", header: "Name" },
-                    ]}
-                    valueField="DESG_CODE"
-                    displayFields={["DESG_CODE", "DESG_NAME"]}
-                    loadOptions={async () => desgOptions as LookupRow[]}
-                    onChange={(val) => updateField("DESG_CODE", val)}
-                  />
-                </Field>
-                <Field label="Standard Weightage">
-                  <Input
-                    disabled={viewMode}
-                    type="number"
-                    value={form.STANDARD_WEIGHTAGE}
-                    onChange={(e) => updateField("STANDARD_WEIGHTAGE", Number(e.target.value || 0))}
-                    min={0}
-                    max={100}
-                  />
-                </Field>
-              </div>
+    {/* Division — larger width */}
+    <Field label="Division">
+      <LookupField
+        compact
+        disabled={viewMode}
+        label="Division"
+        value={form.DIVISION_CODE}
+        displayValue={findLabel(divisionOptions, "DIV_CODE", "DIV_NAME", form.DIVISION_CODE)}
+        placeholder="Select Division"
+        columns={[
+          { field: "DIV_CODE", header: "Code" },
+          { field: "DIV_NAME", header: "Name" },
+        ]}
+        valueField="DIV_CODE"
+        displayFields={["DIV_CODE", "DIV_NAME"]}
+        loadOptions={async () => divisionOptions as LookupRow[]}
+        onChange={(val) => updateField("DIVISION_CODE", val)}
+      />
+    </Field>
+  </div>
 
-              <div>
-                <Field label="KPI Description" required>
-                  <textarea
-                    disabled={viewMode}
-                    className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
-                    value={form.KPI_DESC}
-                    onChange={(e) => updateField("KPI_DESC", e.target.value)}
-                    placeholder="Enter KPI description"
-                  />
-                </Field>
-              </div>
-            </CardContent>
+  {/* Row 2 - Department and Standard Weightage */}
+  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    {/* Department */}
+    <Field label="Department">
+      <LookupField
+        compact
+        disabled={viewMode || !form.DIVISION_CODE}
+        label="Department"
+        value={form.DEPARTMENT_CODE}
+        displayValue={findLabel(deptOptions, "DEPT_CODE", "DEPT_NAME", form.DEPARTMENT_CODE)}
+        placeholder={form.DIVISION_CODE ? "Select Department" : "Select Division first"}
+        columns={[
+          { field: "DEPT_CODE", header: "Code" },
+          { field: "DEPT_NAME", header: "Name" },
+        ]}
+        valueField="DEPT_CODE"
+        displayFields={["DEPT_CODE", "DEPT_NAME"]}
+        loadOptions={async () => deptOptions as LookupRow[]}
+        onChange={(val) => updateField("DEPARTMENT_CODE", val)}
+      />
+    </Field>
+
+    {/* Section */}
+    <Field label="Section">
+      <LookupField
+        compact
+        disabled={viewMode || !form.DEPARTMENT_CODE}
+        label="Section"
+        value={form.SECTION_CODE}
+        displayValue={findLabel(sectionOptions, "SECTION_CODE", "SECTION_NAME", form.SECTION_CODE)}
+        placeholder={form.DEPARTMENT_CODE ? "Select Section" : "Select Department first"}
+        columns={[
+          { field: "SECTION_CODE", header: "Code" },
+          { field: "SECTION_NAME", header: "Name" },
+        ]}
+        valueField="SECTION_CODE"
+        displayFields={["SECTION_CODE", "SECTION_NAME"]}
+        loadOptions={async () => sectionOptions as LookupRow[]}
+        onChange={(val) => updateField("SECTION_CODE", val)}
+      />
+    </Field>
+  </div>
+
+  {/* Row 3 - Section and Designation */}
+  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    
+
+    {/* Designation */}
+    <Field label="Designation">
+      <LookupField
+        compact
+        disabled={viewMode || !form.DEPARTMENT_CODE}
+        label="Designation"
+        value={form.DESG_CODE}
+        displayValue={findLabel(desgOptions, "DESG_CODE", "DESG_NAME", form.DESG_CODE)}
+        placeholder={form.DEPARTMENT_CODE ? "Select Designation" : "Select Department first"}
+        columns={[
+          { field: "DESG_CODE", header: "Code" },
+          { field: "DESG_NAME", header: "Name" },
+        ]}
+        valueField="DESG_CODE"
+        displayFields={["DESG_CODE", "DESG_NAME"]}
+        loadOptions={async () => desgOptions as LookupRow[]}
+        onChange={(val) => updateField("DESG_CODE", val)}
+      />
+    </Field>
+
+    {/* Standard Weightage */}
+    <Field label="Standard Weightage">
+      <Input
+        disabled={viewMode}
+        type="number"
+        value={form.STANDARD_WEIGHTAGE}
+        onChange={(e) => updateField("STANDARD_WEIGHTAGE", Number(e.target.value || 0))}
+        min={0}
+        max={100}
+      />
+    </Field>
+  </div>
+
+  {/* Row 4 - KPI Description — full width */}
+  <div>
+    <Field label="KPI Description" required>
+      <textarea
+        disabled={viewMode}
+        className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+        value={form.KPI_DESC}
+        onChange={(e) => updateField("KPI_DESC", e.target.value)}
+        placeholder="Enter KPI description"
+      />
+    </Field>
+  </div>
+</CardContent>
           </Card>
 
           <NoticeToast notice={formError ? { type: "error", message: formError } : null} onClose={() => setFormError("")} />

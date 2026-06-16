@@ -1,5 +1,5 @@
 import { Edit2, Plus, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { executeCommonProcedure, getDynamicLookup, getLookupValue, LookupRow, postFinance } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
@@ -125,17 +125,17 @@ export function ExpenseTypePage() {
 
   const dirtyCount = Object.keys(dirtySubTypes).length + Object.keys(dirtyExpenseCodes).length;
 
-  const markSubTypeDirty = useCallback((row: ExpenseSubTypeRow) => {
+  const markSubTypeDirty = (row: ExpenseSubTypeRow) => {
     setSubTypes((prev) => prev.map((item) => (item.id === row.id ? row : item)));
     setDirtySubTypes((prev) => ({ ...prev, [row.id]: row }));
-  }, []);
+  };
 
-  const markExpenseCodeDirty = useCallback((row: ExpenseCodeRow) => {
+  const markExpenseCodeDirty = (row: ExpenseCodeRow) => {
     setExpenseCodes((prev) => prev.map((item) => (item.id === row.id ? row : item)));
     setDirtyExpenseCodes((prev) => ({ ...prev, [row.id]: row }));
-  }, []);
+  };
 
-  const addSubTypeRow = useCallback( () => {
+  const addSubTypeRow = () => {
     if (!selected) return;
     const row: ExpenseSubTypeRow = {
       id: `sub_new_${Date.now()}`,
@@ -148,9 +148,9 @@ export function ExpenseTypePage() {
     setSubTypes((prev) => [...prev, row]);
     setDirtySubTypes((prev) => ({ ...prev, [row.id]: row }));
     setActiveGrid("subtype");
-  }, [selected, companyCode]);
+  };
 
-  const addExpenseCodeRow = useCallback(() => {
+  const addExpenseCodeRow = () => {
     if (!selected) return;
     const row: ExpenseCodeRow = {
       id: `code_new_${Date.now()}`,
@@ -163,7 +163,7 @@ export function ExpenseTypePage() {
     setExpenseCodes((prev) => [...prev, row]);
     setDirtyExpenseCodes((prev) => ({ ...prev, [row.id]: row }));
     setActiveGrid("expcode");
-  }, [selected, companyCode]);
+  };
 
   const saveChanges = async () => {
     if (!selected || dirtyCount === 0) return;
@@ -370,41 +370,31 @@ function EditableExpenseTable<T extends Record<string, string>>({
   onDelete: (row: T) => void;
   onChange: (row: T, key: keyof T, value: string) => void;
 }) {
-
-  const onChangeRef = useRef(onChange);
-useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
-const onDeleteRef = useRef(onDelete);
-useEffect(() => { onDeleteRef.current = onDelete; }, [onDelete]);
-
-const tableColumns = useMemo<ColumnDef<T>[]>(() => [
-  ...columns.map<ColumnDef<T>>((column) => ({
-    accessorKey: String(column.key),
-    header: column.label,
-    size: column.width ? Number.parseInt(column.width, 10) : undefined,
-    cell: ({ row }) => {
-      const original = row.original;
-      return active ? (
-        <Input
-          className="h-9"
-          defaultValue={String(original[column.key] || "")}
-          onBlur={(e) => onChangeRef.current(original, column.key, e.target.value)}
-        />
-      ) : (
-        <span className={column.width ? "font-medium" : ""}>{String(original[column.key] || "")}</span>
-      );
+  const tableColumns = useMemo<ColumnDef<T>[]>(() => [
+    ...columns.map<ColumnDef<T>>((column) => ({
+      accessorKey: String(column.key),
+      header: column.label,
+      size: column.width ? Number.parseInt(column.width, 10) : undefined,
+      cell: ({ row }) => {
+        const original = row.original;
+        return active ? (
+          <Input className="h-9" value={String(original[column.key] || "")} onChange={(event) => onChange(original, column.key, event.target.value)} />
+        ) : (
+          <span className={column.width ? "font-medium" : ""}>{String(original[column.key] || "")}</span>
+        );
+      },
+    })),
+    {
+      id: "actions",
+      header: "Actions",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <Button size="icon" variant="ghost" disabled={!active} onClick={() => onDelete(row.original)}>
+          <Trash2 size={15} />
+        </Button>
+      ),
     },
-  })),
-  {
-    id: "actions",
-    header: "Actions",
-    enableSorting: false,
-    cell: ({ row }) => (
-      <Button size="icon" variant="ghost" disabled={disabled} onClick={() => onDeleteRef.current(row.original)}>
-        <Trash2 size={15} />
-      </Button>
-    ),
-  },
- ], [active, columns,disabled, onChange, onDelete]);
+  ], [active, columns, onChange, onDelete]);
 
   return (
     <div className={active ? "rounded-md ring-2 ring-primary/30" : ""}>

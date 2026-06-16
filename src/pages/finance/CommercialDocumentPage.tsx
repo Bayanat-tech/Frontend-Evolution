@@ -731,7 +731,7 @@ const withTax = {
 
   {/* ── Supplier Code + Name — PO / PI  & ── Customer Code + Name — SI / SV ──── */}
   {/* field: ac_code / ac_name — same in all tables ── */}
-  <div className="field commercial-party-primary">
+  <div className="field">
   <LookupField
     label={isSales ? "Customer" : "Supplier"} required
     value={form.ac_code}
@@ -1118,6 +1118,8 @@ const withTax = {
                       {isPO && <th className="px-2 py-2 text-left">Product Code</th>}
                       <th className="px-2 py-2 text-left">Description</th>
                       {isPO && <th className="px-2 py-2 text-left">Cost Code</th>}
+                      <th className="px-2 py-2 text-left">Currency</th>
+                      <th className="px-2 py-2 text-left">Ex Rate</th>
                       <th className="px-2 py-2 text-left">Qty</th>
                       <th className="px-2 py-2 text-left">Rate</th>
                       <th className="finance-amount-cell px-2 py-2 text-left">Amount</th>
@@ -1126,13 +1128,10 @@ const withTax = {
                       <th className="px-2 py-2 text-left">Tax Type</th>
                       <th className="px-2 py-2 text-left">Tax %</th>
                       <th className="finance-amount-cell px-2 py-2 text-left">Tax Amt</th>
-                       <th className="px-2 py-2 text-left">Currency</th>
-                      <th className="px-2 py-2 text-left">Ex Rate</th>
                       <th className="px-2 py-2 text-left">Job</th>
                       {isPO && <th className="px-2 py-2 text-left">Dept.</th>}
                       {isPO && <th className="px-2 py-2 text-left">Remarks</th>}
                       <th className="finance-amount-cell px-2 py-2 text-left">Base Amount</th>
-                      {/* <th className="finance-amount-cell px-2 py-2 text-left">Tax Lucr Amt</th> */}
                       <th className="px-2 py-2 text-left">Action</th>
                     </tr>
                   </thead>

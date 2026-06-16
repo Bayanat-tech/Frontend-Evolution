@@ -6,7 +6,7 @@ type ApiResponse<T> = {
   message?: string;
 };
 
-export type TransactionType = "BP" | "BR" | "CR" | "CP" | "CN" | "DN" | "PO" | "PI" | "SI" | "SV" | "JV" | "RJV" ;
+export type TransactionType = "BP" | "BR" | "CR" | "CP" | "CN" | "DN" | "PO" | "PI" | "SI" | "SV" | "JV";
 
 export type TransactionDocumentRow = {
   company_code?: string;
@@ -508,12 +508,12 @@ async function openReportInTab(endpoint: string, params: ReportParams): Promise<
 }
 
 // ── 1. Cheque Book Monitoring ─────────────────────────────────────────────
-// export async function openChequeMonitoringReport(params: ReportParams) {
-//     await openReportInTab(
-//         `/api/finance/transactions/reports/cheque-monitoring/html`,
-//         params
-//     );
-// }
+export async function openChequeMonitoringReport(params: ReportParams) {
+    await openReportInTab(
+        `/api/finance/transactions/reports/cheque-monitoring/html`,
+        params
+    );
+}
 
 export async function openChequeDateWiseReport(params: ReportParams) {
     await openReportInTab(
@@ -523,36 +523,36 @@ export async function openChequeDateWiseReport(params: ReportParams) {
 }
 
 // ── 2. Detail Dump ────────────────────────────────────────────────────────
-// export async function openDetailDumpReport(params: ReportParams) {
-//     await openReportInTab(
-//         `/api/finance/transactions/reports/detail-dump/html`,
-//         params
-//     );
-// }
+export async function openDetailDumpReport(params: ReportParams) {
+    await openReportInTab(
+        `/api/finance/transactions/reports/detail-dump/html`,
+        params
+    );
+}
 
 // ── 3. Ledger With Details ────────────────────────────────────────────────
-// export async function openLedgerWithDetailsReport(params: ReportParams) {
-//     await openReportInTab(
-//         `/api/finance/transactions/reports/ledger-with-details/html`,
-//         params
-//     );
-// }
+export async function openLedgerWithDetailsReport(params: ReportParams) {
+    await openReportInTab(
+        `/api/finance/transactions/reports/ledger-with-details/html`,
+        params
+    );
+}
 
-// // ── 4. Ledger With Opposite Entry ─────────────────────────────────────────
-// export async function openLedgerOppositeEntryReport(params: ReportParams) {
-//     await openReportInTab(
-//         `/api/finance/transactions/reports/ledger-opposite-entry/html`,
-//         params
-//     );
-// }
+// ── 4. Ledger With Opposite Entry ─────────────────────────────────────────
+export async function openLedgerOppositeEntryReport(params: ReportParams) {
+    await openReportInTab(
+        `/api/finance/transactions/reports/ledger-opposite-entry/html`,
+        params
+    );
+}
 
-// // ── 5. Summary Dump ───────────────────────────────────────────────────────
-// export async function openSummaryDumpReport(params: ReportParams) {
-//     await openReportInTab(
-//         `/api/finance/transactions/reports/summary-dump/html`,
-//         params
-//     );
-// }
+// ── 5. Summary Dump ───────────────────────────────────────────────────────
+export async function openSummaryDumpReport(params: ReportParams) {
+    await openReportInTab(
+        `/api/finance/transactions/reports/summary-dump/html`,
+        params
+    );
+}
 
 // ── 6. Account Payee Wise ─────────────────────────────────────────────────
 export async function openAccountPayeeWiseReport(params: ReportParams) {
@@ -603,43 +603,6 @@ export async function openOutstandingListReport(params: ReportParams) {
 export async function openBalanceSheetReport(params: ReportParams) {
     await openReportInTab(
         `/api/finance/transactions/reports/balance-sheet/html`,
-        params
-    );
-}
-
-export async function taxOutInReport(params: ReportParams) {
-    await openReportInTab(
-        "/api/finance/transactions/reports/tax-vat-out-ledger/html",
-        params
-// ---------AC_statement report-----
-    )}
-
-export async function openAcStatementReport(params: ReportParams) {
-    await openReportInTab(
-        "/api/finance/transactions/reports/AcStatementReport/html",  
-        params
-    );
-}
-
-
-
-export async function taxOutInSummaryReport(params: ReportParams) {
-    await openReportInTab(
-        "/api/finance/transactions/reports/tax-vat-out-ledger-summary/html",
-        params
-    );
-}
-export async function openOutstandingStatementDetailReport(params: ReportParams) {
-    await openReportInTab(
-        "/api/finance/transactions/reports/OutstandingDetailReport/html",  
-        params
-    );
-}
-
-
-export async function openOutstandingStatementSummaryReport(params: ReportParams) {
-    await openReportInTab(
-        "/api/finance/transactions/reports/OutstandingSummaryReport/html", 
         params
     );
 }

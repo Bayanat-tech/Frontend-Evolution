@@ -23,7 +23,6 @@ type LookupFieldProps = {
   compact?: boolean;
   placeholder?: string;
   required?: boolean;
-  multiSelect?: boolean;
 };
 
 export function LookupField({
@@ -39,7 +38,6 @@ export function LookupField({
   compact,
   placeholder,
   required,
-  multiSelect,
 }: LookupFieldProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -111,14 +109,6 @@ export function LookupField({
     };
   }, [compact, open]);
 
-  const selectedValues = useMemo(() => {
-    if (!multiSelect) return value ? [value] : [];
-    return value
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }, [value, multiSelect]);
-
   const filteredRows = useMemo(() => {
     const term = query.trim().toLowerCase();
     if (!term) return rows;
@@ -146,32 +136,15 @@ export function LookupField({
   };
 
   const selectRow = (row: LookupRow) => {
-    const rowValue = String(getLookupValue(row, valueField) || "");
-    if (multiSelect) {
-      const selected = selectedValues.includes(rowValue);
-      const nextValues = selected
-        ? selectedValues.filter((valueItem) => valueItem !== rowValue)
-        : [...selectedValues, rowValue];
-      onChange(nextValues.join(","), row);
-      return;
-    }
-
-    onChange(rowValue, row);
+    onChange(String(getLookupValue(row, valueField) || ""), row);
     setOpen(false);
     setQuery("");
     setPage(1);
   };
-  
+
   const currentText =
     displayValue ||
-    (multiSelect
-      ? rows
-          .filter((row) => selectedValues.includes(String(getLookupValue(row, valueField) || "")))
-          .map((row) => getLookupText(row, displayFields.length ? displayFields : [valueField]))
-          .join(", ") || value || "None"
-      : value
-      ? getLookupText({ [valueField]: value }, displayFields.length ? displayFields : [valueField])
-      : "None");
+    (value ? getLookupText({ [valueField]: value }, displayFields.length ? displayFields : [valueField]) : "None");
 
   return (
     <>
@@ -185,8 +158,8 @@ export function LookupField({
             onClick={openLookup}
             disabled={disabled}
           >
-            <span className={currentText ? "block truncate" : "block truncate text-muted-foreground"}>
-              {currentText || placeholder || `Select ${label}`}
+            <span className={value ? "block truncate" : "block truncate text-muted-foreground"}>
+              {displayValue || value || placeholder || `Select ${label}`}
             </span>
           </button>
           {value && !disabled && (
@@ -253,6 +226,7 @@ export function LookupField({
               <Table>
                 <TableHeader className="sticky top-0 z-10 bg-[#edf4ff]">
                   <TableRow>
+                    <TableHead className="w-10 text-center">Select</TableHead>
                     {columns.map((column) => (
                       <TableHead key={column.field}>{column.header}</TableHead>
                     ))}
@@ -261,28 +235,24 @@ export function LookupField({
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell className="px-3 py-8 text-center text-muted-foreground" colSpan={columns.length}>
+                      <TableCell className="px-3 py-8 text-center text-muted-foreground" colSpan={columns.length + 1}>
                         Loading...
                       </TableCell>
                     </TableRow>
                   ) : pagedRows.length === 0 ? (
                     <TableRow>
-                      <TableCell className="px-3 py-8 text-center text-muted-foreground" colSpan={columns.length}>
+                      <TableCell className="px-3 py-8 text-center text-muted-foreground" colSpan={columns.length + 1}>
                         No records found
                       </TableCell>
                     </TableRow>
                   ) : (
                     pagedRows.map((row, index) => {
-                      const rowValue = String(getLookupValue(row, valueField) || "");
-                      const selected = multiSelect
-                        ? selectedValues.includes(rowValue)
-                        : rowValue === value;
+                      const selected = String(getLookupValue(row, valueField) || "") === value;
                       return (
                         <TableRow
                           className={selected ? "cursor-pointer bg-primary/10" : "cursor-pointer hover:bg-accent"}
-                          key={`${rowValue || index}`}
+                          key={`${getLookupValue(row, valueField) || index}`}
                           onClick={() => selectRow(row)}
-                          aria-selected={selected}
                         >
                           <TableCell className="px-3 py-1.5 text-center">
                             <input
@@ -291,7 +261,7 @@ export function LookupField({
                               className="lookup-radio"
                               onChange={() => selectRow(row)}
                               onClick={(event) => event.stopPropagation()}
-                              type={multiSelect ? "checkbox" : "radio"}
+                              type="radio"
                             />
                           </TableCell>
                           {columns.map((column) => (

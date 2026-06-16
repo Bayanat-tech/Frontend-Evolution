@@ -4,12 +4,18 @@ import React, { useEffect, useState } from "react";
 import {
     Printer,
     RotateCcw,
+    ChevronRight,
+    ChevronLeft,
+    ChevronsRight,
+    ChevronsLeft,
     BarChart2,
     Loader2,
 } from "lucide-react";
 
 import { getDynamicLookup, getDynamicLookupaccount } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
+// import ReportDialogPage from "report/ReportDialogPage";
+// import PeriodWiseReport from "./PeriodWiseReport";
 import { openDuedatewiseDetailReport, openDuedatewiseSummaryReport, openInvdatewiseDetailReport, openInvdatewiseSummaryReport, openOutstandingListReport } from "../../../api/transactions";
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -47,6 +53,19 @@ const rowStyle = (sel: boolean): React.CSSProperties => ({
     background: sel ? "#E6F1FB" : "transparent",
     color: sel ? "#0C447C" : "inherit",
 });
+
+const transferBtnStyle: React.CSSProperties = {
+    width: 32,
+    height: 32,
+    border: "0.5px solid #d1d5db",
+    background: "#fff",
+    borderRadius: 6,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#6b7280",
+};
 
 const fieldLabelStyle: React.CSSProperties = {
     fontSize: 11,
@@ -120,20 +139,29 @@ const PeriodWisePage: React.FC = () => {
     const [divisionSearch, setDivisionSearch] = useState("");
     const [showDivisionDropdown, setShowDivisionDropdown] = useState(false);
 
-    // ── Group list + selection state ──────────────────────────────────────────
+    // ── Group transfer state (same pattern as FinanceReportFilter) ────────────
     const [groupLeftItems, setGroupLeftItems] = useState<any[]>([]);
+    const [groupRightItems, setGroupRightItems] = useState<any[]>([]);
     const [groupLeftSelected, setGroupLeftSelected] = useState(new Set<string>());
+    const [groupRightSelected, setGroupRightSelected] = useState(new Set<string>());
     const [groupSearchLeft, setGroupSearchLeft] = useState("");
+    const [groupSearchRight, setGroupSearchRight] = useState("");
 
-    // ── Account list + selection state ────────────────────────────────────────
+    // ── Account transfer state ────────────────────────────────────────────────
     const [accountLeftItems, setAccountLeftItems] = useState<any[]>([]);
+    const [accountRightItems, setAccountRightItems] = useState<any[]>([]);
     const [accountLeftSelected, setAccountLeftSelected] = useState(new Set<string>());
+    const [accountRightSelected, setAccountRightSelected] = useState(new Set<string>());
     const [accountSearchLeft, setAccountSearchLeft] = useState("");
+    const [accountSearchRight, setAccountSearchRight] = useState("");
 
-    // ── Salesman list + selection state ───────────────────────────────────────
+    // ── Salesman transfer state ───────────────────────────────────────────────
     const [salesmanLeftItems, setSalesmanLeftItems] = useState<any[]>([]);
+    const [salesmanRightItems, setSalesmanRightItems] = useState<any[]>([]);
     const [salesmanLeftSelected, setSalesmanLeftSelected] = useState(new Set<string>());
+    const [salesmanRightSelected, setSalesmanRightSelected] = useState(new Set<string>());
     const [salesmanSearchLeft, setSalesmanSearchLeft] = useState("");
+    const [salesmanSearchRight, setSalesmanSearchRight] = useState("");
 
     // ── Filter/report state ───────────────────────────────────────────────────
     const [dateType, setDateType] = useState<"inv" | "due">("inv");
@@ -148,67 +176,67 @@ const PeriodWisePage: React.FC = () => {
     // ── Track which tabs have been fetched (reset on division change) ─────────
     const [fetchedTabs, setFetchedTabs] = useState<Set<string>>(new Set());
 
+    
+const [generating, setGenerating] = useState(false);
+const [reportError, setReportError] = useState<string | null>(null);
 
-    const [generating, setGenerating] = useState(false);
-    const [reportError, setReportError] = useState<string | null>(null);
 
+const handleGenerate = async () => {
+    if (!division) {
+        setReportError("Please select a Division before generating.");
+        return;
+    }
+    setReportError(null);
+    setGenerating(true);
+    try {
+      const params = {
+   parameter: outstandingList
+        ? "Account_Report_VW_PERIODWISE_OUTSTD_LIST"
+        : dateType === "due" && option === "summary"
+        ? "Account_Report_VW_PERIODWISE_DUEDATE_SUMMARY"
+        : dateType === "due" && option === "detail"
+        ? "Account_Report_VW_PERIODWISE_DUEDATE_DETAIL"
+        : option === "summary"
+        ? "Account_Report_VW_PERIODWISE_INV_SUMMARY"
+        : "Account_Report_VW_PERIODWISE_INV_DETAIL",
+    loginid:  user?.loginid || user?.username || "ADMIN",
+    code1:    user?.company_code || "",
+    code2:    division,
+    code3:    accountRightItems.length > 0 ? accountRightItems.map((r) => r.ac_code).join(",") : "All",
+    code4:    groupRightItems.length > 0 ? groupRightItems.map((r) => r.l4_code).join(",") : "All",
+    code5:    salesmanRightItems.length > 0 ? salesmanRightItems.map((r) => r.salesman_code).join(",") : "All",
+    code6:    formatDateOracle(asOnDate),
+    code7:    dateType,
+    code8:    option,
+    code9:    String(ages[0]),
+    code10:   String(ages[1]),
+    code11:   String(ages[2]),
+    code12:   String(ages[3]),
+    code13:   String(ages[4]),
+    code14:   String(ages[5]),
+    code15:   String(outstandingList),
+    code16:   String(salesmanWise),
+};
 
-    const handleGenerate = async () => {
-        if (!division) {
-            setReportError("Please select a Division before generating.");
-            return;
-        }
-        setReportError(null);
-        setGenerating(true);
-        try {
-            const params = {
-                parameter: outstandingList
-                    ? "Account_Report_VW_PERIODWISE_OUTSTD_LIST"
-                    : dateType === "due" && option === "summary"
-                        ? "Account_Report_VW_PERIODWISE_DUEDATE_SUMMARY"
-                        : dateType === "due" && option === "detail"
-                            ? "Account_Report_VW_PERIODWISE_DUEDATE_DETAIL"
-                            : option === "summary"
-                                ? "Account_Report_VW_PERIODWISE_INV_SUMMARY"
-                                : "Account_Report_VW_PERIODWISE_INV_DETAIL",
-                loginid: user?.loginid || user?.username || "ADMIN",
-                code1: user?.company_code || "",
-                code2: division,
-                code3: accountLeftSelected.size > 0 ? Array.from(accountLeftSelected).join(",") : "All",
-                code4: groupLeftSelected.size > 0 ? Array.from(groupLeftSelected).join(",") : "All",
-                code5: salesmanLeftSelected.size > 0 ? Array.from(salesmanLeftSelected).join(",") : "All",
-                code6: formatDateOracle(asOnDate),
-                code7: dateType,
-                code8: option,
-                code9: String(ages[0]),
-                code10: String(ages[1]),
-                code11: String(ages[2]),
-                code12: String(ages[3]),
-                code13: String(ages[4]),
-                code14: String(ages[5]),
-                code15: String(outstandingList),
-                code16: String(salesmanWise),
-            };
+if (outstandingList) {
+    await openOutstandingListReport(params);
+} else if (dateType === "due" && option === "summary") {
+    await openDuedatewiseSummaryReport(params);
+} else if (dateType === "due" && option === "detail") {
+    await openDuedatewiseDetailReport(params);
+} else if (option === "summary") {
+    await openInvdatewiseSummaryReport(params);
+} else {
+    await openInvdatewiseDetailReport(params);
+}
 
-            if (outstandingList) {
-                await openOutstandingListReport(params);
-            } else if (dateType === "due" && option === "summary") {
-                await openDuedatewiseSummaryReport(params);
-            } else if (dateType === "due" && option === "detail") {
-                await openDuedatewiseDetailReport(params);
-            } else if (option === "summary") {
-                await openInvdatewiseSummaryReport(params);
-            } else {
-                await openInvdatewiseDetailReport(params);
-            }
-
-        } catch (err: any) {
-            setReportError("Failed to generate report. Check console.");
-            console.error(err);
-        } finally {
-            setGenerating(false);
-        }
-    };
+    } catch (err: any) {
+        setReportError("Failed to generate report. Check console.");
+        console.error(err);
+    } finally {
+        setGenerating(false);
+    }
+};
 
     // ── Fetch division list on mount ──────────────────────────────────────────
     useEffect(() => {
@@ -230,12 +258,12 @@ const PeriodWisePage: React.FC = () => {
     useEffect(() => {
         if (!division) return;
 
-        setGroupLeftItems([]);
-        setGroupLeftSelected(new Set());
-        setAccountLeftItems([]);
-        setAccountLeftSelected(new Set());
-        setSalesmanLeftItems([]);
-        setSalesmanLeftSelected(new Set());
+        setGroupLeftItems([]); setGroupRightItems([]);
+        setGroupLeftSelected(new Set()); setGroupRightSelected(new Set());
+        setAccountLeftItems([]); setAccountRightItems([]);
+        setAccountLeftSelected(new Set()); setAccountRightSelected(new Set());
+        setSalesmanLeftItems([]); setSalesmanRightItems([]);
+        setSalesmanLeftSelected(new Set()); setSalesmanRightSelected(new Set());
         setFetchedTabs(new Set());
 
         // Fetch active tab immediately
@@ -247,7 +275,7 @@ const PeriodWisePage: React.FC = () => {
     // ── When tab changes: fetch that tab's data if not yet fetched ────────────
     useEffect(() => {
         if (!division) return;
-        if (fetchedTabs.has(activeTab)) return;
+        if (fetchedTabs.has(activeTab)) return; 
 
         if (activeTab === "acCode") fetchAccounts(division);
         else if (activeTab === "group") fetchGroups(division);
@@ -262,7 +290,9 @@ const PeriodWisePage: React.FC = () => {
                 code2: div,
             });
             setGroupLeftItems(response || []);
+            setGroupRightItems([]);
             setGroupLeftSelected(new Set());
+            setGroupRightSelected(new Set());
             setFetchedTabs((prev) => new Set(prev).add("group"));
         } catch (error) {
             console.error("Group fetch error:", error);
@@ -280,7 +310,9 @@ const PeriodWisePage: React.FC = () => {
                 new Map(response.map((item: any) => [item.ac_code, item])).values()
             );
             setAccountLeftItems(uniqueData as any[]);
+            setAccountRightItems([]);
             setAccountLeftSelected(new Set());
+            setAccountRightSelected(new Set());
             setFetchedTabs((prev) => new Set(prev).add("acCode"));
         } catch (error) {
             console.error("Account fetch error:", error);
@@ -295,7 +327,9 @@ const PeriodWisePage: React.FC = () => {
                 code2: div,
             });
             setSalesmanLeftItems(response || []);
+            setSalesmanRightItems([]);
             setSalesmanLeftSelected(new Set());
+            setSalesmanRightSelected(new Set());
             setFetchedTabs((prev) => new Set(prev).add("salesman"));
         } catch (error) {
             console.error("Salesman fetch error:", error);
@@ -312,7 +346,7 @@ const PeriodWisePage: React.FC = () => {
         });
     };
 
-    // ── Selection helpers ─────────────────────────────────────────────────────
+    // ── Generic transfer helpers ──────────────────────────────────────────────
     const toggleSelection = (
         code: string,
         setSelected: React.Dispatch<React.SetStateAction<Set<string>>>
@@ -324,43 +358,94 @@ const PeriodWisePage: React.FC = () => {
         });
     };
 
-    const toggleAllSelection = (
-        items: any[],
-        selected: Set<string>,
-        setSelected: React.Dispatch<React.SetStateAction<Set<string>>>,
-        keyField: string
+    const moveToRight = (
+        leftItems: any[], rightItems: any[], leftSelected: Set<string>,
+        keyField: string,
+        setLeftItems: any, setRightItems: any, setLeftSelected: any
     ) => {
-        const itemKeys = new Set(items.map((item) => item[keyField]));
-        const allSelected = items.length > 0 && items.every((item) => selected.has(item[keyField]));
-        setSelected(allSelected ? new Set() : itemKeys);
+        if (leftSelected.size === 0) return;
+        const moving = leftItems.filter((i) => leftSelected.has(i[keyField]));
+        setRightItems([...rightItems, ...moving]);
+        setLeftItems(leftItems.filter((i) => !leftSelected.has(i[keyField])));
+        setLeftSelected(new Set());
+    };
+
+    const moveToLeft = (
+        leftItems: any[], rightItems: any[], rightSelected: Set<string>,
+        keyField: string,
+        setLeftItems: any, setRightItems: any, setRightSelected: any
+    ) => {
+        if (rightSelected.size === 0) return;
+        const moving = rightItems.filter((i) => rightSelected.has(i[keyField]));
+        setLeftItems([...leftItems, ...moving]);
+        setRightItems(rightItems.filter((i) => !rightSelected.has(i[keyField])));
+        setRightSelected(new Set());
+    };
+
+    const moveAllToRight = (
+        leftItems: any[], rightItems: any[],
+        setLeftItems: any, setRightItems: any, setLeftSelected: any
+    ) => {
+        setRightItems([...rightItems, ...leftItems]);
+        setLeftItems([]);
+        setLeftSelected(new Set());
+    };
+
+    const moveAllToLeft = (
+        leftItems: any[], rightItems: any[],
+        setLeftItems: any, setRightItems: any, setRightSelected: any
+    ) => {
+        setLeftItems([...leftItems, ...rightItems]);
+        setRightItems([]);
+        setRightSelected(new Set());
     };
 
     // ── Reset ─────────────────────────────────────────────────────────────────
     const handleReset = () => {
+        setGroupLeftItems([...groupLeftItems, ...groupRightItems]);
+        setGroupRightItems([]);
         setGroupLeftSelected(new Set());
+        setGroupRightSelected(new Set());
+        setAccountLeftItems([...accountLeftItems, ...accountRightItems]);
+        setAccountRightItems([]);
         setAccountLeftSelected(new Set());
+        setAccountRightSelected(new Set());
+        setSalesmanLeftItems([...salesmanLeftItems, ...salesmanRightItems]);
+        setSalesmanRightItems([]);
         setSalesmanLeftSelected(new Set());
+        setSalesmanRightSelected(new Set());
         setAges(DEFAULT_AGES);
         setOutstandingList(false);
         setSalesmanWise(false);
         setDateType("inv");
         setOption("detail");
         setAsOnDate(today);
-        setReportError(null);
     };
 
     // ── Filtered lists ────────────────────────────────────────────────────────
     const filteredGroupLeft = groupLeftItems.filter(
         (i) => i.l4_code?.toLowerCase().includes(groupSearchLeft.toLowerCase()) ||
-            i.description?.toLowerCase().includes(groupSearchLeft.toLowerCase())
+               i.description?.toLowerCase().includes(groupSearchLeft.toLowerCase())
+    );
+    const filteredGroupRight = groupRightItems.filter(
+        (i) => i.l4_code?.toLowerCase().includes(groupSearchRight.toLowerCase()) ||
+               i.description?.toLowerCase().includes(groupSearchRight.toLowerCase())
     );
     const filteredAccountLeft = accountLeftItems.filter(
         (i) => i.ac_code?.toLowerCase().includes(accountSearchLeft.toLowerCase()) ||
-            i.ac_name?.toLowerCase().includes(accountSearchLeft.toLowerCase())
+               i.ac_name?.toLowerCase().includes(accountSearchLeft.toLowerCase())
+    );
+    const filteredAccountRight = accountRightItems.filter(
+        (i) => i.ac_code?.toLowerCase().includes(accountSearchRight.toLowerCase()) ||
+               i.ac_name?.toLowerCase().includes(accountSearchRight.toLowerCase())
     );
     const filteredSalesmanLeft = salesmanLeftItems.filter(
         (i) => i.salesman_code?.toLowerCase().includes(salesmanSearchLeft.toLowerCase()) ||
-            i.salesman_name?.toLowerCase().includes(salesmanSearchLeft.toLowerCase())
+               i.salesman_name?.toLowerCase().includes(salesmanSearchLeft.toLowerCase())
+    );
+    const filteredSalesmanRight = salesmanRightItems.filter(
+        (i) => i.salesman_code?.toLowerCase().includes(salesmanSearchRight.toLowerCase()) ||
+               i.salesman_name?.toLowerCase().includes(salesmanSearchRight.toLowerCase())
     );
 
     const filteredDivisions = divisionList.filter((d: any) =>
@@ -376,7 +461,7 @@ const PeriodWisePage: React.FC = () => {
     const formatDateOracle = (date: string) => {
         if (!date) return "";
         const d = new Date(date);
-        const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+        const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
         return `${String(d.getDate()).padStart(2, "0")}-${months[d.getMonth()]}-${d.getFullYear()}`;
     };
 
@@ -394,9 +479,9 @@ const PeriodWisePage: React.FC = () => {
         outstanding_list: outstandingList,
         salesman_wise: salesmanWise,
         division: division || "All",
-        ac_codes: accountLeftSelected.size > 0 ? Array.from(accountLeftSelected).join(",") : "All",
-        l4_codes: groupLeftSelected.size > 0 ? Array.from(groupLeftSelected).join(",") : "All",
-        salesman_codes: salesmanLeftSelected.size > 0 ? Array.from(salesmanLeftSelected).join(",") : "All",
+        ac_codes: accountRightItems.length > 0 ? accountRightItems.map((r) => r.ac_code).join(",") : "All",
+        l4_codes: groupRightItems.length > 0 ? groupRightItems.map((r) => r.l4_code).join(",") : "All",
+        salesman_codes: salesmanRightItems.length > 0 ? salesmanRightItems.map((r) => r.salesman_code).join(",") : "All",
     };
 
     const isDisabledByOutstanding = outstandingList;
@@ -404,7 +489,7 @@ const PeriodWisePage: React.FC = () => {
 
     // ─── Render ───────────────────────────────────────────────────────────────
     return (
-        <div style={{ background: "#f3f4f6", padding: "4px 8px", fontFamily: "system-ui, sans-serif" }}>
+        <div style={{ background: "#f3f4f6", padding: "16px", fontFamily: "system-ui, sans-serif", minHeight: "100%" }}>
             <style>{`
                 .tf-btn:hover { background: #f0f7ff !important; border-color: #185FA5 !important; color: #185FA5 !important; }
                 .tab-btn-r { padding: 7px 18px; border: none; background: none; cursor: pointer; font-size: 12px; font-weight: 500; color: #9ca3af; border-bottom: 2px solid transparent; margin-bottom: -0.5px; }
@@ -418,21 +503,65 @@ const PeriodWisePage: React.FC = () => {
                 .div-option:hover { background: #f0f7ff; }
             `}</style>
 
-            <div style={{ maxWidth: 1080, margin: "0 auto", display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
 
                 {/* ══ Card 1: Filters ══════════════════════════════════════════ */}
-                <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "3px 3px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "20px 24px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
                         <BarChart2 size={18} color="#185FA5" />
                         <span style={{ fontSize: 15, fontWeight: 500, color: "#111827" }}>Period wise report filter</span>
                     </div>
 
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 9, alignItems: "flex-start" }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 20, alignItems: "flex-start" }}>
 
                         {/* Col 1: Date type + As on date + Division */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 260, flex: "1 1 260px" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 260, flex: "1 1 260px" }}>
+
+                            {/* INV / Due date radio */}
+                            <div>
+                                <div style={fieldLabelStyle}>Date type</div>
+                                <div style={{ display: "flex", gap: 16 }}>
+                                    {([["inv", "INV Date wise"], ["due", "Due Date wise"]] as const).map(([val, lbl]) => (
+                                        <label
+                                            key={val}
+                                            style={{
+                                                ...radioLabelStyle,
+                                                opacity: (isDisabledByOutstanding || isDisabledBySalesman) ? 0.45 : 1,
+                                                cursor: (isDisabledByOutstanding || isDisabledBySalesman) ? "not-allowed" : "pointer",
+                                            }}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name="dateType"
+                                                value={val}
+                                                checked={dateType === val}
+                                                disabled={isDisabledByOutstanding || isDisabledBySalesman}
+                                                onChange={() => setDateType(val)}
+                                                style={{ accentColor: "#185FA5" }}
+                                            />
+                                            {lbl}
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* As on date */}
+                            <fieldset style={fieldsetStyle}>
+                                <legend style={legendStyle}>Date</legend>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                    <span style={{ fontSize: 12, color: "#6b7280" }}>As on</span>
+                                    <input
+                                        type="date"
+                                        value={asOnDate}
+                                        onChange={(e) => setAsOnDate(e.target.value)}
+                                        style={{ ...inputStyle, width: 160 }}
+                                    />
+                                </div>
+                            </fieldset>
+
+                            {/* Division searchable dropdown */}
                             <div style={{ position: "relative" }}>
-                                <div style={{ ...fieldLabelStyle, marginBottom: 1 }}>Division</div>
+                                <div style={fieldLabelStyle}>Division</div>
                                 <input
                                     type="text"
                                     placeholder="Search division..."
@@ -470,55 +599,14 @@ const PeriodWisePage: React.FC = () => {
                                     </div>
                                 )}
                             </div>
-                            {/* As on date */}
-                            <fieldset style={fieldsetStyle}>
-                                <legend style={legendStyle}>Date</legend>
-                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                    <span style={{ fontSize: 12, color: "#6b7280" }}>As on</span>
-                                    <input
-                                        type="date"
-                                        value={asOnDate}
-                                        onChange={(e) => setAsOnDate(e.target.value)}
-                                        style={{ ...inputStyle, width: 160 }}
-                                    />
-                                </div>
-                            </fieldset>
                         </div>
 
                         {/* Col 2: Option + Checkboxes */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 220, flex: "1 1 200px" }}>
-
-                            {/* INV / Due date radio */}
-                            <div>
-                                <div style={{ ...fieldLabelStyle, marginBottom: 1 }}>Date type</div>
-                                <div style={{ display: "flex", gap: 16 }}>
-                                    {([["inv", "INV Date wise"], ["due", "Due Date wise"]] as const).map(([val, lbl]) => (
-                                        <label
-                                            key={val}
-                                            style={{
-                                                ...radioLabelStyle,
-                                                opacity: (isDisabledByOutstanding || isDisabledBySalesman) ? 0.45 : 1,
-                                                cursor: (isDisabledByOutstanding || isDisabledBySalesman) ? "not-allowed" : "pointer",
-                                            }}
-                                        >
-                                            <input
-                                                type="radio"
-                                                name="dateType"
-                                                value={val}
-                                                checked={dateType === val}
-                                                disabled={isDisabledByOutstanding || isDisabledBySalesman}
-                                                onChange={() => setDateType(val)}
-                                                style={{ accentColor: "#185FA5" }}
-                                            />
-                                            {lbl}
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 200, flex: "1 1 200px" }}>
 
                             <fieldset style={fieldsetStyle}>
                                 <legend style={legendStyle}>Option</legend>
-                                <div style={{ display: "flex", flexDirection: "row", gap: 16 }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                                     {([["summary", "Summary"], ["detail", "Detail"]] as const).map(([val, lbl]) => (
                                         <label
                                             key={val}
@@ -544,8 +632,8 @@ const PeriodWisePage: React.FC = () => {
                             </fieldset>
 
                             <div>
-                                <div style={{ ...fieldLabelStyle, marginBottom: 1 }}>Options</div>
-                                <div style={{ display: "flex", flexDirection: "row", gap: 16 }}>
+                                <div style={fieldLabelStyle}>Options</div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                                     <label style={{
                                         ...checkRowStyle,
                                         opacity: isDisabledBySalesman ? 0.45 : 1,
@@ -589,7 +677,7 @@ const PeriodWisePage: React.FC = () => {
 
                         {/* Col 3: Age periods */}
                         <div style={{ minWidth: 220, flex: "1 1 220px" }}>
-                            <div style={{ ...fieldLabelStyle, marginBottom: 1 }}>Age periods</div>
+                            <div style={fieldLabelStyle}>Age periods</div>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 12px" }}>
                                 {ages.map((age, idx) => (
                                     <div key={idx} style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -608,19 +696,13 @@ const PeriodWisePage: React.FC = () => {
                             </div>
                         </div>
                     </div>
-
-                    {reportError && (
-                        <div style={{ marginTop: 10, fontSize: 12, color: "#dc2626", background: "#fef2f2", border: "0.5px solid #fecaca", borderRadius: 6, padding: "6px 12px" }}>
-                            {reportError}
-                        </div>
-                    )}
                 </div>
 
-                {/* ══ Card 2: A/c Code / Group / Salesman list ══════════════════ */}
-                <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "0px 10px" }}>
+                {/* ══ Card 2: Transfer tables ══════════════════════════════════ */}
+                <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "20px 24px" }}>
 
                     {/* Tabs */}
-                    <div style={{ display: "flex", borderBottom: "0.5px solid #e5e7eb", marginBottom: 10 }}>
+                    <div style={{ display: "flex", borderBottom: "0.5px solid #e5e7eb", marginBottom: 14 }}>
                         {([["acCode", "A/c Code"], ["group", "Group"], ["salesman", "Salesman"]] as [typeof activeTab, string][]).map(([tab, label]) => (
                             <button
                                 key={tab}
@@ -632,220 +714,247 @@ const PeriodWisePage: React.FC = () => {
                         ))}
                     </div>
 
-                    {/* ── A/c Code tab ── */}
-                    {activeTab === "acCode" && (
-                        <div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                                <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                                    Accounts
-                                </span>
-                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                    {accountLeftSelected.size > 0 && (
-                                        <span style={badgeStyle}>{accountLeftSelected.size} selected</span>
-                                    )}
-                                    <span style={badgeStyle}>{accountLeftItems.length} total</span>
+                    {/* ── Group tab ── */}
+                    {activeTab === "group" && (
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 44px 1fr", gap: 10 }}>
+                            {/* Available groups */}
+                            <div>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                                    <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Available groups</span>
+                                    <span style={badgeStyle}>{groupLeftItems.length}</span>
+                                </div>
+                                <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden" }}>
+                                    <input
+                                        type="text"
+                                        placeholder="Search groups..."
+                                        value={groupSearchLeft}
+                                        onChange={(e) => setGroupSearchLeft(e.target.value)}
+                                        style={{ width: "100%", border: "none", borderBottom: "0.5px solid #e5e7eb", padding: "5px 9px", fontSize: 12, boxSizing: "border-box", outline: "none" }}
+                                    />
+                                    <div style={{ maxHeight: 260, overflowY: "auto" }}>
+                                        <table>
+                                            <thead><tr><th style={{ ...thStyle, width: 90 }}>L4 Code</th><th style={thStyle}>Description</th></tr></thead>
+                                            <tbody>
+                                                {filteredGroupLeft.map((row) => (
+                                                    <tr key={row.l4_code} style={rowStyle(groupLeftSelected.has(row.l4_code))} onClick={() => toggleSelection(row.l4_code, setGroupLeftSelected)}>
+                                                        <td style={tdStyle}>{row.l4_code}</td>
+                                                        <td style={tdStyle}>{row.description}</td>
+                                                    </tr>
+                                                ))}
+                                                {filteredGroupLeft.length === 0 && (
+                                                    <tr><td colSpan={2} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af", padding: "16px" }}>No data</td></tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
-                            <div style={{ marginBottom: 8 }}>
-                                <input
-                                    type="text"
-                                    placeholder="Search accounts..."
-                                    value={accountSearchLeft}
-                                    onChange={(e) => setAccountSearchLeft(e.target.value)}
-                                    style={{ ...inputStyle, fontSize: 12 }}
-                                />
+
+                            {/* Arrows */}
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, paddingTop: 28 }}>
+                                <button className="tf-btn" style={transferBtnStyle} onClick={() => moveAllToRight(groupLeftItems, groupRightItems, setGroupLeftItems, setGroupRightItems, setGroupLeftSelected)}><ChevronsRight size={14} /></button>
+                                <button className="tf-btn" style={transferBtnStyle} onClick={() => moveToRight(groupLeftItems, groupRightItems, groupLeftSelected, "l4_code", setGroupLeftItems, setGroupRightItems, setGroupLeftSelected)}><ChevronRight size={14} /></button>
+                                <button className="tf-btn" style={transferBtnStyle} onClick={() => moveToLeft(groupLeftItems, groupRightItems, groupRightSelected, "l4_code", setGroupLeftItems, setGroupRightItems, setGroupRightSelected)}><ChevronLeft size={14} /></button>
+                                <button className="tf-btn" style={transferBtnStyle} onClick={() => moveAllToLeft(groupLeftItems, groupRightItems, setGroupLeftItems, setGroupRightItems, setGroupRightSelected)}><ChevronsLeft size={14} /></button>
                             </div>
-                            <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 150, overflowY: "auto" }}>
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th style={{ ...thStyle, width: 36 }}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={accountLeftItems.length > 0 && accountLeftItems.every((i) => accountLeftSelected.has(i.ac_code))}
-                                                    onChange={() => toggleAllSelection(accountLeftItems, accountLeftSelected, setAccountLeftSelected, "ac_code")}
-                                                    style={{ accentColor: "#fff", cursor: "pointer" }}
-                                                />
-                                            </th>
-                                            <th style={{ ...thStyle, width: 100 }}>A/c Code</th>
-                                            <th style={thStyle}>AC Name</th>
-                                            <th style={{ ...thStyle, width: 70 }}>Currency</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {filteredAccountLeft.map((row) => (
-                                            <tr
-                                                key={row.ac_code}
-                                                style={rowStyle(accountLeftSelected.has(row.ac_code))}
-                                                onClick={() => toggleSelection(row.ac_code, setAccountLeftSelected)}
-                                            >
-                                                <td style={{ ...tdStyle, width: 36 }}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={accountLeftSelected.has(row.ac_code)}
-                                                        onChange={() => toggleSelection(row.ac_code, setAccountLeftSelected)}
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        style={{ accentColor: "#185FA5", cursor: "pointer" }}
-                                                    />
-                                                </td>
-                                                <td style={tdStyle}>{row.ac_code}</td>
-                                                <td style={tdStyle}>{row.ac_name}</td>
-                                                <td style={tdStyle}>{row.curr_code}</td>
-                                            </tr>
-                                        ))}
-                                        {filteredAccountLeft.length === 0 && (
-                                            <tr><td colSpan={4} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af", padding: 16 }}>
-                                                {division ? "No data" : "Select a division first"}
-                                            </td></tr>
-                                        )}
-                                    </tbody>
-                                </table>
+
+                            {/* Selected groups */}
+                            <div>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                                    <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Selected groups</span>
+                                    <span style={badgeStyle}>{groupRightItems.length}</span>
+                                </div>
+                                <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden" }}>
+                                    <input
+                                        type="text"
+                                        placeholder="Search groups..."
+                                        value={groupSearchRight}
+                                        onChange={(e) => setGroupSearchRight(e.target.value)}
+                                        style={{ width: "100%", border: "none", borderBottom: "0.5px solid #e5e7eb", padding: "5px 9px", fontSize: 12, boxSizing: "border-box", outline: "none" }}
+                                    />
+                                    <div style={{ maxHeight: 260, overflowY: "auto" }}>
+                                        <table>
+                                            <thead><tr><th style={{ ...thStyle, width: 90 }}>L4 Code</th><th style={thStyle}>Description</th></tr></thead>
+                                            <tbody>
+                                                {filteredGroupRight.map((row) => (
+                                                    <tr key={row.l4_code} style={rowStyle(groupRightSelected.has(row.l4_code))} onClick={() => toggleSelection(row.l4_code, setGroupRightSelected)}>
+                                                        <td style={tdStyle}>{row.l4_code}</td>
+                                                        <td style={tdStyle}>{row.description}</td>
+                                                    </tr>
+                                                ))}
+                                                {filteredGroupRight.length === 0 && (
+                                                    <tr><td colSpan={2} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af", padding: "16px" }}>No data</td></tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}
 
-                    {/* ── Group tab ── */}
-                    {activeTab === "group" && (
-                        <div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                                <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                                    Groups
-                                </span>
-                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                    {groupLeftSelected.size > 0 && (
-                                        <span style={badgeStyle}>{groupLeftSelected.size} selected</span>
-                                    )}
-                                    <span style={badgeStyle}>{groupLeftItems.length} total</span>
+                    {/* ── A/c Code tab ── */}
+                    {activeTab === "acCode" && (
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 44px 1fr", gap: 10 }}>
+                            {/* Available accounts */}
+                            <div>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                                    <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Available accounts</span>
+                                    <span style={badgeStyle}>{accountLeftItems.length}</span>
+                                </div>
+                                <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden" }}>
+                                    <input
+                                        type="text"
+                                        placeholder="Search accounts..."
+                                        value={accountSearchLeft}
+                                        onChange={(e) => setAccountSearchLeft(e.target.value)}
+                                        style={{ width: "100%", border: "none", borderBottom: "0.5px solid #e5e7eb", padding: "5px 9px", fontSize: 12, boxSizing: "border-box", outline: "none" }}
+                                    />
+                                    <div style={{ maxHeight: 260, overflowY: "auto" }}>
+                                        <table>
+                                            <thead><tr><th style={{ ...thStyle, width: 90 }}>A/c Code</th><th style={thStyle}>AC Name</th><th style={{ ...thStyle, width: 70 }}>Currency</th></tr></thead>
+                                            <tbody>
+                                                {filteredAccountLeft.map((row) => (
+                                                    <tr key={row.ac_code} style={rowStyle(accountLeftSelected.has(row.ac_code))} onClick={() => toggleSelection(row.ac_code, setAccountLeftSelected)}>
+                                                        <td style={tdStyle}>{row.ac_code}</td>
+                                                        <td style={tdStyle}>{row.ac_name}</td>
+                                                        <td style={tdStyle}>{row.curr_code}</td>
+                                                    </tr>
+                                                ))}
+                                                {filteredAccountLeft.length === 0 && (
+                                                    <tr><td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af", padding: "16px" }}>No data</td></tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
-                            <div style={{ marginBottom: 8 }}>
-                                <input
-                                    type="text"
-                                    placeholder="Search groups..."
-                                    value={groupSearchLeft}
-                                    onChange={(e) => setGroupSearchLeft(e.target.value)}
-                                    style={{ ...inputStyle, fontSize: 12 }}
-                                />
+
+                            {/* Arrows */}
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, paddingTop: 28 }}>
+                                <button className="tf-btn" style={transferBtnStyle} onClick={() => moveAllToRight(accountLeftItems, accountRightItems, setAccountLeftItems, setAccountRightItems, setAccountLeftSelected)}><ChevronsRight size={14} /></button>
+                                <button className="tf-btn" style={transferBtnStyle} onClick={() => moveToRight(accountLeftItems, accountRightItems, accountLeftSelected, "ac_code", setAccountLeftItems, setAccountRightItems, setAccountLeftSelected)}><ChevronRight size={14} /></button>
+                                <button className="tf-btn" style={transferBtnStyle} onClick={() => moveToLeft(accountLeftItems, accountRightItems, accountRightSelected, "ac_code", setAccountLeftItems, setAccountRightItems, setAccountRightSelected)}><ChevronLeft size={14} /></button>
+                                <button className="tf-btn" style={transferBtnStyle} onClick={() => moveAllToLeft(accountLeftItems, accountRightItems, setAccountLeftItems, setAccountRightItems, setAccountRightSelected)}><ChevronsLeft size={14} /></button>
                             </div>
-                            <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 150, overflowY: "auto" }}>
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th style={{ ...thStyle, width: 36 }}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={groupLeftItems.length > 0 && groupLeftItems.every((i) => groupLeftSelected.has(i.l4_code))}
-                                                    onChange={() => toggleAllSelection(groupLeftItems, groupLeftSelected, setGroupLeftSelected, "l4_code")}
-                                                    style={{ accentColor: "#fff", cursor: "pointer" }}
-                                                />
-                                            </th>
-                                            <th style={{ ...thStyle, width: 100 }}>L4 Code</th>
-                                            <th style={thStyle}>Description</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {filteredGroupLeft.map((row) => (
-                                            <tr
-                                                key={row.l4_code}
-                                                style={rowStyle(groupLeftSelected.has(row.l4_code))}
-                                                onClick={() => toggleSelection(row.l4_code, setGroupLeftSelected)}
-                                            >
-                                                <td style={{ ...tdStyle, width: 36 }}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={groupLeftSelected.has(row.l4_code)}
-                                                        onChange={() => toggleSelection(row.l4_code, setGroupLeftSelected)}
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        style={{ accentColor: "#185FA5", cursor: "pointer" }}
-                                                    />
-                                                </td>
-                                                <td style={tdStyle}>{row.l4_code}</td>
-                                                <td style={tdStyle}>{row.description}</td>
-                                            </tr>
-                                        ))}
-                                        {filteredGroupLeft.length === 0 && (
-                                            <tr><td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af", padding: 16 }}>
-                                                {division ? "No data" : "Select a division first"}
-                                            </td></tr>
-                                        )}
-                                    </tbody>
-                                </table>
+
+                            {/* Selected accounts */}
+                            <div>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                                    <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Selected accounts</span>
+                                    <span style={badgeStyle}>{accountRightItems.length}</span>
+                                </div>
+                                <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden" }}>
+                                    <input
+                                        type="text"
+                                        placeholder="Search accounts..."
+                                        value={accountSearchRight}
+                                        onChange={(e) => setAccountSearchRight(e.target.value)}
+                                        style={{ width: "100%", border: "none", borderBottom: "0.5px solid #e5e7eb", padding: "5px 9px", fontSize: 12, boxSizing: "border-box", outline: "none" }}
+                                    />
+                                    <div style={{ maxHeight: 260, overflowY: "auto" }}>
+                                        <table>
+                                            <thead><tr><th style={{ ...thStyle, width: 90 }}>A/c Code</th><th style={thStyle}>AC Name</th><th style={{ ...thStyle, width: 70 }}>Currency</th></tr></thead>
+                                            <tbody>
+                                                {filteredAccountRight.map((row) => (
+                                                    <tr key={row.ac_code} style={rowStyle(accountRightSelected.has(row.ac_code))} onClick={() => toggleSelection(row.ac_code, setAccountRightSelected)}>
+                                                        <td style={tdStyle}>{row.ac_code}</td>
+                                                        <td style={tdStyle}>{row.ac_name}</td>
+                                                        <td style={tdStyle}>{row.curr_code}</td>
+                                                    </tr>
+                                                ))}
+                                                {filteredAccountRight.length === 0 && (
+                                                    <tr><td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af", padding: "16px" }}>No data</td></tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}
 
                     {/* ── Salesman tab ── */}
                     {activeTab === "salesman" && (
-                        <div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                                <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                                    Salesman
-                                </span>
-                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                    {salesmanLeftSelected.size > 0 && (
-                                        <span style={badgeStyle}>{salesmanLeftSelected.size} selected</span>
-                                    )}
-                                    <span style={badgeStyle}>{salesmanLeftItems.length} total</span>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 44px 1fr", gap: 10 }}>
+                            {/* Available salesman */}
+                            <div>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                                    <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Available salesman</span>
+                                    <span style={badgeStyle}>{salesmanLeftItems.length}</span>
+                                </div>
+                                <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden" }}>
+                                    <input
+                                        type="text"
+                                        placeholder="Search salesman..."
+                                        value={salesmanSearchLeft}
+                                        onChange={(e) => setSalesmanSearchLeft(e.target.value)}
+                                        style={{ width: "100%", border: "none", borderBottom: "0.5px solid #e5e7eb", padding: "5px 9px", fontSize: 12, boxSizing: "border-box", outline: "none" }}
+                                    />
+                                    <div style={{ maxHeight: 260, overflowY: "auto" }}>
+                                        <table>
+                                            <thead><tr><th style={{ ...thStyle, width: 110 }}>Salesman Code</th><th style={thStyle}>Salesman Name</th></tr></thead>
+                                            <tbody>
+                                                {filteredSalesmanLeft.map((row) => (
+                                                    <tr key={row.salesman_code} style={rowStyle(salesmanLeftSelected.has(row.salesman_code))} onClick={() => toggleSelection(row.salesman_code, setSalesmanLeftSelected)}>
+                                                        <td style={tdStyle}>{row.salesman_code}</td>
+                                                        <td style={tdStyle}>{row.salesman_name}</td>
+                                                    </tr>
+                                                ))}
+                                                {filteredSalesmanLeft.length === 0 && (
+                                                    <tr><td colSpan={2} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af", padding: "16px" }}>No data</td></tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
-                            <div style={{ marginBottom: 8 }}>
-                                <input
-                                    type="text"
-                                    placeholder="Search salesman..."
-                                    value={salesmanSearchLeft}
-                                    onChange={(e) => setSalesmanSearchLeft(e.target.value)}
-                                    style={{ ...inputStyle, fontSize: 12 }}
-                                />
+
+                            {/* Arrows */}
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, paddingTop: 28 }}>
+                                <button className="tf-btn" style={transferBtnStyle} onClick={() => moveAllToRight(salesmanLeftItems, salesmanRightItems, setSalesmanLeftItems, setSalesmanRightItems, setSalesmanLeftSelected)}><ChevronsRight size={14} /></button>
+                                <button className="tf-btn" style={transferBtnStyle} onClick={() => moveToRight(salesmanLeftItems, salesmanRightItems, salesmanLeftSelected, "salesman_code", setSalesmanLeftItems, setSalesmanRightItems, setSalesmanLeftSelected)}><ChevronRight size={14} /></button>
+                                <button className="tf-btn" style={transferBtnStyle} onClick={() => moveToLeft(salesmanLeftItems, salesmanRightItems, salesmanRightSelected, "salesman_code", setSalesmanLeftItems, setSalesmanRightItems, setSalesmanRightSelected)}><ChevronLeft size={14} /></button>
+                                <button className="tf-btn" style={transferBtnStyle} onClick={() => moveAllToLeft(salesmanLeftItems, salesmanRightItems, setSalesmanLeftItems, setSalesmanRightItems, setSalesmanRightSelected)}><ChevronsLeft size={14} /></button>
                             </div>
-                            <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 150, overflowY: "auto" }}>
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th style={{ ...thStyle, width: 36 }}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={salesmanLeftItems.length > 0 && salesmanLeftItems.every((i) => salesmanLeftSelected.has(i.salesman_code))}
-                                                    onChange={() => toggleAllSelection(salesmanLeftItems, salesmanLeftSelected, setSalesmanLeftSelected, "salesman_code")}
-                                                    style={{ accentColor: "#fff", cursor: "pointer" }}
-                                                />
-                                            </th>
-                                            <th style={{ ...thStyle, width: 110 }}>Salesman Code</th>
-                                            <th style={thStyle}>Salesman Name</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {filteredSalesmanLeft.map((row) => (
-                                            <tr
-                                                key={row.salesman_code}
-                                                style={rowStyle(salesmanLeftSelected.has(row.salesman_code))}
-                                                onClick={() => toggleSelection(row.salesman_code, setSalesmanLeftSelected)}
-                                            >
-                                                <td style={{ ...tdStyle, width: 36 }}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={salesmanLeftSelected.has(row.salesman_code)}
-                                                        onChange={() => toggleSelection(row.salesman_code, setSalesmanLeftSelected)}
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        style={{ accentColor: "#185FA5", cursor: "pointer" }}
-                                                    />
-                                                </td>
-                                                <td style={tdStyle}>{row.salesman_code}</td>
-                                                <td style={tdStyle}>{row.salesman_name}</td>
-                                            </tr>
-                                        ))}
-                                        {filteredSalesmanLeft.length === 0 && (
-                                            <tr><td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af", padding: 16 }}>
-                                                {division ? "No data" : "Select a division first"}
-                                            </td></tr>
-                                        )}
-                                    </tbody>
-                                </table>
+
+                            {/* Selected salesman */}
+                            <div>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                                    <span style={{ fontSize: 11, fontWeight: 500, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Selected salesman</span>
+                                    <span style={badgeStyle}>{salesmanRightItems.length}</span>
+                                </div>
+                                <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden" }}>
+                                    <input
+                                        type="text"
+                                        placeholder="Search salesman..."
+                                        value={salesmanSearchRight}
+                                        onChange={(e) => setSalesmanSearchRight(e.target.value)}
+                                        style={{ width: "100%", border: "none", borderBottom: "0.5px solid #e5e7eb", padding: "5px 9px", fontSize: 12, boxSizing: "border-box", outline: "none" }}
+                                    />
+                                    <div style={{ maxHeight: 260, overflowY: "auto" }}>
+                                        <table>
+                                            <thead><tr><th style={{ ...thStyle, width: 110 }}>Salesman Code</th><th style={thStyle}>Salesman Name</th></tr></thead>
+                                            <tbody>
+                                                {filteredSalesmanRight.map((row) => (
+                                                    <tr key={row.salesman_code} style={rowStyle(salesmanRightSelected.has(row.salesman_code))} onClick={() => toggleSelection(row.salesman_code, setSalesmanRightSelected)}>
+                                                        <td style={tdStyle}>{row.salesman_code}</td>
+                                                        <td style={tdStyle}>{row.salesman_name}</td>
+                                                    </tr>
+                                                ))}
+                                                {filteredSalesmanRight.length === 0 && (
+                                                    <tr><td colSpan={2} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af", padding: "16px" }}>No data</td></tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}
 
                     {/* Action bar */}
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8, paddingTop: 8, borderTop: "0.5px solid #e5e7eb" }}>
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16, paddingTop: 14, borderTop: "0.5px solid #e5e7eb" }}>
                         <button
                             className="action-btn"
                             onClick={handleReset}
@@ -855,20 +964,20 @@ const PeriodWisePage: React.FC = () => {
                         </button>
                         <button
                             className="action-btn-primary"
-                            onClick={handleGenerate}
+                            onClick={handleGenerate}         
                             disabled={generating}
-                            style={{ padding: "7px 16px", border: "0.5px solid #185FA5", background: "#185FA5", cursor: generating ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#fff", opacity: generating ? 0.7 : 1 }}
+                            style={{ padding: "7px 16px", border: "0.5px solid #185FA5", background: "#185FA5", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#fff" }}
                         >
                             {generating
-                                ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Generating...</>
-                                : <><Printer size={13} /> Generate report</>
-                            }
+        ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Generating...</>
+        : <><Printer size={13} /> Generate report</>
+    }
                         </button>
                     </div>
                 </div>
             </div>
 
-
+            
         </div>
     );
 };
