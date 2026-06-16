@@ -146,7 +146,7 @@ export function LookupField({
   };
 
   const selectRow = (row: LookupRow) => {
-    const rowValue = String(getLookupValue(row, valueField) || "");
+    const rowValue = String(getLookupValue(row, valueField) ?? "");
     if (multiSelect) {
       const selected = selectedValues.includes(rowValue);
       const nextValues = selected
@@ -166,11 +166,16 @@ export function LookupField({
     displayValue ||
     (multiSelect
       ? rows
-          .filter((row) => selectedValues.includes(String(getLookupValue(row, valueField) || "")))
+          .filter((row) => selectedValues.includes(String(getLookupValue(row, valueField) ?? "")))
           .map((row) => getLookupText(row, displayFields.length ? displayFields : [valueField]))
           .join(", ") || value || "None"
       : value
-      ? getLookupText({ [valueField]: value }, displayFields.length ? displayFields : [valueField])
+      ? getLookupText(
+          rows.find((row) => String(getLookupValue(row, valueField) ?? "") === String(value)) || {
+            [valueField]: value,
+          },
+          displayFields.length ? displayFields : [valueField],
+        ) || String(value)
       : "None");
 
   return (
@@ -273,7 +278,7 @@ export function LookupField({
                     </TableRow>
                   ) : (
                     pagedRows.map((row, index) => {
-                      const rowValue = String(getLookupValue(row, valueField) || "");
+                      const rowValue = String(getLookupValue(row, valueField) ?? "");
                       const selected = multiSelect
                         ? selectedValues.includes(rowValue)
                         : rowValue === value;
