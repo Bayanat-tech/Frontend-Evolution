@@ -11,10 +11,15 @@ import {
     Check,
     ChevronDown as ChevronDownSmall,
     X,
+    FileSpreadsheet,
+    RefreshCw,
 } from "lucide-react";
 import { getDynamicLookupaccount } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
-import { openDNSummaryReport } from "../../../api/transactions";
+import {
+    getDnSummaryReportHtml,
+    getDnSummaryReportExcelDownload,
+} from "../../../api/transactions";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,7 +50,7 @@ const inputStyle: React.CSSProperties = {
     boxSizing: "border-box",
 };
 
-// ─── Generic lookup fetcher (matches Visa page pattern) ───────────────────────
+// ─── Generic lookup fetcher ───────────────────────────────────────────────────
 
 const fetchLookup = async (
     parameter: string,
@@ -55,7 +60,6 @@ const fetchLookup = async (
     code3: string,
     codeKey: string,
     nameKey: string,
-
 ): Promise<LookupOption[]> => {
     try {
         const res = await getDynamicLookupaccount({
@@ -67,12 +71,10 @@ const fetchLookup = async (
             code4: "",
             number1: 0, number2: 0, number3: 0, number4: 0,
             date1: null, date2: null, date3: null, date4: null,
-            
         });
 
         if (Array.isArray(res) && res.length > 0) {
             console.log(`[${parameter}] First record keys:`, Object.keys(res[0]));
-            console.log(`[${parameter}] First record sample:`, res[0]);
         } else {
             console.warn(`[${parameter}] Empty or non-array response:`, res);
         }
@@ -247,7 +249,6 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
         <div ref={containerRef} style={{ position: "relative" }}>
             <div style={fieldLabelStyle}>{label}</div>
 
-            {/* Trigger box */}
             <div
                 onClick={() => !disabled && setOpen((p) => !p)}
                 style={{
@@ -303,14 +304,12 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
                 />
             </div>
 
-            {/* Dropdown panel */}
             {open && !disabled && (
                 <div style={{
                     position: "absolute", zIndex: 300, top: "calc(100% + 2px)", left: 0, right: 0,
                     background: "#fff", border: "0.5px solid #d1d5db", borderRadius: 6,
                     boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
                 }}>
-                    {/* Search */}
                     <div style={{ padding: "8px 10px", borderBottom: "0.5px solid #f3f4f6" }}>
                         <input
                             type="text"
@@ -322,7 +321,6 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
                         />
                     </div>
 
-                    {/* Select all */}
                     {options.length > 0 && (
                         <div
                             className="dd-option"
@@ -347,7 +345,6 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
                         </div>
                     )}
 
-                    {/* Options list */}
                     <div style={{ maxHeight: 200, overflowY: "auto" }}>
                         {filtered.length === 0 ? (
                             <div style={{ padding: "10px 12px", fontSize: 12, color: "#9ca3af", textAlign: "center" }}>
@@ -382,7 +379,6 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
                         )}
                     </div>
 
-                    {/* Footer */}
                     {selected.length > 0 && (
                         <div style={{
                             padding: "6px 12px", borderTop: "0.5px solid #f3f4f6",
@@ -430,40 +426,49 @@ export default function DNSummaryReportPage() {
     const [loadingGroups, setLoadingGroups] = useState(false);
     const [loadingProducts, setLoadingProducts] = useState(false);
 
+    // ── Report viewer state ───────────────────────────────────────────────────
+    const [reportHtml, setReportHtml] = useState<string>("");
+    const [excelLoading, setExcelLoading] = useState(false);
+
+    const iframeRef = useRef<HTMLIFrameElement>(null);
+    const lastParamsRef = useRef<{
+        prinCode: string;
+        groupCode: string;
+        prodCode: string;
+    } | null>(null);
+
+    // ── Derived flags ─────────────────────────────────────────────────────────
+    // All 3 fields must be selected: principal, group, and at least 1 product
+    const allFieldsSelected = !!principal && !!group && selectedProducts.length > 0;
+    const reportReady = !generating && !reportError && !!reportHtml;
+
     // ── Load principals on mount ──────────────────────────────────────────────
-    // dprincipal SQL: WHERE company_code = P_CODE1
-    // → code1 = companyCode, code2 = "", code3 = ""
     useEffect(() => {
         fetchLookup(
             "WMS_Stock_principal",
             loginId,
             companyCode,
-            "",   // code2 — not used by dprincipal
-            "",   // code3 — not used by dprincipal
+            "",
+            "",
             "prin_code",
             "prin_name",
-          
         ).then(setPrincipalOptions);
     }, [companyCode, loginId]);
 
     // ── Load groups when principal changes ────────────────────────────────────
-    // dprodgroup SQL: WHERE company_code = P_CODE1 AND prin_code = P_CODE2
-    // → code1 = companyCode, code2 = principal.code, code3 = ""
     useEffect(() => {
         setGroup(null);
         setGroupOptions([]);
         setSelectedProducts([]);
         setProductOptions([]);
-
         if (!principal) return;
-
         setLoadingGroups(true);
         fetchLookup(
             "WMS_Stock_prodgroup",
             loginId,
             companyCode,
-            principal.code,  // code2 = prin_code
-            "",              // code3 — not used by WMS_Stock_prodgroup
+            principal.code,
+            "",
             "group_code",
             "group_name"
         ).then((opts) => {
@@ -473,24 +478,17 @@ export default function DNSummaryReportPage() {
     }, [principal]);
 
     // ── Load products when group changes ──────────────────────────────────────
-    // WMS_Stock_product SQL: WHERE company_code = P_CODE1
-    //                 AND prin_code   = P_CODE2
-    //                 AND group_code  = P_CODE3   ← THIS WAS THE BUG
-    // → code1 = companyCode, code2 = principal.code, code3 = group.code
     useEffect(() => {
         setSelectedProducts([]);
         setProductOptions([]);
-
-        // Both principal AND group required — SQL filters on all three codes
         if (!principal || !group) return;
-
         setLoadingProducts(true);
         fetchLookup(
             "WMS_Stock_product",
             loginId,
             companyCode,
-            principal.code,  // code2 = prin_code
-            group.code,      // code3 = group_code  ← THE FIX
+            principal.code,
+            group.code,
             "prod_code",
             "prod_name"
         ).then((opts) => {
@@ -505,23 +503,34 @@ export default function DNSummaryReportPage() {
         setGroup(null);
         setSelectedProducts([]);
         setReportError(null);
+        setReportHtml("");
+        lastParamsRef.current = null;
     };
 
     // ── Generate ──────────────────────────────────────────────────────────────
     const handleGenerate = async () => {
+        if (!allFieldsSelected) return;
         setReportError(null);
+        setReportHtml("");
         setGenerating(true);
 
+        const params = {
+            prinCode:  principal!.code,
+            groupCode: group!.code,
+            prodCode:  selectedProducts.map((p) => p.code).join(","),
+        };
+        lastParamsRef.current = params;
+
         try {
-            await openDNSummaryReport({
+            const html = await getDnSummaryReportHtml({
                 parameter: "WMS_Stock_DN_Summary_Report",
-                loginid: loginId,
-                code1: companyCode,
-                code2: principal?.code ?? "",
-                code3: group?.code ?? "",
-                // Products passed as comma-separated string
-                code4: selectedProducts.map((p) => p.code).join(","),
+                loginid:   loginId,
+                code1:     companyCode,
+                code2:     params.prinCode,
+                code3:     params.groupCode,
+                code4:     params.prodCode,
             });
+            setReportHtml(html);
         } catch (err: any) {
             setReportError(err?.message ?? "Failed to generate report. Please try again.");
             console.error(err);
@@ -530,46 +539,128 @@ export default function DNSummaryReportPage() {
         }
     };
 
+    // ── Print ─────────────────────────────────────────────────────────────────
+    const handlePrint = () => {
+        iframeRef.current?.contentWindow?.postMessage("print", "*");
+    };
+
+    // ── Excel export ──────────────────────────────────────────────────────────
+    const handleExcel = async () => {
+        if (!lastParamsRef.current) return;
+        setExcelLoading(true);
+        try {
+            await getDnSummaryReportExcelDownload({
+                parameter: "WMS_Stock_DN_Summary_Report",
+                loginid:   loginId,
+                code1:     companyCode,
+                code2:     lastParamsRef.current.prinCode,
+                code3:     lastParamsRef.current.groupCode,
+                code4:     lastParamsRef.current.prodCode,
+            });
+        } catch (err) {
+            console.error("Excel export error:", err);
+        } finally {
+            setExcelLoading(false);
+        }
+    };
+
+    // ── Shared disabled button style helper ───────────────────────────────────
+    const disabledStyle = (base: React.CSSProperties, isDisabled: boolean): React.CSSProperties => ({
+        ...base,
+        opacity:       isDisabled ? 0.45 : 1,
+        cursor:        isDisabled ? "not-allowed" : "pointer",
+        pointerEvents: isDisabled ? "none" : "auto",
+    });
+
     // ─── Render ───────────────────────────────────────────────────────────────
     return (
         <div style={{ background: "#f3f4f6", padding: "16px", fontFamily: "system-ui, sans-serif", minHeight: "100%" }}>
             <style>{`
-                .action-btn:hover          { background: #f9fafb !important; }
-                .action-btn-primary:hover  { background: #0C447C !important; border-color: #0C447C !important; }
-                .dd-option:hover           { background: #f0f7ff; }
-                .collapse-btn:hover        { background: #f0f7ff !important; }
-                @keyframes spin            { to { transform: rotate(360deg); } }
+                .action-btn:hover                           { background: #f9fafb !important; }
+                .action-btn-primary:not(:disabled):hover   { background: #0C447C !important; border-color: #0C447C !important; }
+                .action-btn-green:not(:disabled):hover     { background: #15693c !important; border-color: #15693c !important; }
+                .action-btn-outline:not(:disabled):hover   { background: #f0f7ff !important; }
+                .dd-option:hover                            { background: #f0f7ff; }
+                .collapse-btn:hover                         { background: #f0f7ff !important; }
+                @keyframes spin                             { to { transform: rotate(360deg); } }
             `}</style>
 
             <div style={{ maxWidth: 900, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
 
-                {/* ══ Card ══════════════════════════════════════════════════════ */}
+                {/* ══ Filter Card ═══════════════════════════════════════════════ */}
                 <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
 
-                    {/* Card header */}
+                    {/* ── Card header: title + Print/Excel + collapse toggle ── */}
                     <div
                         style={{
                             display: "flex", alignItems: "center", justifyContent: "space-between",
-                            padding: "16px 24px", cursor: "pointer",
+                            padding: "14px 20px",
                             borderBottom: filtersOpen ? "0.5px solid #e5e7eb" : "none",
                         }}
-                        onClick={() => setFiltersOpen((p) => !p)}
                     >
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        {/* Left: icon + title — clicking this toggles collapse */}
+                        <div
+                            style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", flex: 1 }}
+                            onClick={() => setFiltersOpen((p) => !p)}
+                        >
                             <BarChart2 size={18} color="#185FA5" />
                             <span style={{ fontSize: 15, fontWeight: 500, color: "#111827" }}>
-                                DN Summary Report Filter
+                                DN Summary Report
                             </span>
                         </div>
-                        <button
-                            className="collapse-btn"
-                            style={{
-                                background: "none", border: "none", cursor: "pointer",
-                                padding: "4px 6px", borderRadius: 6, color: "#6b7280",
-                            }}
-                        >
-                            {filtersOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                        </button>
+
+                        {/* Right: Print + Excel + collapse chevron */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+
+                            {/* Print — disabled until report is ready */}
+                            <button
+                                className="action-btn-outline"
+                                onClick={handlePrint}
+                                disabled={!reportReady}
+                                title={!reportReady ? "Generate a report first" : "Print / Save as PDF"}
+                                style={disabledStyle({
+                                    padding: "6px 14px",
+                                    border: "0.5px solid #d1d5db",
+                                    background: "#fff",
+                                    display: "flex", alignItems: "center", gap: 6,
+                                    fontSize: 12, borderRadius: 6, color: "#374151",
+                                }, !reportReady)}
+                            >
+                                <Printer size={13} /> Print / PDF
+                            </button>
+
+                            {/* Export Excel — disabled until report is ready */}
+                            <button
+                                className="action-btn-green"
+                                onClick={handleExcel}
+                                disabled={!reportReady || excelLoading}
+                                title={!reportReady ? "Generate a report first" : "Export to Excel"}
+                                style={disabledStyle({
+                                    padding: "6px 14px",
+                                    border: "0.5px solid #1a7f4b",
+                                    background: "#1a7f4b",
+                                    display: "flex", alignItems: "center", gap: 6,
+                                    fontSize: 12, borderRadius: 6, color: "#fff",
+                                }, !reportReady || excelLoading)}
+                            >
+                                {excelLoading
+                                    ? <><RefreshCw size={13} style={{ animation: "spin 1s linear infinite" }} /> Exporting…</>
+                                    : <><FileSpreadsheet size={13} /> Export Excel</>
+                                }
+                            </button>
+
+                            {/* Collapse toggle */}
+                            <button
+                                className="collapse-btn"
+                                onClick={() => setFiltersOpen((p) => !p)}
+                                style={{
+                                    background: "none", border: "none", cursor: "pointer",
+                                    padding: "4px 6px", borderRadius: 6, color: "#6b7280",
+                                }}
+                            >
+                                {filtersOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            </button>
+                        </div>
                     </div>
 
                     {filtersOpen && (
@@ -581,7 +672,7 @@ export default function DNSummaryReportPage() {
                                 {/* Principal */}
                                 <div style={{ minWidth: 240, flex: "1 1 240px" }}>
                                     <SearchableDropdown
-                                        label="Principal"
+                                        label="Principal *"
                                         value={principal}
                                         onChange={setPrincipal}
                                         options={principalOptions}
@@ -589,10 +680,10 @@ export default function DNSummaryReportPage() {
                                     />
                                 </div>
 
-                                {/* Group — depends on principal */}
+                                {/* Group */}
                                 <div style={{ minWidth: 240, flex: "1 1 240px" }}>
                                     <SearchableDropdown
-                                        label={loadingGroups ? "Group (loading…)" : "Group"}
+                                        label={loadingGroups ? "Group (loading…) *" : "Group *"}
                                         value={group}
                                         onChange={setGroup}
                                         options={groupOptions}
@@ -601,10 +692,10 @@ export default function DNSummaryReportPage() {
                                     />
                                 </div>
 
-                                {/* Product — multi-select, depends on principal + group */}
+                                {/* Product */}
                                 <div style={{ minWidth: 240, flex: "2 1 300px" }}>
                                     <MultiSelectDropdown
-                                        label={loadingProducts ? "Product (loading…)" : "Product"}
+                                        label={loadingProducts ? "Product (loading…) *" : "Product *"}
                                         selected={selectedProducts}
                                         onChange={setSelectedProducts}
                                         options={productOptions}
@@ -622,14 +713,14 @@ export default function DNSummaryReportPage() {
                                 </div>
                             </div>
 
-                            {/* Helper hint */}
-                            {principal && group && selectedProducts.length === 0 && !loadingProducts && productOptions.length > 0 && (
+                            {/* Validation hint — shown when not all fields are filled */}
+                            {!allFieldsSelected && (
                                 <div style={{
-                                    marginTop: 10, fontSize: 11, color: "#185FA5",
-                                    background: "#eff6ff", border: "0.5px solid #bfdbfe",
+                                    marginTop: 10, fontSize: 11, color: "#92400e",
+                                    background: "#fffbeb", border: "0.5px solid #fcd34d",
                                     borderRadius: 6, padding: "5px 10px",
                                 }}>
-                                    ℹ No products selected — report will include all products for the selected group.
+                                    ⚠ Please select Principal, Group, and at least one Product to generate the report.
                                 </div>
                             )}
 
@@ -655,7 +746,8 @@ export default function DNSummaryReportPage() {
                                     disabled={generating}
                                     style={{
                                         padding: "7px 16px", border: "0.5px solid #d1d5db",
-                                        background: "#fff", cursor: generating ? "not-allowed" : "pointer",
+                                        background: "#fff",
+                                        cursor: generating ? "not-allowed" : "pointer",
                                         display: "flex", alignItems: "center", gap: 6,
                                         fontSize: 12, borderRadius: 6, color: "#374151",
                                         opacity: generating ? 0.6 : 1,
@@ -664,17 +756,19 @@ export default function DNSummaryReportPage() {
                                     <RotateCcw size={13} /> Reset
                                 </button>
 
+                                {/* Generate — disabled until all 3 fields are selected */}
                                 <button
                                     className="action-btn-primary"
                                     onClick={handleGenerate}
-                                    disabled={generating}
-                                    style={{
-                                        padding: "7px 16px", border: "0.5px solid #185FA5",
-                                        background: "#185FA5", cursor: generating ? "not-allowed" : "pointer",
+                                    disabled={!allFieldsSelected || generating}
+                                    title={!allFieldsSelected ? "Select Principal, Group and Product first" : ""}
+                                    style={disabledStyle({
+                                        padding: "7px 16px",
+                                        border: "0.5px solid #185FA5",
+                                        background: "#185FA5",
                                         display: "flex", alignItems: "center", gap: 6,
                                         fontSize: 12, borderRadius: 6, color: "#fff",
-                                        opacity: generating ? 0.7 : 1,
-                                    }}
+                                    }, !allFieldsSelected || generating)}
                                 >
                                     {generating
                                         ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Generating…</>
@@ -685,6 +779,54 @@ export default function DNSummaryReportPage() {
                         </div>
                     )}
                 </div>
+
+                {/* ══ Report Viewer Card ════════════════════════════════════════ */}
+                {(generating || reportError || reportHtml) && (
+                    <div style={{
+                        background: "#fff", border: "0.5px solid #e5e7eb",
+                        borderRadius: 12, overflow: "hidden",
+                        display: "flex", flexDirection: "column",
+                    }}>
+                        {/* Loading state */}
+                        {generating && (
+                            <div style={{
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                gap: 8, padding: "60px 24px",
+                                fontSize: 13, color: "#6b7280",
+                            }}>
+                                <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />
+                                Loading report…
+                            </div>
+                        )}
+
+                        {/* Error state */}
+                        {!generating && reportError && (
+                            <div style={{
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                padding: "60px 24px",
+                                fontSize: 13, color: "#dc2626",
+                            }}>
+                                ⚠ {reportError}
+                            </div>
+                        )}
+
+                        {/* Report iframe */}
+                        {reportReady && (
+                            <iframe
+                                ref={iframeRef}
+                                srcDoc={reportHtml}
+                                title="DN Summary Report"
+                                style={{
+                                    width: "100%",
+                                    minHeight: "70vh",
+                                    border: "none",
+                                    display: "block",
+                                }}
+                            />
+                        )}
+                    </div>
+                )}
+
             </div>
         </div>
     );

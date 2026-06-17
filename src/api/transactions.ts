@@ -658,11 +658,34 @@ export async function openVisaExpiryReport(params: ReportParams) {
 }
 
 // ---------DN Summary Report----------------
-export async function openDNSummaryReport(params: ReportParams) {
-    await openReportInTab(
-        `/api/finance/transactions/reports/getDnsummaryreport/html`,
-        params
+
+
+export async function getDnSummaryReportHtml(params: ReportParams): Promise<string> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/getDnSummaryReport/html`,
+        params,
+        { responseType: "text" }
     );
+    return response.data as string;
+}
+
+export async function getDnSummaryReportExcelDownload(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/getDnSummaryReport/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "DN_Summary.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
 }
 
 
