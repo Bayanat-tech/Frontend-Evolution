@@ -68,6 +68,7 @@ import { RJVDocumentEditor } from "../pages/finance/RJVDocuments";
 import { AlmsSimpleMasterConfigs } from "../pages/almswf/almsMasterConfig";
 import { AlmsSimpleMasterPage } from "../pages/almswf/AlmsMasterPage";
 import TransactionReportPage from "../pages/wms/Stock_Reports/Transaction_report";
+import TaxReportFilter from "../pages/accounts_report/tax_report/TaxReport";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -100,6 +101,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Finance Account Report",
     match: ({ pathname }) => isAccountReportRoute(pathname),
     element: () => <LedgerBasics />,
+  },
+   {
+    name: "Finance Tax Report",
+    match: ({ pathname }) => isTaxReportRoute(pathname),
+    element: () => <TaxReportFilter />,
   },
 
 
@@ -614,6 +620,11 @@ function isAccountReportRoute(pathname: string) {
   
 }
 
+function isTaxReportRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/finance/accounts_report/tax_report") || normalized.includes("/finance/accounts/reports/tax-report");
+}
+
 
 function isAcStatementRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -1082,3 +1093,5 @@ function isHrTrainingFeedbackRoute(context: WorkspaceRouteContext) {
     normalized.includes("training-feedback")
   );
 }
+
+
