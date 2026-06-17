@@ -5,10 +5,12 @@ import {
     Printer,
     RotateCcw,
     BarChart2,
+    Download,
 } from "lucide-react";
 import { getDynamicLookupaccount } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { LookupField } from "../../../components/ui/LookupField";
+import { exportTransactionProductExcel, TransationReport } from "../../../api/transactions";
 
 // ─── Shared styles ─────────────────────────────────────────────────────────────
 
@@ -95,6 +97,14 @@ function FloatLabel({ label, required, children }: { label: string; required?: b
 
 // ─── Group options ────────────────────────────────────────────────────────────
 
+const formatDateOracle = (iso: string) => {
+    if (!iso) return "";
+    const [y, m, d] = iso.split("-");
+    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+    return `${d}-${months[parseInt(m, 10) - 1]}-${y}`;
+};
+
+
 const GROUP_OPTIONS = [
     { value: "product", label: "Product" },
     { value: "product_lot", label: "Product + Lot No." },
@@ -118,6 +128,9 @@ const GROUP_OPTIONS = [
 export default function TransactionReportPage() {
     const { user } = useAuth();
 
+
+    const [generatingExcel, setGeneratingExcel] = useState(false);
+    const [reportError, setReportError] = useState<string | null>(null);
     // Principal
     const [principal, setPrincipal] = useState([{ prin_code: "", prin_name: "" }]);
 
@@ -199,21 +212,112 @@ export default function TransactionReportPage() {
         setGroupedOn("group_brand_product");
     };
 
-    const handleGenerate = () => {
-        console.log("Generate Transaction Report", {
-            principal: principal[0]?.prin_code,
-            productFrom, productTo,
-            siteFrom, siteTo,
-            locationFrom, locationTo,
-            dateFrom, dateTo,
-            expDateFrom, expDateTo,
-            jobNo, customerFrom, customerTo,
-            txnType, docRefFrom, docRefTo,
-            lotNoFrom, lotNoTo,
-            batchNoFrom, batchNoTo,
-            groupedOn,
-        });
+    const buildParams = () => ({
+        parameter: "WMS_Stock_TRANSACTION_PRODUCT_REPORT",
+        loginid: user?.loginid || user?.username || "ADMIN",
+        code1: user?.company_code || "",
+        code2: principal[0]?.prin_code || "",
+        code3: productFrom || "",
+        code4: productTo || "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ",
+        code5: siteFrom || "",
+        code6: siteTo || "ZZZZZ",
+        code7: locationFrom || "",
+        code8: locationTo || "ZZZZZZZZZZZZZZZ",
+        code9: customerFrom || "",
+        code10: customerTo || "ZZZZZ",
+        code11: lotNoFrom || "",
+        code12: lotNoTo || "ZZZZZZZZZZZZZZZZZZZZ",
+        code13: batchNoFrom || "",
+        code14: batchNoTo || "ZZZZZZZZZZZZZZZZZZZZ",
+        code15: "All",
+        code16: "All",
+        code17: "ZZZZZZZZZZZZZZZZZZZZ",
+        date1: expDateFrom ? formatDateOracle(expDateFrom) : "",
+        date2: expDateTo ? formatDateOracle(expDateTo) : "",
+        date3: dateFrom ? formatDateOracle(dateFrom) : "01-JAN-1900",
+        date4: dateTo ? formatDateOracle(dateTo) : "31-DEC-2999",
+    });
+
+
+
+    //     const handleGenerate = async () => {
+
+    //     if (!principal[0]?.prin_code) {
+    //         console.error("Please select a Principal before generating.");
+    //         return;
+    //     }
+
+    //     try {
+
+    //         const params = {
+    //             parameter: "WMS_Stock_TRANSACTION_PRODUCT_REPORT",
+    //             loginid: user?.loginid || user?.username || "ADMIN",
+    //             code1: user?.company_code || "",
+    //             code2: principal[0]?.prin_code || "",
+    //             code3: productFrom || "",
+    //             code4: productTo || "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ",
+    //             code5: siteFrom || "",
+    //             code6: siteTo || "ZZZZZ",
+    //             code7: locationFrom || "",
+    //             code8: locationTo || "ZZZZZZZZZZZZZZZ",
+    //             code9: customerFrom || "",
+    //             code10: customerTo || "ZZZZZ",
+    //             code11: lotNoFrom || "",
+    //             code12: lotNoTo || "ZZZZZZZZZZZZZZZZZZZZ",
+    //             code13: batchNoFrom || "",
+    //             code14: batchNoTo || "ZZZZZZZZZZZZZZZZZZZZ",
+    //             code15: "All",
+    //             code16: "All",
+    //             code17: "ZZZZZZZZZZZZZZZZZZZZ",
+    //             code20:"RAWSQL",
+
+    //             // exp date range
+    //             date1: expDateFrom ? formatDateOracle(expDateFrom) : "",
+    //             date2: expDateTo   ? formatDateOracle(expDateTo)   : "",
+    //             // txn date range
+    //             date3: dateFrom ? formatDateOracle(dateFrom) : "01-JAN-1900",
+    //             date4: dateTo   ? formatDateOracle(dateTo)   : "31-DEC-2999",
+
+
+
+
+    //         };
+    //         await TransationReport(params);
+    //         console.log("Report generation initiated with params👍👍:",params);
+    //     } catch (err: any) {
+    //         console.error("Failed to generate report:", err);
+    //     }
+
+    // };     
+
+    const handleExportExcel = async () => {
+        setReportError(null);
+        setGeneratingExcel(true);
+        try {
+            await exportTransactionProductExcel(buildParams());
+        } catch (err: any) {
+            setReportError(err.message || "Failed to generate report.");
+        } finally {
+            setGeneratingExcel(false);
+        }
     };
+
+    const handleGenerate = async () => {
+        if (!principal[0]?.prin_code) {
+            setReportError("Please select a Principal before generating.");
+            return;
+        }
+        setReportError(null);
+        try {
+            await TransationReport(buildParams());
+        } catch (err: any) {
+            setReportError("Failed to generate report.");
+            console.error(err);
+        }
+    };
+
+
+
 
     const row2: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 };
     const row3: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 };
@@ -540,7 +644,7 @@ export default function TransactionReportPage() {
                                 </fieldset>
 
                                 {/* Transaction EXP Date */}
-                                <fieldset
+                                {/* <fieldset
                                     style={{
                                         flex: 1,
                                         border: "0.5px solid #d1d5db",
@@ -569,7 +673,37 @@ export default function TransactionReportPage() {
                                             <DateInput value={expDateTo} onChange={setExpDateTo} />
                                         </Field>
                                     </div>
+                                </fieldset> */}
+
+                                {/* Exp Date From | Exp Date To */}
+                                {/* Exp Date From | Exp Date To */}
+                                <fieldset style={{ border: "0.5px solid #d1d5db", borderRadius: 6, padding: "6px 12px 10px", margin: 0 }}>
+                                    <legend style={{ fontSize: 10, color: "#6b7280", padding: "0 4px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>
+                                        Exp Date
+                                    </legend>
+                                    <div style={row2}>
+                                        <Field label="From">
+                                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                                <DateInput value={expDateFrom} onChange={setExpDateFrom} />
+                                                {expDateFrom && (
+                                                    <button onClick={() => setExpDateFrom("")}
+                                                        style={{ fontSize: 11, color: "#6b7280", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+                                                )}
+                                            </div>
+                                        </Field>
+                                        <Field label="To">
+                                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                                <DateInput value={expDateTo} onChange={setExpDateTo} />
+                                                {expDateTo && (
+                                                    <button onClick={() => setExpDateTo("")}
+                                                        style={{ fontSize: 11, color: "#6b7280", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+                                                )}
+                                            </div>
+                                        </Field>
+                                    </div>
                                 </fieldset>
+
+
                             </div>
 
 
@@ -761,6 +895,18 @@ export default function TransactionReportPage() {
                             style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151" }}
                         >
                             <RotateCcw size={13} /> Reset
+                        </button>
+                        {/* <button className="act-btn" onClick={handleExportExcel}>
+                            <Download size={13} />
+                        </button> */}
+
+                        <button
+                            className="action-btn"
+                            onClick={handleExportExcel}
+                            disabled={generatingExcel}
+                            style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: generatingExcel ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: generatingExcel ? 0.7 : 1 }}
+                        >
+                            <Download size={13} /> {generatingExcel ? "Exporting..." : "Export Excel"}
                         </button>
                         <button
                             className="action-btn-primary"

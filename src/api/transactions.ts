@@ -643,6 +643,23 @@ export async function jobListingReport(params: ReportParams) {
     );
 }
 
+export async function TransationReport(params: ReportParams) {
+    await openReportInTab(
+        "/api/finance/transactions/reports/wms-TransactionProductReport/html", 
+        params
+    );
+}
+
+export async function exportTransactionProductExcel(params: ReportParams) {
+    await openReportInTab(
+        "/api/finance/transactions/reports/wms-TransactionProductReport/excel", 
+        params
+    );
+}
+
+
+
+
 
 
 // export const openInvdatewiseDetailReport = async (params: any): Promise<void> => {
