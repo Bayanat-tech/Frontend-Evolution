@@ -636,6 +636,13 @@ export async function openOutstandingStatementSummaryReport(params: ReportParams
     );
 }
 
+export async function jobListingReport(params: ReportParams) {
+    await openReportInTab(
+        "/api/finance/transactions/reports/wms-joblisting/html", 
+        params
+    );
+}
+
 
 
 // export const openInvdatewiseDetailReport = async (params: any): Promise<void> => {
