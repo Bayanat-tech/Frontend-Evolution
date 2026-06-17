@@ -637,16 +637,36 @@ export async function openOutstandingStatementSummaryReport(params: ReportParams
 }
 
 
-// ---------profite and loss report------------------
+// ---------Profit & Loss Report----------------
 
-
-
-export async function openProfitLossReport(params: ReportParams) {
-    await openReportInTab(
+export async function getProfitLossReportHtml(params: ReportParams): Promise<string> {
+    const response = await api.post(
         `/api/finance/transactions/reports/getProfitLossReport/html`,
-        params
+        params,
+        { responseType: "text" }
     );
+    return response.data as string;
 }
+
+export async function getProfitLossReportExcelDownload(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/getProfitLossReport/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "ProfitLoss.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
 
 
 // ----------Visa Expiry Listing Report----------------
