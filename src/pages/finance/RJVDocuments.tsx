@@ -1,13 +1,12 @@
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import { Ban, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, X } from "lucide-react";
+import { Ban, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import {
   cancelTransactionDocument,
+  deleteTransactionDocument,
   Division,
   FyPeriod,
-  getCompanyInfo,
-  getDefaultFyPeriod,
   getCheque,
   getChildTableName,
   getDivisions,
@@ -60,13 +59,13 @@ const DOCUMENT_META: Record<TransactionType, { title: string; subtitle: string; 
   SI: { title: "Sales", subtitle: "Sales invoice document", addLabel: "Add Sales" },
   SV: { title: "Service Invoice", subtitle: "Service billing document", addLabel: "Add Service" },
   JV: { title: "Journal Voucher", subtitle: "General ledger journal", addLabel: "Add Voucher" },
-  RJV: { title: "Reverse Journal Voucher", subtitle: "Reverse journal entry", addLabel: "Add Reverse Voucher" },
+   RJV: { title: "RJournal Voucher", subtitle: "General ledger journal", addLabel: "Add RVoucher" },
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
 const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
-export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) {
+export function RJVDocumentEditor({ docType }: { docType: TransactionType }) {
   const meta = DOCUMENT_META[docType];
   const [rows, setRows] = useState<TransactionDocumentRow[]>([]);
   const [fyPeriods, setFyPeriods] = useState<FyPeriod[]>([]);
@@ -79,18 +78,19 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
   const [totalRows, setTotalRows] = useState(0);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<EditorState>(null);
+  const [deleteTarget, setDeleteTarget] = useState<TransactionDocumentRow | null>(null);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
-    const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
   const loadLookups = async () => {
-    const [fyData, divisionData, companyInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
+    const [fyData, divisionData] = await Promise.all([getFyPeriods(), getDivisions()]);
     setFyPeriods(fyData);
     setDivisions(divisionData);
-    setFyPeriod((current) => current || getDefaultFyPeriod(fyData, companyInfo));
+    setFyPeriod((current) => current || fyData[0]?.fy_period || "");
   };
 
-    const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize, nextColumnFilters = columnFilters, clearNotice = true) => {
+  const loadRows = async (nextFy = fyPeriod, nextQuery = query, nextPageIndex = pageIndex, nextPageSize = pageSize, nextColumnFilters = columnFilters, clearNotice = true) => {
     if (!nextFy) return;
     setLoading(true);
     if (clearNotice) setNotice(null);
@@ -125,6 +125,8 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
     void loadRows();
   }, [fyPeriod, docType, query, pageIndex, pageSize, columnFilters]);
 
+
+
   const columns = useMemo<ColumnDef<TransactionDocumentRow>[]>(() => [
     {
       accessorKey: "doc_no",
@@ -133,10 +135,10 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
     },
     { accessorKey: "doc_date", header: "Date", cell: ({ getValue }) => formatDate(getValue()) },
     { accessorKey: "ac_name", header: "Account Name" },
-    ...(docType === "CN" ? [{ accessorKey: "ac_payee", header: "Account Payee" } as ColumnDef<TransactionDocumentRow>] : []),
+    ...(docType === "CP" ? [{ accessorKey: "ac_payee", header: "Account Payee" } as ColumnDef<TransactionDocumentRow>] : []),
     { accessorKey: "remarks", header: "Description" },
-    ...((docType === "CN" || docType === "DN") ? [{ accessorKey: "cheque_no", header: "Cheque No" } as ColumnDef<TransactionDocumentRow>] : []),
-    ...(docType === "DN" ? [{ accessorKey: "cheque_bank", header: "Cheque Bank" } as ColumnDef<TransactionDocumentRow>] : []),
+    ...(docType !== "CR" ? [{ accessorKey: "cheque_no", header: "Cheque No" } as ColumnDef<TransactionDocumentRow>] : []),
+    ...(docType === "BR" ? [{ accessorKey: "cheque_bank", header: "Cheque Bank" } as ColumnDef<TransactionDocumentRow>] : []),
     { accessorKey: "div_code", header: "Div" },
     {
       accessorKey: "canceled",
@@ -152,17 +154,17 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
           <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })} title="Edit">
             <Edit2 size={15} />
           </Button>
-          <Button size="icon" variant="ghost" onClick={() => void openDocumentReport(row.original.doc_type || docType, row.original.doc_no)} title="Print">
+          <Button size="icon" variant="ghost" onClick={() => window.print()} title="Print">
             <Printer size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" onClick={() => void downloadDocumentReportExcel(row.original.doc_type || docType, row.original.doc_no)} title="Export Excel">
-            <Download size={15} />
           </Button>
           {row.original.canceled !== "Y" && (
             <Button size="icon" variant="ghost" onClick={() => setCancelTarget(row.original)} title="Cancel">
               <Ban size={15} />
             </Button>
           )}
+          <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(row.original)} title="Delete">
+            <Trash2 size={15} />
+          </Button>
         </div>
       ),
     },
@@ -185,6 +187,19 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
     }
   };
 
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteTransactionDocument([deleteTarget.doc_no], docType);
+      setDeleteTarget(null);
+      setNotice({ type: "success", message: "Document deleted successfully" });
+      await loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false);
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete document" });
+    }
+  };
+
+
   return (
     <section className="finance-list-page grid gap-4">
       <div className="finance-list-heading">
@@ -205,7 +220,7 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
       <div className="min-h-[650px]">
-               <DataTable
+        <DataTable
           columns={columns}
           data={rows}
           title={loading ? "Loading" : `${totalRows.toLocaleString()} Documents`}
@@ -239,7 +254,6 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
           pageIndex={pageIndex}
           pageSize={pageSize}
           totalRows={totalRows}
-          initialSorting={[{ id: "doc_date", desc: true }]}
           columnFilters={columnFilters}
           onColumnFiltersChange={(filters) => {
             setColumnFilters(filters);
@@ -256,18 +270,13 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
 
       {editor && (
         <div className="fixed inset-0 z-50 bg-background">
-          <PaymentDocumentEditor
+          <JVDocument
             docType={docType}
             editor={editor}
             onClose={() => setEditor(null)}
             onSaved={async (message) => {
               setEditor(null);
               setNotice({ type: "success", message });
-              await loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false);
-            }}
-            onCancelled={async () => {
-              setEditor(null);
-              setNotice({ type: "success", message: "Document cancelled successfully" });
               await loadRows(fyPeriod, query, pageIndex, pageSize, columnFilters, false);
             }}
           />
@@ -305,33 +314,41 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
         onClose={() => setCancelTarget(null)}
         onConfirm={() => void confirmCancel()}
       />
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        tone="danger"
+        title="Delete Document"
+        description="This action cannot be undone."
+        actionLabel="Delete"
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => void confirmDelete()}
+      />
     </section>
   );
 }
 
-function PaymentDocumentEditor({
+function JVDocument({
   docType,
   editor,
   onClose,
   onSaved,
-  onCancelled,
 }: {
   docType: TransactionType;
   editor: EditorState;
   onClose: () => void;
   onSaved: (message: string) => Promise<void>;
-  onCancelled: () => Promise<void>;
 }) {
   const { user } = useAuth();
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<TransactionHeader>(() => emptyHeader(docType, editor));
   const [selectedDetailId, setSelectedDetailId] = useState<string>("");
-  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [childLoading, setChildLoading] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [error, setError] = useState("");
+  const [showHeaderDetails, setShowHeaderDetails] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -417,25 +434,12 @@ function PaymentDocumentEditor({
   }, [form.detail.map((d) => d.amount).join(",")]);
 
   const disabled = form.canceled === "Y" || saving;
-  const total = form.detail.reduce((sum, row) => sum + (Number(row.amount) || 0) * row.sign_ind, 0);
-
-  const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0) * row.sign_ind, 0);
   const isCancelled = form.canceled === "Y";
+  const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0) * row.sign_ind, 0);
+  const total = form.detail.reduce((sum, row) => sum + (Number(row.amount) || 0) * row.sign_ind, 0);
+  const creditTotal = form.detail.reduce((sum, row) => sum + (row.sign_ind === -1 ? Number(row.amount) || 0 : 0), 0);
+  const debitTotal = form.detail.reduce((sum, row) => sum + (row.sign_ind === 1 ? Number(row.amount) || 0 : 0), 0);
 
-  const cancelCurrentDocument = async () => {
-    if (!form.doc_no || form.doc_no === "0" || form.canceled === "Y") return;
-    setSaving(true);
-    setError("");
-    try {
-      await cancelTransactionDocument(form.doc_no, form.doc_type);
-      setCancelConfirmOpen(false);
-      await onCancelled();
-    } catch (cancelError) {
-      setError(cancelError instanceof Error ? cancelError.message : "Unable to cancel document");
-    } finally {
-      setSaving(false);
-    }
-  };
   const updateField = (field: keyof TransactionHeader, value: string | number) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
@@ -447,10 +451,11 @@ function PaymentDocumentEditor({
     }));
   };
 
+  // REPLACE WITH:
   const selectDetailAccount = async (detail: TransactionDetail, value: string, row: LookupRow | null) => {
     const acName = text(getLookupValue(row || {}, "ac_name"));
     updateDetail(detail.id, { ac_code: value, ac_name: acName, child_table: "", child_code: "" });
-    if (docType === "CN") {
+    if (docType === "CP") {
       setForm((current) => ({ ...current, ac_payee: acName }));
     }
     if (!value) return;
@@ -489,7 +494,7 @@ function PaymentDocumentEditor({
             exp_type_code: childCode,
             exp_subtype_code: "",
             exp_code: childCode,
-            exp_description: "",
+            exp_type_description: "",
             job_no: "",
           };
           return {
@@ -626,7 +631,6 @@ function PaymentDocumentEditor({
     event.preventDefault();
     if (!form.doc_date) return setError("Doc Date is required");
     if (!form.div_code) return setError("Division is required");
-    if (!form.ac_code) return setError("Account is required");
     if (!form.curr_code) return setError("Currency is required");
     if (!form.ex_rate) return setError("Exchange Rate is required");
     setSaving(true);
@@ -678,50 +682,39 @@ function PaymentDocumentEditor({
       });
     });
   };
+  const isBalanced =
+    Number(creditTotal.toFixed(3)) ===
+    Number(debitTotal.toFixed(3));
+  console.log({
+    disabled,
+    loading,
+    detailLength: form.detail.length,
+    creditTotal,
+    debitTotal,
+  });
 
   return (
-    <form className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`} onSubmit={submit}>
-      <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
-        <div className="flex min-h-10 items-center justify-between gap-3">
+ <form className="payment-workbench grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" onSubmit={submit}>
+      <CardHeader className="border-b bg-primary px-5 py-2.5 text-primary-foreground shadow-sm">
+        <div className="flex min-h-12 items-center justify-between gap-4">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
             <div>
               <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
                 {editMode ? "Edit Document" : "New Document"}
               </p>
-              <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">{DOCUMENT_META[docType].title}</h2>
+              <h2 className="m-0 text-lg font-semibold leading-tight text-primary-foreground">{DOCUMENT_META[docType].title}</h2>
             </div>
-            <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
+            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1">
               <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
               <strong className="block text-sm leading-tight text-primary-foreground">{form.doc_no || "New"}</strong>
             </div>
-            <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
+            <div className="rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1">
               <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
-              <strong className="block text-sm leading-tight text-primary-foreground">{formatAmount(total + totalTax)}</strong>
+              <strong className="block text-sm leading-tight text-primary-foreground">{formatAmount(total)}</strong>
             </div>
-            {form.div_code && (
-              <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Division</span>
-                <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}</strong>
-              </div>
-            )}
           </div>
           <div className="flex items-center gap-2">
             {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
-            {form.doc_no && form.doc_no !== "0" && (
-              <>
-                <Button type="button" variant="secondary" onClick={() => void openDocumentReport(form.doc_type, form.doc_no || "")}>
-                  <Printer size={15} /> Print
-                </Button>
-                <Button aria-label="Excel" type="button" variant="secondary" size="icon" onClick={() => void downloadDocumentReportExcel(form.doc_type, form.doc_no || "")}>
-                  <Download size={15} />
-                </Button>
-                {form.canceled !== "Y" && (
-                  <Button type="button" variant="secondary" onClick={() => setCancelConfirmOpen(true)} disabled={saving}>
-                    <Ban size={15} /> Cancel
-                  </Button>
-                )}
-              </>
-            )}
             <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
               <Paperclip size={15} /> Files
             </Button>
@@ -729,213 +722,74 @@ function PaymentDocumentEditor({
           </div>
         </div>
       </CardHeader>
-      {isCancelled && (
-        <div className="cancelled-document-banner" role="status">
-          <div>
-            <span className="cancelled-document-kicker">Cancelled Document</span>
-            <strong>{form.doc_no || DOCUMENT_META[docType].title}</strong>
-          </div>
-          <p>This document is cancelled and opened in read-only mode. You can still print, export, and view attachments.</p>
-        </div>
-      )}
-
 
       <CardContent className="min-h-0 overflow-auto p-3">
         {loading ? (
-          <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
+          <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading voucher...</div>
         ) : (
           <div className="shrink-0 border-b bg-background ">
             <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
- <div className="commercial-header-shell rounded-md border bg-card">
+
+            <div className="commercial-header-shell rounded-md border bg-card">
               <div className="commercial-section-title">
                 <div>
                   <p className="eyebrow m-0">Header</p>
-                   <h3 className="m-0 text-sm font-semibold leading-tight">Credit/Debit Note Information</h3>
+                   <h3 className="m-0 text-sm font-semibold leading-tight">JV Information</h3>
                 </div>
                 <span></span>
               </div>
-            <div className="payment-header-grid grid grid-cols-6 gap-2.5 rounded-md border bg-card p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
-              {editMode && <Field label="Doc No"><Input disabled value={form.doc_no || ""} /></Field>}
-              <Field label="Doc Date"><Input disabled={disabled} required type="date" value={dateInput(form.doc_date)} onChange={(event) => updateField("doc_date", event.target.value)} /></Field>
-              {(docType === "CN" || docType === "DN") && <Field label="Inv No" ><Input disabled={disabled} value={form.inv_no || ""} onChange={(event) => updateField("inv_no", event.target.value)} /></Field>}
-              {(docType === "CN" || docType === "DN") && <Field label="Inv Date" ><Input disabled={disabled} type="date" value={dateInput(form.inv_date)} onChange={(event) => updateField("inv_date", event.target.value)} /></Field>}
-              <LookupField
-
-                label="Division *"
-                value={form.div_code}
-                displayValue={form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}
-                columns={[{ field: "div_code", header: "Code" }, { field: "div_name", header: "Name" }]}
-                valueField="div_code"
-                displayFields={["div_code", "div_name"]}
-                // loadOptions={() => getDocAccounts(docType, "H", form.div_code)}
-                loadOptions={() => getDynamicLookup({
-                  parameter: "Account_division",
-                  code1: user?.company_code,
-                  loginid: user?.loginid || user?.username || "ADMIN"
-                })}
-                disabled={disabled}
-
-                onChange={async (value, row) => {
-                  setForm((current) => ({
-                    ...current,
-                    div_code: value,
-                    div_name: text(getLookupValue(row || {}, "div_name")),
-                  }));
-
-                }}
-
-              />
-              <LookupField
-                label="Account *"
-                value={form.ac_code}
-                displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
-                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
-                valueField="ac_code"
-                displayFields={["ac_code", "ac_name", 'curr_code']}
-                // loadOptions={() => getDocAccounts(docType, "H", form.div_code)}
-                loadOptions={() => getDynamicLookup({
-                  parameter: "Account_AC_CODE_Serach_HDR",
-                  code1: user?.company_code,
-                  code2: "H",
-                  code3: form.doc_type,
-                  code4: form.div_code
-                })}
-                disabled={disabled || !form.div_code}
-
-                onChange={async (value, row) => {
-                  setForm((current) => ({
-                    ...current,
-                    ac_code: value,
-                    ac_name: text(getLookupValue(row || {}, "ac_name")),
-                    curr_code: text(getLookupValue(row || {}, "curr_code")),
-                  }));
-                  if ((docType === "CN" || docType === "DN") && value) {
-                    const cheque: Record<string, unknown> = await getCheque(value).catch(() => ({}));
-                    setForm((current) => ({
-                      ...current,
-                      cheque_no: text(cheque.cheque_no ?? cheque.CHEQUE_NO ?? current.cheque_no),
-                    }));
-                  }
-                }}
-              />
-              <LookupField
-                label="Currency*"
-                value={form.curr_code}
-                displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
-                columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
-                valueField="curr_code"
-                displayFields={["curr_code", "curr_name"]}
-                loadOptions={() => getDynamicLookup({
-                  parameter: "Account_Currency_CODE_Serach",
-                  code1: user?.company_code,
-                  loginid: user?.loginid || user?.username || "ADMIN"
-                })}
-                disabled={disabled}
-                onChange={(value, row) => setForm((current) => ({
-                  ...current,
-                  curr_code: value,
-                  curr_name: text(getLookupValue(row || {}, "curr_name")),
-                  ex_rate: Number(row?.ex_rate ?? 1),
-                }))}
-              />
-              <label className="field col-span-2 max-md:col-span-1">
-                <span>Address</span>
-                <Input disabled={disabled} value={form.party_address || ""} onChange={(event) => updateField("party_address", event.target.value)} />
-              </label>
-              <Field label="Phone"><Input disabled={disabled} value={form.party_phone || ""} onChange={(event) => updateField("party_phone", event.target.value)} /></Field>
-              <Field label="Fax"><Input disabled={disabled} value={form.party_fax || ""} onChange={(event) => updateField("party_fax", event.target.value)} /></Field>
-              <Field label="Exchange Rate*"><Input disabled={disabled} required type="number" step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} /></Field>
-              {docType !== "CR" && (
+              <div className={`commercial-header-panel payment-header-grid relative grid grid-cols-4 gap-2.5 p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1 ${showHeaderDetails ? "is-expanded" : "is-collapsed"}`}>
+                {editMode && (
+                  <Field label="Doc No"><Input disabled value={form.doc_no || ""} /></Field>
+                )}
+                <Field label="Doc Date"><Input disabled={disabled} required type="date" value={dateInput(form.doc_date)} onChange={(event) => updateField("doc_date", event.target.value)} /></Field>
                 <LookupField
-                  label="Bank Account"
-                  value={form.bank_ac_code || ""}
-                  displayValue={form.bank_ac_name ? `${form.bank_ac_code} - ${form.bank_ac_name}` : form.bank_ac_code}
-                  columns={[{ field: "bank_ac_code", header: "Code" }, { field: "bank_ac_name", header: "Name" }]}
-                  valueField="bank_ac_code"
-                  displayFields={["bank_ac_code", "bank_ac_name"]}
-                  loadOptions={() => getDynamicLookup({
-                    parameter: 'BANK_CODE_SETTINGS_BANK_SEARCH', code1: user?.company_code
-                  })}
-                  disabled={disabled || !form.div_code}
-                  onChange={(value, row) => setForm((current) => ({ ...current, bank_ac_code: value, bank_ac_name: text(getLookupValue(row || {}, "bank_ac_name")) }))}
+                  label="Division"
+                  value={form.div_code}
+                  displayValue={form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}
+                  columns={[{ field: "div_code", header: "Code" }, { field: "div_name", header: "Name" }]}
+                  valueField="div_code"
+                  displayFields={["div_code", "div_name"]}
+                  loadOptions={() => getDynamicLookup({ parameter: "Account_division", code1: user?.company_code, loginid: user?.loginid || user?.username || "ADMIN" })}
+                  disabled={disabled}
+                  onChange={async (value, row) => {
+                    setForm((current) => ({ ...current, div_code: value, div_name: text(getLookupValue(row || {}, "div_name")) }));
+                  }}
                 />
-              )}
-              <label className="field col-span-2 max-md:col-span-1">
-                <span>Remarks</span>
-                <Input disabled={disabled} value={form.remarks || ""} onChange={(event) => updateField("remarks", event.target.value)} />
-              </label>
-
-              <LookupField
-                label="Tax Code"
-                compact
-                placeholder="Tax code"
-                value={form.tx_compntcat_code_1 || ""}
-                displayValue={form.tx_compntcat_code_1 || ""}
-                columns={[
-                  { field: "tx_compntcat_code", header: "Code" },
-                  { field: "tx_compntcat_name", header: "Name" },
-                ]}
-                valueField="tx_compntcat_code"
-                displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
-                loadOptions={() => getDynamicLookup({
-                  parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
-                  code1: user?.company_code,
-                  loginid: user?.loginid || user?.username || "ADMIN",
-                })}
-                disabled={disabled}
-                onChange={(value) =>
-                  setForm((current) => ({
-                    ...current,
-                    tx_compntcat_code_1: value,
-                    detail: current.detail.map((d) => ({ ...d, tx_compntcat_code_1: value })),
-                  }))
-                }
-              />
-
-              <Select
-                disabled={disabled}
-                value={form.tx_compnt_1_expmt || "N"}
-                onChange={(event) => {
-                  const taxType = event.target.value;
-                  setForm((current) => ({
-                    ...current,
-                    tx_compnt_1_expmt: taxType,
-                    detail: current.detail.map((d) => {
-                      const taxPerc = taxType === "S" ? (d.tx_compnt_perc_1 ?? 5) : 0;
-                      const taxAmt = taxType === "S" ? (Number(d.amount) || 0) * (taxPerc / 100) : 0;
-                      return {
-                        ...d,
-                        tx_compnt_1_expmt: taxType,
-                        tx_compnt_perc_1: taxPerc,
-                        tx_compnt_amt_1: taxAmt,
-                      };
-                    }),
-                  }));
-                }}
-              >
-                <option value="N">No Tax</option>
-                <option value="S">Std Tax</option>
-                <option value="Z">Zero</option>
-                <option value="E">Exempt</option>
-              </Select>
-
-
-            </div>
+                <LookupField
+                  label="Currency"  
+                  value={form.curr_code}
+                  displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code}
+                  columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
+                  valueField="curr_code"
+                  displayFields={["curr_code", "curr_name"]}
+                  loadOptions={getCurrencyRows}
+                  disabled={disabled}
+                  onChange={(value, row) => setForm((current) => ({ ...current, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(row?.ex_rate ?? 1) }))}
+                />
+                <Field label="Exchange Rate"><Input disabled={disabled} required type="number" style={{ textAlign: "right" }} step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} /></Field>
+                <label className="field col-span-2 max-md:col-span-1">
+                  <span>Remarks</span>
+                  <Input disabled={disabled} value={form.remarks || ""} onChange={(event) => updateField("remarks", event.target.value)} />
+                </label>
+              </div>
               <div className="commercial-header-footer flex items-center justify-between gap-3 border-t bg-secondary/30 px-3 py-2">
                 <div className="min-w-0 truncate text-xs text-muted-foreground">
                   <span>Doc: {form.doc_no || "-"}</span>
                 </div>
-               
+                <Button type="button" size="sm" variant="ghost" onClick={() => setShowHeaderDetails((value) => !value)}>
+                  {showHeaderDetails ? "Hide Details" : "Show Details"}
+                </Button>
               </div>
-             </div>
+            </div>
 
-            <div className="commercial-lines-card rounded-md border bg-card">
-               <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
+            <div className="rounded-md border bg-card">
+              <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-2">
                 <div>
-                  <p className="eyebrow m-0">Details</p>
-                  <h3 className="m-0 text-sm font-semibold leading-tight">Accounting Lines</h3>
+                  <p className="eyebrow">Details</p>
+                  <h3 className="m-0 text-sm font-semibold">Debit / Credit Lines</h3>
                 </div>
-                <Button disabled={disabled || !form.div_code || !form.curr_code} size="sm" type="button" variant="outline" onClick={addDetailRow}>
+                <Button size="sm" type="button" variant="outline" onClick={addDetailRow} disabled={disabled}>
                   <Plus size={14} /> Add Line
                 </Button>
               </div>
@@ -952,10 +806,7 @@ function PaymentDocumentEditor({
                       <th className="px-2 py-2 text-left">Ex Rate</th>
                       <th className="finance-amount-cell px-2 py-2 text-left">Amount</th>
                       <th className="px-2 py-2 text-left">Cr/Dr</th>
-                      <th className="px-2 py-2 text-left">Tax Code</th>
                       <th className="px-2 py-2 text-left">Tax Type</th>
-                      <th className="px-2 py-2 text-left">Tax %</th>
-                      <th className="finance-amount-cell px-2 py-2 text-left">Tax Amt</th>
                       <th className="px-2 py-2 text-left">Job No</th>
                       <th className="px-2 py-2 text-left">Dept</th>
                       <th className="finance-amount-cell px-2 py-2 text-left">Base Amount</th>
@@ -964,7 +815,7 @@ function PaymentDocumentEditor({
                   </thead>
                   <tbody>
                     {form.detail.length === 0 ? (
-                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={17}>No detail lines yet</td></tr>
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={13}>No detail lines yet</td></tr>
                     ) : form.detail.map((detail) => (
                       <tr className={selectedDetail?.id === detail.id ? "border-t bg-primary/5" : "border-t odd:bg-muted/20"} key={detail.id}>
                         <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{detail.serial_no}</td>
@@ -978,7 +829,7 @@ function PaymentDocumentEditor({
                             displayValue={detail.ac_name ? `${detail.ac_code} - ${detail.ac_name}` : detail.ac_code}
                             columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
                             valueField="ac_code"
-                            displayFields={["ac_code", "ac_name", "curr_code", "exp_type_code"]}
+                            displayFields={["ac_code", "ac_name", "curr_code"]}
                             loadOptions={() => getDynamicLookup({
                               parameter: "Account_AC_CODE_Serach_HDR",
                               code1: user?.company_code,
@@ -987,8 +838,7 @@ function PaymentDocumentEditor({
                               code4: form.div_code
                             })}
                             disabled={disabled}
-                            onChange={(value, row) => void selectDetailAccount(detail, value, row,)}
-
+                            onChange={(value, row) => void selectDetailAccount(detail, value, row)}
                           />
                         </td>
                         <td className="px-2 py-1 text-center">
@@ -1028,28 +878,6 @@ function PaymentDocumentEditor({
                             <option value={-1}>Cr</option>
                           </Select>
                         </td>
-                        <td className="w-32 px-2 py-1">
-                          <LookupField
-                            label="Tax Code"
-                            compact
-                            placeholder="Tax code"
-                            value={detail.tx_compntcat_code_1 || ""}
-                            displayValue={detail.tx_compntcat_code_1 || ""}
-                            columns={[
-                              { field: "tx_compntcat_code", header: "Code" },
-                              { field: "tx_compntcat_name", header: "Name" },
-                            ]}
-                            valueField="tx_compntcat_code"
-                            displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
-                            loadOptions={() => getDynamicLookup({
-                              parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
-                              code1: user?.company_code,
-                              loginid: user?.loginid || user?.username || "ADMIN",
-                            })}
-                            disabled={disabled}
-                            onChange={(value) => updateDetail(detail.id, { tx_compntcat_code_1: value })}
-                          />
-                        </td>
                         <td className="w-28 px-2 py-1">
                           <Select
                             disabled={disabled}
@@ -1071,20 +899,21 @@ function PaymentDocumentEditor({
                             <option value="E">Exempt</option>
                           </Select>
                         </td>
-                        <td className="w-24 px-2 py-1"><Input disabled={disabled} type="number" value={detail.tx_compnt_perc_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
-                        <td className="finance-amount-cell w-32 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                         <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
                         <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
-                        <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled value={formatNumber((Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1)))} /></td>
+                        <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled value={formatNumber((Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1)))} /></td>
                         <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <div className="flex items-center justify-end gap-8 border-t px-3 py-1.5 text-sm">
-                <span className="text-muted-foreground">Total</span>
-                <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(total)}</strong>
+              <div className="flex items-center justify-between border-t px-3 py-2 text-sm">
+                <span className="text-muted-foreground">Balance</span>
+                <strong className={Math.abs(total) > 0.001 ? "text-destructive" : "text-emerald-600"}>
+                  {formatAmount(total)}
+                </strong>
+
               </div>
               <div className="flex items-center justify-end gap-8  px-3 py-1.5 text-sm">
                 <span className="text-muted-foreground">Tax</span>
@@ -1092,10 +921,9 @@ function PaymentDocumentEditor({
               </div>
               <div className="flex items-center justify-end gap-8 border-t px-3 py-1.5 text-sm">
                 <span className="text-muted-foreground">Net Total</span>
-                <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{formatAmount(total + totalTax)}</strong>
+                <strong className={total < 0 ? "text-destructive" : "text-emerald-600"}>{(formatAmount(total + totalTax))}</strong>
               </div>
             </div>
-
             <div className="rounded-md border bg-card">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-secondary/40 px-3 py-1.5">
                 <div>
@@ -1147,7 +975,7 @@ function PaymentDocumentEditor({
         </div>
         <div className="flex items-center gap-2">
           <Button disabled={saving} type="button" variant="outline" onClick={onClose}>Close</Button>
-          <Button disabled={disabled || loading || form.detail.length === 0} type="submit">
+          <Button disabled={disabled || loading || form.detail.length === 0 || !isBalanced} type="submit">
             <Save size={15} /> {saving ? "Saving..." : "Save"}
           </Button>
         </div>
@@ -1163,15 +991,6 @@ function PaymentDocumentEditor({
         loginId={user?.loginid || user?.username || ""}
         flowLevel={2}
         readOnly={form.canceled === "Y"}
-      />
-      <ConfirmDialog
-        open={cancelConfirmOpen}
-        tone="danger"
-        title="Cancel Document"
-        description="This will mark the current document as cancelled."
-        actionLabel="Cancel Document"
-        onClose={() => setCancelConfirmOpen(false)}
-        onConfirm={() => void cancelCurrentDocument()}
       />
     </form>
   );
@@ -1243,7 +1062,7 @@ function ChildAllocationTable({
       ? ["No", "Invoice", "Invoice Date", "Invoice Amount", "Outstanding", "Amount", "Paid Amount", "Action"]
       : childTable === "job"
         ? ["No", "Job No", "Doc Ref", "Doc Ref 2", "Amount", "Action"]
-        : ["No", "Expense typeCode", "Expense subtype Code", "Description", "Job No", "Amount", "Action"];
+        : ["No", "Expense Type Code ", "Expense Subtype Code", "Description", "Job No", "Amount", "Action"];
 
   const user = useAuth()
 
@@ -1280,6 +1099,32 @@ function ChildAllocationTable({
                   </td>
                   <td className="px-2 py-1"><Input disabled value={text(row.inv_amt)} /></td>
                   <td className="px-2 py-1"><Input disabled value={text(row.c_bal_amt_org)} /></td>
+                  <td className="w-32 px-2 py-1">
+                    <div className="flex flex-col gap-1">
+                      <Input
+                        disabled={disabled}
+                        type="number"
+                        step="0.001"
+                        value={Number(row.amount || 0)}
+                        onChange={(event) =>
+                          onChange(row.id, {
+                            amount: Number(event.target.value || 0),
+                          })
+                        }
+                        color={
+                          Number(row.amount || 0) > Number(row.c_bal_amt_org || 0)
+                            ? "danger"
+                            : "neutral"
+                        }
+                      />
+
+                      {Number(row.amount || 0) > Number(row.c_bal_amt_org || 0) && (
+                        <span className="text-xs text-red-500">
+                          Amount exceeds available balance
+                        </span>
+                      )}
+                    </div>
+                  </td>
                 </>
               ) : childTable === "job" ? (
                 <>
@@ -1395,11 +1240,13 @@ function ChildAllocationTable({
                       }
                     />
                   </td>
-                  <td className="px-2 py-1"><Input disabled={disabled} value={text(row.exp_type_description)} onChange={(event) => onChange(row.id, { exp_type_description: event.target.value })} /></td>
+                  <td className="px-2 py-1"><Input disabled={disabled} value={text(row.exp_description)} onChange={(event) => onChange(row.id, { exp_description: event.target.value })} /></td>
+
                   <td className="px-2 py-1"><Input disabled={disabled} value={text(row.job_no)} onChange={(event) => onChange(row.id, { job_no: event.target.value })} /></td>
                 </>
               )}
-              <td className="w-32 px-2 py-1"><Input disabled={disabled} type="number" step="0.001" value={Number(row.amount || 0)} onChange={(event) => onChange(row.id, { amount: Number(event.target.value || 0) })} /></td>
+
+              {childTable !== "invoice" && <td className="w-32 px-2 py-1"><Input disabled={disabled} type="number" step="0.001" value={Number(row.amount || 0)} onChange={(event) => onChange(row.id, { amount: Number(event.target.value || 0) })} /></td>}
               {childTable === "invoice" && <td className="w-32 px-2 py-1"><Input disabled value={Number(row.paid_amt || 0)} /></td>}
               <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => onRemove(row.id)}><X size={14} /></Button></td>
             </tr>
@@ -1433,10 +1280,10 @@ function emptyHeader(docType: TransactionType, editor: EditorState): Transaction
     div_code: editor?.mode === "create" ? editor.divCode || "" : "",
     div_name: editor?.mode === "create" ? editor.divName || "" : "",
     remarks: "",
-    cheque_date: (docType === "CR" || docType === "CN" || docType === "DN") ? undefined : today(),
+    cheque_date: docType === "CR" ? undefined : today(),
     detail: [],
     children: {},
-    ...(docType === "CN" ? { ac_payee: "", files: [] } : {}),
+    ...(docType === "CP" ? { ac_payee: "", files: [] } : {}),
   };
 }
 
@@ -1473,7 +1320,7 @@ function emptyDetailRow({
     curr_name: currName || "",
     ex_rate: 1,
     amount: 0,
-    sign_ind: docType === "CN" || docType === "CP" ? 1 : -1,
+    sign_ind: docType === "CP" ? 1 : -1,
     tx_compntcat_code_1: "11100",
     tx_cat_code: "",
     tx_compnt_1_expmt: "N",
@@ -1514,13 +1361,7 @@ function emptyChildRow(
       ? { inv_no: "", inv_date: "", inv_amt: null, c_bal_amt_org: null, c_curr_amt: null, IsDeletable: true }
       : detail.child_table === "job"
         ? { job_no: "", doc_refno: "", doc_refno_2: "" }
-        : {
-          exp_type_code: "",        // ← always empty, user must select
-          exp_subtype_code: "",     // ← always empty
-          exp_code: "",
-          exp_type_description: "",
-          job_no: "",
-        }),
+        : { exp_type_code: detail.child_code || "", exp_subtype_code: "", exp_code: "", exp_description: "", job_no: "" }),
   };
 }
 
@@ -1551,10 +1392,6 @@ function mapChildRow(
     ex_rate: Number(row.ex_rate || form.ex_rate || 1),
     isEditMode: Boolean(row.dtl_sr_no),
     IsDeletable: Boolean(row.isdeletable ?? row.IsDeletable),
-    exp_type_code: text(row.exp_type_code),           // "" if null/undefined
-    exp_subtype_code: text(row.exp_subtype_code),     // "" if null/undefined
-    exp_type_description: text(row.exp_type_description),
-    exp_subtype_description: text(row.exp_subtype_description),
   };
 }
 
@@ -1594,7 +1431,7 @@ function mapExistingDocument(
       curr_name: text(nested(raw, ["Currency", "curr_name"]) ?? row.curr_name),
       ex_rate: Number(row.ex_rate || 1),
       amount: Math.abs(Number(row.amount || 0)),
-      sign_ind: Number(row.sign_ind || (docType === "CN" || docType === "CP" ? 1 : -1)) as 1 | -1,
+      sign_ind: Number(row.sign_ind || (docType === "BP" || docType === "CP" ? 1 : -1)) as 1 | -1,
       div_code: text(row.div_code),
       tx_compntcat_code_1: text(row.tx_compntcat_code_1),
       tx_cat_code: text(row.tx_cat_code),
@@ -1645,8 +1482,8 @@ function mapExistingDocument(
     div_code: text(header.div_code),
     div_name: text(nested(headerRaw, ["Division", "div_name"]) ?? header.div_name),
     remarks: text(header.remarks),
-    inv_no: text(header.ref_no),
-    inv_date: dateInput(header.ref_date),
+    cheque_no: text(header.cheque_no),
+    cheque_date: dateInput(header.cheque_date),
     cheque_bank: text(header.cheque_bank),
     ac_payee: text(header.ac_payee),
     canceled: text(header.canceled),
@@ -1694,12 +1531,12 @@ function buildPayload(form: TransactionHeader, docType: TransactionType, company
   delete (base as Record<string, unknown>).div_name;
   delete (base as Record<string, unknown>).bank_ac_name;
 
-  if (docType !== "CN" && docType !== "CP") {
+  if (docType !== "BP" && docType !== "CP") {
     delete base.ac_payee;
     delete base.files;
   }
-  if (docType !== "DN") delete base.cheque_bank;
-  if (docType === "CR" || docType === "CP" || docType === "CN" || docType === "DN") {
+
+  if (docType === "CR" || docType === "CP") {
     delete base.bank_ac_code;
     delete base.cheque_no;
     delete base.cheque_date;
@@ -1721,8 +1558,6 @@ function buildBulkAccountEntryPayload(originalForm: TransactionHeader, docType: 
     canceled: originalForm.canceled || "N",
     last_dtl_serial_no: originalForm.detail.length,
     sys_gen: "N",
-    inv_no: originalForm.inv_no ?? "",
-    inv_date: originalForm.inv_date ?? "",
   };
   // ensure ac_payee is explicitly preserved in the header
   (header as Record<string, unknown>).ac_payee = originalForm.ac_payee ?? (header as Record<string, unknown>).ac_payee ?? "";
@@ -1732,6 +1567,7 @@ function buildBulkAccountEntryPayload(originalForm: TransactionHeader, docType: 
   const details = originalForm.detail.map((row, index) => ({
     ...row,
     company_code: row.company_code || companyCode,
+    sign_ind: row.sign_ind,
     doc_type: docType,
     doc_no: docNo,
     serial_no: row.serial_no || index + 1,
@@ -1779,12 +1615,10 @@ function groupChildren(form: TransactionHeader) {
       delete cleaned.isSelected;
       delete cleaned.curr_name;
       delete cleaned.c_curr_name_orgin;
-      delete cleaned.exp_type_description;
+      delete cleaned.exp_description;
       delete cleaned.exp_subtype_description;
       cleaned.doc_type = form.doc_type;
       cleaned.doc_no = form.doc_no || cleaned.doc_no || "1";
-      cleaned.inv_no = row.inv_no ?? cleaned.inv_no;
-      cleaned.inv_date = row.inv_date ?? cleaned.inv_date;
       cleaned.serial_no = detail.serial_no;
       cleaned.dtl_sr_no = Number(cleaned.dtl_sr_no || grouped[table].length + 1);
       cleaned.doc_date = form.doc_date;
