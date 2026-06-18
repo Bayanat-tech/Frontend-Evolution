@@ -106,17 +106,17 @@ const formatDateOracle = (iso: string) => {
 
 
 const GROUP_OPTIONS = [
-    { value: "product", label: "Product" },
-    { value: "product_lot", label: "Product + Lot No." },
-    { value: "product_doc", label: "Product + Doc. Ref." },
-    { value: "site_loc_product", label: "Site + Location + Product" },
-    { value: "group_brand_product", label: "Group + Brand + Product" },
-    { value: "brand_product", label: "Brand + Product" },
-    { value: "customerwise", label: "Customerwise" },
-    { value: "job_summary", label: "Job wise Summary" },
-    { value: "without_transfers", label: "Without Transfers" },
-    { value: "without_transfers_exp", label: "Without Transfers - Exp Date" },
-    { value: "product_txn_totals", label: "Product with Transaction Totals" },
+ { value: "PRODUCT", label: "Product" },
+    { value: "PRODUCT_LOT", label: "Product + Lot No." },
+    { value: "PRODUCT_DOC", label: "Product + Doc. Ref." },
+    { value: "SITE_LOC_PRODUCT", label: "Site + Location + Product" },
+    { value: "GROUP_BRAND_PRODUCT", label: "Group + Brand + Product" },
+    { value: "BRAND_PRODUCT", label: "Brand + Product" },
+    { value: "CUSTOMERWISE", label: "Customerwise" },
+    { value: "JOB_SUMMARY", label: "Job wise Summary" },
+    { value: "WITHOUT_TRANSFERS", label: "Without Transfers" },
+    { value: "WITHOUT_TRANSFERS_EXP", label: "Without Transfers - Exp Date" },
+    { value: "PRODUCT_TXN_TOTALS", label: "Product with Transaction Totals" },
     { value: "production_report", label: "Production Report" },
     { value: "production_crosstab", label: "Production Report Crosstab" },
     { value: "model_product", label: "Model No. + Product" },
@@ -139,7 +139,7 @@ export default function TransactionReportPage() {
     const [productFromName, setProductFromName] = useState("");
     const [productTo, setProductTo] = useState("");
     const [productToName, setProductToName] = useState("");
-    const [productDesc, setProductDesc] = useState("");
+    // const [productDesc, setProductDesc] = useState("");
 
     // Site
     const [siteFrom, setSiteFrom] = useState("");
@@ -184,7 +184,9 @@ export default function TransactionReportPage() {
     const [batchNoTo, setBatchNoTo] = useState("");
 
     // Report group
-    const [groupedOn, setGroupedOn] = useState("group_brand_product");
+    // const [groupedOn, setGroupedOn] = useState("group_brand_product");
+    // const [groupedOn, setGroupedOn] = useState("product");
+    const [groupedOn, setGroupedOn] = useState("PRODUCT");
 
     const reportDate = (() => {
         const d = new Date();
@@ -195,7 +197,7 @@ export default function TransactionReportPage() {
         setPrincipal([{ prin_code: "", prin_name: "" }]);
         setProductFrom(""); setProductFromName("");
         setProductTo(""); setProductToName("");
-        setProductDesc("");
+      
         setSiteFrom(""); setSiteFromName("");
         setSiteTo(""); setSiteToName("");
         setLocationFrom(""); setLocationFromName("");
@@ -209,86 +211,41 @@ export default function TransactionReportPage() {
         setDocRefFrom(""); setDocRefTo("");
         setLotNoFrom(""); setLotNoTo("");
         setBatchNoFrom(""); setBatchNoTo("");
-        setGroupedOn("group_brand_product");
+        // setGroupedOn("group_brand_product");
+        setGroupedOn("product");
     };
 
     const buildParams = () => ({
         parameter: "WMS_Stock_TRANSACTION_PRODUCT_REPORT",
         loginid: user?.loginid || user?.username || "ADMIN",
+
         code1: user?.company_code || "",
         code2: principal[0]?.prin_code || "",
+
         code3: productFrom || "",
-        code4: productTo || "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ",
+        code4: productTo || productFrom || "",
+
         code5: siteFrom || "",
-        code6: siteTo || "ZZZZZ",
+        code6: siteTo || siteFrom || "",
+
         code7: locationFrom || "",
-        code8: locationTo || "ZZZZZZZZZZZZZZZ",
+        code8: locationTo || locationFrom || "",
+
         code9: customerFrom || "",
-        code10: customerTo || "ZZZZZ",
+        code10: customerTo || customerFrom || "",
+
         code11: lotNoFrom || "",
-        code12: lotNoTo || "ZZZZZZZZZZZZZZZZZZZZ",
+        code12: lotNoTo || lotNoFrom || "",
+
         code13: batchNoFrom || "",
-        code14: batchNoTo || "ZZZZZZZZZZZZZZZZZZZZ",
-        code15: "All",
-        code16: "All",
-        code17: "ZZZZZZZZZZZZZZZZZZZZ",
+        code14: batchNoTo || batchNoFrom || "",
+
         date1: expDateFrom ? formatDateOracle(expDateFrom) : "",
         date2: expDateTo ? formatDateOracle(expDateTo) : "",
-        date3: dateFrom ? formatDateOracle(dateFrom) : "01-JAN-1900",
-        date4: dateTo ? formatDateOracle(dateTo) : "31-DEC-2999",
+
+        date3: dateFrom ? formatDateOracle(dateFrom) : "",
+        date4: dateTo ? formatDateOracle(dateTo) : "",
     });
-
-
-
-    //     const handleGenerate = async () => {
-
-    //     if (!principal[0]?.prin_code) {
-    //         console.error("Please select a Principal before generating.");
-    //         return;
-    //     }
-
-    //     try {
-
-    //         const params = {
-    //             parameter: "WMS_Stock_TRANSACTION_PRODUCT_REPORT",
-    //             loginid: user?.loginid || user?.username || "ADMIN",
-    //             code1: user?.company_code || "",
-    //             code2: principal[0]?.prin_code || "",
-    //             code3: productFrom || "",
-    //             code4: productTo || "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ",
-    //             code5: siteFrom || "",
-    //             code6: siteTo || "ZZZZZ",
-    //             code7: locationFrom || "",
-    //             code8: locationTo || "ZZZZZZZZZZZZZZZ",
-    //             code9: customerFrom || "",
-    //             code10: customerTo || "ZZZZZ",
-    //             code11: lotNoFrom || "",
-    //             code12: lotNoTo || "ZZZZZZZZZZZZZZZZZZZZ",
-    //             code13: batchNoFrom || "",
-    //             code14: batchNoTo || "ZZZZZZZZZZZZZZZZZZZZ",
-    //             code15: "All",
-    //             code16: "All",
-    //             code17: "ZZZZZZZZZZZZZZZZZZZZ",
-    //             code20:"RAWSQL",
-
-    //             // exp date range
-    //             date1: expDateFrom ? formatDateOracle(expDateFrom) : "",
-    //             date2: expDateTo   ? formatDateOracle(expDateTo)   : "",
-    //             // txn date range
-    //             date3: dateFrom ? formatDateOracle(dateFrom) : "01-JAN-1900",
-    //             date4: dateTo   ? formatDateOracle(dateTo)   : "31-DEC-2999",
-
-
-
-
-    //         };
-    //         await TransationReport(params);
-    //         console.log("Report generation initiated with params👍👍:",params);
-    //     } catch (err: any) {
-    //         console.error("Failed to generate report:", err);
-    //     }
-
-    // };     
 
     const handleExportExcel = async () => {
         setReportError(null);
@@ -315,9 +272,6 @@ export default function TransactionReportPage() {
             console.error(err);
         }
     };
-
-
-
 
     const row2: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 };
     const row3: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 };
@@ -346,79 +300,6 @@ export default function TransactionReportPage() {
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
 
                             {/* Principal */}
-                            {/* <FloatLabel label="Principal" required>
-                                <LookupField
-                                    label=""
-                                    value={principal[0]?.prin_code || ""}
-                                    displayValue={principal[0]?.prin_name || ""}
-                                    columns={[
-                                        { field: "prin_code", header: "Code" },
-                                        { field: "prin_name", header: "Name" },
-                                    ]}
-                                    valueField="prin_code"
-                                    displayFields={["prin_code", "prin_name"]}
-                                    loadOptions={() =>
-                                        getDynamicLookupaccount({
-                                            parameter: "WMS_Stock_principal",
-                                            code1: user?.company_code || "",
-                                            loginid: user?.loginid || user?.username || "ADMIN",
-                                        })
-                                    }
-                                    onChange={(val) => setPrincipal([{ prin_code: val, prin_name: "" }])}
-                                />
-                            </FloatLabel> */}
-
-                            {/* Product From | Product To | Description */}
-                            {/* <div style={row3}>
-                                <FloatLabel label="Product From">
-                                    <LookupField
-                                        label=""
-                                        value={productFrom}
-                                        displayValue={productFromName}
-                                        columns={[
-                                            { field: "prod_code", header: "Code" },
-                                            { field: "prod_name", header: "Name" },
-                                        ]}
-                                        valueField="prod_code"
-                                        displayFields={["prod_code", "prod_name"]}
-                                        loadOptions={() =>
-                                            getDynamicLookupaccount({
-                                                parameter: "WMS_Stock_product_transfer_report",
-                                                code1: user?.company_code || "",
-                                                code2: principal[0]?.prin_code || "",
-                                                code3: "",
-                                            })
-                                        }
-                                        onChange={(val) => setProductFrom(val)}
-                                    />
-                                </FloatLabel>
-                                <FloatLabel label="Product To">
-                                    <LookupField
-                                        label=""
-                                        value={productTo}
-                                        displayValue={productToName}
-                                        columns={[
-                                            { field: "prod_code", header: "Code" },
-                                            { field: "prod_name", header: "Name" },
-                                        ]}
-                                        valueField="prod_code"
-                                        displayFields={["prod_code", "prod_name"]}
-                                        loadOptions={() =>
-                                            getDynamicLookupaccount({
-                                                parameter: "WMS_Stock_product_transfer_report",
-                                                code1: user?.company_code || "",
-                                                code2: principal[0]?.prin_code || "",
-                                                code3: "",
-                                            })
-                                        }
-                                        onChange={(val) => setProductTo(val)}
-                                    />
-                                </FloatLabel>
-                                <Field label="Product Description">
-                                    <TextInput value={productDesc} onChange={setProductDesc} />
-                                </Field>
-                            </div>  */}
-
 
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 6, width: "100%" }}>
                                 <FloatLabel label="Principal" required>
@@ -486,9 +367,7 @@ export default function TransactionReportPage() {
                                         onChange={(val) => setProductTo(val)}
                                     />
                                 </FloatLabel>
-                                {/* <Field label="Product Description">
-        <TextInput value={productDesc} onChange={setProductDesc} />
-    </Field> */}
+
                             </div>
 
                             {/* Site From | Site To */}
@@ -580,30 +459,6 @@ export default function TransactionReportPage() {
                                     />
                                 </FloatLabel>
                             </div>
-
-                            {/* From Date | To Date */}
-                            {/* <fieldset style={{ border: "0.5px solid #d1d5db", borderRadius: 6, padding: "6px 12px 10px", margin: 0 }}>
-                                <legend style={{ fontSize: 10, color: "#6b7280", padding: "0 4px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>
-                                    Transaction Date
-                                </legend>
-                                <div style={row2}>
-                                    <Field label="From Date"><DateInput value={dateFrom} onChange={setDateFrom} /></Field>
-                                    <Field label="To Date"><DateInput value={dateTo} onChange={setDateTo} /></Field>
-                                </div>
-                            </fieldset> */}
-
-                            {/* Exp Date From | Exp Date To */}
-                            {/* <fieldset style={{ border: "0.5px solid #d1d5db", borderRadius: 6, padding: "6px 12px 10px", margin: 0 }}>
-                                <legend style={{ fontSize: 10, color: "#6b7280", padding: "0 4px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>
-                                    Transaction EXP Date
-                                </legend>
-                                <div style={row2}>
-                                    <Field label="Exp Date From"><DateInput value={expDateFrom} onChange={setExpDateFrom} /></Field>
-                                    <Field label="Exp Date To"><DateInput value={expDateTo} onChange={setExpDateTo} /></Field>
-                                </div>
-                            </fieldset> */}
-
-
                             <div
                                 style={{
                                     display: "flex",
@@ -644,37 +499,6 @@ export default function TransactionReportPage() {
                                 </fieldset>
 
                                 {/* Transaction EXP Date */}
-                                {/* <fieldset
-                                    style={{
-                                        flex: 1,
-                                        border: "0.5px solid #d1d5db",
-                                        borderRadius: 6,
-                                        padding: "6px 12px 10px",
-                                        margin: 0,
-                                    }}
-                                >
-                                    <legend
-                                        style={{
-                                            fontSize: 10,
-                                            color: "#6b7280",
-                                            padding: "0 4px",
-                                            textTransform: "uppercase",
-                                            letterSpacing: "0.05em",
-                                            fontWeight: 500,
-                                        }}
-                                    >
-                                        Transaction EXP Date
-                                    </legend>
-                                    <div style={row2}>
-                                        <Field label="Exp Date From">
-                                            <DateInput value={expDateFrom} onChange={setExpDateFrom} />
-                                        </Field>
-                                        <Field label="Exp Date To">
-                                            <DateInput value={expDateTo} onChange={setExpDateTo} />
-                                        </Field>
-                                    </div>
-                                </fieldset> */}
-
                                 {/* Exp Date From | Exp Date To */}
                                 {/* Exp Date From | Exp Date To */}
                                 <fieldset style={{ border: "0.5px solid #d1d5db", borderRadius: 6, padding: "6px 12px 10px", margin: 0 }}>
@@ -791,39 +615,142 @@ export default function TransactionReportPage() {
                                 <div />
                             </div>
 
-                            {/* Txn Type */}
-                            {/* <div style={row2}>
-                                <Field label="Txn Type">
-                                    <select value={txnType} onChange={(e) => setTxnType(e.target.value)} style={inputStyle}>
-                                        <option value="">All</option>
-                                        <option value="ADJ-">ADJ-</option>
-                                        <option value="ADJ+">ADJ+</option>
-                                        <option value="EXP">EXP</option>
-                                        <option value="IMP">IMP</option>
-                                        <option value="TFI">TFI</option>
-                                        <option value="TFO">TFO</option>
-                                    </select>
-                                </Field>
-                                <div />
-                            </div> */}
+
 
                             {/* Doc Ref From | Doc Ref To */}
-                            {/* <div style={row2}>
-                                <Field label="Doc. Ref. From"><TextInput value={docRefFrom} onChange={setDocRefFrom} /></Field>
-                                <Field label="Doc. Ref. To"><TextInput value={docRefTo} onChange={setDocRefTo} /></Field>
-                            </div> */}
+                            <div style={row2}>
+    <FloatLabel label="Doc. Ref. From">
+        <LookupField
+            label=""
+            value={docRefFrom}
+            displayValue={docRefFrom}
+            columns={[
+                { field: "DOC_REF", header: "Doc Ref" },
+            ]}
+            valueField="DOC_REF"
+            displayFields={["DOC_REF"]}
+            loadOptions={() =>
+                getDynamicLookupaccount({
+                    parameter: "WMS_Stock_DOC_REF",
+                    code1: user?.company_code || "",
+                    code2: principal[0]?.prin_code || "",
+                })
+            }
+            onChange={(val) => setDocRefFrom(val)}
+        />
+    </FloatLabel>
+
+    <FloatLabel label="Doc. Ref. To">
+        <LookupField
+            label=""
+            value={docRefTo}
+            displayValue={docRefTo}
+            columns={[
+                { field: "DOC_REF", header: "Doc Ref" },
+            ]}
+            valueField="DOC_REF"
+            displayFields={["DOC_REF"]}
+            loadOptions={() =>
+                getDynamicLookupaccount({
+                    parameter: "WMS_Stock_DOC_REF",
+                    code1: user?.company_code || "",
+                    code2: principal[0]?.prin_code || "",
+                })
+            }
+            onChange={(val) => setDocRefTo(val)}
+        />
+    </FloatLabel>
+</div>
 
                             {/* Lot No From | Lot No To */}
-                            {/* <div style={row2}>
-                                <Field label="Lot No. From"><TextInput value={lotNoFrom} onChange={setLotNoFrom} /></Field>
-                                <Field label="Lot No. To"><TextInput value={lotNoTo} onChange={setLotNoTo} /></Field>
-                            </div> */}
+                            <div style={row2}>
+    <FloatLabel label="Lot No. From">
+        <LookupField
+            label=""
+            value={lotNoFrom}
+            displayValue={lotNoFrom}
+            columns={[
+                { field: "LOT_NO", header: "Lot No" },
+            ]}
+            valueField="LOT_NO"
+            displayFields={["LOT_NO"]}
+            loadOptions={() =>
+                getDynamicLookupaccount({
+                    parameter: "WMS_Stock_Lot_no",
+                    code1: user?.company_code || "",
+                    code2: principal[0]?.prin_code || "",
+                })
+            }
+            onChange={(val) => setLotNoFrom(val)}
+        />
+    </FloatLabel>
+
+    <FloatLabel label="Lot No. To">
+        <LookupField
+            label=""
+            value={lotNoTo}
+            displayValue={lotNoTo}
+            columns={[
+                { field: "LOT_NO", header: "Lot No" },
+            ]}
+            valueField="LOT_NO"
+            displayFields={["LOT_NO"]}
+            loadOptions={() =>
+                getDynamicLookupaccount({
+                    parameter: "WMS_Stock_Lot_no",
+                    code1: user?.company_code || "",
+                    code2: principal[0]?.prin_code || "",
+                })
+            }
+            onChange={(val) => setLotNoTo(val)}
+        />
+    </FloatLabel>
+</div>
 
                             {/* Batch No From | Batch No To */}
-                            {/* <div style={row2}>
-                                <Field label="Batch No. From"><TextInput value={batchNoFrom} onChange={setBatchNoFrom} /></Field>
-                                <Field label="Batch No. To"><TextInput value={batchNoTo} onChange={setBatchNoTo} /></Field>
-                            </div> */}
+                            <div style={row2}>
+    <FloatLabel label="Batch No. From">
+        <LookupField
+            label=""
+            value={batchNoFrom}
+            displayValue={batchNoFrom}
+            columns={[
+                { field: "BATCH_NO", header: "Batch No" },
+            ]}
+            valueField="BATCH_NO"
+            displayFields={["BATCH_NO"]}
+            loadOptions={() =>
+                getDynamicLookupaccount({
+                    parameter: "WMS_Stock_batch_no",
+                    code1: user?.company_code || "",
+                    code2: principal[0]?.prin_code || "",
+                })
+            }
+            onChange={(val) => setBatchNoFrom(val)}
+        />
+    </FloatLabel>
+
+    <FloatLabel label="Batch No. To">
+        <LookupField
+            label=""
+            value={batchNoTo}
+            displayValue={batchNoTo}
+            columns={[
+                { field: "BATCH_NO", header: "Batch No" },
+            ]}
+            valueField="BATCH_NO"
+            displayFields={["BATCH_NO"]}
+            loadOptions={() =>
+                getDynamicLookupaccount({
+                    parameter: "WMS_Stock_batch_no",
+                    code1: user?.company_code || "",
+                    code2: principal[0]?.prin_code || "",
+                })
+            }
+            onChange={(val) => setBatchNoTo(val)}
+        />
+    </FloatLabel>
+</div>
 
                             {/* Report Date */}
                             {/* <div style={row2}>
@@ -870,7 +797,7 @@ export default function TransactionReportPage() {
                                             name="groupedOn"
                                             value={opt.value}
                                             checked={groupedOn === opt.value}
-                                            onChange={() => setGroupedOn(opt.value)}
+                                         onChange={() => setGroupedOn(opt.value.toUpperCase())}
                                             style={{ accentColor: "#185FA5", cursor: "pointer" }}
                                         />
                                         <span style={{
@@ -896,9 +823,7 @@ export default function TransactionReportPage() {
                         >
                             <RotateCcw size={13} /> Reset
                         </button>
-                        {/* <button className="act-btn" onClick={handleExportExcel}>
-                            <Download size={13} />
-                        </button> */}
+
 
                         <button
                             className="action-btn"

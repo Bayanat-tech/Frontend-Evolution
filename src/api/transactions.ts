@@ -641,7 +641,7 @@ export async function jobListingReport(params: ReportParams) {
         "/api/finance/transactions/reports/wms-joblisting/html", 
         params
     );
-}
+} 
 
 export async function TransationReport(params: ReportParams) {
     await openReportInTab(
@@ -652,7 +652,7 @@ export async function TransationReport(params: ReportParams) {
 
 export async function exportTransactionProductExcel(params: ReportParams) {
     await openReportInTab(
-        "/api/finance/transactions/reports/wms-TransactionProductReport/excel", 
+        "/api/finance/transactions/reports/wms-transaction-product-excel",
         params
     );
 }
