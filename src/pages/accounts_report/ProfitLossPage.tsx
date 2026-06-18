@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Play, RefreshCw, X, Search } from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
@@ -13,31 +13,15 @@ import {
   getProfitLossReportExcelDownload,
 } from "../../api/transactions";
 
-type PnlOption = "period" | "month" | "monthwise";
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 type Division = { div_code: string; div_name: string };
 
-interface ReportPayload {
-  parameter: string;
-  loginid: string;
-  code1: string;
-  code2: string;
-  code3: string;
-  code4: string;
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-interface HtmlReportRendererProps {
-  required_values: { html: string };
-}
-
-const PARAMETER_MAP: Record<PnlOption, string> = {
-  period: "Account_Report_VW_PROFIT_AND_LOSS",
-  month: "",
-  monthwise: "",
-};
-
-const getStartOfMonth = (): string => {
+const getStartOfYear = (): string => {
   const n = new Date();
-  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-01`;
+  return `${n.getFullYear()}-01-01`;
 };
 
 const getToday = (): string => {
@@ -47,9 +31,53 @@ const getToday = (): string => {
   ).padStart(2, "0")}`;
 };
 
-function HtmlReportRenderer({ required_values }: HtmlReportRendererProps) {
-  return <div style={{ width: "100%" }} dangerouslySetInnerHTML={{ __html: required_values.html }} />;
+// ─── Iframe renderer ──────────────────────────────────────────────────────────
+
+function IframeReportRenderer({
+  required_values,
+}: {
+  required_values: { html: string };
+}) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+
+    const win = iframe.contentWindow as any;
+
+    let originalPrint: (() => void) | undefined;
+    if (win) {
+      originalPrint = win.print;
+      win.print = () => {};
+    }
+
+    doc.open();
+    doc.write(required_values.html);
+    doc.close();
+
+    const restorePrint = () => {
+      if (win && originalPrint) win.print = originalPrint;
+    };
+    if (doc.readyState === "complete") {
+      restorePrint();
+    } else {
+      iframe.addEventListener("load", restorePrint, { once: true });
+    }
+  }, [required_values.html]);
+
+  return (
+    <iframe
+      ref={iframeRef}
+      style={{ width: "100%", minHeight: "70vh", border: "none" }}
+      title="report"
+    />
+  );
 }
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ProfitLossPage() {
   const { user } = useAuth();
@@ -57,8 +85,7 @@ export default function ProfitLossPage() {
   const companyCode = user?.company_code ?? "";
   const loginId = user?.loginid ?? user?.username ?? "ADMIN";
 
-  const [option] = useState<PnlOption>("period");
-
+  // ── Division lookup ────────────────────────────────────────────────────────
   const [divisionList, setDivisionList] = useState<Division[]>([]);
   const [divisionLoading, setDivisionLoading] = useState(false);
   const [divisionSearch, setDivisionSearch] = useState("");
@@ -66,20 +93,24 @@ export default function ProfitLossPage() {
   const [division, setDivision] = useState("");
   const [divisionDisplay, setDivisionDisplay] = useState("");
 
-  const [dateFrom, setDateFrom] = useState(getStartOfMonth());
+  // ── Form state ─────────────────────────────────────────────────────────────
+  const [dateFrom, setDateFrom] = useState(getStartOfYear());
   const [dateTo, setDateTo] = useState(getToday());
 
+  // ── Report state ───────────────────────────────────────────────────────────
   const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
-  const [excelLoading, setExcelLoading] = useState(false);
 
   const filteredDivisions = divisionList.filter((d) =>
-    `${d.div_code} ${d.div_name}`.toLowerCase().includes(divisionSearch.toLowerCase())
+    `${d.div_code} ${d.div_name}`
+      .toLowerCase()
+      .includes(divisionSearch.toLowerCase())
   );
 
   const canGenerate = Boolean(division && dateFrom && dateTo);
 
+  // ── Fetch divisions ────────────────────────────────────────────────────────
   useEffect(() => {
     const fetchDivisions = async () => {
       setDivisionLoading(true);
@@ -96,45 +127,38 @@ export default function ProfitLossPage() {
         setDivisionLoading(false);
       }
     };
-
     fetchDivisions();
   }, [companyCode, loginId]);
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
 
   const handleReset = () => {
     setDivision("");
     setDivisionDisplay("");
     setDivisionSearch("");
-    setDateFrom(getStartOfMonth());
+    setDateFrom(getStartOfYear());
     setDateTo(getToday());
     setReportHtml(null);
     setReportError(null);
   };
 
-  const buildPayload = useCallback((): ReportPayload => {
-    return {
-      parameter: PARAMETER_MAP[option],
+  const buildPayload = useCallback(
+    () => ({
+      parameter: "Account_Report_PROFIT_AND_LOSS_VW_PROFIT_AND_LOSS",
       loginid: loginId,
-      code1: companyCode,
-      code2: division,
-      code3: dateFrom,
-      code4: dateTo,
-    };
-  }, [companyCode, dateFrom, dateTo, division, loginId, option]);
+      company_code: companyCode,
+      division_code: division,
+      from_date: dateFrom,
+      to_date: dateTo,
+    }),
+    [companyCode, loginId, division, dateFrom, dateTo]
+  );
 
   const handleGenerate = async () => {
-    if (!division) {
-      setReportError("Please select a Division before generating.");
-      return;
-    }
-    if (!dateFrom || !dateTo) {
-      setReportError("Please select both From and To dates.");
-      return;
-    }
-
+    if (!canGenerate) return;
     setReportLoading(true);
     setReportError(null);
     setReportHtml(null);
-
     try {
       const html = await getProfitLossReportHtml(buildPayload());
       setReportHtml(html);
@@ -147,31 +171,35 @@ export default function ProfitLossPage() {
 
   const handleExcel = async () => {
     try {
-      setExcelLoading(true);
       await getProfitLossReportExcelDownload(buildPayload());
     } catch (err: any) {
       setReportError(err?.message ?? "Failed to download Excel");
-    } finally {
-      setExcelLoading(false);
     }
   };
 
+  const handleCloseReport = () => setReportHtml(null);
+
   const pageTitle = "Profit & Loss";
 
+  // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <>
       <section className="grid gap-4">
+
+        {/* Page Header */}
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">{pageTitle}</h1>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Financial Reports</p>
+            <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">
+              {pageTitle}
+            </h1>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Financial Reports
+            </p>
           </div>
-
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" title="Reset" onClick={handleReset}>
               <RefreshCw size={15} />
             </Button>
-
             <Button disabled={!canGenerate || reportLoading} onClick={handleGenerate}>
               {reportLoading ? (
                 <>
@@ -181,8 +209,19 @@ export default function ProfitLossPage() {
                     fill="none"
                     viewBox="0 0 24 24"
                   >
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v8z"
+                    />
                   </svg>
                   Generating…
                 </>
@@ -195,6 +234,7 @@ export default function ProfitLossPage() {
           </div>
         </div>
 
+        {/* Error Banner */}
         {reportError && (
           <div className="flex items-center gap-2 rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
             <span className="font-semibold">Error:</span> {reportError}
@@ -207,6 +247,7 @@ export default function ProfitLossPage() {
           </div>
         )}
 
+        {/* Filters Card */}
         <Card className="border-border shadow-sm overflow-visible">
           <CardHeader className="bg-muted/30 border-b border-border px-4 py-2">
             <div className="flex items-center gap-2">
@@ -216,37 +257,38 @@ export default function ProfitLossPage() {
                   Parameters
                 </p>
                 <h2 className="text-[11px] font-semibold text-foreground leading-tight">
-                  Profit &amp; Loss Filters
+                  Report Filters
                 </h2>
               </div>
             </div>
           </CardHeader>
-
           <CardContent className="px-4 py-3 overflow-visible">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4 overflow-visible">
+
+              {/* Division searchable select */}
               <label className="flex flex-col gap-1.5 sm:col-span-2 overflow-visible">
                 <span className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide">
-                  Division
+                  Division <strong className="text-destructive">*</strong>
                 </span>
-
                 <div className="relative z-50 overflow-visible">
                   <div className="flex items-center gap-2 rounded border border-input bg-background px-2">
                     <Search size={13} className="text-muted-foreground flex-shrink-0" />
                     <input
                       type="text"
-                      placeholder="Search division..."
+                      placeholder={divisionLoading ? "Loading…" : "Search division…"}
                       value={showDivisionDropdown ? divisionSearch : divisionDisplay}
                       onChange={(e) => {
                         setDivisionSearch(e.target.value);
                         setShowDivisionDropdown(true);
                       }}
                       onFocus={() => setShowDivisionDropdown(true)}
-                      onBlur={() => setTimeout(() => setShowDivisionDropdown(false), 200)}
+                      onBlur={() =>
+                        setTimeout(() => setShowDivisionDropdown(false), 200)
+                      }
                       disabled={divisionLoading}
                       className="h-8 w-full bg-transparent text-[11px] text-foreground outline-none disabled:opacity-50"
                     />
                   </div>
-
                   {showDivisionDropdown && filteredDivisions.length > 0 && (
                     <div className="absolute left-0 right-0 top-full z-[9999] mt-1 max-h-52 overflow-y-auto rounded border border-border bg-background shadow-lg">
                       {filteredDivisions.map((d) => (
@@ -257,14 +299,18 @@ export default function ProfitLossPage() {
                           onMouseDown={(e) => {
                             e.preventDefault();
                             setDivision(d.div_code);
-                            setDivisionDisplay(`${d.div_code} - ${d.div_name}`);
+                            setDivisionDisplay(`${d.div_code} – ${d.div_name}`);
                             setDivisionSearch("");
                             setShowDivisionDropdown(false);
                             setReportError(null);
                           }}
                         >
-                          <span className="w-20 flex-shrink-0 font-medium">{d.div_code}</span>
-                          <span className="truncate text-muted-foreground">{d.div_name}</span>
+                          <span className="w-20 flex-shrink-0 font-medium">
+                            {d.div_code}
+                          </span>
+                          <span className="truncate text-muted-foreground">
+                            {d.div_name}
+                          </span>
                         </button>
                       ))}
                     </div>
@@ -272,6 +318,7 @@ export default function ProfitLossPage() {
                 </div>
               </label>
 
+              {/* From Date */}
               <label className="flex flex-col gap-0.5">
                 <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
                   From Date <strong className="text-destructive">*</strong>
@@ -285,6 +332,7 @@ export default function ProfitLossPage() {
                 />
               </label>
 
+              {/* To Date */}
               <label className="flex flex-col gap-0.5">
                 <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
                   To Date <strong className="text-destructive">*</strong>
@@ -297,37 +345,23 @@ export default function ProfitLossPage() {
                   className="h-8 w-full rounded border border-input bg-background px-2 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
                 />
               </label>
+
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-border shadow-sm overflow-hidden min-h-[220px]">
-          {reportLoading && (
-            <div className="flex min-h-[220px] items-center justify-center gap-2 p-10 text-[13px] text-muted-foreground">
-              <svg
-                className="animate-spin h-4 w-4"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-              </svg>
-              Generating report…
-            </div>
-          )}
-
-          {reportHtml !== null && (
-            <ReportDialogPage
-              title={pageTitle}
-              Report={HtmlReportRenderer}
-              required_values={{ html: reportHtml }}
-              excel={handleExcel}
-              onClose={() => setReportHtml(null)}
-            />
-          )}
-        </Card>
       </section>
+
+      {/* Report Dialog */}
+      {reportHtml !== null && (
+        <ReportDialogPage
+          title={pageTitle}
+          Report={IframeReportRenderer}
+          required_values={{ html: reportHtml }}
+          excel={handleExcel}
+          onClose={handleCloseReport}
+        />
+      )}
     </>
   );
 }

@@ -677,9 +677,11 @@ export async function exportJobListingExcel(params: ReportParams) {
 
 // ---------Profit & Loss Report----------------
 
+// transactions.ts
+
 export async function getProfitLossReportHtml(params: ReportParams): Promise<string> {
     const response = await api.post(
-        `/api/finance/transactions/reports/getProfitLossReport/html`,
+        `/api/finance/transactions/reports/profitloss/html`,  
         params,
         { responseType: "text" }
     );
@@ -688,7 +690,7 @@ export async function getProfitLossReportHtml(params: ReportParams): Promise<str
 
 export async function getProfitLossReportExcelDownload(params: ReportParams): Promise<void> {
     const response = await api.post(
-        `/api/finance/transactions/reports/getProfitLossReport/excel`,
+        `/api/finance/transactions/reports/profitloss/excel`,  
         params,
         { responseType: "blob" }
     );
@@ -704,8 +706,6 @@ export async function getProfitLossReportExcelDownload(params: ReportParams): Pr
     link.remove();
     window.URL.revokeObjectURL(url);
 }
-
-
 
 // ----------Visa Expiry Listing Report----------------
 export async function openVisaExpiryReport(params: ReportParams) {
