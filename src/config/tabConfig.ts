@@ -118,26 +118,30 @@ const tabConfigs: Record<string, TabConfig> = {
     ],
   },
 
-  tally_details: {
-    title: "Tally Details", minWidth: 1260,
-    addLabel: "Add Tally", addEndpoint: "tally",
-    addFields: tallyFormFields,
-    sql: ({ companyCode, jobNo, prinCode }) =>
-      `SELECT * FROM VW_WM_INB_TT_TALLY_DETS
-       WHERE company_code = '${sqlEscape(companyCode)}'
-         AND job_no       = '${sqlEscape(jobNo)}'
-         AND prin_code    = '${sqlEscape(prinCode)}'
-       ORDER BY updated_at`,
-    columns: [
-      { key: "prod_name",        label: "Product",    size: 320 },
-      { key: "qty_tally_string", label: "Tally Qty",  size: 150 },
-      { key: "qty_string",       label: "Pack Qty",   size: 150 },
-      { key: "batch_no",         label: "Batch No",   size: 120 },
-      { key: "lot_no",           label: "Lot No",     size: 120 },
-      { key: "container_no",     label: "Container",  size: 140 },
-      { key: "po_no",            label: "PO No",      size: 120 },
-    ],
-  },
+tally_details: {
+  title: "Tally Details", minWidth: 1260,
+  addLabel: "Add Tally", addEndpoint: "tally",
+  addFields: tallyFormFields,
+  sql: ({ companyCode, jobNo, prinCode }) =>
+    `SELECT * FROM VW_WM_INB_TALLY_DETAIL
+     WHERE company_code = '${sqlEscape(companyCode)}'
+       AND job_no       = '${sqlEscape(jobNo)}'
+       AND prin_code    = '${sqlEscape(prinCode)}'
+     ORDER BY seq_number`,
+  columns: [
+    { key: "prod_name",              label: "Product",         size: 280 },
+    { key: "prod_code",              label: "Product Code",    size: 140 },
+    { key: "receive_qty_string",     label: "Received Qty",    size: 180 },
+    { key: "net_receive_qty_string", label: "Net Received Qty",size: 180 },
+    { key: "batch_no",               label: "Batch No",        size: 120 },
+    { key: "lot_no",                 label: "Lot No",          size: 120 },
+    { key: "pallet_id",              label: "Pallet ID",       size: 120 },
+    { key: "container_no",           label: "Container",       size: 140 },
+    { key: "po_no",                  label: "PO No",           size: 120 },
+    { key: "mfg_date",               label: "Mfg Date",        size: 110 },
+    { key: "exp_date",               label: "Exp Date",        size: 110 },
+  ],
+},
 
   putway_details: {
     title: "Putaway Details", minWidth: 1280,

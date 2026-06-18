@@ -122,14 +122,15 @@ const isManualPutaway = tab === "putway_manual"; // ⚠️ confirm this matches 
       const pUom     = String(row?.["P_UOM"]  ?? row?.["p_uom"]  ?? "");
       const lUom     = String(row?.["L_UOM"]     ?? row?.["l_uom"]     ?? "");
       const prodName = String(row?.["PROD_NAME"] ?? row?.["prod_name"] ?? ""); // ← new
-        const rawPo = row?.["PO_NO"] ?? row?.["po_no"];
-  const poNo = rawPo == null || rawPo === "null" ? "" : String(rawPo);
+  const rawPo = row?.["PO_NO"] ?? row?.["po_no"];
+  const poNo = rawPo == null || rawPo === "null" || rawPo === "" ? null : String(rawPo);
 
       setFormData((cur:any) => {
         const qtyPuom = Number(cur.qty_puom ?? 0);
         const qtyLuom = uomCount <= 1 ? 0 : Number(cur.qty_luom ?? 0);
         const quantity = uomCount <= 1 ? qtyPuom + qtyLuom : qtyPuom * uppp + qtyLuom;
-    return { ...cur, prod_code: val, prod_name: prodName, p_uom: pUom, l_uom: lUom, uppp, upp, uom_count: uomCount, qty_luom: uomCount <= 1 ? 0 : cur.qty_luom, quantity, po_no: poNo };
+    return { ...cur, prod_code: val, prod_name: prodName, p_uom: pUom, l_uom: lUom, uppp, upp, uom_count: uomCount, qty_luom: uomCount <= 1 ? 0 : cur.qty_luom, quantity, po_no: poNo,     container_no: val,
+ };
       });
     },
   };
