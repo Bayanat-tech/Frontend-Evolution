@@ -6,7 +6,7 @@ type ApiResponse<T> = {
   message?: string;
 };
 
-export type TransactionType = "BP" | "BR" | "CR" | "CP" | "CN" | "DN" | "PO" | "PI" | "SI" | "SV" | "JV" | "RJV" ;
+export type TransactionType = "BP" | "BR" | "CR" | "CP" | "CN" | "DN" | "PO" | "PI" | "SI" | "SV" | "JV" | "RJV";
 
 export type TransactionDocumentRow = {
   company_code?: string;
@@ -471,40 +471,40 @@ export async function openDocumentReport(docType: TransactionType | string, docN
 
 
 interface ReportParams {
-    parameter: string;
-    loginid: string;
-    code1?: string;
-    code2?: string;
-    code3?: string;
-    code4?: string;
-    code5?: string;
-    code6?: string;
-    code7?: string | number;
-    code8?: string | number;
-    code9?: string;
-    code10?: string;
-    code20?: string;
-    [key: string]: any;
+  parameter: string;
+  loginid: string;
+  code1?: string;
+  code2?: string;
+  code3?: string;
+  code4?: string;
+  code5?: string;
+  code6?: string;
+  code7?: string | number;
+  code8?: string | number;
+  code9?: string;
+  code10?: string;
+  code20?: string;
+  [key: string]: any;
 }
 
 // ── generic helper (same blob → new tab pattern) ──────────────────────────
 async function openReportInTab(endpoint: string, params: ReportParams): Promise<void> {
-    try {
-        const response = await api.post(endpoint, params, {
-            responseType: "blob",
-        });
+  try {
+    const response = await api.post(endpoint, params, {
+      responseType: "blob",
+    });
 
-        const blob = new Blob([response.data], { type: "text/html;charset=utf-8" });
-        const url = window.URL.createObjectURL(blob);
-        const reportWindow = window.open(url, "_blank", "noopener,noreferrer");
+    const blob = new Blob([response.data], { type: "text/html;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const reportWindow = window.open(url, "_blank", "noopener,noreferrer");
 
-        if (!reportWindow) console.error("Please allow popups to view this report");
+    if (!reportWindow) console.error("Please allow popups to view this report");
 
-        window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
-    } catch (error) {
-        console.error(`Failed to open report [${endpoint}]:`, error);
-        throw error; // re-throw so the frontend can show an error banner
-    }
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+  } catch (error) {
+    console.error(`Failed to open report [${endpoint}]:`, error);
+    throw error; // re-throw so the frontend can show an error banner
+  }
 }
 
 // ── 1. Cheque Book Monitoring ─────────────────────────────────────────────
@@ -516,10 +516,10 @@ async function openReportInTab(endpoint: string, params: ReportParams): Promise<
 // }
 
 export async function openChequeDateWiseReport(params: ReportParams) {
-    await openReportInTab(
-        `/api/finance/transactions/reports/cheque-date-wise/html`,
-        params
-    );
+  await openReportInTab(
+    `/api/finance/transactions/reports/cheque-date-wise/html`,
+    params
+  );
 }
 
 // ── 2. Detail Dump ────────────────────────────────────────────────────────
@@ -556,28 +556,27 @@ export async function openChequeDateWiseReport(params: ReportParams) {
 
 // ── 6. Account Payee Wise ─────────────────────────────────────────────────
 export async function openAccountPayeeWiseReport(params: ReportParams) {
-    await openReportInTab(
-        `/api/finance/transactions/reports/account-payee-wise/html`,
-        params
-    );
+  await openReportInTab(
+    `/api/finance/transactions/reports/account-payee-wise/html`,
+    params
+  );
 }
 // -------Ageing Report----------------------
 export async function openInvdatewiseDetailReport(params: ReportParams) {
-    await openReportInTab(
-       `/api/finance/transactions/reports/InvdatewiseDetail/html`,
-        params
-    );
+  await openReportInTab(
+    `/api/finance/transactions/reports/InvdatewiseDetail/html`,
+    params
+  );
 }
 
 export async function openInvdatewiseSummaryReport(params: ReportParams) {
-    await openReportInTab(
-        `/api/finance/transactions/reports/InvdatewiseSummary/html`,
-        params
-    );
+  await openReportInTab(
+    `/api/finance/transactions/reports/InvdatewiseSummary/html`,
+    params
+  );
 }
 
-export async function openDuedatewiseDetailReport(params: ReportParams)
-{
+export async function openDuedatewiseDetailReport(params: ReportParams) {
   await openReportInTab(
 
     `/api/finance/transactions/reports/DuedatewiseDetail/html`,
@@ -586,56 +585,95 @@ export async function openDuedatewiseDetailReport(params: ReportParams)
 }
 
 export async function openDuedatewiseSummaryReport(params: ReportParams) {
-    await openReportInTab(
-        "/api/finance/transactions/reports/DuedatewiseSummary/html",
-        params
-    );
+  await openReportInTab(
+    "/api/finance/transactions/reports/DuedatewiseSummary/html",
+    params
+  );
 }
 
 export async function openOutstandingListReport(params: ReportParams) {
-    await openReportInTab(
-        "/api/finance/transactions/reports/OutstandingList/html",
-        params
-    );
+  await openReportInTab(
+    "/api/finance/transactions/reports/OutstandingList/html",
+    params
+  );
 }
 
 export async function taxOutInReport(params: ReportParams) {
-    await openReportInTab(
-        "/api/finance/transactions/reports/tax-vat-out-ledger/html",
-        params
-// ---------AC_statement report-----
-    )}
+  await openReportInTab(
+    "/api/finance/transactions/reports/tax-vat-out-ledger/html",
+    params
+    // ---------AC_statement report-----
+  )
+}
 
 export async function openAcStatementReport(params: ReportParams) {
-    await openReportInTab(
-        "/api/finance/transactions/reports/AcStatementReport/html",  
-        params
-    );
+  await openReportInTab(
+    "/api/finance/transactions/reports/AcStatementReport/html",
+    params
+  );
 }
 
 
 
 export async function taxOutInSummaryReport(params: ReportParams) {
-    await openReportInTab(
-        "/api/finance/transactions/reports/tax-vat-out-ledger-summary/html",
-        params
-    );
+  await openReportInTab(
+    "/api/finance/transactions/reports/tax-vat-out-ledger-summary/html",
+    params
+  );
 }
 export async function openOutstandingStatementDetailReport(params: ReportParams) {
-    await openReportInTab(
-        "/api/finance/transactions/reports/OutstandingDetailReport/html",  
-        params
-    );
+  await openReportInTab(
+    "/api/finance/transactions/reports/OutstandingDetailReport/html",
+    params
+  );
 }
 
 
 export async function openOutstandingStatementSummaryReport(params: ReportParams) {
-    await openReportInTab(
-        "/api/finance/transactions/reports/OutstandingSummaryReport/html", 
-        params
-    );
+  await openReportInTab(
+    "/api/finance/transactions/reports/OutstandingSummaryReport/html",
+    params
+  );
 }
 
+export async function jobListingReport(params: ReportParams) {
+  await openReportInTab(
+    "/api/finance/transactions/reports/wms-joblisting/html",
+    params
+  );
+}
+// export async function exportJobListingExcel(params: ReportParams) {
+//     await openReportInTab(
+//         "/api/finance/transactions/reports/wms-joblisting/excel", 
+//         params
+//     );
+// }
+
+export async function exportJobListingExcel(params: ReportParams) {
+
+  const response = await fetch(
+    "/api/finance/transactions/reports/wms-joblisting/excel",
+    {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(params),
+    }
+  );
+
+  const blob = await response.blob();
+
+  const url = window.URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "Job_Listing_Report.xlsx";
+  a.click();
+
+  window.URL.revokeObjectURL(url);
+}
 
 // ---------Profit & Loss Report----------------
 
