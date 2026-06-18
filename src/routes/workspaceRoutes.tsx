@@ -72,6 +72,7 @@ import { RJVDocumentEditor } from "../pages/finance/RJVDocuments";
 import { AlmsSimpleMasterConfigs } from "../pages/almswf/almsMasterConfig";
 import { AlmsSimpleMasterPage } from "../pages/almswf/AlmsMasterPage";
 import TaxReportFilter from "../pages/accounts_report/tax_report/TaxReport";
+import JobListingReport from "../pages/wms/stock transfer/JobListingReport";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -282,6 +283,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "WMS Billing Activity Master",
     match: ({ pathname }) => isWmsBillingActRoute(pathname),
     element: () => <WmsBillingActPage />,
+  },
+     {
+    name: "WMS Stock Report Job Listing",
+    match: ({ pathname }) => isJobListingRoute(pathname),
+    element: () => <JobListingReport />,
   },
   
   {
@@ -776,6 +782,11 @@ function isStockTransferViewRoute(pathname: string) {
     normalized.includes("/view/")
   );
 }
+
+function isJobListingRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (normalized.includes("/wms/reports/stock%20report/job_listing") || normalized.includes("/wms/reports/stock-report/job_listing") || normalized.includes("/wms/reports/stock-report/job-listing"));
+}
 function isAssetDepreciationRoute(pathname: string) {
   return pathname.toLowerCase().includes("/finance/a/c_others/assets/asset_depreciation");
 }
@@ -977,7 +988,7 @@ function isPamsAppraisalWeightageRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/appraisal_weightage") || 
          normalized.includes("/appraisal_weightage");
-} 
+}
 
 
 function getPamsMasterConfig(context: WorkspaceRouteContext) {
