@@ -158,7 +158,7 @@ const tabConfigs: Record<string, TabConfig> = {
 
   putway_manual: {
     title: "Putaway Manual", minWidth: 1280,
-    addLabel: "Add Manual Putaway", addEndpoint: "manualputaway",
+    addLabel: "Add Manual Putaway", addEndpoint: "upsertPutawaymanualHandler",
     addFields: manualPutawayFormFields,
     sql: ({ companyCode, jobNo, prinCode }) =>
       `SELECT * FROM VW_WM_INB_TT_BATCH_DETS
