@@ -109,7 +109,7 @@ export async function getWmsOutbound<T = unknown>(endpoint: string, params: Reco
 }
 
 export async function postWmsOutbound<TPayload extends Record<string, unknown>>(endpoint: string, payload: TPayload) {
-  const response = await api.post<ApiResponse<unknown>>(`/api/wms/outbound/${endpoint}`, payload);
+  const response = await api.put<ApiResponse<unknown>>(`/api/wms/outbound/${endpoint}`, payload);
   if (!response.data.success) throw new Error(response.data.message || `Unable to save ${endpoint}`);
   return response.data; 
 }

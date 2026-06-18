@@ -15,6 +15,7 @@ import type { UserProfile } from "../types/auth";
 interface DropdownOption {
   label: string;
   value: string;
+  raw?: LookupRow;
 }
 
 type Props = {
@@ -75,16 +76,11 @@ const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOptio
     const companyCode = form.company_code || user?.company_code || user?.COMPANY_CODE;
     if (companyCode) params.code1 = companyCode;
 
-    console.log(`Loading dropdown options for ${field.name} with params:`, params);
-    console.log("Current form state:", form);
-    console.log("Dropdown code map:", field.dropdownCodeMap);
     if (field.dropdownCodeMap) {
       let codeIndex = 2;
       for (const [fieldName] of Object.entries(field.dropdownCodeMap)) {
-        console.log(`Processing dropdown code map entry: ${fieldName} -> code${codeIndex}`);
         if (fieldName === "company_code") continue;
         const value = form[fieldName];
-        console.log(`Value for ${fieldName}:`, value);
         if (value) params[`code${codeIndex}`] = value;
         codeIndex++;
       }
@@ -101,11 +97,12 @@ const loadDropdownOptions = async (field: WmsMasterField): Promise<DropdownOptio
             .map((f) => String(row[f] || ""))
             .filter(Boolean)
             .join(separator)
-        : String(row[labelKey] || row.label || row.name || row.description || "");
+        : String(row[labelKey] ?? row.label ?? row.name ?? row.description ?? "");
 
       return {
         label: displayLabel,
-        value: String(row[valueKey] || row.value || row.code || row.id || ""),
+        value: String(row[valueKey] ?? row.value ?? row.code ?? row.id ?? ""),
+        raw: row,
       };
     });
   } catch (error) {
@@ -502,7 +499,7 @@ if (field.type === "select" || field.asyncOptions || field.dropdownParam) {
       displayFields={["label"]}
       loadOptions={async () => {
         const options = await loadDropdownOptions(field);
-        return options.map((opt) => ({ value: opt.value, label: opt.label }));
+        return options.map((opt) => ({ ...(opt.raw || {}), value: opt.value, label: opt.label }));
       }}
       onChange={(val) => onChange(field.name, val)}
       disabled={disabled}
