@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Play, RefreshCw, X, Search } from "lucide-react";
+import { Play, RefreshCw, X, Search, ChevronLeft } from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
@@ -12,10 +12,21 @@ import {
   getProfitLossReportHtml,
   getProfitLossReportExcelDownload,
 } from "../../api/transactions";
+import { api } from "../../api/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Division = { div_code: string; div_name: string };
+
+type DrillLevel = "l1" | "l2" | "l3";
+
+interface DrillState {
+  level: DrillLevel;
+  html: string;
+  title: string;
+  pl_code?: string;
+  ac_code?: string;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -47,7 +58,6 @@ function IframeReportRenderer({
     if (!doc) return;
 
     const win = iframe.contentWindow as any;
-
     let originalPrint: (() => void) | undefined;
     if (win) {
       originalPrint = win.print;
@@ -77,6 +87,45 @@ function IframeReportRenderer({
   );
 }
 
+// ─── Drill-back overlay button (renders on top of the dialog) ─────────────────
+
+function DrillBackButton({ onClick }: { onClick: () => void }) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: "72px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 9999,
+      }}
+    >
+      <button
+        onClick={onClick}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "4px",
+          padding: "4px 12px",
+          fontSize: "11px",
+          fontWeight: 600,
+          background: "#1a5f4a",
+          color: "#fff",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+        }}
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+        Back
+      </button>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ProfitLossPage() {
@@ -85,7 +134,7 @@ export default function ProfitLossPage() {
   const companyCode = user?.company_code ?? "";
   const loginId = user?.loginid ?? user?.username ?? "ADMIN";
 
-  // ── Division lookup ────────────────────────────────────────────────────────
+  // ── Division lookup ──────────────────────────────────────────────────────
   const [divisionList, setDivisionList] = useState<Division[]>([]);
   const [divisionLoading, setDivisionLoading] = useState(false);
   const [divisionSearch, setDivisionSearch] = useState("");
@@ -93,24 +142,31 @@ export default function ProfitLossPage() {
   const [division, setDivision] = useState("");
   const [divisionDisplay, setDivisionDisplay] = useState("");
 
-  // ── Form state ─────────────────────────────────────────────────────────────
+  // ── Form state ───────────────────────────────────────────────────────────
   const [dateFrom, setDateFrom] = useState(getStartOfYear());
   const [dateTo, setDateTo] = useState(getToday());
 
-  // ── Report state ───────────────────────────────────────────────────────────
+  // ── Report / drill state ─────────────────────────────────────────────────
   const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
 
+  // Drill-down stack: each entry is a level pushed on top
+  const [drillStack, setDrillStack] = useState<DrillState[]>([]);
+  const [drillLoading, setDrillLoading] = useState(false);
+
+  // ── Derived ──────────────────────────────────────────────────────────────
   const filteredDivisions = divisionList.filter((d) =>
     `${d.div_code} ${d.div_name}`
       .toLowerCase()
       .includes(divisionSearch.toLowerCase())
   );
-
   const canGenerate = Boolean(division && dateFrom && dateTo);
+  const currentDrill = drillStack[drillStack.length - 1] ?? null;
+  const activeHtml = currentDrill?.html ?? reportHtml;
+  const dialogTitle = currentDrill?.title ?? "Profit & Loss";
 
-  // ── Fetch divisions ────────────────────────────────────────────────────────
+  // ── Fetch divisions ──────────────────────────────────────────────────────
   useEffect(() => {
     const fetchDivisions = async () => {
       setDivisionLoading(true);
@@ -130,7 +186,68 @@ export default function ProfitLossPage() {
     fetchDivisions();
   }, [companyCode, loginId]);
 
-  // ── Handlers ───────────────────────────────────────────────────────────────
+  // ── postMessage listener for drill-down clicks inside the iframe ─────────
+  useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+      const data = event.data;
+      if (!data || data.type !== "PNL_DRILL_DOWN") return;
+
+      setDrillLoading(true);
+      setReportError(null);
+
+      try {
+        const basePayload = {
+          parameter: "ProfitLoss",
+          loginid: loginId,
+          company_code: data.company_code,
+          from_date: data.from_date,
+          to_date: data.to_date,
+          division_code: data.division_code,
+        };
+
+        if (data.drillLevel === "l2" && data.pl_code) {
+          const response = await api.post(
+            "/api/finance/transactions/reports/profitloss/drilldown/l2",
+            { ...basePayload, pl_code: data.pl_code },
+            { responseType: "text" }
+          );
+          setDrillStack((prev) => [
+            ...prev,
+            {
+              level: "l2",
+              html: response.data as string,
+              title: `Account Summary — PL: ${data.pl_code}`,
+              pl_code: data.pl_code,
+            },
+          ]);
+        } else if (data.drillLevel === "l3" && data.ac_code) {
+          const response = await api.post(
+            "/api/finance/transactions/reports/profitloss/drilldown/l3",
+            { ...basePayload, ac_code: data.ac_code },
+            { responseType: "text" }
+          );
+          setDrillStack((prev) => [
+            ...prev,
+            {
+              level: "l3",
+              html: response.data as string,
+              title: `Transaction Detail — ${data.ac_code}`,
+              ac_code: data.ac_code,
+            },
+          ]);
+        }
+      } catch (err: any) {
+        setReportError(err?.message ?? "Failed to load drill-down");
+      } finally {
+        setDrillLoading(false);
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [loginId]);
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
 
   const handleReset = () => {
     setDivision("");
@@ -140,11 +257,12 @@ export default function ProfitLossPage() {
     setDateTo(getToday());
     setReportHtml(null);
     setReportError(null);
+    setDrillStack([]);
   };
 
   const buildPayload = useCallback(
     () => ({
-      parameter: "Account_Report_PROFIT_AND_LOSS_VW_PROFIT_AND_LOSS",
+      parameter: "ProfitLoss",
       loginid: loginId,
       company_code: companyCode,
       division_code: division,
@@ -159,6 +277,7 @@ export default function ProfitLossPage() {
     setReportLoading(true);
     setReportError(null);
     setReportHtml(null);
+    setDrillStack([]);
     try {
       const html = await getProfitLossReportHtml(buildPayload());
       setReportHtml(html);
@@ -169,15 +288,53 @@ export default function ProfitLossPage() {
     }
   };
 
+  const triggerDownload = (data: Blob, filename: string) => {
+    const blob = new Blob([data], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
   const handleExcel = async () => {
     try {
-      await getProfitLossReportExcelDownload(buildPayload());
+      if (currentDrill?.level === "l2" && currentDrill.pl_code) {
+        const response = await api.post(
+          "/api/finance/transactions/reports/profitloss/drilldown/l2/excel",
+          { ...buildPayload(), pl_code: currentDrill.pl_code },
+          { responseType: "blob" }
+        );
+        triggerDownload(response.data, `pnl_l2_${currentDrill.pl_code}.xlsx`);
+      } else if (currentDrill?.level === "l3" && currentDrill.ac_code) {
+        const response = await api.post(
+          "/api/finance/transactions/reports/profitloss/drilldown/l3/excel",
+          { ...buildPayload(), ac_code: currentDrill.ac_code },
+          { responseType: "blob" }
+        );
+        triggerDownload(response.data, `pnl_l3_${currentDrill.ac_code}.xlsx`);
+      } else {
+        await getProfitLossReportExcelDownload(buildPayload());
+      }
     } catch (err: any) {
       setReportError(err?.message ?? "Failed to download Excel");
     }
   };
 
-  const handleCloseReport = () => setReportHtml(null);
+  const handleDrillBack = () => {
+    setDrillStack((prev) => prev.slice(0, -1));
+    setReportError(null);
+  };
+
+  const handleCloseReport = () => {
+    setReportHtml(null);
+    setDrillStack([]);
+  };
 
   const pageTitle = "Profit & Loss";
 
@@ -192,9 +349,7 @@ export default function ProfitLossPage() {
             <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">
               {pageTitle}
             </h1>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              Financial Reports
-            </p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Financial Reports</p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" title="Reset" onClick={handleReset}>
@@ -209,19 +364,8 @@ export default function ProfitLossPage() {
                     fill="none"
                     viewBox="0 0 24 24"
                   >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8v8z"
-                    />
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                   </svg>
                   Generating…
                 </>
@@ -305,12 +449,8 @@ export default function ProfitLossPage() {
                             setReportError(null);
                           }}
                         >
-                          <span className="w-20 flex-shrink-0 font-medium">
-                            {d.div_code}
-                          </span>
-                          <span className="truncate text-muted-foreground">
-                            {d.div_name}
-                          </span>
+                          <span className="w-20 flex-shrink-0 font-medium">{d.div_code}</span>
+                          <span className="truncate text-muted-foreground">{d.div_name}</span>
                         </button>
                       ))}
                     </div>
@@ -352,16 +492,35 @@ export default function ProfitLossPage() {
 
       </section>
 
-      {/* Report Dialog */}
-      {reportHtml !== null && (
+      {/* ── Back button floats over the dialog when drilling down ── */}
+      {activeHtml !== null && drillStack.length > 0 && (
+        <DrillBackButton onClick={handleDrillBack} />
+      )}
+
+      {/* ── Report Dialog ── */}
+      {activeHtml !== null && (
         <ReportDialogPage
-          title={pageTitle}
+          title={dialogTitle}
           Report={IframeReportRenderer}
-          required_values={{ html: reportHtml }}
+          required_values={{ html: drillLoading ? getLoadingHtml() : activeHtml! }}
           excel={handleExcel}
           onClose={handleCloseReport}
         />
       )}
     </>
   );
+}
+
+// ─── Loading placeholder HTML ─────────────────────────────────────────────────
+
+function getLoadingHtml(): string {
+  return `<!doctype html><html><body style="display:flex;align-items:center;justify-content:center;height:60vh;font-family:Arial,sans-serif;color:#1a5f4a;font-size:14px">
+  <div style="text-align:center">
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;display:block;margin:0 auto 12px">
+      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+    </svg>
+    <style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>
+    Loading drill-down data…
+  </div>
+</body></html>`;
 }
