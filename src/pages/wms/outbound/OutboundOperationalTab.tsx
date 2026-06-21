@@ -826,7 +826,7 @@ function OrderDetailDialog({
     }
     setSaving(true);
     try {
-      await postWmsOutbound("upsertOutboundOrderDetailManualHandler", form);
+      await putWmsOutbound("upsertOutboundOrderDetailManualHandler", form);
       onNotice({ type: "success", message: "Order detail saved successfully" });
       onClose();
       await onDone();
