@@ -1,6 +1,5 @@
-import React, { useRef } from "react";
-import { useReactToPrint } from "react-to-print";
-import { X } from "lucide-react";
+import React, { useRef, useCallback } from "react";
+import { X, Printer, FileSpreadsheet } from "lucide-react";
 import { Button } from "./ui/Button";
 
 export interface ReportDialogPageProps {
@@ -9,6 +8,7 @@ export interface ReportDialogPageProps {
   onClose?: () => void;
   title?: string;
   excel?: () => void;
+  headerSlot?: React.ReactNode;
 }
 
 const ReportDialogPage = ({
@@ -17,90 +17,72 @@ const ReportDialogPage = ({
   onClose,
   title,
   excel,
+  headerSlot,
 }: ReportDialogPageProps) => {
-  const reportRef = useRef<HTMLDivElement>(null);
+  // We keep a ref to the iframe element so we can reach its contentWindow for printing.
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
-  const fileName = `${title || "Report"}-${new Date()
-    .toISOString()
-    .slice(0, 10)}`;
+  const fileName = `${title || "Report"}-${new Date().toISOString().slice(0, 10)}`;
 
-  const printStyles = `
-    @page { margin: 10mm; size: A4 portrait; }
+  const handlePrint = useCallback(() => {
+    const dialogEl = document.querySelector('[data-report-dialog]');
+    const iframe   = dialogEl?.querySelector('iframe[title="report"]') as HTMLIFrameElement | null;
 
-    * { box-sizing: border-box; }
-
-    body {
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-      margin: 0;
-      padding: 0;
-      font-family: Arial, sans-serif;
-      font-size: 13px;
-      color: #000;
-      background: #fff;
+    if (!iframe?.contentWindow) {
+      console.warn("ReportDialogPage: could not find report iframe");
+      return;
     }
 
-    thead { display: table-header-group; }
-    tfoot { display: table-footer-group; }
-
-    .invoice-print-footer {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: #fff;
-      padding: 4px 24px;
-      border-top: 1px solid #ccc;
-    }
-
-    .invoice-inline-footer {
-      display: none !important;
-    }
-  `;
-
-  const handlePrint = useReactToPrint({
-    contentRef: reportRef,
-    documentTitle: fileName,
-    pageStyle: printStyles,
-  });
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+  }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="relative flex h-[80vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
-        
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      data-report-dialog
+    >
+      <div className="relative flex h-[90vh] w-full max-w-5xl flex-col rounded-lg bg-white shadow-xl">
+
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute right-3 top-3 rounded p-1 text-gray-500 transition hover:bg-gray-100 hover:text-black"
+          className="absolute right-3 top-3 z-10 rounded p-1 text-gray-500 transition hover:bg-gray-100 hover:text-black"
         >
           <X size={20} />
         </button>
 
         {/* Header */}
-        <div className="border-b px-6 py-4 text-lg font-semibold">
-          {title ?? `Report - ${required_values.doc_no ?? ""}`}
+        <div className="border-b px-6 py-4 text-lg font-semibold pr-12 truncate">
+          {title ?? `Report - ${required_values?.doc_no ?? ""}`}
         </div>
 
-        {/* Content */}
+        {/* Optional slot (breadcrumbs, alerts, drill indicators, etc.) */}
+        {headerSlot}
+
+        {/* Content — the Report component renders its own iframe internally */}
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="flex-1 overflow-auto bg-slate-100 p-4">
-            <div ref={reportRef}>
-              <Report required_values={required_values} />
-            </div>
+          <div className="flex-1 bg-slate-100 p-4">
+            <Report required_values={required_values} />
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 border-t p-4 print:hidden">
-          <Button 
-          onClick={excel} 
-          className="rounded bg-green-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-700">
-            Excel
-          </Button>
+        <div className="flex justify-end gap-2 border-t p-4">
+          {excel && (
+            <Button
+              onClick={excel}
+              className="flex items-center gap-1.5 rounded bg-green-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-700"
+            >
+              <FileSpreadsheet size={15} />
+              Excel
+            </Button>
+          )}
           <Button
             onClick={handlePrint}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+            className="flex items-center gap-1.5 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
           >
+            <Printer size={15} />
             Print
           </Button>
         </div>

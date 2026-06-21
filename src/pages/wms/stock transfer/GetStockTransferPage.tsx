@@ -853,27 +853,43 @@ useEffect(() => {
                     { field: "BATCH_NO", header: "Batch No" },
                   ]}
                   placeholder="Search product..."
-                  loadOptions={async () => {
-                    const res = await api.post("/api/wms/inbound/executeRawSql", {
-                      raw_sql: `SELECT PROD_CODE, PROD_NAME, P_UOM, L_UOM, UPPP, UOM_COUNT,
-                                      PRIN_CODE, COMPANY_CODE
-                                FROM MS_PRODUCT
-                                WHERE PRIN_CODE    = '${prin_code}'`                    });
-                    return Array.isArray(res.data?.data) ? res.data.data
-                        : Array.isArray(res.data)        ? res.data : [];
-                  }}
-                  onChange={(_val, row) => {
-                    if (!row) return;
-                    setSelectedProduct(row as WmsRow);
-                    const siteInd = val(row as WmsRow, "SITE_IND").trim();
-                    setFromSite(siteInd);
-                    setFromLocStart(""); setFromLocEnd("");
-                    setToSite(""); setToLocStart(""); setToLocEnd("");
-                    setQtyPUOM(""); setQtyLUOM("");
-                    // auto-load From locations for the pre-filled site
-                    if (siteInd) void loadLocations(siteInd, "from");
-                    setToLocOptions([]);
-                  }}
+                    loadOptions={async () => {
+                      const res = await api.post("/api/wms/inbound/executeRawSql", {
+                        raw_sql: `SELECT 
+                            PROD_CODE, BATCH_NO, UPPP, PRIN_CODE, PROD_NAME, SITE_CODE, LOCATION_CODE,
+                            P_UOM, QTY_STOCK, QTY_AVL, L_UOM, JOB_NO, TXN_DATE, LOT_NO, MANU_CODE,
+                            DOC_REF, KEY_NUMBER, UOM_COUNT, PALLET_ID, MFG_DATE, EXP_DATE
+                          FROM VW_STKLED
+                          WHERE PRIN_CODE = '${prin_code}'`,
+                      });
+                      return Array.isArray(res.data?.data) ? res.data.data
+                          : Array.isArray(res.data)        ? res.data : [];
+                    }}
+                    onChange={(_val, row) => {
+                      if (!row) return;
+                      setSelectedProduct(row as WmsRow);
+                      const siteCode = val(row as WmsRow, "SITE_CODE").trim();
+                      const locCode  = val(row as WmsRow, "LOCATION_CODE").trim();
+                      setFromSite(siteCode);
+                      setFromLocStart(locCode); setFromLocEnd(locCode);
+                      setToSite(""); setToLocStart(""); setToLocEnd("");
+                      setQtyPUOM(""); setQtyLUOM("");
+                      // auto-load From locations for the pre-filled site
+                      if (siteCode) void loadLocations(siteCode, "from");
+                      setToLocOptions([]);
+                    }}
+                  // onChange={(_val, row) => {
+                  //   if (!row) return;
+                  //   setSelectedProduct(row as WmsRow);
+                  //   const siteInd = val(row as WmsRow, "SITE_IND").trim();
+                  //   setFromSite(siteInd);
+                  //   setFromLocStart(""); setFromLocEnd("");
+                  //   setToSite(""); setToLocStart(""); setToLocEnd("");
+                  //   setQtyPUOM(""); setQtyLUOM("");
+                  //   // auto-load From locations for the pre-filled site
+                  //   if (siteInd) void loadLocations(siteInd, "from");
+                  //   setToLocOptions([]);
+                  // }}
                 />
                 <ReadOnlyInput label="Product Name" value={selectedProduct ? val(selectedProduct, "PROD_NAME") : ""} />
               </div>

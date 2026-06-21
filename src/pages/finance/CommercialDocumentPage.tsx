@@ -653,7 +653,13 @@ const withTax = {
          </div>
          <span>{showHeaderDetails ? "Full header" : "Compact header"}</span>
        </div>
-       <div className={`commercial-header-panel payment-header-grid relative grid grid-cols-6 gap-2.5 p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1 ${showHeaderDetails ? "is-expanded" : "is-collapsed"}`}>
+       <div className={`commercial-header-panel commercial-header-block-grid payment-header-grid relative grid gap-2.5 p-3 ${showHeaderDetails ? "is-expanded" : "is-collapsed"}`}>
+        <section className="commercial-header-block commercial-header-block-doc">
+          <div className="commercial-header-block-title">
+            <span>Document</span>
+            <strong>{form.doc_no || "New"}</strong>
+          </div>
+          <div className="commercial-header-block-fields">
 
   {/* ── Doc No (edit only) ── */}
   {editMode && (
@@ -728,6 +734,15 @@ const withTax = {
     <Input disabled required
       value={`${form.div_code}${form.div_name ? ` - ${form.div_name}` : ""}`} />
   </Field>
+          </div>
+        </section>
+
+        <section className="commercial-header-block commercial-header-block-party">
+          <div className="commercial-header-block-title">
+            <span>{isSales ? "Customer" : "Supplier"}</span>
+            <strong>{form.ac_name || form.ac_code || "Not selected"}</strong>
+          </div>
+          <div className="commercial-header-block-fields">
 
   {/* ── Supplier Code + Name — PO / PI  & ── Customer Code + Name — SI / SV ──── */}
   {/* field: ac_code / ac_name — same in all tables ── */}
@@ -856,7 +871,15 @@ const withTax = {
       <Input disabled={isCancelled} value={form.delivery_to || ""} onChange={(e) => update("delivery_to", e.target.value)} />
     </Field>
   )}
+          </div>
+        </section>
 
+        <section className="commercial-header-block commercial-header-block-extra">
+          <div className="commercial-header-block-title">
+            <span>Reference</span>
+            <strong>{form.ref_doc_no || form.ref_no || form.app_ref_no || "-"}</strong>
+          </div>
+          <div className="commercial-header-block-fields">
   {!isPO && (
     <LookupField
       label="Ref Doc"
@@ -956,6 +979,15 @@ const withTax = {
   )}
 
   {/* ── Tax Category  ── */}
+          </div>
+        </section>
+
+        <section className="commercial-header-block commercial-header-block-tax">
+          <div className="commercial-header-block-title">
+            <span>Tax & Remarks</span>
+            <strong>{form.tax_type || form.tx_compntcat_code_1 || "No tax selected"}</strong>
+          </div>
+          <div className="commercial-header-block-fields">
   <LookupField
   label="Tax Category"
   disabled={isCancelled}
@@ -1059,6 +1091,8 @@ const withTax = {
 
   {/* ── HSE Compliant + Letter Head checkboxes — PO only ── */}
   {/* PO table fields: hse_compliance (Y/N) / print_letter_head (bool) ── */}
+          </div>
+        </section>
   {/* {isPO && (
     <label className="field flex-row items-center gap-2">
       <input
@@ -1185,23 +1219,7 @@ const withTax = {
                         {isPO && (<td className="w-36 px-2 py-1"> <Input value={line.cost_code || ""} onChange={(e) => updateLine(line.id, { cost_code: e.target.value })} />
                         </td>
                         )}
-                        <td className="w-[210px] px-2 py-1">
-                          <LookupField
-                            label="Currency"
-                            compact
-                            disabled={isCancelled}
-                            value={form.curr_code ?? ""}
-                            displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
-                            columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
-                            valueField="curr_code"
-                            displayFields={["curr_code", "curr_name", "ex_rate"]}
-                            loadOptions={() => getDynamicFinanceLookup({ parameter: "Account_Currency_CODE_Search", code1: user?.company_code || "" })}
-                            onChange={(value, row) => setForm((c) => ({ ...c, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(getLookupValue(row || {}, "ex_rate") || 1) }))}
-                          />
-  
-                        </td>
-                        <td className="w-40 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></td>
-                        <td className="w-36 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" value={line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
+                        <td className="w-36 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" value={Number(line.qty || 0) === 0 ? "" : line.qty} onChange={(event) => updateLine(line.id, recalc({ ...line, qty: Number(event.target.value || 0) }))} /></td>
                         <td className="w-72 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" value={line.price} onChange={(event) => updateLine(line.id, recalc({ ...line, price: Number(event.target.value || 0) }))} /></td>
                         <td className="finance-amount-cell px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.001" value={line.amount} 
                         // onChange={(event) => updateLine(line.id, { amount: Number(event.target.value || 0) })} /></td>
@@ -1244,6 +1262,21 @@ const withTax = {
                         <td className="finance-amount-cell px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" 
                         // value={line.tx_compnt_amt_1 ?? 0}  onChange={(event) => updateLine(line.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                         value={((Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100).toFixed(3)} /></td>
+                        <td className="w-[210px] px-2 py-1">
+                          <LookupField
+                            label="Currency"
+                            compact
+                            disabled={isCancelled}
+                            value={form.curr_code ?? ""}
+                            displayValue={form.curr_name ? `${form.curr_code} - ${form.curr_name}` : form.curr_code ?? ""}
+                            columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
+                            valueField="curr_code"
+                            displayFields={["curr_code", "curr_name", "ex_rate"]}
+                            loadOptions={() => getDynamicFinanceLookup({ parameter: "Account_Currency_CODE_Search", code1: user?.company_code || "" })}
+                            onChange={(value, row) => setForm((c) => ({ ...c, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(getLookupValue(row || {}, "ex_rate") || 1) }))}
+                          />
+                        </td>
+                        <td className="w-40 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></td>
                         <td className="w-40 px-2 py-1"><Input disabled={isCancelled} value={line.job_no || ""} onChange={(event) => updateLine(line.id, { job_no: event.target.value })} /></td>
                         {isPO && (
                           <td className="w-36 px-2 py-1"> <Input disabled={isCancelled}  value={line.dept_code || ""}  onChange={(e) => updateLine(line.id, { dept_code: e.target.value })}/> </td>
