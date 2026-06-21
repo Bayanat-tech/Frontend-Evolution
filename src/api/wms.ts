@@ -16,6 +16,122 @@ export type WmsPagination = {
   page?: number;
   limit?: number;
 };
+export type AdjHeaderCreatePayload = {
+  ADJ_CODE: string;
+  PRIN_CODE: string;
+  REMARKS: string;
+  ADJ_DATE: string;
+  CONFIRMED: string;
+  USER_ID: string;
+  COMPANY_CODE: string;
+};
+export type AdjDetailPayload = {
+  ADJ_NO: number;
+  ADJ_SERIALNO?: number;
+  PRIN_CODE: string;
+  PROD_CODE: string;
+  SITE_CODE?: string;
+  LOCATION_CODE?: string;
+  P_UOM?: string;
+  L_UOM?: string;
+  JOB_NO?: string;
+  KEY_NUMBER?: string;
+  QTY_PUOM: number;
+  QTY_LUOM?: number;
+  QUANTITY: number;
+  ADJ_TYPE: string;
+  PALLET_ID?: string;
+  MFG_DATE?: string | null;
+  EXP_DATE?: string | null;
+  BATCH_NO?: string | null;
+  LOT_NO?: string | null;
+};
+
+export type ProcessStockAdjustmentPayload = {
+  COMPANY_CODE: string;
+  PRIN_CODE: string;
+  ADJ_NO: number;
+  USERID: string;
+  P_ADJ_SERIALNO: string;
+};
+
+export type ConfirmStockAdjustmentPayload = {
+  P_COMPANY_CODE: string;
+  P_PRIN_CODE: string;
+  P_ADJ_NO: string;
+  P_ADJ_SERIALNO: string;
+};
+
+export type DeleteAdjDetailPayload = {
+  ADJ_NO: number;
+  JOB_NO?: string;
+  ADJ_SERIALNO?: number;
+  COMPANY_CODE?: string;
+};
+
+export type StockAdjustmentListResponse = {
+  headers: LookupRow[];
+  details: LookupRow[];
+};
+
+/** GET — backend always returns ALL headers + ALL details, filter client-side */
+export async function getStockAdjustmentData() {
+  const response = await getWmsStockAdjustment<StockAdjustmentListResponse>();
+  return response || { headers: [], details: [] };
+}
+
+export async function getAllStockAdjustments() {
+  const data = await getStockAdjustmentData();
+  return data.headers || [];
+}
+
+// export async function getAllStockAdjustments(company_code: string) {
+//   return getWmsStockAdjustment<LookupRow[]>({ view: "headers", company_code });
+// }
+
+export async function getStockAdjustmentDetails(
+  adj_no: string,
+  company_code: string,
+  prin_code: string,
+  tab: "create" | "process" | "confirmed"
+) {
+  return getWmsStockAdjustment<LookupRow[]>({ view: "details", adj_no, company_code, prin_code, tab });
+}
+
+
+export async function createAdjHeader(payload: AdjHeaderCreatePayload) {
+  return postWmsStockAdjustment("createAdjHeader", payload as unknown as Record<string, unknown>);
+}
+
+/** POST create adjustment detail line */
+export async function createAdjDetail(payload: AdjDetailPayload) {
+  return postWmsStockAdjustment("createAdjDetail", payload as unknown as Record<string, unknown>);
+}
+
+/** POST edit adjustment detail line */
+export async function editAdjDetail(payload: AdjDetailPayload) {
+  return postWmsStockAdjustment("editAdjDetail", payload as unknown as Record<string, unknown>);
+}
+
+/** POST delete adjustment detail line */
+export async function deleteAdjDetail(payload: DeleteAdjDetailPayload) {
+  return postWmsStockAdjustment("deleteAdjDetail", payload as unknown as Record<string, unknown>);
+}
+
+/** POST process stock adjustment (runs SP_WM_ADJUSTMNT_PROCESS) */
+export async function processStockAdjustment(payload: ProcessStockAdjustmentPayload) {
+  return postWmsStockAdjustment("processStockAdjustment", payload as unknown as Record<string, unknown>);
+}
+
+/** POST confirm stock adjustment */
+export async function confirmStockAdjustment(payload: ConfirmStockAdjustmentPayload) {
+  return postWmsStockAdjustment("confirmStockAdjustment", payload as unknown as Record<string, unknown>);
+}
+
+/** GET all stock adjustment reports for the print dialog */
+export async function getAllStockAdjReports() {
+  return getWmsStockAdjustment<{ reportid: string; reportname: string }[]>({ view: "reports" });
+}
 
 export async function getWmsMaster(master: string, options: WmsPagination & Record<string, unknown> = {}) {
   const response = await api.get<ApiResponse<WmsMasterResponse>>(`/api/wms/${master}`, {
@@ -390,7 +506,7 @@ export async function getAllStockTransferDetails(
   prin_code: string
 ) {
   return getWmsStockTransfer<{ details: LookupRow[]; count: number }>(
-    "getAllStockTransferDetails",
+    "getTSSTNWithDetails",
     { stn_no, company_code, prin_code }
   );
 }
