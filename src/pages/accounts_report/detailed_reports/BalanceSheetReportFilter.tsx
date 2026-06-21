@@ -89,7 +89,7 @@ function IframeReportRenderer({
     <iframe
       ref={iframeRef}
       style={{ width: "100%", minHeight: "70vh", border: "none" }}
-      title="balance-sheet-report"
+      title="report"
     />
   );
 }

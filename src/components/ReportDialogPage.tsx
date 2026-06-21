@@ -26,7 +26,7 @@ const ReportDialogPage = ({
 
   const handlePrint = useCallback(() => {
     const dialogEl = document.querySelector('[data-report-dialog]');
-    const iframe   = dialogEl?.querySelector('iframe[title="report"]') as HTMLIFrameElement | null;
+    const iframe   = dialogEl?.querySelector('iframe[title="report"], iframe') as HTMLIFrameElement | null;
 
     if (!iframe?.contentWindow) {
       console.warn("ReportDialogPage: could not find report iframe");
