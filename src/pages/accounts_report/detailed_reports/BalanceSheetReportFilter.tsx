@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Play, RefreshCw, X } from "lucide-react";
+import { ChevronLeft, Play, RefreshCw, X } from "lucide-react";
 
 import { Button } from "../../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card";
 import { useAuth } from "../../../state/AuthContext";
+import { api } from "../../../api/client";
 import { getBalanceSheetReportHtml, getBalanceSheetReportExcelDownload } from "../../../api/transactions";
 import { getDynamicLookup } from "../../../api/lookups";
 import ReportDialogPage from "../../../components/ReportDialogPage";
@@ -11,6 +12,31 @@ import ReportDialogPage from "../../../components/ReportDialogPage";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Division = { div_code: string; div_name: string };
+
+type DrillLevel = "ac" | "detail";
+
+const DRILL_ENDPOINTS: Record<DrillLevel, string> = {
+  ac:     "api/finance/transactions/report/balancesheet/drilldown/ac",
+  detail: "api/finance/transactions/report/balancesheet/drilldown/detail",
+};
+
+const DRILL_EXCEL_ENDPOINTS: Record<DrillLevel, string> = {
+  ac:     "api/finance/transactions/report/balancesheet/drilldown/ac/excel",
+  detail: "api/finance/transactions/report/balancesheet/drilldown/detail/excel",
+};
+
+const DRILL_TITLES: Record<DrillLevel, string> = {
+  ac:     "Account Breakdown",
+  detail: "Transaction Detail",
+};
+
+interface DrillEntry {
+  id:      number;
+  level:   DrillLevel;
+  label:   string;
+  html:    string;
+  payload: Record<string, unknown>;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -20,9 +46,9 @@ const getToday = (): string => {
 };
 
 // ─── Iframe renderer ──────────────────────────────────────────────────────────
-// Consistent with TrialBalancePage — scripts in report HTML only run inside a
-// real iframe. Balance Sheet has no drill-down, but we keep the same renderer
-// so print() and layout behave identically to TB.
+// Used for the main report AND every drill-down level. Scripts injected into
+// HTML only execute inside a real iframe (not via dangerouslySetInnerHTML),
+// so a single renderer keeps postMessage drill-down clicks working everywhere.
 
 function IframeReportRenderer({
   required_values,
@@ -68,6 +94,42 @@ function IframeReportRenderer({
   );
 }
 
+// ─── Drill breadcrumb bar ─────────────────────────────────────────────────────
+
+interface DrillBreadcrumbProps {
+  stack:      DrillEntry[];
+  onNavigate: (index: number) => void;
+}
+
+function DrillBreadcrumb({ stack, onNavigate }: DrillBreadcrumbProps) {
+  return (
+    <div className="flex items-center gap-1 flex-wrap px-1 py-1.5 text-[10px]">
+      <button
+        onClick={() => onNavigate(-1)}
+        className="flex items-center gap-1 text-primary/80 hover:text-primary font-medium"
+      >
+        <ChevronLeft size={11} /> Balance Sheet
+      </button>
+      {stack.map((entry, i) => (
+        <span key={entry.id} className="flex items-center gap-1">
+          <span className="text-muted-foreground">/</span>
+          <button
+            onClick={() => onNavigate(i)}
+            className={[
+              "font-medium",
+              i === stack.length - 1
+                ? "text-foreground cursor-default"
+                : "text-primary/80 hover:text-primary",
+            ].join(" ")}
+          >
+            {entry.label}
+          </button>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function BalanceSheetPage() {
@@ -85,7 +147,77 @@ export default function BalanceSheetPage() {
   const [reportHtml,    setReportHtml]    = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError,   setReportError]   = useState<string | null>(null);
-  const [excelLoading,  setExcelLoading]  = useState(false);
+
+  // ── Drill-down state ───────────────────────────────────────────────────────
+  const [drillStack, setDrillStack]     = useState<DrillEntry[]>([]);
+  const [drillLoading, setDrillLoading] = useState(false);
+  const [drillError, setDrillError]     = useState<string | null>(null);
+  const drillIdCounter                  = useRef(0);
+
+  // ── Listen for DRILL_DOWN messages posted by report iframes ───────────────
+  useEffect(() => {
+    const handler = async (ev: MessageEvent) => {
+      if (!ev.data || ev.data.type !== "DRILL_DOWN") return;
+
+      const {
+        drillLevel,
+        company_code,
+        as_on_date,
+        division_code,
+        code,
+        codeField,
+      } = ev.data as {
+        drillLevel:    DrillLevel;
+        company_code:  string;
+        as_on_date:    string;
+        division_code: string;
+        code:          string;
+        codeField:     string;
+      };
+
+      const endpoint = DRILL_ENDPOINTS[drillLevel];
+      if (!endpoint) return;
+
+      const payload: Record<string, unknown> = {
+        company_code,
+        as_on_date,
+        division_code,
+        [codeField]: [code],
+      };
+
+      setDrillLoading(true);
+      setDrillError(null);
+
+      try {
+        const { data } = await api.post<string>(endpoint, payload, {
+          headers:      { Accept: "text/html" },
+          responseType: "text",
+        });
+
+        const entry: DrillEntry = {
+          id:      ++drillIdCounter.current,
+          level:   drillLevel,
+          label:   `${DRILL_TITLES[drillLevel]} · ${code}`,
+          html:    data,
+          payload,
+        };
+
+        setDrillStack(prev => [...prev, entry]);
+      } catch (err: any) {
+        const msg =
+          err?.response?.data?.message ||
+          err?.response?.data ||
+          err?.message ||
+          "Failed to load drill-down";
+        setDrillError(String(msg));
+      } finally {
+        setDrillLoading(false);
+      }
+    };
+
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, []);
 
   // ── Fetch divisions ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -114,6 +246,8 @@ export default function BalanceSheetPage() {
     setDivisionCode("");
     setReportHtml(null);
     setReportError(null);
+    setDrillStack([]);
+    setDrillError(null);
   };
 
   const buildPayload = useCallback(() => ({
@@ -133,6 +267,8 @@ export default function BalanceSheetPage() {
     setReportLoading(true);
     setReportError(null);
     setReportHtml(null);
+    setDrillStack([]);
+    setDrillError(null);
 
     try {
       const data = await getBalanceSheetReportHtml(buildPayload());
@@ -150,7 +286,6 @@ export default function BalanceSheetPage() {
   };
 
   const handleExcel = async () => {
-    setExcelLoading(true);
     try {
       await getBalanceSheetReportExcelDownload(buildPayload());
     } catch (err: any) {
@@ -160,13 +295,64 @@ export default function BalanceSheetPage() {
         err?.message ||
         "Failed to download Excel";
       setReportError(String(msg));
-    } finally {
-      setExcelLoading(false);
     }
+  };
+
+  // ── Excel download for whichever drill level is currently visible ─────────
+  const handleDrillExcel = async () => {
+    const topDrill = drillStack.length > 0 ? drillStack[drillStack.length - 1] : null;
+    if (!topDrill) return;
+    const endpoint = DRILL_EXCEL_ENDPOINTS[topDrill.level];
+    try {
+      const response = await api.post(endpoint, topDrill.payload, {
+        responseType: "arraybuffer",
+      });
+      const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url  = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href  = url;
+      link.setAttribute("download", `${topDrill.label.replace(/[^a-z0-9]/gi, "_")}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data ||
+        err?.message ||
+        "Failed to download Excel";
+      setDrillError(String(msg));
+    }
+  };
+
+  const handleCloseReport = () => {
+    setReportHtml(null);
+    setDrillStack([]);
+    setDrillError(null);
+  };
+
+  /**
+   * Navigate the drill breadcrumb:
+   *   index === -1  → back to main report (clear drill stack)
+   *   index ===  n  → truncate stack to [0..n]
+   */
+  const handleDrillNavigate = (index: number) => {
+    if (index === -1) {
+      setDrillStack([]);
+    } else {
+      setDrillStack(prev => prev.slice(0, index + 1));
+    }
+    setDrillError(null);
   };
 
   const canGenerate = Boolean(asOnDate);
   const pageTitle   = "Balance Sheet";
+
+  // ── Derive what to show inside ReportDialogPage ────────────────────────────
+  const topDrill = drillStack.length > 0 ? drillStack[drillStack.length - 1] : null;
 
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -312,11 +498,42 @@ export default function BalanceSheetPage() {
       {/* ── Report Dialog ── */}
       {reportHtml !== null && (
         <ReportDialogPage
-          title={pageTitle}
+          title={topDrill ? topDrill.label : pageTitle}
           Report={IframeReportRenderer}
-          required_values={{ html: reportHtml }}
-          excel={handleExcel}
-          onClose={() => setReportHtml(null)}
+          required_values={{ html: topDrill ? topDrill.html : reportHtml }}
+          excel={topDrill ? handleDrillExcel : handleExcel}
+          onClose={handleCloseReport}
+          headerSlot={
+            <div className="flex flex-col gap-0">
+              {/* Drill loading indicator */}
+              {drillLoading && (
+                <div className="flex items-center gap-2 px-4 py-1.5 bg-primary/5 border-b border-border text-[10px] text-primary">
+                  <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                  Loading drill-down…
+                </div>
+              )}
+
+              {/* Drill error */}
+              {drillError && (
+                <div className="flex items-center gap-2 px-4 py-1.5 bg-destructive/10 border-b border-destructive/20 text-[10px] text-destructive">
+                  <span className="font-semibold">Drill-down error:</span> {drillError}
+                  <button onClick={() => setDrillError(null)} className="ml-auto">
+                    <X size={11} />
+                  </button>
+                </div>
+              )}
+
+              {/* Breadcrumb — only visible when drilled in */}
+              {drillStack.length > 0 && (
+                <div className="border-b border-border bg-muted/20">
+                  <DrillBreadcrumb stack={drillStack} onNavigate={handleDrillNavigate} />
+                </div>
+              )}
+            </div>
+          }
         />
       )}
     </>
