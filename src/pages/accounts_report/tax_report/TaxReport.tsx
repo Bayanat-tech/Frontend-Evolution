@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText, RotateCcw, Printer, Loader2 } from "lucide-react";
+import { FileText, RotateCcw, Printer, Loader2, Download } from "lucide-react";
 import { getDynamicLookup, getDynamicLookupaccount } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { LookupField } from "../../../components/ui/LookupField";
-import { Division, taxOutInSummaryReport, taxOutInReport } from "../../../api/transactions";
+import { Division, taxOutInSummaryReport, taxOutInReport, getTaxInvoiceExcelReport, exportTaxInvoiceSummaryExcel } from "../../../api/transactions";
 import { FloatLabelInput } from "../../../lib/InputStyle";
 
 export default function TaxReportFilter() {
@@ -26,7 +26,7 @@ export default function TaxReportFilter() {
     const [accountLeftSelected, setAccountLeftSelected] = useState(new Set<string>());
     const [groupSearchLeft, setGroupSearchLeft] = useState("");
     const [accountSearchLeft, setAccountSearchLeft] = useState("");
-
+    const [generatingExcel, setGeneratingExcel] = useState(false);
     const [options, setOptions] = useState({
         taxoutsummary: true,
         taxinsummary: false,
@@ -141,6 +141,35 @@ export default function TaxReportFilter() {
         code6: division[0]?.div_code || "",
         parameter,
     });
+const handleExportExcel = async () => {
+    setReportError(null);
+    setGeneratingExcel(true);
+
+    try {
+        if (options.taxoutsummary) {
+            await exportTaxInvoiceSummaryExcel(
+                buildParams("Account_Tax_Report_VAT_OUT_ACCOUNT_LEDGER_SUMMARY_REPORT")
+            );
+        } else if (options.taxinsummary) {
+            await exportTaxInvoiceSummaryExcel(
+                buildParams("Account_Tax_Report_VAT_IN_ACCOUNT_LEDGER_SUMMARY_REPORT")
+            );
+        } else if (options.taxledgeroutreport) {
+            await getTaxInvoiceExcelReport(
+                buildParams("Account_Tax_Report_VAT_OUT_ACCOUNT_LEDGER_REPORT")
+            );
+        } else if (options.taxledgerinreport) {
+            await getTaxInvoiceExcelReport(
+                buildParams("Account_Tax_Report_VAT_IN_ACCOUNT_LEDGER_REPORT")
+            );
+        }
+    } catch (err: any) {
+        console.error(err);
+        setReportError(err.message || "Failed to generate report.");
+    } finally {
+        setGeneratingExcel(false);
+    }
+};
 
     // ── single handleGenerate ──
     const handleGenerate = async () => {
@@ -426,9 +455,15 @@ export default function TaxReportFilter() {
                             style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151" }}>
                             <RotateCcw size={13} /> Reset
                         </button>
-                        <button className="action-btn"
-                            style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151" }}>
-                            <FileText size={13} /> Export
+                        <button className="act-btn" onClick={handleExportExcel}
+                         style={{ padding: "7px 16px", border: "0.5px solid #abcae9", background: "#d2dfee", cursor: generating ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#3a3636", opacity: generating ? 0.75 : 1 }}>
+                            
+                            {generatingExcel && <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />}
+                            {!generatingExcel && (
+                                <Download size={13} />
+
+                            )}
+                            Export Excel
                         </button>
                         <div style={{ width: "0.5px", background: "#e5e7eb", alignSelf: "stretch" }} />
                         <button className="action-btn-primary" disabled={generating} onClick={handleGenerate}

@@ -2192,6 +2192,16 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.commercial-header-block-tax .commercial-header-block-fields {
+  grid-template-columns: minmax(210px, 300px) minmax(140px, 210px) minmax(155px, 210px);
+  justify-content: start;
+}
+
+.commercial-header-block-tax .commercial-header-block-fields > :nth-child(4) {
+  grid-column: 1 / -1;
+  max-width: 720px;
+}
+
 .commercial-header-block-fields > .field,
 .commercial-header-block-fields > label.field {
   position: relative;
@@ -2351,6 +2361,10 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .commercial-header-block-tax .commercial-header-block-fields {
+    grid-template-columns: minmax(210px, 300px) minmax(140px, 210px) minmax(155px, 210px);
+  }
+
   .commercial-header-panel.is-collapsed .commercial-header-block-doc .commercial-header-block-fields {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -2383,6 +2397,10 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   .commercial-header-block-tax .commercial-header-block-fields,
   .commercial-header-block-extra .commercial-header-block-fields {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .commercial-header-block-tax .commercial-header-block-fields > :nth-child(4) {
+    max-width: none;
   }
 
   .commercial-header-panel.is-expanded {

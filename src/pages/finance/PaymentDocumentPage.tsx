@@ -1,4 +1,4 @@
-import { AlignCenter, Ban, ChevronDown, ChevronUp, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { AlignCenter, Ban, Download, Edit2, Paperclip, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
@@ -333,7 +333,6 @@ function PaymentDocumentEditor({
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
-  const [showHeaderDetails, setShowHeaderDetails] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [error, setError] = useState("");
 
@@ -754,15 +753,14 @@ function PaymentDocumentEditor({
           <div className="grid gap-3">
             <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
-            <div className="commercial-header-shell rounded-md border bg-card">
-              <div className="commercial-section-title">
+            <div className="rounded-md border bg-card">
+              <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
                 <div>
                   <p className="eyebrow m-0">Header</p>
                   <h3 className="m-0 text-sm font-semibold leading-tight">Payment Information</h3>
                 </div>
-                <span>{showHeaderDetails ? "Full header" : "Compact header"}</span>
               </div>
-              <div className={`commercial-header-panel payment-header-grid relative grid grid-cols-6 gap-2.5 p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1 ${showHeaderDetails ? "is-expanded" : "is-collapsed"}`}>
+              <div className="payment-header-grid grid grid-cols-6 gap-2.5 p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
               {editMode && <Field label="Doc No"><Input disabled value={form.doc_no || ""} /></Field>}
               <Field label="Doc Date"><Input disabled={disabled} required type="date" value={dateInput(form.doc_date)} onChange={(event) => updateField("doc_date", event.target.value)} /></Field>
               <LookupField
@@ -868,26 +866,6 @@ function PaymentDocumentEditor({
                 <span>Remarks</span>
                 <Input disabled={disabled} value={form.remarks || ""} onChange={(event) => updateField("remarks", event.target.value)} />
               </label>
-              </div>
-              <div className="commercial-header-footer flex items-center justify-between gap-3 border-t bg-secondary/30 px-3 py-2">
-                <div className="min-w-0 truncate text-xs text-muted-foreground">
-                  <span className="font-semibold text-foreground">Account:</span>{" "}
-                  <span>{form.ac_name || form.ac_code || "Not selected"}</span>
-                  <span className="mx-2 text-border">|</span>
-                  <span className="font-semibold text-foreground">Currency:</span>{" "}
-                  <span>{form.curr_code || "-"}</span>
-                  {docType !== "CR" && (
-                    <>
-                      <span className="mx-2 text-border">|</span>
-                      <span className="font-semibold text-foreground">Cheque:</span>{" "}
-                      <span>{form.cheque_no || "-"}</span>
-                    </>
-                  )}
-                </div>
-                <Button type="button" size="sm" variant="ghost" onClick={() => setShowHeaderDetails((value) => !value)}>
-                  {showHeaderDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                  {showHeaderDetails ? "Compact header" : "Show all header fields"}
-                </Button>
               </div>
             </div>
 
