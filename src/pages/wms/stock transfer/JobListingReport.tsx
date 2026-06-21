@@ -334,8 +334,13 @@ export default function JobReportFilter() {
                 )}
                 <button className="act-btn" onClick={handleReset}><RotateCcw size={13} /> Reset</button>
                 <button className="act-btn" onClick={handleExportExcel}>
+                     {generatingExcel && <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />}
+                     {!generatingExcel && (
                     <Download size={13} />
-                </button>
+              
+                     )}
+                     Export Excel
+                       </button>
                 <div style={{ width: 1, height: 20, background: "#E5E7EB" }} />
                 <button className="act-btn-primary" disabled={generating} onClick={handleGenerate}>
                     {generating
