@@ -211,7 +211,6 @@ export default function TransactionReportPage() {
         setDocRefFrom(""); setDocRefTo("");
         setLotNoFrom(""); setLotNoTo("");
         setBatchNoFrom(""); setBatchNoTo("");
-        // setGroupedOn("group_brand_product");
         setGroupedOn("product");
     };
 
