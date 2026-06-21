@@ -169,7 +169,9 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({ onClose, onSuccess }) => {
     reader.readAsArrayBuffer(file);
   };
 
-  const handleUploadToEDI = async () => {
+  const CHUNK_SIZE = 100;
+
+const handleUploadToEDI = async () => {
   try {
     setIsLoading(true);
     setUploadError(null);
@@ -177,16 +179,26 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({ onClose, onSuccess }) => {
     // ── Fill down merged cells ──────────────────────────
     const filled: AnyRow[] = [];
     let lastMain: AnyRow = {};
+    let lastKpiGroup = '';
+    let lastWeightage = '';
 
     for (const raw of excelData) {
       const r = normalizeRow(raw);
 
-      // Naya block — jab DIV_CODE aaye
+      // Naya employee block — jab DIV_CODE aaye
       if (getVal(r, 'DIVCODE', 'DIV_CODE') !== '') {
         lastMain = { ...r };
+        lastKpiGroup = getVal(r, 'KPIGROUP', 'KPI_GROUP');
+        lastWeightage = getVal(r, 'WEIGHTAGE');
+      } else {
+        // Naya KPI_GROUP mila toh update karo
+        const currentGroup = getVal(r, 'KPIGROUP', 'KPI_GROUP');
+        if (currentGroup !== '') {
+          lastKpiGroup = currentGroup;
+          lastWeightage = getVal(r, 'WEIGHTAGE');
+        }
       }
 
-      // Current row mein empty fields → upar wali se lo
       const merged: AnyRow = { ...lastMain };
       Object.keys(r).forEach(k => {
         if (r[k] !== undefined && String(r[k]).trim() !== '') {
@@ -194,7 +206,10 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({ onClose, onSuccess }) => {
         }
       });
 
-      // KPI_ACTIVITY empty toh skip
+      // ✅ KPI_GROUP/WEIGHTAGE ko explicitly tracked values se set karo
+      merged['KPIGROUP'] = lastKpiGroup;
+      merged['WEIGHTAGE'] = lastWeightage;
+
       if (!getVal(merged, 'KPIACTIVITY', 'KPI_ACTIVITY')) continue;
 
       filled.push(merged);
@@ -207,19 +222,33 @@ const ImportKpiEdi: React.FC<ImportKpiEdiProps> = ({ onClose, onSuccess }) => {
       getVal(r, 'DEPTNAME', 'DEPT_NAME'),
       getVal(r, 'SECTIONCODE', 'SECTION_CODE'),
       getVal(r, 'SECTIONNAME', 'SECTION_NAME'),
-      getVal(r, 'DESGCODE', 'DESG_CODE'),
+      getVal(r, 'DESGCODE', 'DESG_CODE').replace(/\.0+$/, ''),
       getVal(r, 'DESGNAME', 'DESG_NAME'),
       getVal(r, 'KPIGROUP', 'KPI_GROUP'),
-      getVal(r, 'WEIGHTAGE'),
+      getVal(r, 'WEIGHTAGE').replace(/\.0+$/, ''),
       getVal(r, 'KPIACTIVITY', 'KPI_ACTIVITY'),
     ].join('|'));
 
-    await (pamsSave as any)({
-      parameter: 'kpi_edi_bulk_insert',
-      loginid: user?.loginid ?? '',
-      val1s1: user?.company_code ?? '',
-      val1s2: mappedRows.join('||'),
-    });
+    const CHUNK_SIZE = 100;
+    const chunks: string[][] = [];
+    for (let i = 0; i < mappedRows.length; i += CHUNK_SIZE) {
+      chunks.push(mappedRows.slice(i, i + CHUNK_SIZE));
+    }
+
+    let totalUploaded = 0;
+    for (let i = 0; i < chunks.length; i++) {
+      await (pamsSave as any)({
+        parameter: 'kpi_edi_bulk_insert',
+        loginid: user?.loginid ?? '',
+        val1s1: user?.company_code ?? '',
+        val1s2: chunks[i].join('||'),
+      });
+      totalUploaded += chunks[i].length;
+      setNotice({
+        type: 'info',
+        message: `Uploading... ${totalUploaded}/${filled.length} rows`,
+      });
+    }
 
     await fetchEDIData();
     setEdiUploaded(true);
