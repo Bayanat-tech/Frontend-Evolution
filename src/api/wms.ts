@@ -84,10 +84,12 @@ export async function patchWmsInbound<TPayload extends Record<string, unknown>>(
   return response.data;
 }
 
-export async function executeWmsInboundSql(rawSql: string) {
-  const response = await api.post<ApiResponse<LookupRow[]> & { data?: LookupRow[]; totalCount?: number }>("/api/wms/inbound/executeRawSql", {
-    raw_sql: rawSql,
-  });
+export async function executeWmsInboundSql(rawSql: string, signal?: AbortSignal) {
+  const response = await api.post<ApiResponse<LookupRow[]>>(
+    "/api/wms/inbound/executeRawSql",
+    { raw_sql: rawSql },
+    { signal }  // 👈 Signal goes here (Axios config)
+  );
   if (!response.data.success) throw new Error(response.data.message || "Unable to load inbound data");
   return response.data.data || [];
 }
