@@ -662,6 +662,34 @@ export async function exportJobListingExcel(params: ReportParams): Promise<void>
     window.URL.revokeObjectURL(url);
 }
 
+export async function getBalanceSheetReportHtml(params: ReportParams): Promise<string> {
+    const response = await api.post(
+        `/api/finance/transactions/report/balancesheet/html`,
+        params,
+        { responseType: "text" }
+    );
+    return response.data as string;
+}
+
+export async function getBalanceSheetReportExcelDownload(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/report/balancesheet/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "BalanceSheet.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
 // ---------Profit & Loss Report----------------
 
 // transactions.ts
