@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import { api } from "../../api/client";
 import { executeWmsInboundSql } from "../../api/wms";
+import { Select } from "../../components/ui/Select";
+import { MultiSelectField } from "../../components/ui/MultiSelectField";
+
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -69,252 +72,41 @@ const mapSingleColumnOptions = (rows: LookupRow[], codeKey: string): Option[] =>
     .sort((a, b) => a.localeCompare(b))
     .map((v) => ({ value: v, label: v }));
 
-// ─── MultiSelect ─────────────────────────────────────────────────────────────
+// ─── Shared label style ───────────────────────────────────────────────────────
 
-const MultiSelect: React.FC<{
-  label:    string;
-  options:  Option[];
-  value:    string[];
-  onChange: (v: string[]) => void;
-  loading?: boolean;
-}> = ({ label, options, value, onChange, loading }) => {
-  const [open, setOpen]       = useState(false);
-  const ref                   = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const toggle = (v: string) => {
-    if (v === "All") { onChange(["All"]); return; }
-    const next = value.includes("All")
-      ? [v]
-      : value.includes(v)
-        ? value.filter((x) => x !== v)
-        : [...value, v];
-    onChange(next.length ? next : ["All"]);
-  };
-
-  const displayLabel =
-    value.includes("All") || !value.length
-      ? "All"
-      : value.length === 1
-        ? (options.find((o) => o.value === value[0])?.label ?? value[0])
-        : `${value.length} selected`;
-
-  return (
-    <div style={{ marginBottom: 14 }} ref={ref}>
-      <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 4 }}>
-        {label}
-      </label>
-      <div
-        onClick={() => setOpen((p) => !p)}
-        style={{
-          border: "1px solid #d1d5db",
-          borderRadius: 6,
-          padding: "7px 10px",
-          cursor: "pointer",
-          background: "#fff",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          fontSize: 12,
-          color: "#111827",
-          userSelect: "none",
-        }}
-      >
-        <span style={{ color: displayLabel === "All" ? "#6b7280" : "#111827" }}>{displayLabel}</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2">
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
-      </div>
-      {open && (
-        <div style={{
-          position: "absolute",
-          zIndex: 9999,
-          background: "#fff",
-          border: "1px solid #d1d5db",
-          borderRadius: 6,
-          boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-          minWidth: 220,
-          maxHeight: 220,
-          overflowY: "auto",
-          marginTop: 2,
-        }}>
-          {loading ? (
-            <div style={{ padding: "10px 12px", color: "#6b7280", fontSize: 11 }}>Loading…</div>
-          ) : options.length === 0 ? (
-            <div style={{ padding: "10px 12px", color: "#6b7280", fontSize: 11 }}>No options found</div>
-          ) : (
-            [{ value: "All", label: "All" }, ...options].map((opt) => (
-              <div
-                key={opt.value}
-                onClick={() => toggle(opt.value)}
-                style={{
-                  padding: "7px 12px",
-                  cursor: "pointer",
-                  fontSize: 12,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  background:
-                    value.includes(opt.value) || (opt.value === "All" && (value.includes("All") || !value.length))
-                      ? "#f0f9f5"
-                      : "transparent",
-                  color: "#111827",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#f0f9f5")}
-                onMouseLeave={(e) => (e.currentTarget.style.background =
-                  value.includes(opt.value) ? "#f0f9f5" : "transparent")}
-              >
-                <span style={{
-                  width: 14, height: 14,
-                  border: "1.5px solid #1a5f4a",
-                  borderRadius: 3,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  flexShrink: 0,
-                  background:
-                    value.includes(opt.value) || (opt.value === "All" && (value.includes("All") || !value.length))
-                      ? "#1a5f4a" : "#fff",
-                }}>
-                  {(value.includes(opt.value) || (opt.value === "All" && (value.includes("All") || !value.length))) && (
-                    <svg width="9" height="9" viewBox="0 0 12 12">
-                      <polyline points="1,6 4.5,9.5 11,2" stroke="#fff" strokeWidth="2" fill="none"/>
-                    </svg>
-                  )}
-                </span>
-                <span>{opt.label}</span>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
+const fieldLabelStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: 11,
+  fontWeight: 600,
+  color: "#374151",
+  marginBottom: 4,
 };
 
-// ─── SingleSelect ─────────────────────────────────────────────────────────────
+// ─── SelectField (single value, backed by the shared Select) ─────────────────
 
-const SingleSelect: React.FC<{
+const SelectField: React.FC<{
   label:    string;
   options:  Option[];
   value:    string;
   onChange: (v: string) => void;
   placeholder?: string;
   loading?: boolean;
-}> = ({ label, options, value, onChange, placeholder, loading }) => {
-  const [open, setOpen] = useState(false);
-  const ref             = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const selected = options.find((o) => o.value === value);
-
-  return (
-    <div style={{ marginBottom: 14 }} ref={ref}>
-      <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 4 }}>
-        {label}
-      </label>
-      <div
-        onClick={() => setOpen((p) => !p)}
-        style={{
-          border: "1px solid #d1d5db",
-          borderRadius: 6,
-          padding: "7px 10px",
-          cursor: "pointer",
-          background: "#fff",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          fontSize: 12,
-          userSelect: "none",
-        }}
-      >
-        <span style={{ color: selected ? "#111827" : "#9ca3af" }}>
-          {selected ? selected.label : (placeholder ?? "Select…")}
-        </span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2">
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
-      </div>
-      {open && (
-        <div style={{
-          position: "absolute",
-          zIndex: 9999,
-          background: "#fff",
-          border: "1px solid #d1d5db",
-          borderRadius: 6,
-          boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-          minWidth: 220,
-          maxHeight: 220,
-          overflowY: "auto",
-          marginTop: 2,
-        }}>
-          {loading ? (
-            <div style={{ padding: "10px 12px", color: "#6b7280", fontSize: 11 }}>Loading…</div>
-          ) : (
-            [{ value: "", label: placeholder ?? "Select…" }, ...options].map((opt) => (
-              <div
-                key={opt.value}
-                onClick={() => { onChange(opt.value); setOpen(false); }}
-                style={{
-                  padding: "7px 12px",
-                  cursor: "pointer",
-                  fontSize: 12,
-                  background: value === opt.value ? "#f0f9f5" : "transparent",
-                  color: opt.value === "" ? "#9ca3af" : "#111827",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#f0f9f5")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = value === opt.value ? "#f0f9f5" : "transparent")}
-              >
-                {opt.label}
-              </div>
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ─── TextInput ────────────────────────────────────────────────────────────────
-
-const TextInput: React.FC<{
-  label:    string;
-  value:    string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}> = ({ label, value, onChange, placeholder }) => (
+}> = ({ label, options, value, onChange, placeholder, loading }) => (
   <div style={{ marginBottom: 14 }}>
-    <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 4 }}>
-      {label}
-    </label>
-    <input
-      type="text"
+    <label style={fieldLabelStyle}>{label}</label>
+    <Select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      style={{
-        width: "100%",
-        border: "1px solid #d1d5db",
-        borderRadius: 6,
-        padding: "7px 10px",
-        fontSize: 12,
-        color: "#111827",
-        outline: "none",
-        boxSizing: "border-box",
-      }}
-    />
+      disabled={loading}
+      style={{ fontSize: 12 }}
+    >
+      <option value="">{loading ? "Loading…" : (placeholder ?? "Select…")}</option>
+      {options.map((opt) => (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </Select>
   </div>
 );
 
@@ -460,7 +252,11 @@ const StockDetailReport: React.FC = () => {
     { value: "site_location",     label: "Site / Location" },
   ];
 
-  // ── Styles
+  // ── Styles (blue theme)
+  const THEME = "#1d4ed8";
+  const THEME_DARK = "#1e40af";
+  const THEME_LIGHT = "#bfdbfe";
+
   const btnBase: React.CSSProperties = {
     display:        "flex",
     alignItems:     "center",
@@ -496,7 +292,7 @@ const StockDetailReport: React.FC = () => {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{
             width: 34, height: 34, borderRadius: 8,
-            background: "#1a5f4a",
+            background: THEME,
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
@@ -553,9 +349,9 @@ const StockDetailReport: React.FC = () => {
           <button
             style={{
               ...btnBase,
-              background: panelOpen ? "#1a5f4a" : "#fff",
+              background: panelOpen ? THEME : "#fff",
               color:       panelOpen ? "#fff"    : "#374151",
-              borderColor: panelOpen ? "#1a5f4a" : "#d1d5db",
+              borderColor: panelOpen ? THEME : "#d1d5db",
             }}
             onClick={() => setPanelOpen((p) => !p)}
             onMouseEnter={(e) => {
@@ -601,7 +397,7 @@ const StockDetailReport: React.FC = () => {
               <div style={{
                 width:        40, height:       40,
                 border:       "3px solid #e5e7eb",
-                borderTop:    "3px solid #1a5f4a",
+                borderTop:    `3px solid ${THEME}`,
                 borderRadius: "50%",
                 animation:    "spin 0.8s linear infinite",
               }}/>
@@ -687,12 +483,12 @@ const StockDetailReport: React.FC = () => {
             display:        "flex",
             justifyContent: "space-between",
             alignItems:     "center",
-            background:     "#1a5f4a",
+            background:     THEME,
             flexShrink:     0,
           }}>
             <div>
               <div style={{ fontWeight: 700, fontSize: 13, color: "#fff" }}>Report Parameters</div>
-              <div style={{ fontSize: 10, color: "#a7d7c5", marginTop: 2 }}>Adjust filters and view report</div>
+              <div style={{ fontSize: 10, color: THEME_LIGHT, marginTop: 2 }}>Adjust filters and view report</div>
             </div>
             <button
               onClick={() => setPanelOpen(false)}
@@ -720,28 +516,28 @@ const StockDetailReport: React.FC = () => {
               </div>
             )}
 
-            <MultiSelect
+            <MultiSelectField
               label="Principal Code"
               options={prinOptions}
               value={params.prin_code}
               onChange={(v) => setParam("prin_code", v)}
               loading={optLoading}
             />
-            <MultiSelect
+            <MultiSelectField
               label="Job Number"
               options={jobOptions}
               value={params.job_no}
               onChange={(v) => setParam("job_no", v)}
               loading={optLoading}
             />
-            <MultiSelect
+            <MultiSelectField
               label="Product Code"
               options={prodOptions}
               value={params.prod_code}
               onChange={(v) => setParam("prod_code", v)}
               loading={optLoading}
             />
-            <MultiSelect
+            <MultiSelectField
               label="Site Code"
               options={siteOptions}
               value={params.site_code}
@@ -757,7 +553,7 @@ const StockDetailReport: React.FC = () => {
               <div style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 10 }}>
                 Location Code Range
               </div>
-              <SingleSelect
+              <SelectField
                 label="From"
                 options={locationOptions}
                 value={params.location_code_from}
@@ -765,7 +561,7 @@ const StockDetailReport: React.FC = () => {
                 placeholder="Select start location"
                 loading={optLoading}
               />
-              <SingleSelect
+              <SelectField
                 label="To"
                 options={locationOptions}
                 value={params.location_code_to}
@@ -775,15 +571,12 @@ const StockDetailReport: React.FC = () => {
               />
             </div>
 
-            {/* Group By is a fixed, static list — never tied to optLoading (the SQL
-                lookup spinner for Principal/Job/Product/Site/Location). Coupling it to
-                optLoading was the bug that hid all four options behind "Loading…". */}
-            <SingleSelect
+            <SelectField
               label="Group By"
-              options={groupByOptions}
+              options={[{ value: "", label: "No grouping" }, ...groupByOptions]}
               value={params.group_by}
               onChange={(v) => setParam("group_by", v)}
-              placeholder="No grouping"
+              placeholder="Select grouping"
             />
           </div>
 
@@ -795,7 +588,7 @@ const StockDetailReport: React.FC = () => {
               style={{
                 width:          "100%",
                 padding:        "10px",
-                background:     loading ? "#9ca3af" : "#1a5f4a",
+                background:     loading ? "#9ca3af" : THEME,
                 color:          "#fff",
                 border:         "none",
                 borderRadius:   8,
@@ -808,8 +601,8 @@ const StockDetailReport: React.FC = () => {
                 gap:            8,
                 transition:     "background 0.15s",
               }}
-              onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = "#14503e"; }}
-              onMouseLeave={(e) => { if (!loading) e.currentTarget.style.background = "#1a5f4a"; }}
+              onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = THEME_DARK; }}
+              onMouseLeave={(e) => { if (!loading) e.currentTarget.style.background = THEME; }}
             >
               {loading ? (
                 <>
