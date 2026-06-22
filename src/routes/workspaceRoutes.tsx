@@ -18,7 +18,6 @@ import { ExpenseTypePage } from "../pages/finance/ExpenseTypePage";
 import { FinanceUtilityMasterPage, financeUtilityConfigs } from "../pages/finance/FinanceUtilityMasterPage";
 // import { JournalVoucherPage } from "../pages/finance/JournalVoucherPage";
 import { PaymentDocumentPage } from "../pages/finance/PaymentDocumentPage";
-import { PLSetupPage } from "../pages/finance/PLSetupPage";
 import { PrepaidRegisterPage } from "../pages/finance/PrepaidRegisterPage";
 import { WmsInboundPage } from "../pages/wms/inbound/WmsInboundPage";
 import { WmsOutboundPage } from "../pages/wms/outbound/WmsOutboundPage";
@@ -73,6 +72,7 @@ import { AlmsSimpleMasterConfigs } from "../pages/almswf/almsMasterConfig";
 import { AlmsSimpleMasterPage } from "../pages/almswf/AlmsMasterPage";
 import TaxReportFilter from "../pages/accounts_report/tax_report/TaxReport";
 import JobListingReport from "../pages/wms/stock transfer/JobListingReport";
+import PLSetupPage from "../pages/finance/PLSetupPage";
 
 type WorkspaceRouteContext = {
   pathname: string;
