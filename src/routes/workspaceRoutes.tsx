@@ -75,6 +75,8 @@ import { AlmsSimpleMasterConfigs } from "../pages/almswf/almsMasterConfig";
 import { AlmsSimpleMasterPage } from "../pages/almswf/AlmsMasterPage";
 import TaxReportFilter from "../pages/accounts_report/tax_report/TaxReport";
 import JobListingReport from "../pages/wms/stock transfer/JobListingReport";
+import StockDetailReport from "../pages/wms_report/StockDetailReport";
+import StockAdjustmentPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -93,6 +95,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: "Finance Ledger Basics",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/wms/wms/reports/stock%20report/stock_detail"),
+    element: () => <StockDetailReport />,
+  },
   {
     name: "Finance Assign User Div",
     match: ({ pathname }) => pathname.toLowerCase().includes("/finance/finance/utilities/assign_user_division"),
@@ -181,7 +188,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isStockTransferRoute(pathname),
     element: () => <StockTransferPage />,
   },
-
+{
+  name: "Stock Adjustment",
+  match: ({ pathname }) => isStockAdjustmentRoute(pathname),
+  element: () => <StockAdjustmentPage />,
+},
   {
     name: "Finance Account Wise Budget",
     match: ({ pathname }) => isAccountWiseBudgetRoute(pathname),
@@ -794,6 +805,10 @@ function isStockTransferRoute(pathname: string) {
     normalized.includes("wms/activity/request/stock_transfer") &&
     !normalized.includes("/view/")  // ← add this
   );
+}
+function isStockAdjustmentRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("wms/activity/request/stock_adj") && !normalized.includes("/view/");
 }
 
 function isStockTransferViewRoute(pathname: string) {
