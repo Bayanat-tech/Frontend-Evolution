@@ -626,6 +626,7 @@ function PaymentDocumentEditor({
     event.preventDefault();
     if (!form.doc_date) return setError("Doc Date is required");
     if (!form.div_code) return setError("Division is required");
+    if (!form.inv_no) return setError("Invoice No is required");
     if (!form.ac_code) return setError("Account is required");
     if (!form.curr_code) return setError("Currency is required");
     if (!form.ex_rate) return setError("Exchange Rate is required");
@@ -752,12 +753,11 @@ function PaymentDocumentEditor({
                   <p className="eyebrow m-0">Header</p>
                    <h3 className="m-0 text-sm font-semibold leading-tight">Credit/Debit Note Information</h3>
                 </div>
-                <span></span>
               </div>
             <div className="payment-header-grid grid grid-cols-6 gap-2.5 rounded-md border bg-card p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
               {editMode && <Field label="Doc No"><Input disabled value={form.doc_no || ""} /></Field>}
               <Field label="Doc Date"><Input disabled={disabled} required type="date" value={dateInput(form.doc_date)} onChange={(event) => updateField("doc_date", event.target.value)} /></Field>
-              {(docType === "CN" || docType === "DN") && <Field label="Inv No" ><Input disabled={disabled} value={form.inv_no || ""} onChange={(event) => updateField("inv_no", event.target.value)} /></Field>}
+              {(docType === "CN" || docType === "DN") && <Field label="Inv No*" ><Input required disabled={disabled} value={form.inv_no || ""} onChange={(event) => updateField("inv_no", event.target.value)} /></Field>}
               {(docType === "CN" || docType === "DN") && <Field label="Inv Date" ><Input disabled={disabled} type="date" value={dateInput(form.inv_date)} onChange={(event) => updateField("inv_date", event.target.value)} /></Field>}
               <LookupField
 
@@ -1021,7 +1021,7 @@ function PaymentDocumentEditor({
                           />
                         </td>
                         <td className="w-28 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
-                        <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.001" value={formatNumber(detail.amount)} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
+                        <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.001" value={detail.amount} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
                         <td className="w-28 px-2 py-1">
                           <Select className="h-9" disabled={disabled} value={detail.sign_ind} onChange={(event) => updateDetail(detail.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
                             <option value={1}>Dr</option>
@@ -1075,7 +1075,7 @@ function PaymentDocumentEditor({
                         <td className="finance-amount-cell w-32 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                         <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
                         <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
-                        <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled value={formatNumber((Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1)))} /></td>
+                        <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled value={(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1))} /></td>
                         <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
                       </tr>
                     ))}

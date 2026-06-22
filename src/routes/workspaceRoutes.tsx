@@ -75,6 +75,7 @@ import { AlmsSimpleMasterPage } from "../pages/almswf/AlmsMasterPage";
 import TransactionReportPage from "../pages/wms/Stock_Reports/Transaction_report";
 import TaxReportFilter from "../pages/accounts_report/tax_report/TaxReport";
 import JobListingReport from "../pages/wms/stock transfer/JobListingReport";
+import StockDetailReport from "../pages/wms_report/StockDetailReport";
 import StockAdjustmentPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
 
 type WorkspaceRouteContext = {
@@ -94,6 +95,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: "Finance Ledger Basics",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/wms/wms/reports/stock%20report/stock_detail"),
+    element: () => <StockDetailReport />,
+  },
   {
     name: "Finance Assign User Div",
     match: ({ pathname }) => pathname.toLowerCase().includes("/finance/finance/utilities/assign_user_division"),
