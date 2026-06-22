@@ -14,7 +14,7 @@ import {
 import { Button } from "../../../components/ui/Button";
 import { useAuth } from "../../../state/AuthContext";
 import { cn } from "../../../lib/utils";
-import { InboundOperationalTab } from "./InboundOperationalTab";
+import { InboundOperationalTab, type InboundOperationalTabHandle } from "./InboundOperationalTab";
 import { getTabsForJob } from "../../../config/tabConfig";
 import {
   type WmsRow,
@@ -73,6 +73,10 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
 
   // Ref to the iframe — used to fire window.print() inside it via postMessage
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Ref to the active operational tab — lets us block switching tabs when
+  // something's unfinished there (e.g. unfilled receiving quantities).
+  const tabRef = useRef<InboundOperationalTabHandle>(null);
 
   // ── Fetch HTML when a report is selected ──────────────────────────────────
   useEffect(() => {
@@ -241,6 +245,13 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
                 : "ui-button ui-button-outline ui-button-sm whitespace-nowrap"
             }
             to={`${basePath}/${item.value}${locationSearchPrincipal(job)}`}
+            onClick={(e) => {
+              if (item.value === activeTab) return;
+              if (!tabRef.current?.validateBeforeLeave()) {
+                e.preventDefault(); // blocked — the tab component already showed the
+                                    // error toast and opened the fix-it modal
+              }
+            }}
           >
             {item.label}
           </Link>
@@ -248,7 +259,7 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
       </div>
 
       {/* ── Tab content ── */}
-      <InboundOperationalTab job={job} jobNo={jobNo} tab={activeTab} loadingJob={loading} />
+      <InboundOperationalTab ref={tabRef} job={job} jobNo={jobNo} tab={activeTab} loadingJob={loading} />
 
       {/* ── Dialog 1: Report list ── */}
       <Dialog
