@@ -81,13 +81,12 @@ export function StockTransferPage() {
   useEffect(() => { void loadRows(); }, []);
 
   // ── Build absolute detail URL ──
-  function detailUrl(row: WmsRow) {
-    const stn = val(row, "stn_no");
-    const prin = val(row, "prin_code");
-    // const co = val(row, "company_code");
-    return `${STN_BASE}/view/${stn}?principal_code=${prin}`;
-  }
-
+function detailUrl(row: WmsRow) {
+  const stn = val(row, "stn_no");
+  const prin = val(row, "prin_code");
+  const co = val(row, "company_code");
+  return `${STN_BASE}/view/${stn}?principal_code=${prin}&company_code=${co}`;
+}
   const columns = useMemo<ColumnDef<WmsRow>[]>(() => [
     {
       accessorKey: "stn_no",

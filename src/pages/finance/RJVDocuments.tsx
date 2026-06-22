@@ -59,7 +59,7 @@ const DOCUMENT_META: Record<TransactionType, { title: string; subtitle: string; 
   SI: { title: "Sales", subtitle: "Sales invoice document", addLabel: "Add Sales" },
   SV: { title: "Service Invoice", subtitle: "Service billing document", addLabel: "Add Service" },
   JV: { title: "Journal Voucher", subtitle: "General ledger journal", addLabel: "Add Voucher" },
-   RJV: { title: "RJournal Voucher", subtitle: "General ledger journal", addLabel: "Add RVoucher" },
+   RJV: { title: "Reverse Journal Voucher", subtitle: "Reverse general ledger journal", addLabel: "Add Reverse Voucher" },
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -734,7 +734,7 @@ function JVDocument({
               <div className="commercial-section-title">
                 <div>
                   <p className="eyebrow m-0">Header</p>
-                   <h3 className="m-0 text-sm font-semibold leading-tight">JV Information</h3>
+                   <h3 className="m-0 text-sm font-semibold leading-tight">RJV Information</h3>
                 </div>
                 <span></span>
               </div>
@@ -787,14 +787,14 @@ function JVDocument({
               <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-2">
                 <div>
                   <p className="eyebrow">Details</p>
-                  <h3 className="m-0 text-sm font-semibold">Debit / Credit Lines</h3>
+                  <h3 className="m-0 text-sm font-semibold">Reverse Jv Lines</h3>
                 </div>
                 <Button size="sm" type="button" variant="outline" onClick={addDetailRow} disabled={disabled}>
                   <Plus size={14} /> Add Line
                 </Button>
               </div>
               <div className="commercial-lines-scroll max-h-[43vh] overflow-auto">
-                <table className="finance-lines-table w-full min-w-[2140px] text-sm">
+                <table className="finance-lines-table w-full min-w-[2000px] text-sm">
                   <thead className="sticky top-0 bg-primary text-xs text-primary-foreground">
                     <tr>
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>

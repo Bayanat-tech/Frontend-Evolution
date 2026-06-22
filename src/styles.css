@@ -2101,12 +2101,12 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 }
 
 .commercial-section-title {
-  min-height: 30px;
+  min-height: 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 5px 12px;
+  gap: 8px;
+  padding: 3px 8px;
   border-bottom: 1px solid #c7d2e3;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
@@ -2115,11 +2115,11 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   flex: 0 0 auto;
   border: 1px solid #d7e1ef;
   border-radius: 999px;
-  padding: 4px 9px;
+  padding: 2px 7px;
   color: #64748b;
   background: #f8fafc;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 700;
 }
 
 .commercial-header-panel {
@@ -2150,14 +2150,18 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   border-color: #bfd0e7;
 }
 
+.commercial-header-block-tax-wide {
+  grid-column: span 2;
+}
+
 .commercial-header-block-title {
   display: flex;
-  min-height: 26px;
+  min-height: 24px;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: flex-start;
+  gap: 8px;
   border-bottom: 1px solid #dce5f0;
-  padding: 4px 9px;
+  padding: 3px 9px;
 }
 
 .commercial-header-block-title span {
@@ -2190,6 +2194,16 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .commercial-header-block-tax .commercial-header-block-fields,
 .commercial-header-block-extra .commercial-header-block-fields {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.commercial-header-block-tax .commercial-header-block-fields {
+  grid-template-columns: minmax(230px, 1.1fr) minmax(120px, 0.45fr) minmax(155px, 0.6fr) minmax(260px, 1.15fr);
+  justify-content: stretch;
+}
+
+.commercial-header-block-tax .commercial-header-block-fields > :nth-child(4) {
+  grid-column: auto;
+  max-width: none;
 }
 
 .commercial-header-block-fields > .field,
@@ -2242,9 +2256,9 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .commercial-header-panel.is-expanded {
   gap: 6px;
   padding: 6px !important;
-  max-height: min(230px, 28vh);
+  max-height: none;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: visible;
 }
 
 .commercial-header-panel.is-expanded input,
@@ -2344,11 +2358,19 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
     grid-column: span 1;
   }
 
+  .commercial-header-block-tax-wide {
+    grid-column: span 2;
+  }
+
   .commercial-header-block-fields,
   .commercial-header-block-doc .commercial-header-block-fields,
   .commercial-header-block-tax .commercial-header-block-fields,
   .commercial-header-block-extra .commercial-header-block-fields {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .commercial-header-block-tax .commercial-header-block-fields {
+    grid-template-columns: minmax(220px, 1.1fr) minmax(110px, 0.45fr) minmax(145px, 0.6fr) minmax(220px, 1fr);
   }
 
   .commercial-header-panel.is-collapsed .commercial-header-block-doc .commercial-header-block-fields {
@@ -2378,11 +2400,19 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .commercial-header-block-tax-wide {
+    grid-column: span 1;
+  }
+
   .commercial-header-block-fields,
   .commercial-header-block-doc .commercial-header-block-fields,
   .commercial-header-block-tax .commercial-header-block-fields,
   .commercial-header-block-extra .commercial-header-block-fields {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .commercial-header-block-tax .commercial-header-block-fields > :nth-child(4) {
+    max-width: none;
   }
 
   .commercial-header-panel.is-expanded {
@@ -2720,7 +2750,7 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 }
 
 .commercial-header-footer {
-  min-height: 38px;
+  min-height: 32px;
   min-width: 0;
   overflow: hidden;
   border-color: #e2e8f0;
@@ -2966,17 +2996,18 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   width: 100%;
   height: 28px;
   min-height: 28px;
-  max-height: 64px;
+  max-height: 28px;
   padding: 4px 9px;
-  overflow: auto;
+  overflow: hidden;
   resize: none;
   font-size: 13px;
-  line-height: 1.25;
+  line-height: 18px;
   color: var(--foreground);
-  background: #fbfdff;
+  background: #ffffff;
   border: 1px solid #b8c5d8;
   border-radius: 7px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  white-space: nowrap;
 }
 
 .commercial-line-description:focus-visible {
@@ -3660,7 +3691,8 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   }
 
   .commercial-header-panel.is-expanded {
-    max-height: 46dvh;
+    max-height: none;
+    overflow-y: visible;
   }
 
   .commercial-lines-scroll {
