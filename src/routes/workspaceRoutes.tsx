@@ -69,6 +69,7 @@ import { StockTransferViewPage } from "../pages/wms/stock transfer/GetStockTrans
 import ProfitLossPage from "../pages/accounts_report/ProfitLossPage";
 import VisaExpiryListingPage from "../pages/hr/Reports/Visaexpirylistingpage";
 import Dnsummaryreportpage from "../pages/wms/Reports/Dnsummaryreportpage";
+import StockSummaryReportPage from "../pages/wms/Reports/StockSummaryReportPage";
 import { RJVDocumentEditor } from "../pages/finance/RJVDocuments";
 import { AlmsSimpleMasterConfigs } from "../pages/almswf/almsMasterConfig";
 import { AlmsSimpleMasterPage } from "../pages/almswf/AlmsMasterPage";
@@ -289,7 +290,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isWmsBillingActRoute(pathname),
     element: () => <WmsBillingActPage />,
   },
-     {
+  {
+    name: "WMS Stock Summary Report",
+    match: ({ pathname }) => isStockSummaryRoute(pathname),
+    element: () => <StockSummaryReportPage />,
+  },
+  {
     name: "WMS Stock Report Job Listing",
     match: ({ pathname }) => isJobListingRoute(pathname),
     element: () => <JobListingReport />,
@@ -800,7 +806,30 @@ function isStockTransferViewRoute(pathname: string) {
 
 function isJobListingRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  return (normalized.includes("/wms/reports/stock%20report/job_listing") || normalized.includes("/wms/reports/stock-report/job_listing") || normalized.includes("/wms/reports/stock-report/job-listing"));
+  return (
+    normalized.includes("/wms/reports/stock%20report/job_listing") ||
+    normalized.includes("/wms/reports/stock-report/job_listing") ||
+    normalized.includes("/wms/reports/stock-report/job-listing")
+  );
+}
+function isStockSummaryRoute(pathname: string) {  
+  const normalized = pathname.toLowerCase();
+  const stockReportPath =
+    normalized.includes("/wms/wms/reports/stock%20report/") ||
+    normalized.includes("/wms/wms/reports/stock_report/") ||
+    normalized.includes("/wms/wms/reports/stock-report/") ||
+    normalized.includes("/wms/wms/reports/stockreport/") ||
+    normalized.includes("/wms/reports/stock%20report/") ||
+    normalized.includes("/wms/reports/stock_report/") ||
+    normalized.includes("/wms/reports/stock-report/") ||
+    normalized.includes("/wms/reports/stockreport/");
+
+  const stockSummarySegment =
+    normalized.includes("/stock_summary") ||
+    normalized.includes("/stock-summary") ||
+    normalized.includes("/stock_detail");
+
+  return stockReportPath && stockSummarySegment;
 }
 function isAssetDepreciationRoute(pathname: string) {
   return pathname.toLowerCase().includes("/finance/a/c_others/assets/asset_depreciation");
