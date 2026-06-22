@@ -106,7 +106,7 @@ const formatDateOracle = (iso: string) => {
 
 
 const GROUP_OPTIONS = [
- { value: "PRODUCT", label: "Product" },
+    { value: "PRODUCT", label: "Product" },
     { value: "PRODUCT_LOT", label: "Product + Lot No." },
     { value: "PRODUCT_DOC", label: "Product + Doc. Ref." },
     { value: "SITE_LOC_PRODUCT", label: "Site + Location + Product" },
@@ -197,7 +197,7 @@ export default function TransactionReportPage() {
         setPrincipal([{ prin_code: "", prin_name: "" }]);
         setProductFrom(""); setProductFromName("");
         setProductTo(""); setProductToName("");
-      
+
         setSiteFrom(""); setSiteFromName("");
         setSiteTo(""); setSiteToName("");
         setLocationFrom(""); setLocationFromName("");
@@ -618,138 +618,138 @@ export default function TransactionReportPage() {
 
                             {/* Doc Ref From | Doc Ref To */}
                             <div style={row2}>
-    <FloatLabel label="Doc. Ref. From">
-        <LookupField
-            label=""
-            value={docRefFrom}
-            displayValue={docRefFrom}
-            columns={[
-                { field: "DOC_REF", header: "Doc Ref" },
-            ]}
-            valueField="DOC_REF"
-            displayFields={["DOC_REF"]}
-            loadOptions={() =>
-                getDynamicLookupaccount({
-                    parameter: "WMS_Stock_DOC_REF",
-                    code1: user?.company_code || "",
-                    code2: principal[0]?.prin_code || "",
-                })
-            }
-            onChange={(val) => setDocRefFrom(val)}
-        />
-    </FloatLabel>
+                                <FloatLabel label="Doc. Ref. From">
+                                    <LookupField
+                                        label=""
+                                        value={docRefFrom}
+                                        displayValue={docRefFrom}
+                                        columns={[
+                                            { field: "DOC_REF", header: "Doc Ref" },
+                                        ]}
+                                        valueField="DOC_REF"
+                                        displayFields={["DOC_REF"]}
+                                        loadOptions={() =>
+                                            getDynamicLookupaccount({
+                                                parameter: "WMS_Stock_DOC_REF",
+                                                code1: user?.company_code || "",
+                                                code2: principal[0]?.prin_code || "",
+                                            })
+                                        }
+                                        onChange={(val) => setDocRefFrom(val)}
+                                    />
+                                </FloatLabel>
 
-    <FloatLabel label="Doc. Ref. To">
-        <LookupField
-            label=""
-            value={docRefTo}
-            displayValue={docRefTo}
-            columns={[
-                { field: "DOC_REF", header: "Doc Ref" },
-            ]}
-            valueField="DOC_REF"
-            displayFields={["DOC_REF"]}
-            loadOptions={() =>
-                getDynamicLookupaccount({
-                    parameter: "WMS_Stock_DOC_REF",
-                    code1: user?.company_code || "",
-                    code2: principal[0]?.prin_code || "",
-                })
-            }
-            onChange={(val) => setDocRefTo(val)}
-        />
-    </FloatLabel>
-</div>
+                                <FloatLabel label="Doc. Ref. To">
+                                    <LookupField
+                                        label=""
+                                        value={docRefTo}
+                                        displayValue={docRefTo}
+                                        columns={[
+                                            { field: "DOC_REF", header: "Doc Ref" },
+                                        ]}
+                                        valueField="DOC_REF"
+                                        displayFields={["DOC_REF"]}
+                                        loadOptions={() =>
+                                            getDynamicLookupaccount({
+                                                parameter: "WMS_Stock_DOC_REF",
+                                                code1: user?.company_code || "",
+                                                code2: principal[0]?.prin_code || "",
+                                            })
+                                        }
+                                        onChange={(val) => setDocRefTo(val)}
+                                    />
+                                </FloatLabel>
+                            </div>
 
                             {/* Lot No From | Lot No To */}
                             <div style={row2}>
-    <FloatLabel label="Lot No. From">
-        <LookupField
-            label=""
-            value={lotNoFrom}
-            displayValue={lotNoFrom}
-            columns={[
-                { field: "LOT_NO", header: "Lot No" },
-            ]}
-            valueField="LOT_NO"
-            displayFields={["LOT_NO"]}
-            loadOptions={() =>
-                getDynamicLookupaccount({
-                    parameter: "WMS_Stock_Lot_no",
-                    code1: user?.company_code || "",
-                    code2: principal[0]?.prin_code || "",
-                })
-            }
-            onChange={(val) => setLotNoFrom(val)}
-        />
-    </FloatLabel>
+                                <FloatLabel label="Lot No. From">
+                                    <LookupField
+                                        label=""
+                                        value={lotNoFrom}
+                                        displayValue={lotNoFrom}
+                                        columns={[
+                                            { field: "LOT_NO", header: "Lot No" },
+                                        ]}
+                                        valueField="LOT_NO"
+                                        displayFields={["LOT_NO"]}
+                                        loadOptions={() =>
+                                            getDynamicLookupaccount({
+                                                parameter: "WMS_Stock_Lot_no",
+                                                code1: user?.company_code || "",
+                                                code2: principal[0]?.prin_code || "",
+                                            })
+                                        }
+                                        onChange={(val) => setLotNoFrom(val)}
+                                    />
+                                </FloatLabel>
 
-    <FloatLabel label="Lot No. To">
-        <LookupField
-            label=""
-            value={lotNoTo}
-            displayValue={lotNoTo}
-            columns={[
-                { field: "LOT_NO", header: "Lot No" },
-            ]}
-            valueField="LOT_NO"
-            displayFields={["LOT_NO"]}
-            loadOptions={() =>
-                getDynamicLookupaccount({
-                    parameter: "WMS_Stock_Lot_no",
-                    code1: user?.company_code || "",
-                    code2: principal[0]?.prin_code || "",
-                })
-            }
-            onChange={(val) => setLotNoTo(val)}
-        />
-    </FloatLabel>
-</div>
+                                <FloatLabel label="Lot No. To">
+                                    <LookupField
+                                        label=""
+                                        value={lotNoTo}
+                                        displayValue={lotNoTo}
+                                        columns={[
+                                            { field: "LOT_NO", header: "Lot No" },
+                                        ]}
+                                        valueField="LOT_NO"
+                                        displayFields={["LOT_NO"]}
+                                        loadOptions={() =>
+                                            getDynamicLookupaccount({
+                                                parameter: "WMS_Stock_Lot_no",
+                                                code1: user?.company_code || "",
+                                                code2: principal[0]?.prin_code || "",
+                                            })
+                                        }
+                                        onChange={(val) => setLotNoTo(val)}
+                                    />
+                                </FloatLabel>
+                            </div>
 
                             {/* Batch No From | Batch No To */}
                             <div style={row2}>
-    <FloatLabel label="Batch No. From">
-        <LookupField
-            label=""
-            value={batchNoFrom}
-            displayValue={batchNoFrom}
-            columns={[
-                { field: "BATCH_NO", header: "Batch No" },
-            ]}
-            valueField="BATCH_NO"
-            displayFields={["BATCH_NO"]}
-            loadOptions={() =>
-                getDynamicLookupaccount({
-                    parameter: "WMS_Stock_batch_no",
-                    code1: user?.company_code || "",
-                    code2: principal[0]?.prin_code || "",
-                })
-            }
-            onChange={(val) => setBatchNoFrom(val)}
-        />
-    </FloatLabel>
+                                <FloatLabel label="Batch No. From">
+                                    <LookupField
+                                        label=""
+                                        value={batchNoFrom}
+                                        displayValue={batchNoFrom}
+                                        columns={[
+                                            { field: "BATCH_NO", header: "Batch No" },
+                                        ]}
+                                        valueField="BATCH_NO"
+                                        displayFields={["BATCH_NO"]}
+                                        loadOptions={() =>
+                                            getDynamicLookupaccount({
+                                                parameter: "WMS_Stock_batch_no",
+                                                code1: user?.company_code || "",
+                                                code2: principal[0]?.prin_code || "",
+                                            })
+                                        }
+                                        onChange={(val) => setBatchNoFrom(val)}
+                                    />
+                                </FloatLabel>
 
-    <FloatLabel label="Batch No. To">
-        <LookupField
-            label=""
-            value={batchNoTo}
-            displayValue={batchNoTo}
-            columns={[
-                { field: "BATCH_NO", header: "Batch No" },
-            ]}
-            valueField="BATCH_NO"
-            displayFields={["BATCH_NO"]}
-            loadOptions={() =>
-                getDynamicLookupaccount({
-                    parameter: "WMS_Stock_batch_no",
-                    code1: user?.company_code || "",
-                    code2: principal[0]?.prin_code || "",
-                })
-            }
-            onChange={(val) => setBatchNoTo(val)}
-        />
-    </FloatLabel>
-</div>
+                                <FloatLabel label="Batch No. To">
+                                    <LookupField
+                                        label=""
+                                        value={batchNoTo}
+                                        displayValue={batchNoTo}
+                                        columns={[
+                                            { field: "BATCH_NO", header: "Batch No" },
+                                        ]}
+                                        valueField="BATCH_NO"
+                                        displayFields={["BATCH_NO"]}
+                                        loadOptions={() =>
+                                            getDynamicLookupaccount({
+                                                parameter: "WMS_Stock_batch_no",
+                                                code1: user?.company_code || "",
+                                                code2: principal[0]?.prin_code || "",
+                                            })
+                                        }
+                                        onChange={(val) => setBatchNoTo(val)}
+                                    />
+                                </FloatLabel>
+                            </div>
 
                             {/* Report Date */}
                             {/* <div style={row2}>
@@ -796,7 +796,7 @@ export default function TransactionReportPage() {
                                             name="groupedOn"
                                             value={opt.value}
                                             checked={groupedOn === opt.value}
-                                         onChange={() => setGroupedOn(opt.value.toUpperCase())}
+                                            onChange={() => setGroupedOn(opt.value.toUpperCase())}
                                             style={{ accentColor: "#185FA5", cursor: "pointer" }}
                                         />
                                         <span style={{
