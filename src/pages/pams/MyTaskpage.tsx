@@ -113,10 +113,12 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   const companyCode  = user?.company_code || "";
   const isHRApprover = HR_APPROVERS.includes(loginid);
 
-  // ── Cache key helper — depends on companyCode, so define after it's known ──
+  // ── Cache key helper — MUST include loginid, not just companyCode.
+  // Without loginid, switching from User A to User B (same company) would
+  // hit User A's cached rows and flash their data for a few seconds.
   const cacheKey = useCallback(
-    (tabIdx: number) => `${companyCode}-${TAB_STATUS[tabIdx]}`,
-    [companyCode]
+    (tabIdx: number) => `${loginid}-${companyCode}-${TAB_STATUS[tabIdx]}`,
+    [loginid, companyCode]
   );
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -124,10 +126,10 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   // Lazy-init rows/loading from cache so the FIRST render already shows
   // previously-fetched data instead of an empty/skeleton table.
   const [rows,         setRows]         = useState<Row[]>(
-    () => taskPageCache.get(`${companyCode}-${TAB_STATUS[initialTab]}`) ?? []
+    () => taskPageCache.get(`${loginid}-${companyCode}-${TAB_STATUS[initialTab]}`) ?? []
   );
   const [loading,      setLoading]      = useState(
-    () => !taskPageCache.has(`${companyCode}-${TAB_STATUS[initialTab]}`)
+    () => !taskPageCache.has(`${loginid}-${companyCode}-${TAB_STATUS[initialTab]}`)
   );
   const [notice,       setNotice]       = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
@@ -157,6 +159,10 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
 
   const isInitialMount = useRef(true);
   const currentTabRef = useRef(initialTab);
+  // Tracks the last loginid+companyCode we fetched for, so we can detect a
+  // user switch (e.g. impersonation / re-login without full page reload)
+  // and instantly wipe stale rows before fetching the new user's data.
+  const prevUserKeyRef = useRef(`${loginid}-${companyCode}`);
 
   const statusFilter = TAB_STATUS[activeTab];
 
@@ -243,6 +249,22 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     isInitialMount.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, fetchData]);
+
+  // ── User switch detection ────────────────────────────────────────────────
+  // If loginid/companyCode changes WITHOUT a full component remount (e.g. an
+  // in-app "switch user" action), wipe rows + cache synchronously so the
+  // previous user's data never flashes on screen, even for a moment.
+  useEffect(() => {
+    const userKey = `${loginid}-${companyCode}`;
+    if (prevUserKeyRef.current === userKey) return;
+    prevUserKeyRef.current = userKey;
+    taskPageCache.clear();
+    setRows([]);
+    setSelectedRows({});
+    setLoading(true);
+    void fetchData(activeTab, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loginid, companyCode]);
 
   const handleTabChange = useCallback((index: number) => {
     if (index === activeTab) return;
