@@ -381,7 +381,7 @@ function CommercialEditor({
   const [saving, setSaving] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [error, setError] = useState("");
-  const [showHeaderDetails, setShowHeaderDetails] = useState(false);
+  const [showHeaderDetails, setShowHeaderDetails] = useState(true);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [lineErrors, setLineErrors] = useState<Record<string, Record<string, string>>>({});   
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
@@ -442,6 +442,7 @@ function CommercialEditor({
   const isPO    = docType === "PO";
   const isPI    = docType === "PI";
   const isSales = docType === "SI" || docType === "SV";
+  const showReferenceBlock = !isPO;
   const isCancelled = form.canceled === "Y";
 
   // const total = form.detail.reduce((sum, line) => sum + Number(line.amount || 0) * line.sign_ind, 0);
@@ -657,7 +658,6 @@ const withTax = {
         <section className="commercial-header-block commercial-header-block-doc">
           <div className="commercial-header-block-title">
             <span>Document</span>
-            <strong>{form.doc_no || "New"}</strong>
           </div>
           <div className="commercial-header-block-fields">
 
@@ -740,7 +740,6 @@ const withTax = {
         <section className="commercial-header-block commercial-header-block-party">
           <div className="commercial-header-block-title">
             <span>{isSales ? "Customer" : "Supplier"}</span>
-            <strong>{form.ac_name || form.ac_code || "Not selected"}</strong>
           </div>
           <div className="commercial-header-block-fields">
 
@@ -874,10 +873,10 @@ const withTax = {
           </div>
         </section>
 
+        {showReferenceBlock && (
         <section className="commercial-header-block commercial-header-block-extra">
           <div className="commercial-header-block-title">
             <span>Reference</span>
-            <strong>{form.ref_doc_no || form.ref_no || form.app_ref_no || "-"}</strong>
           </div>
           <div className="commercial-header-block-fields">
   {!isPO && (
@@ -981,11 +980,11 @@ const withTax = {
   {/* ── Tax Category  ── */}
           </div>
         </section>
+        )}
 
-        <section className="commercial-header-block commercial-header-block-tax">
+        <section className={`commercial-header-block commercial-header-block-tax ${!showReferenceBlock ? "commercial-header-block-tax-wide" : ""}`}>
           <div className="commercial-header-block-title">
             <span>Tax & Remarks</span>
-            <strong>{form.tax_type || form.tx_compntcat_code_1 || "No tax selected"}</strong>
           </div>
           <div className="commercial-header-block-fields">
   <LookupField
@@ -1211,6 +1210,8 @@ const withTax = {
                           <textarea
                             disabled={isCancelled}
                             className="commercial-line-description"
+                            title={line.remarks || ""}
+                            rows={1}
                             value={line.remarks || ""}
                             onChange={(event) => updateLine(line.id, { remarks: event.target.value })}
                             placeholder="Description"

@@ -284,21 +284,14 @@ export function LookupField({
                         : rowValue === value;
                       return (
                         <TableRow
-                          className={selected ? "cursor-pointer bg-primary/10" : "cursor-pointer hover:bg-accent"}
+                          className={selected 
+                            ? "cursor-pointer bg-primary/10 outline outline-1 outline-primary" 
+                            : "cursor-pointer hover:bg-accent"
+                          }
                           key={`${rowValue || index}`}
                           onClick={() => selectRow(row)}
                           aria-selected={selected}
                         >
-                          <TableCell className="px-3 py-1.5 text-center">
-                            <input
-                              aria-label={`Select ${getLookupText(row, displayFields)}`}
-                              checked={selected}
-                              className="lookup-radio"
-                              onChange={() => selectRow(row)}
-                              onClick={(event) => event.stopPropagation()}
-                              type={multiSelect ? "checkbox" : "radio"}
-                            />
-                          </TableCell>
                           {columns.map((column) => (
                             <TableCell className="px-3 py-1.5 text-xs" key={column.field}>
                               {String(getLookupValue(row, column.field) || "")}

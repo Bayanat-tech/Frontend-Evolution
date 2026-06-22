@@ -155,10 +155,14 @@ export function StockTransferViewPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { stn_no } = useParams<{ stn_no: string }>();
+  // const { stn_no } = useParams<{ stn_no: string }>();
+  const pathSegments = location.pathname.split("/");
+  const viewIndex = pathSegments.findIndex(s => s.toLowerCase() === "view");
+  const stn_no = viewIndex !== -1 ? pathSegments[viewIndex + 1] : "";
+
   const searchParams = new URLSearchParams(location.search);
   const prin_code = searchParams.get("principal_code") || "";
-  const company_code = searchParams.get("company_code") || "";
+  const company_code = searchParams.get("company_code") || user?.company_code || "";
 
   const [selectedTab, setSelectedTab] = useState("create");
   const [gridData, setGridData] = useState<WmsRow[]>([]);
@@ -205,8 +209,8 @@ export function StockTransferViewPage() {
           };
         })
       );
-      const batchRaw = await getTfiBatchRows(prin_code, stn_no);
-      setBatchRows(Array.isArray(batchRaw) ? batchRaw.map(normalizeRow) : []);
+      // const batchRaw = await getTfiBatchRows(prin_code, stn_no);
+      // setBatchRows(Array.isArray(batchRaw) ? batchRaw.map(normalizeRow) : []);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load transfer details." });
     } finally {
@@ -515,7 +519,7 @@ export function StockTransferViewPage() {
       {/* ── Header ── */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
-          <Button size="icon" variant="outline" onClick={() => navigate("/wms/activity/request/stock_transfer")} title="Back">
+          <Button size="icon" variant="outline" onClick={() => navigate("/workspace/wms/wms/activity/request/stock_transfer")} title="Back">
             <ArrowLeft size={16} />
           </Button>
           <div className="min-w-0">
@@ -773,6 +777,7 @@ useEffect(() => {
 
   const handleSubmit = async () => {
     if (!canSubmit || !selectedProduct) return;
+      console.log("stn_no from props:", stn_no); // <-- add this
     setSaving(true);
     try {
       await createStockTransferDetail({
