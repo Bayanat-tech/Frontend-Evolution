@@ -2,6 +2,7 @@
 import { api } from "../../../api/client";
 import { executeWmsInboundSql } from "../../../api/wms";
 import { Select } from "../../../components/ui/Select";
+import { MultiSelectField } from "../../../components/ui/MultiSelectField";
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -92,7 +93,7 @@ const SelectField: React.FC<{
     <label style={fieldLabelStyle}>{label}</label>
     <Select
       value={value}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onChange(e.target.value)}
       disabled={loading}
       style={{ fontSize: 12 }}
     >
@@ -103,46 +104,6 @@ const SelectField: React.FC<{
         </option>
       ))}
     </Select>
-  </div>
-);
-
-const MultiSelectField: React.FC<{
-  label:    string;
-  options:  Option[];
-  value:    string[];
-  onChange: (v: string[]) => void;
-  loading?: boolean;
-}> = ({ label, options, value, onChange, loading }) => (
-  <div style={{ marginBottom: 14 }}>
-    <label style={fieldLabelStyle}>{label}</label>
-    <select
-      multiple
-      value={value}
-      disabled={loading}
-      onChange={(e) => {
-        const selected = Array.from(e.target.selectedOptions, (option) => option.value);
-        onChange(selected);
-      }}
-      style={{
-        width:         "100%",
-        minHeight:     110,
-        padding:       10,
-        borderRadius:  10,
-        border:        "1px solid #d1d5db",
-        background:    "#fff",
-        fontSize:      12,
-        color:         "#111827",
-      }}
-    >
-      {options.length === 0 && (
-        <option disabled>{loading ? "Loading…" : "No options available"}</option>
-      )}
-      {options.map((opt) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
   </div>
 );
 
@@ -564,7 +525,7 @@ const StockSummaryReport: React.FC = () => {
               label="Principal Code"
               options={prinOptions}
               value={params.prin_code}
-              onChange={(v) => setParam("prin_code", v)}
+              onChange={(v: string[]) => setParam("prin_code", v)}
               loading={optLoading}
             />
 
@@ -572,7 +533,7 @@ const StockSummaryReport: React.FC = () => {
               label="Product Code"
               options={prodOptions}
               value={params.prod_code}
-              onChange={(v) => setParam("prod_code", v)}
+              onChange={(v: string[]) => setParam("prod_code", v)}
               loading={optLoading}
             />
 
@@ -580,7 +541,7 @@ const StockSummaryReport: React.FC = () => {
               label="Site Code"
               options={siteOptions}
               value={params.site_code}
-              onChange={(v) => setParam("site_code", v)}
+              onChange={(v: string[]) => setParam("site_code", v)}
               loading={optLoading}
             />
 
