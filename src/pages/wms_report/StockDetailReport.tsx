@@ -27,16 +27,6 @@ interface Params {
   group_by:             string;
 }
 
-// ─── Param SQL queries (kept exactly as provided) ─────────────────────────────
-
-const PARAM_SQL = {
-  prin:     "select distinct prin_code, prin_name from VW_BOWM_STK_LEDGER",
-  prod:     "select distinct PROD_CODE, PROD_NAME from VW_BOWM_STK_LEDGER",
-  job:      "select distinct(JOB_NO) from VW_BOWM_STK_LEDGER",
-  site:     "select distinct site_code from VW_BOWM_STK_LEDGER",
-  location: "select distinct location_code from VW_BOWM_STK_LEDGER",
-};
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 // Case-insensitive key lookup, since some queries return UPPERCASE columns
@@ -71,6 +61,19 @@ const mapSingleColumnOptions = (rows: LookupRow[], codeKey: string): Option[] =>
     .filter((v) => !!v)
     .sort((a, b) => a.localeCompare(b))
     .map((v) => ({ value: v, label: v }));
+
+// Escapes single quotes for safe interpolation into a SQL string literal.
+// executeWmsInboundSql only accepts a raw SQL string (no bind params), so
+// every dynamic value placed into a WHERE/IN clause goes through this first.
+const sqlEscape = (v: string): string => v.replace(/'/g, "''");
+
+// Builds a `COL IN ('a','b')` clause for a selected-values array, or "" if
+// the field is at its "All" sentinel (i.e. no filter should be applied).
+const inClause = (col: string, values: string[]): string => {
+  if (!values.length || values.includes("All")) return "";
+  const list = values.map((v) => `'${sqlEscape(v)}'`).join(",");
+  return `${col} IN (${list})`;
+};
 
 // ─── Shared label style ───────────────────────────────────────────────────────
 
@@ -120,7 +123,7 @@ const StockDetailReport: React.FC = () => {
   const [reportHtml,  setReportHtml]  = useState<string>("");
   const [error,       setError]       = useState<string>("");
 
-  // ── Parameter options (loaded via executeWmsInboundSql)
+  // ── Parameter options (loaded via executeWmsInboundSql, cross-filtered)
   const [prinOptions,     setPrinOptions]     = useState<Option[]>([]);
   const [jobOptions,      setJobOptions]      = useState<Option[]>([]);
   const [prodOptions,     setProdOptions]     = useState<Option[]>([]);
@@ -142,36 +145,128 @@ const StockDetailReport: React.FC = () => {
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // ── Load dropdown options via executeWmsInboundSql, using the raw SQL provided
-  useEffect(() => {
+  // Guards against out-of-order responses: every cascade load gets an
+  // incrementing token, and only the most recent one is allowed to commit
+  // state. Without this, rapidly toggling filters could let a slow, stale
+  // request overwrite options/selections set by a newer one.
+  const optionsRequestRef = useRef(0);
+
+  // ── Cross-filtered option loader ─────────────────────────────────────────
+  //
+  // Each field's option list is scoped by every *other* field's current
+  // selection (full cross-filtering), so e.g. picking a Principal narrows
+  // Job/Product/Site/Location to values that actually co-occur with that
+  // Principal in VW_BOWM_STK_LEDGER — and picking a Site on top of that
+  // further narrows Job/Product/Location (and re-narrows Principal too).
+  // Each field's own current selection is intentionally excluded from its
+  // own filter (filtering a field by itself would be circular).
+  const loadCascadedOptions = useCallback(async (p: Params) => {
+    const requestId = ++optionsRequestRef.current;
     setOptLoading(true);
     setOptError("");
-    Promise.all([
-      executeWmsInboundSql(PARAM_SQL.prin),
-      executeWmsInboundSql(PARAM_SQL.job),
-      executeWmsInboundSql(PARAM_SQL.prod),
-      executeWmsInboundSql(PARAM_SQL.site),
-      executeWmsInboundSql(PARAM_SQL.location),
-    ])
-      .then(([prinRows, jobRows, prodRows, siteRows, locRows]) => {
-        setPrinOptions(mapCodeNameOptions(prinRows, "prin_code", "prin_name"));
-        setJobOptions(mapSingleColumnOptions(jobRows, "job_no"));
-        setProdOptions(mapCodeNameOptions(prodRows, "prod_code", "prod_name"));
-        setSiteOptions(mapSingleColumnOptions(siteRows, "site_code"));
-        setLocationOptions(mapSingleColumnOptions(locRows, "location_code"));
-      })
-      .catch((e) => {
-        console.error("Failed to load parameter options", e);
-        setOptError(e?.message ?? "Failed to load filter options");
-      })
-      .finally(() => setOptLoading(false));
+
+    const prinFilter = inClause("PRIN_CODE", p.prin_code);
+    const jobFilter   = inClause("JOB_NO", p.job_no);
+    const prodFilter  = inClause("PROD_CODE", p.prod_code);
+    const siteFilter  = inClause("SITE_CODE", p.site_code);
+
+    const whereExcept = (...exclude: string[]): string => {
+      const all = { prin: prinFilter, job: jobFilter, prod: prodFilter, site: siteFilter };
+      const clauses = Object.entries(all)
+        .filter(([key]) => !exclude.includes(key))
+        .map(([, clause]) => clause)
+        .filter(Boolean);
+      return clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    };
+
+    const sql = {
+      prin:     `select distinct prin_code, prin_name from VW_BOWM_STK_LEDGER ${whereExcept("prin")}`,
+      job:      `select distinct(JOB_NO) from VW_BOWM_STK_LEDGER ${whereExcept("job")}`,
+      prod:     `select distinct PROD_CODE, PROD_NAME from VW_BOWM_STK_LEDGER ${whereExcept("prod")}`,
+      site:     `select distinct site_code from VW_BOWM_STK_LEDGER ${whereExcept("site")}`,
+      location: `select distinct location_code from VW_BOWM_STK_LEDGER ${whereExcept()}`,
+    };
+
+    try {
+      const [prinRows, jobRows, prodRows, siteRows, locRows] = await Promise.all([
+        executeWmsInboundSql(sql.prin),
+        executeWmsInboundSql(sql.job),
+        executeWmsInboundSql(sql.prod),
+        executeWmsInboundSql(sql.site),
+        executeWmsInboundSql(sql.location),
+      ]);
+
+      // A slower, now-superseded request lost the race — drop its results.
+      if (requestId !== optionsRequestRef.current) return;
+
+      const nextPrin     = mapCodeNameOptions(prinRows, "prin_code", "prin_name");
+      const nextJob       = mapSingleColumnOptions(jobRows, "job_no");
+      const nextProd       = mapCodeNameOptions(prodRows, "prod_code", "prod_name");
+      const nextSite       = mapSingleColumnOptions(siteRows, "site_code");
+      const nextLocation = mapSingleColumnOptions(locRows, "location_code");
+
+      setPrinOptions(nextPrin);
+      setJobOptions(nextJob);
+      setProdOptions(nextProd);
+      setSiteOptions(nextSite);
+      setLocationOptions(nextLocation);
+
+      // Prune any current selection that's no longer valid under the new
+      // cross-filtered option set, resetting that field back to "All".
+      setParams((prev) => {
+        const reset = (
+          current: string[],
+          validOptions: Option[],
+        ): string[] => {
+          if (current.includes("All")) return current;
+          const validValues = new Set(validOptions.map((o) => o.value));
+          const stillValid = current.filter((v) => validValues.has(v));
+          return stillValid.length ? stillValid : ["All"];
+        };
+
+        const validLocations = new Set(nextLocation.map((o) => o.value));
+        const nextFrom = prev.location_code_from && !validLocations.has(prev.location_code_from)
+          ? "" : prev.location_code_from;
+        const nextTo = prev.location_code_to && !validLocations.has(prev.location_code_to)
+          ? "" : prev.location_code_to;
+
+        return {
+          ...prev,
+          prin_code: reset(prev.prin_code, nextPrin),
+          job_no:     reset(prev.job_no, nextJob),
+          prod_code: reset(prev.prod_code, nextProd),
+          site_code: reset(prev.site_code, nextSite),
+          location_code_from: nextFrom,
+          location_code_to:   nextTo,
+        };
+      });
+    } catch (e: any) {
+      if (requestId !== optionsRequestRef.current) return;
+      console.error("Failed to load parameter options", e);
+      setOptError(e?.message ?? "Failed to load filter options");
+    } finally {
+      if (requestId === optionsRequestRef.current) setOptLoading(false);
+    }
   }, []);
 
-  // ── Auto-load report on mount with "All" defaults
+  // ── Initial option load (no filters yet — full distinct lists)
   useEffect(() => {
-    fetchReport(params);
+    loadCascadedOptions(params);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Re-run the cascade live whenever Principal/Job/Product/Site change.
+  // Location range is excluded here since it's a BETWEEN range rather than
+  // a discrete multi-select, and re-querying its own bounds on every
+  // keystroke-equivalent change isn't useful the same way.
+  const cascadeKey = JSON.stringify([params.prin_code, params.job_no, params.prod_code, params.site_code]);
+  const prevCascadeKeyRef = useRef(cascadeKey);
+  useEffect(() => {
+    if (prevCascadeKeyRef.current === cascadeKey) return;
+    prevCascadeKeyRef.current = cascadeKey;
+    loadCascadedOptions(params);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cascadeKey]);
 
   // ── Fetch HTML report
   const fetchReport = useCallback(async (p: Params) => {
@@ -197,6 +292,12 @@ const StockDetailReport: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  // ── Auto-load report on mount with "All" defaults
+  useEffect(() => {
+    fetchReport(params);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Print
