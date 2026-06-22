@@ -835,7 +835,7 @@ const withTax = {
   </div>
 
   <Field label="Ex Rate" required error={fieldErrors.ex_rate}>
-    <Input disabled={isCancelled} type="number" step="0.0001" value={form.ex_rate}
+    <Input disabled={isCancelled} type="number" step="0.000001" value={form.ex_rate}
       className={fieldErrors.ref_no ? "border-destructive" : ""}
       onChange={(e) => update("ex_rate", Number(e.target.value || 1))} />
   </Field>
@@ -1207,7 +1207,7 @@ const withTax = {
     />
   </td>
 )}
-                        <td className="w-[360px] px-2 py-1">
+                        <td className="w-[950px] px-2 py-1">
                           <textarea
                             disabled={isCancelled}
                             className="commercial-line-description"
@@ -1276,7 +1276,7 @@ const withTax = {
                             onChange={(value, row) => setForm((c) => ({ ...c, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(getLookupValue(row || {}, "ex_rate") || 1) }))}
                           />
                         </td>
-                        <td className="w-40 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></td>
+                        <td className="w-40 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.000001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></td>
                         <td className="w-40 px-2 py-1"><Input disabled={isCancelled} value={line.job_no || ""} onChange={(event) => updateLine(line.id, { job_no: event.target.value })} /></td>
                         {isPO && (
                           <td className="w-36 px-2 py-1"> <Input disabled={isCancelled}  value={line.dept_code || ""}  onChange={(e) => updateLine(line.id, { dept_code: e.target.value })}/> </td>
