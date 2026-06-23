@@ -437,7 +437,7 @@ const handleExportExcel = async () => {
 
 
             {/* Currency */}
-            <div style={{ flex: "1 1 220px", minWidth: 220 }}>
+            {/* <div style={{ flex: "1 1 220px", minWidth: 220 }}>
               <fieldset style={{ border: "0.5px solid #d1d5db", borderRadius: 6, padding: "6px 12px 10px", margin: 0 }}>
                 <legend style={{ fontSize: 10, color: "#6b7280", padding: "0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   Currency
@@ -458,7 +458,7 @@ const handleExportExcel = async () => {
                   ))}
                 </div>
               </fieldset>
-            </div>
+            </div> */}
 
           </div>
 

@@ -280,7 +280,8 @@ export default function TransactionReportPage() {
             <style>{`
                 .grp-opt:hover { background: #EFF6FF !important; }
                 .action-btn:hover { background: #f9fafb !important; }
-                .action-btn-primary:hover { background: #0C447C !important; border-color: #0C447C !important; }
+                .action-btn-excel:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
+                .field-row { background: #EEF5FD; border-radius: 8px; padding: 10px 12px; }
             `}</style>
 
             <div style={{ maxWidth: 1200, margin: "0 auto" }}>
@@ -300,7 +301,7 @@ export default function TransactionReportPage() {
 
                             {/* Principal */}
 
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 6, width: "100%" }}>
+                            <div className="field-row" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 6, width: "100%" }}>
                                 <FloatLabel label="Principal" required>
                                     <LookupField
                                         label=""
@@ -370,7 +371,7 @@ export default function TransactionReportPage() {
                             </div>
 
                             {/* Site From | Site To */}
-                            <div style={row2}>
+                            <div className="field-row" style={row2}>
                                 <FloatLabel label="Site From">
                                     <LookupField
                                         label=""
@@ -762,61 +763,82 @@ export default function TransactionReportPage() {
                         </div>
 
                         {/* ── Right: Report Grouped On sidebar ── */}
-                        <div style={{
-                            border: "0.5px solid #e5e7eb",
-                            borderRadius: 8,
-                            overflow: "hidden",
-                            background: "#fff",
-                            position: "sticky",
-                            top: 8,
-                        }}>
-                            <div style={{
-                                background: "#185FA5",
-                                padding: "8px 12px",
-                                fontSize: 11,
-                                fontWeight: 600,
-                                color: "#fff",
-                                letterSpacing: "0.05em",
-                                textTransform: "uppercase",
-                            }}>
-                                Report Grouped On
-                            </div>
-                            <div style={{ padding: "4px 0" }}>
-                                {GROUP_OPTIONS.map((opt) => (
-                                    <label
-                                        key={opt.value}
-                                        className="grp-opt"
-                                        style={{
-                                            ...radioLabelStyle,
-                                            background: groupedOn === opt.value ? "#E6F1FB" : "transparent",
-                                        }}
-                                    >
-                                        <input
-                                            type="radio"
-                                            name="groupedOn"
-                                            value={opt.value}
-                                            checked={groupedOn === opt.value}
-                                            onChange={() => setGroupedOn(opt.value.toUpperCase())}
-                                            style={{ accentColor: "#185FA5", cursor: "pointer" }}
-                                        />
-                                        <span style={{
-                                            color: groupedOn === opt.value ? "#0C447C" : "#374151",
-                                            fontWeight: groupedOn === opt.value ? 500 : 400,
-                                            fontSize: 12,
-                                        }}>
-                                            {opt.label}
-                                        </span>
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
+                        {/* ── Right: Report Grouped On sidebar ── */}
+<div style={{
+    border: "0.5px solid #e5e7eb",
+    borderRadius: 8,
+    overflow: "hidden",
+    background: "#fff",
+    position: "sticky",
+    top: 8,
+}}>
+    <div style={{
+        background: "#185FA5",
+        padding: "8px 12px",
+        fontSize: 11,
+        fontWeight: 600,
+        color: "#fff",
+        letterSpacing: "0.05em",
+        textTransform: "uppercase",
+    }}>
+        Report Grouped On
+    </div>
+    <div style={{ padding: "4px 0" }}>
+        {GROUP_OPTIONS.map((opt) => {
+            const isSelected = groupedOn === opt.value;
+            return (
+                <label
+                    key={opt.value}
+                    className="grp-opt"
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        fontSize: 12,
+                        cursor: "pointer",
+                        padding: "5px 12px",
+                        borderLeft: isSelected
+                            ? "3px solid #185FA5"
+                            : "3px solid transparent",
+                        background: isSelected ? "#EEF5FD" : "transparent",
+                        transition: "all 0.15s ease",
+                    }}
+                >
+                    <input
+                        type="radio"
+                        name="groupedOn"
+                        value={opt.value}
+                        checked={isSelected}
+                        onChange={() => setGroupedOn(opt.value.toUpperCase())}
+                        style={{ display: "none" }}
+                    />
+                    {/* Dot indicator */}
+                    <span style={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: "50%",
+                        background: isSelected ? "#185FA5" : "#d1d5db",
+                        flexShrink: 0,
+                        transition: "background 0.15s ease",
+                    }} />
+                    <span style={{
+                        color: isSelected ? "#0C447C" : "#374151",
+                        fontWeight: isSelected ? 600 : 400,
+                    }}>
+                        {opt.label}
+                    </span>
+                </label>
+            );
+        })}
+    </div>
+</div>
 
                     </div>
 
                     {/* Action bar */}
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10, paddingTop: 8, borderTop: "0.5px solid #e5e7eb" }}>
                         <button
-                            className="action-btn"
+                            className="action-btn action-btn-excel"
                             onClick={handleReset}
                             style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151" }}
                         >
@@ -825,7 +847,7 @@ export default function TransactionReportPage() {
 
 
                         <button
-                            className="action-btn"
+                            className="action-btn action-btn-excel"
                             onClick={handleExportExcel}
                             disabled={generatingExcel}
                             style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: generatingExcel ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: generatingExcel ? 0.7 : 1 }}
