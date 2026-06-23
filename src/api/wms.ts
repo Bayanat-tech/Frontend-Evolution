@@ -16,6 +16,122 @@ export type WmsPagination = {
   page?: number;
   limit?: number;
 };
+export type AdjHeaderCreatePayload = {
+  ADJ_CODE: string;
+  PRIN_CODE: string;
+  REMARKS: string;
+  ADJ_DATE: string;
+  CONFIRMED: string;
+  USER_ID: string;
+  COMPANY_CODE: string;
+};
+export type AdjDetailPayload = {
+  ADJ_NO: number;
+  ADJ_SERIALNO?: number;
+  PRIN_CODE: string;
+  PROD_CODE: string;
+  SITE_CODE?: string;
+  LOCATION_CODE?: string;
+  P_UOM?: string;
+  L_UOM?: string;
+  JOB_NO?: string;
+  KEY_NUMBER?: string;
+  QTY_PUOM: number;
+  QTY_LUOM?: number;
+  QUANTITY: number;
+  ADJ_TYPE: string;
+  PALLET_ID?: string;
+  MFG_DATE?: string | null;
+  EXP_DATE?: string | null;
+  BATCH_NO?: string | null;
+  LOT_NO?: string | null;
+};
+
+export type ProcessStockAdjustmentPayload = {
+  COMPANY_CODE: string;
+  PRIN_CODE: string;
+  ADJ_NO: number;
+  USERID: string;
+  P_ADJ_SERIALNO: string;
+};
+
+export type ConfirmStockAdjustmentPayload = {
+  P_COMPANY_CODE: string;
+  P_PRIN_CODE: string;
+  P_ADJ_NO: string;
+  P_ADJ_SERIALNO: string;
+};
+
+export type DeleteAdjDetailPayload = {
+  ADJ_NO: number;
+  JOB_NO?: string;
+  ADJ_SERIALNO?: number;
+  COMPANY_CODE?: string;
+};
+
+export type StockAdjustmentListResponse = {
+  headers: LookupRow[];
+  details: LookupRow[];
+};
+
+/** GET — backend always returns ALL headers + ALL details, filter client-side */
+export async function getStockAdjustmentData() {
+  const response = await getWmsStockAdjustment<StockAdjustmentListResponse>();
+  return response || { headers: [], details: [] };
+}
+
+export async function getAllStockAdjustments() {
+  const data = await getStockAdjustmentData();
+  return data.headers || [];
+}
+
+// export async function getAllStockAdjustments(company_code: string) {
+//   return getWmsStockAdjustment<LookupRow[]>({ view: "headers", company_code });
+// }
+
+export async function getStockAdjustmentDetails(
+  adj_no: string,
+  company_code: string,
+  prin_code: string,
+  tab: "create" | "process" | "confirmed"
+) {
+  return getWmsStockAdjustment<LookupRow[]>({ view: "details", adj_no, company_code, prin_code, tab });
+}
+
+
+export async function createAdjHeader(payload: AdjHeaderCreatePayload) {
+  return postWmsStockAdjustment("createAdjHeader", payload as unknown as Record<string, unknown>);
+}
+
+/** POST create adjustment detail line */
+export async function createAdjDetail(payload: AdjDetailPayload) {
+  return postWmsStockAdjustment("createAdjDetail", payload as unknown as Record<string, unknown>);
+}
+
+/** POST edit adjustment detail line */
+export async function editAdjDetail(payload: AdjDetailPayload) {
+  return postWmsStockAdjustment("editAdjDetail", payload as unknown as Record<string, unknown>);
+}
+
+/** POST delete adjustment detail line */
+export async function deleteAdjDetail(payload: DeleteAdjDetailPayload) {
+  return postWmsStockAdjustment("deleteAdjDetail", payload as unknown as Record<string, unknown>);
+}
+
+/** POST process stock adjustment (runs SP_WM_ADJUSTMNT_PROCESS) */
+export async function processStockAdjustment(payload: ProcessStockAdjustmentPayload) {
+  return postWmsStockAdjustment("process-adjustment", payload as unknown as Record<string, unknown>);
+}
+
+/** POST confirm stock adjustment */
+export async function confirmStockAdjustment(payload: ConfirmStockAdjustmentPayload) {
+  return postWmsStockAdjustment("confirm-adj-detail", payload as unknown as Record<string, unknown>);
+}
+
+/** GET all stock adjustment reports for the print dialog */
+export async function getAllStockAdjReports() {
+  return getWmsStockAdjustment<{ reportid: string; reportname: string }[]>({ view: "reports" });
+}
 
 export async function getWmsMaster(master: string, options: WmsPagination & Record<string, unknown> = {}) {
   const response = await api.get<ApiResponse<WmsMasterResponse>>(`/api/wms/${master}`, {
@@ -84,10 +200,12 @@ export async function patchWmsInbound<TPayload extends Record<string, unknown>>(
   return response.data;
 }
 
-export async function executeWmsInboundSql(rawSql: string) {
-  const response = await api.post<ApiResponse<LookupRow[]> & { data?: LookupRow[]; totalCount?: number }>("/api/wms/inbound/executeRawSql", {
-    raw_sql: rawSql,
-  });
+export async function executeWmsInboundSql(rawSql: string, signal?: AbortSignal) {
+  const response = await api.post<ApiResponse<LookupRow[]>>(
+    "/api/wms/inbound/executeRawSql",
+    { raw_sql: rawSql },
+    { signal }  // 👈 Signal goes here (Axios config)
+  );
   if (!response.data.success) throw new Error(response.data.message || "Unable to load inbound data");
   return response.data.data || [];
 }
@@ -246,6 +364,97 @@ export async function downloadGrnReportExcel(
   URL.revokeObjectURL(url);
 }
 
+export async function getTallyReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/Tally-report/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+ 
+export async function downloadTallyReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/Tally-report/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Tally_Details_report_jobno_${jobNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export async function getDnReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/Dn-report/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+
+export async function downloadDnReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/Dn-report/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Tally_Details_report_jobno_${jobNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export async function getOubPickReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/Oubpick/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+
+export async function downloadOubPickReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/Oubpick/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Tally_Details_report_jobno_${jobNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+
 export async function getAllStockTransfers() {
   const response = await api.get<ApiResponse<unknown[]>>("/api/wms/stocktransfer/getAllStockTransfers");
   if (!response.data.success) throw new Error(response.data.message || "Unable to load stock transfers");
@@ -388,7 +597,7 @@ export async function getAllStockTransferDetails(
   prin_code: string
 ) {
   return getWmsStockTransfer<{ details: LookupRow[]; count: number }>(
-    "getAllStockTransferDetails",
+    "getTSSTNWithDetails",
     { stn_no, company_code, prin_code }
   );
 }

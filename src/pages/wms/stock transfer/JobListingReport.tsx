@@ -98,9 +98,9 @@ export default function JobReportFilter() {
     const [jobTo, setJobTo] = useState<[{ job_no: string; job_type: string; job_date: string }]>([{ job_no: "", job_type: "", job_date: "" }]);
     const [deptFrom, setDeptFrom] = useState<[{ dept_code: string; dept_name: string }]>([{ dept_code: "", dept_name: "" }]);
     const [deptTo, setDeptTo] = useState<[{ dept_code: string; dept_name: string }]>([{ dept_code: "", dept_name: "" }]);
-    const [jobDate, setJobDate] = useState<DateRange>({ from: "2026-06-01", to: "2026-06-15" });
-    const [confirmDate, setConfirmDate] = useState<DateRange>({ from: "", to: "2026-06-15" });
-    const [cancelDate, setCancelDate] = useState<DateRange>({ from: "", to: "" });
+    const [jobDate, setJobDate] = useState<DateRange>({ from: "2026-06-01", to: new Date().toISOString().split("T")[0] });
+    const [confirmDate, setConfirmDate] = useState<DateRange>({ from: "", to: new Date().toISOString().split("T")[0]  });
+    const [cancelDate, setCancelDate] = useState<DateRange>({ from: "", to: new Date().toISOString().split("T")[0]  });
     const [classFrom, setClassFrom] = useState("");
     const [classTo, setClassTo] = useState("");
     const [jobType, setJobType] = useState<JobType>("confirmed");
@@ -117,9 +117,9 @@ export default function JobReportFilter() {
         setJobTo([{ job_no: "", job_type: "", job_date: "" }]);
         setDeptFrom([{ dept_code: "", dept_name: "" }]);
         setDeptTo([{ dept_code: "", dept_name: "" }]);
-        setJobDate({ from: "", to: "" });
-        setConfirmDate({ from: "", to: "" });
-        setCancelDate({ from: "", to: "" });
+        setJobDate({ from: "", to: new Date().toISOString().split("T")[0] });
+        setConfirmDate({ from: "", to: new Date().toISOString().split("T")[0]  });
+        setCancelDate({ from: "", to: new Date().toISOString().split("T")[0] });
         setClassFrom(""); setClassTo("");
         setJobType("confirmed");
         setReportError(null);
@@ -334,8 +334,13 @@ export default function JobReportFilter() {
                 )}
                 <button className="act-btn" onClick={handleReset}><RotateCcw size={13} /> Reset</button>
                 <button className="act-btn" onClick={handleExportExcel}>
+                     {generatingExcel && <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />}
+                     {!generatingExcel && (
                     <Download size={13} />
-                </button>
+              
+                     )}
+                     Export Excel
+                       </button>
                 <div style={{ width: 1, height: 20, background: "#E5E7EB" }} />
                 <button className="act-btn-primary" disabled={generating} onClick={handleGenerate}>
                     {generating

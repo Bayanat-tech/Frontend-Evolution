@@ -381,7 +381,7 @@ function CommercialEditor({
   const [saving, setSaving] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [error, setError] = useState("");
-  const [showHeaderDetails, setShowHeaderDetails] = useState(false);
+  const [showHeaderDetails, setShowHeaderDetails] = useState(true);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [lineErrors, setLineErrors] = useState<Record<string, Record<string, string>>>({});   
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
@@ -442,6 +442,7 @@ function CommercialEditor({
   const isPO    = docType === "PO";
   const isPI    = docType === "PI";
   const isSales = docType === "SI" || docType === "SV";
+  const showReferenceBlock = !isPO;
   const isCancelled = form.canceled === "Y";
 
   // const total = form.detail.reduce((sum, line) => sum + Number(line.amount || 0) * line.sign_ind, 0);
@@ -580,7 +581,7 @@ const withTax = {
 };
 
   return (
-    <form className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`} onSubmit={submit}>
+    <form className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`} onSubmit={submit}>
       <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
@@ -657,7 +658,6 @@ const withTax = {
         <section className="commercial-header-block commercial-header-block-doc">
           <div className="commercial-header-block-title">
             <span>Document</span>
-            <strong>{form.doc_no || "New"}</strong>
           </div>
           <div className="commercial-header-block-fields">
 
@@ -740,7 +740,6 @@ const withTax = {
         <section className="commercial-header-block commercial-header-block-party">
           <div className="commercial-header-block-title">
             <span>{isSales ? "Customer" : "Supplier"}</span>
-            <strong>{form.ac_name || form.ac_code || "Not selected"}</strong>
           </div>
           <div className="commercial-header-block-fields">
 
@@ -835,7 +834,7 @@ const withTax = {
   </div>
 
   <Field label="Ex Rate" required error={fieldErrors.ex_rate}>
-    <Input disabled={isCancelled} type="number" step="0.0001" value={form.ex_rate}
+    <Input disabled={isCancelled} type="number" step="0.000001" value={form.ex_rate}
       className={fieldErrors.ref_no ? "border-destructive" : ""}
       onChange={(e) => update("ex_rate", Number(e.target.value || 1))} />
   </Field>
@@ -874,10 +873,10 @@ const withTax = {
           </div>
         </section>
 
+        {showReferenceBlock && (
         <section className="commercial-header-block commercial-header-block-extra">
           <div className="commercial-header-block-title">
             <span>Reference</span>
-            <strong>{form.ref_doc_no || form.ref_no || form.app_ref_no || "-"}</strong>
           </div>
           <div className="commercial-header-block-fields">
   {!isPO && (
@@ -916,7 +915,8 @@ const withTax = {
     label="Salesman"
     disabled={isCancelled}
     value={form.salesman_code ?? ""}
-    displayValue={form.salesman_name ? `${form.salesman_code} - ${form.salesman_name}` : form.salesman_code ?? ""}
+    // displayValue={form.salesman_name ? `${form.salesman_code} - ${form.salesman_name}` : form.salesman_code ?? ""}
+    displayValue={form.salesman_name || ""}
     columns={[
       { field: "salesman_code", header: "Code" },
       { field: "salesman_name", header: "Name" },
@@ -938,11 +938,11 @@ const withTax = {
     }
   />
   )}
-  {isSales && (
+  {/* {isSales && (
   <Field label="Salesman Name">
     <Input disabled value={form.salesman_name || ""} />
   </Field>
- )}
+ )} */}
 
   {/* ── Sector Code + Name — SI / SV only ── */}
    {isSales && (
@@ -950,7 +950,8 @@ const withTax = {
     label="Sector"
     disabled={isCancelled}
     value={form.sector_code ?? ""}
-    displayValue={form.sector_name ? `${form.sector_code} - ${form.sector_name}` : form.sector_code ?? ""}
+    // displayValue={form.sector_name ? `${form.sector_code} - ${form.sector_name}` : form.sector_code ?? ""}
+    displayValue={form.sector_name || ""}
     columns={[
       { field: "sector_code", header: "Code" },
       { field: "sector_name", header: "Name" },
@@ -972,20 +973,20 @@ const withTax = {
     }
   />
   )}
-  {isSales && (
+  {/* {isSales && (
     <Field label="Sector Name">
       <Input disabled value={form.sector_name || ""} />
     </Field>
-  )}
+  )} */}
 
   {/* ── Tax Category  ── */}
           </div>
         </section>
+        )}
 
-        <section className="commercial-header-block commercial-header-block-tax">
+        <section className={`commercial-header-block commercial-header-block-tax ${!showReferenceBlock ? "commercial-header-block-tax-wide" : ""}`}>
           <div className="commercial-header-block-title">
             <span>Tax & Remarks</span>
-            <strong>{form.tax_type || form.tx_compntcat_code_1 || "No tax selected"}</strong>
           </div>
           <div className="commercial-header-block-fields">
   <LookupField
@@ -1207,10 +1208,12 @@ const withTax = {
     />
   </td>
 )}
-                        <td className="w-[360px] px-2 py-1">
+                        <td className="w-[960px] px-2 py-1">
                           <textarea
                             disabled={isCancelled}
                             className="commercial-line-description"
+                            title={line.remarks || ""}
+                            rows={1}
                             value={line.remarks || ""}
                             onChange={(event) => updateLine(line.id, { remarks: event.target.value })}
                             placeholder="Description"
@@ -1276,7 +1279,7 @@ const withTax = {
                             onChange={(value, row) => setForm((c) => ({ ...c, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(getLookupValue(row || {}, "ex_rate") || 1) }))}
                           />
                         </td>
-                        <td className="w-40 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></td>
+                        <td className="w-40 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.000001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></td>
                         <td className="w-40 px-2 py-1"><Input disabled={isCancelled} value={line.job_no || ""} onChange={(event) => updateLine(line.id, { job_no: event.target.value })} /></td>
                         {isPO && (
                           <td className="w-36 px-2 py-1"> <Input disabled={isCancelled}  value={line.dept_code || ""}  onChange={(e) => updateLine(line.id, { dept_code: e.target.value })}/> </td>

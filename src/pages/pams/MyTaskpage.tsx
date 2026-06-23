@@ -44,6 +44,11 @@ const TAB_STATUS   = ["PENDING", "IN PROGRESS", "REJECTED", "SENT BACK", "APPROV
 const TAB_LABELS   = ["Pending", "In Progress", "Rejected", "Sent Back", "Closed"]   as const;
 const HR_APPROVERS = ["2021060535", "2010080001", "2018030473"];
 
+// ─── Module-level cache ─────────────────────────────────────────────────────
+// Lives outside the component, so it survives unmount/remount when navigating
+// away to AppraisalViewTabsPage and back. Keyed by company + tab status.
+const taskPageCache = new Map<string, Row[]>();
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function text(val: unknown): string {
   if (val === null || val === undefined) return "";
@@ -108,10 +113,24 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   const companyCode  = user?.company_code || "";
   const isHRApprover = HR_APPROVERS.includes(loginid);
 
+  // ── Cache key helper — MUST include loginid, not just companyCode.
+  // Without loginid, switching from User A to User B (same company) would
+  // hit User A's cached rows and flash their data for a few seconds.
+  const cacheKey = useCallback(
+    (tabIdx: number) => `${loginid}-${companyCode}-${TAB_STATUS[tabIdx]}`,
+    [loginid, companyCode]
+  );
+
   // ── State ──────────────────────────────────────────────────────────────────
   const [activeTab,    setActiveTab]    = useState(initialTab);
-  const [rows,         setRows]         = useState<Row[]>([]);
-  const [loading,      setLoading]      = useState(false);
+  // Lazy-init rows/loading from cache so the FIRST render already shows
+  // previously-fetched data instead of an empty/skeleton table.
+  const [rows,         setRows]         = useState<Row[]>(
+    () => taskPageCache.get(`${loginid}-${companyCode}-${TAB_STATUS[initialTab]}`) ?? []
+  );
+  const [loading,      setLoading]      = useState(
+    () => !taskPageCache.has(`${loginid}-${companyCode}-${TAB_STATUS[initialTab]}`)
+  );
   const [notice,       setNotice]       = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
   const [query,        setQuery]        = useState("");
@@ -140,6 +159,10 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
 
   const isInitialMount = useRef(true);
   const currentTabRef = useRef(initialTab);
+  // Tracks the last loginid+companyCode we fetched for, so we can detect a
+  // user switch (e.g. impersonation / re-login without full page reload)
+  // and instantly wipe stale rows before fetching the new user's data.
+  const prevUserKeyRef = useRef(`${loginid}-${companyCode}`);
 
   const statusFilter = TAB_STATUS[activeTab];
 
@@ -187,9 +210,11 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   }, [loginid, companyCode]);
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
-  const fetchData = useCallback(async (tabIndex: number) => {
+  // isBackground=true → don't toggle the loading skeleton (used when we already
+  // have cached rows on screen and just want to silently refresh them).
+  const fetchData = useCallback(async (tabIndex: number, isBackground = false) => {
     const tabStatus = TAB_STATUS[tabIndex];
-    setLoading(true);
+    if (!isBackground) setLoading(true);
     setNotice(null);
     try {
       const data = await pamsSelect({
@@ -201,6 +226,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       });
       const normalizedData = data.map(normalizeRow);
       setRows(normalizedData);
+      taskPageCache.set(cacheKey(tabIndex), normalizedData);
 
       const initSelected: Record<string, boolean> = {};
       normalizedData.forEach((row) => {
@@ -212,19 +238,54 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     } finally {
       setLoading(false);
     }
-  }, [loginid, companyCode]);
+  }, [loginid, companyCode, cacheKey]);
 
+  // ── Mount / activeTab change ────────────────────────────────────────────────
   useEffect(() => {
-    void fetchData(activeTab);
+    const hasCached = taskPageCache.has(cacheKey(activeTab));
+    // If we already have cached rows showing (lazy-init or tab-switch handled
+    // them), just refresh silently in the background — no skeleton flash.
+    void fetchData(activeTab, hasCached);
     isInitialMount.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, fetchData]);
+
+  // ── User switch detection ────────────────────────────────────────────────
+  // If loginid/companyCode changes WITHOUT a full component remount (e.g. an
+  // in-app "switch user" action), wipe rows + cache synchronously so the
+  // previous user's data never flashes on screen, even for a moment.
+  useEffect(() => {
+    const userKey = `${loginid}-${companyCode}`;
+    if (prevUserKeyRef.current === userKey) return;
+    prevUserKeyRef.current = userKey;
+    taskPageCache.clear();
+    setRows([]);
+    setSelectedRows({});
+    setLoading(true);
+    void fetchData(activeTab, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loginid, companyCode]);
 
   const handleTabChange = useCallback((index: number) => {
     if (index === activeTab) return;
+
+    const cached = taskPageCache.get(cacheKey(index));
+    if (cached) {
+      // Show cached data for the new tab instantly — no skeleton.
+      setRows(cached);
+      setLoading(false);
+      const initSelected: Record<string, boolean> = {};
+      cached.forEach((row) => { initSelected[text(row.APPRAISAL_DOC_NO)] = false; });
+      setSelectedRows(initSelected);
+    } else {
+      setRows([]);
+      setLoading(true);
+    }
+
     setActiveTab(index);
     currentTabRef.current = index;
     setQuery("");
-  }, [activeTab]);
+  }, [activeTab, cacheKey]);
 
   const openAppraisalTabsPage = (row: Row, mode: "view" | "edit" = "view") => {
   const docNo = text(row.APPRAISAL_DOC_NO);
