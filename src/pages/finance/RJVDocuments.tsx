@@ -871,7 +871,7 @@ function JVDocument({
                           />
                         </td>
                         <td className="w-28 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
-                        <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.001" value={formatNumber(detail.amount)} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
+                        <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.001" value={detail.amount} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
                         <td className="w-28 px-2 py-1">
                           <Select className="h-9" disabled={disabled} value={detail.sign_ind} onChange={(event) => updateDetail(detail.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
                             <option value={1}>Dr</option>
@@ -901,7 +901,7 @@ function JVDocument({
                         </td>
                         <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
                         <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
-                        <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled value={formatNumber((Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1)))} /></td>
+                        <td className="finance-amount-cell w-36 px-2 py-1"><Input className="finance-money-input" disabled value={(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1))} /></td>
                         <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
                       </tr>
                     ))}

@@ -364,6 +364,67 @@ export async function downloadGrnReportExcel(
   URL.revokeObjectURL(url);
 }
 
+export async function getTallyReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/Tally-report/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+ 
+export async function downloadTallyReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/Tally-report/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Tally_Details_report_jobno_${jobNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export async function getDnReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/Dn-report/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+
+export async function downloadDnReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/Dn-report/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Tally_Details_report_jobno_${jobNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+
 export async function getAllStockTransfers() {
   const response = await api.get<ApiResponse<unknown[]>>("/api/wms/stocktransfer/getAllStockTransfers");
   if (!response.data.success) throw new Error(response.data.message || "Unable to load stock transfers");
