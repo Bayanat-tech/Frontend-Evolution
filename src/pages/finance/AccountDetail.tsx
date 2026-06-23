@@ -53,7 +53,7 @@ export function AccountDetails({
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "approval",   label: "Approval",         icon: <Shield size={14} /> },
     { id: "activities", label: "Activities",        icon: <Activity size={14} /> },
-    // { id: "documents",  label: "Documents Upload",  icon: <Upload size={14} /> },
+    { id: "documents",  label: "Documents Upload",  icon: <Upload size={14} /> },
   ];
 
   return (
@@ -116,9 +116,9 @@ export function AccountDetails({
           {activeTab === "activities" && (
             <ActivitiesTab acCode={acCode} setNotice={setNotice} />
           )}
-          {/* {activeTab === "documents" && (
+          {activeTab === "documents" && (
             <DocumentsTab />
-          )} */}
+          )}
         </div>
       </div>
     </div>
@@ -384,7 +384,7 @@ function ActivitiesTab({
         </Button>
       </div>
 
-      {/* Inline add form */}
+      {/* add form */}
       {showForm && (
   <div className="overflow-hidden rounded-lg border">
     <table className="w-full text-sm">
@@ -473,6 +473,47 @@ function ActivitiesTab({
   </div>
   )}
 
+   {/* Edit form */}
+      {editRow && (
+        <div className="overflow-hidden rounded-lg border border-primary/40">
+          <div className="bg-primary/5 px-3 py-2 text-xs font-semibold text-primary">
+            Editing SR#{editRow.SRNO}
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/40 text-left text-xs font-semibold">
+                <th className="px-2 py-2 w-16">SR No</th>
+                <th className="px-2 py-2 w-32">Activity Code</th>
+                <th className="px-2 py-2">Activity Description</th>
+                <th className="px-2 py-2 w-32">UserID</th>
+                <th className="px-2 py-2 w-40">User Date</th>
+              </tr>
+            </thead>
+            <tbody>
+               <tr>
+                <td className="p-1"><Input value={editRow.SRNO} disabled /></td>
+                <td className="p-1"><Input value={editRow.ACT_CODE} onChange={(e) => setEditRow((r) => r ? { ...r, ACT_CODE: e.target.value } : r)} /></td>
+                <td className="p-1"><Input value={editRow.ACT_DESC} onChange={(e) => setEditRow((r) => r ? { ...r, ACT_DESC: e.target.value } : r)} /></td>
+                <td className="p-1"><Input value={editRow.USER_ID || ""} onChange={(e) => setEditRow((r) => r ? { ...r, USER_ID: e.target.value } : r)} /></td>
+                <td className="p-1">
+                  <Input
+                    type="date"
+                    value={editRow.USER_DT ? new Date(editRow.USER_DT).toISOString().split("T")[0] : ""}
+                    onChange={(e) => setEditRow((r) => r ? { ...r, USER_DT: e.target.value } : r)}
+                  />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div className="flex justify-end gap-2 border-t p-3">
+            <Button variant="outline" onClick={() => setEditRow(null)}>Cancel</Button>
+            <Button disabled={adding} onClick={handleEdit}>
+              {adding ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : "Update"}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       {loading ? (
         <div className="space-y-2">
@@ -492,6 +533,7 @@ function ActivitiesTab({
                 <th className="px-3 py-2.5">Description</th>
                 <th className="px-3 py-2.5 w-28">User</th>
                 <th className="px-3 py-2.5 w-32">Date</th>
+                <th className="px-3 py-2.5 w-16">Edit</th>
               </tr>
             </thead>
             <tbody>
@@ -516,6 +558,14 @@ function ActivitiesTab({
                       ? new Date(row.USER_DT).toLocaleDateString("en-GB")
                       : "—"}
                   </td>
+                  <td className="px-3 py-2.5">
+                    <button
+                      onClick={() => { setEditRow(row); setShowForm(false); }}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Edit
+                    </button>
+                    </td>
                 </tr>
               ))}
             </tbody>
@@ -528,19 +578,19 @@ function ActivitiesTab({
 
 // ─── Documents Tab  ────────────
 
-// function DocumentsTab() {
-//   return (
-//     <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
-//       <div className="grid h-12 w-12 place-items-center rounded-full border bg-muted text-muted-foreground">
-//         <Upload size={20} />
-//       </div>
-//       <p className="text-sm font-medium">Documents Upload</p>
-//       <p className="max-w-xs text-xs text-muted-foreground">
-//         Document upload will be wired up in the next phase. The API will reuse the existing Attachments flow.
-//       </p>
-//     </div>
-//   );
-// }
+function DocumentsTab() {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
+      <div className="grid h-12 w-12 place-items-center rounded-full border bg-muted text-muted-foreground">
+        <Upload size={20} />
+      </div>
+      <p className="text-sm font-medium">Documents Upload</p>
+      {/* <p className="max-w-xs text-xs text-muted-foreground">
+        Document upload will be wired up in the next phase. The API will reuse the existing Attachments flow.
+      </p> */}
+    </div>
+  );
+}
 
 function ReadOnlyField({
   label,
