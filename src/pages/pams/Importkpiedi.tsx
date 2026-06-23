@@ -401,9 +401,9 @@ const handleUploadToEDI = async () => {
               <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isLoading} className="gap-2">
                 <CloudUpload size={16} /> Select Excel File
               </Button>
-              <Button variant="ghost" onClick={handleDownloadTemplate} className="gap-2">
+              {/* <Button variant="ghost" onClick={handleDownloadTemplate} className="gap-2">
                 <Download size={16} /> Download Template
-              </Button>
+              </Button> */}
             </div>
             {fileName && <div className="mt-2 text-sm text-gray-600">Selected: <span className="font-medium">{fileName}</span></div>}
             {fileSelected && excelData.length > 0 && (

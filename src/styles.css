@@ -3015,6 +3015,233 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   box-shadow: 0 0 0 2px var(--ring);
 }
 
+.commercial-document-workbench .commercial-section-title {
+  min-height: 18px;
+  padding: 1px 8px;
+}
+
+.commercial-document-workbench .commercial-section-title > div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.commercial-document-workbench .commercial-section-title .eyebrow {
+  font-size: 9.5px;
+  line-height: 1;
+}
+
+.commercial-document-workbench .commercial-section-title h3 {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.commercial-document-workbench .commercial-section-title > span {
+  padding: 0 7px;
+  font-size: 9.5px;
+  line-height: 15px;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded {
+  gap: 4px;
+  padding: 4px !important;
+  grid-template-columns: minmax(280px, 0.56fr) minmax(0, 1.78fr) minmax(0, 1.18fr);
+}
+
+.commercial-document-workbench .commercial-header-block {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.02);
+}
+
+.commercial-document-workbench .commercial-header-block-title {
+  min-height: 17px;
+  padding: 1px 8px;
+}
+
+.commercial-document-workbench .commercial-header-block-title span {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+}
+
+.commercial-document-workbench .commercial-header-block-fields {
+  gap: 3px;
+  padding: 4px;
+}
+
+.commercial-document-workbench .commercial-header-block-fields > .field,
+.commercial-document-workbench .commercial-header-block-fields > label.field {
+  min-height: 34px;
+  padding: 2px 5px;
+  border-radius: 6px;
+}
+
+.commercial-document-workbench .commercial-header-block-fields > .field > span,
+.commercial-document-workbench .commercial-header-block-fields > label.field > span {
+  margin-bottom: 0;
+  font-size: 9px;
+  line-height: 1;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded input,
+.commercial-document-workbench .commercial-header-panel.is-expanded select,
+.commercial-document-workbench .commercial-header-panel.is-expanded textarea,
+.commercial-document-workbench .commercial-header-panel.is-expanded button[role="combobox"],
+.commercial-document-workbench .commercial-header-panel.is-expanded .lookup-field-trigger {
+  min-height: 23px;
+  height: 23px;
+  font-size: 11.5px;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-doc .commercial-header-block-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-extra .commercial-header-block-fields {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party {
+  grid-column: span 2;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party .commercial-header-block-fields {
+  grid-template-columns:
+    minmax(270px, 1.35fr)
+    minmax(210px, 1fr)
+    minmax(150px, 0.7fr)
+    minmax(105px, 0.46fr)
+    minmax(150px, 0.7fr);
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-party-primary {
+  grid-column: span 2;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party .commercial-header-block-fields > .field.col-span-2,
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party .commercial-header-block-fields > label.field.col-span-2 {
+  grid-column: span 2;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party .commercial-header-block-fields > :nth-child(9) {
+  grid-column: span 2;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party .commercial-header-block-fields > :nth-child(9):last-child {
+  grid-column: 1 / -1;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party .commercial-header-block-fields > :nth-child(11) {
+  grid-column: span 2;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax {
+  grid-column: span 2;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax-wide {
+  grid-column: 2 / -1;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax .commercial-header-block-fields {
+  grid-template-columns:
+    minmax(210px, 1fr)
+    minmax(92px, 0.42fr)
+    minmax(120px, 0.52fr)
+    minmax(260px, 1.18fr);
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax .commercial-header-block-fields > :nth-child(4) {
+  grid-column: auto;
+}
+
+.commercial-document-workbench .commercial-header-footer {
+  min-height: 28px;
+  padding: 3px 10px;
+  font-size: 11px;
+}
+
+.commercial-document-workbench .commercial-lines-card {
+  display: flex;
+  min-height: 260px;
+  flex-direction: column;
+}
+
+.commercial-document-workbench .commercial-lines-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.commercial-document-workbench .commercial-lines-card tbody tr {
+  height: 28px;
+}
+
+.commercial-document-workbench .commercial-lines-card table .ui-input,
+.commercial-document-workbench .commercial-lines-card table .ui-select,
+.commercial-document-workbench .commercial-lines-card table .field > div,
+.commercial-document-workbench .commercial-line-description {
+  height: 24px;
+  min-height: 24px;
+}
+
+.commercial-document-workbench .commercial-lines-card table th {
+  height: 26px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.commercial-document-workbench .commercial-lines-card table td {
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+
+@media (max-width: 1536px) {
+  .commercial-document-workbench .commercial-header-panel.is-expanded {
+    grid-template-columns: minmax(270px, 0.68fr) minmax(0, 1.62fr);
+  }
+
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party,
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax,
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax-wide {
+    grid-column: span 1;
+  }
+
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party .commercial-header-block-fields,
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax .commercial-header-block-fields {
+    grid-template-columns:
+      minmax(230px, 1.35fr)
+      minmax(160px, 0.9fr)
+      minmax(120px, 0.62fr)
+      minmax(120px, 0.62fr);
+  }
+
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-party-primary,
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party .commercial-header-block-fields > .field.col-span-2,
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party .commercial-header-block-fields > label.field.col-span-2 {
+    grid-column: span 2;
+  }
+
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party .commercial-header-block-fields > :nth-child(9):last-child {
+    grid-column: 1 / -1;
+  }
+
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-extra .commercial-header-block-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1180px) {
+  .commercial-document-workbench .commercial-header-panel.is-expanded,
+  .commercial-document-workbench .commercial-header-panel.is-collapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party,
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax {
+    grid-column: span 1;
+  }
+}
+
 .commercial-sticky-footer {
   background: rgba(248, 251, 255, 0.96);
   backdrop-filter: blur(10px);

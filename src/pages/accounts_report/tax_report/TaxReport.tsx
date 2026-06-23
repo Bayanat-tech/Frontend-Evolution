@@ -15,7 +15,7 @@ export default function TaxReportFilter() {
     const [accounts, setAccounts] = useState<any[]>([]);
     const [division, setDivision] = useState<Division[]>([]);
     const [dateFrom, setDateFrom] = useState("2026-05-01");
-    const [dateTo, setDateTo] = useState("2026-05-27");
+    const [dateTo, setDateTo] = useState(new Date().toISOString().split("T")[0]);
     const [activeTab, setActiveTab] = useState("group");
     const [generating, setGenerating] = useState(false);
     const [reportError, setReportError] = useState<string | null>(null);
@@ -141,35 +141,35 @@ export default function TaxReportFilter() {
         code6: division[0]?.div_code || "",
         parameter,
     });
-const handleExportExcel = async () => {
-    setReportError(null);
-    setGeneratingExcel(true);
+    const handleExportExcel = async () => {
+        setReportError(null);
+        setGeneratingExcel(true);
 
-    try {
-        if (options.taxoutsummary) {
-            await exportTaxInvoiceSummaryExcel(
-                buildParams("Account_Tax_Report_VAT_OUT_ACCOUNT_LEDGER_SUMMARY_REPORT")
-            );
-        } else if (options.taxinsummary) {
-            await exportTaxInvoiceSummaryExcel(
-                buildParams("Account_Tax_Report_VAT_IN_ACCOUNT_LEDGER_SUMMARY_REPORT")
-            );
-        } else if (options.taxledgeroutreport) {
-            await getTaxInvoiceExcelReport(
-                buildParams("Account_Tax_Report_VAT_OUT_ACCOUNT_LEDGER_REPORT")
-            );
-        } else if (options.taxledgerinreport) {
-            await getTaxInvoiceExcelReport(
-                buildParams("Account_Tax_Report_VAT_IN_ACCOUNT_LEDGER_REPORT")
-            );
+        try {
+            if (options.taxoutsummary) {
+                await exportTaxInvoiceSummaryExcel(
+                    buildParams("Account_Tax_Report_VAT_OUT_ACCOUNT_LEDGER_SUMMARY_REPORT")
+                );
+            } else if (options.taxinsummary) {
+                await exportTaxInvoiceSummaryExcel(
+                    buildParams("Account_Tax_Report_VAT_IN_ACCOUNT_LEDGER_SUMMARY_REPORT")
+                );
+            } else if (options.taxledgeroutreport) {
+                await getTaxInvoiceExcelReport(
+                    buildParams("Account_Tax_Report_VAT_OUT_ACCOUNT_LEDGER_REPORT")
+                );
+            } else if (options.taxledgerinreport) {
+                await getTaxInvoiceExcelReport(
+                    buildParams("Account_Tax_Report_VAT_IN_ACCOUNT_LEDGER_REPORT")
+                );
+            }
+        } catch (err: any) {
+            console.error(err);
+            setReportError(err.message || "Failed to generate report.");
+        } finally {
+            setGeneratingExcel(false);
         }
-    } catch (err: any) {
-        console.error(err);
-        setReportError(err.message || "Failed to generate report.");
-    } finally {
-        setGeneratingExcel(false);
-    }
-};
+    };
 
     // ── single handleGenerate ──
     const handleGenerate = async () => {
@@ -456,8 +456,8 @@ const handleExportExcel = async () => {
                             <RotateCcw size={13} /> Reset
                         </button>
                         <button className="act-btn" onClick={handleExportExcel}
-                         style={{ padding: "7px 16px", border: "0.5px solid #abcae9", background: "#d2dfee", cursor: generating ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#3a3636", opacity: generating ? 0.75 : 1 }}>
-                            
+                            style={{ padding: "7px 16px", border: "0.5px solid #abcae9", background: "#d2dfee", cursor: generating ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#3a3636", opacity: generating ? 0.75 : 1 }}>
+
                             {generatingExcel && <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />}
                             {!generatingExcel && (
                                 <Download size={13} />

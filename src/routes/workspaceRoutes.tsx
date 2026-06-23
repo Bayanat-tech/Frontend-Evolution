@@ -72,6 +72,7 @@ import Dnsummaryreportpage from "../pages/wms/Reports/Dnsummaryreportpage";
 import { RJVDocumentEditor } from "../pages/finance/RJVDocuments";
 import { AlmsSimpleMasterConfigs } from "../pages/almswf/almsMasterConfig";
 import { AlmsSimpleMasterPage } from "../pages/almswf/AlmsMasterPage";
+import TransactionReportPage from "../pages/wms/Stock_Reports/Transaction_report";
 import TaxReportFilter from "../pages/accounts_report/tax_report/TaxReport";
 import JobListingReport from "../pages/wms/stock transfer/JobListingReport";
 import StockDetailReport from "../pages/wms_report/StockDetailReport";
@@ -204,6 +205,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   match: ({ pathname }) => isStockAdjustmentRoute(pathname),
   element: () => <StockAdjPage />,
 },
+  {
+    name: "WMS Stock Transaction Report",
+    match: ({ pathname }) => isTransactionReportRoute(pathname),
+    element: () => <TransactionReportPage />,
+  },
+
+
   {
     name: "Finance Account Wise Budget",
     match: ({ pathname }) => isAccountWiseBudgetRoute(pathname),
@@ -826,6 +834,14 @@ function isStockTransferRoute(pathname: string) {
 function isStockAdjustmentRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("wms/activity/request/stock_adj") && !normalized.includes("/view/");
+}
+
+
+
+function isTransactionReportRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/wms/reports/stock%20report/transaction_report") ||
+         normalized.includes("/wms/reports/stock%20report/transaction-report");
 }
 
 function isStockTransferViewRoute(pathname: string) {

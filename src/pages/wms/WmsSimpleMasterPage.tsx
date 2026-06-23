@@ -459,7 +459,7 @@ const saveRecord = async (event: FormEvent) => {
           </>
         }
       >
-        <p className="m-0 text-sm text-muted-foreground">This action uses the existing Bayanat WMS backend endpoint.</p>
+        <p className="m-0 text-sm text-muted-foreground">This action cannot be undone.</p>
       </Dialog>
     </section>
   );
