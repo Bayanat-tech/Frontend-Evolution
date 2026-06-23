@@ -396,7 +396,7 @@ export async function downloadTallyReportExcel(
 
 export async function getDnReport(prinCode: string, jobNo: string): Promise<string> {
   const response = await api.get(
-    `/api/wms/inbound/reports/Dn-report/${jobNo}?prin_code=${prinCode}`,
+    `/api/wms/outbound/reports/Dn-report/${jobNo}?prin_code=${prinCode}`,
     { responseType: "text" }
   );
   if (!response.data) throw new Error("Unable to fetch Job Details Report");
@@ -408,7 +408,37 @@ export async function downloadDnReportExcel(
   jobNo: string
 ): Promise<void> {
   const response = await api.get(
-    `/api/wms/inbound/reports/Dn-report/${jobNo}/excel?prin_code=${prinCode}`,
+    `/api/wms/outbound/reports/Dn-report/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Tally_Details_report_jobno_${jobNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export async function getOubPickReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/Oubpick/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+
+export async function downloadOubPickReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/Oubpick/${jobNo}/excel?prin_code=${prinCode}`,
     { responseType: "arraybuffer" }
   );
   const blob = new Blob([response.data], {
