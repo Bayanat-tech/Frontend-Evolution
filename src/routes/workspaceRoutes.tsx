@@ -76,6 +76,9 @@ import TaxReportFilter from "../pages/accounts_report/tax_report/TaxReport";
 import JobListingReport from "../pages/wms/stock transfer/JobListingReport";
 import StockDetailReport from "../pages/wms_report/StockDetailReport";
 import StockAdjustmentPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
+import { StockAdjViewPage } from "../pages/wms/stock adjustment/StockAdjustmentViewPage";
+import StockAdjPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
+import {StorageComputationPage} from "../pages/wms/storage computation/StorageComputation";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -131,7 +134,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   element: () => <AC_StatementPage />,
 },
 
-
+{
+  name: "Storage Computation",
+  match: ({ pathname }) => isStorageComputationRoute(pathname),
+  element: () => <StorageComputationPage />,
+},
 {
   name: "Finance Outstanding Statement",
   match: ({ pathname }) => isOutstandingStatementRoute(pathname),
@@ -187,10 +194,15 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isStockTransferRoute(pathname),
     element: () => <StockTransferPage />,
   },
+  {
+  name: "Stock Adjustment View",
+  match: ({ pathname }) => isStockAdjViewRoute(pathname),
+  element: () => <StockAdjViewPage />,
+},
 {
   name: "Stock Adjustment",
   match: ({ pathname }) => isStockAdjustmentRoute(pathname),
-  element: () => <StockAdjustmentPage />,
+  element: () => <StockAdjPage />,
 },
   {
     name: "Finance Account Wise Budget",
@@ -574,6 +586,17 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
 ];
 
+function isStorageComputationRoute(pathname: string) {
+  return pathname.toLowerCase().includes("wms/activity/request/storage_computation");
+}
+
+function isStockAdjViewRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.includes("wms/activity/request/stock_adj") &&
+    normalized.includes("/view/")
+  );
+}
 function isBankMasterRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return (
