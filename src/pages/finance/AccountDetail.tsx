@@ -599,6 +599,7 @@ function DocumentsTab() {
   );
 }
 
+function ReadOnlyField({
   label,
   value,
   wide,
