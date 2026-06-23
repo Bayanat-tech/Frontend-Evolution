@@ -545,6 +545,8 @@ const PeriodWisePage: React.FC = () => {
                 tbody tr:hover td { background: #f9fafb; }
                 input[type=number]::-webkit-inner-spin-button { opacity: 1; }
                 .div-option:hover { background: #f0f7ff; }
+                 @keyframes spin { to { transform: rotate(360deg); } }
+                  .action-btn-excel:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
             `}</style>
 
             <div style={{ maxWidth: 1080, margin: "0 auto", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -976,7 +978,7 @@ const PeriodWisePage: React.FC = () => {
                     {/* Action bar */}
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8, paddingTop: 8, borderTop: "0.5px solid #e5e7eb" }}>
                         <button
-                            className="action-btn"
+                              className="action-btn action-btn-excel"
                             onClick={handleReset}
                             style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151" }}
                         >
@@ -984,7 +986,7 @@ const PeriodWisePage: React.FC = () => {
                         </button>
 
                         <button
-                            className="action-btn"
+                             className="action-btn action-btn-excel"
                             onClick={handleExportExcel}
                             disabled={generatingExcel}
                             style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: generatingExcel ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: generatingExcel ? 0.7 : 1 }}
