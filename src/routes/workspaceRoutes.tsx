@@ -21,7 +21,7 @@ import { PaymentDocumentPage } from "../pages/finance/PaymentDocumentPage";
 import { PLSetupPage } from "../pages/finance/PLSetupPage";
 import { PrepaidRegisterPage } from "../pages/finance/PrepaidRegisterPage";
 import { WmsInboundPage } from "../pages/wms/inbound/WmsInboundPage";
-import { WmsOutboundPage } from "../pages/wms/WmsOutboundPage";
+import { WmsOutboundPage } from "../pages/wms/outbound/WmsOutboundPage";
 import { WmsSimpleMasterPage } from "../pages/wms/WmsSimpleMasterPage";
 import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
 import { SecurityAssignmentPage, securityAssignmentConfigs } from "../pages/security/SecurityAssignmentPage";
@@ -54,20 +54,29 @@ import { TrainingFeedbackPage } from "../pages/hr/Hrtrainingfeedbackpage";
 import { Leaf } from "lucide-react";
 import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics";
 import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
+// import ProfitLossPage from "../pages/accounts_report/ProfitLossPage";
 import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
 import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseReport";
 // import { AcGroup, FirstGroup, SecondGroup, ThirdGroup } from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
 import AC_StatementPage from "../pages/accounts_report/detailed_reports/AC_StatementReportPage";
 import OutstandingStatementPage from "../pages/accounts_report/detailed_reports/OutstandingStatementPage";
+import BalanceSheetReportFilter from "../pages/accounts_report/detailed_reports/BalanceSheetReportFilter";
 import InspectionFormPage from "../pages/oxmaint/inspection_form/InspectionFormMainPage";
 import AssignUserDiv from "../pages/finance/AssignUserDiv";
 import TrialBalancePage from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
 import StockTransferPage from "../pages/wms/stock transfer/StockTransferPage";
 import { StockTransferViewPage } from "../pages/wms/stock transfer/GetStockTransferPage";
+import ProfitLossPage from "../pages/accounts_report/ProfitLossPage";
+import VisaExpiryListingPage from "../pages/hr/Reports/Visaexpirylistingpage";
+import Dnsummaryreportpage from "../pages/wms/Reports/Dnsummaryreportpage";
 import { RJVDocumentEditor } from "../pages/finance/RJVDocuments";
 import { AlmsSimpleMasterConfigs } from "../pages/almswf/almsMasterConfig";
 import { AlmsSimpleMasterPage } from "../pages/almswf/AlmsMasterPage";
+import TransactionReportPage from "../pages/wms/Stock_Reports/Transaction_report";
 import TaxReportFilter from "../pages/accounts_report/tax_report/TaxReport";
+import JobListingReport from "../pages/wms/stock transfer/JobListingReport";
+import StockDetailReport from "../pages/wms_report/StockDetailReport";
+import StockAdjustmentPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -86,6 +95,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: "Finance Ledger Basics",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/wms/wms/reports/stock%20report/stock_detail"),
+    element: () => <StockDetailReport />,
+  },
   {
     name: "Finance Assign User Div",
     match: ({ pathname }) => pathname.toLowerCase().includes("/finance/finance/utilities/assign_user_division"),
@@ -106,7 +120,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isTaxReportRoute(pathname),
     element: () => <TaxReportFilter />,
   },
-
+  {
+    name: "Finance Balance Sheet",
+    match: ({ pathname }) => isBalanceSheetRoute(pathname),
+    element: () => <BalanceSheetReportFilter />,
+  },
 
   {
   name: "Finance AC Statement",
@@ -170,6 +188,17 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isStockTransferRoute(pathname),
     element: () => <StockTransferPage />,
   },
+{
+  name: "Stock Adjustment",
+  match: ({ pathname }) => isStockAdjustmentRoute(pathname),
+  element: () => <StockAdjustmentPage />,
+},
+  {
+    name: "WMS Stock Transaction Report",
+    match: ({ pathname }) => isTransactionReportRoute(pathname),
+    element: () => <TransactionReportPage />,
+  },
+
 
   {
     name: "Finance Account Wise Budget",
@@ -247,6 +276,24 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <AllocatedInvoicePage />,
   },
   {
+    name : "Profit and Loss",
+    match: ({pathname}) => isProfitLossRoute(pathname),
+    element: () => <ProfitLossPage/>
+  },
+{
+    name : "Visa Expiry Listing Report",
+    match: ({pathname}) => isVisaExpiryListingRoute(pathname),
+    element: () => <VisaExpiryListingPage/>
+  },
+{
+    name : "DN Summary Report",
+    match: ({pathname}) => isDnRoute(pathname),
+    element: () => <Dnsummaryreportpage/>
+  },
+
+  
+
+  {
     name: "WMS Inbound",
     match: ({ pathname }) => isWmsInboundRoute(pathname),
     element: () => <WmsInboundPage />,
@@ -260,6 +307,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "WMS Billing Activity Master",
     match: ({ pathname }) => isWmsBillingActRoute(pathname),
     element: () => <WmsBillingActPage />,
+  },
+     {
+    name: "WMS Stock Report Job Listing",
+    match: ({ pathname }) => isJobListingRoute(pathname),
+    element: () => <JobListingReport />,
   },
   
   {
@@ -617,6 +669,16 @@ function isTaxReportRoute(pathname: string) {
   return normalized.includes("/finance/accounts_report/tax_report") || normalized.includes("/finance/accounts/reports/tax-report");
 }
 
+function isBalanceSheetRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.includes("/finance/finance/accounts_report/balance_sheet/balance_sheet") ||
+    normalized.includes("/finance/finance/accounts_report/balance_sheet") ||
+    normalized.includes("/finance/accounts_report/balance_sheet/balance_sheet") ||
+    normalized.includes("/finance/accounts_report/balance_sheet") ||
+    normalized.includes("/finance/accounts/reports/account-report/balance-sheet")
+  );
+}
 
 function isAcStatementRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -746,6 +808,18 @@ function isStockTransferRoute(pathname: string) {
     !normalized.includes("/view/")  // ← add this
   );
 }
+function isStockAdjustmentRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("wms/activity/request/stock_adj") && !normalized.includes("/view/");
+}
+
+
+
+function isTransactionReportRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/wms/reports/stock%20report/transaction_report") ||
+         normalized.includes("/wms/reports/stock%20report/transaction-report");
+}
 
 function isStockTransferViewRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -753,6 +827,11 @@ function isStockTransferViewRoute(pathname: string) {
     normalized.includes("wms/activity/request/stock_transfer") &&
     normalized.includes("/view/")
   );
+}
+
+function isJobListingRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (normalized.includes("/wms/reports/stock%20report/job_listing") || normalized.includes("/wms/reports/stock-report/job_listing") || normalized.includes("/wms/reports/stock-report/job-listing"));
 }
 function isAssetDepreciationRoute(pathname: string) {
   return pathname.toLowerCase().includes("/finance/a/c_others/assets/asset_depreciation");
@@ -766,6 +845,28 @@ function isAllocatedInvoiceRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/finance/accounts/transactions/allocated_invoice") || normalized.includes("/finance/accounts/transactions/allocated-invoice");
 }
+
+function isProfitLossRoute(pathname:string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/finance/finance/accounts_report/profit_and_loss/profit_and_loss")
+}
+
+
+function isDnRoute(pathname:string) {  
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/wms/wms/reports/summary%20report/dn_summary")
+   || normalized.includes("/wms/wms/reports/summary_report/dn_summary");
+}
+
+
+
+
+function isVisaExpiryListingRoute(pathname:string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("hr/reports/employee/visa_expiry_listing") || 
+          normalized.includes("hr/reports/employee/visa-expiry-listing");
+}
+
 
 function isWmsCountryRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -933,7 +1034,7 @@ function isPamsAppraisalWeightageRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/appraisal_weightage") || 
          normalized.includes("/appraisal_weightage");
-} 
+}
 
 
 function getPamsMasterConfig(context: WorkspaceRouteContext) {

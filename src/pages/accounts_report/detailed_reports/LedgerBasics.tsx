@@ -11,6 +11,7 @@ import {
     ChevronsLeft,
     BarChart2,
     Loader2,
+    Download,
 } from "lucide-react";
 
 import { getDynamicLookup, getDynamicLookupaccount } from "../../../api/lookups";
@@ -25,6 +26,8 @@ import {
     // openLedgerOppositeEntryReport,
     // openSummaryDumpReport,
     openAccountPayeeWiseReport,
+    exportAccountPayeeWiseExcel,
+    exportChequeDateWiseExcel,
 
 } from "../../../api/transactions";
 import { FloatLabelInput } from "../../../lib/InputStyle";
@@ -37,7 +40,7 @@ export default function FinanceReportFilter() {
     const [division, setDivision] = useState<Division[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [dateFrom, setDateFrom] = useState("2026-05-01");
-    const [dateTo, setDateTo] = useState("2026-05-27");
+    const [dateTo, setDateTo] = useState(new Date().toISOString().split("T")[0]); // default to today
     const [amountFrom, setAmountFrom] = useState("");
     const [amountTo, setAmountTo] = useState("");
     const [remarks, setRemarks] = useState("");
@@ -64,6 +67,7 @@ export default function FinanceReportFilter() {
 
     const [accountSearchLeft, setAccountSearchLeft] = useState("");
     const [accountSearchRight, setAccountSearchRight] = useState("");
+    const [generatingExcel, setGeneratingExcel] = useState(false);
 
     const formatDate = (date: string) => {
         if (!date) return null;
@@ -263,7 +267,29 @@ export default function FinanceReportFilter() {
             setReportError(`Failed to open: ${errors.join(", ")}. Check console for details.`);
         }
     };
+    const handleExportExcel = async () => {
+        setReportError(null);
+        setGeneratingExcel(true);
 
+        try {
+            if (options.chequeDateWise) {
+                await exportChequeDateWiseExcel(
+                    buildParams()
+                );
+            } else if (options.acPayeeWise) {
+                await exportAccountPayeeWiseExcel(
+                    buildParams()
+                );
+            }
+
+
+        } catch (err: any) {
+            console.error(err);
+            setReportError(err.message || "Failed to generate report.");
+        } finally {
+            setGeneratingExcel(false);
+        }
+    };
     // ── shared table styles ────────────────────────────────────────────────
     const thStyle: React.CSSProperties = {
         padding: "7px 10px",
@@ -642,9 +668,15 @@ export default function FinanceReportFilter() {
                             style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151" }}>
                             <RotateCcw size={13} /> Reset
                         </button>
-                        <button className="action-btn"
-                            style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151" }}>
-                            <FileText size={13} /> Export
+                        <button className="act-btn" onClick={handleExportExcel}
+                            style={{ padding: "7px 16px", border: "0.5px solid #abcae9", background: "#d2dfee", cursor: generating ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#3a3636", opacity: generating ? 0.75 : 1 }}>
+
+                            {generatingExcel && <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />}
+                            {!generatingExcel && (
+                                <Download size={13} />
+
+                            )}
+                            Export Excel
                         </button>
                         <div style={{ width: "0.5px", background: "#e5e7eb", alignSelf: "stretch" }} />
                         <button

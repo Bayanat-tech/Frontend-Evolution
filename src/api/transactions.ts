@@ -6,7 +6,7 @@ type ApiResponse<T> = {
   message?: string;
 };
 
-export type TransactionType = "BP" | "BR" | "CR" | "CP" | "CN" | "DN" | "PO" | "PI" | "SI" | "SV" | "JV" | "RJV" ;
+export type TransactionType = "BP" | "BR" | "CR" | "CP" | "CN" | "DN" | "PO" | "PI" | "SI" | "SV" | "JV" | "RJV";
 
 export type TransactionDocumentRow = {
   company_code?: string;
@@ -471,40 +471,40 @@ export async function openDocumentReport(docType: TransactionType | string, docN
 
 
 interface ReportParams {
-    parameter: string;
-    loginid: string;
-    code1?: string;
-    code2?: string;
-    code3?: string;
-    code4?: string;
-    code5?: string;
-    code6?: string;
-    code7?: string | number;
-    code8?: string | number;
-    code9?: string;
-    code10?: string;
-    code20?: string;
-    [key: string]: any;
+  parameter: string;
+  loginid: string;
+  code1?: string;
+  code2?: string;
+  code3?: string;
+  code4?: string;
+  code5?: string;
+  code6?: string;
+  code7?: string | number;
+  code8?: string | number;
+  code9?: string;
+  code10?: string;
+  code20?: string;
+  [key: string]: any;
 }
 
 // ── generic helper (same blob → new tab pattern) ──────────────────────────
 async function openReportInTab(endpoint: string, params: ReportParams): Promise<void> {
-    try {
-        const response = await api.post(endpoint, params, {
-            responseType: "blob",
-        });
+  try {
+    const response = await api.post(endpoint, params, {
+      responseType: "blob",
+    });
 
-        const blob = new Blob([response.data], { type: "text/html;charset=utf-8" });
-        const url = window.URL.createObjectURL(blob);
-        const reportWindow = window.open(url, "_blank", "noopener,noreferrer");
+    const blob = new Blob([response.data], { type: "text/html;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const reportWindow = window.open(url, "_blank", "noopener,noreferrer");
 
-        if (!reportWindow) console.error("Please allow popups to view this report");
+    if (!reportWindow) console.error("Please allow popups to view this report");
 
-        window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
-    } catch (error) {
-        console.error(`Failed to open report [${endpoint}]:`, error);
-        throw error; // re-throw so the frontend can show an error banner
-    }
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+  } catch (error) {
+    console.error(`Failed to open report [${endpoint}]:`, error);
+    throw error; // re-throw so the frontend can show an error banner
+  }
 }
 
 // ── 1. Cheque Book Monitoring ─────────────────────────────────────────────
@@ -516,10 +516,10 @@ async function openReportInTab(endpoint: string, params: ReportParams): Promise<
 // }
 
 export async function openChequeDateWiseReport(params: ReportParams) {
-    await openReportInTab(
-        `/api/finance/transactions/reports/cheque-date-wise/html`,
-        params
-    );
+  await openReportInTab(
+    `/api/finance/transactions/reports/cheque-date-wise/html`,
+    params
+  );
 }
 
 // ── 2. Detail Dump ────────────────────────────────────────────────────────
@@ -556,28 +556,27 @@ export async function openChequeDateWiseReport(params: ReportParams) {
 
 // ── 6. Account Payee Wise ─────────────────────────────────────────────────
 export async function openAccountPayeeWiseReport(params: ReportParams) {
-    await openReportInTab(
-        `/api/finance/transactions/reports/account-payee-wise/html`,
-        params
-    );
+  await openReportInTab(
+    `/api/finance/transactions/reports/account-payee-wise/html`,
+    params
+  );
 }
 // -------Ageing Report----------------------
 export async function openInvdatewiseDetailReport(params: ReportParams) {
-    await openReportInTab(
-       `/api/finance/transactions/reports/InvdatewiseDetail/html`,
-        params
-    );
+  await openReportInTab(
+    `/api/finance/transactions/reports/InvdatewiseDetail/html`,
+    params
+  );
 }
 
 export async function openInvdatewiseSummaryReport(params: ReportParams) {
-    await openReportInTab(
-        `/api/finance/transactions/reports/InvdatewiseSummary/html`,
-        params
-    );
+  await openReportInTab(
+    `/api/finance/transactions/reports/InvdatewiseSummary/html`,
+    params
+  );
 }
 
-export async function openDuedatewiseDetailReport(params: ReportParams)
-{
+export async function openDuedatewiseDetailReport(params: ReportParams) {
   await openReportInTab(
 
     `/api/finance/transactions/reports/DuedatewiseDetail/html`,
@@ -586,56 +585,425 @@ export async function openDuedatewiseDetailReport(params: ReportParams)
 }
 
 export async function openDuedatewiseSummaryReport(params: ReportParams) {
-    await openReportInTab(
-        "/api/finance/transactions/reports/DuedatewiseSummary/html",
-        params
-    );
+  await openReportInTab(
+    "/api/finance/transactions/reports/DuedatewiseSummary/html",
+    params
+  );
 }
 
-export async function openOutstandingListReport(params: ReportParams) {
-    await openReportInTab(
-        "/api/finance/transactions/reports/OutstandingList/html",
-        params
+// ─── PeriodWise Excel Export Functions ───────────────────────────────────────
+
+export async function exportInvDetailExcel(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/InvdatewiseDetail/excel`,
+        params,
+        { responseType: "blob" }
     );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "PeriodWise_InvDetail.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+export async function exportInvSummaryExcel(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/InvdatewiseSummary/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "PeriodWise_InvSummary.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+export async function exportDueDetailExcel(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/DuedatewiseDetail/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "PeriodWise_DueDetail.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+export async function exportDueSummaryExcel(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/DuedatewiseSummary/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "PeriodWise_DueSummary.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+export async function exportOutstandingListExcel(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/OutstandingList/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "PeriodWise_OutstandingList.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+
+
+
+
+
+
+export async function openOutstandingListReport(params: ReportParams) {
+  await openReportInTab(
+    "/api/finance/transactions/reports/OutstandingList/html",
+    params
+  );
 }
 
 export async function taxOutInReport(params: ReportParams) {
-    await openReportInTab(
-        "/api/finance/transactions/reports/tax-vat-out-ledger/html",
-        params
-// ---------AC_statement report-----
-    )}
+  await openReportInTab(
+    "/api/finance/transactions/reports/tax-vat-out-ledger/html",
+    params
+    // ---------AC_statement report-----
+  )
+}
 
 export async function openAcStatementReport(params: ReportParams) {
-    await openReportInTab(
-        "/api/finance/transactions/reports/AcStatementReport/html",  
-        params
-    );
+  await openReportInTab(
+    "/api/finance/transactions/reports/AcStatementReport/html",
+    params
+  );
 }
 
 
 
 export async function taxOutInSummaryReport(params: ReportParams) {
-    await openReportInTab(
-        "/api/finance/transactions/reports/tax-vat-out-ledger-summary/html",
-        params
-    );
+  await openReportInTab(
+    "/api/finance/transactions/reports/tax-vat-out-ledger-summary/html",
+    params
+  );
 }
 export async function openOutstandingStatementDetailReport(params: ReportParams) {
-    await openReportInTab(
-        "/api/finance/transactions/reports/OutstandingDetailReport/html",  
-        params
-    );
+  await openReportInTab(
+    "/api/finance/transactions/reports/OutstandingDetailReport/html",
+    params
+  );
 }
 
 
 export async function openOutstandingStatementSummaryReport(params: ReportParams) {
+  await openReportInTab(
+    "/api/finance/transactions/reports/OutstandingSummaryReport/html",
+    params
+  );
+}
+
+export async function jobListingReport(params: ReportParams) {
+  await openReportInTab(
+    "/api/finance/transactions/reports/wms-joblisting/html",
+    params
+  );
+}
+
+export async function exportJobListingExcel(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/wms-joblisting`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "DN_Summary.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+export async function getBalanceSheetReportHtml(params: ReportParams): Promise<string> {
+    const response = await api.post(
+        `/api/finance/transactions/report/balancesheet/html`,
+        params,
+        { responseType: "text" }
+    );
+    return response.data as string;
+}
+
+export async function getBalanceSheetReportExcelDownload(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/report/balancesheet/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "BalanceSheet.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+// ---------Profit & Loss Report----------------
+
+// transactions.ts
+
+export async function getProfitLossReportHtml(params: ReportParams): Promise<string> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/profitloss/html`,  
+        params,
+        { responseType: "text" }
+
+    )
+    return response.data as string;}
+export async function getTaxInvoiceExcelReport(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/tax-vat-out-ledger/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "Tax_Invoice_Report.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+export async function exportTaxInvoiceSummaryExcel(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/tax-vat-out-ledger-summary/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "Tax_Invoice_summary_Report.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+export async function exportChequeDateWiseExcel(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/cheque-date-wise/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "ChequeDateWiseReport.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+export async function exportAccountPayeeWiseExcel(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/account-payee-wise/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "AccountPayeeWiseReport.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+// export async function openProfitLossReport(params: ReportParams) {
+//     await openReportInTab(
+//         `/api/finance/transactions/reports/getProfitLossReport/html`,
+//         params
+//     );
+//     return response.data as string;
+// }
+
+export async function getProfitLossReportExcelDownload(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/profitloss/excel`,  
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "ProfitLoss.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+
+
+// ----------Visa Expiry Listing Report----------------
+export async function openVisaExpiryReport(params: ReportParams) {
     await openReportInTab(
-        "/api/finance/transactions/reports/OutstandingSummaryReport/html", 
+        `/api/finance/transactions/reports/getVisaExpiryReport/html`,
+        params
+    );
+} 
+
+export async function TransationReport(params: ReportParams) {
+    await openReportInTab(
+        "/api/finance/transactions/reports/wms-TransactionProductReport/html", 
         params
     );
 }
 
+export async function exportTransactionProductExcel(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/wms-exportTransactionProductExcel/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "TransactionProduct.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+
+// export async function exportTransactionProductExcel(params: ReportParams) {
+//     await openReportInTab(
+//         "/api/finance/transactions/reports/wms-exportTransactionProductExcel/excel",
+//         params
+//     );
+// }
+
+
+
+
+// ---------DN Summary Report----------------
+
+
+export async function getDnSummaryReportHtml(params: ReportParams): Promise<string> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/getDnSummaryReport/html`,
+        params,
+        { responseType: "text" }
+    );
+    return response.data as string;
+}
+
+export async function getDnSummaryReportExcelDownload(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/getDnSummaryReport/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "DN_Summary.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+// export async function exportTransactionProductExcel(params: ReportParams): Promise<void> {
+//     const response = await api.post(
+//         `/api/finance/transactions/reports/wms-exportTransactionProductExcel/excel`,
+//         params,
+//         { responseType: "blob" }
+//     );
+//     const blob = new Blob([response.data], {
+//         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+//     });
+//     const url = window.URL.createObjectURL(blob);
+//     const link = document.createElement("a");
+//     link.href = url;
+//     link.download = "DN_Summary.xlsx";
+//     document.body.appendChild(link);
+//     link.click();
+//     link.remove();
+//     window.URL.revokeObjectURL(url);
+// }
 
 
 // export const openInvdatewiseDetailReport = async (params: any): Promise<void> => {
