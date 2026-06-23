@@ -732,10 +732,17 @@ function PaymentDocumentEditor({
     if (detail.child_table !== "invoice") return false;
     const childRows = (form.children[detail.id] || []) as TransactionChildRow[];
     if (childRows.length === 0) return false;
-    const totalOutstanding = childRows.reduce(
-      (sum, r) => sum + (Number(r.c_bal_amt_org) || 0), 0
-    );
-    return Number(detail.amount || 0) > totalOutstanding;
+
+    // In edit mode: outstanding may be 0 because THIS doc already holds the allocation.
+    // Use max(c_bal_amt_org, child.amount) per row as the effective ceiling.
+    const effectiveCeiling = childRows.reduce((sum, r) => {
+      const outstanding = Number(r.c_bal_amt_org) || 0;
+      const allocated = Number(r.amount) || 0;
+      // effective ceiling = outstanding + what this doc already allocated to it
+      return sum + Math.max(outstanding, allocated);
+    }, 0);
+
+    return Number(detail.amount || 0) > effectiveCeiling + 0.001; // small epsilon for float
   });
 
   return (
@@ -1034,14 +1041,15 @@ function PaymentDocumentEditor({
                               const childRows = (form.children[detail.id] || []) as TransactionChildRow[];
                               if (detail.child_table !== "invoice" || childRows.length === 0) return null;
 
-                              const totalOutstanding = childRows.reduce(
-                                (sum, r) => sum + (Number(r.c_bal_amt_org) || 0), 0
-                              );
+                              const effectiveCeiling = childRows.reduce((sum, r) => {
+                                const outstanding = Number(r.c_bal_amt_org) || 0;
+                                const allocated = Number(r.amount) || 0;
+                                return sum + Math.max(outstanding, allocated);
+                              }, 0);
 
-                              // ✅ Compare user's typed detail amount against total outstanding
-                              return Number(detail.amount || 0) > totalOutstanding ? (
+                              return Number(detail.amount || 0) > effectiveCeiling + 0.001 ? (
                                 <span className="text-xs text-red-500">
-                                  Amount exceeds total outstanding ({totalOutstanding.toFixed(3)})
+                                  Amount exceeds total outstanding ({effectiveCeiling.toFixed(3)})
                                 </span>
                               ) : null;
                             })()}
@@ -1323,11 +1331,12 @@ function ChildAllocationTable({
                         }
                       />
 
-                      {Number(row.amount || 0) > Number(row.c_bal_amt_org || 0) && (
-                        <span className="text-xs text-red-500">
-                          Amount exceeds available balance
-                        </span>
-                      )}
+                      {Number(row.c_bal_amt_org || 0) > 0 &&
+                        Number(row.amount || 0) > Number(row.c_bal_amt_org || 0) + 0.001 && (
+                          <span className="text-xs text-red-500">
+                            Amount exceeds available balance
+                          </span>
+                        )}
                     </div>
                   </td>
                 </>
