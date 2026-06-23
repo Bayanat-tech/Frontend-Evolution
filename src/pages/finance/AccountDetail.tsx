@@ -7,87 +7,36 @@ import { NoticeToast } from "../../components/ui/NoticeToast";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { useAuth } from "../../state/AuthContext";
 import { cn } from "../../lib/utils";
-import { getLevel5Activities, getLevel5ApprovalDetails, saveLevel5ApprovalDetails, upsertLevel5Activities } from "../../api/transactions";
+import { getAccountTreeNode ,CreateLevel5ApprovalDetails, upsertLevel5Activities,getLevel5Activities } from "../../api/finance";
 
 // ─── Types ───────
 
 type Tab = "approval" | "activities" | "documents";
 
 type ApprovalData = {
-  ac_code: string;
-  ac_name: string;
-  create_user: string;
-  create_date: string; 
-  ac_status: string;
-  approved_by: string;
-  approved_date: string;
-  company_code: string;
-  cr_no: string;
-  ac_active: string;
+  AC_CODE: string;
+  AC_NAME: string;
+  // CREATE_USER: string;
+  // CREATE_DATE: string;
+  AC_STATUS: string;
+  APPROVED_BY: string;
+  APPROVED_DATE: string;
+  COMPANY_CODE: string;
+  CR_NO: string;
+  AC_ACTIVE: string;
 };
 
 type Activity = {
-  company_code: string;
-  ac_code: string;
-  srno: number;
-  act_code: string;
-  act_desc: string;
-  user_id: string;
-  user_dt: string;
+  SRNO: number;
+  ACT_CODE: string;
+  ACT_DESC: string;
+  USER_ID: string;
+  USER_DT: string;
 };
 
 type Notice = { type: "success" | "error"; message: string } | null;
 
-// ─── API helpers (add to your api/finance.ts) ────────────────────────────────
-// These call the four new endpoints from the controller.
-
-// async function fetchApprovalDetails(acCode: string): Promise<ApprovalData> {
-//   const res = await fetch(`/api/finance/ac-tree/level5/${acCode}/approval`, {
-//     credentials: "include",
-//   });
-//   const json = await res.json();
-//   if (!json.success) throw new Error(json.message || "Failed to load approval details");
-//   return json.data;
-// }
-
-// async function saveApprovalDetails(
-//   acCode: string,
-//   payload: Partial<ApprovalData>
-// ): Promise<void> {
-//   const res = await fetch(`/api/finance/ac-tree/level5/${acCode}/approval`, {
-//     method: "PUT",
-//     credentials: "include",
-//     headers: { "Content-Type": "application/json" },
-//     body: JSON.stringify(payload),
-//   });
-//   const json = await res.json();
-//   if (!json.success) throw new Error(json.message || "Failed to save approval details");
-// }
-
-// async function fetchActivities(acCode: string): Promise<Activity[]> {
-//   const res = await fetch(`/api/finance/ac-tree/level5/${acCode}/activities`, {
-//     credentials: "include",
-//   });
-//   const json = await res.json();
-//   if (!json.success) throw new Error(json.message || "Failed to load activities");
-//   return json.data;
-// }
-
-// async function addActivity(
-//   acCode: string,
-//   payload: { act_code: string; act_desc: string }
-// ): Promise<void> {
-//   const res = await fetch(`/api/finance/ac-tree/level5/${acCode}/activities`, {
-//     method: "POST",
-//     credentials: "include",
-//     headers: { "Content-Type": "application/json" },
-//     body: JSON.stringify(payload),
-//   });
-//   const json = await res.json();
-//   if (!json.success) throw new Error(json.message || "Failed to add activity");
-// }
-
-// ─── Main Dialog ─────────────
+// ─── Dialog ─────────────
 
 export function AccountDetails({
   acCode,
@@ -104,11 +53,10 @@ export function AccountDetails({
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "approval",   label: "Approval",         icon: <Shield size={14} /> },
     { id: "activities", label: "Activities",        icon: <Activity size={14} /> },
-    { id: "documents",  label: "Documents Upload",  icon: <Upload size={14} /> },
+    // { id: "documents",  label: "Documents Upload",  icon: <Upload size={14} /> },
   ];
 
   return (
-    // Backdrop
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}
@@ -168,9 +116,9 @@ export function AccountDetails({
           {activeTab === "activities" && (
             <ActivitiesTab acCode={acCode} setNotice={setNotice} />
           )}
-          {activeTab === "documents" && (
+          {/* {activeTab === "documents" && (
             <DocumentsTab />
-          )}
+          )} */}
         </div>
       </div>
     </div>
@@ -186,6 +134,7 @@ function ApprovalTab({
   acCode: string;
   setNotice: (n: Notice) => void;
 }) {
+  const { user } = useAuth(); 
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
   const [data, setData]         = useState<ApprovalData | null>(null);
@@ -193,8 +142,8 @@ function ApprovalTab({
     cr_no:         "",
     ac_status:     "",
     ac_active:     "Y",
-    approved_by:   "",
-    // approved_date: "",
+    approved_by:   user?.loginid,
+    approved_date: "",
   });
 
   useEffect(() => {
@@ -203,14 +152,17 @@ function ApprovalTab({
     setLoading(true);
     try {
  
-    const result = await getLevel5ApprovalDetails(acCode) as ApprovalData;
+    const result = await getAccountTreeNode(5, acCode) as ApprovalData;
       if (!active) return;
       setData(result);
       setForm({
-        cr_no:       result.cr_no       || "",
-        ac_status:   result.ac_status   || "",
-        ac_active:   result.ac_active   || "Y",
-        approved_by: result.approved_by || "",
+        cr_no:       result.CR_NO       || "",
+        ac_status:   result.AC_STATUS   || "",
+        ac_active:   result.AC_ACTIVE   || "Y",
+        approved_by: result.APPROVED_BY || "",
+        approved_date: result.APPROVED_DATE
+           ? new Date(result.APPROVED_DATE).toISOString().split("T")[0]  // → YYYY-MM-DD for input[type=date]
+           : "",
       });
     } catch (err) {
       if (active)
@@ -223,17 +175,26 @@ function ApprovalTab({
 }, [acCode]);
 
   const handleSave = async () => {
-    setSaving(true);
-    try {
-    //   await saveApprovalDetails(acCode, form);
-    // await saveLevel5ApprovalDetails(acCode, form);
-      setNotice({ type: "success", message: "Approval details updated successfully" });
-    } catch (err) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to save" });
-    } finally {
-      setSaving(false);
-    }
-  };
+  setSaving(true);
+  try {
+    await CreateLevel5ApprovalDetails({
+      parameter: "PROC_UPDATE_MS_ACCODES_APPROVAL",
+      loginid:   user?.loginid || "",
+      val1s1:    data?.COMPANY_CODE  || "",   
+      val1s2:    acCode,                       
+      val1s3:    form.ac_status      || "",   
+      val1s4:    form.approved_by    || "",   
+      val1s5: new Date().toLocaleDateString("en-GB"), 
+      val1s6:    form.cr_no          || "",   
+      val1s7:    form.ac_active      || "Y",  
+    });
+    setNotice({ type: "success", message: "Approval details updated successfully" });
+  } catch (err) {
+    setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to save" });
+  } finally {
+    setSaving(false);
+  }
+ };
 
   if (loading) {
     return (
@@ -247,12 +208,12 @@ function ApprovalTab({
     <div className="p-5">
       {/* Read-only header block */}
       <div className="mb-5 grid grid-cols-2 gap-3 rounded-lg border bg-muted/20 p-4">
-        <ReadOnlyField label="Ac Code"     value={data?.ac_code   || ""} />
-        <ReadOnlyField label="Ac Name"     value={data?.ac_name   || ""} wide />
-        <ReadOnlyField label="Create User" value={data?.create_user || ""} />
+        <ReadOnlyField label="Ac Code"     value={data?.AC_CODE   || ""} />
+        <ReadOnlyField label="Ac Name"     value={data?.AC_NAME   || ""} wide />
+        <ReadOnlyField label="Create User" value={data?.APPROVED_BY || ""} />
         <ReadOnlyField label="Create Date"
-          value={data?.create_date
-            ? new Date(data.create_date).toLocaleDateString("en-GB")
+          value={data?.APPROVED_DATE
+            ? new Date(data.APPROVED_DATE).toLocaleDateString("en-GB")
             : "—"}
         />
       </div>
@@ -271,8 +232,8 @@ function ApprovalTab({
         <label className="field">
           <span>Ac Approve</span>
           <Select
-            value={form.approved_by}
-            onChange={(e) => setForm((f) => ({ ...f, approved_by: e.target.value }))}
+            value={form.ac_active}
+            onChange={(e) => setForm((f) => ({ ...f, ac_active: e.target.value }))}
           >
             <option value="">— Select —</option>
             <option value="Y">Approved</option>
@@ -327,6 +288,7 @@ function ActivitiesTab({
   const [adding, setAdding]     = useState(false);
   const [rows, setRows]         = useState<Activity[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [editRow, setEditRow]   = useState<Activity | null>(null);
   const [newAct, setNewAct]     = useState({ 
    srno:"", act_code: "", act_desc: "" , user_id:"", user_dt:""
  });
@@ -353,10 +315,10 @@ function ActivitiesTab({
     setAdding(true);
     try {
     await upsertLevel5Activities({
-      company_code: user?.company_code || "",
-      ac_code: acCode,
-  loginid: user?.loginid || "",
-  records: [{
+    company_code: user?.company_code || "",
+    ac_code: acCode,
+    loginid: user?.loginid || "",
+    records: [{
     srno: newAct.srno ? Number(newAct.srno) : undefined,
     act_code: newAct.act_code,
     act_desc: newAct.act_desc,
@@ -370,6 +332,38 @@ function ActivitiesTab({
       await load();
     } catch (err) {
       setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to add activity" });
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleEdit = async () => {
+    if (!editRow) return;
+    if (!editRow.ACT_CODE.trim() || !editRow.ACT_DESC.trim()) {
+      setNotice({ type: "error", message: "Activity Code and Description are required." });
+      return;
+    }
+    setAdding(true);
+    try {
+      await upsertLevel5Activities({
+        company_code: user?.company_code || "",
+        ac_code: acCode,
+        loginid: user?.loginid || "",
+        records: [{
+          srno: editRow.SRNO,
+          act_code: editRow.ACT_CODE,
+          act_desc: editRow.ACT_DESC,
+          user_id: editRow.USER_ID || undefined,
+          user_dt: editRow.USER_DT
+            ? new Date(editRow.USER_DT).toISOString().split("T")[0]
+            : undefined,
+        }],
+      });
+      setNotice({ type: "success", message: "Activity updated successfully" });
+      setEditRow(null);
+      await load();
+    } catch (err) {
+      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to update activity" });
     } finally {
       setAdding(false);
     }
@@ -391,57 +385,6 @@ function ActivitiesTab({
       </div>
 
       {/* Inline add form */}
-      {/* {showForm && (
-        <div className="rounded-lg border bg-muted/20 p-4">
-          <p className="mb-3 text-sm font-medium">New Activity</p>
-          <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
-            <label className="field">
-              <span>Sr No</span>
-              <Input
-                value={newAct.srno}
-                onChange={(e) => setNewAct((f) => ({ ...f, srno: e.target.value }))}
-              />
-            </label>
-            <label className="field">
-              <span>Activity Code</span>
-              <Input
-                value={newAct.act_code}
-                onChange={(e) => setNewAct((f) => ({ ...f, act_code: e.target.value }))}
-              />
-            </label>
-            <label className="field">
-              <span>Activity Description</span>
-              <Input
-                value={newAct.act_desc}
-                onChange={(e) => setNewAct((f) => ({ ...f, act_desc: e.target.value }))}
-              />
-            </label>
-            <label className="field">
-              <span>User ID</span>
-              <Input
-                value={newAct.user_id }
-                onChange={(e) => setNewAct((f) => ({ ...f, user_id: e.target.value }))}
-              />
-            </label>
-            <label className="field">
-              <span>User Date</span>
-              <Input
-                value={newAct.user_dt}
-                onChange={(e) => setNewAct((f) => ({ ...f, user_dt: e.target.value }))}
-              />
-            </label>
-          </div>
-          <div className="mt-3 flex justify-end gap-2">
-            <Button variant="outline" onClick={() => { setShowForm(false); setNewAct({ srno:"", act_code: "", act_desc: "" , user_id:"", user_dt:"" }); }}>
-              Cancel
-            </Button>
-            <Button disabled={adding} onClick={handleAdd}>
-              {adding ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : "Save"}
-            </Button>
-          </div>
-        </div>
-      )} */}
-
       {showForm && (
   <div className="overflow-hidden rounded-lg border">
     <table className="w-full text-sm">
@@ -544,7 +487,7 @@ function ActivitiesTab({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/40 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <th className="px-3 py-2.5 w-12">#</th>
+                <th className="px-3 py-2.5 w-12">Sr No</th>
                 <th className="px-3 py-2.5 w-28">Code</th>
                 <th className="px-3 py-2.5">Description</th>
                 <th className="px-3 py-2.5 w-28">User</th>
@@ -554,23 +497,23 @@ function ActivitiesTab({
             <tbody>
               {rows.map((row, i) => (
                 <tr
-                  key={row.srno}
+                  key={row.SRNO}
                   className={cn(
                     "border-b last:border-0 transition-colors hover:bg-muted/30",
                     i % 2 === 0 ? "bg-background" : "bg-muted/10"
                   )}
                 >
-                  <td className="px-3 py-2.5 text-muted-foreground">{row.srno}</td>
+                  <td className="px-3 py-2.5 text-muted-foreground">{row.SRNO}</td>
                   <td className="px-3 py-2.5">
                     <code className="rounded border bg-card px-1.5 py-0.5 text-[11px] text-primary">
-                      {row.act_code}
+                      {row.ACT_CODE}
                     </code>
                   </td>
-                  <td className="px-3 py-2.5">{row.act_desc}</td>
-                  <td className="px-3 py-2.5 text-muted-foreground">{row.user_id}</td>
+                  <td className="px-3 py-2.5">{row.ACT_DESC}</td>
+                  <td className="px-3 py-2.5 text-muted-foreground">{row.USER_ID}</td>
                   <td className="px-3 py-2.5 text-muted-foreground">
-                    {row.user_dt
-                      ? new Date(row.user_dt).toLocaleDateString("en-GB")
+                    {row.USER_DT
+                      ? new Date(row.USER_DT).toLocaleDateString("en-GB")
                       : "—"}
                   </td>
                 </tr>
@@ -585,19 +528,19 @@ function ActivitiesTab({
 
 // ─── Documents Tab  ────────────
 
-function DocumentsTab() {
-  return (
-    <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
-      <div className="grid h-12 w-12 place-items-center rounded-full border bg-muted text-muted-foreground">
-        <Upload size={20} />
-      </div>
-      <p className="text-sm font-medium">Documents Upload</p>
-      <p className="max-w-xs text-xs text-muted-foreground">
-        Document upload will be wired up in the next phase. The API will reuse the existing Attachments flow.
-      </p>
-    </div>
-  );
-}
+// function DocumentsTab() {
+//   return (
+//     <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
+//       <div className="grid h-12 w-12 place-items-center rounded-full border bg-muted text-muted-foreground">
+//         <Upload size={20} />
+//       </div>
+//       <p className="text-sm font-medium">Documents Upload</p>
+//       <p className="max-w-xs text-xs text-muted-foreground">
+//         Document upload will be wired up in the next phase. The API will reuse the existing Attachments flow.
+//       </p>
+//     </div>
+//   );
+// }
 
 function ReadOnlyField({
   label,

@@ -7,6 +7,19 @@ export type AccountTreeNode = {
   level: number;
   children: AccountTreeNode[];
 };
+// Ac-Tree Level5
+export type ApprovalDetail={
+  parameter: string;
+      loginid:string;
+      val1s1: string,
+      val1s2: string,
+      val1s3: string,
+      val1s4: string,
+      val1s5: string, //date, // DD/MM/YYYY
+      val1s6: string,
+      val1s7: string,
+
+}
 
 type ApiResponse<T> = {
   success: boolean;
@@ -120,4 +133,82 @@ function normalizeAccountTreeNode(raw: unknown, index: number): AccountTreeNode 
 function text(value: unknown) {
   if (value === null || value === undefined) return "";
   return String(value);
+}
+
+
+// Ac Treee Detail(L5)
+export async function getLevel5ApprovalDetails(acCode: string) {
+  const response = await api.get<ApiResponse<Record<string, unknown>>>(
+    `/api/finance/transaction/level5/${encodeURIComponent(acCode)}/approval`
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load approval details");
+  return response.data.data || {};
+}
+
+export async function CreateLevel5ApprovalDetails<T = Record<string, unknown>>(
+  AcTree: ApprovalDetail
+): Promise<T> {
+  if (!AcTree?.parameter) throw new Error("parameter is required");
+  
+  const response = await api.post<ApiResponse<T>>(
+    "/api/wms/common/procBuildCommonProcedurewmc",
+    AcTree
+  );
+  
+  if (!response.data.success)
+    throw new Error(response.data.message || "Unable to save approval details");
+  
+  return response.data.data as T;
+}
+
+export async function getLevel5Activities(acCode: string) {
+  const response = await api.get<ApiResponse<Record<string, unknown>[]>>(
+    `/api/finance/master/ac_tree/getVendorActivities`,
+    { params: { ac_code: acCode } }
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load activities");
+  return response.data.data || [];
+}
+
+export async function upsertLevel5Activities(payload: {
+  company_code: string;
+  ac_code: string;
+  loginid: string;
+  records: {
+    srno?: number;
+    act_code: string;
+    act_desc: string;
+    user_id?: string;
+    user_dt?: string;
+  }[];
+}) {
+  const response = await api.post<ApiResponse<null>>(
+    `/api/finance/upsertVendorActivity`,
+    payload
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Unable to save activity");
+  return response.data;
+}
+
+export async function upsertLevel5Documents(payload: {
+  company_code: string;
+  ac_code: string;
+  loginid: string;
+  records: {
+    srno?: number;
+    doc_type?: string;
+    doc_path?: string;
+    exp_date?: string;
+    mandatory?: string;
+    user_id?: string;
+    user_dt?: string;
+    doc_name?: string;
+  }[];
+}) {
+  const response = await api.post<ApiResponse<null>>(
+    `/api/finance/upsertAcMasterDocsDet`,
+    payload
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Unable to save document records");
+  return response.data;
 }
