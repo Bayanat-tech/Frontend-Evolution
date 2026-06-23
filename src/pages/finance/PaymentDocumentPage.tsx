@@ -30,7 +30,7 @@ import {
   upsertBulkAccountEntryApi,
   getFinanceOutstanding,
 } from "../../api/transactions";
-import { getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
+import { getDynamicLookup, getDynamicFinanceLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { Badge } from "../../components/ui/Badge";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
@@ -866,12 +866,37 @@ function PaymentDocumentEditor({
                   disabled={disabled || !form.div_code}
 
                   onChange={async (value, row) => {
+                    const selectedCurrency = text(getLookupValue(row || {}, "curr_code"));
+                    const selectedCurrName = text(getLookupValue(row || {}, "curr_name"));
+                    const selectedExRate = Number(getLookupValue(row || {}, "ex_rate") || row?.ex_rate || 0);
+                    let resolvedExRate = selectedExRate;
+
+                    if (!resolvedExRate && selectedCurrency) {
+                      try {
+                        const currencyRows = await getDynamicFinanceLookup({
+                          parameter: "Account_Currency_CODE_Search",
+                          code1: user?.company_code || "",
+                        });
+                        const match = currencyRows.find(
+                          (currencyRow) =>
+                            String(getLookupValue(currencyRow, "curr_code") || "").toUpperCase() ===
+                            selectedCurrency.toUpperCase(),
+                        );
+                        resolvedExRate = Number(getLookupValue(match || {}, "ex_rate") || match?.ex_rate || 0);
+                      } catch {
+                        resolvedExRate = 0;
+                      }
+                    }
+
                     setForm((current) => ({
                       ...current,
                       ac_code: value,
                       ac_name: text(getLookupValue(row || {}, "ac_name")),
-                      curr_code: text(getLookupValue(row || {}, "curr_code")),
+                      curr_code: selectedCurrency,
+                      curr_name: selectedCurrName,
+                      ex_rate: resolvedExRate || current.ex_rate || 1,
                     }));
+
                     if (docType !== "CR" && value) {
                       const cheque: Record<string, unknown> = await getCheque(value).catch(() => ({}));
                       setForm((current) => ({
@@ -898,8 +923,9 @@ function PaymentDocumentEditor({
                     ...current,
                     curr_code: value,
                     curr_name: text(getLookupValue(row || {}, "curr_name")),
-                    ex_rate: Number(row?.ex_rate ?? 1),
+                    ex_rate: Number(getLookupValue(row || {}, "ex_rate") || row?.ex_rate || current.ex_rate || 1),
                   }))}
+
                 />
                 <Field label="Exchange Rate*"><Input disabled={disabled} required type="number" style={{ textAlign: "right" }} step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} /></Field>
                 {/* {docType !== "CR" && (
@@ -1318,7 +1344,7 @@ function ChildAllocationTable({
                         type="number"
                         style={{ textAlign: "right" }}
                         step="0.001"
-                        value={Number(row.amount.toFixed(3) || 0)}
+                        value={Number(((Number(row.amount) || 0) * (Number(row.ex_rate) || 1)).toFixed(3))}
                         onChange={(event) =>
                           onChange(row.id, {
                             amount: Number(event.target.value || 0),
