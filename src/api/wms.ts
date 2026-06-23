@@ -120,12 +120,12 @@ export async function deleteAdjDetail(payload: DeleteAdjDetailPayload) {
 
 /** POST process stock adjustment (runs SP_WM_ADJUSTMNT_PROCESS) */
 export async function processStockAdjustment(payload: ProcessStockAdjustmentPayload) {
-  return postWmsStockAdjustment("processStockAdjustment", payload as unknown as Record<string, unknown>);
+  return postWmsStockAdjustment("process-adjustment", payload as unknown as Record<string, unknown>);
 }
 
 /** POST confirm stock adjustment */
 export async function confirmStockAdjustment(payload: ConfirmStockAdjustmentPayload) {
-  return postWmsStockAdjustment("confirmStockAdjustment", payload as unknown as Record<string, unknown>);
+  return postWmsStockAdjustment("confirm-adj-detail", payload as unknown as Record<string, unknown>);
 }
 
 /** GET all stock adjustment reports for the print dialog */
