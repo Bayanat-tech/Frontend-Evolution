@@ -591,6 +591,109 @@ export async function openDuedatewiseSummaryReport(params: ReportParams) {
   );
 }
 
+// ─── PeriodWise Excel Export Functions ───────────────────────────────────────
+
+export async function exportInvDetailExcel(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/InvdatewiseDetail/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "PeriodWise_InvDetail.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+export async function exportInvSummaryExcel(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/InvdatewiseSummary/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "PeriodWise_InvSummary.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+export async function exportDueDetailExcel(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/DuedatewiseDetail/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "PeriodWise_DueDetail.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+export async function exportDueSummaryExcel(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/DuedatewiseSummary/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "PeriodWise_DueSummary.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+export async function exportOutstandingListExcel(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/OutstandingList/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "PeriodWise_OutstandingList.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+
+
+
+
+
+
 export async function openOutstandingListReport(params: ReportParams) {
   await openReportInTab(
     "/api/finance/transactions/reports/OutstandingList/html",
@@ -813,7 +916,44 @@ export async function openVisaExpiryReport(params: ReportParams) {
         `/api/finance/transactions/reports/getVisaExpiryReport/html`,
         params
     );
+} 
+
+export async function TransationReport(params: ReportParams) {
+    await openReportInTab(
+        "/api/finance/transactions/reports/wms-TransactionProductReport/html", 
+        params
+    );
 }
+
+export async function exportTransactionProductExcel(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/wms-exportTransactionProductExcel/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "TransactionProduct.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+
+// export async function exportTransactionProductExcel(params: ReportParams) {
+//     await openReportInTab(
+//         "/api/finance/transactions/reports/wms-exportTransactionProductExcel/excel",
+//         params
+//     );
+// }
+
+
+
 
 // ---------DN Summary Report----------------
 
@@ -845,6 +985,25 @@ export async function getDnSummaryReportExcelDownload(params: ReportParams): Pro
     link.remove();
     window.URL.revokeObjectURL(url);
 }
+
+// export async function exportTransactionProductExcel(params: ReportParams): Promise<void> {
+//     const response = await api.post(
+//         `/api/finance/transactions/reports/wms-exportTransactionProductExcel/excel`,
+//         params,
+//         { responseType: "blob" }
+//     );
+//     const blob = new Blob([response.data], {
+//         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+//     });
+//     const url = window.URL.createObjectURL(blob);
+//     const link = document.createElement("a");
+//     link.href = url;
+//     link.download = "DN_Summary.xlsx";
+//     document.body.appendChild(link);
+//     link.click();
+//     link.remove();
+//     window.URL.revokeObjectURL(url);
+// }
 
 
 // export const openInvdatewiseDetailReport = async (params: any): Promise<void> => {

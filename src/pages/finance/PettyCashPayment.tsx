@@ -442,6 +442,40 @@ function PettyCashPaymentDocument({
     }));
   };
 
+   const updateDetailAmount = (id: string, newAmount: number) => {
+    setForm((current) => {
+      const detail = current.detail.find((d) => d.id === id);
+      if (!detail || detail.child_table !== "invoice") {
+        return {
+          ...current,
+          detail: current.detail.map((row) =>
+            row.id === id ? { ...row, amount: newAmount } : row
+          ),
+        };
+      }
+
+      const childRows = (current.children[id] || []) as TransactionChildRow[];
+      let remaining = newAmount;
+
+      const updatedChildren = childRows.map((row) => {
+        if (remaining <= 0) return { ...row, amount: 0 };
+        const maxAllowed = Number(row.c_bal_amt_org || 0);
+        const allocated = Math.min(remaining, maxAllowed);
+        remaining -= allocated;
+        return { ...row, amount: allocated };
+      });
+
+      return {
+        ...current,
+        // ✅ Keep user's typed amount, don't snap it
+        detail: current.detail.map((row) =>
+          row.id === id ? { ...row, amount: newAmount } : row
+        ),
+        children: { ...current.children, [id]: updatedChildren },
+      };
+    });
+  };
+
   // REPLACE WITH:
   const selectDetailAccount = async (detail: TransactionDetail, value: string, row: LookupRow | null) => {
     const acName = text(getLookupValue(row || {}, "ac_name"));
@@ -456,6 +490,15 @@ function PettyCashPaymentDocument({
       const childTable = child?.table || "";
       const childCode = child?.code || "";
       updateDetail(detail.id, { child_table: childTable, child_code: childCode });
+
+       if (childTable === "invoice") {
+        await loadChildrenForDetail({
+          ...detail,
+          ac_code: value,
+          child_table: childTable,
+          child_code: childCode,
+        });
+      }
 
       if (childTable === "expense" && childCode) {
         setForm((current) => {
@@ -909,7 +952,41 @@ function PettyCashPaymentDocument({
                           />
                         </td>
                         <td className="w-40 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.0001" value={Number.isFinite(detail.ex_rate) ? detail.ex_rate.toFixed(6) : ""} onChange={(event) => updateDetail(detail.id, { ex_rate: Number(event.target.value || 1) })} /></td>
-                        <td className="finance-amount-cell px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" step="0.001" value={formatNumber(detail.amount)} onChange={(event) => updateDetail(detail.id, { amount: Number(event.target.value || 0) })} /></td>
+                         <td className="finance-amount-cell px-2 py-1">
+                          <div className="flex flex-col gap-1">
+                            <Input
+                              disabled={disabled}
+                              type="number"
+                              style={{ textAlign: "right" }}
+                              step="0.001"
+                              value={Number(detail.amount || 0)}
+                              onChange={(event) => {
+                                const newAmount = Number(event.target.value || 0);
+                                const childRows = (form.children[detail.id] || []) as TransactionChildRow[];
+                                if (detail.child_table === "invoice" && childRows.length > 0) {
+                                  updateDetailAmount(detail.id, newAmount);
+                                } else {
+                                  updateDetail(detail.id, { amount: newAmount });
+                                }
+                              }}
+                            />
+                            {(() => {
+                              const childRows = (form.children[detail.id] || []) as TransactionChildRow[];
+                              if (detail.child_table !== "invoice" || childRows.length === 0) return null;
+
+                              const totalOutstanding = childRows.reduce(
+                                (sum, r) => sum + (Number(r.c_bal_amt_org) || 0), 0
+                              );
+
+                              // ✅ Compare user's typed detail amount against total outstanding
+                              return Number(detail.amount || 0) > totalOutstanding ? (
+                                <span className="text-xs text-red-500">
+                                  Amount exceeds total outstanding ({totalOutstanding.toFixed(3)})
+                                </span>
+                              ) : null;
+                            })()}
+                          </div>
+                        </td>
                         <td className="w-28 px-2 py-1">
                           <Select className="h-9" disabled={disabled} value={detail.sign_ind} onChange={(event) => updateDetail(detail.id, { sign_ind: Number(event.target.value) as 1 | -1 })}>
                             <option value={1}>Dr</option>
@@ -963,7 +1040,7 @@ function PettyCashPaymentDocument({
                         <td className="finance-amount-cell px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                         <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
                         <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
-                        <td className="finance-amount-cell px-2 py-1"><Input className="finance-money-input" disabled value={formatNumber((Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1)))} /></td>
+                        <td className="finance-amount-cell px-2 py-1"><Input className="finance-money-input" disabled value={(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1) * Number(detail.sign_ind || 1))} /></td>
                         <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
                       </tr>
                     ))}
@@ -1004,11 +1081,6 @@ function PettyCashPaymentDocument({
                       </option>
                     ))}
                   </Select>
-                  {selectedDetail?.child_table === "invoice" && (
-                    <Button disabled={disabled || childLoading} size="sm" type="button" variant="outline" onClick={() => selectedDetail && void loadChildrenForDetail(selectedDetail)}>
-                      <RefreshCw size={14} /> Load
-                    </Button>
-                  )}
                   <Button disabled={disabled || !selectedDetail?.child_table} size="sm" type="button" variant="outline" onClick={addChildRow}>
                     <Plus size={14} /> Add
                   </Button>
