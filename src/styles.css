@@ -3075,7 +3075,8 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 }
 
 .commercial-document-workbench .commercial-header-block-fields > .field,
-.commercial-document-workbench .commercial-header-block-fields > label.field {
+.commercial-document-workbench .commercial-header-block-fields > label.field,
+.commercial-document-workbench .commercial-header-block-fields > div {
   min-height: 34px;
   padding: 2px 5px;
   border-radius: 6px;
@@ -3088,7 +3089,7 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .commercial-document-workbench .commercial-header-block-fields > .field > span,
 .commercial-document-workbench .commercial-header-block-fields > label.field > span {
   margin-bottom: 0;
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1;
 }
 
@@ -3096,7 +3097,8 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .commercial-document-workbench .commercial-header-panel.is-expanded select,
 .commercial-document-workbench .commercial-header-panel.is-expanded textarea,
 .commercial-document-workbench .commercial-header-panel.is-expanded button[role="combobox"],
-.commercial-document-workbench .commercial-header-panel.is-expanded .lookup-field-trigger {
+.commercial-document-workbench .commercial-header-panel.is-expanded .lookup-field-trigger,
+.commercial-document-workbench .commercial-header-panel.is-expanded .field > div.flex.overflow-hidden {
   min-height: 23px;
   height: 23px;
   font-size: 11.5px;
