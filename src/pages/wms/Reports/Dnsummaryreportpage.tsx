@@ -1,20 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import {
-    BarChart2,
-    RotateCcw,
-    Printer,
-    Loader2,
-    X,
-    FileSpreadsheet,
-    RefreshCw,
-    AlertTriangle,
-    SlidersHorizontal,
-    Calendar,
-} from "lucide-react";
-import { getDynamicLookupaccount } from "../../../api/lookups";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "../../../state/AuthContext";
+import { getDynamicLookupaccount } from "../../../api/lookups";
 import {
     getDnSummaryReportHtml,
     getDnSummaryReportExcelDownload,
@@ -22,166 +10,116 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface LookupOption {
-    code: string;
-    name: string;
+interface Option {
+    value: string;
+    label: string;
 }
+
+interface LookupRow {
+    [key: string]: any;
+}
+
+interface Params {
+    prin_code: string;   // "All" or a specific PRIN_CODE
+    from_date: string;   // "All" or "DD/MM/YYYY"
+    to_date:   string;   // "All" or "DD/MM/YYYY"
+}
+
+const ALL_PARAMS: Params = { prin_code: "All", from_date: "All", to_date: "All" };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const fetchLookup = async (
-    parameter: string,
-    loginId: string,
-    code1: string,
-    code2: string,
-    code3: string,
-    codeKey: string,
-    nameKey: string,
-): Promise<LookupOption[]> => {
-    try {
-        const res = await getDynamicLookupaccount({
-            parameter, loginid: loginId, code1, code2, code3, code4: "",
-            number1: 0, number2: 0, number3: 0, number4: 0,
-            date1: null, date2: null, date3: null, date4: null,
-        });
-        return Array.isArray(res)
-            ? res
-                .filter((x: any) => x[codeKey] != null && String(x[codeKey]).trim() !== "")
-                .map((x: any) => ({ code: String(x[codeKey]), name: x[nameKey] ?? "" }))
-            : [];
-    } catch (err) {
-        console.error(`[${parameter}] Fetch error:`, err);
-        return [];
+const getField = (row: LookupRow, ...keys: string[]): string => {
+    for (const k of keys) {
+        if (row[k] !== undefined && row[k] !== null) return String(row[k]);
+        const upper = k.toUpperCase();
+        if (row[upper] !== undefined && row[upper] !== null) return String(row[upper]);
+        const lower = k.toLowerCase();
+        if (row[lower] !== undefined && row[lower] !== null) return String(row[lower]);
     }
+    return "";
 };
 
-/** Format a date input value (YYYY-MM-DD) → DD/MM/YYYY string for the API */
+const mapCodeNameOptions = (rows: LookupRow[], codeKey: string, nameKey: string): Option[] =>
+    rows
+        .map((r) => {
+            const code = getField(r, codeKey);
+            const name = getField(r, nameKey);
+            if (!code) return null;
+            return { value: code, label: name ? `${code} - ${name}` : code };
+        })
+        .filter((o): o is Option => !!o)
+        .sort((a, b) => a.value.localeCompare(b.value));
+
+/** Format a date input value (YYYY-MM-DD) → DD/MM/YYYY string for the API, or "All" if empty */
 const toApiDateString = (isoDate: string): string => {
-    if (!isoDate) return "";
+    if (!isoDate) return "All";
     const [y, m, d] = isoDate.split("-");
     return `${d}/${m}/${y}`;
 };
 
-// ─── Shared field label ───────────────────────────────────────────────────────
+// ─── Select (single value) ─────────────────────────────────────────────────────
 
-const FieldLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <label style={{
-        display: "block", fontSize: 10, fontWeight: 600, color: "#6b7280",
-        textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5,
-    }}>
-        {children}
-    </label>
-);
-
-// ─── Searchable Dropdown ──────────────────────────────────────────────────────
-
-interface SearchableDropdownProps {
-    label: string;
-    value: LookupOption | null;
-    onChange: (v: LookupOption | null) => void;
-    options: LookupOption[];
-    placeholder?: string;
-    disabled?: boolean;
-}
-
-const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
-    label, value, onChange, options, placeholder = "Search...", disabled = false,
-}) => {
-    const [search, setSearch] = useState("");
-    const [open, setOpen] = useState(false);
-
-    useEffect(() => { if (!value) setSearch(""); }, [value]);
-
-    const filtered = options.filter((o) => {
-        if (!search) return true;
-        const q = search.toLowerCase();
-        return o.code.toLowerCase().includes(q) || o.name.toLowerCase().includes(q);
-    });
-
-    const displayValue = search !== "" ? search : value ? `${value.code} – ${value.name}` : "";
-
-    return (
-        <div style={{ position: "relative" }}>
-            <FieldLabel>{label}</FieldLabel>
-            <input
-                type="text"
-                placeholder={placeholder}
-                value={displayValue}
-                onChange={(e) => { setSearch(e.target.value); setOpen(true); if (value) onChange(null); }}
-                onFocus={() => !disabled && setOpen(true)}
-                onBlur={() => setTimeout(() => setOpen(false), 150)}
-                disabled={disabled}
-                style={{
-                    width: "100%", fontSize: 13, padding: "8px 10px",
-                    border: "1px solid", borderColor: disabled ? "#e5e7eb" : value ? "#185FA5" : "#d1d5db",
-                    borderRadius: 7, background: disabled ? "#f9fafb" : "#fff",
-                    color: disabled ? "#9ca3af" : "#111827", boxSizing: "border-box",
-                    outline: "none", transition: "border-color 0.15s",
-                    cursor: disabled ? "not-allowed" : "text",
-                }}
-            />
-            {open && !disabled && (
-                <div style={{
-                    position: "absolute", zIndex: 400, top: "calc(100% + 4px)", left: 0, right: 0,
-                    background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8,
-                    boxShadow: "0 8px 24px rgba(0,0,0,0.1)", maxHeight: 200, overflowY: "auto",
-                }}>
-                    <div className="dn-opt"
-                        style={{ padding: "7px 12px", fontSize: 11, color: "#9ca3af", cursor: "pointer", borderBottom: "1px solid #f3f4f6" }}
-                        onMouseDown={() => { onChange(null); setSearch(""); setOpen(false); }}>
-                        — All —
-                    </div>
-                    {filtered.length === 0
-                        ? <div style={{ padding: "10px 12px", fontSize: 12, color: "#9ca3af", textAlign: "center" }}>No results</div>
-                        : filtered.map((o) => (
-                            <div key={o.code} className="dn-opt"
-                                style={{ padding: "8px 12px", fontSize: 12, cursor: "pointer", display: "flex", gap: 8 }}
-                                onMouseDown={() => { onChange(o); setSearch(""); setOpen(false); }}>
-                                <span style={{ fontWeight: 600, color: "#185FA5", minWidth: 56 }}>{o.code}</span>
-                                <span style={{ color: "#6b7280" }}>{o.name}</span>
-                            </div>
-                        ))
-                    }
-                </div>
-            )}
-        </div>
-    );
+const fieldLabelStyle: React.CSSProperties = {
+    display: "block",
+    fontSize: 11,
+    fontWeight: 600,
+    color: "#374151",
+    marginBottom: 4,
 };
 
-// ─── Date Field ───────────────────────────────────────────────────────────────
-
-interface DateFieldProps {
+const SelectField: React.FC<{
     label: string;
-    value: string;           // YYYY-MM-DD (native date input format)
+    options: Option[];
+    value: string;
+    onChange: (v: string) => void;
+    placeholder?: string;
+    loading?: boolean;
+}> = ({ label, options, value, onChange, placeholder, loading }) => (
+    <div style={{ marginBottom: 14 }}>
+        <label style={fieldLabelStyle}>{label}</label>
+        <select
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            disabled={loading}
+            style={{
+                width: "100%", fontSize: 12, padding: "8px 10px",
+                border: "1px solid #d1d5db", borderRadius: 7,
+                background: loading ? "#f9fafb" : "#fff",
+                color: "#111827", boxSizing: "border-box",
+                outline: "none", cursor: loading ? "not-allowed" : "pointer",
+            }}
+        >
+            <option value="All">{loading ? "Loading…" : (placeholder ?? "All")}</option>
+            {options.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+        </select>
+    </div>
+);
+
+const DateField: React.FC<{
+    label: string;
+    value: string;        // YYYY-MM-DD (native date input format), "" = All
     onChange: (v: string) => void;
     max?: string;
     min?: string;
-}
-
-const DateField: React.FC<DateFieldProps> = ({ label, value, onChange, max, min }) => (
-    <div style={{ position: "relative" }}>
-        <FieldLabel>{label}</FieldLabel>
-        <div style={{ position: "relative" }}>
-            <input
-                type="date"
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                min={min}
-                max={max}
-                style={{
-                    width: "100%", fontSize: 13, padding: "8px 36px 8px 10px",
-                    border: "1px solid", borderColor: value ? "#185FA5" : "#d1d5db",
-                    borderRadius: 7, background: "#fff", color: value ? "#111827" : "#9ca3af",
-                    boxSizing: "border-box", outline: "none", transition: "border-color 0.15s",
-                    cursor: "pointer", appearance: "none", WebkitAppearance: "none",
-                }}
-            />
-            <Calendar
-                size={14}
-                color={value ? "#185FA5" : "#9ca3af"}
-                style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}
-            />
-        </div>
+}> = ({ label, value, onChange, max, min }) => (
+    <div style={{ marginBottom: 14 }}>
+        <label style={fieldLabelStyle}>{label}</label>
+        <input
+            type="date"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            min={min}
+            max={max}
+            style={{
+                width: "100%", fontSize: 12, padding: "8px 10px",
+                border: "1px solid #d1d5db", borderRadius: 7,
+                background: "#fff", color: value ? "#111827" : "#9ca3af",
+                boxSizing: "border-box", outline: "none", cursor: "pointer",
+            }}
+        />
     </div>
 );
 
@@ -192,414 +130,485 @@ export default function DNSummaryReportPage() {
     const companyCode = user?.company_code ?? "";
     const loginId = user?.loginid ?? user?.username ?? "ADMIN";
 
-    // ── Filter state ──────────────────────────────────────────────────────────
-    const [principalOptions, setPrincipalOptions] = useState<LookupOption[]>([]);
-    const [principal, setPrincipal] = useState<LookupOption | null>(null);
-    const [fromDate, setFromDate] = useState<string>("");   // YYYY-MM-DD
-    const [toDate, setToDate] = useState<string>("");       // YYYY-MM-DD
-
-    // ── UI state ──────────────────────────────────────────────────────────────
-    const [sidebarOpen, setSidebarOpen] = useState(false);
-    const [generating, setGenerating] = useState(false);
-    const [reportError, setReportError] = useState<string | null>(null);
-
-    // ── Report state ──────────────────────────────────────────────────────────
+    // ── UI state
+    const [panelOpen, setPanelOpen] = useState(false);
+    const [loading,   setLoading]   = useState(false);
+    const [exporting, setExporting] = useState(false);
     const [reportHtml, setReportHtml] = useState<string>("");
-    const [excelLoading, setExcelLoading] = useState(false);
+    const [error,      setError]      = useState<string>("");
+
+    // ── Filter options
+    const [principalOptions, setPrincipalOptions] = useState<Option[]>([]);
+    const [optLoading, setOptLoading] = useState(false);
+
+    // ── Filter values — native date-input strings for the UI; "All" sentinel for params
+    const [principal, setPrincipal] = useState<string>("All");
+    const [fromDateIso, setFromDateIso] = useState<string>("");   // "" = All
+    const [toDateIso,   setToDateIso]   = useState<string>("");   // "" = All
 
     const iframeRef = useRef<HTMLIFrameElement>(null);
-    const lastParamsRef = useRef<{ prinCode: string; fromDate: string; toDate: string } | null>(null);
+    const lastParamsRef = useRef<Params>(ALL_PARAMS);
 
-    // ── Derived ───────────────────────────────────────────────────────────────
-    const allFieldsSelected = !!principal && !!fromDate && !!toDate;
-    const dateRangeValid = !fromDate || !toDate || fromDate <= toDate;
-    const canGenerate = allFieldsSelected && dateRangeValid;
-    const reportReady = !generating && !reportError && !!reportHtml;
-    const filledCount = [principal, fromDate, toDate].filter(Boolean).length;
+    const dateRangeValid = !fromDateIso || !toDateIso || fromDateIso <= toDateIso;
 
-    // ── Load principals ───────────────────────────────────────────────────────
+    // ── Load principal options (independent of report filters)
     useEffect(() => {
-        fetchLookup("WMS_Stock_principal", loginId, companyCode, "", "", "prin_code", "prin_name")
-            .then(setPrincipalOptions);
+        (async () => {
+            setOptLoading(true);
+            try {
+                const res = await getDynamicLookupaccount({
+                    parameter: "WMS_Stock_principal", loginid: loginId,
+                    code1: companyCode, code2: "", code3: "", code4: "",
+                    number1: 0, number2: 0, number3: 0, number4: 0,
+                    date1: null, date2: null, date3: null, date4: null,
+                });
+                const rows = Array.isArray(res) ? res : [];
+                setPrincipalOptions(mapCodeNameOptions(rows, "prin_code", "prin_name"));
+            } catch (err) {
+                console.error("[WMS_Stock_principal] Fetch error:", err);
+            } finally {
+                setOptLoading(false);
+            }
+        })();
     }, [companyCode, loginId]);
 
-    // ── Actions ───────────────────────────────────────────────────────────────
-    const handleReset = () => {
-        setPrincipal(null);
-        setFromDate("");
-        setToDate("");
-        setReportError(null);
-        setReportHtml("");
-        lastParamsRef.current = null;
-    };
-
-    const handleGenerate = async () => {
-        if (!canGenerate) return;
-        setReportError(null);
-        setReportHtml("");
-        setGenerating(true);
-        setSidebarOpen(false);
-
-        const params = {
-            prinCode: principal!.code,
-            fromDate: toApiDateString(fromDate),   // e.g. "01/06/2025"
-            toDate:   toApiDateString(toDate),     // e.g. "30/06/2025"
-        };
-        lastParamsRef.current = params;
-
+    // ── Fetch HTML report
+    const fetchReport = useCallback(async (p: Params) => {
+        setLoading(true);
+        setError("");
+        lastParamsRef.current = p;
         try {
             const html = await getDnSummaryReportHtml({
                 parameter: "WMS_Stock_DN_Summary_Report",
                 loginid:   loginId,
                 code1:     companyCode,
-                code2:     params.prinCode,
-                code3:     params.fromDate,   // fromDate in place of groupCode
-                code4:     params.toDate,     // toDate in place of prodCode
+                code2:     p.prin_code,
+                code3:     p.from_date,
+                code4:     p.to_date,
             });
             setReportHtml(html);
         } catch (err: any) {
-            setReportError(err?.message ?? "Failed to generate report. Please try again.");
-            console.error(err);
+            setError(err?.message ?? "Failed to load report. Please try again.");
+            setReportHtml("");
         } finally {
-            setGenerating(false);
+            setLoading(false);
         }
+    }, [loginId, companyCode]);
+
+    // ── Auto-load on mount with "All" defaults — full dataset, no filters
+    useEffect(() => {
+        fetchReport(ALL_PARAMS);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // ── Apply current filter selections
+    const handleViewReport = () => {
+        if (!dateRangeValid) return;
+        const params: Params = {
+            prin_code: principal || "All",
+            from_date: toApiDateString(fromDateIso),
+            to_date:   toApiDateString(toDateIso),
+        };
+        fetchReport(params);
+        setPanelOpen(false);
     };
 
-    const handlePrint = () => iframeRef.current?.contentWindow?.postMessage("print", "*");
+    const handleReset = () => {
+        setPrincipal("All");
+        setFromDateIso("");
+        setToDateIso("");
+        fetchReport(ALL_PARAMS);
+    };
+
+    const handlePrint = () => {
+        iframeRef.current?.contentWindow?.postMessage("print", "*");
+    };
 
     const handleExcel = async () => {
-        if (!lastParamsRef.current) return;
-        setExcelLoading(true);
+        setExporting(true);
         try {
             await getDnSummaryReportExcelDownload({
                 parameter: "WMS_Stock_DN_Summary_Report",
                 loginid:   loginId,
                 code1:     companyCode,
-                code2:     lastParamsRef.current.prinCode,
-                code3:     lastParamsRef.current.fromDate,
-                code4:     lastParamsRef.current.toDate,
+                code2:     lastParamsRef.current.prin_code,
+                code3:     lastParamsRef.current.from_date,
+                code4:     lastParamsRef.current.to_date,
             });
         } catch (err) {
             console.error("Excel export error:", err);
+            alert("Excel export failed. Please try again.");
         } finally {
-            setExcelLoading(false);
+            setExporting(false);
         }
     };
 
-    // ─── Render ───────────────────────────────────────────────────────────────
-    return (
-        <div style={{
-            background: "#f3f4f6", minHeight: "100vh",
-            fontFamily: "system-ui, -apple-system, sans-serif",
-            display: "flex", flexDirection: "column",
-        }}>
-            <style>{`
-                .dn-opt:hover { background: #f0f7ff !important; }
-                .dn-ghost:hover:not(:disabled) { background: #f3f4f6 !important; }
-                .dn-outline:hover:not(:disabled) { background: #f0f7ff !important; border-color: #185FA5 !important; color: #185FA5 !important; }
-                .dn-primary:hover:not(:disabled) { background: #0C447C !important; }
-                .dn-green:hover:not(:disabled) { background: #15803d !important; }
-                @keyframes spin { to { transform: rotate(360deg); } }
-                .dn-spin { animation: spin 1s linear infinite; }
-                .dn-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.25); z-index: 199; }
-                .dn-sidebar {
-                    position: fixed; top: 0; right: 0; bottom: 0; z-index: 200;
-                    width: 320px; background: #fff;
-                    border-left: 1px solid #e5e7eb;
-                    display: flex; flex-direction: column;
-                    transform: translateX(100%);
-                    transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
-                }
-                .dn-sidebar.open { transform: translateX(0); }
-                input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0; position: absolute; right: 0; width: 36px; height: 100%; cursor: pointer; }
-            `}</style>
+    // ── Styles (blue theme, matches Stock Detail Report)
+    const THEME = "#1d4ed8";
+    const THEME_DARK = "#1e40af";
+    const THEME_LIGHT = "#bfdbfe";
 
-            {/* ══ Top bar ════════════════════════════════════════════════════ */}
+    const btnBase: React.CSSProperties = {
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "7px 14px",
+        borderRadius: 8,
+        border: "1px solid #d1d5db",
+        background: "#fff",
+        cursor: "pointer",
+        fontSize: 12,
+        fontWeight: 600,
+        color: "#374151",
+        whiteSpace: "nowrap",
+        transition: "background 0.15s",
+    };
+
+    return (
+        <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#f1f5f9", overflow: "hidden" }}>
+
+            {/* ── Top toolbar ── */}
             <div style={{
-                background: "#fff", borderBottom: "1px solid #e5e7eb",
-                padding: "0 20px", flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "10px 20px",
+                background: "#fff",
+                borderBottom: "1px solid #e5e7eb",
+                flexShrink: 0,
+                gap: 12,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
             }}>
+                {/* Title */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{
+                        width: 34, height: 34, borderRadius: 8,
+                        background: THEME,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="9" y1="13" x2="15" y2="13" />
+                            <line x1="9" y1="17" x2="15" y2="17" />
+                        </svg>
+                    </div>
+                    <div>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: "#111827" }}>DN Summary Report</div>
+                        <div style={{ fontSize: 10, color: "#6b7280" }}>Delivery Note Summary</div>
+                    </div>
+                </div>
+
+                {/* Action buttons */}
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    {/* Print */}
+                    <button
+                        style={btnBase}
+                        onClick={handlePrint}
+                        disabled={!reportHtml || loading}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "#f9fafb")}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                            <rect x="6" y="14" width="12" height="8" />
+                        </svg>
+                        Print
+                    </button>
+
+                    {/* Excel */}
+                    <button
+                        style={{ ...btnBase, color: "#166534", borderColor: "#86efac" }}
+                        onClick={handleExcel}
+                        disabled={!reportHtml || loading || exporting}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "#f0fdf4")}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
+                    >
+                        {exporting ? (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: "spin 1s linear infinite" }}>
+                                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                            </svg>
+                        ) : (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                                <line x1="12" y1="18" x2="12" y2="12" /><line x1="9" y1="15" x2="15" y2="15" />
+                            </svg>
+                        )}
+                        {exporting ? "Exporting…" : "Excel"}
+                    </button>
+
+                    {/* Parameters toggle */}
+                    <button
+                        style={{
+                            ...btnBase,
+                            background: panelOpen ? THEME : "#fff",
+                            color: panelOpen ? "#fff" : "#374151",
+                            borderColor: panelOpen ? THEME : "#d1d5db",
+                        }}
+                        onClick={() => setPanelOpen((p) => !p)}
+                        onMouseEnter={(e) => { if (!panelOpen) e.currentTarget.style.background = "#f9fafb"; }}
+                        onMouseLeave={(e) => { if (!panelOpen) e.currentTarget.style.background = "#fff"; }}
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="4" y1="6" x2="20" y2="6" /><line x1="8" y1="12" x2="20" y2="12" />
+                            <line x1="4" y1="18" x2="20" y2="18" />
+                        </svg>
+                        Parameters
+                    </button>
+                </div>
+            </div>
+
+            {/* ── Content area ── */}
+            <div style={{ flex: 1, display: "flex", overflow: "hidden", position: "relative" }}>
+
+                {/* ── Report iframe ── */}
                 <div style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    height: 56, gap: 12,
+                    flex: 1,
+                    overflow: "hidden",
+                    display: "flex",
+                    flexDirection: "column",
+                    transition: "margin-right 0.3s ease",
+                    marginRight: panelOpen ? 320 : 0,
                 }}>
-                    {/* Title */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    {loading && (
                         <div style={{
-                            width: 32, height: 32, borderRadius: 8, background: "#eff6ff",
-                            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                            position: "absolute",
+                            inset: 0,
+                            background: "rgba(255,255,255,0.85)",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            zIndex: 50,
+                            gap: 12,
                         }}>
-                            <BarChart2 size={16} color="#185FA5" />
+                            <div style={{
+                                width: 40, height: 40,
+                                border: "3px solid #e5e7eb",
+                                borderTop: `3px solid ${THEME}`,
+                                borderRadius: "50%",
+                                animation: "spin 0.8s linear infinite",
+                            }} />
+                            <span style={{ fontSize: 13, color: "#6b7280", fontWeight: 500 }}>Loading report…</span>
                         </div>
+                    )}
+
+                    {error && !loading && (
+                        <div style={{
+                            margin: 20,
+                            padding: "14px 18px",
+                            background: "#fef2f2",
+                            border: "1px solid #fecaca",
+                            borderRadius: 8,
+                            color: "#dc2626",
+                            fontSize: 13,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                        }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" />
+                                <line x1="12" y1="16" x2="12.01" y2="16" />
+                            </svg>
+                            {error}
+                        </div>
+                    )}
+
+                    {reportHtml && !error && (
+                        <iframe
+                            ref={iframeRef}
+                            srcDoc={reportHtml}
+                            style={{
+                                flex: 1,
+                                border: "none",
+                                width: "100%",
+                                height: "100%",
+                            }}
+                            title="DN Summary Report"
+                        />
+                    )}
+
+                    {!reportHtml && !loading && !error && (
+                        <div style={{
+                            flex: 1,
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#9ca3af",
+                            gap: 12,
+                        }}>
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                            </svg>
+                            <span style={{ fontSize: 13 }}>No report loaded</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* ── Slide-in Parameter Panel ── */}
+                <div style={{
+                    position: "absolute",
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    width: 320,
+                    background: "#fff",
+                    borderLeft: "1px solid #e5e7eb",
+                    boxShadow: "-4px 0 20px rgba(0,0,0,0.08)",
+                    transform: panelOpen ? "translateX(0)" : "translateX(100%)",
+                    transition: "transform 0.3s ease",
+                    display: "flex",
+                    flexDirection: "column",
+                    zIndex: 40,
+                    overflow: "hidden",
+                }}>
+                    {/* Panel header */}
+                    <div style={{
+                        padding: "14px 18px",
+                        borderBottom: "1px solid #e5e7eb",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        background: THEME,
+                        flexShrink: 0,
+                    }}>
                         <div>
-                            <div style={{ fontSize: 14, fontWeight: 600, color: "#111827", lineHeight: 1.2 }}>DN Summary Report</div>
-                            <div style={{ fontSize: 11, color: "#9ca3af", lineHeight: 1.2 }}>Delivery note summary</div>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: "#fff" }}>Report Parameters</div>
+                            <div style={{ fontSize: 10, color: THEME_LIGHT, marginTop: 2 }}>Adjust filters and view report</div>
+                        </div>
+                        <button
+                            onClick={() => setPanelOpen(false)}
+                            style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "#fff" }}
+                        >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    {/* Scrollable params */}
+                    <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
+                        {!dateRangeValid && (
+                            <div style={{
+                                marginBottom: 14,
+                                padding: "8px 10px",
+                                background: "#fffbeb",
+                                border: "1px solid #fde68a",
+                                borderRadius: 6,
+                                color: "#92400e",
+                                fontSize: 11,
+                            }}>
+                                From date must be on or before To date.
+                            </div>
+                        )}
+
+                        <SelectField
+                            label="Principal Code"
+                            options={principalOptions}
+                            value={principal}
+                            onChange={setPrincipal}
+                            placeholder="All"
+                            loading={optLoading}
+                        />
+
+                        {/* Date range */}
+                        <div style={{
+                            background: "#f8fafc", borderRadius: 8, padding: "12px 14px",
+                            border: "1px solid #e5e7eb", marginBottom: 4,
+                        }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 10 }}>
+                                Transaction Date Range
+                            </div>
+                            <DateField
+                                label="From Date"
+                                value={fromDateIso}
+                                onChange={setFromDateIso}
+                                max={toDateIso || undefined}
+                            />
+                            <DateField
+                                label="To Date"
+                                value={toDateIso}
+                                onChange={setToDateIso}
+                                min={fromDateIso || undefined}
+                            />
+                            <div style={{ fontSize: 10, color: "#9ca3af", marginTop: -6 }}>
+                                Leave blank to include all dates
+                            </div>
                         </div>
                     </div>
 
-                    {/* Actions */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        {/* Print */}
-                        <button className="dn-outline" onClick={handlePrint} disabled={!reportReady}
-                            title={!reportReady ? "Generate a report first" : "Print / Save as PDF"}
+                    {/* Panel footer */}
+                    <div style={{ padding: "14px 18px", borderTop: "1px solid #e5e7eb", flexShrink: 0, display: "flex", gap: 8 }}>
+                        <button
+                            onClick={handleReset}
+                            disabled={loading}
                             style={{
-                                padding: "6px 13px", border: "1px solid #d1d5db", background: "#fff",
-                                display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 7,
-                                color: "#374151", cursor: !reportReady ? "not-allowed" : "pointer",
-                                opacity: !reportReady ? 0.4 : 1, transition: "all 0.15s", fontWeight: 500,
-                            }}>
-                            <Printer size={13} /> Print / PDF
+                                flex: 1,
+                                padding: "10px",
+                                background: "#fff",
+                                color: "#374151",
+                                border: "1px solid #d1d5db",
+                                borderRadius: 8,
+                                fontSize: 12,
+                                fontWeight: 600,
+                                cursor: loading ? "not-allowed" : "pointer",
+                                opacity: loading ? 0.5 : 1,
+                            }}
+                        >
+                            Reset
                         </button>
-
-                        {/* Excel */}
-                        <button className="dn-green" onClick={handleExcel} disabled={!reportReady || excelLoading}
-                            title={!reportReady ? "Generate a report first" : "Export to Excel"}
+                        <button
+                            onClick={handleViewReport}
+                            disabled={loading || !dateRangeValid}
                             style={{
-                                padding: "6px 13px", border: "1px solid #16a34a", background: "#16a34a",
-                                display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 7,
-                                color: "#fff", cursor: (!reportReady || excelLoading) ? "not-allowed" : "pointer",
-                                opacity: (!reportReady || excelLoading) ? 0.45 : 1, transition: "all 0.15s", fontWeight: 500,
-                            }}>
-                            {excelLoading
-                                ? <><RefreshCw size={13} className="dn-spin" /> Exporting…</>
-                                : <><FileSpreadsheet size={13} /> Export Excel</>
-                            }
-                        </button>
-
-                        {/* Divider */}
-                        <div style={{ width: 1, height: 24, background: "#e5e7eb" }} />
-
-                        {/* Filters */}
-                        <button onClick={() => setSidebarOpen((p) => !p)}
-                            style={{
-                                padding: "6px 13px",
-                                border: `1px solid ${sidebarOpen ? "#185FA5" : "#d1d5db"}`,
-                                background: sidebarOpen ? "#eff6ff" : "#fff",
-                                display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 7,
-                                color: sidebarOpen ? "#185FA5" : "#374151",
-                                cursor: "pointer", transition: "all 0.15s", fontWeight: 500,
-                            }}>
-                            <SlidersHorizontal size={13} />
-                            Filters
-                            {filledCount > 0 && (
-                                <span style={{
-                                    background: "#185FA5", color: "#fff",
-                                    fontSize: 10, fontWeight: 700, lineHeight: 1,
-                                    padding: "2px 5px", borderRadius: 20, minWidth: 16, textAlign: "center",
-                                }}>
-                                    {filledCount}
-                                </span>
+                                flex: 2,
+                                padding: "10px",
+                                background: (loading || !dateRangeValid) ? "#9ca3af" : THEME,
+                                color: "#fff",
+                                border: "none",
+                                borderRadius: 8,
+                                fontSize: 13,
+                                fontWeight: 700,
+                                cursor: (loading || !dateRangeValid) ? "not-allowed" : "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: 8,
+                                transition: "background 0.15s",
+                            }}
+                            onMouseEnter={(e) => { if (!loading && dateRangeValid) e.currentTarget.style.background = THEME_DARK; }}
+                            onMouseLeave={(e) => { if (!loading && dateRangeValid) e.currentTarget.style.background = THEME; }}
+                        >
+                            {loading ? (
+                                <>
+                                    <div style={{
+                                        width: 14, height: 14,
+                                        border: "2px solid rgba(255,255,255,0.3)",
+                                        borderTop: "2px solid #fff",
+                                        borderRadius: "50%",
+                                        animation: "spin 0.8s linear infinite",
+                                    }} />
+                                    Loading…
+                                </>
+                            ) : (
+                                <>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+                                    </svg>
+                                    View Report
+                                </>
                             )}
                         </button>
                     </div>
                 </div>
             </div>
 
-            {/* ══ Report area ════════════════════════════════════════════════ */}
-            <div style={{ flex: 1, padding: 16, display: "flex", flexDirection: "column" }}>
-                <div style={{
-                    flex: 1, background: "#fff", border: "1px solid #e5e7eb",
-                    borderRadius: 12, overflow: "hidden",
-                    display: "flex", flexDirection: "column",
-                    height: "calc(100vh - 104px)", minHeight: 400,
-                }}>
-                    {/* Empty state */}
-                    {!generating && !reportError && !reportHtml && (
-                        <div style={{
-                            flex: 1, display: "flex", flexDirection: "column",
-                            alignItems: "center", justifyContent: "center", gap: 12,
-                        }}>
-                            <div style={{
-                                width: 48, height: 48, borderRadius: 12, background: "#f3f4f6",
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                            }}>
-                                <BarChart2 size={22} color="#d1d5db" strokeWidth={1.5} />
-                            </div>
-                            <div style={{ textAlign: "center" }}>
-                                <div style={{ fontSize: 13, fontWeight: 500, color: "#374151", marginBottom: 4 }}>
-                                    No report generated yet
-                                </div>
-                                <div style={{ fontSize: 12, color: "#9ca3af" }}>
-                                    Open <strong style={{ color: "#185FA5" }}>Filters</strong> to configure and generate your report
-                                </div>
-                            </div>
-                            <button className="dn-outline" onClick={() => setSidebarOpen(true)}
-                                style={{
-                                    marginTop: 4, padding: "7px 16px",
-                                    border: "1px solid #d1d5db", background: "#fff",
-                                    display: "flex", alignItems: "center", gap: 6,
-                                    fontSize: 12, borderRadius: 7, color: "#374151",
-                                    cursor: "pointer", fontWeight: 500,
-                                }}>
-                                <SlidersHorizontal size={13} /> Open Filters
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Loading */}
-                    {generating && (
-                        <div style={{
-                            flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-                            gap: 10, fontSize: 13, color: "#6b7280",
-                        }}>
-                            <Loader2 size={18} className="dn-spin" />
-                            Generating report…
-                        </div>
-                    )}
-
-                    {/* Error */}
-                    {!generating && reportError && (
-                        <div style={{
-                            flex: 1, display: "flex", flexDirection: "column",
-                            alignItems: "center", justifyContent: "center", gap: 8,
-                        }}>
-                            <AlertTriangle size={22} color="#dc2626" strokeWidth={1.5} />
-                            <div style={{ fontSize: 13, color: "#dc2626" }}>{reportError}</div>
-                            <button className="dn-ghost" onClick={() => setSidebarOpen(true)}
-                                style={{
-                                    marginTop: 4, padding: "6px 14px",
-                                    border: "1px solid #d1d5db", background: "#fff",
-                                    fontSize: 12, borderRadius: 7, color: "#374151",
-                                    cursor: "pointer", fontWeight: 500,
-                                }}>
-                                Adjust filters
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Report iframe */}
-                    {reportReady && (
-                        <iframe
-                            ref={iframeRef}
-                            srcDoc={reportHtml}
-                            title="DN Summary Report"
-                            style={{ flex: 1, width: "100%", border: "none", display: "block" }}
-                        />
-                    )}
-                </div>
-            </div>
-
-            {/* ══ Sidebar overlay ════════════════════════════════════════════ */}
-            {sidebarOpen && (
-                <div className="dn-overlay" onClick={() => setSidebarOpen(false)} />
-            )}
-
-            {/* ══ Sidebar panel ══════════════════════════════════════════════ */}
-            <div className={`dn-sidebar${sidebarOpen ? " open" : ""}`}>
-
-                {/* Header */}
-                <div style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    padding: "16px 20px", borderBottom: "1px solid #e5e7eb", flexShrink: 0,
-                }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <SlidersHorizontal size={15} color="#185FA5" />
-                        <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>Report Filters</span>
-                    </div>
-                    <button onClick={() => setSidebarOpen(false)}
-                        style={{
-                            background: "none", border: "none", cursor: "pointer",
-                            padding: 4, borderRadius: 6, color: "#6b7280", display: "flex",
-                        }}>
-                        <X size={16} />
-                    </button>
-                </div>
-
-                {/* Body */}
-                <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
-
-                    {/* Validation hint */}
-                    {(!canGenerate) && (
-                        <div style={{
-                            display: "flex", alignItems: "flex-start", gap: 7,
-                            padding: "8px 12px", background: "#fffbeb", border: "1px solid #fde68a",
-                            borderRadius: 7, fontSize: 11, color: "#92400e", marginBottom: 20, lineHeight: 1.5,
-                        }}>
-                            <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 1 }} />
-                            {!dateRangeValid
-                                ? "From date must be on or before To date."
-                                : "Select a principal and both dates to generate the report."
-                            }
-                        </div>
-                    )}
-
-                    {/* Principal */}
-                    <div style={{ marginBottom: 18 }}>
-                        <SearchableDropdown
-                            label="Principal *"
-                            value={principal}
-                            onChange={setPrincipal}
-                            options={principalOptions}
-                            placeholder="Search principal…"
-                        />
-                    </div>
-
-                    {/* Date range */}
-                    <div style={{ marginBottom: 18 }}>
-                        <DateField
-                            label="From Date *"
-                            value={fromDate}
-                            onChange={setFromDate}
-                            max={toDate || undefined}
-                        />
-                    </div>
-
-                    <div style={{ marginBottom: 4 }}>
-                        <DateField
-                            label="To Date *"
-                            value={toDate}
-                            onChange={setToDate}
-                            min={fromDate || undefined}
-                        />
-                    </div>
-
-                    {/* Date range summary pill */}
-                    {fromDate && toDate && dateRangeValid && (
-                        <div style={{
-                            marginTop: 14, padding: "7px 12px",
-                            background: "#eff6ff", border: "1px solid #bfdbfe",
-                            borderRadius: 7, fontSize: 11, color: "#0C447C",
-                            display: "flex", alignItems: "center", gap: 6,
-                        }}>
-                            <Calendar size={11} />
-                            {toApiDateString(fromDate)} → {toApiDateString(toDate)}
-                        </div>
-                    )}
-
-                </div>
-
-                {/* Footer */}
-                <div style={{
-                    padding: "14px 20px", borderTop: "1px solid #e5e7eb",
-                    display: "flex", gap: 8, flexShrink: 0,
-                }}>
-                    <button className="dn-ghost" onClick={handleReset} disabled={generating}
-                        style={{
-                            flex: 1, padding: "8px", border: "1px solid #d1d5db", background: "#fff",
-                            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                            fontSize: 12, borderRadius: 7, color: "#374151",
-                            cursor: generating ? "not-allowed" : "pointer",
-                            opacity: generating ? 0.5 : 1, fontWeight: 500,
-                        }}>
-                        <RotateCcw size={13} /> Reset
-                    </button>
-                    <button className="dn-primary" onClick={handleGenerate} disabled={!canGenerate || generating}
-                        style={{
-                            flex: 2, padding: "8px",
-                            border: "1px solid #185FA5", background: "#185FA5",
-                            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                            fontSize: 12, borderRadius: 7, color: "#fff",
-                            cursor: (!canGenerate || generating) ? "not-allowed" : "pointer",
-                            opacity: (!canGenerate || generating) ? 0.5 : 1,
-                            transition: "background 0.15s", fontWeight: 500,
-                        }}>
-                        {generating
-                            ? <><Loader2 size={13} className="dn-spin" /> Generating…</>
-                            : <><BarChart2 size={13} /> Generate Report</>
-                        }
-                    </button>
-                </div>
-            </div>
+            <style>{`
+                @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+            `}</style>
         </div>
     );
 }
