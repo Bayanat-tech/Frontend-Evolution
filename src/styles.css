@@ -2206,8 +2206,11 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   max-width: none;
 }
 
+/* .commercial-header-block-fields > .field,
+.commercial-header-block-fields > label.field { */
 .commercial-header-block-fields > .field,
-.commercial-header-block-fields > label.field {
+.commercial-header-block-fields > label.field,
+.commercial-header-block-fields > div {
   position: relative;
   min-height: 44px;
   padding: 4px 6px;
@@ -2322,7 +2325,8 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 }
 
 .commercial-header-panel.is-collapsed .commercial-header-block-fields > .field,
-.commercial-header-panel.is-collapsed .commercial-header-block-fields > label.field {
+.commercial-header-panel.is-collapsed .commercial-header-block-fields > label.field,
+.commercial-header-panel.is-collapsed .commercial-header-block-fields > div  {
   min-height: 42px;
   padding: 4px 6px;
   border-radius: 8px;
@@ -2339,7 +2343,8 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .commercial-header-panel.is-collapsed select,
 .commercial-header-panel.is-collapsed textarea,
 .commercial-header-panel.is-collapsed button[role="combobox"],
-.commercial-header-panel.is-collapsed .lookup-field-trigger {
+.commercial-header-panel.is-collapsed .lookup-field-trigger,
+.commercial-header-panel.is-collapsed .field > div.flex.overflow-hidden {
   min-height: 28px;
   height: 28px;
   font-size: 12px;
@@ -3070,16 +3075,21 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 }
 
 .commercial-document-workbench .commercial-header-block-fields > .field,
-.commercial-document-workbench .commercial-header-block-fields > label.field {
+.commercial-document-workbench .commercial-header-block-fields > label.field,
+.commercial-document-workbench .commercial-header-block-fields > div {
   min-height: 34px;
   padding: 2px 5px;
   border-radius: 6px;
 }
 
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-doc {
+  align-self: stretch;
+}
+
 .commercial-document-workbench .commercial-header-block-fields > .field > span,
 .commercial-document-workbench .commercial-header-block-fields > label.field > span {
   margin-bottom: 0;
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1;
 }
 
@@ -3087,7 +3097,8 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .commercial-document-workbench .commercial-header-panel.is-expanded select,
 .commercial-document-workbench .commercial-header-panel.is-expanded textarea,
 .commercial-document-workbench .commercial-header-panel.is-expanded button[role="combobox"],
-.commercial-document-workbench .commercial-header-panel.is-expanded .lookup-field-trigger {
+.commercial-document-workbench .commercial-header-panel.is-expanded .lookup-field-trigger,
+.commercial-document-workbench .commercial-header-panel.is-expanded .field > div.flex.overflow-hidden {
   min-height: 23px;
   height: 23px;
   font-size: 11.5px;
@@ -3099,6 +3110,24 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 
 .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-extra .commercial-header-block-fields {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-extra:not(.commercial-header-block-extra-sales-compact) .commercial-header-block-fields > :only-child {
+  grid-column: 1 / -1;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-extra-sales-compact .commercial-header-block-fields {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-extra-sales-compact .commercial-header-block-fields > .field,
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-extra-sales-compact .commercial-header-block-fields > label.field {
+  min-height: 29px;
+  padding: 2px 5px;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-extra-sales-compact .lookup-field-trigger {
+  width: 100%;
 }
 
 .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party {
@@ -3135,12 +3164,47 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   grid-column: span 2;
 }
 
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party-sales .commercial-header-block-fields {
+  grid-template-columns:
+    minmax(340px, 1.75fr)
+    minmax(190px, 0.96fr)
+    minmax(145px, 0.7fr)
+    minmax(105px, 0.5fr)
+    minmax(135px, 0.62fr)
+    minmax(135px, 0.62fr);
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party-sales .commercial-party-primary {
+  grid-column: span 3;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party-sales .commercial-header-block-fields > :nth-child(5) {
+  grid-column: span 2;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party-sales .commercial-header-block-fields > :nth-child(8) {
+  grid-column: span 2;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party-sales .commercial-header-block-fields > :nth-child(9) {
+  grid-column: span 2;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party-sales .commercial-header-block-fields > :nth-child(10),
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party-sales .commercial-header-block-fields > :nth-child(11) {
+  grid-column: span 2;
+}
+
 .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax {
   grid-column: span 2;
 }
 
 .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax-wide {
   grid-column: 2 / -1;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax-sales-wide {
+  grid-column: 1 / -1;
 }
 
 .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax .commercial-header-block-fields {
