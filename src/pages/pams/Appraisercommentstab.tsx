@@ -18,7 +18,7 @@ interface Props {
   characterTotal: number;
   flowLevel?: number;
   userFlowLevel?: number;
-  weightageConfig?: WeightageConfig;            // from parent (AppraisalViewTabsPage)
+  weightageConfig?: WeightageConfig;
   onAppraiserCommentChange?: (val: string) => void;
   onAppraiseeCommentChange?: (val: string) => void;
 }
@@ -35,11 +35,11 @@ function fmtDateTime(val: unknown): string {
   return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
 }
 
-// level: 1-5 → maps to APPRAISER_COMMENTS1..5 / APPRAISER_NAME1..5
 function commentForLevel(row: Row | null, level: number): string {
   if (!row || level < 1 || level > 5) return "";
   return text(row[`APPRAISER_COMMENTS${level}`]);
 }
+
 function nameForLevel(row: Row | null, level: number): string {
   if (!row || level < 1 || level > 5) return "";
   return text(row[`APPRAISER_NAME${level}`]);
@@ -76,8 +76,6 @@ const S = {
   meta: { fontSize: "11px", color: "#6b7280", marginTop: "4px" },
   readOnlyTag: { fontSize: "11px", color: "#ef4444", marginTop: "4px" },
   spinner: { padding: "40px", textAlign: "center" as const, color: "#9ca3af", fontSize: "13px" },
-
-  // ── new: previous-level comment block ──
   prevBlock: {
     padding: "8px", marginBottom: "8px", borderRadius: "6px",
     background: "#f9fafb", border: "1px solid #e5e7eb",
@@ -87,6 +85,7 @@ const S = {
     fontSize: "13px", color: "#4b5563", whiteSpace: "pre-wrap" as const,
   },
   currentName: { fontSize: "12px", fontWeight: 700, color: "#374151", marginBottom: "4px" },
+  nameBox: { fontSize: "12px", fontWeight: 700, color: "#374151", marginBottom: "4px" },
 };
 
 const AppraiserCommentsTab: React.FC<Props> = ({
@@ -115,43 +114,30 @@ const AppraiserCommentsTab: React.FC<Props> = ({
   const appraiserReadOnly   = isEmployee || isFinal || !isCurrentActionUser;
   const appraiseeReadOnly   = !isEmployee || isFinal;
 
-  // ── Which level are we actually displaying in the Appraiser Comments box? ──
-  // userFlowLevel === 0 → live/active field → "current level" is the overall flowLevel.
-  // userFlowLevel 1-5   → an archived level being viewed read-only.
   const effectiveLevel = userFlowLevel === 0 ? flowLevel : userFlowLevel;
 
-  // From level 3 onward, also show the immediately previous level's comment (read-only) —
-  // but only if that level actually has an appraiser comment. Levels where the actor was
-  // the employee (appraiser box read-only for them) have no APPRAISER_COMMENTSn entry;
-  // their input lives in Appraisee Comments instead, so we skip showing them here.
   const prevLevelNum        = effectiveLevel - 1;
   const prevLevelCommentRaw = effectiveLevel >= 2 ? commentForLevel(existingData, prevLevelNum) : "";
   const prevLevelComment    = prevLevelCommentRaw.trim();
   const showPrevLevel       = prevLevelComment.length > 0;
   const prevLevelName       = showPrevLevel ? nameForLevel(existingData, prevLevelNum) : "";
-
-  // Name to show above the current (own) comment box.
-  // Resolved from backend via P_LOGINID (CURRENT_USER_NAME) — more reliable than
-  // AuthContext, which may not always carry a populated `name` field.
+  
   const currentActorName = userFlowLevel === 0
     ? (text(existingData?.CURRENT_USER_NAME) || myName || loginid)
     : nameForLevel(existingData, userFlowLevel);
 
-  // Appraisee Comments is always filled by the employee themselves.
   const employeeName = text(existingData?.EMPLOYEE_NAME);
 
-  // ── Final rating — uses weightageConfig from parent (HR logic or default) ──
+  // ── Final rating ──
   const { finalRating, taskWeighted, charWeighted } = useMemo(() => {
     const t = Number(taskTotal      || 0);
     const c = Number(characterTotal || 0);
 
     if (weightageConfig?.isHrDefined) {
-      // HR logic: weighted formula
       const tw  = (t * weightageConfig.taskPct) / 100;
       const cw  = (c * weightageConfig.charPct) / 100;
       return { finalRating: Math.round(tw + cw), taskWeighted: tw, charWeighted: cw };
     }
-    // Default: simple average
     return {
       finalRating:  Math.round((t + c) / 2),
       taskWeighted: t / 2,
@@ -159,7 +145,7 @@ const AppraiserCommentsTab: React.FC<Props> = ({
     };
   }, [taskTotal, characterTotal, weightageConfig]);
 
-  // ── Fetch comments ────────────────────────────────────────────────────────
+  // ── Fetch comments ──
   useEffect(() => {
     if (!docNo) return;
     setLoading(true);
@@ -168,6 +154,7 @@ const AppraiserCommentsTab: React.FC<Props> = ({
         if (res.length > 0) {
           const row = res[0] as Row;
           setExistingData(row);
+          console.log("APPRAISAL DATA =", row);
           let ac = "";
           if      (userFlowLevel === 0) ac = text(row.APPRAISER_COMMENTS);
           else if (userFlowLevel === 1) ac = text(row.APPRAISER_COMMENTS1);
@@ -192,30 +179,22 @@ const AppraiserCommentsTab: React.FC<Props> = ({
 
   if (loading) return <div style={S.spinner}>Loading comments...</div>;
 
-  const isHrLogic  = weightageConfig?.isHrDefined ?? false;
-  const taskPctLbl = weightageConfig?.taskPct ?? 50;
-  const charPctLbl = weightageConfig?.charPct ?? 50;
-
   return (
     <div>
       {/* ── Score summary ── */}
       <div style={S.scoreRow}>
-
         <div style={S.scoreBox("#1976d2")}>
           <div style={S.scoreLabel}>Task Score</div>
           <div style={S.scoreValue("#1976d2")}>{Math.round(taskTotal)}</div>
         </div>
-
         <div style={S.scoreBox("#9c27b0")}>
           <div style={S.scoreLabel}>Character Score</div>
           <div style={S.scoreValue("#9c27b0")}>{Math.round(characterTotal)}</div>
         </div>
-
         <div style={S.scoreBox("#2e7d32")}>
           <div style={S.scoreLabel}>Final Rating</div>
           <div style={S.scoreValue("#2e7d32")}>{finalRating}</div>
         </div>
-
       </div>
 
       {/* ── Comments grid ── */}
@@ -223,8 +202,8 @@ const AppraiserCommentsTab: React.FC<Props> = ({
         <div style={{ ...S.header, borderRight: "1px solid #111" }}>Appraiser Comments</div>
         <div style={S.header}>Appraisee Comments</div>
 
+        {/* Appraiser Comments Column */}
         <div style={{ padding: "8px", borderTop: "1px solid #111", borderRight: "1px solid #111" }}>
-          {/* ── Previous level's comment (read-only), only if it actually has content ── */}
           {showPrevLevel && (
             <div style={S.prevBlock}>
               <div style={S.prevName}>{prevLevelName || `Level ${prevLevelNum}`}</div>
@@ -232,8 +211,8 @@ const AppraiserCommentsTab: React.FC<Props> = ({
             </div>
           )}
 
-          {/* ── Current level's name + comment box ── */}
-          {currentActorName && <div style={S.currentName}>{currentActorName}</div>}
+          {/* Show name ALWAYS - both in edit and view only mode */}
+          {currentActorName && <div style={S.nameBox}>{currentActorName}</div>}
 
           <textarea
             style={S.textarea(appraiserReadOnly)}
@@ -250,8 +229,11 @@ const AppraiserCommentsTab: React.FC<Props> = ({
           {appraiserReadOnly && <div style={S.readOnlyTag}>View only</div>}
         </div>
 
+        {/* Appraisee Comments Column */}
         <div style={{ padding: "8px", borderTop: "1px solid #111" }}>
-          {/* {employeeName && <div style={S.currentName}>{employeeName}</div>} */}
+          {/* Show name ALWAYS - both in edit and view only mode */}
+          {employeeName && <div style={S.nameBox}>{employeeName}</div>}
+
           <textarea
             style={S.textarea(appraiseeReadOnly)}
             value={appraiseeComment}
