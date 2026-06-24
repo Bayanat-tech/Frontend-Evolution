@@ -77,6 +77,7 @@ import TaxReportFilter from "../pages/accounts_report/tax_report/TaxReport";
 import JobListingReport from "../pages/wms/stock transfer/JobListingReport";
 import StockDetailReport from "../pages/wms_report/StockDetailReport";
 import StockAdjustmentPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
+import { VendorWorkspacePage } from "../pages/vendor/VendorWorkspacePage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -95,6 +96,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: "Vendor System",
+    match: (context) => isVendorRoute(context),
+    element: (context) => <VendorWorkspacePage routePath={getGenericMatchText(context)} />,
+  },
   {
     name: "Finance Ledger Basics",
     match: ({ pathname }) => pathname.toLowerCase().includes("/wms/wms/reports/stock%20report/stock_detail"),
@@ -1000,6 +1006,20 @@ function collectMenuLeaves(nodes: MenuNode[]) {
 
 function isPamsRoute(pathname: string) {
   return pathname.toLowerCase().includes("/pams/");
+}
+
+function isVendorRoute(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return (
+    matchText.includes("/vendor") ||
+    matchText.includes("vendor system") ||
+    compact.includes("vendorsystem") ||
+    compact.includes("vendorregistration") ||
+    compact.includes("vendorapproval") ||
+    compact.includes("vendoroutstanding") ||
+    compact.includes("vendorstatus")
+  );
 }
 
 function isPamsBulkAppraisalRoute(pathname: string) {
