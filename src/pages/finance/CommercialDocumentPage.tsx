@@ -85,9 +85,6 @@ type FormState = {
   payment_terms?: string;
   delivery_info?: string;
   dlvr_term?: string;  
-  // contact?: string;
-  // mobile?: string;
-  // email?: string;
   tax_category?: string;
   tax_cat_code?: string;
   tax_type?: string;
@@ -455,7 +452,13 @@ function CommercialEditor({
   const dir = Number(line.sign_ind || 1) === baseSign ? 1 : -1;
   return sum + amt * dir;
   }, 0);
-  const taxTotal = form.detail.filter((line) => Number(line.serial_no) < 9000).reduce((sum, line) => sum + (Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100, 0);
+  // const taxTotal = form.detail.filter((line) => Number(line.serial_no) < 9000).reduce((sum, line) => sum + (Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100, 0);
+
+  const taxTotal = visibleLines.reduce((sum, line) => {
+  const taxAmt = Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100;
+  const dir = Number(line.sign_ind || 1) === baseSign ? 1 : -1;
+  return sum + taxAmt * dir;
+}, 0);
 
   const update = (field: keyof FormState, value: string | number) => setForm((current) => ({ ...current, [field]: value }));
   const updateLine = (id: string, patch: Partial<Line>) => {
@@ -476,7 +479,7 @@ function CommercialEditor({
     //   tx_compnt_perc_1:    current.tx_compnt_perc_1 ?? 0,
     // };
     const resolvedExpmt = current.tx_compnt_1_expmt || current.tax_type || "S";
-const resolvedPerc  = (current.tx_compnt_perc_1 != null && current.tx_compnt_perc_1 !== 0)
+    const resolvedPerc  = (current.tx_compnt_perc_1 != null && current.tx_compnt_perc_1 !== 0)
   ? current.tx_compnt_perc_1
   : resolvedExpmt === "S" ? 5 : 0;
 
@@ -650,7 +653,6 @@ const withTax = {
        <div className="commercial-section-title">
          <div>
            <p className="eyebrow m-0">Header</p>
-           <h3 className="m-0 text-sm font-semibold leading-tight">Document Information</h3>
          </div>
          <span>{showHeaderDetails ? "Full header" : "Compact header"}</span>
        </div>
@@ -1265,7 +1267,7 @@ const withTax = {
                 <Button disabled={isCancelled} size="sm" type="button" variant="outline" onClick={addLine}><Plus size={14} /> Add Line</Button>
               </div>
               <div className="commercial-lines-scroll overflow-auto">
-                <table className="finance-lines-table w-full min-w-[2400px] text-[12px]">
+                <table className="finance-lines-table w-full min-w-[3300px] text-[12px]">
                   <thead className="sticky top-0 bg-primary text-xs text-primary-foreground">
                     <tr>
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
