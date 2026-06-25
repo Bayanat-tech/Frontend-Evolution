@@ -698,6 +698,73 @@ const withTax = {
     </Field>
   )}
 
+  {isSales && !isPO && (
+    <LookupField
+      label="Ref Doc"
+      disabled={isCancelled}
+      value={form.ref_doc_no || ""}
+      displayValue={form.ref_doc_no || ""}
+      columns={[
+        { field: "DOC_NO", header: "Doc No" },
+        { field: "DOC_DATE", header: "Date" },
+        { field: "REF_NO", header: "Ref No" },
+        { field: "REMARKS", header: "Remarks" },
+      ]}
+      valueField="DOC_NO"
+      displayFields={["DOC_NO"]}
+      loadOptions={() =>
+        getDynamicFinanceLookup({
+          parameter: "Account_LPO_REF_DOC",
+          code1: user?.company_code || "",
+          number1: form.div_code ? Number(form.div_code) : undefined,
+        })
+      }
+      onChange={async (value, row) => {
+        if (!value || !row) return;
+        const r = row as Record<string, unknown>;
+        const docNo = String(r["DOC_NO"] ?? r["doc_no"] ?? value);
+        const srcType = String(r["DOC_TYPE"] ?? r["doc_type"] ?? "PO");
+        setForm((c) => ({ ...c, ref_doc_no: docNo }));
+        try {
+          let header: Record<string, unknown> = {};
+          try {
+            header = await getPurchaseHeader(docNo, srcType);
+            if (!hasRecordData(header)) header = await getLpoHeader(docNo, srcType);
+          } catch {
+            header = await getLpoHeader(docNo, srcType);
+          }
+
+          let rawDetail: Record<string, unknown>[] = [];
+          try {
+            const res = await getTransactionDetail(docNo, form.div_code, srcType as TransactionType);
+            if (res.length) rawDetail = res;
+          } catch {}
+          if (!rawDetail.length) {
+            try {
+              rawDetail = await getLpoDetail(docNo, srcType);
+            } catch {}
+          }
+
+          const targetDocType: CommercialType = srcType.toUpperCase() === "PO" ? "PI" : (srcType as CommercialType);
+          const mapped = mapForm(targetDocType, header, rawDetail);
+          setForm((c) => ({
+            ...c,
+            ...mapped,
+            doc_type: targetDocType,
+            doc_no: c.doc_no,
+            div_code: c.div_code,
+            div_name: c.div_name,
+            ref_doc_no: docNo,
+            detail: mapped.detail,
+          }));
+        } catch (err) {
+          console.error("Failed to load ref doc", err);
+          setError(err instanceof Error ? err.message : "Unable to load reference document");
+        }
+      }}
+    />
+  )}
+
   {/* ── PO-only: Ref No / Ref Date / APP Ref No / LPO Category ── */}
   {isPO && (
     <Field label="Ref No">
@@ -737,7 +804,7 @@ const withTax = {
           </div>
         </section>
 
-        <section className="commercial-header-block commercial-header-block-party">
+        <section className={`commercial-header-block commercial-header-block-party ${isSales ? "commercial-header-block-party-sales" : ""}`}>
           <div className="commercial-header-block-title">
             <span>{isSales ? "Customer" : "Supplier"}</span>
           </div>
@@ -859,6 +926,62 @@ const withTax = {
     <Input disabled={isCancelled} value={form.payment_terms || ""} onChange={(e) => update("payment_terms", e.target.value)} />
   </Field>
 
+  {isSales && (
+  <LookupField
+    label="Salesman"
+    disabled={isCancelled}
+    value={form.salesman_code ?? ""}
+    displayValue={[form.salesman_code, form.salesman_name].filter(Boolean).join(" - ")}
+    columns={[
+      { field: "salesman_code", header: "Code" },
+      { field: "salesman_name", header: "Name" },
+    ]}
+    valueField="salesman_code"
+    displayFields={["salesman_code", "salesman_name"]}
+    loadOptions={() =>
+      getDynamicFinanceLookup({
+        parameter: "Salesman_Search",
+        code1: user?.company_code || "",
+      })
+    }
+    onChange={(value, row) =>
+      setForm((c) => ({
+        ...c,
+        salesman_code: value,
+        salesman_name: text(getLookupValue(row || {}, "salesman_name")),
+      }))
+    }
+  />
+  )}
+
+  {isSales && (
+   <LookupField
+    label="Sector"
+    disabled={isCancelled}
+    value={form.sector_code ?? ""}
+    displayValue={[form.sector_code, form.sector_name].filter(Boolean).join(" - ")}
+    columns={[
+      { field: "sector_code", header: "Code" },
+      { field: "sector_name", header: "Name" },
+    ]}
+    valueField="sector_code"
+    displayFields={["sector_code", "sector_name"]}
+    loadOptions={() =>
+      getDynamicFinanceLookup({
+        parameter: "Sector_Search",
+        code1: user?.company_code || "",
+      })
+    }
+    onChange={(value, row) =>
+      setForm((c) => ({
+        ...c,
+        sector_code: value,
+        sector_name: text(getLookupValue(row || {}, "sector_name")),
+      }))
+    }
+  />
+  )}
+
   {isPO && (
     <Field label="Delivery Term">
       <Input disabled={isCancelled} value={form.dlvr_term || ""} onChange={(e) => update("dlvr_term", e.target.value)} />
@@ -873,7 +996,7 @@ const withTax = {
           </div>
         </section>
 
-        {showReferenceBlock && (
+        {showReferenceBlock && !isSales && (
         <section className="commercial-header-block commercial-header-block-extra">
           <div className="commercial-header-block-title">
             <span>Reference</span>
@@ -915,8 +1038,7 @@ const withTax = {
     label="Salesman"
     disabled={isCancelled}
     value={form.salesman_code ?? ""}
-    // displayValue={form.salesman_name ? `${form.salesman_code} - ${form.salesman_name}` : form.salesman_code ?? ""}
-    displayValue={form.salesman_name || ""}
+    displayValue={[form.salesman_code, form.salesman_name].filter(Boolean).join(" - ")}
     columns={[
       { field: "salesman_code", header: "Code" },
       { field: "salesman_name", header: "Name" },
@@ -950,8 +1072,7 @@ const withTax = {
     label="Sector"
     disabled={isCancelled}
     value={form.sector_code ?? ""}
-    // displayValue={form.sector_name ? `${form.sector_code} - ${form.sector_name}` : form.sector_code ?? ""}
-    displayValue={form.sector_name || ""}
+    displayValue={[form.sector_code, form.sector_name].filter(Boolean).join(" - ")}
     columns={[
       { field: "sector_code", header: "Code" },
       { field: "sector_name", header: "Name" },
@@ -984,7 +1105,7 @@ const withTax = {
         </section>
         )}
 
-        <section className={`commercial-header-block commercial-header-block-tax ${!showReferenceBlock ? "commercial-header-block-tax-wide" : ""}`}>
+        <section className={`commercial-header-block commercial-header-block-tax ${(!showReferenceBlock || isSales) ? "commercial-header-block-tax-wide" : ""} ${isSales ? "commercial-header-block-tax-sales-wide" : ""}`}>
           <div className="commercial-header-block-title">
             <span>Tax & Remarks</span>
           </div>

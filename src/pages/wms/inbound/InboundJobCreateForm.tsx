@@ -12,6 +12,7 @@ import {
   loadInboundPortLookup,
 } from "../../../utils/lookupLoaders";
 import { type WmsRow } from "../../../utils/inboundHelpers";
+import { LookupFieldInfinite } from "../../../components/ui/LookupFieldInfinite";
 
 type Props = {
   form:        WmsRow;
@@ -40,8 +41,9 @@ export function InboundJobCreateForm({ form, setForm, companyCode, onSubmit }: P
         </div>
 
         <div className="grid gap-2.5 p-3 md:grid-cols-4">
-          <LookupField
+          <LookupFieldInfinite
             label="Principal"
+            batchSize={10}
             value={String(form.prin_code || "")}
             displayValue={[form.prin_code, form.prin_name].filter(Boolean).join(" - ")}
             valueField="prin_code"
