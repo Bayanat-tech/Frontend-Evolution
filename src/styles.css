@@ -158,6 +158,105 @@ body {
   }
 }
 
+.vendor-compact {
+  --app-control-font-size: 12px;
+  --app-table-font-size: 11.5px;
+  --app-label-font-size: 11px;
+}
+
+.vendor-compact section {
+  gap: 10px;
+}
+
+.vendor-compact .eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+}
+
+.vendor-compact .vendor-page-header h1 {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.vendor-compact .ui-button {
+  min-height: 30px;
+  height: 30px;
+  padding-inline: 10px;
+  font-size: 12px;
+}
+
+.vendor-compact .ui-button-icon {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+}
+
+.vendor-compact .ui-input,
+.vendor-compact .ui-select {
+  height: 32px;
+  font-size: 12px;
+}
+
+.vendor-compact .data-table-header {
+  padding: 6px 8px;
+}
+
+.vendor-compact .data-table-search {
+  height: 34px;
+  max-width: 430px;
+}
+
+.vendor-compact .data-table-scroll table {
+  font-size: 11.5px;
+}
+
+.vendor-compact .data-table-scroll th,
+.vendor-compact .data-table-scroll td {
+  font-size: 11.5px;
+}
+
+.vendor-compact .vendor-detail-panel {
+  font-size: 11.5px;
+}
+
+.vendor-invoice-dialog {
+  width: min(98vw, 1680px) !important;
+}
+
+.vendor-pending-dialog {
+  width: min(96vw, 1180px) !important;
+}
+
+.vendor-compact .vendor-detail-scroll {
+  height: min(52dvh, 520px);
+  min-height: 320px;
+}
+
+.vendor-compact .vendor-detail-table th,
+.vendor-compact .vendor-detail-table td {
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+.vendor-compact .vendor-detail-table tbody tr {
+  height: 24px;
+}
+
+.vendor-compact .vendor-line-input {
+  height: 22px;
+  min-height: 22px;
+  padding: 0 5px;
+  font-size: 11px;
+  box-shadow: none;
+}
+
+.vendor-compact .vendor-line-icon {
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+}
+
 button,
 input,
 select,

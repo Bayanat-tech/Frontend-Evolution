@@ -10,6 +10,7 @@ type DialogProps = {
   tone?: "default" | "danger";
   compact?: boolean;
   wide?: boolean;
+  contentClassName?: string;
   children: ReactNode;
   footer?: ReactNode;
   onClose: () => void;
@@ -22,6 +23,7 @@ export function Dialog({
   tone = "default",
   compact,
   wide,
+  contentClassName,
   children,
   footer,
   onClose,
@@ -39,6 +41,7 @@ export function Dialog({
           "grid max-h-[92vh] w-[min(96vw,560px)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg border bg-card text-card-foreground shadow-2xl",
           compact && "w-[min(94vw,460px)]",
           wide && "w-[min(96vw,1040px)]",
+          contentClassName,
         )}
 onClick={(e) => e.stopPropagation()}
       >

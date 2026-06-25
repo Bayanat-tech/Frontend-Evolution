@@ -78,6 +78,7 @@ import JobListingReport from "../pages/wms/stock transfer/JobListingReport";
 import StockDetailReport from "../pages/wms_report/StockDetailReport";
 import StockAdjustmentPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
 import { VendorWorkspacePage } from "../pages/vendor/VendorWorkspacePage";
+import { isVendorRouteText } from "../pages/vendor/vendorRoutes";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -1008,20 +1009,6 @@ function isPamsRoute(pathname: string) {
   return pathname.toLowerCase().includes("/pams/");
 }
 
-function isVendorRoute(context: WorkspaceRouteContext) {
-  const matchText = getGenericMatchText(context);
-  const compact = matchText.replace(/[^a-z0-9]/g, "");
-  return (
-    matchText.includes("/vendor") ||
-    matchText.includes("vendor system") ||
-    compact.includes("vendorsystem") ||
-    compact.includes("vendorregistration") ||
-    compact.includes("vendorapproval") ||
-    compact.includes("vendoroutstanding") ||
-    compact.includes("vendorstatus")
-  );
-}
-
 function isPamsBulkAppraisalRoute(pathname: string) {
   const normalized = pathname.toLowerCase().replace(/\/+$/, "");
   return normalized.endsWith("/pams/masters/gm/kpi") || normalized.includes("/bulk");
@@ -1088,6 +1075,10 @@ function getGenericMatchText(context: WorkspaceRouteContext) {
     return path && pathname.includes(path);
   });
   return [pathname, context.activeApp?.title, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
+}
+
+function isVendorRoute(context: WorkspaceRouteContext) {
+  return isVendorRouteText(getGenericMatchText(context));
 }
 
 function isApplicationProgressRoute(context: WorkspaceRouteContext) {

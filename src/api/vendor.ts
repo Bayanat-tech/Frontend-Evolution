@@ -1,142 +1,180 @@
 import { api } from "./client";
 
 type ApiResponse<T> = {
-  success: boolean;
+  success?: boolean;
   data?: T;
   message?: string;
+  error?: string;
+  details?: string;
+  totalCount?: number;
 };
 
 export type VendorRow = Record<string, unknown>;
 
-function unwrapRows(value: unknown): VendorRow[] {
-  if (Array.isArray(value)) return value as VendorRow[];
-  if (!value || typeof value !== "object") return [];
+export type VendorRequestPayload = {
+  COMPANY_CODE?: string;
+  DOC_NO?: string;
+  DOC_DATE?: string;
+  AC_CODE?: string;
+  AC_NAME?: string;
+  AC_DESC?: string;
+  DIV_CODE?: string;
+  DIV_NAME?: string;
+  DIVN_CODE?: string;
+  REF_DOC_NO?: string;
+  REF_DOC1?: string;
+  REF_DOC2?: string;
+  REF_DOC3?: string;
+  INVOICE_NUMBER?: string;
+  INVOICE_DATE?: string;
+  REMARKS?: string;
+  LAST_ACTION?: string;
+  items?: VendorRow[];
+  [key: string]: unknown;
+};
 
-  const record = value as Record<string, unknown>;
+function unwrapRows(payload: unknown): VendorRow[] {
+  const data = (payload as { data?: unknown })?.data ?? payload;
+  if (Array.isArray(data)) return data as VendorRow[];
+  if (!data || typeof data !== "object") return [];
+  const record = data as Record<string, unknown>;
   for (const key of ["tableData", "data", "Data", "rows", "Rows", "result", "Result"]) {
     if (Array.isArray(record[key])) return record[key] as VendorRow[];
   }
-
-  return [record];
+  return [];
 }
 
-async function getVendor<T = unknown>(endpoint: string, params: Record<string, unknown> = {}) {
-  const response = await api.get<ApiResponse<T>>(`/api/vendor/gm/${endpoint}`, { params });
-  if (!response.data.success) throw new Error(response.data.message || `Unable to load ${endpoint}`);
-  return response.data.data as T;
+function assertSuccess<T>(response: ApiResponse<T>, fallback: string) {
+  if (response.success === false) {
+    throw new Error(response.message || response.details || response.error || fallback);
+  }
 }
 
-async function postVendor<T = unknown>(endpoint: string, payload: Record<string, unknown>) {
-  const response = await api.post<ApiResponse<T>>(`/api/vendor/gm/${endpoint}`, payload);
-  if (!response.data.success) throw new Error(response.data.message || `Unable to save ${endpoint}`);
-  return response.data.data as T;
-}
-
-function unwrapData<T>(value: unknown, fallback: T): T {
-  if (value === null || value === undefined) return fallback;
-  return value as T;
-}
-
-export async function getVendorAccounts(companyCode: string, acCode?: string) {
-  return unwrapRows(await getVendor("accounts", { company_code: companyCode, ac_code: acCode || undefined }));
+export async function getVendorAccounts(search = "", companyCode?: string) {
+  const { data } = await api.get<ApiResponse<VendorRow[]> | VendorRow[]>("/api/vendor/gm/accounts", {
+    params: {
+      ...(search ? { ac_code: search } : {}),
+      ...(companyCode ? { company_code: companyCode } : {}),
+    },
+  });
+  assertSuccess(data as ApiResponse<VendorRow[]>, "Unable to load vendor accounts");
+  return unwrapRows(data);
 }
 
 export async function getVendorDivisions() {
-  return unwrapRows(await getVendor("divisions"));
+  const { data } = await api.get<ApiResponse<VendorRow[]> | VendorRow[]>("/api/vendor/gm/divisions");
+  assertSuccess(data as ApiResponse<VendorRow[]>, "Unable to load divisions");
+  return unwrapRows(data);
 }
 
-export async function getPendingVendorLpo(companyCode: string, acCode: string) {
-  return unwrapRows(await getVendor("pending-lpo", { company_code: companyCode, ac_code: acCode }));
+export async function getPendingVendorLpo(params?: Record<string, string>) {
+  const { data } = await api.get<ApiResponse<VendorRow[]> | VendorRow[]>("/api/vendor/gm/pending-lpo", { params });
+  assertSuccess(data as ApiResponse<VendorRow[]>, "Unable to load pending ref documents");
+  return unwrapRows(data);
 }
 
-export async function getPendingVendorLpoDetail(companyCode: string, acCode: string, docNo: string) {
-  return unwrapRows(await getVendor("pending-lpo-detail", { company_code: companyCode, ac_code: acCode, doc_no: docNo }));
-}
-
-export async function getVendorOutstanding(companyCode: string, acCode: string) {
-  return unwrapRows(await getVendor("party-outstanding", { company_code: companyCode, ac_code: acCode }));
-}
-
-export async function getVendorInvoiceStatus(companyCode: string, acCode: string, fromDate: string, toDate: string) {
-  return unwrapRows(
-    await getVendor("getInvoiceStatus", {
-      company_code: companyCode,
-      ac_code: acCode,
-      po_date_from: fromDate,
-      po_date_to: toDate,
-    }),
-  );
-}
-
-export async function createVendorRegistration(companyCode: string, payload: VendorRow) {
-  return postVendor("createVendor", {
-    ...payload,
-    COMPANY_CODE: companyCode,
-    company_code: companyCode,
+export async function getPendingVendorLpoDetail(docNo: string, acCode?: string, companyCode?: string) {
+  const { data } = await api.get<ApiResponse<VendorRow[]> | VendorRow[]>("/api/vendor/gm/pending-lpo-detail", {
+    params: { doc_no: docNo, ac_code: acCode, company_code: companyCode },
   });
-}
-
-export async function executeVendorSql(rawSql: string) {
-  const response = await api.post<ApiResponse<VendorRow[]> & { data?: VendorRow[]; totalCount?: number; error?: string; details?: string }>(
-    "/api/vendor/gm/executeRawSql",
-    { raw_sql: rawSql },
-  );
-  if (!response.data.success) throw new Error(response.data.message || response.data.details || response.data.error || "Unable to load vendor data");
-  return unwrapRows(response.data.data);
-}
-
-export async function executeVendorSqlBody(query_parameter: string, query_where: string, query_updatevalues = "") {
-  const response = await api.post<ApiResponse<VendorRow[]> & { data?: VendorRow[]; totalCount?: number; error?: string; details?: string }>(
-    "/api/vendor/gm/executeRawSqlbody",
-    { query_parameter, query_where, query_updatevalues },
-  );
-  if (!response.data.success) throw new Error(response.data.message || response.data.details || response.data.error || "Unable to execute vendor update");
-  return unwrapRows(response.data.data);
+  assertSuccess(data as ApiResponse<VendorRow[]>, "Unable to load pending invoice details");
+  return unwrapRows(data);
 }
 
 export async function getVendorRequest(docNo: string) {
-  const response = await api.get<ApiResponse<VendorRow>>(`/api/vendor/gm/getVendorrequest/${encodeURIComponent(docNo)}`);
-  if (!response.data.success) throw new Error(response.data.message || "Unable to load vendor request");
-  return unwrapData<VendorRow>(response.data.data, {});
+  const { data } = await api.get<ApiResponse<VendorRequestPayload>>(`/api/vendor/gm/getVendorrequest/${encodeURIComponent(docNo)}`);
+  assertSuccess(data, "Unable to load vendor request");
+  return (data.data ?? data) as VendorRequestPayload;
 }
 
-export async function saveVendorRequest(payload: VendorRow) {
-  const response = await api.post<ApiResponse<{ requestNumber?: string }>>("/api/vendor/gm/postLpoRequestHandler", payload);
-  if (!response.data.success) throw new Error(response.data.message || "Unable to save vendor request");
-  return response.data.data || {};
+export async function saveVendorRequest(payload: VendorRequestPayload) {
+  const { data } = await api.post<ApiResponse<{ requestNumber?: string }> & { requestNumber?: string }>("/api/vendor/gm/postLpoRequestHandler", payload);
+  assertSuccess(data, "Unable to save vendor request");
+  return data;
 }
 
 export async function updateVendorLpoStatus(payload: {
   doc_no: string;
-  company_code: string;
-  flow_level: number;
-  remarks: string;
-  action: "SENTBACK" | "REJECTED";
+  action: string;
+  remarks?: string;
+  company_code?: string;
+  flow_level?: number | string;
 }) {
-  const response = await api.post<ApiResponse<unknown>>("/api/vendor/gm/updateLpoStatus", payload);
-  if (!response.data.success) throw new Error(response.data.message || "Unable to update vendor status");
-  return response.data;
+  const { data } = await api.post<ApiResponse<unknown>>("/api/vendor/gm/updateLpoStatus", payload);
+  assertSuccess(data, "Unable to update vendor status");
+  return data;
 }
 
-export async function getVendorClosedInvoices(loginid: string) {
-  return unwrapRows(await getVendor("tmp-ac-header-with-erp-doc", { loginid }));
+export async function createVendorRegistration(payload: VendorRow) {
+  const { data } = await api.post<ApiResponse<unknown>>("/api/vendor/gm/createVendor", payload);
+  assertSuccess(data, "Unable to save vendor");
+  return data;
+}
+
+export async function executeVendorSql(rawSql: string) {
+  const { data } = await api.post<ApiResponse<VendorRow[]> | VendorRow[]>("/api/vendor/gm/executeRawSql", { raw_sql: rawSql });
+  assertSuccess(data as ApiResponse<VendorRow[]>, "Unable to load vendor data");
+  return unwrapRows(data);
+}
+
+export async function executeVendorSqlBody(query_parameter: string, query_where: string, query_updatevalues = "") {
+  const { data } = await api.post<ApiResponse<VendorRow[]> | VendorRow[]>("/api/vendor/gm/executeRawSqlbody", {
+    query_parameter,
+    query_where,
+    query_updatevalues,
+  });
+  assertSuccess(data as ApiResponse<VendorRow[]>, "Unable to execute vendor update");
+  return unwrapRows(data);
 }
 
 export async function saveVendorFiles(requestNumber: string, files: VendorRow[]) {
-  const response = await api.post<ApiResponse<unknown>>("/api/vendor/gm/saveFile", {
-    request_number: requestNumber,
-    files,
+  const { data } = await api.post<ApiResponse<unknown>>("/api/vendor/gm/saveFile", { request_number: requestNumber, files });
+  assertSuccess(data, "Unable to save vendor files");
+  return data;
+}
+
+export async function getAllVendorFiles(requestNumber: string) {
+  const { data } = await api.get<ApiResponse<VendorRow[]> | VendorRow[]>(`/api/files/getAllVendorFiles/${encodeURIComponent(requestNumber)}`);
+  assertSuccess(data as ApiResponse<VendorRow[]>, "Unable to load vendor files");
+  return unwrapRows(data);
+}
+
+export async function getVendorOutstanding(acCode: string, companyCode?: string) {
+  const { data } = await api.get<ApiResponse<VendorRow[]> | VendorRow[]>("/api/vendor/gm/party-outstanding", {
+    params: { ac_code: acCode, company_code: companyCode },
   });
-  if (!response.data.success) throw new Error(response.data.message || "Unable to save vendor files");
-  return response.data;
+  assertSuccess(data as ApiResponse<VendorRow[]>, "Unable to load vendor outstanding");
+  return unwrapRows(data);
+}
+
+export async function getVendorInvoiceStatus(acCode: string, fromDate?: string, toDate?: string, companyCode?: string) {
+  const { data } = await api.get<ApiResponse<VendorRow[]> | VendorRow[]>("/api/vendor/gm/getInvoiceStatus", {
+    params: { ac_code: acCode, company_code: companyCode, po_date_from: fromDate, po_date_to: toDate },
+  });
+  assertSuccess(data as ApiResponse<VendorRow[]>, "Unable to load invoice status");
+  return unwrapRows(data);
+}
+
+export async function getVendorStatement(acCode: string, fromDate?: string, toDate?: string, companyCode?: string) {
+  const { data } = await api.get<ApiResponse<VendorRow[]> | VendorRow[]>("/api/vendor/gm/party-account-statement", {
+    params: { ac_code: acCode, company_code: companyCode, doc_date_from: fromDate, doc_date_to: toDate },
+  });
+  assertSuccess(data as ApiResponse<VendorRow[]>, "Unable to load vendor statement");
+  return unwrapRows(data);
+}
+
+export async function getVendorClosedInvoices(loginid: string) {
+  const { data } = await api.get<ApiResponse<VendorRow[]> | VendorRow[]>("/api/vendor/gm/tmp-ac-header-with-erp-doc", { params: { loginid } });
+  assertSuccess(data as ApiResponse<VendorRow[]>, "Unable to load closed invoices");
+  return unwrapRows(data);
 }
 
 export async function executeVendorInvoicePrint(companyCode: string, docNo: string, loginUser: string) {
-  const response = await api.post<ApiResponse<unknown>>("/api/vendor/gm/executeVendorInvoicePrintHandler", {
+  const { data } = await api.post<ApiResponse<unknown>>("/api/vendor/gm/executeVendorInvoicePrintHandler", {
     COMPANY_CODE: companyCode,
     DOC_NO: docNo,
     LOGIN_USER: loginUser,
   });
-  if (!response.data.success) throw new Error(response.data.message || "Unable to execute vendor invoice print");
-  return response.data;
+  assertSuccess(data, "Unable to execute vendor invoice print");
+  return data;
 }
