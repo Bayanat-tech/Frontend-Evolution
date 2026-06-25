@@ -487,27 +487,30 @@ useEffect(() => {
     };
 
     // ── guard ────────────────────────────────────────────────────────────────
-    useImperativeHandle(ref, () => ({
-      validateBeforeLeave: () => {
-        if (tab !== "receiving_details") return true;
-        const pending = rows.find((r) => getReceivedQty(r) <= 0);
-        if (!pending) return true;
-        toast.error("Please enter receiving quantity before continuing.");
-        setEditForm({
-          packdet_no:   value(pending, "packdet_no"),
-          prod_name:    value(pending, "prod_name"),
-          batch_no:     value(pending, "batch_no"),
-          lot_no:       value(pending, "lot_no"),
-          po_no:        value(pending, "po_no"),
-          doc_ref:      value(pending, "doc_ref"),
-          qty_luom:     Number(value(pending, "qty_luom") ?? 0),
-          qty1_arrived: getReceivedQty(pending),
-          qty2_arrived: 0,
-        });
-        setEditOpen(true);
-        return false;
-      },
-    }), [tab, rows, toast]);
+useImperativeHandle(ref, () => ({
+  validateBeforeLeave: () => {
+    if (tab !== "receiving_details") return true;
+    const pending = rows.find((r) => getReceivedQty(r) <= 0);
+    if (!pending) return true;
+    toast.error("Please enter receiving quantity before continuing.");
+    setEditForm({
+      packdet_no:   value(pending, "packdet_no"),
+      prod_name:    value(pending, "prod_name"),
+      batch_no:     value(pending, "batch_no"),
+      lot_no:       value(pending, "lot_no"),
+      po_no:        value(pending, "po_no"),
+      doc_ref:      value(pending, "doc_ref"),
+      qty_luom:     Number(value(pending, "qty_luom") ?? 0),
+      qty_puom:     Number(value(pending, "qty_puom") ?? 0),         // ← add
+      p_uom:        String(value(pending, "p_uom") || value(pending, "puom") || ""), // ← add
+      qty1_arrived: getReceivedQty(pending),
+      qty2_arrived: 0,
+    });
+    setEditOpen(true);
+    return false;
+  },
+}), [tab, rows, toast]);
+
 
     // ── open modals ──────────────────────────────────────────────────────────
     const openAddModal = () => {
@@ -761,14 +764,16 @@ setPutawayForm({ site_from: "", site_to: "", location_from: "", location_code: "
         ? (row: any) => {
             if (tab === "packing_details") {
               setEditForm({ ...row, uom_count: Number(row.uom_count ?? 1), uppp: Number(row.uppp ?? 1), qty_puom: Number(row.qty_puom ?? 0), qty_luom: Number(row.qty_luom ?? 0), quantity: Number(row.quantity ?? 0) });
-            } else {
-              setEditForm({
-                packdet_no: row.packdet_no, prod_name: row.prod_name,
-                batch_no: row.batch_no, lot_no: row.lot_no, po_no: row.po_no, doc_ref: row.doc_ref,
-                qty_luom: Number(row.qty_luom ?? 0),
-                qty1_arrived: getReceivedQty(row), qty2_arrived: Number(row.qty2_arrived ?? 0),
-              });
-            }
+                } else {
+                  setEditForm({
+                    packdet_no: row.packdet_no, prod_name: row.prod_name,
+                    batch_no: row.batch_no, lot_no: row.lot_no, po_no: row.po_no, doc_ref: row.doc_ref,
+                    qty_luom: Number(row.qty_luom ?? 0),
+                    qty_puom: Number(row.qty_puom ?? 0),          // ← packed/expected qty
+                    p_uom: String(row.p_uom || row.puom || ""),   // ← UOM for display
+                    qty1_arrived: getReceivedQty(row), qty2_arrived: Number(row.qty2_arrived ?? 0),
+                  });
+                }
             setEditOpen(true);
           }
         : undefined,
@@ -944,8 +949,8 @@ setPutawayForm({ site_from: "", site_to: "", location_from: "", location_code: "
               <label className="field">
                 <span className="text-xs font-medium text-muted-foreground">Qty (Primary) <strong className="text-destructive">*</strong></span>
                 <div className="relative flex h-8 overflow-hidden rounded-md border bg-background focus-within:ring-2 focus-within:ring-primary/40">
-                  <input type="number" min="0" placeholder="0"
-                    className="min-w-0 flex-1 border-0 bg-transparent px-2 text-sm outline-none"
+                  <input style={{paddingBottom: '8px'}} type="number" min="0" placeholder="0"
+                    className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm outline-none"
                     value={String(addForm.qty_puom ?? "")}
                     onChange={(e) => setAddForm((c) => ({ ...c, ...recalcQuantity(c, "qty_puom", e.target.value) }))} />
                   {pUom && <span className="flex items-center border-l bg-muted/50 px-2 text-xs font-semibold text-muted-foreground">{pUom}</span>}
@@ -957,7 +962,7 @@ setPutawayForm({ site_from: "", site_to: "", location_from: "", location_code: "
                   Qty (Lowest){!lDisabled && <strong className="text-destructive"> *</strong>}
                 </span>
                 <div className={`relative flex h-8 overflow-hidden rounded-md border bg-background focus-within:ring-2 focus-within:ring-primary/40 ${lDisabled ? "opacity-50" : ""}`}>
-                  <input type="number" min="0" disabled={lDisabled}
+                  <input style={{paddingBottom: '8px'}} type="number" min="0" disabled={lDisabled}
                     className="min-w-0 flex-1 border-0 bg-transparent px-2 text-sm outline-none disabled:cursor-not-allowed"
                     placeholder={lDisabled ? "Same UOM" : "0"}
                     value={lDisabled ? "0" : String(addForm.qty_luom ?? "")}
@@ -970,8 +975,8 @@ setPutawayForm({ site_from: "", site_to: "", location_from: "", location_code: "
               <label className="field">
                 <span className="text-xs font-medium text-muted-foreground">Total Quantity</span>
                 <div className="relative flex h-8 overflow-hidden rounded-md border bg-muted/40">
-                  <input type="number" readOnly
-                    className="min-w-0 flex-1 border-0 bg-transparent px-2 text-sm font-semibold text-foreground outline-none"
+                  <input style={{paddingBottom: '8px'}} type="number" readOnly
+                    className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm font-semibold text-foreground outline-none"
                     value={String(addForm.quantity ?? 0)} />
                   {(lUom || pUom) && <span className="flex items-center border-l bg-muted/60 px-2 text-xs font-semibold text-muted-foreground">{lUom || pUom}</span>}
                 </div>
@@ -1217,14 +1222,23 @@ setPutawayForm({ site_from: "", site_to: "", location_from: "", location_code: "
                 </div>
               ) : (
                 <div className="grid gap-4">
-                  <div className="rounded-md border bg-muted/30 p-3 grid grid-cols-2 gap-3 text-sm">
-                    {(["prod_name", "batch_no", "lot_no", "po_no", "doc_ref"] as const).map((k) => (
-                      <div key={k}>
-                        <span className="block text-xs text-muted-foreground capitalize">{k.replace("_", " ")}</span>
-                        <span className="font-medium">{String(editForm[k] ?? "-")}</span>
-                      </div>
-                    ))}
+              <div className="rounded-md border bg-muted/30 p-3 grid grid-cols-2 gap-3 text-sm">
+                {(["prod_name", "batch_no", "lot_no", "po_no", "doc_ref"] as const).map((k) => (
+                  <div key={k}>
+                    <span className="block text-xs text-muted-foreground capitalize">{k.replace("_", " ")}</span>
+                    <span className="font-medium">{String(editForm[k] ?? "-")}</span>
                   </div>
+                ))}
+                {Number(editForm.qty_puom ?? 0) > 0 && (
+                  <div className="col-span-2 mt-1 flex items-center gap-2 rounded-md bg-primary/8 border border-primary/20 px-3 py-1.5">
+                    <span className="text-xs text-muted-foreground">Expected Qty (Packed):</span>
+                    <span className="font-semibold text-primary">
+                      {Number(editForm.qty_puom)}
+                      {editForm.p_uom ? ` ${String(editForm.p_uom)}` : ""}
+                    </span>
+                  </div>
+                )}
+              </div>
                   <div className="grid grid-cols-2 gap-3">
                     <label className="field">
                       <span className="text-xs font-medium text-muted-foreground">Quantity (Primary) <strong className="text-destructive">*</strong></span>
