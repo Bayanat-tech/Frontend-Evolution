@@ -18,7 +18,6 @@ import { ExpenseTypePage } from "../pages/finance/ExpenseTypePage";
 import { FinanceUtilityMasterPage, financeUtilityConfigs } from "../pages/finance/FinanceUtilityMasterPage";
 // import { JournalVoucherPage } from "../pages/finance/JournalVoucherPage";
 import { PaymentDocumentPage } from "../pages/finance/PaymentDocumentPage";
-import { PLSetupPage } from "../pages/finance/PLSetupPage";
 import { PrepaidRegisterPage } from "../pages/finance/PrepaidRegisterPage";
 import { WmsInboundPage } from "../pages/wms/inbound/WmsInboundPage";
 import { WmsOutboundPage } from "../pages/wms/outbound/WmsOutboundPage";
@@ -69,16 +68,21 @@ import { StockTransferViewPage } from "../pages/wms/stock transfer/GetStockTrans
 import ProfitLossPage from "../pages/accounts_report/ProfitLossPage";
 import VisaExpiryListingPage from "../pages/hr/Reports/Visaexpirylistingpage";
 import Dnsummaryreportpage from "../pages/wms/Reports/Dnsummaryreportpage";
+import StockSummaryReportPage from "../pages/wms/Reports/StockSummaryReportPage";
 import { RJVDocumentEditor } from "../pages/finance/RJVDocuments";
 import { AlmsSimpleMasterConfigs } from "../pages/almswf/almsMasterConfig";
 import { AlmsSimpleMasterPage } from "../pages/almswf/AlmsMasterPage";
 import TransactionReportPage from "../pages/wms/Stock_Reports/Transaction_report";
 import TaxReportFilter from "../pages/accounts_report/tax_report/TaxReport";
 import JobListingReport from "../pages/wms/stock transfer/JobListingReport";
+import PLSetupPage from "../pages/finance/PLSetupPage";
 import StockDetailReport from "../pages/wms_report/StockDetailReport";
 import StockAdjustmentPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
 import { VendorWorkspacePage } from "../pages/vendor/VendorWorkspacePage";
 import { isVendorRouteText } from "../pages/vendor/vendorRoutes";
+import { StockAdjViewPage } from "../pages/wms/stock adjustment/StockAdjustmentViewPage";
+import StockAdjPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
+import {StorageComputationPage} from "../pages/wms/storage computation/StorageComputation";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -139,7 +143,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   element: () => <AC_StatementPage />,
 },
 
-
+{
+  name: "Storage Computation",
+  match: ({ pathname }) => isStorageComputationRoute(pathname),
+  element: () => <StorageComputationPage />,
+},
 {
   name: "Finance Outstanding Statement",
   match: ({ pathname }) => isOutstandingStatementRoute(pathname),
@@ -195,10 +203,15 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isStockTransferRoute(pathname),
     element: () => <StockTransferPage />,
   },
+  {
+  name: "Stock Adjustment View",
+  match: ({ pathname }) => isStockAdjViewRoute(pathname),
+  element: () => <StockAdjViewPage />,
+},
 {
   name: "Stock Adjustment",
   match: ({ pathname }) => isStockAdjustmentRoute(pathname),
-  element: () => <StockAdjustmentPage />,
+  element: () => <StockAdjPage />,
 },
   {
     name: "WMS Stock Transaction Report",
@@ -315,7 +328,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isWmsBillingActRoute(pathname),
     element: () => <WmsBillingActPage />,
   },
-     {
+  {
+    name: "WMS Stock Summary Report",
+    match: ({ pathname }) => isStockSummaryRoute(pathname),
+    element: () => <StockSummaryReportPage />,
+  },
+  {
     name: "WMS Stock Report Job Listing",
     match: ({ pathname }) => isJobListingRoute(pathname),
     element: () => <JobListingReport />,
@@ -589,6 +607,17 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
 ];
 
+function isStorageComputationRoute(pathname: string) {
+  return pathname.toLowerCase().includes("wms/activity/request/storage_computation");
+}
+
+function isStockAdjViewRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.includes("wms/activity/request/stock_adj") &&
+    normalized.includes("/view/")
+  );
+}
 function isBankMasterRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return (
@@ -838,7 +867,30 @@ function isStockTransferViewRoute(pathname: string) {
 
 function isJobListingRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  return (normalized.includes("/wms/reports/stock%20report/job_listing") || normalized.includes("/wms/reports/stock-report/job_listing") || normalized.includes("/wms/reports/stock-report/job-listing"));
+  return (
+    normalized.includes("/wms/reports/stock%20report/job_listing") ||
+    normalized.includes("/wms/reports/stock-report/job_listing") ||
+    normalized.includes("/wms/reports/stock-report/job-listing")
+  );
+}
+function isStockSummaryRoute(pathname: string) {  
+  const normalized = pathname.toLowerCase();
+  const stockReportPath =
+    normalized.includes("/wms/wms/reports/stock%20report/") ||
+    normalized.includes("/wms/wms/reports/stock_report/") ||
+    normalized.includes("/wms/wms/reports/stock-report/") ||
+    normalized.includes("/wms/wms/reports/stockreport/") ||
+    normalized.includes("/wms/reports/stock%20report/") ||
+    normalized.includes("/wms/reports/stock_report/") ||
+    normalized.includes("/wms/reports/stock-report/") ||
+    normalized.includes("/wms/reports/stockreport/");
+
+  const stockSummarySegment =
+    normalized.includes("/stock_summary") ||
+    normalized.includes("/stock-summary") ||
+    normalized.includes("/stock_detail");
+
+  return stockReportPath && stockSummarySegment;
 }
 function isAssetDepreciationRoute(pathname: string) {
   return pathname.toLowerCase().includes("/finance/a/c_others/assets/asset_depreciation");
