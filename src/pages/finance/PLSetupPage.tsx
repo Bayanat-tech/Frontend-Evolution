@@ -324,7 +324,7 @@ const PLSetupPage: React.FC = () => {
           </div>
 
           {/* Table */}
-          <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 360, overflowY: "auto" }}>
+          <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 440, overflowY: "auto" }}>
             <table>
               <thead>
                 <tr>
