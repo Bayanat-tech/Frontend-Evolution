@@ -27,7 +27,7 @@ export function vendorRequestSql(companyCode: string, loginid: string, action: s
       SELECT DOC_NO, DOC_DATE, REF_DOC_NO, INVOICE_NUMBER, INVOICE_DATE, REMARKS, LAST_ACTION, REJECT_HISTORY
       FROM VW_TR_AC_LPO_HEADER_REJECTED
       WHERE COMPANY_CODE = '${company}'
-        AND FUN_CHECK_VENDOR_DOC_NO('${user}', DOC_NO) = 'YES'
+        AND AC_CODE = '${user}'
       ORDER BY DOC_NO DESC
     `;
   }
@@ -37,7 +37,7 @@ export function vendorRequestSql(companyCode: string, loginid: string, action: s
       FROM VW_TR_AC_LPO_HEADER_CLOSED
       WHERE COMPANY_CODE = '${company}'
         AND FINAL_APPROVED = 'YES'
-        AND FUN_CHECK_VENDOR_DOC_NO('${user}', DOC_NO) = 'YES'
+        AND AC_CODE = '${user}'
       ORDER BY DOC_NO DESC
     `;
   }
@@ -89,7 +89,7 @@ export function vendorApprovalSql(companyCode: string, loginid: string, actions:
       SELECT H.*,
         (SELECT AMOUNT FROM VW_VENDOR_AMOUNT K WHERE K.COMPANY_CODE = H.COMPANY_CODE AND K.DOC_NO = H.DOC_NO) AS AMOUNT
       FROM VW_TR_AC_LPO_HEADER_REJECTED H
-      WHERE FUN_CHECK_VENDOR_DOC_NO('${user}', H.DOC_NO) = 'YES'
+      WHERE 1 = 1
         ${companyFilter}
       ORDER BY H.DOC_NO DESC
     `;
@@ -128,7 +128,7 @@ export function vendorSentBackSql(companyCode: string, loginid = "") {
       (SELECT AMOUNT FROM VW_VENDOR_AMOUNT K WHERE K.COMPANY_CODE = H.COMPANY_CODE AND K.DOC_NO = H.DOC_NO) AS AMOUNT
     FROM VW_TR_AC_LPO_HEADER_SENTBACK H
     WHERE COMPANY_CODE = '${escapeSql(companyCode)}'
-      ${loginid ? `AND FUN_CHECK_VENDOR_DOC_NO('${escapeSql(loginid)}', H.DOC_NO) = 'YES'` : ""}
+      ${loginid ? `AND H.AC_CODE = '${escapeSql(loginid)}'` : ""}
     ORDER BY H.DOC_NO DESC
   `;
 }
@@ -140,7 +140,7 @@ export function vendorClosedSql(companyCode: string, loginid = "") {
     FROM VW_TR_AC_LPO_HEADER_CLOSED H
     WHERE H.COMPANY_CODE = '${escapeSql(companyCode)}'
       AND H.FINAL_APPROVED = 'YES'
-      ${loginid ? `AND FUN_CHECK_VENDOR_DOC_NO('${escapeSql(loginid)}', H.DOC_NO) = 'YES'` : ""}
+      ${loginid ? `AND H.AC_CODE = '${escapeSql(loginid)}'` : ""}
     ORDER BY H.DOC_NO DESC
   `;
 }
