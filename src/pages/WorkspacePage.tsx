@@ -58,6 +58,7 @@ import type { MenuNode } from "../types/auth";
 import { cleanPath, flattenLeaves, titleCase } from "../utils/menu";
 import { resolveWorkspaceRoute } from "../routes/workspaceRoutes";
 import { cn } from "../lib/utils";
+import { SupportChatWidget } from "../components/SupportChatWidget";
 
 export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => void }) {
   const { appCode } = useParams();
@@ -106,6 +107,9 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   }, [isMobile, mobileMenuOpen]);
 
   const workspaceRoute = resolveWorkspaceRoute({ pathname: location.pathname, activeApp });
+  const supportAdminEnabled =
+    location.pathname.toLowerCase().includes("/security") ||
+    String(user?.loginid || user?.username || "").toUpperCase().includes("ADMIN");
   const displayCollapsed = isMobile ? false : collapsed;
   const toggleSidebar = () => {
     if (isMobile) {
@@ -192,6 +196,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
             <button className="icon-button" onClick={onToggleTheme} title={dark ? "Light mode" : "Dark mode"}>
               {dark ? <Sun size={17} /> : <Moon size={17} />}
             </button>
+            <SupportChatWidget adminEnabled={supportAdminEnabled} />
             <div className="header-user compact">
               <div className="avatar">{(user?.username || user?.loginid || "U").slice(0, 2).toUpperCase()}</div>
               <div>
