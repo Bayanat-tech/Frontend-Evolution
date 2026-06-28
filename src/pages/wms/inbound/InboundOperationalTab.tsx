@@ -177,7 +177,7 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
     });
 
     // ── putaway form + debounced location validation ─────────────────────────
-    const [putawayForm, setPutawayForm] = useState({ site_from: "", location_code: "" });
+const [putawayForm, setPutawayForm] = useState({ site_from: "", site_to: "", location_from: "", location_code: "", location_to: "" });
     const debouncedLocation = useDebounce(putawayForm.location_code, 500);
     const [locationValid, setLocationValid] = useState<boolean | null>(null);
     const [locationError, setLocationError] = useState<string>("");
@@ -466,8 +466,12 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
       }
     }, [tab, jobNo, prinCode, loadingJob, companyCode]);
 
-    useEffect(() => { void loadRows(); }, [loadRows]);
 
+useEffect(() => {
+  if (!loadingJob && !processOpen) {
+    void loadRows();
+  }
+}, [tab, jobNo, prinCode, loadingJob, processOpen]);
     // ── received qty helpers ─────────────────────────────────────────────────
     const parseLeadingNumber = (v: unknown): number => {
       if (v === null || v === undefined || v === "") return 0;
@@ -483,27 +487,30 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
     };
 
     // ── guard ────────────────────────────────────────────────────────────────
-    useImperativeHandle(ref, () => ({
-      validateBeforeLeave: () => {
-        if (tab !== "receiving_details") return true;
-        const pending = rows.find((r) => getReceivedQty(r) <= 0);
-        if (!pending) return true;
-        toast.error("Please enter receiving quantity before continuing.");
-        setEditForm({
-          packdet_no:   value(pending, "packdet_no"),
-          prod_name:    value(pending, "prod_name"),
-          batch_no:     value(pending, "batch_no"),
-          lot_no:       value(pending, "lot_no"),
-          po_no:        value(pending, "po_no"),
-          doc_ref:      value(pending, "doc_ref"),
-          qty_luom:     Number(value(pending, "qty_luom") ?? 0),
-          qty1_arrived: getReceivedQty(pending),
-          qty2_arrived: 0,
-        });
-        setEditOpen(true);
-        return false;
-      },
-    }), [tab, rows, toast]);
+useImperativeHandle(ref, () => ({
+  validateBeforeLeave: () => {
+    if (tab !== "receiving_details") return true;
+    const pending = rows.find((r) => getReceivedQty(r) <= 0);
+    if (!pending) return true;
+    toast.error("Please enter receiving quantity before continuing.");
+    setEditForm({
+      packdet_no:   value(pending, "packdet_no"),
+      prod_name:    value(pending, "prod_name"),
+      batch_no:     value(pending, "batch_no"),
+      lot_no:       value(pending, "lot_no"),
+      po_no:        value(pending, "po_no"),
+      doc_ref:      value(pending, "doc_ref"),
+      qty_luom:     Number(value(pending, "qty_luom") ?? 0),
+      qty_puom:     Number(value(pending, "qty_puom") ?? 0),         // ← add
+      p_uom:        String(value(pending, "p_uom") || value(pending, "puom") || ""), // ← add
+      qty1_arrived: getReceivedQty(pending),
+      qty2_arrived: 0,
+    });
+    setEditOpen(true);
+    return false;
+  },
+}), [tab, rows, toast]);
+
 
     // ── open modals ──────────────────────────────────────────────────────────
     const openAddModal = () => {
@@ -523,7 +530,7 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
           label: `${r["SITE_CODE"] ?? r["site_code"]} - ${r["SITE_NAME"] ?? r["site_name"]}`,
         })));
       } catch { /* ignore */ }
-      setPutawayForm({ site_from: "", location_code: "" });
+setPutawayForm({ site_from: "", site_to: "", location_from: "", location_code: "", location_to: "" });
       setLocationFromOptions([]); setLocationToOptions([]);
       setModalNotice(null); setProcessOpen(true);
     };
@@ -624,6 +631,33 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
             prod_name: addForm.prod_name || "", quantity,
             packdet_no: addForm.packdet_no ?? null,
             pda_quantity: quantity, job_no: jobNo, prin_code: prinCode,
+          });
+} else if (tab === "packing_details") {
+          await postWmsInbound(config.addEndpoint, {
+            prod_code:      addForm.prod_code,
+            company_code:   companyCode,
+            qty_puom:       addForm.qty_puom,
+            p_uom:          String(addForm.p_uom  || ""),
+            l_uom:          String(addForm.l_uom  || ""),
+            qty_luom:       Number(addForm.qty_luom  ?? 0),
+            quantity:       Number(addForm.quantity  ?? 0),
+            batch_no:       addForm.batch_no       || "",
+            lot_no:         addForm.lot_no         || "",
+            mfg_date:       addForm.mfg_date       || null,
+            exp_date:       addForm.exp_date       || null,
+            po_no:          addForm.po_no          || null,
+            origin_country: addForm.origin_country || "",
+            manu_code:      "",
+            gross_weight:   null,
+            volume:         null,
+            shelf_life_days: addForm.shelf_life_days || null,
+            shelf_life_date: addForm.shelf_life_date || null,
+            container_no:   addForm.container_no   || "",
+            bl_no:          addForm.bl_no          || "",
+            doc_ref:        addForm.doc_ref        || "",
+            uppp:           Number(addForm.uppp    ?? 1),
+            job_no:         jobNo,
+            prin_code:      prinCode,
           });
         } else {
           await postWmsInbound(config.addEndpoint, {
@@ -730,14 +764,16 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
         ? (row: any) => {
             if (tab === "packing_details") {
               setEditForm({ ...row, uom_count: Number(row.uom_count ?? 1), uppp: Number(row.uppp ?? 1), qty_puom: Number(row.qty_puom ?? 0), qty_luom: Number(row.qty_luom ?? 0), quantity: Number(row.quantity ?? 0) });
-            } else {
-              setEditForm({
-                packdet_no: row.packdet_no, prod_name: row.prod_name,
-                batch_no: row.batch_no, lot_no: row.lot_no, po_no: row.po_no, doc_ref: row.doc_ref,
-                qty_luom: Number(row.qty_luom ?? 0),
-                qty1_arrived: getReceivedQty(row), qty2_arrived: Number(row.qty2_arrived ?? 0),
-              });
-            }
+                } else {
+                  setEditForm({
+                    packdet_no: row.packdet_no, prod_name: row.prod_name,
+                    batch_no: row.batch_no, lot_no: row.lot_no, po_no: row.po_no, doc_ref: row.doc_ref,
+                    qty_luom: Number(row.qty_luom ?? 0),
+                    qty_puom: Number(row.qty_puom ?? 0),          // ← packed/expected qty
+                    p_uom: String(row.p_uom || row.puom || ""),   // ← UOM for display
+                    qty1_arrived: getReceivedQty(row), qty2_arrived: Number(row.qty2_arrived ?? 0),
+                  });
+                }
             setEditOpen(true);
           }
         : undefined,
@@ -854,35 +890,39 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
 
     // ── packing details sections ─────────────────────────────────────────────
     const renderPackingDetailsSections = () => {
-      // Explicit cast to LookupProps — safe because we know these keys exist in the switch
-      const containerLp    = getLookupProps({ name: "container_no", lookup: "container"    } as any) as LookupProps;
-      const productLp      = getLookupProps({ name: "prod_code",    lookup: "product"      } as any) as LookupProps;
+      const containerLp = getLookupProps({ name: "container_no", lookup: "container" } as any) as LookupProps;
+      const productLp   = getLookupProps({ name: "prod_code",    lookup: "product"   } as any) as LookupProps;
       const manufacturerLp = getLookupProps({ name: "manufacturer", lookup: "manufacturer" } as any) as LookupProps;
 
-      const pUom      = String(addForm.p_uom     || "");
-      const lUom      = String(addForm.l_uom      || "");
-      const uomCount  = Number(addForm.uom_count  ?? 1);
-      const uppp      = Number(addForm.uppp       ?? 1);
+      const pUom      = String(addForm.p_uom    || "");
+      const lUom      = String(addForm.l_uom    || "");
+      const uomCount  = Number(addForm.uom_count ?? 1);
+      const uppp      = Number(addForm.uppp      ?? 1);
       const lDisabled = uomCount <= 1;
       const uomSummary = pUom
         ? `${pUom}${uppp > 1 ? ` × ${uppp}` : ""}${!lDisabled && lUom ? ` + ${lUom}` : ""}`
         : "—";
       const prodNameStr = String(addForm.prod_name || "");
 
-      return (
-        <div className="grid gap-5">
+      // Shared section header — identical styling to before
+      const SH = ({ icon: Icon, eyebrow, title }: { icon: any; eyebrow: string; title: string }) => (
+        <div className="flex items-center gap-2 border-b px-3 py-1.5">
+          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><Icon size={14} /></div>
+          <div>
+            <p className="m-0 text-[9px] font-bold uppercase tracking-widest text-primary">{eyebrow}</p>
+            <p className="m-0 text-xs font-semibold text-foreground leading-tight">{title}</p>
+          </div>
+        </div>
+      );
 
-          {/* Section 1: Container & Product */}
-          <section className="rounded-md border bg-card shadow-sm">
-            <div className="flex items-center gap-2.5 border-b px-3 py-2">
-              <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary"><Package size={16} /></div>
-              <div>
-                <p className="eyebrow m-0 text-[10px] font-bold uppercase tracking-widest text-primary">Packing Information</p>
-                <h3 className="m-0 text-sm font-semibold text-foreground">Container &amp; Product</h3>
-              </div>
-            </div>
-            <div className="grid gap-3 p-3 md:grid-cols-2">
-              {/* Container No */}
+      return (
+        // 2-column grid of sections — each section is self-contained with its own border/bg
+        <div className="grid grid-cols-2 gap-3">
+
+          {/* ── Section 1: Container & Product (full width) ── */}
+          <section className="col-span-2 rounded-md border bg-card shadow-sm">
+            <SH icon={Package} eyebrow="Packing Information" title="Container & Product" />
+            <div className="grid grid-cols-2 gap-2.5 p-2.5">
               <label className="field">
                 <span className="text-xs font-medium text-muted-foreground">Container No <strong className="text-destructive">*</strong></span>
                 <LookupField label="Container No" compact
@@ -890,7 +930,6 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
                   valueField={containerLp.valueField} displayFields={containerLp.displayFields}
                   columns={containerLp.columns} loadOptions={containerLp.loadOptions} onChange={containerLp.onChange} />
               </label>
-              {/* Product / SKU — always shown, not conditionally */}
               <label className="field">
                 <span className="text-xs font-medium text-muted-foreground">Product / SKU <strong className="text-destructive">*</strong></span>
                 <LookupField label="Product / SKU" compact
@@ -899,117 +938,95 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
                   valueField={productLp.valueField} displayFields={productLp.displayFields}
                   columns={productLp.columns} loadOptions={productLp.loadOptions} onChange={productLp.onChange} />
               </label>
-
             </div>
           </section>
 
-          {/* Section 2: Quantity & UOM */}
+          {/* ── Section 2: Quantity & UOM ── */}
           <section className="rounded-md border bg-card shadow-sm">
-            <div className="flex items-center gap-2.5 border-b px-3 py-2">
-              <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary"><Hash size={16} /></div>
-              <div>
-                <p className="eyebrow m-0 text-[10px] font-bold uppercase tracking-widest text-primary">Quantity &amp; UOM</p>
-                <h3 className="m-0 text-sm font-semibold text-foreground">Primary, Lowest &amp; Total</h3>
-              </div>
-            </div>
-            <div className="grid gap-3 p-3 md:grid-cols-4">
+            <SH icon={Hash} eyebrow="Quantity & UOM" title="Primary, Lowest & Total" />
+            <div className="grid grid-cols-2 gap-x-2.5 gap-y-2 p-2.5">
               {/* Primary Qty */}
               <label className="field">
-                <span className="text-xs font-medium text-muted-foreground">Quantity (Primary) <strong className="text-destructive">*</strong></span>
-                <div className="relative flex h-9 overflow-hidden rounded-md border bg-background focus-within:ring-2 focus-within:ring-primary/40">
-                  <input type="number" min="0" placeholder="0"
-                    className="min-w-0 flex-1 border-0 bg-transparent px-3 text-sm outline-none"
+                <span className="text-xs font-medium text-muted-foreground">Qty (Primary) <strong className="text-destructive">*</strong></span>
+                <div className="relative flex h-8 overflow-hidden rounded-md border bg-background focus-within:ring-2 focus-within:ring-primary/40">
+                  <input style={{paddingBottom: '8px'}} type="number" min="0" placeholder="0"
+                    className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm outline-none"
                     value={String(addForm.qty_puom ?? "")}
                     onChange={(e) => setAddForm((c) => ({ ...c, ...recalcQuantity(c, "qty_puom", e.target.value) }))} />
-                  {pUom && <span className="flex items-center border-l bg-muted/50 px-2.5 text-xs font-semibold text-muted-foreground">{pUom}</span>}
+                  {pUom && <span className="flex items-center border-l bg-muted/50 px-2 text-xs font-semibold text-muted-foreground">{pUom}</span>}
                 </div>
               </label>
               {/* Lowest Qty */}
               <label className="field">
                 <span className="text-xs font-medium text-muted-foreground">
-                  Quantity (Lowest){!lDisabled && <strong className="text-destructive"> *</strong>}
+                  Qty (Lowest){!lDisabled && <strong className="text-destructive"> *</strong>}
                 </span>
-                <div className={`relative flex h-9 overflow-hidden rounded-md border bg-background focus-within:ring-2 focus-within:ring-primary/40 ${lDisabled ? "opacity-50" : ""}`}>
-                  <input type="number" min="0" disabled={lDisabled}
-                    className="min-w-0 flex-1 border-0 bg-transparent px-3 text-sm outline-none disabled:cursor-not-allowed"
+                <div className={`relative flex h-8 overflow-hidden rounded-md border bg-background focus-within:ring-2 focus-within:ring-primary/40 ${lDisabled ? "opacity-50" : ""}`}>
+                  <input style={{paddingBottom: '8px'}} type="number" min="0" disabled={lDisabled}
+                    className="min-w-0 flex-1 border-0 bg-transparent px-2 text-sm outline-none disabled:cursor-not-allowed"
                     placeholder={lDisabled ? "Same UOM" : "0"}
                     value={lDisabled ? "0" : String(addForm.qty_luom ?? "")}
                     onChange={(e) => { if (!lDisabled) setAddForm((c) => ({ ...c, ...recalcQuantity(c, "qty_luom", e.target.value) })); }} />
-                  {lUom && <span className="flex items-center border-l bg-muted/50 px-2.5 text-xs font-semibold text-muted-foreground">{lUom}</span>}
+                  {lUom && <span className="flex items-center border-l bg-muted/50 px-2 text-xs font-semibold text-muted-foreground">{lUom}</span>}
                 </div>
-                {lDisabled && pUom && <p className="mt-0.5 text-[10px] text-muted-foreground">P UOM and L UOM are both {pUom}</p>}
+                {lDisabled && pUom && <p className="mt-0.5 text-[10px] text-muted-foreground">P &amp; L UOM both {pUom}</p>}
               </label>
               {/* Total Qty */}
               <label className="field">
                 <span className="text-xs font-medium text-muted-foreground">Total Quantity</span>
-                <div className="relative flex h-9 overflow-hidden rounded-md border bg-muted/40">
-                  <input type="number" readOnly
-                    className="min-w-0 flex-1 border-0 bg-transparent px-3 text-sm font-semibold text-foreground outline-none"
+                <div className="relative flex h-8 overflow-hidden rounded-md border bg-muted/40">
+                  <input style={{paddingBottom: '8px'}} type="number" readOnly
+                    className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm font-semibold text-foreground outline-none"
                     value={String(addForm.quantity ?? 0)} />
-                  {(lUom || pUom) && <span className="flex items-center border-l bg-muted/60 px-2.5 text-xs font-semibold text-muted-foreground">{lUom || pUom}</span>}
+                  {(lUom || pUom) && <span className="flex items-center border-l bg-muted/60 px-2 text-xs font-semibold text-muted-foreground">{lUom || pUom}</span>}
                 </div>
               </label>
               {/* UOM Details */}
               <label className="field">
                 <span className="text-xs font-medium text-muted-foreground">UOM Details</span>
-                <Input readOnly className="bg-muted/40 font-mono text-xs text-muted-foreground" value={uomSummary} />
+                <Input readOnly className="h-8 bg-muted/40 font-mono text-xs text-muted-foreground" value={uomSummary} />
               </label>
             </div>
           </section>
 
-          {/* Section 3: References */}
+          {/* ── Section 3: References ── */}
           <section className="rounded-md border bg-card shadow-sm">
-            <div className="flex items-center gap-2.5 border-b px-3 py-2">
-              <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={16} /></div>
-              <div>
-                <p className="eyebrow m-0 text-[10px] font-bold uppercase tracking-widest text-primary">References</p>
-                <h3 className="m-0 text-sm font-semibold text-foreground">Batch, Lot &amp; Order References</h3>
-              </div>
-            </div>
-            <div className="grid gap-3 p-3 md:grid-cols-4">
+            <SH icon={FileText} eyebrow="References" title="Batch, Lot & Order References" />
+            <div className="grid grid-cols-3 gap-2.5 p-2.5">
               <label className="field"><span className="text-xs font-medium text-muted-foreground">Batch No</span>
-                <Input value={String(addForm.batch_no || "")} onChange={(e) => setAddForm((c) => ({ ...c, batch_no: e.target.value }))} /></label>
+                <Input className="h-8" value={String(addForm.batch_no || "")} onChange={(e) => setAddForm((c) => ({ ...c, batch_no: e.target.value }))} /></label>
               <label className="field"><span className="text-xs font-medium text-muted-foreground">Lot No</span>
-                <Input value={String(addForm.lot_no || "")} onChange={(e) => setAddForm((c) => ({ ...c, lot_no: e.target.value }))} /></label>
+                <Input className="h-8" value={String(addForm.lot_no || "")} onChange={(e) => setAddForm((c) => ({ ...c, lot_no: e.target.value }))} /></label>
               <label className="field"><span className="text-xs font-medium text-muted-foreground">PO No</span>
-                <Input readOnly className="bg-muted/40 text-muted-foreground" title="Auto-filled from container" value={String(addForm.po_no || "")} /></label>
+                <Input className="h-8" value={String(addForm.po_no || "")} onChange={(e) => setAddForm((c) => ({ ...c, po_no: e.target.value }))} /></label>
               <label className="field"><span className="text-xs font-medium text-muted-foreground">BL No</span>
-                <Input value={String(addForm.bl_no || "")} onChange={(e) => setAddForm((c) => ({ ...c, bl_no: e.target.value }))} /></label>
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">Doc Ref</span>
-                <Input value={String(addForm.doc_ref || "")} onChange={(e) => setAddForm((c) => ({ ...c, doc_ref: e.target.value }))} /></label>
-              <label className="field md:col-span-3"><span className="text-xs font-medium text-muted-foreground">Manufacturer</span>
-                <LookupField label="Manufacturer" compact
-                  value={String(addForm.manufacturer || "")}
-                  displayValue={String(addForm.manufacturer_display || addForm.manufacturer || "")}
-                  valueField={manufacturerLp.valueField} displayFields={manufacturerLp.displayFields}
-                  columns={manufacturerLp.columns} loadOptions={manufacturerLp.loadOptions} onChange={manufacturerLp.onChange} /></label>
+                <Input className="h-8" value={String(addForm.bl_no || "")} onChange={(e) => setAddForm((c) => ({ ...c, bl_no: e.target.value }))} /></label>
+              <label className="field col-span-2"><span className="text-xs font-medium text-muted-foreground">Doc Ref</span>
+                <Input className="h-8" value={String(addForm.doc_ref || "")} onChange={(e) => setAddForm((c) => ({ ...c, doc_ref: e.target.value }))} /></label>
             </div>
           </section>
 
-          {/* Section 4: Dates & Shelf Life */}
-          <section className="rounded-md border bg-card shadow-sm">
-            <div className="flex items-center gap-2.5 border-b px-3 py-2">
-              <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary"><CalendarDays size={16} /></div>
-              <div>
-                <p className="eyebrow m-0 text-[10px] font-bold uppercase tracking-widest text-primary">Dates &amp; Shelf Life</p>
-                <h3 className="m-0 text-sm font-semibold text-foreground">Production, Expiry &amp; Shelf Life</h3>
-              </div>
-            </div>
-            <div className="grid gap-3 p-3 md:grid-cols-4">
+
+          {/* ── Section 4: Dates & Shelf Life (full width) ── */}
+          <section className="col-span-2 rounded-md border bg-card shadow-sm">
+            <SH icon={CalendarDays} eyebrow="Dates & Shelf Life" title="Production, Expiry & Shelf Life" />
+            <div className="grid grid-cols-4 gap-2.5 px-2.5 py-2">
               <label className="field"><span className="text-xs font-medium text-muted-foreground">Production Date</span>
-                <Input type="date" value={String(addForm.mfg_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, mfg_date: e.target.value }))} /></label>
+                <Input className="h-8" type="date" value={String(addForm.mfg_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, mfg_date: e.target.value }))} /></label>
               <label className="field"><span className="text-xs font-medium text-muted-foreground">Expiry Date</span>
-                <Input type="date" value={String(addForm.exp_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, exp_date: e.target.value }))} /></label>
+                <Input className="h-8" type="date" value={String(addForm.exp_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, exp_date: e.target.value }))} /></label>
               <label className="field"><span className="text-xs font-medium text-muted-foreground">Shelf Life (Date)</span>
-                <Input type="date" value={String(addForm.shelf_life_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, shelf_life_date: e.target.value }))} /></label>
+                <Input className="h-8" type="date" value={String(addForm.shelf_life_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, shelf_life_date: e.target.value }))} /></label>
               <label className="field"><span className="text-xs font-medium text-muted-foreground">Shelf Life Days</span>
-                <Input type="number" min="0" value={String(addForm.shelf_life_days ?? "")} onChange={(e) => setAddForm((c) => ({ ...c, shelf_life_days: e.target.value }))} /></label>
+                <Input className="h-8" type="number" min="0" value={String(addForm.shelf_life_days ?? "")} onChange={(e) => setAddForm((c) => ({ ...c, shelf_life_days: e.target.value }))} /></label>
             </div>
+
           </section>
 
         </div>
       );
     };
+
 
     // ── manual putaway sections ──────────────────────────────────────────────
     const renderManualPutawaySections = () => {
@@ -1205,14 +1222,23 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
                 </div>
               ) : (
                 <div className="grid gap-4">
-                  <div className="rounded-md border bg-muted/30 p-3 grid grid-cols-2 gap-3 text-sm">
-                    {(["prod_name", "batch_no", "lot_no", "po_no", "doc_ref"] as const).map((k) => (
-                      <div key={k}>
-                        <span className="block text-xs text-muted-foreground capitalize">{k.replace("_", " ")}</span>
-                        <span className="font-medium">{String(editForm[k] ?? "-")}</span>
-                      </div>
-                    ))}
+              <div className="rounded-md border bg-muted/30 p-3 grid grid-cols-2 gap-3 text-sm">
+                {(["prod_name", "batch_no", "lot_no", "po_no", "doc_ref"] as const).map((k) => (
+                  <div key={k}>
+                    <span className="block text-xs text-muted-foreground capitalize">{k.replace("_", " ")}</span>
+                    <span className="font-medium">{String(editForm[k] ?? "-")}</span>
                   </div>
+                ))}
+                {Number(editForm.qty_puom ?? 0) > 0 && (
+                  <div className="col-span-2 mt-1 flex items-center gap-2 rounded-md bg-primary/8 border border-primary/20 px-3 py-1.5">
+                    <span className="text-xs text-muted-foreground">Expected Qty (Packed):</span>
+                    <span className="font-semibold text-primary">
+                      {Number(editForm.qty_puom)}
+                      {editForm.p_uom ? ` ${String(editForm.p_uom)}` : ""}
+                    </span>
+                  </div>
+                )}
+              </div>
                   <div className="grid grid-cols-2 gap-3">
                     <label className="field">
                       <span className="text-xs font-medium text-muted-foreground">Quantity (Primary) <strong className="text-destructive">*</strong></span>
@@ -1288,64 +1314,169 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
         )}
 
         {/* ── Putaway Modal ── */}
-        {tab === "putway_details" && (
-          <Dialog wide open={processOpen} title="Process Putaway" description={`Selected Items: ${selectedRows.length}`}
-            onClose={() => { setProcessOpen(false); setModalNotice(null); setLocationValid(null); setLocationError(""); }}
-          >
-            <form className="grid gap-4" onSubmit={async (e) => {
-              e.preventDefault(); setModalNotice(null);
-              if (!putawayForm.site_from)    { setModalNotice("Site From is required."); return; }
-              if (!putawayForm.location_code){ setModalNotice("Location Code is required."); return; }
-              if (locationValid !== true)    { setModalNotice("Please enter a valid location code for the selected site."); return; }
-              setSaving(true);
-              try {
-                await api.put(`/api/wms/inbound/putway_details/${encodeURIComponent(jobNo)}?prin_code=${encodeURIComponent(prinCode)}`, {
-                  site_from: putawayForm.site_from, site_to: putawayForm.site_from,
-                  location_code: putawayForm.location_code,
-                  packdet_no: selectedRows.map((r) => value(r, "packdet_no")),
-                });
-                setProcessOpen(false); setModalNotice(null); setSelectedRows([]);
-                setPutawayForm({ site_from: "", location_code: "" });
-                setLocationValid(null); setLocationError("");
-                toast.success("Putaway processed successfully"); await loadRows();
-              } catch (error) {
-                const msg = error instanceof Error ? error.message : "Putaway failed";
-                setModalNotice(msg); toast.error(msg);
-              } finally { setSaving(false); }
-            }}>
-              {modalNotice && <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{modalNotice}</div>}
-              <div className="grid grid-cols-2 gap-3">
-                <label className="field">
-                  <span className="text-xs font-medium text-muted-foreground">Site From <strong className="text-destructive">*</strong></span>
-                  <Select value={putawayForm.site_from} onChange={(e) => { setPutawayForm((c) => ({ ...c, site_from: e.target.value, location_code: "" })); setLocationValid(null); setLocationError(""); }}>
-                    <option value="">— Select Site —</option>
-                    {siteOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </Select>
-                </label>
-                <label className="field">
-                  <span className="text-xs font-medium text-muted-foreground">Location Code <strong className="text-destructive">*</strong></span>
-                  <div className="relative">
-                    <Input value={putawayForm.location_code}
-                      onChange={(e) => setPutawayForm((c) => ({ ...c, location_code: e.target.value }))}
-                      placeholder="Enter location code" disabled={!putawayForm.site_from}
-                      className={locationValid === false ? "border-destructive" : locationValid === true ? "border-primary" : ""} />
-                    {locationValid === true  && <CheckCircle2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />}
-                    {locationValid === false && <X className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-destructive" />}
-                  </div>
-                  {locationError && <p className="text-xs text-destructive mt-1">{locationError}</p>}
-                </label>
-                <div className="col-span-2"><p className="text-sm text-muted-foreground">Site To will be automatically set to <strong>{putawayForm.site_from || "(none)"}</strong></p></div>
-              </div>
-              <p className="text-sm text-muted-foreground">Selected Items: {selectedRows.length}</p>
-              <div className="flex justify-end gap-2 pt-1">
-                <Button type="button" variant="outline" onClick={() => { setProcessOpen(false); setModalNotice(null); }}>Cancel</Button>
-                <Button type="submit" disabled={saving || selectedRows.length === 0 || locationValid !== true}>
-                  <Settings2 size={15} /> {saving ? "Processing..." : "Process Putaway"}
-                </Button>
-              </div>
-            </form>
-          </Dialog>
-        )}
+     {tab === "putway_details" && (
+  <Dialog wide open={processOpen} title="Process Putaway" description={`Selected Items: ${selectedRows.length}`}
+    onClose={() => { setProcessOpen(false); setModalNotice(null); }}
+  >
+    <form className="grid gap-4" onSubmit={async (e) => {
+      e.preventDefault(); setModalNotice(null);
+      if (!putawayForm.site_from)     { setModalNotice("Site From is required."); return; }
+      if (!putawayForm.location_from) { setModalNotice("Location From is required."); return; }
+      setSaving(true);
+      try {
+        await api.put(`/api/wms/inbound/putway_details/${encodeURIComponent(jobNo)}?prin_code=${encodeURIComponent(prinCode)}`, {
+          site_from:     putawayForm.site_from,
+          site_to:       putawayForm.site_from,
+          location_from: putawayForm.location_from,
+          location_to:   putawayForm.location_to || putawayForm.location_from,
+          packdet_no:    selectedRows.map((r) => value(r, "packdet_no")),
+        });
+        setProcessOpen(false); setModalNotice(null); setSelectedRows([]);
+setPutawayForm({ site_from: "", site_to: "", location_from: "", location_code: "", location_to: "" });
+        setLocationFromOptions([]); setLocationToOptions([]);
+        toast.success("Putaway processed successfully"); await loadRows();
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : "Putaway failed";
+        setModalNotice(msg); toast.error(msg);
+      } finally { setSaving(false); }
+    }}>
+      {modalNotice && <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{modalNotice}</div>}
+      <div className="grid grid-cols-2 gap-3">
+        {/* Site From */}
+        <label className="field">
+          <span className="text-xs font-medium text-muted-foreground">Site From <strong className="text-destructive">*</strong></span>
+          <div className="relative flex items-center">
+            <Select
+              value={putawayForm.site_from}
+              onChange={(e) => {
+                const site = e.target.value;
+                setPutawayForm((c) => ({ ...c, site_from: site, location_from: "", location_to: "" }));
+                setLocationFromOptions([]); setLocationToOptions([]);
+                if (site) {
+                  void loadLocations(site, "from");
+                  void loadLocations(site, "to");
+                }
+              }}
+              className="pr-7"
+            >
+              <option value="">— Select Site —</option>
+              {siteOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </Select>
+            {putawayForm.site_from && (
+              <button type="button" tabIndex={-1}
+                className="absolute right-7 top-1/2 -translate-y-1/2 flex h-4 w-4 items-center justify-center rounded-full bg-muted-foreground/20 text-muted-foreground hover:bg-muted-foreground/40"
+                onClick={() => {
+                  setPutawayForm((c) => ({ ...c, site_from: "", location_from: "", location_to: "" }));
+                  setLocationFromOptions([]); setLocationToOptions([]);
+                }}
+              >
+                <X size={10} />
+              </button>
+            )}
+          </div>
+        </label>
+
+        {/* Location From */}
+        <label className="field">
+          <span className="text-xs font-medium text-muted-foreground">Location From <strong className="text-destructive">*</strong></span>
+          <div className="relative flex items-center">
+            <Select
+              value={putawayForm.location_from}
+              disabled={!putawayForm.site_from || locationFromOptions.length === 0}
+              onChange={(e) => {
+                const loc = e.target.value;
+                setPutawayForm((c) => ({ ...c, location_from: loc, location_to: loc }));
+              }}
+              className="pr-7"
+            >
+              <option value="">— Select Location —</option>
+              {locationFromOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </Select>
+            {putawayForm.location_from && (
+              <button type="button" tabIndex={-1}
+                className="absolute right-7 top-1/2 -translate-y-1/2 flex h-4 w-4 items-center justify-center rounded-full bg-muted-foreground/20 text-muted-foreground hover:bg-muted-foreground/40"
+                onClick={() => setPutawayForm((c) => ({ ...c, location_from: "", location_to: "" }))}
+              >
+                <X size={10} />
+              </button>
+            )}
+          </div>
+        </label>
+
+        {/* Site To (read-only, mirrors Site From) */}
+        <label className="field">
+          <span className="text-xs font-medium text-muted-foreground">Site To (Auto-set to match Site From)</span>
+          <div className="relative flex items-center">
+            <Select
+              value={putawayForm.site_to || putawayForm.site_from}
+              onChange={(e) => {
+                const site = e.target.value;
+                setPutawayForm((c) => ({ ...c, site_to: site, location_to: "" }));
+                setLocationToOptions([]);
+                if (site) void loadLocations(site, "to");
+              }}
+              className="pr-7"
+            >
+              <option value="">— Select Site —</option>
+              {siteOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </Select>
+            {(putawayForm.site_to || putawayForm.site_from) && (
+              <button type="button" tabIndex={-1}
+                className="absolute right-7 top-1/2 -translate-y-1/2 flex h-4 w-4 items-center justify-center rounded-full bg-muted-foreground/20 text-muted-foreground hover:bg-muted-foreground/40"
+                onClick={() => {
+                  setPutawayForm((c) => ({ ...c, site_to: "", location_to: "" }));
+                  setLocationToOptions([]);
+                }}
+              >
+                <X size={10} />
+              </button>
+            )}
+          </div>
+        </label>
+
+
+        {/* Location To */}
+        <label className="field">
+          <span className="text-xs font-medium text-muted-foreground">Location To</span>
+          <div className="relative flex items-center">
+            <Select
+              value={putawayForm.location_to}
+              disabled={!putawayForm.site_from || locationToOptions.length === 0}
+              onChange={(e) => setPutawayForm((c) => ({ ...c, location_to: e.target.value }))}
+              className="pr-7"
+            >
+              <option value="">— Select Location —</option>
+              {locationToOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </Select>
+            {putawayForm.location_to && (
+              <button type="button" tabIndex={-1}
+                className="absolute right-7 top-1/2 -translate-y-1/2 flex h-4 w-4 items-center justify-center rounded-full bg-muted-foreground/20 text-muted-foreground hover:bg-muted-foreground/40"
+                onClick={() => setPutawayForm((c) => ({ ...c, location_to: "" }))}
+              >
+                <X size={10} />
+              </button>
+            )}
+          </div>
+        </label>
+
+        <div className="col-span-2">
+          <p className="text-sm text-[#4a90d9] italic">
+            Note: Site To defaults to match Site From. You can override it independently.
+          </p>
+        </div>
+      </div>
+
+      <p className="text-sm text-muted-foreground">Selected Items: {selectedRows.length}</p>
+      <div className="flex justify-end gap-2 pt-1">
+        <Button type="button" variant="outline" onClick={() => { setProcessOpen(false); setModalNotice(null); }}>Cancel</Button>
+        <Button type="submit" disabled={saving || selectedRows.length === 0 || !putawayForm.location_from}>
+          <Settings2 size={15} /> {saving ? "Processing..." : "Process Putaway"}
+        </Button>
+      </div>
+    </form>
+  </Dialog>
+)}
+
 
         {/* ── HHT Putaway Modal ── */}
         {isPutawayHHT && (
@@ -1448,15 +1579,17 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
             footer={
               <>
                 <Button variant="outline" onClick={() => setProcessOpen(false)}>Close</Button>
-                <Button disabled={saving} onClick={async () => {
+ <Button disabled={saving} onClick={async () => {
                   setSaving(true);
                   try {
                     await api.put(
                       `/api/wms/inbound/job_confirmation/${encodeURIComponent(jobNo)}?prin_code=${encodeURIComponent(prinCode)}`,
                       { packdet_no: selectedRows.map((r) => value(r, "packdet_no")) }
                     );
-                    setProcessOpen(false); setSelectedRows([]);
-                    toast.success("Job confirmation processed successfully"); await loadRows();
+                    setSelectedRows([]);
+                    setProcessOpen(false);
+                    toast.success("Job confirmation processed successfully");
+                    await loadRows();
                   } catch (error) {
                     const msg = error instanceof Error ? error.message : "Process failed";
                     setModalNotice(msg); toast.error(msg);

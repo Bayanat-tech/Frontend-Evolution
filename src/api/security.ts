@@ -17,6 +17,8 @@ export async function getSecurityMaster(master: string, params: SecurityMasterPa
   const firstColumnFilter = params.columnFilters?.find((item) => item.value);
   if (firstColumnFilter) {
     filter.search = { field: firstColumnFilter.field, value: firstColumnFilter.value, values: firstColumnFilter.value };
+  } else if (params.search?.trim()) {
+    filter.search = { value: params.search.trim(), values: params.search.trim() };
   }
 
   const response = await api.get(`/api/security/${master}`, {

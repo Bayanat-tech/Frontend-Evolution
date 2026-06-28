@@ -2,14 +2,8 @@
 
 import { useEffect, useState } from "react";
 import {
-    FileText,
     RotateCcw,
     Printer,
-    ChevronRight,
-    ChevronLeft,
-    ChevronsRight,
-    ChevronsLeft,
-    BarChart2,
     Loader2,
     Download,
 } from "lucide-react";
@@ -28,6 +22,9 @@ import {
     openAccountPayeeWiseReport,
     exportAccountPayeeWiseExcel,
     exportChequeDateWiseExcel,
+    openLedgerWithDetailsReport,
+    openLedgerOppositeEntryReport,
+    exportLedgerWithDetailsExcel,
 
 } from "../../../api/transactions";
 import { FloatLabelInput } from "../../../lib/InputStyle";
@@ -80,10 +77,10 @@ export default function FinanceReportFilter() {
 
     const [options, setOptions] = useState({
         // default to cheque date wise selected
-        chequeDateWise: true,
+        chequeDateWise: false,
         // chequeBookMonitoring: true,
-        // ledgerWithDetails: false,
-        // ledgerWithOppositeEntry: false,
+        ledgerWithDetails: false,
+        ledgerWithOppositeEntry: false,
         // summaryDump: false,
         // detailDump: false,
         acPayeeWise: false,
@@ -130,12 +127,11 @@ export default function FinanceReportFilter() {
         }
     };
 
-    // Make options mutually-exclusive: selecting one will deselect others.
     const toggleOption = (key: keyof typeof options) => {
         setOptions((prev) => {
             const next: Record<string, boolean> = {};
             Object.keys(prev).forEach((k) => {
-                next[k] = k === key;
+                next[k] = k === key ? !prev[key] : false;
             });
             return next as typeof prev;
         });
@@ -213,11 +209,6 @@ export default function FinanceReportFilter() {
 
     // ── generate report(s) — opens each checked option in its own tab ──────
     const handleGenerate = async () => {
-        const anyChecked = Object.values(options).some(Boolean);
-        if (!anyChecked) {
-            setReportError("Please select at least one report option.");
-            return;
-        }
         if (!division[0]?.div_code) {
             setReportError("Please select a Division before generating.");
             return;
@@ -228,36 +219,33 @@ export default function FinanceReportFilter() {
 
         const params = buildParams();
 
-        // Map each checkbox to its API function
+        const anyChecked = Object.values(options).some(Boolean);
+
         const reportMap: { key: keyof typeof options; fn: (p: any) => Promise<void>; label: string }[] = [
-            // { key: "chequeBookMonitoring", fn: openChequeMonitoringReport, label: "Cheque Book Monitoring" },
             { key: "chequeDateWise", fn: openChequeDateWiseReport, label: "Cheque Date Wise" },
-            // { key: "detailDump", fn: openDetailDumpReport, label: "Detail Dump" },
-            // { key: "ledgerWithDetails", fn: openLedgerWithDetailsReport, label: "Ledger With Details" },
-            // { key: "ledgerWithOppositeEntry", fn: openLedgerOppositeEntryReport, label: "Ledger Opposite Entry" },
-            // { key: "summaryDump", fn: openSummaryDumpReport, label: "Summary Dump" },
+            { key: "ledgerWithDetails", fn: openLedgerWithDetailsReport, label: "Ledger With Details" },
+            { key: "ledgerWithOppositeEntry", fn: openLedgerOppositeEntryReport, label: "Ledger Opposite Entry" },
             { key: "acPayeeWise", fn: openAccountPayeeWiseReport, label: "Account Payee Wise" },
         ];
 
         const errors: string[] = [];
 
-        for (const { key, fn, label } of reportMap) {
-            if (!options[key]) continue;
-            try {
-                await fn(params);
-            } catch (err: any) {
-                console.error(`${label} error:`, err);
-                errors.push(label);
-            }
-        }
-
-        // chequeDateWise — handled separately if you have a dedicated endpoint
-        // currently falls back to the cheque monitoring report
-        if (options.chequeDateWise) {
+        if (!anyChecked) {
+            // default: cheque date wise
             try {
                 await openChequeDateWiseReport({ ...params, code20: "DATE_WISE" });
             } catch (err: any) {
                 errors.push("Cheque Date Wise");
+            }
+        } else {
+            for (const { key, fn, label } of reportMap) {
+                if (!options[key]) continue;
+                try {
+                    await fn(key === "ledgerWithDetails" ? { ...params, code20: "DATE_WISE" } : params);
+                } catch (err: any) {
+                    console.error(`${label} error:`, err);
+                    errors.push(label);
+                }
             }
         }
 
@@ -276,7 +264,16 @@ export default function FinanceReportFilter() {
                 await exportChequeDateWiseExcel(
                     buildParams()
                 );
-            } else if (options.acPayeeWise) {
+            } else if (options.ledgerWithDetails) {
+                await exportLedgerWithDetailsExcel(
+                    buildParams()
+                );
+            }else if (options.ledgerWithOppositeEntry) {
+                await exportLedgerWithDetailsExcel(
+                    buildParams()
+                );
+            }
+            else if (options.acPayeeWise) {
                 await exportAccountPayeeWiseExcel(
                     buildParams()
                 );
@@ -298,12 +295,15 @@ export default function FinanceReportFilter() {
         fontSize: 11,
         background: "#185FA5",
         color: "#fff",
+        position: "sticky",
+        top: 0,
+        zIndex: 1,
     };
 
     const tdStyle: React.CSSProperties = {
         padding: "6px 10px",
         fontSize: 11,
-        borderBottom: "0.5px solid #e5e7eb",
+        borderBottom: "0.5px solid #e9e5eb",
         whiteSpace: "nowrap",
         overflow: "hidden",
         textOverflow: "ellipsis",
@@ -392,28 +392,37 @@ export default function FinanceReportFilter() {
                 }}>
                     {/* ── top filters ── */}
                     {/* ── top filters ── */}
-                    <div style={{ display: "grid", gridTemplateColumns: "4fr 1fr", gap: 12, marginBottom: 16, alignItems: "start" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
 
-                        {/* LEFT 80% */}
-                        <div style={{ display: "grid", gap: 3 }}>
+                        {/* Row 1: Parameters + Filters side by side */}
+                        <div style={{ display: "flex", gap: 10, alignItems: "stretch" }}>
 
-                            {/* Left Row 1 */}
-                            <div style={{ display: "grid", gridTemplateColumns: "200px 140px 140px 1fr 1fr", gap: 12, alignItems: "start" }}>
-                                <div>
-                                    <div style={{ position: "relative", }}>
+                            {/* Left column — Parameters stacked above Report options */}
+                            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+
+                                {/* Group 1 — Parameters */}
+                                <div style={{
+                                    display: "grid",
+                                    gridTemplateColumns: "180px 130px 130px",
+                                    gap: 10,
+                                    alignItems: "center",
+                                    padding: "10px 14px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: 8,
+                                    background: "#f9fafb",
+                                    position: "relative",
+                                }}>
+                                    <span style={{
+                                        position: "absolute", top: -9, left: 12, fontSize: 10,
+                                        color: "#185FA5", background: "#f9fafb", padding: "0 5px",
+                                        fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase",
+                                    }}>Parameters</span>
+
+                                    <div style={{ position: "relative" }}>
                                         <span style={{
-                                            position: "absolute",
-                                            top: -8,
-                                            left: 10,
-                                            fontSize: 11,
-                                            color: "#6b7280",
-                                            background: "#fff",
-                                            padding: "0 4px",
-                                            zIndex: 1,
-                                            fontFamily: "system-ui, sans-serif",
-                                        }}>
-                                            Division
-                                        </span>
+                                            position: "absolute", top: -8, left: 10, fontSize: 11,
+                                            color: "#6b7280", background: "#f9fafb", padding: "0 4px", zIndex: 1,
+                                        }}>Division</span>
                                         <div style={{ borderRadius: 6, padding: "1px 0" }}>
                                             <LookupField
                                                 label=""
@@ -431,20 +440,72 @@ export default function FinanceReportFilter() {
                                             />
                                         </div>
                                     </div>
+                                    <FloatLabelInput label="From" value={dateFrom} type="date" onChange={(e) => setDateFrom(e.target.value)} />
+                                    <FloatLabelInput label="To" value={dateTo} type="date" onChange={(e) => setDateTo(e.target.value)} />
                                 </div>
-                                <FloatLabelInput label="From" value={dateFrom} type="date" onChange={(e) => setDateFrom(e.target.value)} />
-                                <FloatLabelInput label="To" value={dateTo} type="date" onChange={(e) => setDateTo(e.target.value)} />
-                                <FloatLabelInput label="Amount from" value={amountFrom} onChange={(e) => setAmountFrom(e.target.value)} />
-                                <FloatLabelInput label="Amount to" value={amountTo} onChange={(e) => setAmountTo(e.target.value)} />
+
+                                {/* Group 3 — Report options (sits below Parameters, same width) */}
+                                <div style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 20,
+                                    padding: "8px 14px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: 8,
+                                    background: "#f9fafb",
+                                    position: "relative",
+                                }}>
+                                    <span style={{
+                                        position: "absolute", top: -9, left: 12, fontSize: 10,
+                                        color: "#185FA5", background: "#f9fafb", padding: "0 5px",
+                                        fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase",
+                                    }}>Report options</span>
+                                    {([
+                                        ["ledgerWithDetails", "Ledger With Details"],
+                                        ["ledgerWithOppositeEntry", "Ledger With Opposite Entry"],
+                                        ["acPayeeWise", "A/c payee wise"],
+                                    ] as [keyof typeof options, string][]).map(([key, label]) => (
+                                        <label key={key} style={{ ...checkRowStyle, marginBottom: 0 }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={options[key]}
+                                                onChange={() => toggleOption(key)}
+                                                style={{ accentColor: "#185FA5" }}
+                                            />
+                                            <span style={{ fontSize: 12 }}>{label}</span>
+                                        </label>
+                                    ))}
+                                    {selectedCount > 0 && <span style={{ ...badgeStyle, marginLeft: "auto" }}>{selectedCount} selected</span>}
+                                </div>
+
                             </div>
 
-                            {/* Left Row 2 */}
-                            <div style={{ display: "grid", gridTemplateColumns: "0.5fr 0.5fr", gap: 12, alignItems: "end" }}>
-                                <FloatLabelInput label="Remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
-                                <div style={{ position: "relative", marginTop: 6 }}>
+                            {/* Group 2 — Filters */}
+                            <div style={{
+                                display: "grid",
+                                gridTemplateColumns: "120px 120px 1fr",
+                                gridTemplateRows: "auto auto",
+                                gap: 10,
+                                alignItems: "center",
+                                padding: "10px 14px",
+                                border: "1px solid #d1d5db",
+                                borderRadius: 8,
+                                background: "#f9fafb",
+                                flex: 1,
+                                position: "relative",
+                            }}>
+                                <span style={{
+                                    position: "absolute", top: -9, left: 12, fontSize: 10,
+                                    color: "#185FA5", background: "#f9fafb", padding: "0 5px",
+                                    fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase",
+                                }}>Filters</span>
+
+                                <FloatLabelInput label="Amount from" value={amountFrom} onChange={(e) => setAmountFrom(e.target.value)} />
+                                <FloatLabelInput label="Amount to" value={amountTo} onChange={(e) => setAmountTo(e.target.value)} />
+                                <div style={{ position: "relative" }}>
                                     <span style={{
                                         position: "absolute", top: -8, left: 10, fontSize: 11,
-                                        color: "#6b7280", background: "#fff", padding: "0 4px", zIndex: 1,
+                                        color: "#6b7280", background: "#f9fafb", padding: "0 4px", zIndex: 1,
                                     }}>A/c payee</span>
                                     <div style={{ borderRadius: 6, padding: "1px 0" }}>
                                         <LookupField
@@ -465,37 +526,14 @@ export default function FinanceReportFilter() {
                                         />
                                     </div>
                                 </div>
-                            </div>
-                        </div>
 
-                        {/* RIGHT 20% — Report Options */}
-                        <div style={{
-                            border: "1px solid #d1d5db",
-                            borderRadius: 8,
-                            padding: "10px 14px",
-                            background: "#f9fafb",
-                            alignSelf: "stretch",
-                        }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                                <span style={fieldLabelStyle}>Report options</span>
-                                {selectedCount > 0 && <span style={badgeStyle}>{selectedCount} selected</span>}
+                                {/* Remarks — full width */}
+                                <div style={{ gridColumn: "1 / -1" }}>
+                                    <FloatLabelInput label="Remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
+                                </div>
                             </div>
-                            {([
-                                ["chequeDateWise", "Cheque date wise"],
-                                ["acPayeeWise", "A/c payee wise"],
-                            ] as [keyof typeof options, string][]).map(([key, label]) => (
-                                <label key={key} style={checkRowStyle}>
-                                    <input
-                                        type="checkbox"
-                                        checked={options[key]}
-                                        onChange={() => toggleOption(key)}
-                                        style={{ accentColor: "#185FA5" }}
-                                    />
-                                    <span style={{ fontSize: 12 }}>{label}</span>
-                                </label>
-                            ))}
-                        </div>
 
+                        </div>
                     </div>
 
                     {/* ── divider ── */}
@@ -537,7 +575,7 @@ export default function FinanceReportFilter() {
                                     style={{ ...inputStyle, fontSize: 12 }}
                                 />
                             </div>
-                            <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 260, overflowY: "auto" }}>
+                            <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 200, overflowY: "auto" }}>
                                 <table>
                                     <thead>
                                         <tr>
@@ -602,7 +640,7 @@ export default function FinanceReportFilter() {
                                     style={{ ...inputStyle, fontSize: 12 }}
                                 />
                             </div>
-                            <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 260, overflowY: "auto" }}>
+                            <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 6, overflow: "hidden", maxHeight: 200, overflowY: "auto" }}>
                                 <table>
                                     <thead>
                                         <tr>
