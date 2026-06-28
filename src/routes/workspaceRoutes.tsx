@@ -78,6 +78,8 @@ import JobListingReport from "../pages/wms/stock transfer/JobListingReport";
 import PLSetupPage from "../pages/finance/PLSetupPage";
 import StockDetailReport from "../pages/wms_report/StockDetailReport";
 import StockAdjustmentPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
+import { VendorWorkspacePage } from "../pages/vendor/VendorWorkspacePage";
+import { isVendorRouteText } from "../pages/vendor/vendorRoutes";
 import { StockAdjViewPage } from "../pages/wms/stock adjustment/StockAdjustmentViewPage";
 import StockAdjPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
 import {StorageComputationPage} from "../pages/wms/storage computation/StorageComputation";
@@ -99,6 +101,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: "Vendor System",
+    match: (context) => isVendorRoute(context),
+    element: (context) => <VendorWorkspacePage routePath={getGenericMatchText(context)} />,
+  },
   {
     name: "Finance Ledger Basics",
     match: ({ pathname }) => pathname.toLowerCase().includes("/wms/wms/reports/stock%20report/stock_detail"),
@@ -1120,6 +1127,10 @@ function getGenericMatchText(context: WorkspaceRouteContext) {
     return path && pathname.includes(path);
   });
   return [pathname, context.activeApp?.title, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
+}
+
+function isVendorRoute(context: WorkspaceRouteContext) {
+  return isVendorRouteText(getGenericMatchText(context));
 }
 
 function isApplicationProgressRoute(context: WorkspaceRouteContext) {
