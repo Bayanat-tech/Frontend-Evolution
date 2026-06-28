@@ -36,9 +36,9 @@ export function Dialog({
       <div
         className={cn(
           // ← restored: rounded, border, bg, shadow, max-h, overflow-hidden
-          "grid max-h-[92vh] w-[min(96vw,560px)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg border bg-card text-card-foreground shadow-2xl",
+          "grid max-h-[94vh] w-[min(96vw,560px)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg border bg-card text-card-foreground shadow-2xl",
           compact && "w-[min(94vw,460px)]",
-          wide && "w-[min(96vw,1040px)]",
+          wide && "min-h-[min(62vh,600px)] w-[min(96vw,900px)]",
         )}
 onClick={(e) => e.stopPropagation()}
       >
