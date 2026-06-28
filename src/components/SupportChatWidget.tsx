@@ -1,5 +1,6 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Circle, Headphones, ImagePlus, MessageSquarePlus, Paperclip, RefreshCw, Send, UserRoundCheck, X } from "lucide-react";
+import { io, Socket } from "socket.io-client";
 import {
   SupportAttachment,
   SupportMessage,
@@ -14,6 +15,7 @@ import {
   supportHeartbeat,
   updateSupportTicket,
 } from "../api/support";
+import { API_URL } from "../api/client";
 import { useAuth } from "../state/AuthContext";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
@@ -24,7 +26,8 @@ type ChatRole = "user" | "admin";
 export function SupportChatWidget({ adminEnabled = false }: { adminEnabled?: boolean }) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
-  const [role, setRole] = useState<ChatRole>(adminEnabled ? "admin" : "user");
+  const [role, setRole] = useState<ChatRole>("user");
+  const [serverCanAdmin, setServerCanAdmin] = useState(false);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [activeUsers, setActiveUsers] = useState<SupportUser[]>([]);
@@ -34,13 +37,15 @@ export function SupportChatWidget({ adminEnabled = false }: { adminEnabled?: boo
   const [attachments, setAttachments] = useState<SupportAttachment[]>([]);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
+  const [threadNotice, setThreadNotice] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const socketRef = useRef<Socket | null>(null);
 
   const selectedTicket = useMemo(() => tickets.find((ticket) => Number(ticket.TICKET_ID) === selectedId) || null, [tickets, selectedId]);
   const unreadTotal = tickets.reduce((sum, ticket) => sum + Number(ticket.UNREAD_COUNT || 0), 0);
   const currentUser = user?.loginid || user?.username || "";
-  const canUseAdmin = adminEnabled || ["ADMIN", "SA", "SUPER"].some((key) => currentUser.toUpperCase().includes(key));
+  const canUseAdmin = serverCanAdmin;
 
   useEffect(() => {
     setRole((current) => (canUseAdmin ? current : "user"));
@@ -55,9 +60,45 @@ export function SupportChatWidget({ adminEnabled = false }: { adminEnabled?: boo
   useEffect(() => {
     if (!open) return;
     void loadAll();
-    const timer = window.setInterval(() => void loadAll(false), 7000);
+    const timer = window.setInterval(() => void loadAll(false), 30000);
     return () => window.clearInterval(timer);
   }, [open, role]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const token = localStorage.getItem("bayanat_service_token");
+    if (!token) return undefined;
+
+    const socket = io(API_URL, {
+      path: "/socket.io",
+      auth: { token },
+      transports: ["websocket", "polling"],
+    });
+    socketRef.current = socket;
+
+    socket.on("support:ready", (payload: { role?: string }) => {
+      const isAdmin = payload.role === "admin";
+      setServerCanAdmin(isAdmin);
+      if (isAdmin && adminEnabled) setRole("admin");
+    });
+    socket.on("support:presence-changed", () => {
+      void loadAll(false);
+    });
+    socket.on("support:tickets-changed", (payload: { ticketId?: number }) => {
+      void loadAll(false);
+      if (selectedId && (!payload.ticketId || Number(payload.ticketId) === selectedId)) {
+        void loadMessages(selectedId);
+      }
+    });
+    socket.on("connect_error", () => {
+      setServerCanAdmin(false);
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [open, selectedId, role, adminEnabled]);
 
   useEffect(() => {
     if (!selectedId || !open) {
@@ -77,9 +118,16 @@ export function SupportChatWidget({ adminEnabled = false }: { adminEnabled?: boo
       const [nextTickets, nextActive] = await Promise.all([getSupportTickets(role), getSupportActiveUsers()]);
       setTickets(nextTickets);
       setActiveUsers(nextActive);
-      if (!selectedId && nextTickets[0]) setSelectedId(Number(nextTickets[0].TICKET_ID));
+      const stillVisible = selectedId ? nextTickets.some((ticket) => Number(ticket.TICKET_ID) === selectedId) : true;
+      if (selectedId && !stillVisible) {
+        setSelectedId(null);
+        setMessages([]);
+        setThreadNotice("That ticket is no longer available in this view. Select another ticket or start a new request.");
+      } else if (!selectedId && nextTickets[0] && !threadNotice) {
+        setSelectedId(Number(nextTickets[0].TICKET_ID));
+      }
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Unable to load support chat");
+      setNotice(toFriendlySupportError(error, "Unable to load support chat"));
     } finally {
       if (showLoading) setLoading(false);
     }
@@ -87,11 +135,20 @@ export function SupportChatWidget({ adminEnabled = false }: { adminEnabled?: boo
 
   const loadMessages = async (ticketId: number) => {
     try {
+      setThreadNotice("");
       const nextMessages = await getSupportMessages(ticketId, role);
       setMessages(nextMessages);
       await markSupportRead(ticketId).catch(() => undefined);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Unable to load messages");
+      const friendly = toFriendlySupportError(error, "Unable to load messages");
+      setThreadNotice(friendly);
+      if (isTicketAccessError(error)) {
+        setSelectedId(null);
+        setMessages([]);
+        await loadAll(false);
+        return;
+      }
+      setNotice(friendly);
     }
   };
 
@@ -120,7 +177,14 @@ export function SupportChatWidget({ adminEnabled = false }: { adminEnabled?: boo
       await loadAll(false);
       if (selectedId) await loadMessages(selectedId);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Unable to send message");
+      const friendly = toFriendlySupportError(error, "Unable to send message");
+      if (isTicketAccessError(error)) {
+        setSelectedId(null);
+        setMessages([]);
+        setThreadNotice(friendly);
+      } else {
+        setNotice(friendly);
+      }
     } finally {
       setLoading(false);
     }
@@ -148,7 +212,7 @@ export function SupportChatWidget({ adminEnabled = false }: { adminEnabled?: boo
       {open && (
         <div className="support-shell" role="dialog" aria-label="Support chat">
           <div className="support-backdrop" onClick={() => setOpen(false)} />
-          <section className="support-panel">
+          <section className={cn("support-panel", role === "admin" ? "admin-mode" : "user-mode")}>
             <header className="support-header">
               <div>
                 <p className="eyebrow m-0">Support</p>
@@ -184,7 +248,7 @@ export function SupportChatWidget({ adminEnabled = false }: { adminEnabled?: boo
                   </div>
                 </div>
 
-                <Button className="support-new-ticket" variant="outline" onClick={() => { setSelectedId(null); setMessages([]); }}>
+                <Button className="support-new-ticket" variant="outline" onClick={() => { setSelectedId(null); setMessages([]); setThreadNotice(""); }}>
                   <MessageSquarePlus size={14} /> New request
                 </Button>
 
@@ -193,7 +257,7 @@ export function SupportChatWidget({ adminEnabled = false }: { adminEnabled?: boo
                     <button
                       className={cn("support-ticket", selectedId === Number(ticket.TICKET_ID) && "active")}
                       key={ticket.TICKET_ID}
-                      onClick={() => setSelectedId(Number(ticket.TICKET_ID))}
+                      onClick={() => { setThreadNotice(""); setSelectedId(Number(ticket.TICKET_ID)); }}
                     >
                       <span className={cn("presence-dot", ticket.REQUESTER_IS_ONLINE === "Y" && "online")} />
                       <strong>{ticket.SUBJECT || `Ticket ${ticket.TICKET_ID}`}</strong>
@@ -220,6 +284,7 @@ export function SupportChatWidget({ adminEnabled = false }: { adminEnabled?: boo
                 </div>
 
                 <div className="support-messages" ref={scrollerRef}>
+                  {threadNotice && <div className="support-thread-notice">{threadNotice}</div>}
                   {!selectedId && (
                     <div className="support-new-fields">
                       <Input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="Subject" />
@@ -299,4 +364,16 @@ function readFile(file: File): Promise<SupportAttachment> {
     });
     reader.readAsDataURL(file);
   });
+}
+
+function isTicketAccessError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return message.toLowerCase().includes("not found or not accessible");
+}
+
+function toFriendlySupportError(error: unknown, fallback: string) {
+  if (isTicketAccessError(error)) {
+    return "This support ticket is no longer available for your login. Please select another ticket or start a new request.";
+  }
+  return error instanceof Error ? error.message : fallback;
 }
