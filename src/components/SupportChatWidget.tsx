@@ -1,5 +1,5 @@
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Circle, Headphones, ImagePlus, MessageSquarePlus, Paperclip, RefreshCw, Send, UserRoundCheck, X } from "lucide-react";
+import { ChangeEvent, ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { CheckCircle2, Headphones, ImagePlus, MessageSquarePlus, Paperclip, RefreshCw, Send, ShieldCheck, UserRoundCheck, X } from "lucide-react";
 import { io, Socket } from "socket.io-client";
 import {
   SupportAttachment,
@@ -23,7 +23,7 @@ import { cn } from "../lib/utils";
 
 type ChatRole = "user" | "admin";
 
-export function SupportChatWidget({ adminEnabled = false }: { adminEnabled?: boolean }) {
+export function SupportChatWidget() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<ChatRole>("user");
@@ -46,6 +46,7 @@ export function SupportChatWidget({ adminEnabled = false }: { adminEnabled?: boo
   const unreadTotal = tickets.reduce((sum, ticket) => sum + Number(ticket.UNREAD_COUNT || 0), 0);
   const currentUser = user?.loginid || user?.username || "";
   const canUseAdmin = serverCanAdmin;
+  const onlineUsers = activeUsers.filter((item) => item.IS_ONLINE === "Y").length;
 
   useEffect(() => {
     setRole((current) => (canUseAdmin ? current : "user"));
@@ -79,7 +80,7 @@ export function SupportChatWidget({ adminEnabled = false }: { adminEnabled?: boo
     socket.on("support:ready", (payload: { role?: string }) => {
       const isAdmin = payload.role === "admin";
       setServerCanAdmin(isAdmin);
-      if (isAdmin && adminEnabled) setRole("admin");
+      setRole(isAdmin ? "admin" : "user");
     });
     socket.on("support:presence-changed", () => {
       void loadAll(false);
@@ -98,7 +99,7 @@ export function SupportChatWidget({ adminEnabled = false }: { adminEnabled?: boo
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [open, selectedId, role, adminEnabled]);
+  }, [open, selectedId, role]);
 
   useEffect(() => {
     if (!selectedId || !open) {
@@ -203,6 +204,26 @@ export function SupportChatWidget({ adminEnabled = false }: { adminEnabled?: boo
     event.target.value = "";
   };
 
+  const onPaste = async (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const pastedFiles: File[] = [];
+    Array.from(event.clipboardData.items).forEach((item) => {
+      if (item.kind !== "file") return;
+      const file = item.getAsFile();
+      if (file?.type.startsWith("image/")) pastedFiles.push(file);
+    });
+    pastedFiles.splice(3);
+
+    if (!pastedFiles.length) return;
+    event.preventDefault();
+    const stampedFiles = pastedFiles.map((file, index) => {
+      const extension = file.type.split("/")[1] || "png";
+      const filename = file.name || `pasted-screenshot-${Date.now()}-${index + 1}.${extension}`;
+      return new File([file], filename, { type: file.type, lastModified: file.lastModified });
+    });
+    const encoded = await Promise.all(stampedFiles.map(readFile));
+    setAttachments((current) => [...current, ...encoded].slice(0, 5));
+  };
+
   return (
     <>
       <button className="support-launcher" onClick={() => setOpen(true)} title="Support chat" aria-label="Support chat">
@@ -211,20 +232,17 @@ export function SupportChatWidget({ adminEnabled = false }: { adminEnabled?: boo
       </button>
       {open && (
         <div className="support-shell" role="dialog" aria-label="Support chat">
-          <div className="support-backdrop" onClick={() => setOpen(false)} />
           <section className={cn("support-panel", role === "admin" ? "admin-mode" : "user-mode")}>
             <header className="support-header">
               <div>
                 <p className="eyebrow m-0">Support</p>
-                <h2>Live Help Desk</h2>
+                <h2>{canUseAdmin ? "Admin Help Desk" : "Live Help Desk"}</h2>
               </div>
               <div className="support-header-actions">
-                {canUseAdmin && (
-                  <div className="support-role-switch">
-                    <button className={role === "user" ? "active" : ""} onClick={() => setRole("user")}>Mine</button>
-                    <button className={role === "admin" ? "active" : ""} onClick={() => setRole("admin")}>Admin</button>
-                  </div>
-                )}
+                <div className="support-mode-badge">
+                  {canUseAdmin ? <ShieldCheck size={13} /> : <Headphones size={13} />}
+                  {canUseAdmin ? "All tickets" : "My support"}
+                </div>
                 <button className="icon-button" onClick={() => void loadAll()} title="Refresh"><RefreshCw size={15} /></button>
                 <button className="icon-button" onClick={() => setOpen(false)} title="Close"><X size={16} /></button>
               </div>
@@ -234,6 +252,19 @@ export function SupportChatWidget({ adminEnabled = false }: { adminEnabled?: boo
 
             <div className="support-body">
               <aside className="support-sidebar">
+                {canUseAdmin && (
+                  <div className="support-admin-summary">
+                    <div>
+                      <strong>{tickets.length}</strong>
+                      <span>Open queue</span>
+                    </div>
+                    <div>
+                      <strong>{onlineUsers}</strong>
+                      <span>Online now</span>
+                    </div>
+                  </div>
+                )}
+
                 <div className="support-active-users">
                   <div className="support-section-title">
                     <UserRoundCheck size={14} /> Active users
@@ -259,10 +290,18 @@ export function SupportChatWidget({ adminEnabled = false }: { adminEnabled?: boo
                       key={ticket.TICKET_ID}
                       onClick={() => { setThreadNotice(""); setSelectedId(Number(ticket.TICKET_ID)); }}
                     >
-                      <span className={cn("presence-dot", ticket.REQUESTER_IS_ONLINE === "Y" && "online")} />
-                      <strong>{ticket.SUBJECT || `Ticket ${ticket.TICKET_ID}`}</strong>
-                      <small>{ticket.REQUESTER_NAME || ticket.REQUESTER_LOGINID} · {ticket.STATUS}</small>
-                      <em>{ticket.LAST_MESSAGE || "No messages yet"}</em>
+                      <span className="support-ticket-avatar">
+                        {String(ticket.REQUESTER_NAME || ticket.REQUESTER_LOGINID || "U").slice(0, 2).toUpperCase()}
+                        <i className={cn("presence-dot", ticket.REQUESTER_IS_ONLINE === "Y" && "online")} />
+                      </span>
+                      <span className="support-ticket-content">
+                        <span className="support-ticket-top">
+                          <strong>{ticket.SUBJECT || `Ticket ${ticket.TICKET_ID}`}</strong>
+                          <span className={cn("support-status-chip", ticket.STATUS === "CLOSED" && "closed")}>{ticket.STATUS}</span>
+                        </span>
+                        <small>{ticket.REQUESTER_NAME || ticket.REQUESTER_LOGINID} - {ticket.PRIORITY || "NORMAL"}</small>
+                        <em>{ticket.LAST_MESSAGE || "No messages yet"}</em>
+                      </span>
                       {Number(ticket.UNREAD_COUNT || 0) > 0 && <b>{ticket.UNREAD_COUNT}</b>}
                     </button>
                   ))}
@@ -274,12 +313,17 @@ export function SupportChatWidget({ adminEnabled = false }: { adminEnabled?: boo
                 <div className="support-thread-head">
                   <div>
                     <h3>{selectedTicket ? selectedTicket.SUBJECT || `Ticket ${selectedTicket.TICKET_ID}` : "New Support Request"}</h3>
-                    <p>{selectedTicket ? `${selectedTicket.REQUESTER_NAME || selectedTicket.REQUESTER_LOGINID} · ${selectedTicket.STATUS}` : "Describe the issue and attach a screenshot if needed."}</p>
+                    <p>{selectedTicket ? `${selectedTicket.REQUESTER_NAME || selectedTicket.REQUESTER_LOGINID} - ${canUseAdmin ? "Customer thread" : "Support thread"}` : "Describe the issue and attach a screenshot if needed."}</p>
                   </div>
-                  {selectedTicket?.STATUS !== "CLOSED" && selectedId && (
-                    <Button size="sm" variant="outline" onClick={() => void closeTicket()}>
-                      <CheckCircle2 size={14} /> Close
-                    </Button>
+                  {selectedTicket && (
+                    <div className="support-thread-actions">
+                      <span className={cn("support-status-chip", selectedTicket.STATUS === "CLOSED" && "closed")}>{selectedTicket.STATUS}</span>
+                      {canUseAdmin && selectedTicket.STATUS !== "CLOSED" && selectedId && (
+                        <Button size="sm" variant="outline" onClick={() => void closeTicket()}>
+                          <CheckCircle2 size={14} /> Close
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -291,7 +335,7 @@ export function SupportChatWidget({ adminEnabled = false }: { adminEnabled?: boo
                     </div>
                   )}
                   {messages.map((message) => {
-                    const mine = message.SENDER_LOGINID === currentUser;
+                    const mine = String(message.SENDER_LOGINID || "").toUpperCase() === String(currentUser || "").toUpperCase();
                     return (
                       <div className={cn("support-message", mine && "mine")} key={message.MESSAGE_ID}>
                         <div className="support-message-bubble">
@@ -331,7 +375,7 @@ export function SupportChatWidget({ adminEnabled = false }: { adminEnabled?: boo
                     <button className="icon-button" onClick={() => fileInputRef.current?.click()} title="Attach screenshot or file">
                       <ImagePlus size={17} />
                     </button>
-                    <textarea value={compose} onChange={(event) => setCompose(event.target.value)} placeholder="Type your message..." onKeyDown={(event) => {
+                    <textarea value={compose} onPaste={onPaste} onChange={(event) => setCompose(event.target.value)} placeholder="Type your message or paste a screenshot..." onKeyDown={(event) => {
                       if (event.key === "Enter" && !event.shiftKey) {
                         event.preventDefault();
                         void send();
