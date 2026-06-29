@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { Pencil, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
@@ -8,29 +8,26 @@ import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import NoticeToast, { ToastNotice } from "../../components/ui/NoticeToast";
 import { useAuth } from "../../state/AuthContext";
-import {
-  executeCommonProcedure,
-  getDynamicLookup,
-  LookupRow,
-} from "../../api/lookups";
+import { getDynamicLookup, LookupRow } from "../../api/lookups";
+import { saveLeaveEncashment } from "./api/Leaveencashmentapi";
 import {
   buildLeaveEncashmentPayload,
   DOC_TYPE_LEAVE_ENCASHMENT,
   emptyDetailRow,
   emptyHeader,
   findBalanceForType,
+  HALF_DAY_OPTIONS,
   LeaveBalanceRow,
   LeaveDetailRow,
   LeaveHeader,
+  STATUS_OPTIONS,
   toDateInputValue,
+  toHalfDayDisplay,
+  toLeaveReasonDisplay,
+  toStatusDisplay,
   validateDetailRow,
 } from "./leaveEncashmentHelpers";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Dynamic procedure parameter names.
-// PROC_BUILD_DYNAMIC_HR_LEAVE_ENCASHMENT for screen-specific data,
-// PROC_BUILD_DYNAMIC_DROP_DOWN for shared org-structure drop-downs.
-// ─────────────────────────────────────────────────────────────────────────────
 const PARAM = {
   DIVISION: "DROP_DOWN_DIVISION",
   DEPARTMENT: "DROP_DOWN_DEPT_BASED_ON_DIV",
@@ -41,9 +38,6 @@ const PARAM = {
   DETAIL: "HR_LEAVE_ENCASHMENT_DETAIL",
   LEAVE_BALANCE: "HR_LEAVE_ENCASHMENT_LEAVE_BALANCE",
   LEAVE_HISTORY: "HR_LEAVE_ENCASHMENT_LEAVE_BALANCE_HISTORY",
-  // Not provided in the source procedures — wire to your actual save
-  // procedure name when available. Kept isolated here so it's a one-line swap.
-  SAVE: "HR_LEAVE_ENCASHMENT_SAVE",
 } as const;
 
 type FilterState = {
@@ -55,6 +49,12 @@ type FilterState = {
   sectionName: string;
   employeeId: string;
   employeeName: string;
+};
+
+// Shape rendered in the Detail Lines grid: a LeaveDetailRow plus doc-level
+// fields merged in for display only (see `detailsForGrid`).
+type DetailGridRow = LeaveDetailRow & {
+  doc_approval_status?: string;
 };
 
 const emptyFilters: FilterState = {
@@ -87,11 +87,14 @@ export function LeaveEncashmentPage() {
   const [loadingDoc, setLoadingDoc] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<ToastNotice>(null);
+
   const [lineEditorOpen, setLineEditorOpen] = useState(false);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const editingRow = editingIndex !== null ? details[editingIndex] ?? null : null;
 
   const employeeSelected = Boolean(filters.employeeId);
 
-  // ── Lookups for the cascading filters ────────────────────────────────────
+  // ── Lookups ───────────────────────────────────────────────────────────────
 
   const loadDivisions = async () =>
     (await getDynamicLookup({ parameter: PARAM.DIVISION, loginid, code1: companyCode })) as LookupRow[];
@@ -120,16 +123,10 @@ export function LeaveEncashmentPage() {
     (await getDynamicLookup({
       parameter: PARAM.EMPLOYEE,
       loginid,
-      // When Division is empty, omit all three codes so the procedure's
-      // IF P_CODEx IS NOT NULL guards fall through and return every
-      // employee company-wide — lets the user jump straight to Employee.
-      // Once Division is picked, narrow by whatever's filled in below it.
       code1: filters.divCode || undefined,
       code2: filters.divCode ? filters.deptCode || undefined : undefined,
       code3: filters.divCode ? filters.sectionCode || undefined : undefined,
     })) as LookupRow[];
-
-  // ── Data load on employee selection ──────────────────────────────────────
 
   const loadBalance = async (employeeId: string) => {
     setLoadingBalance(true);
@@ -155,6 +152,7 @@ export function LeaveEncashmentPage() {
         parameter: PARAM.DOC_NO,
         loginid,
         code1: companyCode,
+        code2: employeeId,
       });
       setDocNoOptions(data);
     } catch (error) {
@@ -181,6 +179,8 @@ export function LeaveEncashmentPage() {
     setSelectedDocNo("");
     setHeader(emptyHeader(companyCode, filters.employeeId));
     setDetails([]);
+    setEditingIndex(null);
+    setLineEditorOpen(false);
   };
 
   useEffect(() => {
@@ -195,10 +195,7 @@ export function LeaveEncashmentPage() {
     void loadBalance(filters.employeeId);
     void loadDocNoOptions(filters.employeeId);
     void loadHistory(filters.employeeId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.employeeId]);
-
-  // ── Load an existing encashment document (header + detail) ──────────────
 
   const loadDocument = async (hdrLveSlno: string) => {
     if (!hdrLveSlno || !filters.employeeId) return;
@@ -226,7 +223,14 @@ export function LeaveEncashmentPage() {
 
       const loadedHeader = (headerRows[0] as LeaveHeader) || emptyHeader(companyCode, filters.employeeId);
       setHeader({ ...loadedHeader, hdr_lve_slno: hdrLveSlno });
-      setDetails(detailRows as LeaveDetailRow[]);
+      setDetails(
+        (detailRows as LeaveDetailRow[]).map((row) => ({
+          ...row,
+          status: toStatusDisplay(row.status),
+          half_day: toHalfDayDisplay(row.half_day),
+          leave_reason: toLeaveReasonDisplay(row.leave_reason),
+        })),
+      );
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load encashment document" });
     } finally {
@@ -234,26 +238,115 @@ export function LeaveEncashmentPage() {
     }
   };
 
+  const docNoToHdrLveSlno = useMemo(() => {
+    const map = new Map<string, string>();
+    history.forEach((row) => {
+      const docNo = row.lve_doc_no != null ? String(row.lve_doc_no) : "";
+      const slno = row.hdr_lve_slno != null ? String(row.hdr_lve_slno) : "";
+      if (docNo && slno) map.set(docNo, slno);
+    });
+    return map;
+  }, [history]);
+
   const handleDocNoChange = (value: string) => {
     setSelectedDocNo(value);
     if (!value) {
       resetDocument();
       return;
     }
-    void loadDocument(value);
+    const hdrLveSlno = docNoToHdrLveSlno.get(value);
+    if (!hdrLveSlno) {
+      setNotice({
+        type: "error",
+        message: "Unable to locate document details for the selected Doc No. Please refresh and try again.",
+      });
+      return;
+    }
+    void loadDocument(hdrLveSlno);
   };
 
-  // ── Detail line management ───────────────────────────────────────────────
+  // ── Detail line management ────────────────────────────────────────────────
 
-  const addDetailRow = (row: LeaveDetailRow) => {
-    setDetails((current) => [...current, { ...row, id: `new-${Date.now()}` }]);
+  const openAddLine = () => {
+    setEditingIndex(null);
+    setLineEditorOpen(true);
   };
 
-  const removeDetailRow = (row: LeaveDetailRow) => {
-    setDetails((current) => current.filter((item) => item !== row));
+  const openEditLine = (index: number) => {
+    setEditingIndex(index);
+    setLineEditorOpen(true);
   };
 
-  const detailColumns = useMemo<ColumnDef<LeaveDetailRow>[]>(
+  const closeLineEditor = () => {
+    setLineEditorOpen(false);
+    setEditingIndex(null);
+  };
+
+  const saveDetailRow = (row: LeaveDetailRow) => {
+    setDetails((current) => {
+      if (editingIndex !== null && editingIndex >= 0 && editingIndex < current.length) {
+        const next = [...current];
+        next[editingIndex] = { ...row, id: current[editingIndex].id };
+        return next;
+      }
+      return [...current, { ...row, id: `new-${Date.now()}` }];
+    });
+    closeLineEditor();
+  };
+
+  const removeDetailRow = (index: number) => {
+    setDetails((current) => current.filter((_, i) => i !== index));
+  };
+
+  // When the DETAIL proc returns rows, merge doc-level fields (doc no,
+  // start/end date, approval status) from the history list which carries them.
+  // When DETAIL returns nothing for a selected doc, fall back to the history
+  // row itself so the user sees something in the grid instead of an empty table.
+  const detailsForGrid = useMemo<DetailGridRow[]>(() => {
+    if (!selectedDocNo && details.length === 0) return [];
+
+    const historyRow = history.find((row) => String(row.lve_doc_no ?? "") === selectedDocNo);
+
+    if (details.length > 0) {
+      if (!historyRow) return details;
+      return details.map((row) => ({
+        ...row,
+        lve_doc_no: historyRow.lve_doc_no != null ? String(historyRow.lve_doc_no) : row.lve_doc_no,
+        leave_start_date:
+          historyRow.leave_start_date != null ? String(historyRow.leave_start_date) : row.leave_start_date,
+        leave_end_date:
+          historyRow.leave_end_date != null ? String(historyRow.leave_end_date) : row.leave_end_date,
+        doc_approval_status:
+          historyRow.approval_status != null ? String(historyRow.approval_status) : undefined,
+      }));
+    }
+
+    // DETAIL proc returned nothing — show history row as a display-only fallback
+    if (selectedDocNo && historyRow) {
+      return [
+        {
+          id: `history-fallback-${selectedDocNo}`,
+          leave_type: String(historyRow.leave_type ?? ""),
+          leave_days: historyRow.leave_days != null ? Number(historyRow.leave_days) : undefined,
+          leave_reason: String(historyRow.leave_reason ?? ""),
+          half_day: String(historyRow.half_day ?? ""),
+          status: String(historyRow.approval_status ?? ""),
+          remarks: String(historyRow.remarks ?? ""),
+          lve_doc_no: String(historyRow.lve_doc_no ?? ""),
+          leave_start_date: String(historyRow.leave_start_date ?? ""),
+          leave_end_date: String(historyRow.leave_end_date ?? ""),
+          doc_approval_status: String(historyRow.approval_status ?? ""),
+          company_code: companyCode,
+          employee_id: filters.employeeId,
+          hdr_lve_slno: String(historyRow.hdr_lve_slno ?? ""),
+        } as DetailGridRow,
+      ];
+    }
+
+    return [];
+  }, [details, history, selectedDocNo, companyCode, filters.employeeId]);
+
+  const detailColumns = useMemo<ColumnDef<DetailGridRow>[]>(
     () => [
       { accessorKey: "leave_type", header: "Leave Type" },
       { accessorKey: "leave_days", header: "Days" },
@@ -261,14 +354,23 @@ export function LeaveEncashmentPage() {
       { accessorKey: "half_day", header: "Half Day" },
       { accessorKey: "status", header: "Status" },
       { accessorKey: "remarks", header: "Remarks" },
+      { accessorKey: "lve_doc_no", header: "Doc No" },
+      { accessorKey: "leave_start_date", header: "Start Date" },
+      { accessorKey: "leave_end_date", header: "End Date" },
+      { accessorKey: "doc_approval_status", header: "Doc Status" },
       {
         id: "actions",
         header: "Actions",
         enableSorting: false,
-        cell: ({ row }: { row: { original: LeaveDetailRow } }) => (
-          <Button size="icon" variant="ghost" onClick={() => removeDetailRow(row.original)}>
-            <Trash2 size={14} />
-          </Button>
+        cell: ({ row }: { row: { index: number } }) => (
+          <div className="flex items-center gap-1">
+            <Button size="icon" variant="ghost" onClick={() => openEditLine(row.index)}>
+              <Pencil size={14} />
+            </Button>
+            <Button size="icon" variant="ghost" onClick={() => removeDetailRow(row.index)}>
+              <Trash2 size={14} />
+            </Button>
+          </div>
         ),
       },
     ],
@@ -287,16 +389,10 @@ export function LeaveEncashmentPage() {
       const payload = buildLeaveEncashmentPayload(
         { ...header, employee_id: filters.employeeId, company_code: companyCode, doc_type: DOC_TYPE_LEAVE_ENCASHMENT },
         details,
-      );
-      await executeCommonProcedure({
-        parameter: PARAM.SAVE,
         loginid,
-        val1s1: filters.employeeId,
-        val1s2: companyCode,
-        val1s3: String(header.hdr_lve_slno || ""),
-        payload,
-      });
-      setNotice({ type: "success", message: "Leave encashment saved successfully" });
+      );
+      const result = await saveLeaveEncashment(payload);
+      setNotice({ type: "success", message: result.message || "Leave encashment saved successfully" });
       await loadDocNoOptions(filters.employeeId);
       await loadHistory(filters.employeeId);
       await loadBalance(filters.employeeId);
@@ -310,35 +406,37 @@ export function LeaveEncashmentPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <section className="grid gap-2">
+      {/* Page title + actions — compact */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="eyebrow">HR Transactions</p>
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">Leave Encashment</h1>
+          <p className="eyebrow text-xs">HR Transactions</p>
+          <h1 className="m-0 text-lg font-semibold tracking-tight">Leave Encashment</h1>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           <Button
+            size="sm"
             variant="outline"
             disabled={!filters.employeeId}
             onClick={() => filters.employeeId && void loadBalance(filters.employeeId)}
           >
-            <RefreshCw size={15} /> Refresh
+            <RefreshCw size={13} /> Refresh
           </Button>
-          <Button disabled={!employeeSelected} onClick={() => setLineEditorOpen(true)}>
-            <Plus size={15} /> Add
+          <Button size="sm" disabled={!employeeSelected} onClick={openAddLine}>
+            <Plus size={13} /> Add
           </Button>
-          <Button disabled={!canSave || saving} onClick={() => void saveDocument()}>
-            <Save size={15} /> Save
+          <Button size="sm" disabled={!canSave || saving} onClick={() => void saveDocument()}>
+            <Save size={13} /> Save
           </Button>
         </div>
       </div>
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      {/* Org-structure filter cascade */}
-      <div className="rounded-lg border bg-white p-4">
-        <p className="eyebrow">Employee Selection</p>
-        <div className="grid gap-3 md:grid-cols-4">
+      {/* Org-structure filter cascade — compact padding */}
+      <div className="rounded-md border bg-white p-2">
+        <p className="eyebrow mb-1.5 text-xs">Employee Selection</p>
+        <div className="grid gap-2 md:grid-cols-4">
           <LookupField
             label="Division"
             value={filters.divCode}
@@ -410,9 +508,6 @@ export function LeaveEncashmentPage() {
             required
           />
           <LookupField
-            // Remounts (and so re-fetches) whenever the narrowing scope
-            // changes, since LookupField caches its loaded rows internally
-            // and otherwise wouldn't widen/narrow after the first open.
             key={`employee-${filters.divCode}-${filters.deptCode}-${filters.sectionCode}`}
             label="Employee"
             value={filters.employeeId}
@@ -441,10 +536,6 @@ export function LeaveEncashmentPage() {
                   employeeId: value,
                   employeeName: String(row.rpt_name ?? ""),
                   divCode,
-                  // Falls back to the code itself if the employee row
-                  // doesn't also carry a description column — still
-                  // correct, just less friendly until re-selected via
-                  // the Division box, which will fetch the real name.
                   divName: divCode ? String(row.div_name ?? (current.divName || divCode)) : current.divName,
                   deptCode,
                   deptName: deptCode ? String(row.dept_name ?? (current.deptName || deptCode)) : current.deptName,
@@ -462,65 +553,64 @@ export function LeaveEncashmentPage() {
 
       {employeeSelected && (
         <>
-          {/* Document header */}
-          <div className="rounded-lg border bg-white p-4">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div className="grid gap-3 md:grid-cols-3 md:flex-1">
-                <label className="field">
-                  <span>Doc No</span>
-                  <select
-                    className="ui-input h-9 rounded-md border px-3 text-sm"
-                    value={selectedDocNo}
-                    onChange={(event) => handleDocNoChange(event.target.value)}
-                  >
-                    <option value="">New (unsaved)</option>
-                    {docNoOptions.map((row) => (
-                      <option key={String(row.lve_doc_no)} value={String(row.lve_doc_no)}>
-                        {String(row.lve_doc_no)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Request Date</span>
-                  <Input
-                    type="date"
-                    value={toDateInputValue(header.leave_request_date)}
-                    onChange={(event) => setHeader((current) => ({ ...current, leave_request_date: event.target.value }))}
-                  />
-                </label>
-                <label className="field">
-                  <span>Leave Status</span>
-                  <Input value={header.verified_status || "New"} disabled />
-                </label>
-              </div>
+          {/* Document header — all fields in one compact row */}
+          <div className="rounded-md border bg-white p-2">
+            <div className="grid gap-2 md:grid-cols-4">
+              <label className="field">
+                <span className="text-xs">Doc No</span>
+                <select
+                  className="ui-input h-8 rounded-md border px-2 text-sm"
+                  value={selectedDocNo}
+                  onChange={(event) => handleDocNoChange(event.target.value)}
+                >
+                  <option value="">New (unsaved)</option>
+                  {docNoOptions.map((row) => (
+                    <option key={String(row.lve_doc_no)} value={String(row.lve_doc_no)}>
+                      {String(row.lve_doc_no)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span className="text-xs">Request Date</span>
+                <Input
+                  type="date"
+                  className="h-8 text-sm"
+                  value={toDateInputValue(header.leave_request_date)}
+                  onChange={(event) => setHeader((current) => ({ ...current, leave_request_date: event.target.value }))}
+                />
+              </label>
+              <label className="field">
+                <span className="text-xs">Leave Status</span>
+                <Input className="h-8 text-sm" value={header.verified_status || "New"} disabled />
+              </label>
+              <label className="field">
+                <span className="text-xs">Remarks</span>
+                <Input
+                  className="h-8 text-sm"
+                  value={header.leave_remarks || ""}
+                  onChange={(event) => setHeader((current) => ({ ...current, leave_remarks: event.target.value }))}
+                />
+              </label>
             </div>
-            <label className="field mt-3">
-              <span>Remarks</span>
-              <textarea
-                className="ui-input min-h-[72px] rounded-md border px-3 py-2 text-sm"
-                value={header.leave_remarks || ""}
-                onChange={(event) => setHeader((current) => ({ ...current, leave_remarks: event.target.value }))}
-              />
-            </label>
           </div>
 
-          {/* Leave detail lines */}
+          {/* Leave detail lines — reduced height */}
           <DataTable
             columns={detailColumns}
-            data={details}
+            data={detailsForGrid}
             loading={loadingDoc}
-            height={280}
-            density="grid"
+            height={200}
+            density="compact"
             emptyText="No leave encashment lines yet — use Add to apply against available balance"
             getRowId={(row, index) => String(row.id ?? index)}
           />
 
-          {/* Leave balance + history side by side */}
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-lg border bg-white">
-              <div className="border-b p-3">
-                <p className="eyebrow m-0">Leave Balance</p>
+          {/* Leave balance + history side by side — reduced height */}
+          <div className="grid gap-2 md:grid-cols-2">
+            <div className="rounded-md border bg-white">
+              <div className="border-b px-3 py-1.5">
+                <p className="eyebrow m-0 text-xs">Leave Balance</p>
               </div>
               <DataTable
                 columns={[
@@ -533,25 +623,40 @@ export function LeaveEncashmentPage() {
                 ]}
                 data={balances}
                 loading={loadingBalance}
-                height={260}
+                height={200}
                 density="compact"
                 emptyText="No leave balance found"
               />
             </div>
-            <div className="rounded-lg border bg-white">
-              <div className="border-b p-3">
-                <p className="eyebrow m-0">Leave Encash History</p>
+            <div className="rounded-md border bg-white">
+              <div className="border-b px-3 py-1.5">
+                <p className="eyebrow m-0 text-xs">Leave Encash History</p>
               </div>
               <DataTable
                 columns={[
-                  { accessorKey: "lve_doc_no", header: "Doc No" },
+                  {
+                    accessorKey: "lve_doc_no",
+                    header: "Doc No",
+                    cell: ({ row }: { row: { original: LookupRow } }) => {
+                      const docNo = String(row.original.lve_doc_no ?? "");
+                      const isCurrent = docNo !== "" && docNo === selectedDocNo;
+                      return (
+                        <span className={isCurrent ? "font-semibold text-primary" : undefined}>
+                          {docNo}
+                          {isCurrent && (
+                            <span className="ml-1 text-[10px] text-muted-foreground">(current)</span>
+                          )}
+                        </span>
+                      );
+                    },
+                  },
                   { accessorKey: "leave_request_date", header: "Request Date" },
                   { accessorKey: "leave_start_date", header: "Start Date" },
                   { accessorKey: "leave_end_date", header: "End Date" },
                   { accessorKey: "approval_status", header: "Status" },
                 ]}
                 data={history}
-                height={260}
+                height={200}
                 density="compact"
                 emptyText="No encashment history found"
                 onRowClick={(row) => handleDocNoChange(String(row.lve_doc_no ?? ""))}
@@ -564,11 +669,9 @@ export function LeaveEncashmentPage() {
       <LeaveLineEditor
         open={lineEditorOpen}
         balances={balances}
-        onClose={() => setLineEditorOpen(false)}
-        onAdd={(row) => {
-          addDetailRow(row);
-          setLineEditorOpen(false);
-        }}
+        editingRow={editingRow}
+        onClose={closeLineEditor}
+        onSave={saveDetailRow}
         employeeId={filters.employeeId}
         companyCode={companyCode}
         hdrLveSlno={header.hdr_lve_slno || ""}
@@ -577,37 +680,44 @@ export function LeaveEncashmentPage() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Add-line dialog — picks a leave type, validates days against the loaded
-// balance, and appends an unsaved detail row to the grid.
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Line editor dialog ────────────────────────────────────────────────────────
+// 2-column layout with all 10 grid columns covered as editable fields.
 
 function LeaveLineEditor({
   open,
   balances,
+  editingRow,
   onClose,
-  onAdd,
+  onSave,
   employeeId,
   companyCode,
   hdrLveSlno,
 }: {
   open: boolean;
   balances: LeaveBalanceRow[];
+  editingRow: LeaveDetailRow | null;
   onClose: () => void;
-  onAdd: (row: LeaveDetailRow) => void;
+  onSave: (row: LeaveDetailRow) => void;
   employeeId: string;
   companyCode: string;
   hdrLveSlno: string | number;
 }) {
-  const [form, setForm] = useState<LeaveDetailRow>(emptyDetailRow(companyCode, employeeId, hdrLveSlno));
+  const isEditing = Boolean(editingRow);
+
+  const [form, setForm] = useState<DetailGridRow>(
+    (editingRow as DetailGridRow) || (emptyDetailRow(companyCode, employeeId, hdrLveSlno) as DetailGridRow),
+  );
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (open) {
-      setForm(emptyDetailRow(companyCode, employeeId, hdrLveSlno));
+      setForm(
+        (editingRow as DetailGridRow) ||
+          (emptyDetailRow(companyCode, employeeId, hdrLveSlno) as DetailGridRow),
+      );
       setError("");
     }
-  }, [open, companyCode, employeeId, hdrLveSlno]);
+  }, [open, editingRow, companyCode, employeeId, hdrLveSlno]);
 
   const selectedBalance = findBalanceForType(balances, form.leave_type || "");
 
@@ -618,92 +728,154 @@ function LeaveLineEditor({
       setError(validationError);
       return;
     }
-    onAdd(form);
+    onSave(form);
   };
 
   return (
     <Dialog
       open={open}
-      title="Add Leave Encashment Line"
+      title={isEditing ? "Edit Leave Encashment Line" : "Add Leave Encashment Line"}
       description="Apply against available leave balance"
       onClose={onClose}
       footer={
         <>
           <Button type="button" variant="outline" onClick={onClose}>
-            <X size={15} /> Cancel
+            <X size={14} /> Cancel
           </Button>
           <Button type="submit" form="leave-encashment-line-form">
-            <Save size={15} /> Add Line
+            <Save size={14} /> {isEditing ? "Save Changes" : "Add Line"}
           </Button>
         </>
       }
     >
-      <form id="leave-encashment-line-form" className="grid gap-3" onSubmit={submit}>
+      <form id="leave-encashment-line-form" className="grid grid-cols-2 gap-x-4 gap-y-2" onSubmit={submit}>
+
+        {/* Row 1: Leave Type + Days */}
         <label className="field">
-          <span>Leave Type *</span>
+          <span className="text-xs font-medium">Leave Type *</span>
           <Input
-            className="uppercase"
+            className="h-8 uppercase text-sm"
             value={form.leave_type || ""}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, leave_type: event.target.value.toUpperCase() }))
-            }
+            onChange={(e) => setForm((c) => ({ ...c, leave_type: e.target.value.toUpperCase() }))}
             placeholder="e.g. AL"
             required
           />
         </label>
 
-        {form.leave_type && !selectedBalance && (
-          <p className="m-0 text-xs text-muted-foreground">No balance found for "{form.leave_type}"</p>
-        )}
-
-        {selectedBalance && (
-          <p className="m-0 text-xs text-muted-foreground">
-            {selectedBalance.leave_type_desc || selectedBalance.leave_type} — available balance:{" "}
-            {selectedBalance.leave_balance ?? selectedBalance.no_of_leaves_available ?? 0} day(s)
-          </p>
-        )}
-
         <label className="field">
-          <span>Days *</span>
+          <span className="text-xs font-medium">Days *</span>
           <Input
             type="number"
+            className="h-8 text-sm"
             min={0}
             step={0.5}
             value={String(form.leave_days ?? "")}
-            onChange={(event) => setForm((current) => ({ ...current, leave_days: Number(event.target.value) }))}
+            onChange={(e) => setForm((c) => ({ ...c, leave_days: Number(e.target.value) }))}
             required
           />
         </label>
 
+        {/* Balance hint */}
+        {form.leave_type && (
+          <p className="col-span-2 -mt-1 m-0 text-xs text-muted-foreground">
+            {!selectedBalance
+              ? `No balance found for "${form.leave_type}"`
+              : `${selectedBalance.leave_type_desc || selectedBalance.leave_type} — available: ${
+                  selectedBalance.leave_balance ?? selectedBalance.no_of_leaves_available ?? 0
+                } day(s)`}
+          </p>
+        )}
+
+        {/* Row 2: Start Date + End Date */}
         <label className="field">
-          <span>Half Day</span>
+          <span className="text-xs font-medium">Start Date</span>
+          <Input
+            type="date"
+            className="h-8 text-sm"
+            value={toDateInputValue(form.leave_start_date)}
+            onChange={(e) => setForm((c) => ({ ...c, leave_start_date: e.target.value }))}
+          />
+        </label>
+
+        <label className="field">
+          <span className="text-xs font-medium">End Date</span>
+          <Input
+            type="date"
+            className="h-8 text-sm"
+            value={toDateInputValue(form.leave_end_date)}
+            onChange={(e) => setForm((c) => ({ ...c, leave_end_date: e.target.value }))}
+          />
+        </label>
+
+        {/* Row 3: Half Day + Status */}
+        <label className="field">
+          <span className="text-xs font-medium">Half Day</span>
           <select
-            className="ui-input h-9 rounded-md border px-3 text-sm"
+            className="ui-input h-8 rounded-md border px-2 text-sm"
             value={form.half_day || "No"}
-            onChange={(event) => setForm((current) => ({ ...current, half_day: event.target.value }))}
+            onChange={(e) => setForm((c) => ({ ...c, half_day: e.target.value }))}
           >
-            <option value="No">No</option>
-            <option value="Yes">Yes</option>
+            {HALF_DAY_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
           </select>
         </label>
 
+        {/* Status maps "Active"/"Inactive" to "A"/"I" in buildLeaveEncashmentPayload */}
         <label className="field">
-          <span>Reason</span>
+          <span className="text-xs font-medium">Status</span>
+          <select
+            className="ui-input h-8 rounded-md border px-2 text-sm"
+            value={form.status || STATUS_OPTIONS[0]}
+            onChange={(e) => setForm((c) => ({ ...c, status: e.target.value }))}
+          >
+            {STATUS_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+        </label>
+
+        {/* Row 4: Doc No + Doc Status */}
+        <label className="field">
+          <span className="text-xs font-medium">Doc No</span>
           <Input
+            className="h-8 text-sm"
+            value={form.lve_doc_no || ""}
+            onChange={(e) => setForm((c) => ({ ...c, lve_doc_no: e.target.value }))}
+            placeholder="Auto-assigned if blank"
+          />
+        </label>
+
+        <label className="field">
+          <span className="text-xs font-medium">Doc Status</span>
+          <Input
+            className="h-8 text-sm"
+            value={form.doc_approval_status || ""}
+            onChange={(e) => setForm((c) => ({ ...c, doc_approval_status: e.target.value }))}
+            placeholder="e.g. C"
+          />
+        </label>
+
+        {/* Row 5: Reason + Remarks */}
+        <label className="field">
+          <span className="text-xs font-medium">Reason</span>
+          <Input
+            className="h-8 text-sm"
             value={form.leave_reason || ""}
-            onChange={(event) => setForm((current) => ({ ...current, leave_reason: event.target.value }))}
+            onChange={(e) => setForm((c) => ({ ...c, leave_reason: e.target.value }))}
           />
         </label>
 
         <label className="field">
-          <span>Remarks</span>
+          <span className="text-xs font-medium">Remarks</span>
           <Input
+            className="h-8 text-sm"
             value={form.remarks || ""}
-            onChange={(event) => setForm((current) => ({ ...current, remarks: event.target.value }))}
+            onChange={(e) => setForm((c) => ({ ...c, remarks: e.target.value }))}
           />
         </label>
 
-        {error && <div className="alert error">{error}</div>}
+        {error && <div className="alert error col-span-2 text-sm">{error}</div>}
       </form>
     </Dialog>
   );
