@@ -347,8 +347,8 @@ export function SupportChatWidget() {
                           {!!message.attachments?.length && (
                             <div className="support-attachments">
                               {message.attachments.map((item) => (
-                                <a href={item.DATA_URL} download={item.FILE_NAME} target="_blank" rel="noreferrer" key={item.ATTACHMENT_ID || item.FILE_NAME}>
-                                  {String(item.FILE_TYPE || "").startsWith("image/") ? <img src={item.DATA_URL} alt={item.FILE_NAME || "Attachment"} /> : <Paperclip size={14} />}
+                                <a href={item.DATA_URL || item.FILE_URL} download={item.FILE_NAME} target="_blank" rel="noreferrer" key={item.ATTACHMENT_ID || item.FILE_NAME}>
+                                  {String(item.FILE_TYPE || "").startsWith("image/") ? <img src={item.DATA_URL || item.FILE_URL} alt={item.FILE_NAME || "Attachment"} /> : <Paperclip size={14} />}
                                   <span>{item.FILE_NAME}</span>
                                 </a>
                               ))}

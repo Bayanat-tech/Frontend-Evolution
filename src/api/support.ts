@@ -7,6 +7,8 @@ export type SupportAttachment = {
   FILE_TYPE?: string;
   FILE_SIZE?: number;
   DATA_URL?: string;
+  FILE_URL?: string;
+  OBJECT_KEY?: string;
   file_name?: string;
   file_type?: string;
   file_size?: number;
