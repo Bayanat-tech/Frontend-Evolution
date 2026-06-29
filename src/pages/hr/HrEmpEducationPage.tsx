@@ -24,16 +24,16 @@ type EduLevelOption = { edu_level_code: string; edu_level_desc: string };
 type EduDiscOption  = { edu_disc_code: string;  edu_disc_desc: string };
 
 type EduRow = {
-  _rowId: string;
-  edu_desc_code: string;
-  edu_disc_desc: string;
-  edu_level_code: string;
-  edu_level_desc: string;
-  start_date: string;
-  end_date: string;
+  _rowId:          string;
+  edu_desc_code:   string;
+  edu_disc_desc:   string;
+  edu_level_code:  string;
+  edu_level_desc:  string;
+  start_date:      string;
+  end_date:        string;
   year_of_passing: string;
-  studied_at: string;
-  status_flag: string;
+  studied_at:      string;
+  status_flag:     string;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -42,9 +42,9 @@ function toIsoDate(value: string): string {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  const y  = date.getFullYear();
-  const m  = String(date.getMonth() + 1).padStart(2, "0");
-  const d  = String(date.getDate()).padStart(2, "0");
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
 
@@ -69,12 +69,12 @@ function buildParams(
   companyCode: string,
   code2 = "",
   code3 = "",
-  code4 = ""
+  code4 = "",
 ) {
   return {
     parameter,
     loginid,
-    code1: companyCode,
+    code1:   companyCode,
     code2,
     code3,
     code4,
@@ -118,8 +118,8 @@ function EditableSelectCell({
   disabled = false,
   onChange,
 }: {
-  value: string;
-  options: { code: string; label: string }[];
+  value:    string;
+  options:  { code: string; label: string }[];
   disabled?: boolean;
   onChange: (value: string) => void;
 }) {
@@ -142,7 +142,7 @@ function EditableSelectCell({
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export function HrEmpEducationPage() {
-  const { user } = useAuth();
+  const { user }    = useAuth();
   const queryClient = useQueryClient();
   const loginid     = user?.loginid      ?? "";
   const companyCode = user?.company_code ?? "";
@@ -157,13 +157,13 @@ export function HrEmpEducationPage() {
   const [rows,   setRows]   = useState<EduRow[]>([]);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  // ── Master data — edu level + discipline ──────────────────────────────────
+  // ── Master data — edu level + discipline ───────────────────────────────────
   const { data: eduLevelOpts = [] } = useQuery<EduLevelOption[]>({
     queryKey: ["edu-level", companyCode],
     staleTime: 10 * 60 * 1000,
     queryFn: async () => {
       const res = await getDynamicLookup(
-        buildParams("EDUCATION_QUALIFICATION_HR_EDUCATIONAL_LEVEL_SELECT", loginid, companyCode)
+        buildParams("EDUCATION_QUALIFICATION_HR_EDUCATIONAL_LEVEL_SELECT", loginid, companyCode),
       );
       return res as EduLevelOption[];
     },
@@ -174,7 +174,7 @@ export function HrEmpEducationPage() {
     staleTime: 10 * 60 * 1000,
     queryFn: async () => {
       const res = await getDynamicLookup(
-        buildParams("EDUCATION_QUALIFICATION_HR_EDU_DISCIPLINE", loginid, companyCode)
+        buildParams("EDUCATION_QUALIFICATION_HR_EDU_DISCIPLINE", loginid, companyCode),
       );
       return res as EduDiscOption[];
     },
@@ -183,15 +183,15 @@ export function HrEmpEducationPage() {
   // ── Employee education data ────────────────────────────────────────────────
   useQuery({
     queryKey: ["education-data", employee?.employee_id],
-    enabled: !!employee?.employee_id,
-    queryFn: async () => {
+    enabled:  !!employee?.employee_id,
+    queryFn:  async () => {
       const res = await getDynamicLookup(
         buildParams(
           "EDUCATION_QUALIFICATION_EMP_EDUCATION_SELECT",
           loginid,
           companyCode,
-          employee?.employee_id ?? ""
-        )
+          employee?.employee_id ?? "",
+        ),
       );
       const data: EduRow[] = (Array.isArray(res) ? res : []).map(
         (r: Record<string, unknown>, i: number) => ({
@@ -205,7 +205,7 @@ export function HrEmpEducationPage() {
           year_of_passing: String(r.year_of_passing ?? ""),
           studied_at:      String(r.studied_at      ?? ""),
           status_flag:     String(r.status_flag     ?? "A"),
-        })
+        }),
       );
       setRows(data);
       return data;
@@ -250,19 +250,19 @@ export function HrEmpEducationPage() {
             return { ...r, edu_level_code: value, edu_level_desc: opt?.edu_level_desc ?? "" };
           }
           return { ...r, [field]: value };
-        })
+        }),
       );
     },
-    [eduDiscOpts, eduLevelOpts]
+    [eduDiscOpts, eduLevelOpts],
   );
 
   const updateRowText = useCallback(
     (rowId: string, field: keyof EduRow, value: string) => {
       setRows((prev) =>
-        prev.map((r) => (r._rowId === rowId ? { ...r, [field]: value } : r))
+        prev.map((r) => (r._rowId === rowId ? { ...r, [field]: value } : r)),
       );
     },
-    []
+    [],
   );
 
   const deleteRow = useCallback((rowId: string) => {
@@ -273,18 +273,18 @@ export function HrEmpEducationPage() {
   const columns = useMemo<ColumnDef<EduRow>[]>(
     () => [
       {
-        id: "index",
+        id:     "index",
         header: "#",
-        size: 50,
-        cell: ({ row }) => (
+        size:   50,
+        cell:   ({ row }) => (
           <span className="text-muted-foreground text-xs">{row.index + 1}</span>
         ),
       },
       {
         accessorKey: "edu_desc_code",
-        header: "Educational Discipline *",
-        size: 240,
-        cell: ({ row }) => (
+        header:      "Educational Discipline *",
+        size:        240,
+        cell:        ({ row }) => (
           <EditableSelectCell
             value={row.original.edu_desc_code}
             options={eduDiscOpts.map((o) => ({
@@ -297,9 +297,9 @@ export function HrEmpEducationPage() {
       },
       {
         accessorKey: "edu_level_code",
-        header: "Educational Level *",
-        size: 200,
-        cell: ({ row }) => (
+        header:      "Educational Level *",
+        size:        200,
+        cell:        ({ row }) => (
           <EditableSelectCell
             value={row.original.edu_level_code}
             options={eduLevelOpts.map((o) => ({
@@ -312,9 +312,9 @@ export function HrEmpEducationPage() {
       },
       {
         accessorKey: "start_date",
-        header: "Start Date *",
-        size: 160,
-        cell: ({ row }) => (
+        header:      "Start Date *",
+        size:        160,
+        cell:        ({ row }) => (
           <EditableTextCell
             initialValue={row.original.start_date}
             type="date"
@@ -324,9 +324,9 @@ export function HrEmpEducationPage() {
       },
       {
         accessorKey: "end_date",
-        header: "End Date",
-        size: 160,
-        cell: ({ row }) => (
+        header:      "End Date",
+        size:        160,
+        cell:        ({ row }) => (
           <EditableTextCell
             initialValue={row.original.end_date}
             type="date"
@@ -336,9 +336,9 @@ export function HrEmpEducationPage() {
       },
       {
         accessorKey: "year_of_passing",
-        header: "Year Passed *",
-        size: 120,
-        cell: ({ row }) => (
+        header:      "Year Passed *",
+        size:        120,
+        cell:        ({ row }) => (
           <EditableTextCell
             initialValue={row.original.year_of_passing}
             onBlur={(v) => {
@@ -350,9 +350,9 @@ export function HrEmpEducationPage() {
       },
       {
         accessorKey: "studied_at",
-        header: "University / Institution *",
-        size: 220,
-        cell: ({ row }) => (
+        header:      "University / Institution *",
+        size:        220,
+        cell:        ({ row }) => (
           <EditableTextCell
             initialValue={row.original.studied_at}
             onBlur={(v) => updateRowText(row.original._rowId, "studied_at", v)}
@@ -361,9 +361,9 @@ export function HrEmpEducationPage() {
       },
       {
         accessorKey: "status_flag",
-        header: "Status *",
-        size: 130,
-        cell: ({ row }) => (
+        header:      "Status *",
+        size:        130,
+        cell:        ({ row }) => (
           <EditableSelectCell
             value={row.original.status_flag}
             options={[
@@ -375,11 +375,11 @@ export function HrEmpEducationPage() {
         ),
       },
       {
-        id: "remove",
-        header: "",
-        size: 60,
+        id:                 "remove",
+        header:             "",
+        size:               60,
         enableColumnFilter: false,
-        cell: ({ row }) => (
+        cell:               ({ row }) => (
           <Button
             size="icon"
             variant="ghost"
@@ -391,7 +391,7 @@ export function HrEmpEducationPage() {
         ),
       },
     ],
-    [eduDiscOpts, eduLevelOpts, updateRowSelect, updateRowText, deleteRow]
+    [eduDiscOpts, eduLevelOpts, updateRowSelect, updateRowText, deleteRow],
   );
 
   // ── Save ───────────────────────────────────────────────────────────────────
@@ -414,7 +414,7 @@ export function HrEmpEducationPage() {
       }));
 
       const success = await hrEmpEducationServiceInstance.upsertHrEmpEducationApi({
-        company_code:       companyCode,
+        company_code:      companyCode,
         education_details,
         loginid,
       });
@@ -432,38 +432,56 @@ export function HrEmpEducationPage() {
 
   // ── Lookup loaders ─────────────────────────────────────────────────────────
   const loadDivisions = useCallback(
-    () => getDynamicLookup(
-      buildParams("EDUCATION_QUALIFICATION_DIVISION_LIST", loginid, companyCode)
-    ),
-    [loginid, companyCode]
+    () =>
+      getDynamicLookup(
+        buildParams("EDUCATION_QUALIFICATION_DIVISION_LIST", loginid, companyCode),
+      ),
+    [loginid, companyCode],
   );
 
   const loadDepartments = useCallback(
-    () => getDynamicLookup(
-      buildParams("EDUCATION_QUALIFICATION_DEPARTMENT_DEPTCODE", loginid, companyCode, division?.div_code ?? "")
-    ),
-    [loginid, companyCode, division?.div_code]
+    () =>
+      getDynamicLookup(
+        buildParams(
+          "EDUCATION_QUALIFICATION_DEPARTMENT_DEPTCODE",
+          loginid,
+          companyCode,
+          division?.div_code ?? "",
+        ),
+      ),
+    [loginid, companyCode, division?.div_code],
   );
 
   const loadSections = useCallback(
-    () => getDynamicLookup(
-      buildParams("EDUCATION_QUALIFICATION_MS_HR_SECTION", loginid, companyCode, department?.dept_code ?? "")
-    ),
-    [loginid, companyCode, department?.dept_code]
+    () =>
+      getDynamicLookup(
+        buildParams(
+          "EDUCATION_QUALIFICATION_MS_HR_SECTION",
+          loginid,
+          companyCode,
+          department?.dept_code ?? "",
+        ),
+      ),
+    [loginid, companyCode, department?.dept_code],
   );
 
+  // FIX: loadEmployees now accepts any combination of filters.
+  // Division and section are optional — only department is used as
+  // the primary filter (code2). Division goes to code3, section to code4.
+  // The disabled prop below is also relaxed to only require department.
   const loadEmployees = useCallback(
-    () => getDynamicLookup(
-      buildParams(
-        "EDUCATION_QUALIFICATION_HR_EMPLOYEE_LIST_WITH_MANAGER",
-        loginid,
-        companyCode,
-        department?.dept_code ?? "",
-        division?.div_code    ?? "",
-        section?.section_code ?? ""
-      )
-    ),
-    [loginid, companyCode, division?.div_code, department?.dept_code, section?.section_code]
+    () =>
+      getDynamicLookup(
+        buildParams(
+          "EDUCATION_QUALIFICATION_HR_EMPLOYEE_LIST_WITH_MANAGER",
+          loginid,
+          companyCode,
+          department?.dept_code  ?? "",  // code2 — primary filter
+          division?.div_code     ?? "",  // code3 — optional
+          section?.section_code  ?? "",  // code4 — optional
+        ),
+      ),
+    [loginid, companyCode, department?.dept_code, division?.div_code, section?.section_code],
   );
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -499,6 +517,7 @@ export function HrEmpEducationPage() {
             <Input disabled value={companyCode} />
           </label>
 
+          {/* Division — optional, narrows employee list */}
           <label className="field">
             <span>Division</span>
             <LookupField
@@ -515,12 +534,15 @@ export function HrEmpEducationPage() {
               loadOptions={loadDivisions}
               onChange={(_, row) => {
                 setDivision(
-                  row ? { div_code: String(row.div_code), div_name: String(row.div_name) } : null
+                  row
+                    ? { div_code: String(row.div_code ?? ""), div_name: String(row.div_name ?? "") }
+                    : null,
                 );
               }}
             />
           </label>
 
+          {/* Department — optional but recommended */}
           <label className="field">
             <span>Department</span>
             <LookupField
@@ -535,17 +557,19 @@ export function HrEmpEducationPage() {
               valueField="dept_code"
               displayFields={["dept_code", "dept_name"]}
               loadOptions={loadDepartments}
-              disabled={!division}
               onChange={(_, row) => {
                 setDepartment(
-                  row ? { dept_code: String(row.dept_code), dept_name: String(row.dept_name) } : null
+                  row
+                    ? { dept_code: String(row.dept_code ?? ""), dept_name: String(row.dept_name ?? "") }
+                    : null,
                 );
               }}
             />
           </label>
 
+          {/* Section — fully optional */}
           <label className="field">
-            <span>Section (All)</span>
+            <span>Section</span>
             <LookupField
               compact
               label="Section"
@@ -562,20 +586,30 @@ export function HrEmpEducationPage() {
               onChange={(_, row) => {
                 setSection(
                   row
-                    ? { section_code: String(row.section_code), section_name: String(row.section_name) }
-                    : null
+                    ? {
+                        section_code: String(row.section_code ?? ""),
+                        section_name: String(row.section_name ?? ""),
+                      }
+                    : null,
                 );
               }}
             />
           </label>
 
+          {/* Employee — FIX: only requires department, not division */}
           <label className="field">
-            <span>Employee <strong className="text-destructive">*</strong></span>
+            <span>
+              Employee <strong className="text-destructive">*</strong>
+            </span>
             <LookupField
               compact
               label="Employee"
               value={employee?.employee_id ?? ""}
-              displayValue={employee ? `${employee.employee_id} - ${employee.employee_name}` : ""}
+              displayValue={
+                employee
+                  ? `${employee.employee_id} - ${employee.employee_name}`
+                  : ""
+              }
               columns={[
                 { field: "employee_id",   header: "ID"       },
                 { field: "employee_name", header: "Employee" },
@@ -583,12 +617,22 @@ export function HrEmpEducationPage() {
               valueField="employee_id"
               displayFields={["employee_id", "employee_name"]}
               loadOptions={loadEmployees}
-              disabled={!division || !department}
+              // FIX: was `!division || !department` — division is optional
+              disabled={false}
               onChange={(_, row) => {
                 setEmployee(
                   row
-                    ? { employee_id: String(row.employee_id), employee_name: String(row.employee_name) }
-                    : null
+                    ? {
+                        employee_id: String(
+                          row.employee_id ?? "",
+                        ),
+                        // FIX: guard both rpt_name and employee_name —
+                        // API may return either depending on the lookup
+                        employee_name: String(
+                          row.employee_name ?? row.rpt_name ?? "",
+                        ),
+                      }
+                    : null,
                 );
               }}
             />

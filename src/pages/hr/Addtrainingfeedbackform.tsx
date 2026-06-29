@@ -1,5 +1,6 @@
 import { Save, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { executeDynamicMutationColumn90, getDynamicLookup } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
@@ -62,9 +63,9 @@ type TEmployee = {
 type FormMode = "add" | "edit" | "view";
 
 type Props = {
-  mode:         FormMode;
+  mode:          FormMode;
   existingData?: Partial<TTrainingFeedback>;
-  onClose:      (shouldRefetch?: boolean) => void;
+  onClose:       (shouldRefetch?: boolean) => void;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -125,7 +126,193 @@ const EMPTY_FORM: TTrainingFeedback = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Component
+// Employee Autocomplete (portal-based dropdown — no overflow clipping)
+// ─────────────────────────────────────────────────────────────────────────────
+
+type EmpAutocompleteProps = {
+  employees:       TEmployee[];
+  selectedEmp:     TEmployee | null;
+  fallbackName:    string;
+  readonly:        boolean;
+  error?:          string;
+  onSelect:        (emp: TEmployee) => void;
+};
+
+function EmployeeAutocomplete({
+  employees,
+  selectedEmp,
+  fallbackName,
+  readonly,
+  error,
+  onSelect,
+}: EmpAutocompleteProps) {
+  const [search,    setSearch]    = useState("");
+  const [open,      setOpen]      = useState(false);
+  const [dropStyle, setDropStyle] = useState<React.CSSProperties>({});
+  const inputRef = useRef<HTMLInputElement>(null);
+  const wrapRef  = useRef<HTMLDivElement>(null);
+
+  // Compute portal dropdown position anchored to the input
+  const openDropdown = () => {
+    if (!wrapRef.current) return;
+    const rect = wrapRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const dropHeight = Math.min(220, spaceBelow - 8);
+
+    setDropStyle({
+      position: "fixed",
+      top:      rect.bottom + 2,
+      left:     rect.left,
+      width:    rect.width,
+      maxHeight: dropHeight > 80 ? dropHeight : 220,
+      zIndex:   9999,
+    });
+    setOpen(true);
+  };
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return employees.slice(0, 50);
+    return employees
+      .filter(
+        (e) =>
+          (e.rpt_name      || "").toLowerCase().includes(q) ||
+          (e.employee_code || "").toLowerCase().includes(q),
+      )
+      .slice(0, 50);
+  }, [employees, search]);
+
+  const displayValue =
+    search ||
+    (selectedEmp
+      ? `${selectedEmp.employee_code} – ${selectedEmp.rpt_name}`
+      : fallbackName);
+
+  if (readonly) {
+    return <Input disabled value={fallbackName} />;
+  }
+
+  return (
+    <div ref={wrapRef} style={{ position: "relative", width: "100%" }}>
+      <Input
+        ref={inputRef}
+        placeholder="Search by name or code…"
+        value={displayValue}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          openDropdown();
+        }}
+        onFocus={openDropdown}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+      />
+      {error && (
+        <span className="text-destructive text-xs mt-0.5 block">{error}</span>
+      )}
+
+      {open && filtered.length > 0 &&
+        createPortal(
+          <div
+            style={{
+              ...dropStyle,
+              background:   "var(--card)",
+              border:       "1px solid var(--border)",
+              borderRadius: 6,
+              overflowY:    "auto",
+              boxShadow:    "0 4px 20px rgba(0,0,0,0.18)",
+            }}
+          >
+            {filtered.map((emp) => (
+              <div
+                key={emp.employee_id}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onSelect(emp);
+                  setSearch("");
+                  setOpen(false);
+                }}
+                style={{
+                  padding:      "8px 12px",
+                  cursor:       "pointer",
+                  borderBottom: "1px solid var(--border)",
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = "var(--muted)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = "")
+                }
+              >
+                <div style={{ fontWeight: 600, fontSize: "0.8125rem" }}>
+                  {emp.rpt_name}
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    color:    "var(--muted-foreground)",
+                  }}
+                >
+                  {emp.employee_code}
+                  {emp.desg_name ? ` | ${emp.desg_name}` : ""}
+                  {emp.dept_name ? ` | ${emp.dept_name}` : ""}
+                  {emp.grade_name ? ` | ${emp.grade_name}` : ""}
+                </div>
+              </div>
+            ))}
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rating Section
+// ─────────────────────────────────────────────────────────────────────────────
+
+type RatingSectionProps = {
+  eyebrow:   string;
+  title:     string;
+  questions: { label: string; field: keyof TTrainingFeedback }[];
+  form:      TTrainingFeedback;
+  readonly:  boolean;
+  onChange:  (field: keyof TTrainingFeedback, value: string) => void;
+};
+
+function RatingSection({ eyebrow, title, questions, form, readonly, onChange }: RatingSectionProps) {
+  return (
+    <Card>
+      <CardHeader>
+        <div>
+          <p className="eyebrow">{eyebrow}</p>
+          <h2 className="m-0 text-sm font-semibold">{title}</h2>
+        </div>
+      </CardHeader>
+      <CardContent
+        className="grid gap-3"
+        style={{ gridTemplateColumns: `repeat(${Math.min(questions.length, 4)}, 1fr)` }}
+      >
+        {questions.map(({ label, field }) => (
+          <label className="field" key={field as string}>
+            <span>{label}</span>
+            <Select
+              disabled={readonly}
+              value={String(form[field] ?? "")}
+              onChange={(e) => onChange(field, e.target.value)}
+            >
+              <option value="">—</option>
+              {RATING_OPTIONS.map((v) => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </Select>
+          </label>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Form Component
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function AddTrainingFeedbackForm({ mode, existingData, onClose }: Props) {
@@ -142,8 +329,8 @@ export function AddTrainingFeedbackForm({ mode, existingData, onClose }: Props) 
     company_code: companyCode,
     user_id:      loginid,
   });
-  const [errors,  setErrors]  = useState<Partial<Record<keyof TTrainingFeedback, string>>>({});
-  const [saving,  setSaving]  = useState(false);
+  const [errors,   setErrors]   = useState<Partial<Record<keyof TTrainingFeedback, string>>>({});
+  const [saving,   setSaving]   = useState(false);
   const [apiError, setApiError] = useState("");
 
   useEffect(() => {
@@ -164,11 +351,9 @@ export function AddTrainingFeedbackForm({ mode, existingData, onClose }: Props) 
   const set = (field: keyof TTrainingFeedback, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
-  // ── Employee autocomplete ───────────────────────────────────────────────────
+  // ── Employee list ────────────────────────────────────────────────────────────
 
   const [employeeList, setEmployeeList] = useState<TEmployee[]>([]);
-  const [empSearch,    setEmpSearch]    = useState("");
-  const [empOpen,      setEmpOpen]      = useState(false);
 
   useEffect(() => {
     if (!companyCode) return;
@@ -180,7 +365,9 @@ export function AddTrainingFeedbackForm({ mode, existingData, onClose }: Props) 
       number1: 0, number2: 0, number3: 0, number4: 0,
       date1: null, date2: null, date3: null, date4: null,
     })
-      .then((data) => setEmployeeList(Array.isArray(data) ? (data as TEmployee[]) : []))
+      .then((data) =>
+        setEmployeeList(Array.isArray(data) ? (data as TEmployee[]) : []),
+      )
       .catch(() => {});
   }, [companyCode, loginid]);
 
@@ -194,18 +381,6 @@ export function AddTrainingFeedbackForm({ mode, existingData, onClose }: Props) 
     [employeeList, form.cand_no, form.cand_name],
   );
 
-  const filteredEmployees = useMemo(() => {
-    if (!empSearch.trim()) return employeeList.slice(0, 50);
-    const q = empSearch.toLowerCase();
-    return employeeList
-      .filter(
-        (e) =>
-          (e.rpt_name      || "").toLowerCase().includes(q) ||
-          (e.employee_code || "").toLowerCase().includes(q),
-      )
-      .slice(0, 50);
-  }, [employeeList, empSearch]);
-
   const handleEmployeeSelect = (emp: TEmployee) => {
     setForm((prev) => ({
       ...prev,
@@ -216,8 +391,6 @@ export function AddTrainingFeedbackForm({ mode, existingData, onClose }: Props) 
       grade:     emp.grade_name   || "",
       report_to: emp.manager_name || "",
     }));
-    setEmpSearch("");
-    setEmpOpen(false);
     setErrors((prev) => ({ ...prev, cand_name: undefined }));
   };
 
@@ -242,39 +415,39 @@ export function AddTrainingFeedbackForm({ mode, existingData, onClose }: Props) 
       await executeDynamicMutationColumn90({
         parameter: "HR_TR_FEEDBACK_FORM_INS_UPD",
         loginid,
-        val1s1:  companyCode,                        // COMPANY_CODE
-        val1s2:  isEdit ? String(form.doc_no) : "",  // DOC_NO (empty = INSERT)
-        val1s3:  form.doc_type,                      // DOC_TYPE
-        val1s4:  form.doc_ref_no,                    // DOC_REF_NO
-        val1s5:  toDate(form.doc_date),              // DOC_DATE
-        val1s6:  form.cand_no,                       // CAND_NO
-        val1s7:  form.cand_name,                     // CAND_NAME
-        val1s8:  form.desig,                         // DESIG
-        val1s9:  form.dept,                          // DEPT
-        val1s10: form.grade,                         // GRADE
-        val1s11: form.course_att,                    // COURSE_ATT
-        val1s12: form.report_to,                     // REPORT_TO
-        val1s13: form.q1_rating_cm,                  // Q1_RATING_CM
-        val1s14: form.q2_rating_cm,                  // Q2_RATING_CM
-        val1s15: form.q3_rating_cm,                  // Q3_RATING_CM
-        val1s16: form.q4_rating_cm,                  // Q4_RATING_CM
-        val1s17: form.q1_rating_tr,                  // Q1_RATING_TR
-        val1s18: form.q2_rating_tr,                  // Q2_RATING_TR
-        val1s19: form.q3_rating_tr,                  // Q3_RATING_TR
-        val1s20: form.q4_rating_tr,                  // Q4_RATING_TR
-        val1s21: form.q1_rating_inf,                 // Q1_RATING_INF
-        val1s22: form.q2_rating_inf,                 // Q2_RATING_INF
-        val1s23: form.q1_rating_exp,                 // Q1_RATING_EXP
-        val1s24: form.q2_rating_exp,                 // Q2_RATING_EXP
-        val1s25: form.q3_rating_exp,                 // Q3_RATING_EXP
-        val1s26: form.q3_rating_exp1,                // Q3_RATING_EXP1
-        val1s27: form.comments,                      // COMMENTS
-        val1s28: form.sign_1,                        // SIGN_1
-        val1s29: toDate(form.date_1),                // DATE_1
-        val1s30: form.sign_2,                        // SIGN_2
-        val1s31: toDate(form.date_2),                // DATE_2
-        val1s32: form.sign_3,                        // SIGN_3
-        val1s33: toDate(form.date_3),                // DATE_3
+        val1s1:  companyCode,
+        val1s2:  isEdit ? String(form.doc_no) : "",
+        val1s3:  form.doc_type,
+        val1s4:  form.doc_ref_no,
+        val1s5:  toDate(form.doc_date),
+        val1s6:  form.cand_no,
+        val1s7:  form.cand_name,
+        val1s8:  form.desig,
+        val1s9:  form.dept,
+        val1s10: form.grade,
+        val1s11: form.course_att,
+        val1s12: form.report_to,
+        val1s13: form.q1_rating_cm,
+        val1s14: form.q2_rating_cm,
+        val1s15: form.q3_rating_cm,
+        val1s16: form.q4_rating_cm,
+        val1s17: form.q1_rating_tr,
+        val1s18: form.q2_rating_tr,
+        val1s19: form.q3_rating_tr,
+        val1s20: form.q4_rating_tr,
+        val1s21: form.q1_rating_inf,
+        val1s22: form.q2_rating_inf,
+        val1s23: form.q1_rating_exp,
+        val1s24: form.q2_rating_exp,
+        val1s25: form.q3_rating_exp,
+        val1s26: form.q3_rating_exp1,
+        val1s27: form.comments,
+        val1s28: form.sign_1,
+        val1s29: toDate(form.date_1),
+        val1s30: form.sign_2,
+        val1s31: toDate(form.date_2),
+        val1s32: form.sign_3,
+        val1s33: toDate(form.date_3),
       });
       onClose(true);
     } catch (err) {
@@ -285,47 +458,6 @@ export function AddTrainingFeedbackForm({ mode, existingData, onClose }: Props) 
       setSaving(false);
     }
   };
-
-  // ── Rating section helper ───────────────────────────────────────────────────
-
-  const RatingSection = ({
-    eyebrow,
-    title,
-    questions,
-  }: {
-    eyebrow:   string;
-    title:     string;
-    questions: { label: string; field: keyof TTrainingFeedback }[];
-  }) => (
-    <Card>
-      <CardHeader>
-        <div>
-          <p className="eyebrow">{eyebrow}</p>
-          <h2 className="m-0 text-sm font-semibold">{title}</h2>
-        </div>
-      </CardHeader>
-      <CardContent
-        className="grid gap-3"
-        style={{ gridTemplateColumns: `repeat(${questions.length}, 1fr)` }}
-      >
-        {questions.map(({ label, field }) => (
-          <label className="field" key={field as string}>
-            <span>{label}</span>
-            <Select
-              disabled={readonly}
-              value={String(form[field] ?? "")}
-              onChange={(e) => set(field, e.target.value)}
-            >
-              <option value="">—</option>
-              {RATING_OPTIONS.map((v) => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </Select>
-          </label>
-        ))}
-      </CardContent>
-    </Card>
-  );
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -413,87 +545,29 @@ export function AddTrainingFeedbackForm({ mode, existingData, onClose }: Props) 
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
 
-          {/* Employee autocomplete */}
-          <label className="field md:col-span-2 xl:col-span-1" style={{ position: "relative" }}>
+          {/* Employee autocomplete — portal-rendered dropdown */}
+          <label className="field">
             <span>
               Candidate Name <strong className="text-destructive">*</strong>
             </span>
-            {readonly ? (
-              <Input disabled value={form.cand_name} />
-            ) : (
-              <div style={{ position: "relative" }}>
-                <Input
-                  placeholder="Search by name or code…"
-                  value={
-                    empSearch ||
-                    (selectedEmployee
-                      ? `${selectedEmployee.employee_code} – ${selectedEmployee.rpt_name}`
-                      : form.cand_name)
-                  }
-                  onChange={(e) => {
-                    setEmpSearch(e.target.value);
-                    setEmpOpen(true);
-                  }}
-                  onFocus={() => setEmpOpen(true)}
-                  onBlur={() => setTimeout(() => setEmpOpen(false), 150)}
-                />
-                {empOpen && filteredEmployees.length > 0 && (
-                  <div
-                    style={{
-                      position:     "absolute",
-                      top:          "100%",
-                      left:         0,
-                      right:        0,
-                      zIndex:       50,
-                      background:   "var(--card)",
-                      border:       "1px solid var(--border)",
-                      borderRadius: 6,
-                      maxHeight:    220,
-                      overflowY:    "auto",
-                      boxShadow:    "0 4px 16px rgba(0,0,0,0.12)",
-                    }}
-                  >
-                    {filteredEmployees.map((emp) => (
-                      <div
-                        key={emp.employee_id}
-                        onMouseDown={() => handleEmployeeSelect(emp)}
-                        style={{
-                          padding:      "8px 12px",
-                          cursor:       "pointer",
-                          borderBottom: "1px solid var(--border)",
-                        }}
-                        onMouseEnter={(e) =>
-                          (e.currentTarget.style.background = "var(--muted)")
-                        }
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.background = "")
-                        }
-                      >
-                        <div style={{ fontWeight: 600, fontSize: "0.8125rem" }}>
-                          {emp.rpt_name}
-                        </div>
-                        <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)" }}>
-                          {emp.employee_code} | {emp.desg_name} | {emp.dept_name} | {emp.grade_name}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-            {errors.cand_name && (
-              <span className="text-destructive text-xs mt-0.5">{errors.cand_name}</span>
-            )}
+            <EmployeeAutocomplete
+              employees={employeeList}
+              selectedEmp={selectedEmployee}
+              fallbackName={form.cand_name}
+              readonly={readonly}
+              error={errors.cand_name}
+              onSelect={handleEmployeeSelect}
+            />
           </label>
 
           {/* Auto-filled read-only fields */}
           {(
             [
-              { label: "Candidate No", field: "cand_no"   },
-              { label: "Designation",  field: "desig"     },
-              { label: "Department",   field: "dept"      },
-              { label: "Grade",        field: "grade"     },
-              { label: "Reports To",   field: "report_to" },
+              { label: "Candidate No",  field: "cand_no"   },
+              { label: "Designation",   field: "desig"     },
+              { label: "Department",    field: "dept"      },
+              { label: "Grade",         field: "grade"     },
+              { label: "Reports To",    field: "report_to" },
             ] as { label: string; field: keyof TTrainingFeedback }[]
           ).map(({ label, field }) => (
             <label key={field as string} className="field">
@@ -516,6 +590,9 @@ export function AddTrainingFeedbackForm({ mode, existingData, onClose }: Props) 
         <RatingSection
           eyebrow="Ratings"
           title="Course Material (CM)"
+          form={form}
+          readonly={readonly}
+          onChange={set}
           questions={[
             { label: "Q1 – Content relevance", field: "q1_rating_cm" },
             { label: "Q2 – Material quality",  field: "q2_rating_cm" },
@@ -527,6 +604,9 @@ export function AddTrainingFeedbackForm({ mode, existingData, onClose }: Props) 
         <RatingSection
           eyebrow="Ratings"
           title="Trainer (TR)"
+          form={form}
+          readonly={readonly}
+          onChange={set}
           questions={[
             { label: "Q1 – Knowledge",   field: "q1_rating_tr" },
             { label: "Q2 – Delivery",    field: "q2_rating_tr" },
@@ -538,6 +618,9 @@ export function AddTrainingFeedbackForm({ mode, existingData, onClose }: Props) 
         <RatingSection
           eyebrow="Ratings"
           title="Infrastructure (INF)"
+          form={form}
+          readonly={readonly}
+          onChange={set}
           questions={[
             { label: "Q1 – Venue & facilities", field: "q1_rating_inf" },
             { label: "Q2 – Equipment",          field: "q2_rating_inf" },
@@ -547,6 +630,9 @@ export function AddTrainingFeedbackForm({ mode, existingData, onClose }: Props) 
         <RatingSection
           eyebrow="Ratings"
           title="Experience (EXP)"
+          form={form}
+          readonly={readonly}
+          onChange={set}
           questions={[
             { label: "Q1 – Practical value",  field: "q1_rating_exp"  },
             { label: "Q2 – Applicability",    field: "q2_rating_exp"  },
