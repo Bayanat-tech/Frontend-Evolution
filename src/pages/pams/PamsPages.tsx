@@ -201,8 +201,8 @@ export const pamsMasterConfigs: Record<string, PamsMasterConfig> = {
     keyFields: ["PERIOD_NUMBER"],
     fields: [
       { name: "PERIOD_NUMBER", label: "Period Number", disabledOnEdit: true, table: true, width: 150 },
-      { name: "PERIOD_FROM_DATE", label: "From Date", type: "date", required: true, table: true, width: 160 },
-      { name: "PERIOD_TO_DATE", label: "To Date", type: "date", required: true, table: true, width: 160 },
+      { name: "PERIOD_FROM_DATE", label: "From Date", type: "date", required: true, table: true, width: 160, display: (row) => formatDateDisplay(row.PERIOD_FROM_DATE),  },
+      { name: "PERIOD_TO_DATE", label: "To Date", type: "date", required: true, table: true, width: 160, display: (row) => formatDateDisplay(row.PERIOD_TO_DATE), },
     ],
     buildSave: (form, ctx) => ({
       val1s1: text(form.PERIOD_NUMBER),
