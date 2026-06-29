@@ -1,4 +1,5 @@
 import { ChangeEvent, ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CheckCircle2, Headphones, ImagePlus, MessageSquarePlus, Paperclip, RefreshCw, Send, ShieldCheck, UserRoundCheck, X } from "lucide-react";
 import { io, Socket } from "socket.io-client";
 import {
@@ -46,7 +47,10 @@ export function SupportChatWidget() {
   const unreadTotal = tickets.reduce((sum, ticket) => sum + Number(ticket.UNREAD_COUNT || 0), 0);
   const currentUser = user?.loginid || user?.username || "";
   const canUseAdmin = serverCanAdmin;
-  const onlineUsers = activeUsers.filter((item) => item.IS_ONLINE === "Y").length;
+  const onlineUsers = activeUsers.filter(isSupportUserOnline).length;
+  const visibleActiveUsers = [...activeUsers]
+    .sort((first, second) => Number(isSupportUserOnline(second)) - Number(isSupportUserOnline(first)))
+    .slice(0, 8);
 
   useEffect(() => {
     setRole((current) => (canUseAdmin ? current : "user"));
@@ -230,7 +234,7 @@ export function SupportChatWidget() {
         <Headphones size={17} />
         {unreadTotal > 0 && <span>{unreadTotal > 9 ? "9+" : unreadTotal}</span>}
       </button>
-      {open && (
+      {open && typeof document !== "undefined" && createPortal(
         <div className="support-shell" role="dialog" aria-label="Support chat">
           <section className={cn("support-panel", role === "admin" ? "admin-mode" : "user-mode")}>
             <header className="support-header">
@@ -267,21 +271,31 @@ export function SupportChatWidget() {
 
                 <div className="support-active-users">
                   <div className="support-section-title">
-                    <UserRoundCheck size={14} /> Active users
+                    <UserRoundCheck size={14} /> Active users <span>{onlineUsers} online</span>
                   </div>
                   <div className="support-user-strip">
-                    {activeUsers.slice(0, 8).map((item) => (
-                      <div className="support-avatar-wrap" title={`${item.USERNAME || item.LOGINID} ${item.IS_ONLINE === "Y" ? "online" : "offline"}`} key={item.LOGINID}>
-                        <div className="support-avatar">{String(item.USERNAME || item.LOGINID).slice(0, 2).toUpperCase()}</div>
-                        <span className={cn("presence-dot", item.IS_ONLINE === "Y" && "online")} />
-                      </div>
-                    ))}
+                    {visibleActiveUsers.map((item) => {
+                      const online = isSupportUserOnline(item);
+                      const name = item.USERNAME || item.LOGINID || "User";
+                      return (
+                        <div className={cn("support-avatar-wrap", online && "online")} title={`${name} ${online ? "online" : "away"}`} key={item.LOGINID || name}>
+                          <div className="support-avatar">{String(name).slice(0, 2).toUpperCase()}</div>
+                          <span className={cn("presence-dot", online && "online")} />
+                          <span className="support-active-copy">
+                            <strong>{name}</strong>
+                            <small>{online ? "Online" : "Away"}</small>
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
-                <Button className="support-new-ticket" variant="outline" onClick={() => { setSelectedId(null); setMessages([]); setThreadNotice(""); }}>
-                  <MessageSquarePlus size={14} /> New request
-                </Button>
+                {!canUseAdmin && (
+                  <Button className="support-new-ticket" variant="outline" onClick={() => { setSelectedId(null); setMessages([]); setThreadNotice(""); }}>
+                    <MessageSquarePlus size={14} /> New request
+                  </Button>
+                )}
 
                 <div className="support-ticket-list">
                   {tickets.map((ticket) => (
@@ -312,8 +326,8 @@ export function SupportChatWidget() {
               <main className="support-chat">
                 <div className="support-thread-head">
                   <div>
-                    <h3>{selectedTicket ? selectedTicket.SUBJECT || `Ticket ${selectedTicket.TICKET_ID}` : "New Support Request"}</h3>
-                    <p>{selectedTicket ? `${selectedTicket.REQUESTER_NAME || selectedTicket.REQUESTER_LOGINID} - ${canUseAdmin ? "Customer thread" : "Support thread"}` : "Describe the issue and attach a screenshot if needed."}</p>
+                    <h3>{selectedTicket ? selectedTicket.SUBJECT || `Ticket ${selectedTicket.TICKET_ID}` : canUseAdmin ? "Support Queue" : "New Support Request"}</h3>
+                    <p>{selectedTicket ? `${selectedTicket.REQUESTER_NAME || selectedTicket.REQUESTER_LOGINID} - ${canUseAdmin ? "Customer thread" : "Support thread"}` : canUseAdmin ? "Select a customer ticket from the queue to reply or close it." : "Describe the issue and attach a screenshot if needed."}</p>
                   </div>
                   {selectedTicket && (
                     <div className="support-thread-actions">
@@ -329,7 +343,14 @@ export function SupportChatWidget() {
 
                 <div className="support-messages" ref={scrollerRef}>
                   {threadNotice && <div className="support-thread-notice">{threadNotice}</div>}
-                  {!selectedId && (
+                  {!selectedId && canUseAdmin && (
+                    <div className="support-admin-empty">
+                      <MessageSquarePlus size={24} />
+                      <strong>{tickets.length ? "Select a ticket" : "No tickets waiting"}</strong>
+                      <p>{tickets.length ? "Choose a conversation from the left queue to review messages, reply, or close the request." : "New customer requests will appear here in real time."}</p>
+                    </div>
+                  )}
+                  {!selectedId && !canUseAdmin && (
                     <div className="support-new-fields">
                       <Input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="Subject" />
                     </div>
@@ -381,7 +402,7 @@ export function SupportChatWidget() {
                         void send();
                       }
                     }} />
-                    <Button onClick={() => void send()} disabled={loading || (!compose.trim() && !attachments.length)}>
+                    <Button onClick={() => void send()} disabled={(canUseAdmin && !selectedId) || loading || (!compose.trim() && !attachments.length)}>
                       <Send size={15} /> Send
                     </Button>
                   </div>
@@ -390,7 +411,8 @@ export function SupportChatWidget() {
               </main>
             </div>
           </section>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
@@ -420,4 +442,13 @@ function toFriendlySupportError(error: unknown, fallback: string) {
     return "This support ticket is no longer available for your login. Please select another ticket or start a new request.";
   }
   return error instanceof Error ? error.message : fallback;
+}
+
+function isSupportUserOnline(item: SupportUser) {
+  if (item.IS_ONLINE === "Y") return true;
+  if (!item.LAST_SEEN_AT) return false;
+  const normalized = String(item.LAST_SEEN_AT).replace(" ", "T");
+  const lastSeen = new Date(normalized);
+  if (Number.isNaN(lastSeen.getTime())) return false;
+  return Date.now() - lastSeen.getTime() <= 5 * 60 * 1000;
 }
