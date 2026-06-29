@@ -81,6 +81,7 @@ import StockAdjustmentPage from "../pages/wms/stock adjustment/StockAdjustmentPa
 import { StockAdjViewPage } from "../pages/wms/stock adjustment/StockAdjustmentViewPage";
 import StockAdjPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
 import {StorageComputationPage} from "../pages/wms/storage computation/StorageComputation";
+import LeaveEncashmentPage from "../pages/hr/LeaveEncashmentPage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -99,6 +100,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: "HR Leave Encashment",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/leave_encashment"),
+    element: () => <LeaveEncashmentPage />,
+  },
   {
     name: "Finance Ledger Basics",
     match: ({ pathname }) => pathname.toLowerCase().includes("/wms/wms/reports/stock%20report/stock_detail"),
