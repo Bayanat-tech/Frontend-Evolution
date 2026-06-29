@@ -716,7 +716,6 @@ export function StockTransferViewPage() {
     </section>
   );
 }
-
 // ─── Create Detail Dialog ─────────────────────────────────────────────────────
 function CreateDetailDialog({
   open, stn_no, company_code, prin_code, username, onClose, onSuccess, onError,
@@ -734,6 +733,7 @@ function CreateDetailDialog({
   const [toLocEnd, setToLocEnd] = useState("");
   const [qtyPUOM, setQtyPUOM] = useState("");
   const [qtyLUOM, setQtyLUOM] = useState("");
+const [locNotice, setLocNotice] = useState<NoticeState>(null);
 
 const [fromLocOptions, setFromLocOptions] = useState<WmsRow[]>([]);
 const [toLocOptions, setToLocOptions]     = useState<WmsRow[]>([]);
@@ -765,6 +765,7 @@ useEffect(() => {
     setToLocStart(""); setToLocEnd("");
     setQtyPUOM(""); setQtyLUOM("");
     setFromLocOptions([]); setToLocOptions([]); // add this
+        setLocNotice(null); // add this
   }
 }, [open]);
 
@@ -935,7 +936,19 @@ useEffect(() => {
                       onChange={(v) => { setToSite(v); setToLocStart(""); setToLocEnd(""); }} />
                   </div>
                 </Section>
-
+<NoticeToast notice={locNotice} onClose={() => setLocNotice(null)} />
+{/* {locNotice && (
+  <div className="flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+    <span>⚠ {locNotice.message}</span>
+    <button
+      type="button"
+      className="ml-2 text-red-400 hover:text-red-700"
+      onClick={() => setLocNotice(null)}
+    >
+      ✕
+    </button>
+  </div>
+)} */}
             <Section title="Location">
               <div className="grid gap-2.5 md:grid-cols-2">
                 <LookupField
@@ -949,17 +962,18 @@ useEffect(() => {
                     { field: "LOC_DESC", header: "Location Name" },
                   ]}
                   placeholder="Select location"
-                    loadOptions={async () => {
-                      if (!fromSite) return [];
-                      const res = await api.post("/api/wms/inbound/executeRawSql", {
-                        raw_sql: `SELECT LOCATION_CODE, LOC_DESC
-                                  FROM MS_LOCATION
-                                  WHERE
-                                     SITE_CODE    = '${fromSite}'`,
-                      });
-                      return Array.isArray(res.data?.data) ? res.data.data
-                          : Array.isArray(res.data)        ? res.data : [];
-                    }}
+                  loadOptions={async () => {
+                    if (!fromSite) return [];
+                    const res = await api.post("/api/wms/inbound/executeRawSql", {
+                      raw_sql: `SELECT LOCATION_CODE, LOC_DESC
+                                FROM MS_LOCATION
+                                WHERE SITE_CODE = '${fromSite}'`,
+                    });
+                    const data = Array.isArray(res.data?.data) ? res.data.data
+                              : Array.isArray(res.data)        ? res.data : [];
+                    if (data.length === 0) setLocNotice({ type: "error", message: `Site "${fromSite}" does not have any locations.` });
+                    return data;
+                  }}
                   onChange={(v) => { setFromLocStart(v); setFromLocEnd(v); }}
                 />
                 <LookupField
@@ -974,14 +988,16 @@ useEffect(() => {
                   ]}
                   placeholder="Select location"
                   loadOptions={async () => {
-                    if (!fromSite) return [];
+                    if (!toSite) return [];
                     const res = await api.post("/api/wms/inbound/executeRawSql", {
                       raw_sql: `SELECT LOCATION_CODE, LOC_DESC
                                 FROM MS_LOCATION
-                                WHERE SITE_CODE    = '${fromSite}'`,
+                                WHERE SITE_CODE = '${toSite}'`,
                     });
-                    return Array.isArray(res.data?.data) ? res.data.data
-                        : Array.isArray(res.data)        ? res.data : [];
+                    const data = Array.isArray(res.data?.data) ? res.data.data
+                              : Array.isArray(res.data)        ? res.data : [];
+                    if (data.length === 0) setLocNotice({ type: "error", message: `Site "${toSite}" does not have any locations.` });
+                    return data;
                   }}
                   onChange={(v) => { setToLocStart(v); setToLocEnd(v); }}
                 />
@@ -995,16 +1011,18 @@ useEffect(() => {
                     { field: "LOC_DESC", header: "Location Name" },
                   ]}
                   placeholder="Select location"
-                loadOptions={async () => {
-                  if (!fromSite) return [];
-                  const res = await api.post("/api/wms/inbound/executeRawSql", {
-                    raw_sql: `SELECT LOCATION_CODE, LOC_DESC
-                              FROM MS_LOCATION
-                              WHERE SITE_CODE    = '${fromSite}'`,
-                  });
-                  return Array.isArray(res.data?.data) ? res.data.data
-                      : Array.isArray(res.data)        ? res.data : [];
-                }}
+                    loadOptions={async () => {
+                      if (!fromSite) return [];
+                      const res = await api.post("/api/wms/inbound/executeRawSql", {
+                        raw_sql: `SELECT LOCATION_CODE, LOC_DESC
+                                  FROM MS_LOCATION
+                                  WHERE SITE_CODE = '${fromSite}'`,
+                      });
+                      const data = Array.isArray(res.data?.data) ? res.data.data
+                                : Array.isArray(res.data)        ? res.data : [];
+                      if (data.length === 0) setLocNotice({ type: "error", message: `Site "${fromSite}" does not have any locations.` });
+                      return data;
+                    }}
                   onChange={(v) => setFromLocEnd(v)}
                 />
                 <LookupField
@@ -1017,16 +1035,18 @@ useEffect(() => {
                     { field: "LOC_DESC", header: "Location Name" },
                   ]}
                   placeholder="Select location"
-                loadOptions={async () => {
-                  if (!fromSite) return [];
-                  const res = await api.post("/api/wms/inbound/executeRawSql", {
-                    raw_sql: `SELECT LOCATION_CODE, LOC_DESC
-                              FROM MS_LOCATION
-                              WHERE SITE_CODE    = '${fromSite}'`,
-                  });
-                  return Array.isArray(res.data?.data) ? res.data.data
-                      : Array.isArray(res.data)        ? res.data : [];
-                }}
+                        loadOptions={async () => {
+                          if (!toSite) return [];
+                          const res = await api.post("/api/wms/inbound/executeRawSql", {
+                            raw_sql: `SELECT LOCATION_CODE, LOC_DESC
+                                      FROM MS_LOCATION
+                                      WHERE SITE_CODE = '${toSite}'`,
+                          });
+                          const data = Array.isArray(res.data?.data) ? res.data.data
+                                    : Array.isArray(res.data)        ? res.data : [];
+                          if (data.length === 0) setLocNotice({ type: "error", message: `Site "${toSite}" does not have any locations.` });
+                          return data;
+                        }}
                 onChange={(v) => setToLocEnd(v)}
                 />
               </div>
