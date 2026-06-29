@@ -1,0 +1,542 @@
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Download, Paperclip, Plus, RotateCcw, Save, Send, Trash2, X } from "lucide-react";
+import { Button } from "../../components/ui/Button";
+import { Dialog } from "../../components/ui/Dialog";
+import { Input } from "../../components/ui/Input";
+import { Select } from "../../components/ui/Select";
+import {
+  executeVendorSql,
+  getAllVendorFiles,
+  getPendingVendorLpo,
+  getPendingVendorLpoDetail,
+  getVendorAccounts,
+  saveVendorFiles,
+  saveVendorRequest,
+  type VendorRequestPayload,
+  type VendorRow,
+} from "../../api/vendor";
+import { useAuth } from "../../state/AuthContext";
+import { cn } from "../../lib/utils";
+
+type RefDoc = VendorRow & {
+  DOC_NO?: string;
+  AC_CODE?: string;
+  DIV_CODE?: string;
+  DIV_NAME?: string;
+  DOC_TYPE?: string;
+  PDO_TYPE?: string;
+  CURR_CODE?: string;
+  EX_RATE?: number | string;
+};
+
+const emptyRequest = (companyCode = ""): VendorRequestPayload => ({
+  COMPANY_CODE: companyCode,
+  DOC_NO: "",
+  DOC_DATE: toInputDate(new Date()),
+  INVOICE_DATE: toInputDate(new Date()),
+  INVOICE_NUMBER: "",
+  REF_DOC_NO: "",
+  REF_DOC1: "",
+  REF_DOC2: "",
+  REF_DOC3: "",
+  REMARKS: "",
+  items: [],
+});
+
+export function VendorRequestDialog({
+  open,
+  request,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  request?: VendorRequestPayload | null;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const { user } = useAuth();
+  const companyCode = user?.company_code || "";
+  const loginid = user?.loginid || user?.username || "";
+  const isEdit = Boolean(request?.DOC_NO);
+
+  const [activeTab, setActiveTab] = useState<"info" | "details">("info");
+  const [form, setForm] = useState<VendorRequestPayload>(() => emptyRequest(companyCode));
+  const [items, setItems] = useState<VendorRow[]>([]);
+  const [accounts, setAccounts] = useState<VendorRow[]>([]);
+  const [refDocs, setRefDocs] = useState<RefDoc[]>([]);
+  const [pendingOpen, setPendingOpen] = useState(false);
+  const [filesOpen, setFilesOpen] = useState<{ srNo?: number; title: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [loadingRef, setLoadingRef] = useState(false);
+  const [error, setError] = useState("");
+  const [savedDocNo, setSavedDocNo] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    const next = { ...emptyRequest(companyCode), ...(request || {}) };
+    setForm(next);
+    setItems(normalizeItems(Array.isArray(request?.items) ? request.items : []));
+    setSavedDocNo(String(next.DOC_NO || ""));
+    setError("");
+    setActiveTab("info");
+
+    void Promise.all([
+      getVendorAccounts(loginid, companyCode).catch(() => []),
+      getPendingVendorLpo({ company_code: companyCode, ac_code: loginid }).catch(() => []),
+    ]).then(([accountRows, refRows]) => {
+      setAccounts(accountRows);
+      setRefDocs(refRows as RefDoc[]);
+      const account = accountRows[0];
+      if (!request?.AC_CODE && account) {
+        setForm((prev) => ({
+          ...prev,
+          AC_CODE: String(account.AC_CODE || ""),
+          AC_NAME: String(account.AC_NAME || account.AC_DESC || ""),
+          ADDRESS: String(account.ADDRESS || ""),
+          PHONE: String(account.PHONE || ""),
+          FAX: String(account.FAX || ""),
+        }));
+      }
+    });
+  }, [companyCode, loginid, open, request]);
+
+  const selectedRef = useMemo(() => refDocs.find((item) => String(item.DOC_NO || "") === String(form.REF_DOC_NO || "")), [form.REF_DOC_NO, refDocs]);
+  const account = accounts[0] || {};
+  const totals = useMemo(() => calculateTotals(items), [items]);
+
+  const setField = (field: keyof VendorRequestPayload, value: string) => setForm((prev) => ({ ...prev, [field]: value }));
+
+  const loadRefDetails = async (docNo: string) => {
+    const ref = refDocs.find((item) => String(item.DOC_NO || "") === docNo);
+    setForm((prev) => ({
+      ...prev,
+      REF_DOC_NO: docNo,
+      DOC_TYPE: String(ref?.DOC_TYPE || prev.DOC_TYPE || ""),
+      PDO_TYPE: String(ref?.PDO_TYPE || prev.PDO_TYPE || ""),
+      CURR_CODE: String(ref?.CURR_CODE || prev.CURR_CODE || ""),
+      EX_RATE: ref?.EX_RATE ?? prev.EX_RATE,
+      DIV_CODE: String(ref?.DIV_CODE || prev.DIV_CODE || ""),
+      DIV_NAME: String(ref?.DIV_NAME || prev.DIV_NAME || ""),
+    }));
+    if (!docNo) {
+      setItems([]);
+      return;
+    }
+    setLoadingRef(true);
+    try {
+      const detailRows = await getPendingVendorLpoDetail(docNo, loginid, companyCode);
+      setItems(normalizeItems(detailRows));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load invoice details for selected ref doc");
+    } finally {
+      setLoadingRef(false);
+    }
+  };
+
+  const save = async (event: FormEvent | undefined, action: "SAVEASDRAFT" | "SUBMITTED") => {
+    event?.preventDefault();
+    setError("");
+    const totalQty = items.reduce((sum, item) => sum + Number(item.QTY || 0), 0);
+    if (!form.REF_DOC_NO && !isEdit) return setError("Ref Doc No is required.");
+    if (!form.INVOICE_NUMBER) return setError("Invoice No is required.");
+    if (!form.INVOICE_DATE) return setError("Invoice Date is required.");
+    if (action === "SUBMITTED" && totalQty <= 0) return setError("Total quantity cannot be 0.");
+
+    const filteredItems = action === "SAVEASDRAFT" ? items : items.filter((item) => Number(item.QTY || 0) > 0);
+    try {
+      setSaving(true);
+      const payload: VendorRequestPayload = {
+        ...form,
+        COMPANY_CODE: companyCode,
+        DOC_NO: savedDocNo || String(form.DOC_NO || ""),
+        AC_CODE: String(account.AC_CODE || form.AC_CODE || ""),
+        AC_NAME: String(account.AC_NAME || form.AC_NAME || ""),
+        ADDRESS: String(account.ADDRESS || form.ADDRESS || ""),
+        PHONE: String(account.PHONE || form.PHONE || ""),
+        FAX: String(account.FAX || form.FAX || ""),
+        LAST_ACTION: action,
+        EDIT_USER: loginid,
+        DOC_TYPE: String(selectedRef?.DOC_TYPE || form.DOC_TYPE || ""),
+        PDO_TYPE: String(selectedRef?.PDO_TYPE || form.PDO_TYPE || ""),
+        CURR_CODE: String(selectedRef?.CURR_CODE || form.CURR_CODE || ""),
+        EX_RATE: selectedRef?.EX_RATE ?? form.EX_RATE,
+        items: filteredItems.map((item) => ({
+          ...item,
+          QTY: Number(item.QTY || 0),
+          DOC_DATE: form.DOC_DATE,
+          AC_CODE: String(item.AC_CODE || account.AC_CODE || form.AC_CODE || ""),
+          ORIGINAL_QTY: Number(item.ORIGINAL_QTY ?? item.QTY ?? 0),
+        })),
+      };
+      const response = await saveVendorRequest(payload);
+      const generated = String(response?.data?.requestNumber || response?.requestNumber || payload.DOC_NO || "");
+      if (generated) {
+        setSavedDocNo(generated);
+        setForm((prev) => ({ ...prev, DOC_NO: generated }));
+      }
+      if (action === "SUBMITTED") await onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save purchase invoice");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog
+      open={open}
+      wide
+      contentClassName="vendor-invoice-dialog"
+      title={isEdit ? "Edit Purchase Invoices" : "Add Purchase Invoices"}
+      onClose={onClose}
+      footer={
+        <div className="flex w-full items-center justify-between gap-2">
+          <div className="flex gap-2">
+            <Button variant="outline" disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, "SAVEASDRAFT")}><Save size={15} /> Save As Draft</Button>
+            <Button disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, "SUBMITTED")}><Send size={15} /> Submit</Button>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" disabled={!savedDocNo} onClick={() => setFilesOpen({ title: "All Attachments" })}><Paperclip size={15} /></Button>
+            <Button variant="outline" onClick={onClose}><X size={15} /></Button>
+          </div>
+        </div>
+      }
+    >
+      <form className="grid gap-3" onSubmit={(event) => void save(event, "SAVEASDRAFT")}>
+        {error && <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{error}</div>}
+
+        <div className="flex border-b">
+          <TabButton active={activeTab === "info"} onClick={() => setActiveTab("info")}>Invoice Information</TabButton>
+          <TabButton active={activeTab === "details"} onClick={() => setActiveTab("details")}>Invoice Details</TabButton>
+        </div>
+
+        {activeTab === "info" ? (
+          <div className="grid gap-3 rounded-md border bg-white p-4 md:grid-cols-4">
+            <FormInput label="Doc No" value={savedDocNo || String(form.DOC_NO || "")} readOnly />
+            <FormInput label="Doc Date" value={toInputDate(form.DOC_DATE)} type="date" onChange={(value) => setField("DOC_DATE", value)} />
+            <label className="grid gap-1 text-sm md:col-span-1">
+              <span className="font-medium text-muted-foreground">Ref Doc No</span>
+              <Select value={String(form.REF_DOC_NO || "")} onChange={(event) => void loadRefDetails(event.target.value)} disabled={loadingRef || isEdit}>
+                <option value="">Select Ref Doc</option>
+                {refDocs.map((item) => <option key={String(item.DOC_NO)} value={String(item.DOC_NO)}>{String(item.DOC_NO)}</option>)}
+              </Select>
+            </label>
+            <FormInput label="Well Id" value={String(form.REF_DOC1 || "")} onChange={(value) => setField("REF_DOC1", value)} />
+            <FormInput label="RIG No" value={String(form.REF_DOC2 || "")} onChange={(value) => setField("REF_DOC2", value)} />
+            <FormInput label="Truck No" value={String(form.REF_DOC3 || "")} onChange={(value) => setField("REF_DOC3", value)} />
+            <FormInput label="Invoice No" value={String(form.INVOICE_NUMBER || "")} onChange={(value) => setField("INVOICE_NUMBER", value)} required />
+            <FormInput label="Invoice Date" value={toInputDate(form.INVOICE_DATE)} type="date" onChange={(value) => setField("INVOICE_DATE", value)} required />
+            <FormInput label="Account Number" value={String(account.AC_CODE || form.AC_CODE || "")} readOnly />
+            <FormInput label="Account Name" value={String(account.AC_NAME || form.AC_NAME || "")} readOnly className="md:col-span-4" />
+            <FormInput label="Phone" value={String(account.PHONE || form.PHONE || "")} readOnly />
+            <FormInput label="Address" value={String(account.ADDRESS || form.ADDRESS || "")} readOnly className="md:col-span-3" />
+            <FormInput label="Fax" value={String(account.FAX || form.FAX || "")} readOnly />
+            <FormInput label="Division Code" value={String(form.DIV_CODE || "")} readOnly />
+            <FormInput label="Division Name" value={String(form.DIV_NAME || "")} readOnly className="md:col-span-2" />
+            <FormInput label="Remarks" value={String(form.REMARKS || "")} onChange={(value) => setField("REMARKS", value)} className="md:col-span-4" />
+          </div>
+        ) : (
+          <InvoiceDetailsTab
+            items={items}
+            loading={loadingRef}
+            requestNumber={savedDocNo}
+            totals={totals}
+            onItemsChange={setItems}
+            onAddPending={() => setPendingOpen(true)}
+            onOpenAttachment={(srNo) => setFilesOpen({ srNo, title: `Attachments for Serial No: ${srNo}` })}
+          />
+        )}
+      </form>
+
+      {pendingOpen && (
+        <PendingItemsDialog
+          refDocNo={String(form.REF_DOC_NO || "")}
+          headerAcCode={String(items[0]?.HEADER_AC_CODE || account.AC_CODE || form.AC_CODE || "")}
+          existingItems={items}
+          onClose={() => setPendingOpen(false)}
+          onAdd={(rows) => {
+            setItems((prev) => normalizeItems([...prev, ...rows]));
+            setPendingOpen(false);
+          }}
+        />
+      )}
+
+      {filesOpen && (
+        <VendorFilesDialog
+          requestNumber={savedDocNo || String(form.DOC_NO || "")}
+          srNo={filesOpen.srNo}
+          title={filesOpen.title}
+          onClose={() => setFilesOpen(null)}
+        />
+      )}
+    </Dialog>
+  );
+}
+
+function InvoiceDetailsTab({
+  items,
+  loading,
+  requestNumber,
+  totals,
+  onItemsChange,
+  onAddPending,
+  onOpenAttachment,
+}: {
+  items: VendorRow[];
+  loading: boolean;
+  requestNumber: string;
+  totals: ReturnType<typeof calculateTotals>;
+  onItemsChange: (rows: VendorRow[]) => void;
+  onAddPending: () => void;
+  onOpenAttachment: (srNo: number) => void;
+}) {
+  const setItem = (index: number, field: string, value: string) => onItemsChange(items.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: field === "QTY" ? Number(value) : value } : item));
+  const reset = () => onItemsChange(items.map((item) => ({ ...item, QTY: 0 })));
+
+  return (
+    <div className="vendor-detail-panel grid gap-2 rounded-md border bg-white p-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs font-semibold text-muted-foreground">
+          {items.length} lines loaded
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button type="button" size="sm" variant="outline" onClick={onAddPending}><Plus size={14} /> Add Pending Items</Button>
+          <Button type="button" size="sm" variant="outline" onClick={reset}><RotateCcw size={14} /> Reset</Button>
+        </div>
+      </div>
+      <div className="vendor-detail-scroll overflow-auto rounded-md border">
+        <table className="vendor-detail-table w-full min-w-[1360px] text-xs">
+          <thead className="sticky top-0 z-10 bg-slate-50 text-left text-muted-foreground">
+            <tr>
+              {["Sr No", "Description", "Qty", "Org Qty", "Rate", "Amount", "Currency", "Ex Rate", "Base Amt", "Attach", "Tax Code", "Tax %", "Tax Local Amt", "Final Amt", "Item Remark", ""].map((head) => (
+                <th key={head} className="border-b px-1.5 py-1 font-semibold">{head}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td className="px-2 py-8 text-center text-muted-foreground" colSpan={16}>Loading invoice details...</td></tr>
+            ) : items.length ? items.map((item, index) => {
+              const qty = Number(item.QTY || 0);
+              const price = Number(item.PRICE ?? item.RATE ?? 0);
+              const exRate = Number(item.EX_RATE || 1);
+              const taxPerc = Number(item.TX_COMPNT_PERC_1 || 0);
+              const amount = qty * price;
+              const baseAmt = amount * exRate;
+              const taxLocal = baseAmt * (taxPerc / 100);
+              return (
+                <tr key={`${item.SERIAL_NO || index}`} className="h-6 border-b">
+                  <td className="px-1.5 py-0.5 text-muted-foreground">{String(item.SERIAL_NO || index + 1)}</td>
+                  <td className="min-w-[280px] max-w-[360px] truncate px-1.5 py-0.5 text-muted-foreground" title={String(item.REMARKS || item.ITEM_DESC || "")}>{String(item.REMARKS || item.ITEM_DESC || "")}</td>
+                  <td className="px-1.5 py-0.5"><Input className="vendor-line-input text-right" type="number" value={String(item.QTY ?? 0)} onChange={(event) => setItem(index, "QTY", event.target.value)} /></td>
+                  <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(item.ORIGINAL_QTY)}</td>
+                  <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(price)}</td>
+                  <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(amount)}</td>
+                  <td className="px-1.5 py-0.5 text-muted-foreground">{String(item.CURR_CODE || "")}</td>
+                  <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(exRate)}</td>
+                  <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(baseAmt)}</td>
+                  <td className="px-1.5 py-0.5">
+                    <Button className="vendor-line-icon" type="button" size="icon" variant="ghost" disabled={!requestNumber} onClick={() => onOpenAttachment(Number(item.SERIAL_NO || index + 1))}><Paperclip size={12} /></Button>
+                  </td>
+                  <td className="px-1.5 py-0.5 text-muted-foreground">{String(item.TX_CAT_CODE || "")}</td>
+                  <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(taxPerc)}</td>
+                  <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(taxLocal)}</td>
+                  <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(baseAmt + taxLocal)}</td>
+                  <td className="px-1.5 py-0.5"><Input className="vendor-line-input" value={String(item.ITEM_REMARK || "")} onChange={(event) => setItem(index, "ITEM_REMARK", event.target.value)} /></td>
+                  <td className="px-1.5 py-0.5"><Button className="vendor-line-icon" type="button" size="icon" variant="ghost" onClick={() => onItemsChange(items.filter((_, rowIndex) => rowIndex !== index))}><Trash2 size={12} /></Button></td>
+                </tr>
+              );
+            }) : (
+              <tr><td className="px-2 py-8 text-center text-muted-foreground" colSpan={16}>Select a Ref Doc No to load invoice lines.</td></tr>
+            )}
+          </tbody>
+          <tfoot className="sticky bottom-0 bg-slate-50 font-semibold shadow-[0_-1px_0_rgba(148,163,184,0.35)]">
+            <tr>
+              <td className="px-1.5 py-1" colSpan={2}>Total</td>
+              <td className="px-1.5 py-1 text-right">{formatAmount(totals.qty)}</td>
+              <td />
+              <td />
+              <td className="px-1.5 py-1 text-right">{formatAmount(totals.amount)}</td>
+              <td />
+              <td />
+              <td className="px-1.5 py-1 text-right">{formatAmount(totals.base)}</td>
+              <td colSpan={7} />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function PendingItemsDialog({
+  refDocNo,
+  headerAcCode,
+  existingItems,
+  onClose,
+  onAdd,
+}: {
+  refDocNo: string;
+  headerAcCode: string;
+  existingItems: VendorRow[];
+  onClose: () => void;
+  onAdd: (rows: VendorRow[]) => void;
+}) {
+  const [rows, setRows] = useState<VendorRow[]>([]);
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!refDocNo || !headerAcCode) return;
+    const existingSerials = existingItems.map((item) => Number(item.SERIAL_NO || 0)).filter(Boolean).join(",") || "0";
+    const sql = `
+      SELECT *
+      FROM VW_VM_LPO_DTL_PENDING_AWARE
+      WHERE DOC_NO = '${escapeSql(refDocNo)}'
+        AND HEADER_AC_CODE = '${escapeSql(headerAcCode)}'
+        AND SERIAL_NO NOT IN (${existingSerials})
+      ORDER BY SERIAL_NO
+    `;
+    setLoading(true);
+    void executeVendorSql(sql).then(setRows).finally(() => setLoading(false));
+  }, [existingItems, headerAcCode, refDocNo]);
+
+  return (
+    <Dialog open wide contentClassName="vendor-pending-dialog" title="Pending Items" onClose={onClose} footer={<><Button variant="outline" onClick={onClose}>Close</Button><Button onClick={() => onAdd(rows.filter((row) => selected[String(row.SERIAL_NO)]))}>Save</Button></>}>
+      <div className="overflow-auto rounded-md border">
+        <table className="w-full min-w-[760px] text-sm">
+          <thead className="bg-slate-50 text-left text-muted-foreground">
+            <tr><th className="w-10 p-2" /><th className="p-2">Sr No</th><th className="p-2">Description</th><th className="p-2">Price</th><th className="p-2">Currency</th><th className="p-2">Ex Rate</th></tr>
+          </thead>
+          <tbody>
+            {loading ? <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">Loading...</td></tr> : rows.map((row) => (
+              <tr key={String(row.SERIAL_NO)} className="border-t">
+                <td className="p-2"><input type="checkbox" checked={Boolean(selected[String(row.SERIAL_NO)])} onChange={(event) => setSelected((prev) => ({ ...prev, [String(row.SERIAL_NO)]: event.target.checked }))} /></td>
+                <td className="p-2">{String(row.SERIAL_NO || "")}</td>
+                <td className="p-2">{String(row.REMARKS || "")}</td>
+                <td className="p-2 text-right">{formatAmount(row.PRICE)}</td>
+                <td className="p-2">{String(row.CURR_CODE || "")}</td>
+                <td className="p-2 text-right">{formatAmount(row.EX_RATE)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Dialog>
+  );
+}
+
+function VendorFilesDialog({ requestNumber, srNo, title, onClose }: { requestNumber: string; srNo?: number; title: string; onClose: () => void }) {
+  const { user } = useAuth();
+  const [files, setFiles] = useState<VendorRow[]>([]);
+  const [picked, setPicked] = useState<File[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!requestNumber) return;
+    void getAllVendorFiles(requestNumber).then((rows) => {
+      setFiles(srNo ? rows.filter((row) => Number(row.SR_NO ?? row.sr_no ?? 0) === srNo) : rows);
+    }).catch(() => setFiles([]));
+  }, [requestNumber, srNo]);
+
+  const save = async () => {
+    if (!requestNumber || picked.length === 0) return;
+    setSaving(true);
+    setError("");
+    try {
+      await saveVendorFiles(requestNumber, picked.map((file) => ({
+        company_code: user?.company_code || "",
+        request_number: requestNumber,
+        sr_no: srNo || 0,
+        file_name: file.name,
+        org_file_name: file.name,
+        user_file_name: file.name,
+        extensions: file.name.split(".").pop() || "",
+        modules: "Vendor",
+        type: file.type,
+        file_transfer: "N",
+        created_by: user?.loginid || user?.username || "",
+        updated_by: user?.loginid || user?.username || "",
+      })));
+      setPicked([]);
+      setFiles(await getAllVendorFiles(requestNumber));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save attachment metadata");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open wide title={title} onClose={onClose} footer={<><Button variant="outline" onClick={onClose}>Close</Button><Button disabled={!picked.length || saving} onClick={() => void save()}><Download size={15} /> Save Files</Button></>}>
+      <div className="grid gap-3">
+        {error && <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{error}</div>}
+        <Input type="file" multiple onChange={(event) => setPicked(Array.from(event.target.files || []))} disabled={!requestNumber} />
+        <div className="rounded-md border">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-left text-muted-foreground"><tr><th className="p-2">File</th><th className="p-2">Sr No</th><th className="p-2">Type</th></tr></thead>
+            <tbody>
+              {files.length ? files.map((file, index) => (
+                <tr key={index} className="border-t"><td className="p-2">{String(file.ORG_FILE_NAME || file.org_file_name || file.FILE_NAME || file.file_name || "")}</td><td className="p-2">{String(file.SR_NO || file.sr_no || "")}</td><td className="p-2">{String(file.TYPE || file.type || "")}</td></tr>
+              )) : <tr><td colSpan={3} className="p-6 text-center text-muted-foreground">No attachments found.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </Dialog>
+  );
+}
+
+function TabButton({ active, children, onClick }: { active: boolean; children: string; onClick: () => void }) {
+  return <button type="button" className={cn("border-b-2 px-4 py-3 text-sm font-semibold", active ? "border-primary text-primary" : "border-transparent text-foreground")} onClick={onClick}>{children}</button>;
+}
+
+function FormInput({ label, value, onChange, type = "text", readOnly, required, className }: { label: string; value: string; onChange?: (value: string) => void; type?: string; readOnly?: boolean; required?: boolean; className?: string }) {
+  return (
+    <label className={cn("grid gap-1 text-sm", className)}>
+      <span className="font-medium text-muted-foreground">{required ? `*${label}` : label}</span>
+      <Input value={value} type={type} readOnly={readOnly} required={required} onChange={(event) => onChange?.(event.target.value)} />
+    </label>
+  );
+}
+
+function normalizeItems(rows: VendorRow[]) {
+  return rows.map((row, index) => ({
+    ...row,
+    SERIAL_NO: row.SERIAL_NO ?? index + 1,
+    QTY: Number(row.QTY ?? 0),
+    ORIGINAL_QTY: Number(row.ORIGINAL_QTY ?? row.QTY ?? 0),
+    PRICE: Number(row.PRICE ?? row.RATE ?? 0),
+  }));
+}
+
+function calculateTotals(rows: VendorRow[]) {
+  return rows.reduce<{ qty: number; amount: number; base: number }>((sum, row) => {
+    const qty = Number(row.QTY || 0);
+    const price = Number(row.PRICE ?? row.RATE ?? 0);
+    const exRate = Number(row.EX_RATE || 1);
+    const amount = qty * price;
+    return { qty: sum.qty + qty, amount: sum.amount + amount, base: sum.base + amount * exRate };
+  }, { qty: 0, amount: 0, base: 0 });
+}
+
+function formatAmount(value: unknown) {
+  const number = Number(value || 0);
+  return number.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+}
+
+function toInputDate(value: unknown) {
+  if (!value) return "";
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  const raw = String(value);
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  const match = raw.match(/^(\d{2})-(\d{2})-(\d{4})/);
+  if (match) return `${match[3]}-${match[2]}-${match[1]}`;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? raw : parsed.toISOString().slice(0, 10);
+}
+
+function escapeSql(value: string) {
+  return String(value || "").replace(/'/g, "''");
+}
