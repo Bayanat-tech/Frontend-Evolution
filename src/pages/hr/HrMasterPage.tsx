@@ -60,6 +60,14 @@ export type HrMasterConfig = {
   buildDelete?: (row: Record<string, unknown>, context: HrMasterContext) => DynamicDeleteParams;
   financeSaveEndpoint?: string;
   autoGenerateKey?: boolean;
+  customDialog?: React.ComponentType<{
+    open: boolean;
+    isEdit: boolean;
+    isView: boolean;
+    company_code: string;
+    grade_code?: string;
+    onClose: (saved?: boolean) => void;
+  }>;
 };
 
 export type HrMasterContext = {
@@ -84,6 +92,12 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
   const [form, setForm] = useState<Record<string, unknown>>({});
   const [deleteTarget, setDeleteTarget] = useState<Record<string, unknown> | null>(null);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [customDialogState, setCustomDialogState] = useState<{
+    open: boolean;
+    isEdit: boolean;
+    isView: boolean;
+    row: Record<string, unknown> | null;
+  }>({ open: false, isEdit: false, isView: false, row: null });
 
   const tableFields = config.fields.filter((field) => field.table !== false);
   const loginid = user?.loginid || "ADMIN";
@@ -167,7 +181,17 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
     [config, tableFields],
   );
 
+  // ── Add ───────────────────────────────────────────────────────────────────
+  // IMPORTANT: masters that define `customDialog` (e.g. Grade Master, which
+  // uses GradeDialog with its own Header/Details tabs) must open that custom
+  // dialog on Add too — not just on Edit. Without this branch, "Add" falls
+  // through to the generic auto-built form below and the custom Header/Details
+  // tabs never appear.
   const openAdd = () => {
+    if (config.customDialog) {
+      setCustomDialogState({ open: true, isEdit: false, isView: false, row: null });
+      return;
+    }
     setEditMode(false);
     const empty = makeEmpty();
     if (config.autoGenerateKey) empty[config.keyField] = nextCode(rows, config.keyField);
@@ -177,6 +201,10 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
   };
 
   const openEdit = (row: Record<string, unknown>) => {
+    if (config.customDialog) {
+      setCustomDialogState({ open: true, isEdit: true, isView: false, row });
+      return;
+    }
     setEditMode(true);
     setForm({ ...makeEmpty(), ...row, _edit_key: row[config.keyField], company_code: row.company_code || companyCode });
     setFormOpen(true);
@@ -185,9 +213,9 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
 
   const saveRecord = async (event: FormEvent) => {
     event.preventDefault();
-  
+
     const missing = config.fields.find(
-  (field) => field.required && !field.hideOnAdd && !String(form[field.name] ?? "").trim());
+      (field) => field.required && !field.hideOnAdd && !String(form[field.name] ?? "").trim());
     if (missing) {
       setNotice({ type: "error", message: `${missing.label} is required` });
       return;
@@ -287,42 +315,54 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
         getRowId={(row, index) => String(row[config.keyField] || `${config.master}_${index}`)}
       />
 
-      <Dialog open={formOpen} title={editMode ? `Edit ${config.title}` : `Add ${config.title}`} wide onClose={() => setFormOpen(false)}>
-        <form className="grid gap-4" onSubmit={saveRecord}>
-          <Card>
-            <CardHeader>
-              <div>
-                <p className="eyebrow">Details</p>
-                <h2 className="m-0 text-sm font-semibold">Basic Information</h2>
-              </div>
-            </CardHeader>
-           
+      {/* Generic auto-built form dialog — used only when the master has no customDialog */}
+      {!config.customDialog && (
+        <Dialog open={formOpen} title={editMode ? `Edit ${config.title}` : `Add ${config.title}`} wide onClose={() => setFormOpen(false)}>
+          <form className="grid gap-4" onSubmit={saveRecord}>
+            <Card>
+              <CardHeader>
+                <div>
+                  <p className="eyebrow">Details</p>
+                  <h2 className="m-0 text-sm font-semibold">Basic Information</h2>
+                </div>
+              </CardHeader>
 
+              <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {config.fields.map((field) => {
+                  if (field.hideOnAdd && !editMode) return null;
 
-            <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-  {config.fields.map((field, index) => {
-    
-    if (field.hideOnAdd && !editMode) return null;
-
-    return (
-      <label className="field" key={field.name}>
-        <span>{field.label}{field.required ? <strong className="text-destructive"> *</strong> : null}</span>
-        {renderInput(field, form[field.name], form[`${field.name}_name`], Boolean((editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd)), buildContext(), (value, row) => setForm((current) => ({ ...current, [field.name]: value, ...(row ? displayPatch(field, row) : { [`${field.name}_name`]: "" }) })))}
-      </label>
-    );
-  })}
-</CardContent>
-          </Card>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
-              <X size={15} /> Cancel
-            </Button>
-            <Button type="submit" disabled={saving}>
-              <Save size={15} /> {saving ? "Saving..." : "Save"}
-            </Button>
-          </div>
-        </form>
-      </Dialog>
+                  return (
+                    <label className="field" key={field.name}>
+                      <span>{field.label}{field.required ? <strong className="text-destructive"> *</strong> : null}</span>
+                      {renderInput(
+                        field,
+                        form[field.name],
+                        form[`${field.name}_name`],
+                        Boolean((editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd)),
+                        buildContext(),
+                        (value, row) =>
+                          setForm((current) => ({
+                            ...current,
+                            [field.name]: value,
+                            ...(row ? displayPatch(field, row) : { [`${field.name}_name`]: "" }),
+                          })),
+                      )}
+                    </label>
+                  );
+                })}
+              </CardContent>
+            </Card>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
+                <X size={15} /> Cancel
+              </Button>
+              <Button type="submit" disabled={saving}>
+                <Save size={15} /> {saving ? "Saving..." : "Save"}
+              </Button>
+            </div>
+          </form>
+        </Dialog>
+      )}
 
       <Dialog
         open={Boolean(deleteTarget)}
@@ -340,6 +380,23 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
       >
         <p className="text-sm text-muted-foreground">Confirm delete for <strong>{String(deleteTarget?.[config.keyField] || "")}</strong>.</p>
       </Dialog>
+
+      {config.customDialog && customDialogState.open && (
+        <config.customDialog
+          open={customDialogState.open}
+          isEdit={customDialogState.isEdit}
+          isView={customDialogState.isView}
+          company_code={String(customDialogState.row?.company_code || companyCode)}
+          grade_code={String(customDialogState.row?.[config.keyField] || "")}
+          onClose={(saved) => {
+            setCustomDialogState((prev) => ({ ...prev, open: false }));
+            if (saved) {
+              setNotice({ type: "success", message: `${config.title} saved successfully.` });
+              void loadRows(pageIndex, pageSize, false);
+            }
+          }}
+        />
+      )}
     </section>
   );
 }
