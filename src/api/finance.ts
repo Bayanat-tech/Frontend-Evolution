@@ -190,6 +190,25 @@ export async function upsertLevel5Activities(payload: {
   return response.data;
 }
 
+export async function deleteLevel5Activity(params: {
+  company_code?: string;
+  ac_code: string;
+  srno: number;
+  loginid?: string;
+}) {
+  const response = await api.delete<ApiResponse<unknown>>(
+    `/api/finance/vendorActivity/${encodeURIComponent(params.ac_code)}/${params.srno}`,
+    {
+      data: {
+        company_code: params.company_code,
+        loginid: params.loginid,
+      },
+    }
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Unable to delete activity");
+  return response.data;
+}
+
 export async function upsertLevel5Documents(payload: {
   company_code: string;
   ac_code: string;
