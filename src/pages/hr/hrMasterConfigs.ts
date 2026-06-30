@@ -740,7 +740,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     gmEndpoint: "grade",
     routeKeys: ["grademaster", "grade"],
     keyField: "grade_code",
-    customDialog: GradeDialog,             // ✅ bas yeh ek line add karo
+    customDialog: GradeDialog,             
     fields: [
       { name: "grade_code", label: "Grade Code", required: true, disabledOnEdit: true, width: 140 },
       { name: "grade_name", label: "Grade Name", required: true, width: 240 },
