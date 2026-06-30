@@ -13,6 +13,11 @@ const activeInactive = [
   { label: "Inactive", value: "N" },
 ];
 
+const proffesionalOther = [
+  { label: "proffesional", value: "P" },
+  { label: "Other", value: "O" },
+];
+
 const dynamicList = (parameter: string, useCompany = false) => (context: { loginid: string; companyCode: string }) => ({
   parameter,
   loginid: context.loginid,
@@ -642,7 +647,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       { name: "skill_code", label: "Skill Code", required: true, disabledOnEdit: true, width: 140 },
       { name: "skill_desc", label: "Skill Description", required: true, width: 280 },
       { name: "skill_short_desc", label: "Short Description", width: 170 },
-      { name: "skill_category", label: "Skill Category", width: 170 },
+      { name: "skill_category", label: "Skill Category",type: "select", options: proffesionalOther, width: 170 },
       { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
       { name: "remarks", label: "Remarks", width: 280 },
     ],
@@ -659,18 +664,24 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     source: "finance",
     financeSaveEndpoint: "upsertHrDocTypes",
     listQuery: dynamicList("MST_HR_MS_HR_DOCTYPES", true),
-    buildSave: (form, context) => ({
-      ...form,
-      company_code: context.companyCode,
-      loginid: context.loginid,
-      renewal_period_days: num(form, "renewal_period_days"),
-      renewal_chgs: num(form, "renewal_chgs"),
-      alert_before: num(form, "alert_before"),
-      user_id: context.loginid,
-    }),
+    buildSave: (form, context) => {
+  if (form.doc_type && String(form.doc_type).length > 5) {
+    throw new Error("Doc Type cannot exceed 5 characters");
+  }
+
+  return {
+    ...form,
+    company_code: context.companyCode,
+    loginid: context.loginid,
+    renewal_period_days: num(form, "renewal_period_days"),
+    renewal_chgs: num(form, "renewal_chgs"),
+    alert_before: num(form, "alert_before"),
+    user_id: context.loginid,
+  };
+},
     buildDelete: (row, context) => ({ parameter: "MST_HR_DEL_DOCTYPES", loginid: context.loginid, code1: context.companyCode, code2: text(row, "doc_type") }),
     fields: [
-      { name: "doc_type", label: "Doc Type", disabledOnEdit: true, width: 120 },
+      { name: "doc_type", label: "Doc Type", disabledOnEdit: true, width: 120,hideOnCreate: true, },
       { name: "doctype_name", label: "Document Name", required: true, width: 280 },
       { name: "doctype_short_desc", label: "Short Description", width: 180 },
       { name: "renewal_period_days", label: "Renewal Days", type: "number", width: 140 },

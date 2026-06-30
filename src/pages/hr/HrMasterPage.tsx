@@ -31,6 +31,7 @@ export type HrMasterField = {
   hideOnAdd?: boolean;
   disabledOnEdit?: boolean;
   disabledOnAdd?: boolean;
+  hideOnCreate?: boolean;
   type?: "text" | "number" | "select" | "email" | "date";
   options?: { label: string; value: string }[];
   lookup?: {
@@ -66,6 +67,7 @@ export type HrMasterConfig = {
     isView: boolean;
     company_code: string;
     grade_code?: string;
+
     onClose: (saved?: boolean) => void;
   }>;
 };
@@ -329,22 +331,34 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
 
               <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {config.fields.map((field) => {
-                  if (field.hideOnAdd && !editMode) return null;
+                  if (!editMode && (field.hideOnAdd || field.hideOnCreate)) {
+                    return null;
+                  }
 
                   return (
                     <label className="field" key={field.name}>
-                      <span>{field.label}{field.required ? <strong className="text-destructive"> *</strong> : null}</span>
+                      <span>
+                        {field.label}
+                        {field.required ? (
+                          <strong className="text-destructive"> *</strong>
+                        ) : null}
+                      </span>
                       {renderInput(
                         field,
                         form[field.name],
                         form[`${field.name}_name`],
-                        Boolean((editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd)),
+                        Boolean(
+                          (editMode && field.disabledOnEdit) ||
+                          (!editMode && field.disabledOnAdd)
+                        ),
                         buildContext(),
                         (value, row) =>
                           setForm((current) => ({
                             ...current,
                             [field.name]: value,
-                            ...(row ? displayPatch(field, row) : { [`${field.name}_name`]: "" }),
+                            ...(row
+                              ? displayPatch(field, row)
+                              : { [`${field.name}_name`]: "" }),
                           })),
                       )}
                     </label>
