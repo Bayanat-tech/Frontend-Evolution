@@ -84,6 +84,7 @@ import { StockAdjViewPage } from "../pages/wms/stock adjustment/StockAdjustmentV
 import StockAdjPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
 import {StorageComputationPage} from "../pages/wms/storage computation/StorageComputation";
 import LeaveEncashmentPage from "../pages/hr/LeaveEncashmentPage";
+import EmployeeSalaryIncrement from "../pages/hr/EmployeeSalaryIncrement";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -102,6 +103,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: "HR Employee Salary Increment",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/salary%20increment"),
+    element: () => <EmployeeSalaryIncrement />
+  },
   {
     name: "HR Leave Encashment",
     match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/leave_encashment"),
