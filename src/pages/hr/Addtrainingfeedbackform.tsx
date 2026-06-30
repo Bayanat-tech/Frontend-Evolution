@@ -1,5 +1,5 @@
 import { Save, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { executeDynamicMutationColumn90, getDynamicLookup } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
@@ -126,16 +126,17 @@ const EMPTY_FORM: TTrainingFeedback = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Employee Autocomplete (portal-based dropdown — no overflow clipping)
+// Employee Autocomplete — portal dropdown that tracks the input live
+// while any ancestor (dialog body, page, etc.) scrolls or the window resizes.
 // ─────────────────────────────────────────────────────────────────────────────
 
 type EmpAutocompleteProps = {
-  employees:       TEmployee[];
-  selectedEmp:     TEmployee | null;
-  fallbackName:    string;
-  readonly:        boolean;
-  error?:          string;
-  onSelect:        (emp: TEmployee) => void;
+  employees:    TEmployee[];
+  selectedEmp:  TEmployee | null;
+  fallbackName: string;
+  readonly:     boolean;
+  error?:       string;
+  onSelect:     (emp: TEmployee) => void;
 };
 
 function EmployeeAutocomplete({
@@ -152,23 +153,47 @@ function EmployeeAutocomplete({
   const inputRef = useRef<HTMLInputElement>(null);
   const wrapRef  = useRef<HTMLDivElement>(null);
 
-  // Compute portal dropdown position anchored to the input
-  const openDropdown = () => {
+  // Recompute the dropdown position relative to the input's current
+  // on-screen location. Called on open, on every scroll (any ancestor,
+  // captured via the `true` capture flag), and on resize — so the
+  // dropdown always stays glued under the input instead of drifting.
+  const updatePosition = () => {
     if (!wrapRef.current) return;
     const rect = wrapRef.current.getBoundingClientRect();
     const spaceBelow = window.innerHeight - rect.bottom;
     const dropHeight = Math.min(220, spaceBelow - 8);
 
     setDropStyle({
-      position: "fixed",
-      top:      rect.bottom + 2,
-      left:     rect.left,
-      width:    rect.width,
+      position:  "fixed",
+      top:       rect.bottom + 2,
+      left:      rect.left,
+      width:     rect.width,
       maxHeight: dropHeight > 80 ? dropHeight : 220,
-      zIndex:   9999,
+      zIndex:    9999,
     });
+  };
+
+  const openDropdown = () => {
+    updatePosition();
     setOpen(true);
   };
+
+  // Keep position in sync while the dropdown is open.
+  useLayoutEffect(() => {
+    if (!open) return;
+    updatePosition();
+
+    const handle = () => updatePosition();
+    // capture: true so we catch scroll events from any scrollable
+    // ancestor (dialog body, page wrapper, etc.), not just window.
+    window.addEventListener("scroll", handle, true);
+    window.addEventListener("resize", handle);
+    return () => {
+      window.removeEventListener("scroll", handle, true);
+      window.removeEventListener("resize", handle);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -545,7 +570,7 @@ export function AddTrainingFeedbackForm({ mode, existingData, onClose }: Props) 
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
 
-          {/* Employee autocomplete — portal-rendered dropdown */}
+          {/* Employee autocomplete — portal-rendered dropdown that tracks scroll */}
           <label className="field">
             <span>
               Candidate Name <strong className="text-destructive">*</strong>
