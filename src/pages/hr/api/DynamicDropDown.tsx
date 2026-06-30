@@ -12,7 +12,8 @@ export type DropDownType =
   | "employee"
   | "dddwIncrementStatus"
   | "dddwYesNoFlag"
-  | "dddwStatusFlag";
+  | "dddwStatusFlag"
+  | "payComponent";
 
 interface DropDownConfig {
   parameterCode: string;
@@ -24,6 +25,16 @@ interface DropDownConfig {
 
 // Add a new dropdown by adding ONE entry here — nothing else changes.
 const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
+  payComponent: {
+    parameterCode: "EMPLOYEE_SALARY_INCREMENT_DDDW_PAY_COMPONENT", // confirm/adjust name
+    label: "Pay Unit",
+    valueField: "code",
+    displayField: "name",
+    columns: [
+      { field: "code", header: "Code" },
+      { field: "name", header: "Name" },
+    ],
+  },
   division: {
     parameterCode: "DROP_DOWN_DIVISION",
     label: "Division",
@@ -78,11 +89,11 @@ const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
   dddwIncrementStatus: {
     parameterCode: "EMPLOYEE_SALARY_INCREMENT_DDDW_INCREMENT_STATUS",
     label: "Increment Status",
-    valueField: "code",
-    displayField: "name",
+    valueField: "value_code",
+    displayField: "value_desc",
     columns: [
-      { field: "code", header: "Code" },
-      { field: "name", header: "Name" },
+      { field: "value_code", header: "Code" },
+      { field: "value_desc", header: "Name" },
     ],
   },
   dddwYesNoFlag: {
@@ -98,11 +109,11 @@ const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
   dddwStatusFlag: {
     parameterCode: "EMPLOYEE_SALARY_INCREMENT_DDDW_STATUS_FLAG",
     label: "Status",
-    valueField: "code",
-    displayField: "name",
+    valueField: "value_code",
+    displayField: "value_desc",
     columns: [
-      { field: "code", header: "Code" },
-      { field: "name", header: "Name" },
+      { field: "value_code", header: "Code" },
+      { field: "value_desc", header: "Name" },
     ],
   },
 };
@@ -139,11 +150,6 @@ export function DynamicDropDown({
   const config = DROPDOWN_CONFIG[type];
   const queryClient = useQueryClient();
 
-  // LookupField only knows about loadOptions(), so we route every call
-  // through queryClient.fetchQuery (still "useQuery"-powered, for
-  // consistent error/retry handling), but with staleTime: 0 and
-  // gcTime: 0 so nothing is ever served from cache — every dropdown
-  // open hits the API fresh.
   const loadOptions = useCallback(async () => {
     try {
       const data = await queryClient.fetchQuery({
