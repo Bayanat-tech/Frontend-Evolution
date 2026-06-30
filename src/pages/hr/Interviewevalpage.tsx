@@ -6,7 +6,7 @@ import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { useAuth } from "../../state/AuthContext";
-import { AddInterviewEvalForm } from "./Addinterviewevalform";
+import { Addinterviewevalform } from "./Addinterviewevalform";
 
 type InterviewEvalRow = {
   doc_no: string;
@@ -46,6 +46,27 @@ const baseParams = (loginid: string, companyCode: string) => ({
   date4: null,
 });
 
+// doc_no (e.g. 2026120003) is the sequential identifier assigned by the
+// backend at save time, so the highest doc_no is always the most recently
+// created record. doc_date is a user-editable business field on the form
+// (people can type any date), so it must NOT be used for ordering.
+//
+// doc_no can arrive as a zero-padded string, with stray whitespace, or
+// (rarely) with a non-numeric prefix/suffix depending on the backend
+// formatter, so we strip everything except digits before comparing
+// numerically. This avoids cases where naive Number(a.doc_no) === NaN
+// silently falls through to string comparison and produces an
+// insertion-order-looking result.
+const docNoSortValue = (docNo: unknown): number => {
+  const digitsOnly = String(docNo ?? "").replace(/[^0-9]/g, "");
+  if (!digitsOnly) return -Infinity;
+  const n = Number(digitsOnly);
+  return Number.isNaN(n) ? -Infinity : n;
+};
+
+const sortByDocNoDesc = (rows: InterviewEvalRow[]): InterviewEvalRow[] =>
+  [...rows].sort((a, b) => docNoSortValue(b.doc_no) - docNoSortValue(a.doc_no));
+
 export function InterviewEvalPage() {
   const { user } = useAuth();
   const loginid = user?.loginid || "ADMIN";
@@ -64,7 +85,12 @@ export function InterviewEvalPage() {
     setNotice(null);
     try {
       const data = await getDynamicLookup(baseParams(loginid, companyCode));
-      setRows(Array.isArray(data) ? (data as InterviewEvalRow[]) : []);
+      const raw = Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
+      const list: InterviewEvalRow[] = raw.map((r) => ({
+        ...(r as InterviewEvalRow),
+        doc_no: String(r.doc_no ?? r.DOC_NO ?? ""),
+      }));
+      setRows(sortByDocNoDesc(list));
     } catch (error) {
       setNotice({
         type: "error",
@@ -106,26 +132,50 @@ export function InterviewEvalPage() {
 
   const columns = useMemo<ColumnDef<InterviewEvalRow>[]>(
     () => [
-      { accessorKey: "doc_no", header: "Doc No", size: 100 },
+      {
+        accessorKey: "doc_no",
+        header: "Doc No",
+        size: 100,
+        // Sorting disabled here so users can't click the header and flip
+        // the order — the desired order (newest first) is enforced two
+        // ways: (1) sortByDocNoDesc() pre-sorts the row array on load,
+        // and (2) DataTable is given initialSorting=[{id:"doc_no",desc:true}]
+        // so tanstack-table's getSortedRowModel doesn't fall back to
+        // unsorted/insertion order before any user interaction.
+        enableSorting: false,
+        // sortingFn is defined for correctness/documentation even though
+        // enableSorting is false — if this column's sorting is ever
+        // re-enabled, it will sort numerically by the digits in doc_no
+        // rather than falling back to tanstack's default string/basic sort.
+        sortingFn: (rowA, rowB) =>
+          docNoSortValue(rowA.original.doc_no) - docNoSortValue(rowB.original.doc_no),
+      },
       {
         accessorKey: "doc_date",
         header: "Doc Date",
         size: 120,
+        // Sorting disabled: doc_date is a user-editable business field
+        // (people can backdate/postdate it on the form), so it must never
+        // become the active sort column — otherwise it silently overrides
+        // the newest-first-by-doc_no order this table is meant to show.
+        enableSorting: false,
         cell: ({ getValue }) => {
           const val = getValue<string>();
           if (!val) return "-";
           return new Date(val).toLocaleDateString("en-GB");
         },
       },
-      { accessorKey: "doc_ref_no", header: "Ref No", size: 120 },
-      { accessorKey: "cand_name", header: "Candidate Name", size: 180 },
-      { accessorKey: "pos_appl_for", header: "Position Applied", size: 160 },
-      { accessorKey: "dept", header: "Department", size: 140 },
-      { accessorKey: "intvr_name", header: "Interviewer", size: 150 },
+      { accessorKey: "doc_ref_no", header: "Ref No", size: 120, enableSorting: false },
+      { accessorKey: "cand_name", header: "Candidate Name", size: 180, enableSorting: false },
+      { accessorKey: "pos_appl_for", header: "Position Applied", size: 160, enableSorting: false },
+      { accessorKey: "dept", header: "Department", size: 140, enableSorting: false },
+      { accessorKey: "intvr_name", header: "Interviewer", size: 150, enableSorting: false },
       {
         accessorKey: "intrvw_date",
         header: "Interview Date",
         size: 130,
+        // Same reasoning as doc_date: keep the table locked to doc_no order.
+        enableSorting: false,
         cell: ({ getValue }) => {
           const val = getValue<string>();
           if (!val) return "-";
@@ -136,6 +186,7 @@ export function InterviewEvalPage() {
         accessorKey: "hire_flag",
         header: "Hired",
         size: 90,
+        enableSorting: false,
         cell: ({ row }) => {
           const val = (row.original.hire_flag ?? "").toString().toUpperCase();
           if (val === "Y")
@@ -228,6 +279,7 @@ export function InterviewEvalPage() {
         density="grid"
         enablePagination
         pageSize={100}
+        initialSorting={[{ id: "doc_no", desc: true }]}
         getRowId={(row) => `${row.doc_type}-${row.doc_no}`}
       />
 
@@ -244,7 +296,7 @@ export function InterviewEvalPage() {
           wide
           onClose={() => setPopup((p) => ({ ...p, open: false }))}
         >
-          <AddInterviewEvalForm
+          <Addinterviewevalform
             mode={popup.mode}
             existingData={popup.data}
             onClose={(shouldRefetch?: boolean) => {
