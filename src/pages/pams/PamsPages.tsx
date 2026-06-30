@@ -1848,11 +1848,7 @@ function assignmentDelete(row: Row, ctx: PamsContext) {
 }
 
 async function loadBulkEmployees(loginid: string, companyCode: string, periodNumber?: string) {
-  try {
-    return await getDynamicLookup({ parameter: "PAMS_employee_hierarchy", loginid, code1: companyCode, code2: periodNumber || "NULL" });
-  } catch {
-    return await pamsSelect({ parameter: "employee_hierarchy", loginid, code1: companyCode, code2: periodNumber || "NULL" });
-  }
+  return await pamsSelect({ parameter: "dept_head_employees", loginid, code1: companyCode, code2: periodNumber || "NULL" });
 }
 
 function bulkAppraisalColumns(): ColumnDef<Row>[] {
