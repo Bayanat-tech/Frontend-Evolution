@@ -38,6 +38,7 @@ const PARAM = {
   DETAIL: "HR_LEAVE_ENCASHMENT_DETAIL",
   LEAVE_BALANCE: "HR_LEAVE_ENCASHMENT_LEAVE_BALANCE",
   LEAVE_HISTORY: "HR_LEAVE_ENCASHMENT_LEAVE_BALANCE_HISTORY",
+  LEAVE_TYPE: "HR_LEAVE_ENCASHMENT_LEAVE_TYPE_DROP_DOWN",
 } as const;
 
 type FilterState = {
@@ -52,10 +53,15 @@ type FilterState = {
 };
 
 // Shape rendered in the Detail Lines grid: a LeaveDetailRow plus doc-level
-// fields merged in for display only (see `detailsForGrid`).
+// fields merged in for display only (see `detailsForGrid`). These doc-level
+// fields (lve_doc_no, doc_approval_status, dates merged from history) are
+// DISPLAY ONLY — HR_EMP_LEAVE_DET has no LVE_DOC_NO column, so they must
+// never be persisted back into `details` (source-of-truth state).
 type DetailGridRow = LeaveDetailRow & {
   doc_approval_status?: string;
 };
+
+const FALLBACK_ID_PREFIX = "history-fallback-";
 
 const emptyFilters: FilterState = {
   divCode: "",
@@ -90,9 +96,13 @@ export function LeaveEncashmentPage() {
 
   const [lineEditorOpen, setLineEditorOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const editingRow = editingIndex !== null ? details[editingIndex] ?? null : null;
 
   const employeeSelected = Boolean(filters.employeeId);
+
+  // Only one encashment detail line is allowed per document at a time.
+  // The Add button is hidden once a real (non-fallback) row exists in
+  // `details`, and reappears automatically once the row is removed.
+  const canAddLine = employeeSelected && details.length === 0;
 
   // ── Lookups ───────────────────────────────────────────────────────────────
 
@@ -268,6 +278,7 @@ export function LeaveEncashmentPage() {
   // ── Detail line management ────────────────────────────────────────────────
 
   const openAddLine = () => {
+    if (!canAddLine) return;
     setEditingIndex(null);
     setLineEditorOpen(true);
   };
@@ -282,14 +293,27 @@ export function LeaveEncashmentPage() {
     setEditingIndex(null);
   };
 
-  const saveDetailRow = (row: LeaveDetailRow) => {
+  // `row` here is the form's working copy, which is a DetailGridRow and may
+  // carry display-only doc-level fields (lve_doc_no, doc_approval_status)
+  // that were merged in purely for rendering. HR_EMP_LEAVE_DET has no
+  // LVE_DOC_NO column — strip those before writing into `details`, the
+  // array that actually gets sent to the save API.
+  const saveDetailRow = (row: DetailGridRow) => {
+    const { doc_approval_status, lve_doc_no, ...lineFields } = row;
+    void doc_approval_status;
+    void lve_doc_no;
+
     setDetails((current) => {
       if (editingIndex !== null && editingIndex >= 0 && editingIndex < current.length) {
         const next = [...current];
-        next[editingIndex] = { ...row, id: current[editingIndex].id };
+        next[editingIndex] = { ...lineFields, id: current[editingIndex].id } as LeaveDetailRow;
         return next;
       }
-      return [...current, { ...row, id: `new-${Date.now()}` }];
+      // Enforce single-line-per-document on the add path as well, in case
+      // openAddLine's guard was bypassed (e.g. dialog left open from a
+      // stale render). Editing an existing row is always allowed.
+      if (current.length > 0) return current;
+      return [...current, { ...lineFields, id: `new-${Date.now()}` } as LeaveDetailRow];
     });
     closeLineEditor();
   };
@@ -302,6 +326,9 @@ export function LeaveEncashmentPage() {
   // start/end date, approval status) from the history list which carries them.
   // When DETAIL returns nothing for a selected doc, fall back to the history
   // row itself so the user sees something in the grid instead of an empty table.
+  // NOTE: the fallback row (id starting with FALLBACK_ID_PREFIX) is
+  // display-only and does NOT exist in `details` — actions on it must be
+  // disabled, see detailColumns below.
   const detailsForGrid = useMemo<DetailGridRow[]>(() => {
     if (!selectedDocNo && details.length === 0) return [];
 
@@ -325,7 +352,7 @@ export function LeaveEncashmentPage() {
     if (selectedDocNo && historyRow) {
       return [
         {
-          id: `history-fallback-${selectedDocNo}`,
+          id: `${FALLBACK_ID_PREFIX}${selectedDocNo}`,
           leave_type: String(historyRow.leave_type ?? ""),
           leave_days: historyRow.leave_days != null ? Number(historyRow.leave_days) : undefined,
           leave_reason: String(historyRow.leave_reason ?? ""),
@@ -346,6 +373,15 @@ export function LeaveEncashmentPage() {
     return [];
   }, [details, history, selectedDocNo, companyCode, filters.employeeId]);
 
+  // FIX (Bug 1): editingRow must read from `detailsForGrid`, not `details`.
+  // `details` is the raw API/source-of-truth array and never carries
+  // lve_doc_no / doc_approval_status — those are merged in only on
+  // `detailsForGrid`. Editing from `details` caused the dialog to always
+  // show blank Doc No / Doc Status even though the table row displayed them.
+  const editingRow = editingIndex !== null ? detailsForGrid[editingIndex] ?? null : null;
+
+  const isFallbackRow = (row: DetailGridRow) => String(row.id ?? "").startsWith(FALLBACK_ID_PREFIX);
+
   const detailColumns = useMemo<ColumnDef<DetailGridRow>[]>(
     () => [
       { accessorKey: "leave_type", header: "Leave Type" },
@@ -362,19 +398,31 @@ export function LeaveEncashmentPage() {
         id: "actions",
         header: "Actions",
         enableSorting: false,
-        cell: ({ row }: { row: { index: number } }) => (
-          <div className="flex items-center gap-1">
-            <Button size="icon" variant="ghost" onClick={() => openEditLine(row.index)}>
-              <Pencil size={14} />
-            </Button>
-            <Button size="icon" variant="ghost" onClick={() => removeDetailRow(row.index)}>
-              <Trash2 size={14} />
-            </Button>
-          </div>
-        ),
+        // NOTE: this DataTable wrapper only guarantees `row.index`, not a
+        // full TanStack row with `.original` — so look the row up from
+        // `detailsForGrid` (closed over here) by index instead of reading
+        // row.original directly. The synthetic "history fallback" row has
+        // no corresponding entry in `details`, so openEditLine/removeDetailRow
+        // (which operate by index into `details`) must never be wired to it.
+        cell: ({ row }: { row: { index: number } }) => {
+          const original = detailsForGrid[row.index];
+          if (!original || isFallbackRow(original)) {
+            return <span className="text-xs text-muted-foreground">Add a line to edit</span>;
+          }
+          return (
+            <div className="flex items-center gap-1">
+              <Button size="icon" variant="ghost" onClick={() => openEditLine(row.index)}>
+                <Pencil size={14} />
+              </Button>
+              <Button size="icon" variant="ghost" onClick={() => removeDetailRow(row.index)}>
+                <Trash2 size={14} />
+              </Button>
+            </div>
+          );
+        },
       },
     ],
-    [],
+    [detailsForGrid],
   );
 
   // ── Save ──────────────────────────────────────────────────────────────────
@@ -410,7 +458,6 @@ export function LeaveEncashmentPage() {
       {/* Page title + actions — compact */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="eyebrow text-xs">HR Transactions</p>
           <h1 className="m-0 text-lg font-semibold tracking-tight">Leave Encashment</h1>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -422,9 +469,13 @@ export function LeaveEncashmentPage() {
           >
             <RefreshCw size={13} /> Refresh
           </Button>
-          <Button size="sm" disabled={!employeeSelected} onClick={openAddLine}>
-            <Plus size={13} /> Add
-          </Button>
+          {/* Only one detail line is allowed per document — hide Add once a
+              real (non-fallback) row exists; it reappears after removal. */}
+          {canAddLine && (
+            <Button size="sm" onClick={openAddLine}>
+              <Plus size={13} /> Add
+            </Button>
+          )}
           <Button size="sm" disabled={!canSave || saving} onClick={() => void saveDocument()}>
             <Save size={13} /> Save
           </Button>
@@ -674,6 +725,7 @@ export function LeaveEncashmentPage() {
         onSave={saveDetailRow}
         employeeId={filters.employeeId}
         companyCode={companyCode}
+        loginid={loginid}
         hdrLveSlno={header.hdr_lve_slno || ""}
       />
     </section>
@@ -691,35 +743,46 @@ function LeaveLineEditor({
   onSave,
   employeeId,
   companyCode,
+  loginid,
   hdrLveSlno,
 }: {
   open: boolean;
   balances: LeaveBalanceRow[];
-  editingRow: LeaveDetailRow | null;
+  editingRow: DetailGridRow | null;
   onClose: () => void;
-  onSave: (row: LeaveDetailRow) => void;
+  onSave: (row: DetailGridRow) => void;
   employeeId: string;
   companyCode: string;
+  loginid: string;
   hdrLveSlno: string | number;
 }) {
   const isEditing = Boolean(editingRow);
 
   const [form, setForm] = useState<DetailGridRow>(
-    (editingRow as DetailGridRow) || (emptyDetailRow(companyCode, employeeId, hdrLveSlno) as DetailGridRow),
+    editingRow || (emptyDetailRow(companyCode, employeeId, hdrLveSlno) as DetailGridRow),
   );
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (open) {
-      setForm(
-        (editingRow as DetailGridRow) ||
-          (emptyDetailRow(companyCode, employeeId, hdrLveSlno) as DetailGridRow),
-      );
+      setForm(editingRow || (emptyDetailRow(companyCode, employeeId, hdrLveSlno) as DetailGridRow));
       setError("");
     }
   }, [open, editingRow, companyCode, employeeId, hdrLveSlno]);
 
   const selectedBalance = findBalanceForType(balances, form.leave_type || "");
+
+  // Loads leave types from MS_HR_LEAVE_TYPES for the company, excluding any
+  // row explicitly flagged as not encashable (ENCASHMENT = 'N'). Rows with
+  // ENCASHMENT null/blank/'Y' (or anything other than 'N') are shown.
+  const loadLeaveTypes = async () => {
+    const rows = (await getDynamicLookup({
+      parameter: "HR_LEAVE_ENCASHMENT_LEAVE_TYPE_DROP_DOWN",
+      loginid,
+      code1: companyCode,
+    })) as LookupRow[];
+    return rows.filter((row) => String(row.encashment ?? "").trim().toUpperCase() !== "N");
+  };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -753,11 +816,18 @@ function LeaveLineEditor({
         {/* Row 1: Leave Type + Days */}
         <label className="field">
           <span className="text-xs font-medium">Leave Type *</span>
-          <Input
-            className="h-8 uppercase text-sm"
+          <LookupField
+            label=""
             value={form.leave_type || ""}
-            onChange={(e) => setForm((c) => ({ ...c, leave_type: e.target.value.toUpperCase() }))}
-            placeholder="e.g. AL"
+            displayValue={form.leave_type || ""}
+            columns={[
+              { field: "leave_type", header: "Code" },
+              { field: "leave_type_desc", header: "Description" },
+            ]}
+            valueField="leave_type"
+            displayFields={["leave_type", "leave_type_desc"]}
+            loadOptions={loadLeaveTypes}
+            onChange={(value) => setForm((c) => ({ ...c, leave_type: value }))}
             required
           />
         </label>
@@ -835,14 +905,17 @@ function LeaveLineEditor({
           </select>
         </label>
 
-        {/* Row 4: Doc No + Doc Status */}
+        {/* Row 4: Doc No + Doc Status — read-only: doc number is assigned by
+            the backend (HDR_LVE_SLNO -> LVE_DOC_NO) and approval status is a
+            header-level value; neither is a column on HR_EMP_LEAVE_DET, so
+            they must not be free-typed as if they were per-line fields. */}
         <label className="field">
           <span className="text-xs font-medium">Doc No</span>
           <Input
             className="h-8 text-sm"
             value={form.lve_doc_no || ""}
-            onChange={(e) => setForm((c) => ({ ...c, lve_doc_no: e.target.value }))}
-            placeholder="Auto-assigned if blank"
+            disabled
+            placeholder="Auto-assigned on save"
           />
         </label>
 
@@ -851,8 +924,8 @@ function LeaveLineEditor({
           <Input
             className="h-8 text-sm"
             value={form.doc_approval_status || ""}
-            onChange={(e) => setForm((c) => ({ ...c, doc_approval_status: e.target.value }))}
-            placeholder="e.g. C"
+            disabled
+            placeholder="Set on approval"
           />
         </label>
 
