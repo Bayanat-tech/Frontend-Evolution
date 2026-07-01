@@ -83,6 +83,8 @@ import { isVendorRouteText } from "../pages/vendor/vendorRoutes";
 import { StockAdjViewPage } from "../pages/wms/stock adjustment/StockAdjustmentViewPage";
 import StockAdjPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
 import {StorageComputationPage} from "../pages/wms/storage computation/StorageComputation";
+import LeaveEncashmentPage from "../pages/hr/LeaveEncashmentPage";
+import EmployeeSalaryIncrement from "../pages/hr/EmployeeSalaryIncrement";
 
 import { ContinuousAutoMemoPage } from "../pages/hr/HrContinuousAutoMemo";
 
@@ -93,6 +95,7 @@ import { InterviewEvalPage } from "../pages/hr/Interviewevalpage";
 import { HrJoiningPage } from "../pages/hr/HrJoiningPage";
 
 import { HrEmpEducationPage } from "../pages/hr/HrEmpEducationPage";  
+import GradeSalaryIncrement from "../pages/hr/GradeSalaryIncrement.";
 
 
 
@@ -113,6 +116,21 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name:"HR Grade Salary Increment",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/grade_salary_increment"),
+    element: () => <GradeSalaryIncrement />
+  },
+  {
+    name: "HR Employee Salary Increment",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/salary%20increment"),
+    element: () => <EmployeeSalaryIncrement />
+  },
+  {
+    name: "HR Leave Encashment",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/leave_encashment"),
+    element: () => <LeaveEncashmentPage />
+  },
   {
     name: "Vendor System",
     match: (context) => isVendorRoute(context),
