@@ -569,7 +569,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     routeKeys: ["educational_discipline", "education_discipline", "edu_discipline"],
     keyField: "edu_disc_code",
     source: "dynamic",
-    listQuery: dynamicList("MST_HR_MS_HR_EDU_DISCIPLINE"),
+    listQuery: dynamicList("MST_HR_MS_HR_EDU_DISCIPLINE",true),
     autoGenerateKey: true,
     buildSave: (form, context) => ({
       parameter: "MST_HR_EDU_DISCIPLINE",

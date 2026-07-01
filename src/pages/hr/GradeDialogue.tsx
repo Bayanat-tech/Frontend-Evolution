@@ -1,4 +1,4 @@
-import { Plus, Save, Trash2, X } from "lucide-react";
+import { Save, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import { saveHrGm } from "../../api/hr";
@@ -28,6 +28,10 @@ export type TGradeHeader = {
   dep_med_entitlement: string;
 };
 
+// Read-only row shape, sourced from WMSTST.MS_HR_GRADE_COMPONENTS.
+// Only the columns actually displayed in the grid are kept here; the table
+// has additional columns (REIMBURSEMENT, ARREARS_*, SORT_ORDER, etc.) that
+// are not shown on this screen and are intentionally not modeled.
 export type TGradeDetail = {
   _id: string;
   company_code: string;
@@ -120,18 +124,12 @@ function FieldLabel({ label, required }: { label: string; required?: boolean }) 
   );
 }
 
-function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`border-b-2 px-5 py-2 text-sm font-medium transition-colors ${
-        active ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
-      }`}
-    >
-      {children}
-    </button>
-  );
+function formatDate(value: unknown) {
+  if (!value) return "-";
+  const raw = String(value);
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toLocaleDateString("en-GB");
 }
 
 function EntitlementCard({
@@ -180,10 +178,19 @@ function EntitlementCard({
 }
 
 // ─── Main Dialog ─────────────────────────────────────────────────────────────
-
+// NOTE ON LAYOUT: this is a SINGLE scrolling page — Header fields,
+// Entitlements, Remarks, and the Grade Components grid all live in one
+// continuous body (matching the reference legacy screen), instead of being
+// split across separate "Header" / "Details" tabs.
+//
+// NOTE ON GRADE COMPONENTS: this grid is DISPLAY-ONLY. It is populated from
+// WMSTST.MS_HR_GRADE_COMPONENTS (pay_comp_id, min_pay_amt, max_pay_amt,
+// approved_date) via the same GET /api/hr/grade/:code call used to load the
+// header. There is no Add Row / edit / delete here — this screen does not
+// create or modify component rows, it only shows what already exists for
+// the selected grade_code.
 export function GradeDialog({ open, isEdit, isView, company_code, grade_code: initGradeCode, onClose }: TProps) {
   const { user } = useAuth();
-  const [tab, setTab] = useState<"header" | "details">("header");
   const [header, setHeader] = useState<TGradeHeader>(emptyHeader(company_code));
   const [details, setDetails] = useState<TGradeDetail[]>([]);
   const [saving, setSaving] = useState(false);
@@ -215,14 +222,20 @@ export function GradeDialog({ open, isEdit, isView, company_code, grade_code: in
     [details],
   );
 
-  // ── Load existing grade data ───────────────────────────────────────────────
+  // ── Load existing grade data (header + components) ─────────────────────────
   // Uses the shared `api` client (same one api/hr.ts uses) instead of a bare
   // fetch(), so auth headers / base URL / response-envelope handling all
   // behave consistently with the rest of the app instead of silently
   // hitting the wrong host or failing auth.
+  //
+  // Backend contract expected here: GET /api/hr/grade/:grade_code?company_code=...
+  // must return { success, data: { header, details } } where `details` is
+  // the list of rows from MS_HR_GRADE_COMPONENTS for that grade_code. If you
+  // are seeing "Cannot GET /api/hr/grade/xxx", the route itself is missing
+  // or mounted under a different path on the server — that is a backend
+  // routing issue, not something fixable from this file.
   useEffect(() => {
     if (!open) return;
-    setTab("header");
     setNotice(null);
     setPageIndex(0);
 
@@ -250,6 +263,8 @@ export function GradeDialog({ open, isEdit, isView, company_code, grade_code: in
                 approved_date: String(row.approved_date ?? ""),
               })),
             );
+          } else {
+            setDetails([]);
           }
         })
         .catch((error) =>
@@ -268,36 +283,15 @@ export function GradeDialog({ open, isEdit, isView, company_code, grade_code: in
   // ── Field helpers ──────────────────────────────────────────────────────────
   const setH = (field: keyof TGradeHeader, value: string) => setHeader((prev) => ({ ...prev, [field]: value }));
 
-  const addDetailRow = () => {
-    setDetails((prev) => [
-      ...prev,
-      {
-        _id: `new_${Date.now()}`,
-        company_code,
-        grade_code: header.grade_code,
-        pay_comp_id: "",
-        min_pay_amt: 0,
-        max_pay_amt: 0,
-        approved_date: "",
-      },
-    ]);
-  };
-
-  const updateDetail = (id: string, field: keyof TGradeDetail, value: string | number) =>
-    setDetails((prev) => prev.map((row) => (row._id === id ? { ...row, [field]: value } : row)));
-
-  const deleteDetail = (id: string) => setDetails((prev) => prev.filter((row) => row._id !== id));
-
   const pageCount = Math.max(1, Math.ceil(details.length / pageSize));
   const pagedDetails = details.slice(pageIndex * pageSize, pageIndex * pageSize + pageSize);
   const rangeStart = details.length === 0 ? 0 : pageIndex * pageSize + 1;
   const rangeEnd = Math.min(details.length, pageIndex * pageSize + pageSize);
 
-  // ── Save ───────────────────────────────────────────────────────────────────
+  // ── Save (header only — Grade Components is read-only on this screen) ──────
   const handleSave = async () => {
     if (!header.grade_name.trim()) {
       setNotice({ type: "error", message: "Name is required." });
-      setTab("header");
       return;
     }
 
@@ -306,10 +300,8 @@ export function GradeDialog({ open, isEdit, isView, company_code, grade_code: in
     try {
       // On Add, grade_code is sent blank — the server generates the real
       // code and returns it in the response. On Edit, the existing code is
-      // sent as-is and the server echoes it back unchanged. Either way,
-      // `savedGradeCode` is the one source of truth to use afterwards —
-      // never the locally-held (possibly blank) header.grade_code.
-      const saveResponse = await saveHrGm(
+      // sent as-is and the server echoes it back unchanged.
+      await saveHrGm(
         "grade",
         {
           ...header,
@@ -319,35 +311,6 @@ export function GradeDialog({ open, isEdit, isView, company_code, grade_code: in
         },
         isEdit ? "put" : "post",
       );
-
-      const savedGradeCode = String(
-        (saveResponse as { data?: { grade_code?: string } })?.data?.grade_code || (isEdit ? initGradeCode : ""),
-      );
-
-      if (!savedGradeCode) {
-        // Server did not return a code and this wasn't an edit — without a
-        // valid grade_code we cannot safely save detail rows under it.
-        throw new Error("Grade was saved, but no grade code was returned. Please refresh and check Details.");
-      }
-
-      if (details.length > 0) {
-        const detailResponse = await api.post<ApiResponse<unknown>>("/api/hr/grade/components", {
-          header: { ...header, grade_code: savedGradeCode, user_id: user?.loginid ?? "" },
-          details: details.map((row) => ({
-            company_code: row.company_code,
-            grade_code: savedGradeCode,
-            pay_comp_id: row.pay_comp_id,
-            min_pay_amt: Number(row.min_pay_amt),
-            max_pay_amt: Number(row.max_pay_amt),
-            approved_date: row.approved_date,
-            user_id: user?.loginid ?? "",
-          })),
-        });
-
-        if (!detailResponse.data.success) {
-          throw new Error(detailResponse.data.message || "Grade was saved, but components failed to save.");
-        }
-      }
 
       onClose(true);
     } catch (error) {
@@ -403,25 +366,14 @@ export function GradeDialog({ open, isEdit, isView, company_code, grade_code: in
         }
       `}</style>
 
-      {/* Fixed-height shell: title/tabs/notice are fixed; only the active
-          tab's own region ever scrolls — both Header and Details scroll
-          internally instead of being clipped, so the dialog itself never
-          grows/shrinks or resets its scroll position while typing. */}
-      <div className="-mt-6 flex max-h-[78vh] flex-col overflow-hidden">
+      {/* Fixed title bar; everything else (header fields, entitlements,
+          remarks, and the Grade Components grid) scrolls together as ONE
+          page inside this shell — matching the reference screen, which has
+          no tab split. */}
+      <div className="-mt-6 flex max-h-[85vh] flex-col overflow-hidden">
         {/* ── Title bar ── */}
         <div className="flex shrink-0 items-center justify-between bg-primary px-6 py-3.5">
           <h2 className="text-base font-semibold text-white">{dialogTitle}</h2>
-         
-        </div>
-
-        {/* ── Tabs ── */}
-        <div className="flex shrink-0 border-b px-6">
-          <TabBtn active={tab === "header"} onClick={() => setTab("header")}>
-            Header
-          </TabBtn>
-          <TabBtn active={tab === "details"} onClick={() => setTab("details")}>
-            Details
-          </TabBtn>
         </div>
 
         {notice && (
@@ -435,298 +387,262 @@ export function GradeDialog({ open, isEdit, isView, company_code, grade_code: in
             Loading grade data...
           </div>
         ) : (
-          <>
-            {/* ══════════════ TAB: HEADER ══════════════ */}
-            {tab === "header" && (
-             <div className="flex-1 overflow-hidden px-6 py-3">
-                {/* Grade code / amount strip */}
-                <div className="flex items-center justify-between rounded-t-md border border-b-0 bg-slate-50 px-3 py-2">
-                  <div>
-                    <p className="text-[10px] uppercase leading-tight tracking-wide text-muted-foreground">
-                      Autogenerated
-                    </p>
-                    <p className="text-[11px] font-medium leading-tight text-muted-foreground">Grade Code</p>
-                    <p className="text-sm font-semibold leading-tight text-foreground">
-                      {isEdit || isView ? header.grade_code || initGradeCode : "N/A"}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[11px] font-medium leading-tight text-muted-foreground">Amount</p>
-                    <p className="text-sm font-semibold leading-tight text-foreground">{totalAmount.toFixed(2)}</p>
-                  </div>
-                </div>
-                <div className="h-0.5 w-full bg-primary" />
-
-                <div className="grid grid-cols-1 gap-x-5 gap-y-2.5 rounded-b-md border border-t-0 p-3 sm:grid-cols-2 lg:grid-cols-3">
-                  <label className="field">
-                    <FieldLabel label="Company" required />
-                    <Input className="h-8 text-sm" value={header.company_code} disabled />
-                  </label>
-
-                  <label className="field">
-                    <FieldLabel label="Name" required />
+          <div className="scroll-hide flex-1 overflow-y-auto px-6 py-3">
+            {/* ══════════════ Grade Code / Amount strip ══════════════ */}
+            <div className="flex items-center justify-between rounded-t-md border border-b-0 bg-slate-50 px-3 py-2">
+              <div className="flex-1">
+                <p className="text-[10px] uppercase leading-tight tracking-wide text-muted-foreground">
+                  {isEdit || isView ? "Autogenerated" : "Autogenerated on save"}
+                </p>
+                <label className="field mt-1 block max-w-xs">
+                  <FieldLabel label="Grade Code" required />
+                  <div className="relative">
                     <Input
-                      className="h-8 text-sm"
-                      value={header.grade_name}
-                      disabled={isDisabled}
-                      onChange={(event) => setH("grade_name", event.target.value)}
+                      className="h-8 pr-8 text-sm"
+                      value={isEdit || isView ? header.grade_code || initGradeCode || "" : ""}
+                      placeholder={isEdit || isView ? "" : "N/A"}
+                      disabled
                     />
-                  </label>
-
-                  <label className="field">
-                    <FieldLabel label="Short Name" />
-                    <Input
-                      className="h-8 text-sm"
-                      value={header.grade_short_name}
-                      disabled={isDisabled}
-                      onChange={(event) => setH("grade_short_name", event.target.value)}
+                    <Search
+                      size={14}
+                      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
                     />
-                  </label>
-
-                  <label className="field">
-                    <FieldLabel label="Eligibility for OT (Y/N)" required />
-                    <Select
-                      className="h-8 text-sm"
-                      value={header.ot_eligibility}
-                      disabled={isDisabled}
-                      onChange={(event) => setH("ot_eligibility", event.target.value)}
-                    >
-                      {yesNo.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </Select>
-                  </label>
-
-                  <label className="field">
-                    <FieldLabel label="Grade Status" />
-                    <Select
-                      className="h-8 text-sm"
-                      value={header.grade_status}
-                      disabled={isDisabled}
-                      onChange={(event) => setH("grade_status", event.target.value)}
-                    >
-                      <option value="">— Select —</option>
-                      {gradeStatusOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </Select>
-                  </label>
-
-                  <label className="field">
-                    <FieldLabel label="Status" required />
-                    <Select
-                      className="h-8 text-sm"
-                      value={header.status}
-                      disabled={isDisabled}
-                      onChange={(event) => setH("status", event.target.value)}
-                    >
-                      {activeInactive.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </Select>
-                  </label>
-
-                  <div className="col-span-1 sm:col-span-2 lg:col-span-3">
-                    <p className="mb-1 mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                      Entitlements
-                    </p>
-                    <hr className="mb-2 border-slate-200" />
-                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                      <EntitlementCard
-                        title="Airfare Entitlement"
-                        self={header.airfare_entitlement}
-                        spouse={header.spouse_af_entitlement}
-                        dependent={header.dep_af_entitlement}
-                        disabled={isDisabled}
-                        onChange={(key, value) => setH(AIRFARE_FIELD_MAP[key], value)}
-                      />
-                      <EntitlementCard
-                        title="Medical Entitlement"
-                        self={header.medical_entitlement}
-                        spouse={header.spouse_med_entitlement}
-                        dependent={header.dep_med_entitlement}
-                        disabled={isDisabled}
-                        onChange={(key, value) => setH(MEDICAL_FIELD_MAP[key], value)}
-                      />
-                    </div>
                   </div>
+                </label>
+              </div>
+              <div className="text-right">
+                <p className="text-[11px] font-medium leading-tight text-muted-foreground">Amount</p>
+                <p className="text-sm font-semibold leading-tight text-foreground">{totalAmount.toFixed(2)}</p>
+              </div>
+            </div>
+            <div className="h-0.5 w-full bg-primary" />
 
-                  <label className="field col-span-1 sm:col-span-2 lg:col-span-3">
-                    <FieldLabel label="Remarks" />
-                    <textarea
-                      className="min-h-[44px] w-full resize-none rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-                      value={header.remarks}
-                      disabled={isDisabled}
-                      onChange={(event) => setH("remarks", event.target.value)}
-                    />
-                  </label>
+            {/* ══════════════ Header fields ══════════════ */}
+            <div className="grid grid-cols-1 gap-x-5 gap-y-2.5 rounded-b-md border border-t-0 p-3 sm:grid-cols-2 lg:grid-cols-3">
+              <label className="field">
+                <FieldLabel label="Company" required />
+                <Input className="h-8 text-sm" value={header.company_code} disabled />
+              </label>
+
+              <label className="field">
+                <FieldLabel label="Name" required />
+                <Input
+                  className="h-8 text-sm"
+                  value={header.grade_name}
+                  disabled={isDisabled}
+                  onChange={(event) => setH("grade_name", event.target.value)}
+                />
+              </label>
+
+              <label className="field">
+                <FieldLabel label="Short Name" />
+                <Input
+                  className="h-8 text-sm"
+                  value={header.grade_short_name}
+                  disabled={isDisabled}
+                  onChange={(event) => setH("grade_short_name", event.target.value)}
+                />
+              </label>
+
+              <label className="field">
+                <FieldLabel label="Eligibility for OT (Y/N)" required />
+                <Select
+                  className="h-8 text-sm"
+                  value={header.ot_eligibility}
+                  disabled={isDisabled}
+                  onChange={(event) => setH("ot_eligibility", event.target.value)}
+                >
+                  {yesNo.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+
+              <label className="field">
+                <FieldLabel label="Grade Status" />
+                <Select
+                  className="h-8 text-sm"
+                  value={header.grade_status}
+                  disabled={isDisabled}
+                  onChange={(event) => setH("grade_status", event.target.value)}
+                >
+                  <option value="">— Select —</option>
+                  {gradeStatusOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+
+              <label className="field">
+                <FieldLabel label="Status" required />
+                <Select
+                  className="h-8 text-sm"
+                  value={header.status}
+                  disabled={isDisabled}
+                  onChange={(event) => setH("status", event.target.value)}
+                >
+                  {activeInactive.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+
+              <div className="col-span-1 sm:col-span-2 lg:col-span-3">
+                <p className="mb-1 mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  Entitlements
+                </p>
+                <hr className="mb-2 border-slate-200" />
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                  <EntitlementCard
+                    title="Airfare Entitlement"
+                    self={header.airfare_entitlement}
+                    spouse={header.spouse_af_entitlement}
+                    dependent={header.dep_af_entitlement}
+                    disabled={isDisabled}
+                    onChange={(key, value) => setH(AIRFARE_FIELD_MAP[key], value)}
+                  />
+                  <EntitlementCard
+                    title="Medical Entitlement"
+                    self={header.medical_entitlement}
+                    spouse={header.spouse_med_entitlement}
+                    dependent={header.dep_med_entitlement}
+                    disabled={isDisabled}
+                    onChange={(key, value) => setH(MEDICAL_FIELD_MAP[key], value)}
+                  />
                 </div>
               </div>
-            )}
 
-            {/* ══════════════ TAB: DETAILS ══════════════ */}
-            {tab === "details" && (
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 py-3">
-                <div className="mb-2 flex shrink-0 items-center justify-between">
-                  <h3 className="text-sm font-semibold text-foreground">Grade Components</h3>
-                  {!isDisabled && (
-                    <Button size="sm" variant="outline" onClick={addDetailRow}>
-                      <Plus size={13} /> Add Row
-                    </Button>
-                  )}
-                </div>
+              <label className="field col-span-1 sm:col-span-2 lg:col-span-3">
+                <FieldLabel label="Remarks" />
+                <textarea
+                  className="min-h-[64px] w-full resize-none rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                  value={header.remarks}
+                  disabled={isDisabled}
+                  onChange={(event) => setH("remarks", event.target.value)}
+                />
+              </label>
+            </div>
 
-                <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border">
-                  <div className="scroll-hide overflow-auto">
-                    <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-slate-50 text-left text-muted-foreground">
+            {/* ══════════════ Grade Components (same page, below header) ══════════════
+                DISPLAY ONLY: sourced from MS_HR_GRADE_COMPONENTS via the grade
+                fetch above. No Add Row / edit / delete — this screen never
+                writes to this table, it only shows what's already there for
+                the selected grade_code. */}
+            <div className="mt-4">
+              <div className="mb-2 flex items-center justify-between border-b pb-1">
+                <h3 className="text-sm font-semibold text-primary underline decoration-1 underline-offset-4">
+                  Grade Components
+                </h3>
+              </div>
+
+              <div className="flex flex-col overflow-hidden rounded-md border">
+                <div className="scroll-hide max-h-[38vh] overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-slate-50 text-left text-muted-foreground">
+                      <tr>
+                        <th className="border-b px-3 py-2 font-semibold">S.No</th>
+                        <th className="border-b px-3 py-2 font-semibold">Pay Component</th>
+                        <th className="border-b px-3 py-2 font-semibold">Min Amount</th>
+                        <th className="border-b px-3 py-2 font-semibold">Max Amount</th>
+                        <th className="border-b px-3 py-2 font-semibold">Approved Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pagedDetails.length === 0 ? (
                         <tr>
-                          <th className="border-b px-3 py-2 font-semibold">S.No</th>
-                          <th className="border-b px-3 py-2 font-semibold">Pay Component</th>
-                          <th className="border-b px-3 py-2 font-semibold">Min Amount</th>
-                          <th className="border-b px-3 py-2 font-semibold">Max Amount</th>
-                          <th className="border-b px-3 py-2 font-semibold">Approved Date</th>
-                          {!isDisabled && <th className="border-b px-3 py-2" />}
+                          <td colSpan={5} className="px-4 py-16 text-center text-muted-foreground">
+                            No Rows To Show
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {pagedDetails.length === 0 ? (
-                          <tr>
-                            <td colSpan={isDisabled ? 5 : 6} className="px-4 py-16 text-center text-muted-foreground">
-                              No Rows To Show
+                      ) : (
+                        pagedDetails.map((row, index) => (
+                          <tr key={row._id} className="border-b hover:bg-slate-50">
+                            <td className="px-3 py-1.5 text-muted-foreground">
+                              {pageIndex * pageSize + index + 1}
                             </td>
+                            <td className="px-3 py-1.5">{row.pay_comp_id || "-"}</td>
+                            <td className="px-3 py-1.5 text-right">{Number(row.min_pay_amt || 0).toFixed(2)}</td>
+                            <td className="px-3 py-1.5 text-right">{Number(row.max_pay_amt || 0).toFixed(2)}</td>
+                            <td className="px-3 py-1.5">{formatDate(row.approved_date)}</td>
                           </tr>
-                        ) : (
-                          pagedDetails.map((row, index) => (
-                            <tr key={row._id} className="border-b hover:bg-slate-50">
-                              <td className="px-3 py-1.5 text-muted-foreground">{pageIndex * pageSize + index + 1}</td>
-                              <td className="px-2 py-1.5">
-                                <Input
-                                  className="h-8 text-sm"
-                                  value={row.pay_comp_id}
-                                  disabled={isDisabled}
-                                  onChange={(event) => updateDetail(row._id, "pay_comp_id", event.target.value)}
-                                />
-                              </td>
-                              <td className="px-2 py-1.5">
-                                <Input
-                                  className="h-8 text-right text-sm"
-                                  type="number"
-                                  value={row.min_pay_amt}
-                                  disabled={isDisabled}
-                                  onChange={(event) => updateDetail(row._id, "min_pay_amt", Number(event.target.value))}
-                                />
-                              </td>
-                              <td className="px-2 py-1.5">
-                                <Input
-                                  className="h-8 text-right text-sm"
-                                  type="number"
-                                  value={row.max_pay_amt}
-                                  disabled={isDisabled}
-                                  onChange={(event) => updateDetail(row._id, "max_pay_amt", Number(event.target.value))}
-                                />
-                              </td>
-                              <td className="px-2 py-1.5">
-                                <Input
-                                  className="h-8 text-sm"
-                                  type="date"
-                                  value={row.approved_date}
-                                  disabled={isDisabled}
-                                  onChange={(event) => updateDetail(row._id, "approved_date", event.target.value)}
-                                />
-                              </td>
-                              {!isDisabled && (
-                                <td className="px-2 py-1.5 text-center">
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8 text-rose-500 hover:bg-rose-50"
-                                    onClick={() => deleteDetail(row._id)}
-                                  >
-                                    <Trash2 size={14} />
-                                  </Button>
-                                </td>
-                              )}
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex shrink-0 items-center justify-between border-t bg-slate-50 px-3 py-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <span>Page Size:</span>
+                    <Select
+                      className="h-8 w-20"
+                      value={String(pageSize)}
+                      onChange={(event) => {
+                        setPageSize(Number(event.target.value));
+                        setPageIndex(0);
+                      }}
+                    >
+                      {PAGE_SIZE_OPTIONS.map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </Select>
                   </div>
 
-                  <div className="flex shrink-0 items-center justify-between border-t bg-slate-50 px-3 py-2 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <span>Page Size:</span>
-                      <Select
-                        className="h-8 w-20"
-                        value={String(pageSize)}
-                        onChange={(event) => {
-                          setPageSize(Number(event.target.value));
-                          setPageIndex(0);
-                        }}
+                  <div className="flex items-center gap-4">
+                    <span>
+                      {rangeStart} to {rangeEnd} of {details.length}
+                    </span>
+                    <span>
+                      Page <strong className="text-foreground">{details.length === 0 ? 0 : pageIndex + 1}</strong> of{" "}
+                      <strong className="text-foreground">{details.length === 0 ? 0 : pageCount}</strong>
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        className="rounded p-1 hover:bg-slate-200 disabled:opacity-40"
+                        disabled={pageIndex === 0}
+                        onClick={() => setPageIndex(0)}
                       >
-                        {PAGE_SIZE_OPTIONS.map((size) => (
-                          <option key={size} value={size}>
-                            {size}
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                      <span>
-                        {rangeStart} to {rangeEnd} of {details.length}
-                      </span>
-                      <span>
-                        Page <strong className="text-foreground">{details.length === 0 ? 0 : pageIndex + 1}</strong> of{" "}
-                        <strong className="text-foreground">{details.length === 0 ? 0 : pageCount}</strong>
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          className="rounded p-1 hover:bg-slate-200 disabled:opacity-40"
-                          disabled={pageIndex === 0}
-                          onClick={() => setPageIndex(0)}
-                        >
-                          ⏮
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded p-1 hover:bg-slate-200 disabled:opacity-40"
-                          disabled={pageIndex === 0}
-                          onClick={() => setPageIndex((prev) => Math.max(0, prev - 1))}
-                        >
-                          ‹
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded p-1 hover:bg-slate-200 disabled:opacity-40"
-                          disabled={pageIndex >= pageCount - 1}
-                          onClick={() => setPageIndex((prev) => Math.min(pageCount - 1, prev + 1))}
-                        >
-                          ›
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded p-1 hover:bg-slate-200 disabled:opacity-40"
-                          disabled={pageIndex >= pageCount - 1}
-                          onClick={() => setPageIndex(pageCount - 1)}
-                        >
-                          ⏭
-                        </button>
-                      </div>
+                        ⏮
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded p-1 hover:bg-slate-200 disabled:opacity-40"
+                        disabled={pageIndex === 0}
+                        onClick={() => setPageIndex((prev) => Math.max(0, prev - 1))}
+                      >
+                        ‹
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded p-1 hover:bg-slate-200 disabled:opacity-40"
+                        disabled={pageIndex >= pageCount - 1}
+                        onClick={() => setPageIndex((prev) => Math.min(pageCount - 1, prev + 1))}
+                      >
+                        ›
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded p-1 hover:bg-slate-200 disabled:opacity-40"
+                        disabled={pageIndex >= pageCount - 1}
+                        onClick={() => setPageIndex(pageCount - 1)}
+                      >
+                        ⏭
+                      </button>
                     </div>
                   </div>
                 </div>
               </div>
-            )}
-          </>
+            </div>
+          </div>
         )}
       </div>
     </Dialog>
