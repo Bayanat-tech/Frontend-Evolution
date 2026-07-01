@@ -624,27 +624,29 @@ export default function EmployeeSalaryIncrement() {
     setSaving(true);
     setNotice(null);
     try {
-      const payload = {
-        company_code: user.company_code,
-        employee_id: employeeDetail.emp_id,
-        rows: incrementRows.map((r) => ({
-          slno: r.slno,
-          pay_comp_id: r.pay_comp_id,
-          increment_type: r.increment_type,
-          trn_type: r.trn_type,
-          incr_perc: r.incr_perc,
-          incr_amount: r.incr_amount,
-          effective_date: r.effective_date,
-          arrears_flag: r.arrears_flag,
-          arrears_amt: r.arrears_amt,
-          approval_status: r.approval_status,
-          status_flag: r.status_flag,
-          remarks: r.remarks,
-          is_new: r.is_new,
-        })),
-      };
+    const payload = incrementRows.map((r) => ({
+      company_code: user.company_code,
+      employee_id: employeeDetail.emp_id,
+      slno: r.slno,
+      pay_comp_id: r.pay_comp_id,
+      increment_type: r.increment_type,
+      trn_type: Number(r.trn_type),
+      incr_perc: r.incr_perc,
+      incr_amount: r.incr_amount,
+      effective_date: r.effective_date,
+      arrears_flag: r.arrears_flag,
+      arrears_amt: r.arrears_amt,
+      approval_status: r.approval_status,
+      status_flag: r.status_flag,
+      remarks: r.remarks,
+      is_new: r.is_new,
+      revised_by: user.loginid,
+      user_id: user.loginid,
+      posted : 'N',
+    }));
 
-      await api.post("/api/finance/insUpdEmpSalaryIncrement", payload);
+    await api.post("/api/finance/insUpdEmpSalaryIncrement", payload);
+
 
       const [salaryRows, incrementLookupRows] = await Promise.all([
         getDynamicLookup({
