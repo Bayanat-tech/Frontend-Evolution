@@ -4786,6 +4786,13 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   text-decoration: none;
 }
 
+.support-pending-files button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .support-attachments img {
   width: 44px;
   height: 32px;
@@ -4801,9 +4808,25 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 
 .support-compose-row {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr auto auto;
   gap: 8px;
   align-items: end;
+}
+
+.support-clear-draft {
+  display: grid;
+  height: 40px;
+  width: 40px;
+  place-items: center;
+  border: 1px solid #fecdd3;
+  border-radius: 14px;
+  background: #fff1f2;
+  color: #be123c;
+  cursor: pointer;
+}
+
+.support-clear-draft:hover {
+  background: #ffe4e6;
 }
 
 .support-compose textarea {

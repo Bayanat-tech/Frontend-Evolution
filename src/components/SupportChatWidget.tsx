@@ -58,8 +58,18 @@ export function SupportChatWidget() {
 
   useEffect(() => {
     void supportHeartbeat().catch(() => undefined);
-    const timer = window.setInterval(() => void supportHeartbeat().catch(() => undefined), 45000);
-    return () => window.clearInterval(timer);
+    const beat = () => void supportHeartbeat().catch(() => undefined);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") beat();
+    };
+    window.addEventListener("focus", beat);
+    document.addEventListener("visibilitychange", onVisible);
+    const timer = window.setInterval(beat, 15000);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", beat);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   useEffect(() => {
@@ -85,6 +95,9 @@ export function SupportChatWidget() {
       const isAdmin = payload.role === "admin";
       setServerCanAdmin(isAdmin);
       setRole(isAdmin ? "admin" : "user");
+      void supportHeartbeat()
+        .then(() => loadAll(false))
+        .catch(() => undefined);
     });
     socket.on("support:presence-changed", () => {
       void loadAll(false);
@@ -199,6 +212,11 @@ export function SupportChatWidget() {
     if (!selectedId) return;
     await updateSupportTicket(selectedId, { status: "CLOSED" }, role);
     await loadAll(false);
+  };
+
+  const clearDraft = () => {
+    setCompose("");
+    setAttachments([]);
   };
 
   const onFiles = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -386,8 +404,8 @@ export function SupportChatWidget() {
                   {!!attachments.length && (
                     <div className="support-pending-files">
                       {attachments.map((file, index) => (
-                        <button type="button" onClick={() => setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index))} key={`${file.file_name}-${index}`}>
-                          <Paperclip size={13} /> {file.file_name}
+                        <button type="button" onClick={() => setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index))} key={`${file.file_name}-${index}`} title="Remove attachment">
+                          <Paperclip size={13} /> <span>{file.file_name}</span> <X size={12} />
                         </button>
                       ))}
                     </div>
@@ -402,6 +420,11 @@ export function SupportChatWidget() {
                         void send();
                       }
                     }} />
+                    {(compose.trim() || attachments.length > 0) && (
+                      <button className="support-clear-draft" type="button" onClick={clearDraft} title="Clear typed message and attachments" aria-label="Clear typed message and attachments">
+                        <X size={14} />
+                      </button>
+                    )}
                     <Button onClick={() => void send()} disabled={(canUseAdmin && !selectedId) || loading || (!compose.trim() && !attachments.length)}>
                       <Send size={15} /> Send
                     </Button>
