@@ -126,6 +126,7 @@ export function LeaveEncashmentPage() {
           loginid,
           code1: filters.divCode,
           code2: filters.deptCode,
+          code3: user?.company_code || '',
         })) as LookupRow[])
       : [];
 
