@@ -58,7 +58,7 @@ export function BankReconciliationPage() {
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
-    void getDynamicLookupaccount({ parameter: "BANK_RECONCILIATION_GET_DOCUMENT_TYPE", loginid: user?.loginid || "" })
+    void getDynamicLookupaccount({ parameter: "BANK_RECONCILIATION_GET_DOCUMENT_TYPE", loginid: user?.loginid || "", code1: user?.company_code || "" })
       .then(setDocTypes)
       .catch(() => setDocTypes([]));
   }, [user?.loginid]);
@@ -181,7 +181,7 @@ export function BankReconciliationPage() {
             columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }]}
             valueField="ac_code"
             displayFields={["ac_code", "ac_name"]}
-            loadOptions={() => getDynamicLookupaccount({ parameter: "BANK_RECONCILIATION_GET_BANK_ACCOUNT", loginid: user?.loginid || "" })}
+            loadOptions={() => getDynamicLookupaccount({ parameter: "BANK_RECONCILIATION_GET_BANK_ACCOUNT", loginid: user?.loginid || "", code1: user?.company_code || "" })}
             onChange={(value, row) => setFilters((current) => ({ ...current, bankAccount: value, bankAccountName: String(getLookupValue(row || {}, "ac_name") || "") }))}
           />
           <label className="field"><span>Document Type</span><Select value={filters.docType} onChange={(event) => setFilters((current) => ({ ...current, docType: event.target.value }))}><option value="">All</option>{docTypes.map((type, index) => <option key={`${getLookupValue(type, "doc_id")}_${index}`} value={String(getLookupValue(type, "doc_id") || "")}>{String(getLookupValue(type, "doc_id") || "")}</option>)}</Select></label>
