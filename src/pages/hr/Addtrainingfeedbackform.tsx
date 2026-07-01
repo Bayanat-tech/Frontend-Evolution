@@ -448,7 +448,7 @@ export function AddTrainingFeedbackForm({ mode, existingData, onClose }: Props) 
             )}
           </label>
 
-          {/* Auto-filled read-only fields */}
+          {/* Auto-filled fields — read-only (not editable) but styled like a normal input, not greyed-out/disabled */}
           {(
             [
               { label: "Candidate No",  field: "cand_no"   },
@@ -461,9 +461,9 @@ export function AddTrainingFeedbackForm({ mode, existingData, onClose }: Props) 
             <label key={field as string} className="field">
               <span>{label}</span>
               <Input
-                disabled
+                readOnly
                 value={String(form[field] ?? "")}
-                style={{ background: "var(--muted)", opacity: 1 }}
+                style={{ background: "var(--background)", opacity: 1, cursor: "default" }}
                 title="Auto-filled from Candidate Name"
               />
             </label>
