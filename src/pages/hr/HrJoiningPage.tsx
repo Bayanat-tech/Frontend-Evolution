@@ -182,9 +182,9 @@ export function HrJoiningPage() {
           <h1 className="m-0 text-2xl font-semibold text-foreground">HR Joining</h1>
           <p className="m-0 mt-1 text-sm text-muted-foreground">Manage employee joining documents and pay component assignments.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" title="Refresh" onClick={() => loadRows()}>
-            <RefreshCw size={15} />
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={loadRows}>
+            <RefreshCw size={15} /> Refresh
           </Button>
           <Button onClick={() => setPopup({ open: true, mode: "add", data: {} })}>
             <Plus size={15} /> Add Joining

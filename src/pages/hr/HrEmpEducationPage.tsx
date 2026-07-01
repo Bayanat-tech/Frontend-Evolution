@@ -1,5 +1,5 @@
 import { MdAddCircleOutline } from "react-icons/md";
-import { Save } from "lucide-react";
+import { RefreshCw, Save } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getDynamicLookup } from "../../api/lookups";
@@ -162,6 +162,12 @@ export function HrEmpEducationPage() {
   const [section,    setSection]    = useState<SectionOption  | null>(null);
   const [employee,   setEmployee]   = useState<EmployeeOption | null>(null);
 
+  // FIX: bumping this remounts every LookupField below (via `key`), forcing
+  // each one to re-run its loadOptions from scratch — this is what makes
+  // "Refresh" restore the page to its just-opened state rather than just
+  // re-fetching the currently selected employee's grid data.
+  const [resetKey, setResetKey] = useState(0);
+
   // ── Grid / notice state ────────────────────────────────────────────────────
   const [rows,   setRows]   = useState<EduRow[]>([]);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -197,7 +203,7 @@ export function HrEmpEducationPage() {
   });
 
   // ── Employee education data ────────────────────────────────────────────────
-  useQuery({
+  const eduQuery = useQuery({
     queryKey: ["education-data", employee?.employee_id],
     enabled:  !!employee?.employee_id,
     queryFn:  async () => {
@@ -568,6 +574,29 @@ export function HrEmpEducationPage() {
             Maintain education history for employees across divisions and departments.
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              // Reset all filters and grid state back to how the page
+              // looked when it was first opened.
+              setDivision(null);
+              setDepartment(null);
+              setSection(null);
+              setEmployee(null);
+              setRows([]);
+              setNotice(null);
+              // Force every LookupField to remount so it reloads its
+              // option list fresh instead of showing a stale cached list.
+              setResetKey((k) => k + 1);
+              // Also refresh the master dropdown data (edu level / discipline).
+              void queryClient.invalidateQueries({ queryKey: ["edu-level", companyCode] });
+              void queryClient.invalidateQueries({ queryKey: ["edu-discipline", companyCode] });
+            }}
+          >
+            <RefreshCw size={15} /> Refresh
+          </Button>
+        </div>
       </div>
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
@@ -591,6 +620,7 @@ export function HrEmpEducationPage() {
           <label className="field">
             <span>Division</span>
             <LookupField
+              key={`division-${resetKey}`}
               compact
               label="Division"
               value={division?.div_code ?? ""}
@@ -616,6 +646,7 @@ export function HrEmpEducationPage() {
           <label className="field">
             <span>Department</span>
             <LookupField
+              key={`department-${resetKey}`}
               compact
               label="Department"
               value={department?.dept_code ?? ""}
@@ -641,6 +672,7 @@ export function HrEmpEducationPage() {
           <label className="field">
             <span>Section</span>
             <LookupField
+              key={`section-${resetKey}`}
               compact
               label="Section"
               value={section?.section_code ?? ""}
@@ -672,6 +704,7 @@ export function HrEmpEducationPage() {
               Employee <strong className="text-destructive">*</strong>
             </span>
             <LookupField
+              key={`employee-${resetKey}`}
               compact
               label="Employee"
               value={employee?.employee_id ?? ""}
