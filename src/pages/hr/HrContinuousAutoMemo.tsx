@@ -14,6 +14,7 @@ type ContinuousAutoMemoRow = {
   doc_type: string;
   employee_code: string;
   doc_status: string;
+  created_at: string;
   [key: string]: unknown;
 };
 
@@ -40,6 +41,74 @@ const baseParams = (loginid: string, companyCode: string) => ({
   date4: null,
 });
 
+// CREATED_AT is a DB-level audit timestamp (DATE DEFAULT SYSDATE NOT NULL)
+// set once at insert time and never touched afterward, so it's a reliable
+// "true creation order" — unlike doc_date (user-editable business field,
+// can be backdated/postdated) or doc_no (sequential, but only a reliable
+// proxy for creation order if the backend never reuses/backfills numbers).
+//
+// created_at can arrive from the backend in several shapes depending on
+// how Oracle/the API layer serializes SYSDATE, e.g.:
+//   - ISO string:                "2026-06-30T14:05:09.000Z"
+//   - Oracle default format:     "30-JUN-26" or "30-JUN-2026"
+//   - "YYYY-MM-DD HH24:MI:SS"
+//   - With stray whitespace, or wrapped as { value: "..." }
+// We parse defensively and fall back to -Infinity (sorts last) on
+// anything unparseable rather than letting NaN comparisons silently
+// produce insertion-order-looking results.
+const parseCreatedAt = (input: unknown): number => {
+  if (input === null || input === undefined || input === "") return -Infinity;
+
+  // Some APIs wrap date values as { value: "..." } or { date: "..." }
+  if (typeof input === "object") {
+    const obj = input as Record<string, unknown>;
+    const inner = obj.value ?? obj.date ?? obj.iso ?? null;
+    if (inner) return parseCreatedAt(inner);
+    return -Infinity;
+  }
+
+  const raw = String(input).trim();
+  if (!raw) return -Infinity;
+
+  // Try as-is first (handles proper ISO strings)
+  let t = Date.parse(raw);
+  if (!Number.isNaN(t)) return t;
+
+  // Try swapping a space-separated date/time into ISO-friendly form:
+  // "YYYY-MM-DD HH24:MI:SS" -> "YYYY-MM-DDTHH24:MI:SS"
+  t = Date.parse(raw.replace(" ", "T"));
+  if (!Number.isNaN(t)) return t;
+
+  // Try common Oracle default NLS format: "DD-MON-YY" / "DD-MON-YYYY"
+  // e.g. "30-JUN-26", "30-JUN-2026", optionally with a time portion.
+  const oracleMatch = raw.match(
+    /^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/,
+  );
+  if (oracleMatch) {
+    const [, day, monStr, yearStr, hh = "0", mm = "0", ss = "0"] = oracleMatch;
+    const months: Record<string, number> = {
+      JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5,
+      JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11,
+    };
+    const month = months[monStr.toUpperCase()];
+    let year = Number(yearStr);
+    if (yearStr.length === 2) year += year < 70 ? 2000 : 1900;
+    if (month !== undefined) {
+      const d = new Date(year, month, Number(day), Number(hh), Number(mm), Number(ss));
+      if (!Number.isNaN(d.getTime())) return d.getTime();
+    }
+  }
+
+  return -Infinity;
+};
+
+const createdAtSortValue = (createdAt: unknown): number => parseCreatedAt(createdAt);
+
+const sortByCreatedAtDesc = (rows: ContinuousAutoMemoRow[]): ContinuousAutoMemoRow[] =>
+  [...rows].sort(
+    (a, b) => createdAtSortValue(b.created_at) - createdAtSortValue(a.created_at),
+  );
+
 export function ContinuousAutoMemoPage() {
   const { user } = useAuth();
   const loginid = user?.loginid || "ADMIN";
@@ -58,7 +127,16 @@ export function ContinuousAutoMemoPage() {
     setNotice(null);
     try {
       const data = await getDynamicLookup(baseParams(loginid, companyCode));
-      setRows(Array.isArray(data) ? (data as ContinuousAutoMemoRow[]) : []);
+      const raw = Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
+      const list: ContinuousAutoMemoRow[] = raw.map((r) => ({
+        ...(r as ContinuousAutoMemoRow),
+        // Accept multiple possible key casings/names the backend might use
+        // for the SYSDATE audit column.
+        created_at: String(
+          r.created_at ?? r.CREATED_AT ?? r.createdAt ?? r.CREATED_DATE ?? r.created_date ?? "",
+        ),
+      }));
+      setRows(sortByCreatedAtDesc(list));
     } catch (error) {
       setNotice({
         type: "error",
@@ -100,23 +178,39 @@ export function ContinuousAutoMemoPage() {
 
   const columns = useMemo<ColumnDef<ContinuousAutoMemoRow>[]>(
     () => [
-      { accessorKey: "doc_no", header: "Doc No", size: 140 },
+      {
+        accessorKey: "doc_no",
+        header: "Doc No",
+        size: 140,
+        // Sorting disabled: the desired order (newest first) is already
+        // enforced by sortByCreatedAtDesc() pre-sorting the row array on
+        // load, using created_at as the sort key. That column is
+        // intentionally not rendered in the UI (see note near the bottom
+        // of this columns array).
+        enableSorting: false,
+      },
       {
         accessorKey: "doc_date",
         header: "Doc Date",
         size: 130,
+        // Sorting disabled: doc_date is a user-editable business field
+        // (people can backdate/postdate it on the form), so it must never
+        // become the active sort column — otherwise it silently overrides
+        // the newest-first-by-created_at order this table is meant to show.
+        enableSorting: false,
         cell: ({ getValue }) => {
           const val = getValue<string>();
           if (!val) return "-";
           return new Date(val).toLocaleDateString("en-GB");
         },
       },
-      { accessorKey: "doc_type", header: "Doc Type", size: 130 },
-      { accessorKey: "employee_code", header: "Employee Code", size: 160 },
+      { accessorKey: "doc_type", header: "Doc Type", size: 130, enableSorting: false },
+      { accessorKey: "employee_code", header: "Employee Code", size: 160, enableSorting: false },
       {
         accessorKey: "doc_status",
         header: "Status",
         size: 110,
+        enableSorting: false,
         cell: ({ row }) => {
           const active = row.original.doc_status === "A";
           return (
@@ -132,6 +226,12 @@ export function ContinuousAutoMemoPage() {
           );
         },
       },
+      // NOTE: created_at is intentionally NOT rendered as a column here.
+      // It's still fetched, parsed, and used to pre-sort `rows` (newest
+      // first) via sortByCreatedAtDesc() in loadRows(). It's just hidden
+      // from the UI. If you ever want it back, re-add a column with
+      // accessorKey: "created_at" using parseCreatedAt()/createdAtSortValue()
+      // for its cell rendering and sortingFn.
       {
         id: "actions",
         header: "Actions",

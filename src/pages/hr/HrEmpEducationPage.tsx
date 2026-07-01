@@ -177,7 +177,15 @@ export function HrEmpEducationPage() {
   // for a genuine "employee changed / first load" fetch, not for the
   // invalidate-on-success refetch (where we already know the authoritative
   // state because we just sent it).
-  const skipNextHydrateRef = useRef(false);
+  //
+  // FIX #2: this now stores the employee_id the skip applies to (not just a
+  // bare boolean). A bare boolean was a bug — if the user saved for Employee
+  // A and then switched to Employee B (or reselected A after a Refresh)
+  // before the post-save refetch for A had fired, the skip flag would still
+  // be `true` and would incorrectly swallow the hydration for whichever
+  // employee's fetch ran next, making the grid look like it "didn't fetch"
+  // even though the network request went through fine.
+  const skipHydrateForEmployeeRef = useRef<string | null>(null);
 
   // ── Master data — edu level + discipline ───────────────────────────────────
   const { data: eduLevelOpts = [] } = useQuery<EduLevelOption[]>({
@@ -206,13 +214,19 @@ export function HrEmpEducationPage() {
   const eduQuery = useQuery({
     queryKey: ["education-data", employee?.employee_id],
     enabled:  !!employee?.employee_id,
+    // FIX: always treat cached data as stale on (re)enable, so re-selecting
+    // the same employee after a Refresh (which resets local filter state
+    // but doesn't touch this query's cache) reliably triggers a real network
+    // fetch instead of silently reusing a previous result.
+    refetchOnMount: "always",
     queryFn:  async () => {
+      const currentEmployeeId = employee?.employee_id ?? "";
       const res = await getDynamicLookup(
         buildParams(
           "EDUCATION_QUALIFICATION_EMP_EDUCATION_SELECT",
           loginid,
           companyCode,
-          employee?.employee_id ?? "",
+          currentEmployeeId,
         ),
       );
       const data: EduRow[] = (Array.isArray(res) ? res : []).map(
@@ -231,12 +245,13 @@ export function HrEmpEducationPage() {
         }),
       );
 
-      // FIX: skip hydrating local `rows` state from the refetch that fires
-      // right after a successful save — we already reflect the correct
-      // post-save state locally (deleted rows stripped, new rows kept).
-      // Only the genuine "employee just selected" fetch should populate rows.
-      if (skipNextHydrateRef.current) {
-        skipNextHydrateRef.current = false;
+      // FIX: only skip hydration if this fetch is for the SAME employee the
+      // skip was set for. Any other employee's fetch always hydrates normally.
+      if (
+        skipHydrateForEmployeeRef.current !== null &&
+        skipHydrateForEmployeeRef.current === currentEmployeeId
+      ) {
+        skipHydrateForEmployeeRef.current = null;
       } else {
         setRows(data);
       }
@@ -494,11 +509,13 @@ export function HrEmpEducationPage() {
           .map((r) => ({ ...r, _isPersisted: true })),
       );
 
-      // FIX: tell the next education-data fetch to skip re-hydrating
-      // `rows` from the server response — we already have the correct
-      // local state and don't want a race/shape mismatch to bring back
-      // a row the user just deleted.
-      skipNextHydrateRef.current = true;
+      // FIX: tell the next education-data fetch FOR THIS SPECIFIC EMPLOYEE
+      // to skip re-hydrating `rows` from the server response — we already
+      // have the correct local state and don't want a race/shape mismatch
+      // to bring back a row the user just deleted. Scoping this to the
+      // employee id (instead of a bare boolean) prevents it from
+      // accidentally swallowing a different employee's legitimate fetch.
+      skipHydrateForEmployeeRef.current = employee?.employee_id ?? null;
       queryClient.invalidateQueries({ queryKey: ["education-data", employee?.employee_id] });
     },
     onError: (err: Error) => {
@@ -592,6 +609,15 @@ export function HrEmpEducationPage() {
               // Also refresh the master dropdown data (edu level / discipline).
               void queryClient.invalidateQueries({ queryKey: ["edu-level", companyCode] });
               void queryClient.invalidateQueries({ queryKey: ["edu-discipline", companyCode] });
+              // FIX: fully remove any cached education-data results (for
+              // every employee, not just the currently selected one) so
+              // re-selecting an employee after Refresh always triggers a
+              // genuine fresh fetch instead of potentially reusing a
+              // previous result from the query cache.
+              queryClient.removeQueries({
+                predicate: (query) => query.queryKey[0] === "education-data",
+              });
+              skipHydrateForEmployeeRef.current = null;
             }}
           >
             <RefreshCw size={15} /> Refresh
