@@ -8,7 +8,7 @@ import { Skeleton } from "../../components/ui/Skeleton";
 import { useAuth } from "../../state/AuthContext";
 import { cn } from "../../lib/utils";
 import { uploadAccountFile } from "../../api/files";
-import { getAccountTreeNode ,CreateLevel5ApprovalDetails, upsertLevel5Activities,getLevel5Activities, upsertLevel5Documents, getLevel5Documents, deleteLevel5Document } from "../../api/finance";
+import { getAccountTreeNode ,CreateLevel5ApprovalDetails, upsertLevel5Activities,getLevel5Activities, deleteLevel5Activity, upsertLevel5Documents, getLevel5Documents, deleteLevel5Document } from "../../api/finance";
 
 // ─── Types ───────
 
@@ -302,8 +302,11 @@ function ActivitiesTab({
   const [showForm, setShowForm] = useState(false);
   const [editRow, setEditRow]   = useState<Activity | null>(null);
   const [newAct, setNewAct]     = useState({ 
-   srno:"", act_code: "", act_desc: "" , user_id:"", user_dt:""
+   act_code: "", act_desc: ""
  });
+  const nextSrNo = rows.reduce((max, row) => Math.max(max, Number(row.SRNO) || 0), 0) + 1;
+  const loginId = user?.loginid || user?.username || "";
+  const today = new Date().toISOString().slice(0, 10);
 
   const load = async () => {
     setLoading(true);
@@ -331,15 +334,15 @@ function ActivitiesTab({
     ac_code: acCode,
     loginid: user?.loginid || "",
     records: [{
-    srno: newAct.srno ? Number(newAct.srno) : undefined,
+    srno: nextSrNo,
     act_code: newAct.act_code,
     act_desc: newAct.act_desc,
-    user_id: newAct.user_id || undefined,
-    user_dt: newAct.user_dt || undefined,
+    user_id: loginId || undefined,
+    user_dt: today,
   }],
   });
       setNotice({ type: "success", message: "Activity added successfully" });
-      setNewAct({ srno:"", act_code: "", act_desc: "" , user_id:"", user_dt:"" });
+      setNewAct({ act_code: "", act_desc: "" });
       setShowForm(false);
       await load();
     } catch (err) {
@@ -376,6 +379,25 @@ function ActivitiesTab({
       await load();
     } catch (err) {
       setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to update activity" });
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleDelete = async (row: Activity) => {
+    setAdding(true);
+    try {
+      await deleteLevel5Activity({
+        company_code: user?.company_code || "",
+        ac_code: acCode,
+        srno: row.SRNO,
+        loginid: user?.loginid || "",
+      });
+      if (editRow?.SRNO === row.SRNO) setEditRow(null);
+      setNotice({ type: "success", message: "Activity deleted successfully" });
+      await load();
+    } catch (err) {
+      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to delete activity" });
     } finally {
       setAdding(false);
     }
@@ -418,12 +440,7 @@ function ActivitiesTab({
       <tbody>
         <tr>
           <td className="p-1">
-            <Input
-              value={newAct.srno}
-              onChange={(e) =>
-                setNewAct((f) => ({ ...f, srno: e.target.value }))
-              }
-            />
+            <Input value={nextSrNo} disabled />
           </td>
 
           <td className="p-1">
@@ -445,22 +462,11 @@ function ActivitiesTab({
           </td>
 
           <td className="p-1">
-            <Input
-              value={newAct.user_id}
-              onChange={(e) =>
-                setNewAct((f) => ({ ...f, user_id: e.target.value }))
-              }
-            />
+            <Input value={loginId} disabled />
           </td>
 
           <td className="p-1">
-            <Input
-              type="date"
-              value={newAct.user_dt}
-              onChange={(e) =>
-                setNewAct((f) => ({ ...f, user_dt: e.target.value }))
-              }
-            />
+            <Input type="date" value={today} disabled />
           </td>
         </tr>
       </tbody>
@@ -472,11 +478,8 @@ function ActivitiesTab({
         onClick={() => {
           setShowForm(false);
           setNewAct({
-            srno: "",
             act_code: "",
             act_desc: "",
-            user_id: "",
-            user_dt: "",
           });
         }}
       >
@@ -556,7 +559,7 @@ function ActivitiesTab({
                 <th className="px-3 py-2.5">Description</th>
                 <th className="px-3 py-2.5 w-28">User</th>
                 <th className="px-3 py-2.5 w-32">Date</th>
-                <th className="px-3 py-2.5 w-16">Edit</th>
+                <th className="px-3 py-2.5 w-20">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -582,12 +585,24 @@ function ActivitiesTab({
                       : "—"}
                   </td>
                   <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-1">
                     <button
                       onClick={() => { setEditRow(row); setShowForm(false); }}
-                      className="text-xs text-primary hover:underline"
+                      className="rounded-md px-2 py-1 text-xs text-primary hover:bg-primary/10"
                     >
                       Edit
                     </button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        disabled={adding}
+                        title="Delete activity"
+                        aria-label="Delete activity"
+                        onClick={() => void handleDelete(row)}
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
                     </td>
                 </tr>
               ))}
