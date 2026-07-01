@@ -13,7 +13,8 @@ export type DropDownType =
   | "dddwIncrementStatus"
   | "dddwYesNoFlag"
   | "dddwStatusFlag"
-  | "payComponent";
+  | "payComponent"
+  | "grade";
 
 interface DropDownConfig {
   parameterCode: string;
@@ -25,6 +26,16 @@ interface DropDownConfig {
 
 // Add a new dropdown by adding ONE entry here — nothing else changes.
 const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
+  grade:{
+    parameterCode: "GRADE_SALARY_INCREMENT_GRADE_DROP_DOWN",
+    label: "Grade",
+    valueField: "code",
+    displayField: "name",
+    columns: [
+      { field: "code", header: "Code" },
+      { field: "name", header: "Name" },
+    ],
+  },
   payComponent: {
     parameterCode: "EMPLOYEE_SALARY_INCREMENT_DDDW_PAY_COMPONENT", // confirm/adjust name
     label: "Pay Unit",

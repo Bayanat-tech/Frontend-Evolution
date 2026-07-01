@@ -95,6 +95,7 @@ import { InterviewEvalPage } from "../pages/hr/Interviewevalpage";
 import { HrJoiningPage } from "../pages/hr/HrJoiningPage";
 
 import { HrEmpEducationPage } from "../pages/hr/HrEmpEducationPage";  
+import GradeSalaryIncrement from "../pages/hr/GradeSalaryIncrement.";
 
 
 
@@ -115,6 +116,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name:"HR Grade Salary Increment",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/grade_salary_increment"),
+    element: () => <GradeSalaryIncrement />
+  },
   {
     name: "HR Employee Salary Increment",
     match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/salary%20increment"),
