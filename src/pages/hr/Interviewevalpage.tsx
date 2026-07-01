@@ -20,6 +20,7 @@ type InterviewEvalRow = {
   intvr_name: string;
   intrvw_date: string;
   hire_flag: string;
+  created_at: string;
   [key: string]: unknown;
 };
 
@@ -46,26 +47,73 @@ const baseParams = (loginid: string, companyCode: string) => ({
   date4: null,
 });
 
-// doc_no (e.g. 2026120003) is the sequential identifier assigned by the
-// backend at save time, so the highest doc_no is always the most recently
-// created record. doc_date is a user-editable business field on the form
-// (people can type any date), so it must NOT be used for ordering.
+// CREATED_AT is a DB-level audit timestamp (DATE DEFAULT SYSDATE NOT NULL)
+// set once at insert time and never touched afterward, so it's a reliable
+// "true creation order" — unlike doc_date (user-editable business field,
+// can be backdated/postdated) or doc_no (sequential, but only a reliable
+// proxy for creation order if the backend never reuses/backfills numbers).
 //
-// doc_no can arrive as a zero-padded string, with stray whitespace, or
-// (rarely) with a non-numeric prefix/suffix depending on the backend
-// formatter, so we strip everything except digits before comparing
-// numerically. This avoids cases where naive Number(a.doc_no) === NaN
-// silently falls through to string comparison and produces an
-// insertion-order-looking result.
-const docNoSortValue = (docNo: unknown): number => {
-  const digitsOnly = String(docNo ?? "").replace(/[^0-9]/g, "");
-  if (!digitsOnly) return -Infinity;
-  const n = Number(digitsOnly);
-  return Number.isNaN(n) ? -Infinity : n;
+// created_at can arrive from the backend in several shapes depending on
+// how Oracle/the API layer serializes SYSDATE, e.g.:
+//   - ISO string:                "2026-06-30T14:05:09.000Z"
+//   - Oracle default format:     "30-JUN-26" or "30-JUN-2026"
+//   - "YYYY-MM-DD HH24:MI:SS"
+//   - With stray whitespace, or wrapped as { value: "..." }
+// We parse defensively and fall back to -Infinity (sorts last) on
+// anything unparseable rather than letting NaN comparisons silently
+// produce insertion-order-looking results.
+const parseCreatedAt = (input: unknown): number => {
+  if (input === null || input === undefined || input === "") return -Infinity;
+
+  // Some APIs wrap date values as { value: "..." } or { date: "..." }
+  if (typeof input === "object") {
+    const obj = input as Record<string, unknown>;
+    const inner = obj.value ?? obj.date ?? obj.iso ?? null;
+    if (inner) return parseCreatedAt(inner);
+    return -Infinity;
+  }
+
+  const raw = String(input).trim();
+  if (!raw) return -Infinity;
+
+  // Try as-is first (handles proper ISO strings)
+  let t = Date.parse(raw);
+  if (!Number.isNaN(t)) return t;
+
+  // Try swapping a space-separated date/time into ISO-friendly form:
+  // "YYYY-MM-DD HH24:MI:SS" -> "YYYY-MM-DDTHH24:MI:SS"
+  t = Date.parse(raw.replace(" ", "T"));
+  if (!Number.isNaN(t)) return t;
+
+  // Try common Oracle default NLS format: "DD-MON-YY" / "DD-MON-YYYY"
+  // e.g. "30-JUN-26", "30-JUN-2026", optionally with a time portion.
+  const oracleMatch = raw.match(
+    /^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/,
+  );
+  if (oracleMatch) {
+    const [, day, monStr, yearStr, hh = "0", mm = "0", ss = "0"] = oracleMatch;
+    const months: Record<string, number> = {
+      JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5,
+      JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11,
+    };
+    const month = months[monStr.toUpperCase()];
+    let year = Number(yearStr);
+    if (yearStr.length === 2) year += year < 70 ? 2000 : 1900;
+    if (month !== undefined) {
+      const d = new Date(year, month, Number(day), Number(hh), Number(mm), Number(ss));
+      if (!Number.isNaN(d.getTime())) return d.getTime();
+    }
+  }
+
+  return -Infinity;
 };
 
-const sortByDocNoDesc = (rows: InterviewEvalRow[]): InterviewEvalRow[] =>
-  [...rows].sort((a, b) => docNoSortValue(b.doc_no) - docNoSortValue(a.doc_no));
+const createdAtSortValue = (createdAt: unknown): number => parseCreatedAt(createdAt);
+
+const sortByCreatedAtDesc = (rows: InterviewEvalRow[]): InterviewEvalRow[] =>
+  [...rows].sort(
+    (a, b) => createdAtSortValue(b.created_at) - createdAtSortValue(a.created_at),
+  );
 
 export function InterviewEvalPage() {
   const { user } = useAuth();
@@ -89,8 +137,13 @@ export function InterviewEvalPage() {
       const list: InterviewEvalRow[] = raw.map((r) => ({
         ...(r as InterviewEvalRow),
         doc_no: String(r.doc_no ?? r.DOC_NO ?? ""),
+        // Accept multiple possible key casings/names the backend might use
+        // for the SYSDATE audit column.
+        created_at: String(
+          r.created_at ?? r.CREATED_AT ?? r.createdAt ?? r.CREATED_DATE ?? r.created_date ?? "",
+        ),
       }));
-      setRows(sortByDocNoDesc(list));
+      setRows(sortByCreatedAtDesc(list));
     } catch (error) {
       setNotice({
         type: "error",
@@ -137,18 +190,11 @@ export function InterviewEvalPage() {
         header: "Doc No",
         size: 100,
         // Sorting disabled here so users can't click the header and flip
-        // the order — the desired order (newest first) is enforced two
-        // ways: (1) sortByDocNoDesc() pre-sorts the row array on load,
-        // and (2) DataTable is given initialSorting=[{id:"doc_no",desc:true}]
-        // so tanstack-table's getSortedRowModel doesn't fall back to
-        // unsorted/insertion order before any user interaction.
+        // the order — the desired order (newest first) is enforced by
+        // sortByCreatedAtDesc() pre-sorting the row array on load, using
+        // created_at as the sort key (that column is intentionally not
+        // rendered in the UI — see note below where it used to be defined).
         enableSorting: false,
-        // sortingFn is defined for correctness/documentation even though
-        // enableSorting is false — if this column's sorting is ever
-        // re-enabled, it will sort numerically by the digits in doc_no
-        // rather than falling back to tanstack's default string/basic sort.
-        sortingFn: (rowA, rowB) =>
-          docNoSortValue(rowA.original.doc_no) - docNoSortValue(rowB.original.doc_no),
       },
       {
         accessorKey: "doc_date",
@@ -157,7 +203,7 @@ export function InterviewEvalPage() {
         // Sorting disabled: doc_date is a user-editable business field
         // (people can backdate/postdate it on the form), so it must never
         // become the active sort column — otherwise it silently overrides
-        // the newest-first-by-doc_no order this table is meant to show.
+        // the newest-first-by-created_at order this table is meant to show.
         enableSorting: false,
         cell: ({ getValue }) => {
           const val = getValue<string>();
@@ -174,7 +220,7 @@ export function InterviewEvalPage() {
         accessorKey: "intrvw_date",
         header: "Interview Date",
         size: 130,
-        // Same reasoning as doc_date: keep the table locked to doc_no order.
+        // Same reasoning as doc_date: keep the table locked to created_at order.
         enableSorting: false,
         cell: ({ getValue }) => {
           const val = getValue<string>();
@@ -204,6 +250,12 @@ export function InterviewEvalPage() {
           return <span style={{ color: "#6b7280", fontSize: "0.8125rem" }}>-</span>;
         },
       },
+      // NOTE: created_at is intentionally NOT rendered as a column anymore.
+      // It's still fetched, parsed, and used to pre-sort `rows` (newest
+      // first) via sortByCreatedAtDesc() in loadRows(). It's just hidden
+      // from the UI. If you ever want it back, re-add a column with
+      // accessorKey: "created_at" using parseCreatedAt()/createdAtSortValue()
+      // for its cell rendering and sortingFn.
       {
         id: "actions",
         header: "Actions",
@@ -279,7 +331,6 @@ export function InterviewEvalPage() {
         density="grid"
         enablePagination
         pageSize={100}
-        initialSorting={[{ id: "doc_no", desc: true }]}
         getRowId={(row) => `${row.doc_type}-${row.doc_no}`}
       />
 
