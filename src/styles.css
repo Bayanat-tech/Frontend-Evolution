@@ -1108,9 +1108,10 @@ footer,
 }
 
 .workspace {
-  min-height: 100vh;
+  height: 100vh;        /* was: min-height: 100vh */
   display: flex;
   background: var(--bg);
+  overflow: hidden;      /* new */
 }
 
 body.mobile-menu-lock {
@@ -1126,7 +1127,7 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   width: var(--app-sidebar-width);
   min-width: var(--app-sidebar-width);
   max-width: var(--app-sidebar-width);
-  min-height: 100vh;
+  height: 100vh;         /* was: min-height: 100vh */
   display: flex;
   flex-direction: column;
   background: var(--panel);
@@ -1505,6 +1506,10 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .workspace-main {
   flex: 1;
   min-width: 0;
+  height: 100vh;          /* new */
+  display: flex;           /* new */
+  flex-direction: column;  /* new */
+  overflow: hidden;        /* new */
 }
 
 .mobile-appbar,
@@ -1560,8 +1565,10 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 
 .workspace-content {
   padding: var(--app-content-padding-y) var(--app-content-padding-x);
+  flex: 1;              /* new */
+  min-height: 0;         /* new — critical for flex children to scroll properly */
+  overflow-y: auto;      /* new */
 }
-
 .workspace-content > section > div:first-child:has(h1) {
   align-items: flex-end;
   padding-bottom: 10px;

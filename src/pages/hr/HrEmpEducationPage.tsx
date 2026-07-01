@@ -25,6 +25,14 @@ type EduDiscOption  = { edu_disc_code: string;  edu_disc_desc: string };
 
 type EduRow = {
   _rowId:          string;
+  // FIX: track whether this row already exists on the server. Rows loaded
+  // from the API are "persisted" — if the user removes one of these from
+  // the grid, we can't just drop it from local state, because the next
+  // save's payload would simply omit it and the backend (an upsert API)
+  // would never know to delete/deactivate it. So persisted rows that get
+  // "removed" are kept in state with status_flag flipped to "D" and sent
+  // to the server on save, then truly dropped from the grid afterwards.
+  _isPersisted:    boolean;
   edu_desc_code:   string;
   edu_disc_desc:   string;
   edu_level_code:  string;
@@ -51,6 +59,7 @@ function toIsoDate(value: string): string {
 function makeRow(): EduRow {
   return {
     _rowId:          `row_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    _isPersisted:    false,
     edu_desc_code:   "",
     edu_disc_desc:   "",
     edu_level_code:  "",
@@ -157,6 +166,13 @@ export function HrEmpEducationPage() {
   const [rows,   setRows]   = useState<EduRow[]>([]);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
+  // FIX: guards against the post-save refetch clobbering rows the user just
+  // edited/deleted locally. We only want the query's setRows(data) to run
+  // for a genuine "employee changed / first load" fetch, not for the
+  // invalidate-on-success refetch (where we already know the authoritative
+  // state because we just sent it).
+  const skipNextHydrateRef = useRef(false);
+
   // ── Master data — edu level + discipline ───────────────────────────────────
   const { data: eduLevelOpts = [] } = useQuery<EduLevelOption[]>({
     queryKey: ["edu-level", companyCode],
@@ -196,6 +212,7 @@ export function HrEmpEducationPage() {
       const data: EduRow[] = (Array.isArray(res) ? res : []).map(
         (r: Record<string, unknown>, i: number) => ({
           _rowId:          `row_${i}`,
+          _isPersisted:    true,
           edu_desc_code:   String(r.edu_desc_code   ?? ""),
           edu_disc_desc:   String(r.edu_disc_desc   ?? ""),
           edu_level_code:  String(r.edu_level_code  ?? ""),
@@ -207,7 +224,16 @@ export function HrEmpEducationPage() {
           status_flag:     String(r.status_flag     ?? "A"),
         }),
       );
-      setRows(data);
+
+      // FIX: skip hydrating local `rows` state from the refetch that fires
+      // right after a successful save — we already reflect the correct
+      // post-save state locally (deleted rows stripped, new rows kept).
+      // Only the genuine "employee just selected" fetch should populate rows.
+      if (skipNextHydrateRef.current) {
+        skipNextHydrateRef.current = false;
+      } else {
+        setRows(data);
+      }
       return data;
     },
   });
@@ -265,9 +291,32 @@ export function HrEmpEducationPage() {
     [],
   );
 
+  // FIX: deleteRow no longer just filters the row out of state.
+  // - If the row was never saved (new/unpersisted), it's safe to drop it
+  //   entirely, same as before.
+  // - If the row came from the server (_isPersisted), we mark it as
+  //   status_flag "D" (deleted) but KEEP it in state so it's included in
+  //   the next save payload — the backend needs to know it was removed,
+  //   otherwise it stays in the DB and reappears on the post-save refetch.
+  //   We hide it from the visible grid via the `visibleRows` filter below.
   const deleteRow = useCallback((rowId: string) => {
-    setRows((prev) => prev.filter((r) => r._rowId !== rowId));
+    setRows((prev) =>
+      prev
+        .map((r) =>
+          r._rowId === rowId && r._isPersisted
+            ? { ...r, status_flag: "D" }
+            : r,
+        )
+        .filter((r) => !(r._rowId === rowId && !r._isPersisted)),
+    );
   }, []);
+
+  // FIX: rows marked for deletion are kept in `rows` (so save can send
+  // them) but hidden from the visible grid the user interacts with.
+  const visibleRows = useMemo(
+    () => rows.filter((r) => r.status_flag !== "D"),
+    [rows],
+  );
 
   // ── Columns ────────────────────────────────────────────────────────────────
   const columns = useMemo<ColumnDef<EduRow>[]>(
@@ -398,8 +447,15 @@ export function HrEmpEducationPage() {
   const mutation = useMutation({
     mutationFn: async () => {
       if (!employee?.employee_id) throw new Error("Please select an employee");
-      if (rows.length === 0)      throw new Error("Add at least one education record");
+      // FIX: validate against the visible (non-deleted) rows, not the raw
+      // `rows` array, since `rows` may now contain status_flag "D" entries
+      // pending deletion that shouldn't block saving an otherwise-empty grid.
+      if (visibleRows.length === 0 && rows.every((r) => r.status_flag === "D")) {
+        throw new Error("Add at least one education record");
+      }
 
+      // FIX: send ALL rows, including ones marked status_flag "D", so the
+      // backend can actually remove/deactivate the records the user deleted.
       const education_details = rows.map((r) => ({
         employee_id:     employee.employee_id,
         edu_desc_code:   r.edu_desc_code,
@@ -423,6 +479,20 @@ export function HrEmpEducationPage() {
     },
     onSuccess: () => {
       setNotice({ type: "success", message: "Education details saved successfully." });
+
+      // FIX: drop rows we just told the server to delete, and mark the
+      // remaining rows as persisted (they now exist server-side too).
+      setRows((prev) =>
+        prev
+          .filter((r) => r.status_flag !== "D")
+          .map((r) => ({ ...r, _isPersisted: true })),
+      );
+
+      // FIX: tell the next education-data fetch to skip re-hydrating
+      // `rows` from the server response — we already have the correct
+      // local state and don't want a race/shape mismatch to bring back
+      // a row the user just deleted.
+      skipNextHydrateRef.current = true;
       queryClient.invalidateQueries({ queryKey: ["education-data", employee?.employee_id] });
     },
     onError: (err: Error) => {
@@ -644,8 +714,11 @@ export function HrEmpEducationPage() {
       {/* ── Education Grid ───────────────────────────────────────────────── */}
       <DataTable
         columns={columns}
-        data={rows}
-        title={`${rows.length} Record${rows.length !== 1 ? "s" : ""}`}
+        // FIX: render only visibleRows (excludes rows pending deletion)
+        // so a removed row stays gone from the UI, while the underlying
+        // `rows` state still carries it (status_flag "D") for the save call.
+        data={visibleRows}
+        title={`${visibleRows.length} Record${visibleRows.length !== 1 ? "s" : ""}`}
         subtitle="Education Records"
         searchPlaceholder="Search discipline, level, institution..."
         height={420}
@@ -667,7 +740,7 @@ export function HrEmpEducationPage() {
       {/* ── Footer Actions ───────────────────────────────────────────────── */}
       <div className="flex justify-end gap-2">
         <Button
-          disabled={mutation.isPending || rows.length === 0 || !employee?.employee_id}
+          disabled={mutation.isPending || visibleRows.length === 0 || !employee?.employee_id}
           onClick={() => mutation.mutate()}
         >
           <Save size={15} />

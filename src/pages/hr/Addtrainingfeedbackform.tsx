@@ -1,6 +1,5 @@
 import { Save, X } from "lucide-react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useState } from "react";
 import { executeDynamicMutationColumn90, getDynamicLookup } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
@@ -126,171 +125,6 @@ const EMPTY_FORM: TTrainingFeedback = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Employee Autocomplete — portal dropdown that tracks the input live
-// while any ancestor (dialog body, page, etc.) scrolls or the window resizes.
-// ─────────────────────────────────────────────────────────────────────────────
-
-type EmpAutocompleteProps = {
-  employees:    TEmployee[];
-  selectedEmp:  TEmployee | null;
-  fallbackName: string;
-  readonly:     boolean;
-  error?:       string;
-  onSelect:     (emp: TEmployee) => void;
-};
-
-function EmployeeAutocomplete({
-  employees,
-  selectedEmp,
-  fallbackName,
-  readonly,
-  error,
-  onSelect,
-}: EmpAutocompleteProps) {
-  const [search,    setSearch]    = useState("");
-  const [open,      setOpen]      = useState(false);
-  const [dropStyle, setDropStyle] = useState<React.CSSProperties>({});
-  const inputRef = useRef<HTMLInputElement>(null);
-  const wrapRef  = useRef<HTMLDivElement>(null);
-
-  // Recompute the dropdown position relative to the input's current
-  // on-screen location. Called on open, on every scroll (any ancestor,
-  // captured via the `true` capture flag), and on resize — so the
-  // dropdown always stays glued under the input instead of drifting.
-  const updatePosition = () => {
-    if (!wrapRef.current) return;
-    const rect = wrapRef.current.getBoundingClientRect();
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const dropHeight = Math.min(220, spaceBelow - 8);
-
-    setDropStyle({
-      position:  "fixed",
-      top:       rect.bottom + 2,
-      left:      rect.left,
-      width:     rect.width,
-      maxHeight: dropHeight > 80 ? dropHeight : 220,
-      zIndex:    9999,
-    });
-  };
-
-  const openDropdown = () => {
-    updatePosition();
-    setOpen(true);
-  };
-
-  // Keep position in sync while the dropdown is open.
-  useLayoutEffect(() => {
-    if (!open) return;
-    updatePosition();
-
-    const handle = () => updatePosition();
-    // capture: true so we catch scroll events from any scrollable
-    // ancestor (dialog body, page wrapper, etc.), not just window.
-    window.addEventListener("scroll", handle, true);
-    window.addEventListener("resize", handle);
-    return () => {
-      window.removeEventListener("scroll", handle, true);
-      window.removeEventListener("resize", handle);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return employees.slice(0, 50);
-    return employees
-      .filter(
-        (e) =>
-          (e.rpt_name      || "").toLowerCase().includes(q) ||
-          (e.employee_code || "").toLowerCase().includes(q),
-      )
-      .slice(0, 50);
-  }, [employees, search]);
-
-  const displayValue =
-    search ||
-    (selectedEmp
-      ? `${selectedEmp.employee_code} – ${selectedEmp.rpt_name}`
-      : fallbackName);
-
-  if (readonly) {
-    return <Input disabled value={fallbackName} />;
-  }
-
-  return (
-    <div ref={wrapRef} style={{ position: "relative", width: "100%" }}>
-      <Input
-        ref={inputRef}
-        placeholder="Search by name or code…"
-        value={displayValue}
-        onChange={(e) => {
-          setSearch(e.target.value);
-          openDropdown();
-        }}
-        onFocus={openDropdown}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-      />
-      {error && (
-        <span className="text-destructive text-xs mt-0.5 block">{error}</span>
-      )}
-
-      {open && filtered.length > 0 &&
-        createPortal(
-          <div
-            style={{
-              ...dropStyle,
-              background:   "var(--card)",
-              border:       "1px solid var(--border)",
-              borderRadius: 6,
-              overflowY:    "auto",
-              boxShadow:    "0 4px 20px rgba(0,0,0,0.18)",
-            }}
-          >
-            {filtered.map((emp) => (
-              <div
-                key={emp.employee_id}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  onSelect(emp);
-                  setSearch("");
-                  setOpen(false);
-                }}
-                style={{
-                  padding:      "8px 12px",
-                  cursor:       "pointer",
-                  borderBottom: "1px solid var(--border)",
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = "var(--muted)")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.background = "")
-                }
-              >
-                <div style={{ fontWeight: 600, fontSize: "0.8125rem" }}>
-                  {emp.rpt_name}
-                </div>
-                <div
-                  style={{
-                    fontSize: "0.75rem",
-                    color:    "var(--muted-foreground)",
-                  }}
-                >
-                  {emp.employee_code}
-                  {emp.desg_name ? ` | ${emp.desg_name}` : ""}
-                  {emp.dept_name ? ` | ${emp.dept_name}` : ""}
-                  {emp.grade_name ? ` | ${emp.grade_name}` : ""}
-                </div>
-              </div>
-            ))}
-          </div>,
-          document.body,
-        )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Rating Section
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -379,9 +213,11 @@ export function AddTrainingFeedbackForm({ mode, existingData, onClose }: Props) 
   // ── Employee list ────────────────────────────────────────────────────────────
 
   const [employeeList, setEmployeeList] = useState<TEmployee[]>([]);
+  const [empLoading,   setEmpLoading]   = useState(false);
 
   useEffect(() => {
     if (!companyCode) return;
+    setEmpLoading(true);
     getDynamicLookup({
       parameter: "HR_TRANSACTIONS_MEMO_AND_FORMS_HR_EMPLOYEE_LIST_WITH_MANAGER",
       loginid,
@@ -393,7 +229,8 @@ export function AddTrainingFeedbackForm({ mode, existingData, onClose }: Props) 
       .then((data) =>
         setEmployeeList(Array.isArray(data) ? (data as TEmployee[]) : []),
       )
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setEmpLoading(false));
   }, [companyCode, loginid]);
 
   const selectedEmployee = useMemo(
@@ -406,7 +243,20 @@ export function AddTrainingFeedbackForm({ mode, existingData, onClose }: Props) 
     [employeeList, form.cand_no, form.cand_name],
   );
 
-  const handleEmployeeSelect = (emp: TEmployee) => {
+  const handleEmployeeSelect = (employeeCode: string) => {
+    const emp = employeeList.find((e) => e.employee_code === employeeCode);
+    if (!emp) {
+      setForm((prev) => ({
+        ...prev,
+        cand_no: "",
+        cand_name: "",
+        desig: "",
+        dept: "",
+        grade: "",
+        report_to: "",
+      }));
+      return;
+    }
     setForm((prev) => ({
       ...prev,
       cand_no:   emp.employee_code || emp.employee_id,
@@ -570,19 +420,32 @@ export function AddTrainingFeedbackForm({ mode, existingData, onClose }: Props) 
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
 
-          {/* Employee autocomplete — portal-rendered dropdown that tracks scroll */}
+          {/* Employee dropdown — plain Select, same pattern as Division/Designation in Joining form */}
           <label className="field">
             <span>
               Candidate Name <strong className="text-destructive">*</strong>
             </span>
-            <EmployeeAutocomplete
-              employees={employeeList}
-              selectedEmp={selectedEmployee}
-              fallbackName={form.cand_name}
-              readonly={readonly}
-              error={errors.cand_name}
-              onSelect={handleEmployeeSelect}
-            />
+            {readonly ? (
+              <Input disabled value={form.cand_name} />
+            ) : (
+              <Select
+                disabled={empLoading}
+                value={selectedEmployee?.employee_code ?? ""}
+                onChange={(e) => handleEmployeeSelect(e.target.value)}
+              >
+                <option value="">
+                  {empLoading ? "Loading..." : "Select Candidate"}
+                </option>
+                {employeeList.map((emp) => (
+                  <option key={emp.employee_id} value={emp.employee_code}>
+                    {emp.rpt_name} ({emp.employee_code})
+                  </option>
+                ))}
+              </Select>
+            )}
+            {errors.cand_name && (
+              <span className="text-destructive text-xs mt-0.5">{errors.cand_name}</span>
+            )}
           </label>
 
           {/* Auto-filled read-only fields */}

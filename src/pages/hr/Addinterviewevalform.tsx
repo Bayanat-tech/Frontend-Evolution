@@ -90,7 +90,7 @@ const EMPTY: TInterviewEval = {
   sign_4: "",
 };
 
-export function AddInterviewEvalForm({ mode, existingData, onClose }: Props) {
+export function Addinterviewevalform({ mode, existingData, onClose }: Props) {
   const { user } = useAuth();
   const readonly = mode === "view";
   const isEdit = mode === "edit";
