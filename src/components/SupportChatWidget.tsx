@@ -54,12 +54,15 @@ export function SupportChatWidget() {
   const socketRef = useRef<Socket | null>(null);
   const adminNotifySocketRef = useRef<Socket | null>(null);
   const typingStopRef = useRef<number | null>(null);
+  const loadAllInFlightRef = useRef(false);
+  const adminTicketRefreshInFlightRef = useRef(false);
 
   const selectedTicket = useMemo(() => tickets.find((ticket) => Number(ticket.TICKET_ID) === selectedId) || null, [tickets, selectedId]);
   const unreadTotal = tickets.reduce((sum, ticket) => sum + Number(ticket.UNREAD_COUNT || 0), 0);
   const currentUser = user?.loginid || user?.username || "";
   const canUseAdmin = serverCanAdmin;
-  const canOpenAdminPage = canUseAdmin || isLikelySupportAdmin(user);
+  const likelyAdminUser = isLikelySupportAdmin(user);
+  const canOpenAdminPage = canUseAdmin || likelyAdminUser;
   const selectedTicketClosed = selectedTicket?.STATUS === "CLOSED";
   const onlineUsers = activeUsers.filter(isSupportUserOnline).length;
   const visibleActiveUsers = [...activeUsers]
@@ -109,10 +112,10 @@ export function SupportChatWidget() {
     socket.on("support:ready", (payload: { role?: string }) => {
       const isAdmin = payload.role === "admin";
       setServerCanAdmin(isAdmin);
-      if (isAdmin) void getSupportTickets("admin").then(setTickets).catch(() => undefined);
+      if (isAdmin) void refreshAdminTickets();
     });
     socket.on("support:tickets-changed", (payload: { ticketId?: number; actorLoginid?: string; senderLoginid?: string; loginid?: string } = {}) => {
-      void getSupportTickets("admin").then(setTickets).catch(() => undefined);
+      void refreshAdminTickets();
       const actor = String(payload.actorLoginid || payload.senderLoginid || payload.loginid || "").trim().toUpperCase();
       const isOwnAction = actor && actor === String(currentUser || "").trim().toUpperCase();
       if (!isOwnAction && Date.now() - connectedAt > 1500) {
@@ -120,14 +123,26 @@ export function SupportChatWidget() {
       }
     });
     socket.on("connect_error", () => {
-      if (!isLikelySupportAdmin(user)) setServerCanAdmin(false);
+      if (!likelyAdminUser) setServerCanAdmin(false);
     });
 
     return () => {
       socket.disconnect();
       adminNotifySocketRef.current = null;
     };
-  }, [canOpenAdminPage, currentUser, user]);
+  }, [canOpenAdminPage, currentUser, likelyAdminUser]);
+
+  const refreshAdminTickets = async () => {
+    if (adminTicketRefreshInFlightRef.current) return;
+    adminTicketRefreshInFlightRef.current = true;
+    try {
+      setTickets(await getSupportTickets("admin"));
+    } catch {
+      // Header badge refresh is best-effort.
+    } finally {
+      adminTicketRefreshInFlightRef.current = false;
+    }
+  };
 
   useEffect(() => {
     if (!open) return undefined;
@@ -193,6 +208,8 @@ export function SupportChatWidget() {
   }, [messages.length]);
 
   const loadAll = async (showLoading = true) => {
+    if (loadAllInFlightRef.current) return;
+    loadAllInFlightRef.current = true;
     if (showLoading) setLoading(true);
     try {
       const [nextTickets, nextActive] = await Promise.all([getSupportTickets(role), getSupportActiveUsers()]);
@@ -209,6 +226,7 @@ export function SupportChatWidget() {
     } catch (error) {
       setNotice(toFriendlySupportError(error, "Unable to load support chat"));
     } finally {
+      loadAllInFlightRef.current = false;
       if (showLoading) setLoading(false);
     }
   };

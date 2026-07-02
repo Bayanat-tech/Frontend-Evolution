@@ -43,6 +43,7 @@ export function AdminSupportCenterPage() {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const typingStopRef = useRef<number | null>(null);
+  const loadAllInFlightRef = useRef(false);
 
   const selectedTicket = useMemo(() => tickets.find((ticket) => Number(ticket.TICKET_ID) === selectedId) || null, [tickets, selectedId]);
   const currentUser = user?.loginid || user?.username || "";
@@ -124,6 +125,8 @@ export function AdminSupportCenterPage() {
   }, [messages.length]);
 
   const loadAll = async (showLoading = true) => {
+    if (loadAllInFlightRef.current) return;
+    loadAllInFlightRef.current = true;
     if (showLoading) setLoading(true);
     try {
       const [nextTickets, nextUsers] = await Promise.all([getSupportTickets("admin"), getSupportActiveUsers()]);
@@ -137,6 +140,7 @@ export function AdminSupportCenterPage() {
     } catch (error) {
       setNotice(toFriendlyError(error, "Unable to load admin support center"));
     } finally {
+      loadAllInFlightRef.current = false;
       if (showLoading) setLoading(false);
     }
   };
