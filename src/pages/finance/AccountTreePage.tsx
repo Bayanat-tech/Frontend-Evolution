@@ -207,16 +207,16 @@ const ACCOUNT_FORM_SECTIONS: Array<{
       { name: "exp_subtype_description", label: "Exp SubType Description" },
     ],
   },
-  {
-    title: "Approval",
-    fields: [
-      // { name: "cr_no", label: "CR No" },
-      // { name: "apprval_factor", label: "Approval Factor" },
-      // { name: "request_number", label: "Request Number" },
-      // { name: "ac_type", label: "Account Type" },
-      { name: "ac_active", label: "Active", type: "flag" },
-    ],
-  },
+  // {
+  //   title: "Approval",
+  //   fields: [
+  //     // { name: "cr_no", label: "CR No" },
+  //     // { name: "apprval_factor", label: "Approval Factor" },
+  //     // { name: "request_number", label: "Request Number" },
+  //     // { name: "ac_type", label: "Account Type" },
+  //     { name: "ac_active", label: "Active", type: "flag" },
+  //   ],
+  // },
 ];
 
 export function AccountTreePage() {
