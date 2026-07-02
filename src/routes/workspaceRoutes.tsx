@@ -96,6 +96,7 @@ import { HrJoiningPage } from "../pages/hr/HrJoiningPage";
 
 import { HrEmpEducationPage } from "../pages/hr/HrEmpEducationPage";  
 import GradeSalaryIncrement from "../pages/hr/GradeSalaryIncrement.";
+import SalaryAdditionDeductionMainPage from "../pages/hr/addition_deduction/SalaryAdditionDeductionMainPage";
 
 
 
@@ -116,6 +117,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: "HR Salary Addition Deduction Page",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/memo_and_forms/addition/deduction_letter"),
+    element: () => <SalaryAdditionDeductionMainPage />,
+  },
   {
     name:"HR Grade Salary Increment",
     match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/grade_salary_increment"),
