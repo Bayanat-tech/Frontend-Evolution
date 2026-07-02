@@ -425,7 +425,7 @@ export async function upsertBulkAccountEntryApi(payload: {
   return response.data;
 }
 
-export async function cancelTransactionDocument(docNo: string, docType: TransactionType, companyCode: string) {
+export async function cancelTransactionDocument(docNo: string, docType: TransactionType, companyCode?: string) {
   const response = await api.put<ApiResponse<null>>("/api/finance/transactions/cancel_cheque", {}, {
     params: { doc_no: docNo, doc_type: docType, company_code: companyCode },
   });

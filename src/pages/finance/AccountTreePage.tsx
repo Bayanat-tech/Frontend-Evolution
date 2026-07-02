@@ -207,16 +207,16 @@ const ACCOUNT_FORM_SECTIONS: Array<{
       { name: "exp_subtype_description", label: "Exp SubType Description" },
     ],
   },
-  {
-    title: "Approval",
-    fields: [
-      // { name: "cr_no", label: "CR No" },
-      // { name: "apprval_factor", label: "Approval Factor" },
-      // { name: "request_number", label: "Request Number" },
-      // { name: "ac_type", label: "Account Type" },
-      { name: "ac_active", label: "Active", type: "flag" },
-    ],
-  },
+  // {
+  //   title: "Approval",
+  //   fields: [
+  //     // { name: "cr_no", label: "CR No" },
+  //     // { name: "apprval_factor", label: "Approval Factor" },
+  //     // { name: "request_number", label: "Request Number" },
+  //     // { name: "ac_type", label: "Account Type" },
+  //     { name: "ac_active", label: "Active", type: "flag" },
+  //   ],
+  // },
 ];
 
 export function AccountTreePage() {
@@ -633,8 +633,8 @@ function AccountNodeEditor({ dialog, onClose, onSaved, onDetails }: { dialog: Di
     try {
       setSaving(true);
       const payload = level === 5
-        ? buildAccountPayload(accountForm, parent || node)
-        : buildPayload(level, description.trim(), parent || node, { l4Type, l4Bill, l4Job }, isEdit);
+        ? buildAccountPayload(accountForm, parent || node, user?.company_code || "")
+        : buildPayload(level, description.trim(), parent || node, { l4Type, l4Bill, l4Job }, isEdit, user?.company_code || "");
       const result = isEdit && node
         ? await updateAccountTreeNode(level, node.id, payload)
         : await createAccountTreeNode(level, payload);
@@ -936,13 +936,14 @@ function buildPayload(
   context: AccountTreeNode | null,
   flags: { l4Type: string; l4Bill: string; l4Job: string },
   isEdit: boolean,
+  companyCode: string
 ) {
   const parentCode = isEdit ? context?.parent_code || "" : context?.id || "";
   switch (level) {
     case 2:
-      return { l1_code: parentCode, l2_description: description };
+      return { l1_code: parentCode, l2_description: description, company_code: companyCode };
     case 3:
-      return { l2_code: parentCode, l3_description: description };
+      return { l2_code: parentCode, l3_description: description, company_code: companyCode };
     case 4:
       return {
         l3_code: parentCode,
@@ -950,11 +951,13 @@ function buildPayload(
         l4_type: flags.l4Type,
         l4_bill: flags.l4Bill,
         l4_job: flags.l4Job,
+        company_code: companyCode,
       };
     case 5:
       return {
         l4_code: context?.id || "",
         ac_name: description,
+        company_code: companyCode,
         files: [],
       };
     default:
@@ -962,8 +965,9 @@ function buildPayload(
   }
 }
 
-function buildAccountPayload(form: AccountFormState, context: AccountTreeNode | null) {
+function buildAccountPayload(form: AccountFormState, context: AccountTreeNode | null, companyCode: string) {
   return {
+    company_code: companyCode,
     l4_code: form.l4_code || context?.id || context?.parent_code || "",
     ac_name: form.ac_name.trim(),
     address_1: form.address_1,
