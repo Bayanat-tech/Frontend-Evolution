@@ -11,7 +11,7 @@ type LookupColumn = {
 };
 
 type LookupFieldProps = {
-  label: string;
+  label?: string;
   value: string;
   displayValue?: string;
   columns: LookupColumn[];

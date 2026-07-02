@@ -1,19 +1,17 @@
-
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useFormik } from 'formik';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Edit2, Plus } from 'lucide-react';
+import { Edit2, Plus, Save } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
-import { Dialog } from '../../../components/ui/Dialog';
 import { DataTable } from '../../../components/ui/DataTable';
 import { useToast } from '../../../components/ui/AlertToast';
-import AddAbsentMemoPage from './AddUpdate/AddAbsentMemoPage';
-import type { AbsentMemoDetailRow } from './AddUpdate/types';
+import { DocumentPageShell } from '../../../components/ui/DocumentPageShell';
+import AddAbsentMemoPage from './AddAbsentMemoPage';
+import type { AbsentMemoDetailRow } from './types';
 import { getDynamicLookup } from '../../../api/lookups';
 import { useAuth } from '../../../state/AuthContext';
 import hrSalaryAdvDedServiceInstance from '../../../api/hr/upsertHrSalaryAdvDed';
-
 
 const gridDataParameter = 'HR_ABSENT_MEMO_MAIN_PAGE';
 
@@ -116,15 +114,12 @@ const AbsentMemoMainPage = () => {
         const success = await hrSalaryAdvDedServiceInstance.upsertHrSalaryAdvDed({
           header,
           details,
-          loginid: user?.loginid || user?.loginid || '',
+          loginid: user?.loginid || '',
         });
 
         if (success) {
           toast.success(dialogStatus.type === 'edit' ? 'Updated Successfully' : 'Saved Successfully');
-          setDialogStatus({ open: false, type: '' });
-          setSelectedRowData(null);
-          setDetailRows([]);
-          formik.resetForm();
+          closeDialog();
           refetchGridData();
           return;
         }
@@ -157,6 +152,13 @@ const AbsentMemoMainPage = () => {
 
     void fetchDetailRows();
   }, [dialogStatus.open, dialogStatus.type, selectedRowData, user?.company_code, user?.loginid]);
+
+  const closeDialog = () => {
+    setDialogStatus({ open: false, type: '' });
+    setSelectedRowData(null);
+    setDetailRows([]);
+    formik.resetForm();
+  };
 
   const openAdd = () => {
     setSelectedRowData(null);
@@ -202,6 +204,8 @@ const AbsentMemoMainPage = () => {
     enabled: !!user?.company_code,
   });
 
+  const totalAmount = detailRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+
   return (
     <section className="grid gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -221,45 +225,44 @@ const AbsentMemoMainPage = () => {
         getRowId={(row: any) => String(row.doc_no)}
       />
 
-      <Dialog
-        open={dialogStatus.open}
-        title={`${dialogStatus.type === 'edit' ? 'Edit' : 'Add'} ${title}`}
-        compact
-        wide
-        onClose={() => {
-          setDialogStatus({ open: false, type: '' });
-          setSelectedRowData(null);
-          setDetailRows([]);
-          formik.resetForm();
-        }}
-        footer={
-          <>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setDialogStatus({ open: false, type: '' });
-                setSelectedRowData(null);
-                setDetailRows([]);
-                formik.resetForm();
-              }}
-            >
-              Cancel
-            </Button>
-            <Button onClick={() => formik.submitForm()}>
-              {dialogStatus.type === 'edit' ? 'Update' : 'Save'}
-            </Button>
-          </>
-        }
-      >
-        <div style={{ maxHeight: 'calc(90vh - 180px)', overflowY: 'auto', width: '100%' }}>
+      {dialogStatus.open && (
+        <DocumentPageShell
+          eyebrow={dialogStatus.type === 'edit' ? 'Edit Document' : 'Add Document'}
+          title={title}
+          badges={[
+            { label: 'Doc No', value: formik.values.docNo || 'New' },
+            { label: 'Doc Date', value: formik.values.docDate || '—' },
+            { label: 'Employee', value: formik.values.employeeCode || '—' },
+          ]}
+          onClose={closeDialog}
+          onCancel={closeDialog}
+          footer={
+            <>
+              <div className="text-sm text-slate-600">
+                Total Amount{' '}
+                <span className="text-base font-semibold text-[#0e4f8f]">
+                  {totalAmount.toLocaleString(undefined, { minimumFractionDigits: 3 })}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={closeDialog}>
+                  Close
+                </Button>
+                <Button onClick={() => formik.submitForm()} className="bg-[#0e4f8f] hover:bg-[#0c4278]">
+                  <Save size={14} /> {dialogStatus.type === 'edit' ? 'Update' : 'Save'}
+                </Button>
+              </div>
+            </>
+          }
+        >
           <AddAbsentMemoPage
             mode={dialogStatus.type}
             formik={formik}
             detailRows={detailRows}
             setDetailRows={setDetailRows}
           />
-        </div>
-      </Dialog>
+        </DocumentPageShell>
+      )}
     </section>
   );
 };
