@@ -651,7 +651,7 @@ buildDelete: (row, context) => ({
     routeKeys: ["skills", "skill", "hr_skills"],
     keyField: "skill_code",
     source: "dynamic",
-    listQuery: dynamicList("MST_HR_MS_HR_SKILLS"),
+    listQuery: dynamicList("MST_HR_MS_HR_SKILLS", true),
     autoGenerateKey: true,
     buildSave: (form, context) => ({
       parameter: "MST_HR_SKILLS",
