@@ -225,8 +225,7 @@ export function AdminSupportCenterPage() {
               <h3>Ticket status</h3>
               <span>{loading ? "Loading..." : "Live queue"}</span>
             </div>
-            <StatusBar label="Open" value={openTickets.length} max={maxMetric} />
-            <StatusBar label="Closed" value={closedTickets.length} max={maxMetric} />
+            <TicketStatusChart open={openTickets.length} closed={closedTickets.length} total={maxMetric} />
           </div>
 
           <div className="support-center-card support-center-recent-card">
@@ -443,11 +442,26 @@ function MetricCard({ label, value, icon, tone }: { label: string; value: number
   );
 }
 
-function StatusBar({ label, value, max }: { label: string; value: number; max: number }) {
+function TicketStatusChart({ open, closed, total }: { open: number; closed: number; total: number }) {
+  const openPercent = Math.round((open / total) * 100);
   return (
-    <div className="support-center-statusbar">
-      <div><span>{label}</span><strong>{value}</strong></div>
-      <i><b style={{ width: `${Math.max(5, (value / max) * 100)}%` }} /></i>
+    <div className="support-center-status-chart">
+      <div className="support-center-donut" style={{ background: `conic-gradient(#0b76db 0 ${openPercent}%, #22c55e ${openPercent}% 100%)` }}>
+        <span>{total}</span>
+        <small>Total</small>
+      </div>
+      <div className="support-center-status-lines">
+        <div>
+          <i className="open" />
+          <span>Open queue</span>
+          <strong>{open}</strong>
+        </div>
+        <div>
+          <i className="closed" />
+          <span>Closed tickets</span>
+          <strong>{closed}</strong>
+        </div>
+      </div>
     </div>
   );
 }
