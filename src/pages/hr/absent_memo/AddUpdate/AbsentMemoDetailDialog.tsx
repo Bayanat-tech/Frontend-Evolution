@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
+import { Dialog } from '../../../../components/ui/Dialog';
 import { Button } from '../../../../components/ui/Button';
 import { Input } from '../../../../components/ui/Input';
 import { Select } from '../../../../components/ui/Select';
 import { LookupField } from '../../../../components/ui/LookupField';
 import type { AbsentMemoDetailRow } from './types';
-import { Dialog } from '../../../../components/ui/Dialog';
 import { getDynamicLookup } from '../../../../api/lookups';
 import { useAuth } from '../../../../state/AuthContext';
 
@@ -27,6 +27,9 @@ const emptyRow = (): AbsentMemoDetailRow => ({
   refLeaveDocNo: '',
   cancel: 'No',
 });
+
+const inputClass = 'h-7 text-[11px] px-2';
+const labelClass = 'text-[10px] font-medium text-muted-foreground';
 
 const AbsentMemoDetailDialog = ({ open, initialRow, onClose, onSave }: Props) => {
   const { user } = useAuth();
@@ -53,15 +56,16 @@ const AbsentMemoDetailDialog = ({ open, initialRow, onClose, onSave }: Props) =>
       onClose={onClose}
       footer={
         <>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={() => onSave(row)}>Save</Button>
+          <Button size="sm" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button size="sm" onClick={() => onSave(row)}>Save</Button>
         </>
       }
     >
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">Sr No</span>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+        <label className="flex flex-col gap-0.5">
+          <span className={labelClass}>Sr No</span>
           <Input
+            className={inputClass}
             type="number"
             value={String(row.srNo ?? '')}
             onChange={(e) => setRow((prev) => ({ ...prev, srNo: e.target.value }))}
@@ -70,6 +74,7 @@ const AbsentMemoDetailDialog = ({ open, initialRow, onClose, onSave }: Props) =>
 
         <LookupField
           label="Pay Unit"
+          compact
           value={row.payUnit}
           columns={[
             { field: 'value_code', header: 'Value Code' },
@@ -81,64 +86,69 @@ const AbsentMemoDetailDialog = ({ open, initialRow, onClose, onSave }: Props) =>
           onChange={(value) => setRow((prev) => ({ ...prev, payUnit: value }))}
         />
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">Description</span>
-          <Input value={row.description} onChange={(e) => setRow((prev) => ({ ...prev, description: e.target.value }))} />
+        <label className="flex flex-col gap-0.5">
+          <span className={labelClass}>Description</span>
+          <Input className={inputClass} value={row.description} onChange={(e) => setRow((prev) => ({ ...prev, description: e.target.value }))} />
         </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">Effective From</span>
+        <label className="flex flex-col gap-0.5">
+          <span className={labelClass}>Effective From</span>
           <Input
+            className={inputClass}
             type="date"
             value={row.effectiveFrom}
             onChange={(e) => setRow((prev) => ({ ...prev, effectiveFrom: e.target.value }))}
           />
         </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">Absent From Date</span>
+        <label className="flex flex-col gap-0.5">
+          <span className={labelClass}>Absent From Date</span>
           <Input
+            className={inputClass}
             type="date"
             value={row.absentFromDate}
             onChange={(e) => setRow((prev) => ({ ...prev, absentFromDate: e.target.value }))}
           />
         </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">Absent To Date</span>
+        <label className="flex flex-col gap-0.5">
+          <span className={labelClass}>Absent To Date</span>
           <Input
+            className={inputClass}
             type="date"
             value={row.absentToDate}
             onChange={(e) => setRow((prev) => ({ ...prev, absentToDate: e.target.value }))}
           />
         </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">No Of Days</span>
+        <label className="flex flex-col gap-0.5">
+          <span className={labelClass}>No Of Days</span>
           <Input
+            className={inputClass}
             type="number"
             value={String(row.noOfDays ?? '')}
             onChange={(e) => setRow((prev) => ({ ...prev, noOfDays: e.target.value }))}
           />
         </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">Amount</span>
+        <label className="flex flex-col gap-0.5">
+          <span className={labelClass}>Amount</span>
           <Input
+            className={inputClass}
             type="number"
             value={String(row.amount ?? '')}
             onChange={(e) => setRow((prev) => ({ ...prev, amount: e.target.value }))}
           />
         </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">Ref Leave Doc No</span>
-          <Input value={row.refLeaveDocNo} onChange={(e) => setRow((prev) => ({ ...prev, refLeaveDocNo: e.target.value }))} />
+        <label className="flex flex-col gap-0.5">
+          <span className={labelClass}>Ref Leave Doc No</span>
+          <Input className={inputClass} value={row.refLeaveDocNo} onChange={(e) => setRow((prev) => ({ ...prev, refLeaveDocNo: e.target.value }))} />
         </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">Cancel</span>
-          <Select value={row.cancel} onChange={(e) => setRow((prev) => ({ ...prev, cancel: e.target.value }))}>
+        <label className="flex flex-col gap-0.5">
+          <span className={labelClass}>Cancel</span>
+          <Select className={inputClass} value={row.cancel} onChange={(e) => setRow((prev) => ({ ...prev, cancel: e.target.value }))}>
             <option value="No">No</option>
             <option value="Yes">Yes</option>
           </Select>

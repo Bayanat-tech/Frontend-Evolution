@@ -1,9 +1,13 @@
-import { useMemo, useState } from 'react';
-import { Edit2, Plus, Trash2 } from 'lucide-react';
+import { useMemo } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '../../../../components/ui/Button';
+import { Input } from '../../../../components/ui/Input';
+import { Select } from '../../../../components/ui/Select';
+import { LookupField } from '../../../../components/ui/LookupField';
 import { DataTable } from '../../../../components/ui/DataTable';
-import AbsentMemoDetailDialog from './AbsentMemoDetailDialog';
+import { getDynamicLookup } from '../../../../api/lookups';
+import { useAuth } from '../../../../state/AuthContext';
 import type { AbsentMemoDetailRow } from './types';
 
 type Props = {
@@ -12,71 +16,189 @@ type Props = {
 };
 
 const AbsentMemoDetailTab = ({ detailRows, setDetailRows }: Props) => {
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingRow, setEditingRow] = useState<AbsentMemoDetailRow | null>(null);
+  const { user } = useAuth();
 
-  const openAddRow = () => {
-    setEditingRow(null);
-    setDialogOpen(true);
-  };
-
-  const openEditRow = (row: AbsentMemoDetailRow) => {
-    setEditingRow(row);
-    setDialogOpen(true);
-  };
-
-  const removeRow = (srNo: number | string) => {
-    setDetailRows((prev) => prev.filter((row) => String(row.srNo) !== String(srNo)));
-  };
-
-  const handleDialogSave = (row: AbsentMemoDetailRow) => {
-    setDetailRows((prev) => {
-      const exists = editingRow && prev.some((r) => String(r.srNo) === String(editingRow.srNo));
-      if (exists) {
-        return prev.map((r) => (String(r.srNo) === String(editingRow!.srNo) ? row : r));
-      }
-      const nextSrNo = row.srNo || (prev.length > 0 ? Number(prev[prev.length - 1]?.srNo || 0) + 1 : 1);
-      return [...prev, { ...row, srNo: nextSrNo }];
+  const loadPayUnits = async () => {
+    const response = await getDynamicLookup({
+      parameter: 'PAY_COMPONENT_DependentPayCompId',
+      loginid: user?.loginid ?? '',
+      code1: user?.company_code ?? '',
     });
-    setDialogOpen(false);
+    return Array.isArray(response) ? response : [];
+  };
+
+  const updateRow = (rowKey: number | string, patch: Partial<AbsentMemoDetailRow>) => {
+    setDetailRows((prev) =>
+      prev.map((row) => (String(row.srNo) === String(rowKey) ? { ...row, ...patch } : row)),
+    );
+  };
+
+  const handleAddDetailRow = () => {
+    const nextSrNo = detailRows.length > 0 ? Number(detailRows[detailRows.length - 1]?.srNo || 0) + 1 : 1;
+    setDetailRows((prev) => [
+      ...prev,
+      {
+        srNo: nextSrNo,
+        payUnit: '',
+        description: '',
+        effectiveFrom: '',
+        absentFromDate: '',
+        absentToDate: '',
+        noOfDays: '',
+        amount: '',
+        refLeaveDocNo: '',
+        cancel: 'No',
+      },
+    ]);
+  };
+
+  const handleRemoveDetailRow = (rowKey: number | string) => {
+    setDetailRows((prev) => prev.filter((row) => String(row.srNo) !== String(rowKey)));
   };
 
   const columns = useMemo<ColumnDef<AbsentMemoDetailRow>[]>(
     () => [
-      { accessorKey: 'srNo', header: 'SNo', size: 60 },
-      { accessorKey: 'payUnit', header: 'Pay Unit' },
-      { accessorKey: 'description', header: 'Description' },
-      { accessorKey: 'effectiveFrom', header: 'Effective From' },
-      { accessorKey: 'absentFromDate', header: 'From Date' },
-      { accessorKey: 'absentToDate', header: 'To Date' },
-      { accessorKey: 'noOfDays', header: 'No Of Days' },
-      { accessorKey: 'amount', header: 'Amount' },
-      { accessorKey: 'refLeaveDocNo', header: 'Ref Leave Doc No' },
-      { accessorKey: 'cancel', header: 'Cancel' },
+      { accessorKey: 'srNo', header: 'SNo', size: 55 },
+      {
+        accessorKey: 'payUnit',
+        header: 'Pay Unit',
+        size: 180,
+        cell: ({ row }) => (
+          <LookupField
+            label='Pay Unit'
+            compact
+            value={row.original.payUnit}
+            columns={[
+              { field: 'value_code', header: 'Value Code' },
+              { field: 'value_desc', header: 'Description' },
+            ]}
+            valueField="value_code"
+            displayFields={['value_code', 'value_desc']}
+            loadOptions={loadPayUnits}
+            onChange={(value) => updateRow(row.original.srNo, { payUnit: value })}
+          />
+        ),
+      },
+      {
+        accessorKey: 'description',
+        header: 'Description',
+        cell: ({ row }) => (
+          <Input
+            className="h-7 text-[11px] px-2"
+            value={row.original.description}
+            onChange={(e) => updateRow(row.original.srNo, { description: e.target.value })}
+          />
+        ),
+      },
+      {
+        accessorKey: 'effectiveFrom',
+        header: 'Effective From',
+        cell: ({ row }) => (
+          <Input
+            className="h-7 text-[11px] px-2"
+            type="date"
+            value={row.original.effectiveFrom}
+            onChange={(e) => updateRow(row.original.srNo, { effectiveFrom: e.target.value })}
+          />
+        ),
+      },
+      {
+        accessorKey: 'absentFromDate',
+        header: 'From Date',
+        cell: ({ row }) => (
+          <Input
+            className="h-7 text-[11px] px-2"
+            type="date"
+            value={row.original.absentFromDate}
+            onChange={(e) => updateRow(row.original.srNo, { absentFromDate: e.target.value })}
+          />
+        ),
+      },
+      {
+        accessorKey: 'absentToDate',
+        header: 'To Date',
+        cell: ({ row }) => (
+          <Input
+            className="h-7 text-[11px] px-2"
+            type="date"
+            value={row.original.absentToDate}
+            onChange={(e) => updateRow(row.original.srNo, { absentToDate: e.target.value })}
+          />
+        ),
+      },
+      {
+        accessorKey: 'noOfDays',
+        header: 'No Of Days',
+        cell: ({ row }) => (
+          <Input
+            className="h-7 text-[11px] px-2"
+            type="number"
+            value={String(row.original.noOfDays ?? '')}
+            onChange={(e) => updateRow(row.original.srNo, { noOfDays: e.target.value })}
+          />
+        ),
+      },
+      {
+        accessorKey: 'amount',
+        header: 'Amount',
+        cell: ({ row }) => (
+          <Input
+            className="h-7 text-[11px] px-2"
+            type="number"
+            value={String(row.original.amount ?? '')}
+            onChange={(e) => updateRow(row.original.srNo, { amount: e.target.value })}
+          />
+        ),
+      },
+      {
+        accessorKey: 'refLeaveDocNo',
+        header: 'Ref Leave Doc No',
+        cell: ({ row }) => (
+          <Input
+            className="h-7 text-[11px] px-2"
+            value={row.original.refLeaveDocNo}
+            onChange={(e) => updateRow(row.original.srNo, { refLeaveDocNo: e.target.value })}
+          />
+        ),
+      },
+      {
+        accessorKey: 'cancel',
+        header: 'Cancel',
+        cell: ({ row }) => (
+          <Select
+            className="h-7 text-[11px] px-2"
+            value={row.original.cancel}
+            onChange={(e) => updateRow(row.original.srNo, { cancel: e.target.value })}
+          >
+            <option value="No">No</option>
+            <option value="Yes">Yes</option>
+          </Select>
+        ),
+      },
       {
         id: 'actions',
-        header: 'Actions',
+        header: 'Remove',
         cell: ({ row }) => (
-          <div className="flex items-center justify-center gap-1">
-            <Button size="icon" variant="ghost" onClick={() => openEditRow(row.original)} title="Edit">
-              <Edit2 size={14} />
-            </Button>
-            <Button size="icon" variant="ghost" onClick={() => removeRow(row.original.srNo)} title="Remove">
-              <Trash2 size={14} />
-            </Button>
-          </div>
+          <Button
+            size="icon"
+            variant="ghost"
+            title="Delete Row"
+            onClick={() => handleRemoveDetailRow(row.original.srNo)}
+          >
+            <Trash2 size={13} />
+          </Button>
         ),
-        size: 90,
+        size: 60,
       },
     ],
-    [],
+    [user],
   );
 
   return (
     <div className="grid gap-2">
       <div className="flex justify-end">
-        <Button size="sm" onClick={openAddRow}>
-          <Plus size={14} /> Add Line
+        <Button size="sm" onClick={handleAddDetailRow}>
+          <Plus size={13} /> Add Line
         </Button>
       </div>
 
@@ -84,16 +206,9 @@ const AbsentMemoDetailTab = ({ detailRows, setDetailRows }: Props) => {
         columns={columns}
         data={detailRows}
         emptyText="No lines added"
-        height={300}
+        height={260}
         density="compact"
         getRowId={(row) => String(row.srNo)}
-      />
-
-      <AbsentMemoDetailDialog
-        open={dialogOpen}
-        initialRow={editingRow}
-        onClose={() => setDialogOpen(false)}
-        onSave={handleDialogSave}
       />
     </div>
   );

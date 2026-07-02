@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import type { SalaryAdditionDeductionDetailRow } from './types';
 import SalaryAdditionDeductionTab1 from './SalaryAdditionDeductionTab1';
 import SalaryAdditionDeductionTab2 from './SalaryAdditionDeductionTab2';
@@ -10,37 +9,28 @@ type Props = {
   setDetailRows: React.Dispatch<React.SetStateAction<SalaryAdditionDeductionDetailRow[]>>;
 };
 
-const TABS = [
-  { key: 'header', label: 'Details' },
-  { key: 'detail', label: 'Addition / Deduction Lines' },
-];
-
 const AddSalaryAdditionDeductionPage = ({ formik, detailRows, setDetailRows }: Props) => {
-  const [activeTab, setActiveTab] = useState(TABS[0].key);
-
   return (
-    <form className="flex flex-col gap-3" onSubmit={formik.handleSubmit}>
-      <div className="flex items-center gap-1 border-b border-border">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-3 py-2 text-xs font-medium transition-colors border-b-2 -mb-px ${
-              activeTab === tab.key
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+    <form className="flex flex-col gap-4" onSubmit={formik.handleSubmit}>
+      <section className="grid gap-2">
+        <div className="flex items-center gap-2">
+          <div className="h-3.5 w-1 rounded-full bg-primary" />
+          <h3 className="m-0 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Details
+          </h3>
+        </div>
+        <SalaryAdditionDeductionTab1 formik={formik} />
+      </section>
 
-      {activeTab === 'header' && <SalaryAdditionDeductionTab1 formik={formik} />}
-      {activeTab === 'detail' && (
+      <section className="grid gap-2">
+        <div className="flex items-center gap-2">
+          <div className="h-3.5 w-1 rounded-full bg-primary" />
+          <h3 className="m-0 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Addition / Deduction Lines
+          </h3>
+        </div>
         <SalaryAdditionDeductionTab2 detailRows={detailRows} setDetailRows={setDetailRows} />
-      )}
+      </section>
     </form>
   );
 };
