@@ -26,6 +26,7 @@ import { cn } from "../lib/utils";
 import { playSupportRing } from "../utils/supportNotification";
 
 type ChatRole = "user" | "admin";
+const SUPPORT_EMOJIS = ["👍", "🙏", "✅", "😊", "👌", "🚀"];
 
 export function SupportChatWidget() {
   const { user } = useAuth();
@@ -449,7 +450,7 @@ export function SupportChatWidget() {
                     const mine = String(message.SENDER_LOGINID || "").toUpperCase() === String(currentUser || "").toUpperCase();
                     const deleted = message.IS_DELETED === "Y";
                     const system = message.SENDER_ROLE === "SYSTEM";
-                    const canDeleteMessage = !deleted && !system && selectedId && (canUseAdmin || mine);
+                    const canDeleteMessage = !deleted && !system && selectedId && mine;
                     return (
                       <div className={cn("support-message", mine && "mine", system && "system", deleted && "deleted")} key={message.MESSAGE_ID}>
                         <div className="support-message-bubble">
@@ -490,6 +491,13 @@ export function SupportChatWidget() {
                       ))}
                     </div>
                   )}
+                  <div className="support-emoji-row" aria-label="Quick emojis">
+                    {SUPPORT_EMOJIS.map((emoji) => (
+                      <button type="button" key={emoji} onClick={() => setCompose((current) => `${current}${current ? " " : ""}${emoji}`)} title={`Add ${emoji}`}>
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
                   <div className="support-compose-row">
                     <button className="icon-button" onClick={() => fileInputRef.current?.click()} title="Attach screenshot or file">
                       <ImagePlus size={17} />

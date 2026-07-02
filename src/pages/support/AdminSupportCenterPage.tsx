@@ -17,10 +17,10 @@ import {
 import { API_URL } from "../../api/client";
 import { useAuth } from "../../state/AuthContext";
 import { Button } from "../../components/ui/Button";
-import { Input } from "../../components/ui/Input";
 import { cn } from "../../lib/utils";
 
 type AdminSupportTab = "dashboard" | "tickets" | "users";
+const SUPPORT_EMOJIS = ["👍", "🙏", "✅", "😊", "👌", "🚀"];
 
 export function AdminSupportCenterPage() {
   const { user } = useAuth();
@@ -220,7 +220,7 @@ export function AdminSupportCenterPage() {
           <MetricCard label="Closed tickets" value={closedTickets.length} icon={<CheckCircle2 size={18} />} tone="green" />
           <MetricCard label="Online now" value={onlineUsers.length} icon={<UserRoundCheck size={18} />} tone="teal" />
 
-          <div className="support-center-card span-2">
+          <div className="support-center-card support-center-status-card">
             <div className="support-center-card-head">
               <h3>Ticket status</h3>
               <span>{loading ? "Loading..." : "Live queue"}</span>
@@ -229,7 +229,7 @@ export function AdminSupportCenterPage() {
             <StatusBar label="Closed" value={closedTickets.length} max={maxMetric} />
           </div>
 
-          <div className="support-center-card">
+          <div className="support-center-card support-center-recent-card">
             <div className="support-center-card-head">
               <h3>Recent tickets</h3>
               <span>{tickets.length} total</span>
@@ -242,6 +242,27 @@ export function AdminSupportCenterPage() {
                 </button>
               ))}
               {!tickets.length && <p>No tickets found.</p>}
+            </div>
+          </div>
+
+          <div className="support-center-card support-center-live-card">
+            <div className="support-center-card-head">
+              <h3>Live users</h3>
+              <span>{onlineUsers.length} online</span>
+            </div>
+            <div className="support-center-mini-users">
+              {activeUsers.slice(0, 5).map((item) => {
+                const online = isSupportUserOnline(item);
+                const name = item.USERNAME || item.LOGINID || "User";
+                return (
+                  <button key={`${item.LOGINID}-${item.TENANT_ID || ""}`} onClick={() => setActiveTab("users")}>
+                    <span className="support-center-avatar">{name.slice(0, 2).toUpperCase()}<i className={online ? "online" : ""} /></span>
+                    <strong>{name}</strong>
+                    <em>{online ? "Online" : "Away"}</em>
+                  </button>
+                );
+              })}
+              {!activeUsers.length && <p>No active users found.</p>}
             </div>
           </div>
         </div>
@@ -328,7 +349,7 @@ export function AdminSupportCenterPage() {
                 </div>
               )}
               {messages.map((message) => {
-                const mine = String(message.SENDER_LOGINID || "").toUpperCase() === String(currentUser || "").toUpperCase() || message.SENDER_ROLE === "ADMIN";
+                const mine = String(message.SENDER_LOGINID || "").toUpperCase() === String(currentUser || "").toUpperCase();
                 const deleted = message.IS_DELETED === "Y";
                 const system = message.SENDER_ROLE === "SYSTEM";
                 return (
@@ -337,7 +358,7 @@ export function AdminSupportCenterPage() {
                       <header>
                         <strong>{message.SENDER_NAME || message.SENDER_LOGINID}</strong>
                         <span>{message.CREATED_AT}</span>
-                        {!deleted && !system && (
+                        {!deleted && !system && mine && (
                           <button onClick={() => void removeMessage(Number(message.MESSAGE_ID))} title="Delete message">
                             <Trash2 size={12} />
                           </button>
@@ -370,6 +391,13 @@ export function AdminSupportCenterPage() {
                   ))}
                 </div>
               )}
+              <div className="support-center-emoji-row" aria-label="Quick emojis">
+                {SUPPORT_EMOJIS.map((emoji) => (
+                  <button type="button" key={emoji} onClick={() => setCompose((current) => `${current}${current ? " " : ""}${emoji}`)} disabled={!selectedTicket} title={`Add ${emoji}`}>
+                    {emoji}
+                  </button>
+                ))}
+              </div>
               <div>
                 <button className="icon-button" onClick={() => fileInputRef.current?.click()} title="Attach screenshot or file">
                   <ImagePlus size={17} />
