@@ -6462,3 +6462,242 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   }
 }
 
+/* Support UI theme alignment: keep support screens on the same visual system as WMS/Finance/Security. */
+.support-launcher,
+.support-shell,
+.support-panel,
+.support-center-page,
+.support-preview-backdrop {
+  font-family: var(--app-font-family);
+  color: var(--text);
+}
+
+.support-launcher,
+.support-header,
+.workspace-content .support-center-page .support-center-hero {
+  background: var(--primary);
+  color: var(--primary-ink);
+  box-shadow: var(--shadow);
+}
+
+.support-launcher:hover {
+  box-shadow: var(--shadow);
+}
+
+.support-panel,
+.support-center-metric,
+.support-center-card,
+.support-center-workbench,
+.support-preview-card,
+.workspace-content .support-center-card,
+.workspace-content .support-center-dashboard .support-center-metric,
+.workspace-content .support-center-ticket,
+.workspace-content .support-center-user,
+.workspace-content .support-center-presence-card,
+.workspace-content .support-center-presence-summary div,
+.workspace-content .support-center-attention-list button,
+.workspace-content .support-center-mini-list button,
+.workspace-content .support-center-mini-users button {
+  border-color: var(--border);
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+}
+
+.support-sidebar,
+.support-chat,
+.support-compose,
+.support-center-thread,
+.support-center-queue,
+.support-center-composer,
+.workspace-content .support-center-page,
+.workspace-content .support-center-messages,
+.support-messages {
+  background: var(--bg);
+}
+
+.support-active-copy strong,
+.support-ticket strong,
+.support-thread-head h3,
+.support-message-bubble p,
+.support-center-card-head h3,
+.support-center-ticket strong,
+.support-center-thread h2,
+.support-center-message p,
+.support-center-metric strong,
+.support-center-presence-card strong,
+.support-center-user strong,
+.support-center-attention-list strong,
+.support-center-mini-list strong {
+  color: var(--text);
+}
+
+.support-ticket small,
+.support-ticket em,
+.support-thread-head p,
+.support-message-meta,
+.support-active-copy small,
+.support-center-card-head span,
+.support-center-ticket small,
+.support-center-ticket em,
+.support-center-thread p,
+.support-center-message header,
+.support-center-metric small,
+.support-center-presence-card span,
+.support-center-presence-card small,
+.support-center-user span,
+.support-center-user small,
+.support-center-attention-list span,
+.support-center-attention-list em,
+.support-center-muted,
+.support-empty {
+  color: var(--muted);
+}
+
+.support-mode-badge,
+.support-center-live,
+.workspace-content .support-center-page .support-center-hero span,
+.workspace-content .support-center-page .support-center-hero .eyebrow {
+  color: color-mix(in srgb, var(--primary-ink) 88%, transparent);
+}
+
+.support-header .icon-button,
+.support-center-actions .btn {
+  border-color: color-mix(in srgb, var(--primary-ink) 26%, transparent);
+  background: color-mix(in srgb, var(--primary-ink) 12%, transparent);
+  color: var(--primary-ink);
+}
+
+.support-ticket.active,
+.workspace-content .support-center-ticket.active {
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
+  background: var(--primary-soft);
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+.support-status-chip,
+.workspace-content .support-center-ticket b,
+.support-center-ticket b,
+.support-read-state {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.support-status-chip.closed,
+.workspace-content .support-center-ticket b.closed,
+.support-center-ticket b.closed,
+.support-center-presence-card.online em {
+  background: color-mix(in srgb, var(--success) 15%, var(--panel));
+  color: #047857;
+}
+
+.support-avatar,
+.support-ticket-avatar,
+.support-center-avatar,
+.support-admin-empty svg,
+.support-center-empty-state svg,
+.support-center-metric > span,
+.workspace-content .support-center-dashboard .support-center-metric > span {
+  border-color: color-mix(in srgb, var(--primary) 20%, var(--border));
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.support-avatar-wrap.online,
+.workspace-content .support-center-user.online,
+.workspace-content .support-center-presence-card.online,
+.workspace-content .support-center-mini-users button:has(.online),
+.workspace-content .support-center-presence-summary div.online {
+  border-color: color-mix(in srgb, var(--success) 34%, var(--border));
+  background: color-mix(in srgb, var(--success) 8%, var(--panel));
+}
+
+.presence-dot.online,
+.support-center-avatar i.online,
+.workspace-content .support-center-live span {
+  background: var(--success);
+}
+
+.support-message-bubble,
+.support-center-message > div {
+  background: var(--panel);
+  color: var(--text);
+}
+
+.support-message.mine .support-message-bubble,
+.support-center-message.mine > div {
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+
+.support-message.mine .support-message-meta,
+.support-message.mine .support-message-bubble p,
+.support-center-message.mine header,
+.support-center-message.mine p,
+.support-message.mine .support-read-state,
+.support-center-message.mine .support-read-state {
+  color: var(--primary-ink);
+}
+
+.support-compose textarea,
+.support-center-composer textarea,
+.support-center-search,
+.support-center-search input,
+.support-emoji-row button,
+.support-center-emoji-row button,
+.support-quick-replies button,
+.support-clear-draft,
+.support-center-clear,
+.support-preview-card header button {
+  border-color: var(--border);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.support-compose textarea:focus,
+.support-center-composer textarea:focus,
+.support-center-search:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(0, 55, 140, 0.13);
+}
+
+.support-center-tabs button {
+  color: var(--muted);
+  font-size: var(--app-control-font-size);
+}
+
+.support-center-tabs button.active {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.support-center-card-head h3,
+.support-center-thread h2,
+.support-thread-head h3 {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.support-ticket strong,
+.support-center-ticket strong,
+.support-center-user strong,
+.support-center-presence-card strong,
+.support-center-mini-users strong,
+.support-center-attention-list strong {
+  font-size: var(--app-control-font-size);
+  font-weight: 700;
+}
+
+.support-ticket small,
+.support-ticket em,
+.support-center-ticket small,
+.support-center-ticket em,
+.support-center-user span,
+.support-center-user small,
+.support-center-presence-card span,
+.support-center-presence-card small,
+.support-center-attention-list span,
+.support-center-attention-list em {
+  font-size: var(--app-label-font-size);
+}
+
