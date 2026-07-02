@@ -145,6 +145,7 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
   const [editor, setEditor] = useState<{ mode: "create"; div?: Division } | { mode: "edit"; row: TransactionDocumentRow } | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<TransactionDocumentRow | null>(null);
+  const { user } = useAuth();
 
   const loadLookups = async () => {
     const [fyData, divisionData, companyInfo] = await Promise.all([getFyPeriods(), getDivisions(), getCompanyInfo()]);
@@ -196,7 +197,7 @@ export function CommercialDocumentPage({ docType }: { docType: CommercialType })
   const confirmCancel = async () => {
     if (!cancelTarget) return;
     try {
-      await cancelTransactionDocument(cancelTarget.doc_no, cancelTarget.doc_type || docType);
+      await cancelTransactionDocument(cancelTarget.doc_no, cancelTarget.doc_type || docType, user?.company_code || "");
       setCancelTarget(null);
       setNotice({ type: "success", message: "Document cancelled successfully" });
       await loadRows();
@@ -388,7 +389,7 @@ function CommercialEditor({
     setSaving(true);
     setError("");
     try {
-      await cancelTransactionDocument(form.doc_no, form.doc_type);
+      await cancelTransactionDocument(form.doc_no, form.doc_type, user?.company_code || "");
       setCancelConfirmOpen(false);
       await onSaved("Document cancelled successfully");
     } catch (cancelError) {

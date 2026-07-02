@@ -50,7 +50,7 @@ export function InboundJobListing() {
     setLoading(true);
     try {
       const data = await executeWmsInboundSql(
-        "SELECT * FROM VW_TI_JOB WHERE JOB_TYPE = 'IMP' ORDER BY JOB_NO DESC",
+        `SELECT * FROM VW_TI_JOB WHERE JOB_TYPE = 'IMP' AND COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY JOB_NO DESC`
       );
       setRows(data.map(normalizeRow));
     } catch (error) {

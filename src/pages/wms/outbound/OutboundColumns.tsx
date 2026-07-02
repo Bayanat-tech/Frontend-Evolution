@@ -3,6 +3,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import type { WmsRow } from "./Outboundtypes";
 import { value, formatCellValue, sqlEscape } from "./OutboundHelpers";
+import { useAuth } from "../../../state/AuthContext";
 
 export function makeColumns(
   columns: { key: string; label: string; size?: number }[]
@@ -171,6 +172,8 @@ export function pickingIssueColumns() {
 }
 
 export function getOutboundTabConfig(tab: string) {
+      const { user }    = useAuth();
+  
   const orderWhere = ({
     companyCode,
     jobNo,
@@ -204,7 +207,7 @@ export function getOutboundTabConfig(tab: string) {
       kind: "order",
       editable: true,
       sql: (args) =>
-        `SELECT * FROM TO_ORDER WHERE ${orderWhere(args)} ORDER BY ORDER_NO`,
+        `SELECT * FROM TO_ORDER WHERE ${orderWhere(args)} AND COMPANY_CODE=${user?.company_code} ORDER BY ORDER_NO`,
       columns: [
         { key: "order_no", label: "Order No", size: 150 },
         { key: "cust_code", label: "Customer", size: 150 },
@@ -231,23 +234,23 @@ export function getOutboundTabConfig(tab: string) {
       kind: "detail",
       editable: true,
       sql: (args) =>
-        `SELECT * FROM VW_TO_ORDER_DET WHERE ${orderWhere(args)} ORDER BY ORDER_NO, SERIAL_NO`,
+        `SELECT * FROM VW_TO_ORDER_DET WHERE ${orderWhere(args)} AND COMPANY_CODE=${user?.company_code} ORDER BY ORDER_NO, SERIAL_NO`,
       columns: orderDetailColumns(),
     },
     picking_details: {
       title: "Picking Details",
       minWidth: 2100,
       selectionKey: "serial_no",
-      sql: ({ jobNo, prinCode }) =>
-        `SELECT * FROM VW_WM_OUB_TO_PICK WHERE JOB_NO = '${sqlEscape(jobNo)}' AND PRIN_CODE = '${sqlEscape(prinCode)}' ORDER BY ORDER_NO, SERIAL_NO`,
+      sql: ({ jobNo, prinCode, companyCode }) =>
+        `SELECT * FROM VW_WM_OUB_TO_PICK WHERE JOB_NO = '${sqlEscape(jobNo)}' AND PRIN_CODE = '${sqlEscape(prinCode)}' AND COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY ORDER_NO, SERIAL_NO`,
       columns: pickingColumns(),
     },
     cancel_picking: {
       title: "Cancel Picking",
       minWidth: 2100,
       selectionKey: "key_number",
-      sql: ({ jobNo, prinCode }) =>
-        `SELECT * FROM VW_WM_OUB_PICK_TO_CONFIRM WHERE CONFIRMED = 'N' AND JOB_NO = '${sqlEscape(jobNo)}' AND PRIN_CODE = '${sqlEscape(prinCode)}' ORDER BY ORDER_NO, KEY_NUMBER`,
+      sql: ({ jobNo, prinCode, companyCode }) =>
+        `SELECT * FROM VW_WM_OUB_PICK_TO_CONFIRM WHERE CONFIRMED = 'N' AND JOB_NO = '${sqlEscape(jobNo)}' AND PRIN_CODE = '${sqlEscape(prinCode)}' AND COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY ORDER_NO, KEY_NUMBER`,
       columns: confirmPickColumns(),
     },
     job_confirmation: {
@@ -261,7 +264,7 @@ export function getOutboundTabConfig(tab: string) {
     activity_billing: {
       title: "Activity Billing",
       minWidth: 1180,
-      sql: ({ jobNo, prinCode }) => `
+      sql: ({ jobNo, prinCode, companyCode }) => `
         SELECT
           tid.PRIN_CODE,
           tid.JOB_NO,
@@ -278,6 +281,7 @@ export function getOutboundTabConfig(tab: string) {
           ON tid.ACT_CODE = ma.ACTIVITY_CODE
         WHERE tid.PRIN_CODE = ${Number(prinCode) || 0}
           AND tid.JOB_NO = '${sqlEscape(jobNo)}'
+          AND tid.COMPANY_CODE = '${sqlEscape(companyCode)}'
       `,
       columns: [
         { key: "act_code", label: "Activity Code", size: 150 },

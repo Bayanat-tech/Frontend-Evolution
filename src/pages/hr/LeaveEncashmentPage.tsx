@@ -126,6 +126,7 @@ export function LeaveEncashmentPage() {
           loginid,
           code1: filters.divCode,
           code2: filters.deptCode,
+          code3: user?.company_code || '',
         })) as LookupRow[])
       : [];
 
@@ -136,6 +137,7 @@ export function LeaveEncashmentPage() {
       code1: filters.divCode || undefined,
       code2: filters.divCode ? filters.deptCode || undefined : undefined,
       code3: filters.divCode ? filters.sectionCode || undefined : undefined,
+      code4: user?.company_code || '',
     })) as LookupRow[];
 
   const loadBalance = async (employeeId: string) => {
