@@ -1,7 +1,7 @@
 import { ChangeEvent, ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { CheckCircle2, Headphones, ImagePlus, MessageSquarePlus, Paperclip, RefreshCw, Send, ShieldCheck, UserRoundCheck, X } from "lucide-react";
+import { CheckCircle2, Eye, Headphones, ImagePlus, MessageSquarePlus, Paperclip, RefreshCw, Send, ShieldCheck, UserRoundCheck, X } from "lucide-react";
 import { io, Socket } from "socket.io-client";
 import {
   SupportAttachment,
@@ -26,7 +26,8 @@ import { cn } from "../lib/utils";
 import { playSupportRing } from "../utils/supportNotification";
 
 type ChatRole = "user" | "admin";
-const SUPPORT_EMOJIS = ["👍", "🙏", "✅", "😊", "👌", "🚀"];
+const SUPPORT_QUICK_EMOJIS = ["\u{1F44D}", "\u{1F64F}", "\u2705", "\u{1F60A}", "\u{1F44C}", "\u{1F680}"];
+const QUICK_REPLIES = ["Please check this.", "I have attached a screenshot.", "Thank you.", "It is working now."];
 
 export function SupportChatWidget() {
   const { user } = useAuth();
@@ -43,6 +44,8 @@ export function SupportChatWidget() {
   const [compose, setCompose] = useState("");
   const [subject, setSubject] = useState("");
   const [attachments, setAttachments] = useState<SupportAttachment[]>([]);
+  const [previewAttachment, setPreviewAttachment] = useState<SupportAttachment | null>(null);
+  const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
   const [threadNotice, setThreadNotice] = useState("");
@@ -50,6 +53,7 @@ export function SupportChatWidget() {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const adminNotifySocketRef = useRef<Socket | null>(null);
+  const typingStopRef = useRef<number | null>(null);
 
   const selectedTicket = useMemo(() => tickets.find((ticket) => Number(ticket.TICKET_ID) === selectedId) || null, [tickets, selectedId]);
   const unreadTotal = tickets.reduce((sum, ticket) => sum + Number(ticket.UNREAD_COUNT || 0), 0);
@@ -148,6 +152,17 @@ export function SupportChatWidget() {
     socket.on("support:presence-changed", () => {
       void loadAll(false);
     });
+    socket.on("support:typing", (payload: { ticketId?: number; loginid?: string; username?: string; typing?: boolean }) => {
+      if (!payload.ticketId || Number(payload.ticketId) !== selectedId) return;
+      const loginid = String(payload.loginid || "").toUpperCase();
+      if (!loginid || loginid === String(currentUser || "").toUpperCase()) return;
+      setTypingUsers((current) => {
+        const next = { ...current };
+        if (payload.typing) next[loginid] = payload.username || payload.loginid || "User";
+        else delete next[loginid];
+        return next;
+      });
+    });
     socket.on("support:tickets-changed", (payload: { ticketId?: number }) => {
       void loadAll(false);
       if (selectedId && (!payload.ticketId || Number(payload.ticketId) === selectedId)) {
@@ -170,6 +185,7 @@ export function SupportChatWidget() {
       return;
     }
     void loadMessages(selectedId);
+    setTypingUsers({});
   }, [selectedId, open, role]);
 
   useEffect(() => {
@@ -238,6 +254,7 @@ export function SupportChatWidget() {
       setCompose("");
       setSubject("");
       setAttachments([]);
+      notifyTyping(false);
       await loadAll(false);
       if (selectedId) await loadMessages(selectedId);
     } catch (error) {
@@ -272,6 +289,26 @@ export function SupportChatWidget() {
   const clearDraft = () => {
     setCompose("");
     setAttachments([]);
+    notifyTyping(false);
+  };
+
+  const notifyTyping = (typing: boolean) => {
+    if (!selectedTicket) return;
+    socketRef.current?.emit("support:typing", {
+      ticketId: selectedTicket.TICKET_ID,
+      requesterLoginid: selectedTicket.REQUESTER_LOGINID,
+      assignedTo: selectedTicket.ASSIGNED_TO,
+      typing,
+    });
+  };
+
+  const onComposeChange = (value: string) => {
+    setCompose(value);
+    notifyTyping(Boolean(value.trim()));
+    if (typingStopRef.current) window.clearTimeout(typingStopRef.current);
+    if (value.trim()) {
+      typingStopRef.current = window.setTimeout(() => notifyTyping(false), 1600);
+    }
   };
 
   const openSupport = () => {
@@ -462,15 +499,17 @@ export function SupportChatWidget() {
                                 <X size={11} /> Delete
                               </button>
                             )}
+                            {mine && !system && <span className="support-read-state">{message.READ_AT ? "Read" : "Sent"}</span>}
                           </div>
                           <p>{message.MESSAGE_TEXT}</p>
                           {!!message.attachments?.length && (
                             <div className="support-attachments">
                               {message.attachments.map((item) => (
-                                <a href={item.DATA_URL || item.FILE_URL} download={item.FILE_NAME} target="_blank" rel="noreferrer" key={item.ATTACHMENT_ID || item.FILE_NAME}>
+                                <button type="button" onClick={() => setPreviewAttachment(item)} key={item.ATTACHMENT_ID || item.FILE_NAME}>
                                   {String(item.FILE_TYPE || "").startsWith("image/") ? <img src={item.DATA_URL || item.FILE_URL} alt={item.FILE_NAME || "Attachment"} /> : <Paperclip size={14} />}
                                   <span>{item.FILE_NAME}</span>
-                                </a>
+                                  <Eye size={13} />
+                                </button>
                               ))}
                             </div>
                           )}
@@ -482,6 +521,9 @@ export function SupportChatWidget() {
                 </div>
 
                 <footer className="support-compose">
+                  {!!Object.keys(typingUsers).length && (
+                    <div className="support-typing-indicator">{Object.values(typingUsers).join(", ")} typing...</div>
+                  )}
                   {!!attachments.length && (
                     <div className="support-pending-files">
                       {attachments.map((file, index) => (
@@ -492,9 +534,16 @@ export function SupportChatWidget() {
                     </div>
                   )}
                   <div className="support-emoji-row" aria-label="Quick emojis">
-                    {SUPPORT_EMOJIS.map((emoji) => (
+                    {SUPPORT_QUICK_EMOJIS.map((emoji) => (
                       <button type="button" key={emoji} onClick={() => setCompose((current) => `${current}${current ? " " : ""}${emoji}`)} title={`Add ${emoji}`}>
                         {emoji}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="support-quick-replies" aria-label="Quick replies">
+                    {QUICK_REPLIES.map((reply) => (
+                      <button type="button" key={reply} onClick={() => setCompose(reply)}>
+                        {reply}
                       </button>
                     ))}
                   </div>
@@ -502,7 +551,7 @@ export function SupportChatWidget() {
                     <button className="icon-button" onClick={() => fileInputRef.current?.click()} title="Attach screenshot or file">
                       <ImagePlus size={17} />
                     </button>
-                    <textarea value={compose} onPaste={onPaste} onChange={(event) => setCompose(event.target.value)} placeholder={selectedTicketClosed && !canUseAdmin ? "Reply to reopen this ticket..." : "Type your message or paste a screenshot..."} onKeyDown={(event) => {
+                    <textarea value={compose} onPaste={onPaste} onChange={(event) => onComposeChange(event.target.value)} placeholder={selectedTicketClosed && !canUseAdmin ? "Reply to reopen this ticket..." : "Type your message or paste a screenshot..."} onKeyDown={(event) => {
                       if (event.key === "Enter" && !event.shiftKey) {
                         event.preventDefault();
                         void send();
@@ -525,7 +574,31 @@ export function SupportChatWidget() {
         </div>,
         document.body
       )}
+      {previewAttachment && typeof document !== "undefined" && createPortal(
+        <AttachmentPreviewModal attachment={previewAttachment} onClose={() => setPreviewAttachment(null)} />,
+        document.body
+      )}
     </>
+  );
+}
+
+function AttachmentPreviewModal({ attachment, onClose }: { attachment: SupportAttachment; onClose: () => void }) {
+  const src = attachment.DATA_URL || attachment.FILE_URL || attachment.data_url || "";
+  const type = String(attachment.FILE_TYPE || attachment.file_type || "");
+  const name = attachment.FILE_NAME || attachment.file_name || "Attachment";
+  return (
+    <div className="support-preview-backdrop" role="dialog" aria-label="Attachment preview">
+      <div className="support-preview-card">
+        <header>
+          <strong>{name}</strong>
+          <button type="button" onClick={onClose} aria-label="Close preview"><X size={16} /></button>
+        </header>
+        {type.startsWith("image/") ? <img src={src} alt={name} /> : <iframe src={src} title={name} />}
+        <footer>
+          <a href={src} target="_blank" rel="noreferrer" download={name}>Open / download</a>
+        </footer>
+      </div>
+    </div>
   );
 }
 

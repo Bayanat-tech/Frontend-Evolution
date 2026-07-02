@@ -42,6 +42,7 @@ export type SupportMessage = {
   IS_DELETED?: string;
   DELETED_BY?: string;
   DELETED_AT?: string;
+  READ_AT?: string;
   CREATED_AT?: string;
   attachments?: SupportAttachment[];
 };

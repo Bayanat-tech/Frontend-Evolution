@@ -1,5 +1,5 @@
 import { ChangeEvent, ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, CheckCircle2, Clock3, ImagePlus, Inbox, MessageSquarePlus, Paperclip, RefreshCw, Search, Send, ShieldCheck, Trash2, UserRoundCheck, X } from "lucide-react";
+import { BarChart3, Bell, BellOff, CheckCircle2, Clock3, Eye, ImagePlus, Inbox, MessageSquarePlus, Paperclip, RefreshCw, Search, Send, ShieldCheck, Trash2, UserRoundCheck, X } from "lucide-react";
 import { io, Socket } from "socket.io-client";
 import {
   SupportAttachment,
@@ -18,9 +18,11 @@ import { API_URL } from "../../api/client";
 import { useAuth } from "../../state/AuthContext";
 import { Button } from "../../components/ui/Button";
 import { cn } from "../../lib/utils";
+import { isSupportRingMuted, setSupportRingMuted } from "../../utils/supportNotification";
 
 type AdminSupportTab = "dashboard" | "tickets" | "users";
-const SUPPORT_EMOJIS = ["👍", "🙏", "✅", "😊", "👌", "🚀"];
+const SUPPORT_QUICK_EMOJIS = ["\u{1F44D}", "\u{1F64F}", "\u2705", "\u{1F60A}", "\u{1F44C}", "\u{1F680}"];
+const QUICK_REPLIES = ["We are checking this now.", "Please share a screenshot.", "This is resolved. Please confirm.", "Thank you, we will update shortly."];
 
 export function AdminSupportCenterPage() {
   const { user } = useAuth();
@@ -32,17 +34,22 @@ export function AdminSupportCenterPage() {
   const [query, setQuery] = useState("");
   const [compose, setCompose] = useState("");
   const [attachments, setAttachments] = useState<SupportAttachment[]>([]);
+  const [previewAttachment, setPreviewAttachment] = useState<SupportAttachment | null>(null);
+  const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
+  const [ringMuted, setRingMuted] = useState(() => isSupportRingMuted());
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  const typingStopRef = useRef<number | null>(null);
 
   const selectedTicket = useMemo(() => tickets.find((ticket) => Number(ticket.TICKET_ID) === selectedId) || null, [tickets, selectedId]);
   const currentUser = user?.loginid || user?.username || "";
   const openTickets = tickets.filter((ticket) => ticket.STATUS !== "CLOSED");
   const closedTickets = tickets.filter((ticket) => ticket.STATUS === "CLOSED");
   const onlineUsers = activeUsers.filter(isSupportUserOnline);
+  const awayUsers = activeUsers.filter((item) => !isSupportUserOnline(item));
   const filteredTickets = tickets.filter((ticket) => {
     const text = [
       ticket.SUBJECT,
@@ -73,6 +80,17 @@ export function AdminSupportCenterPage() {
     socketRef.current = socket;
     socket.on("support:ready", () => void loadAll(false));
     socket.on("support:presence-changed", () => void loadAll(false));
+    socket.on("support:typing", (payload: { ticketId?: number; loginid?: string; username?: string; typing?: boolean }) => {
+      if (!payload.ticketId || Number(payload.ticketId) !== selectedId) return;
+      const loginid = String(payload.loginid || "").toUpperCase();
+      if (!loginid || loginid === String(currentUser || "").toUpperCase()) return;
+      setTypingUsers((current) => {
+        const next = { ...current };
+        if (payload.typing) next[loginid] = payload.username || payload.loginid || "User";
+        else delete next[loginid];
+        return next;
+      });
+    });
     socket.on("support:tickets-changed", (payload: { ticketId?: number }) => {
       void loadAll(false);
       if (selectedId && (!payload.ticketId || Number(payload.ticketId) === selectedId)) {
@@ -87,11 +105,18 @@ export function AdminSupportCenterPage() {
   }, [selectedId]);
 
   useEffect(() => {
+    const onMuteChanged = (event: Event) => setRingMuted(Boolean((event as CustomEvent<{ muted?: boolean }>).detail?.muted));
+    window.addEventListener("support:ring-muted-changed", onMuteChanged);
+    return () => window.removeEventListener("support:ring-muted-changed", onMuteChanged);
+  }, []);
+
+  useEffect(() => {
     if (!selectedId) {
       setMessages([]);
       return;
     }
     void loadMessages(selectedId);
+    setTypingUsers({});
   }, [selectedId]);
 
   useEffect(() => {
@@ -135,6 +160,7 @@ export function AdminSupportCenterPage() {
     try {
       await sendSupportMessage(selectedId, { message, attachments }, "admin");
       setCompose("");
+      notifyTyping(false);
       setAttachments([]);
       await loadAll(false);
       await loadMessages(selectedId);
@@ -142,6 +168,25 @@ export function AdminSupportCenterPage() {
       setNotice(toFriendlyError(error, "Unable to send reply"));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const notifyTyping = (typing: boolean) => {
+    if (!selectedTicket) return;
+    socketRef.current?.emit("support:typing", {
+      ticketId: selectedTicket.TICKET_ID,
+      requesterLoginid: selectedTicket.REQUESTER_LOGINID,
+      assignedTo: selectedTicket.ASSIGNED_TO,
+      typing,
+    });
+  };
+
+  const onComposeChange = (value: string) => {
+    setCompose(value);
+    notifyTyping(Boolean(value.trim()));
+    if (typingStopRef.current) window.clearTimeout(typingStopRef.current);
+    if (value.trim()) {
+      typingStopRef.current = window.setTimeout(() => notifyTyping(false), 1600);
     }
   };
 
@@ -191,6 +236,9 @@ export function AdminSupportCenterPage() {
         <div className="support-center-actions">
           <Button variant="outline" onClick={() => void loadAll()}>
             <RefreshCw size={15} /> Refresh
+          </Button>
+          <Button variant="outline" onClick={() => { setSupportRingMuted(!ringMuted); setRingMuted(!ringMuted); }} title={ringMuted ? "Unmute support ring" : "Mute support ring"}>
+            {ringMuted ? <BellOff size={15} /> : <Bell size={15} />} {ringMuted ? "Muted" : "Sound"}
           </Button>
           <div className="support-center-live">
             <span />
@@ -299,18 +347,62 @@ export function AdminSupportCenterPage() {
       )}
 
       {activeTab === "users" && (
-        <div className="support-center-card">
-          <div className="support-center-card-head">
-            <h3>Active users</h3>
-            <span>{onlineUsers.length} online</span>
+        <div className="support-center-users-page">
+          <div className="support-center-presence-summary">
+            <div>
+              <strong>{activeUsers.length}</strong>
+              <span>Total users</span>
+            </div>
+            <div className="online">
+              <strong>{onlineUsers.length}</strong>
+              <span>Online now</span>
+            </div>
+            <div>
+              <strong>{awayUsers.length}</strong>
+              <span>Away</span>
+            </div>
           </div>
-          <div className="support-center-user-grid">
-            {activeUsers.map((item) => {
+
+          <div className="support-center-card support-center-presence-board">
+            <div className="support-center-card-head">
+              <h3>Online now</h3>
+              <span>{onlineUsers.length} active</span>
+            </div>
+            <div className="support-center-presence-grid">
+              {onlineUsers.map((item) => {
+                const name = item.USERNAME || item.LOGINID || "User";
+                return <PresenceCard item={item} name={name} online key={`${item.LOGINID}-${item.TENANT_ID || ""}`} />;
+              })}
+              {!onlineUsers.length && <p className="support-center-muted">No users are online right now.</p>}
+            </div>
+          </div>
+
+          <div className="support-center-card support-center-presence-board">
+            <div className="support-center-card-head">
+              <h3>Away users</h3>
+              <span>{awayUsers.length} away</span>
+            </div>
+            <div className="support-center-presence-grid">
+              {awayUsers.map((item) => {
+                const name = item.USERNAME || item.LOGINID || "User";
+                return <PresenceCard item={item} name={name} online={false} key={`${item.LOGINID}-${item.TENANT_ID || ""}`} />;
+              })}
+              {!awayUsers.length && <p className="support-center-muted">No away users found.</p>}
+            </div>
+          </div>
+
+          <div className="support-center-card support-center-presence-board all-users">
+            <div className="support-center-card-head">
+              <h3>All users</h3>
+              <span>{activeUsers.length} visible</span>
+            </div>
+            <div className="support-center-user-grid">
+              {activeUsers.map((item) => {
               const online = isSupportUserOnline(item);
               const name = item.USERNAME || item.LOGINID || "User";
               return (
                 <div className={cn("support-center-user", online && "online")} key={`${item.LOGINID}-${item.TENANT_ID || ""}`}>
-                  <div className="support-center-avatar">{name.slice(0, 2).toUpperCase()}<i /></div>
+                  <div className="support-center-avatar">{name.slice(0, 2).toUpperCase()}<i className={online ? "online" : ""} /></div>
                   <div>
                     <strong>{name}</strong>
                     <span>{item.LOGINID} - {online ? "Online" : "Away"}</span>
@@ -318,8 +410,9 @@ export function AdminSupportCenterPage() {
                   </div>
                 </div>
               );
-            })}
-            {!activeUsers.length && <p className="support-center-muted">No active users found.</p>}
+              })}
+              {!activeUsers.length && <p className="support-center-muted">No active users found.</p>}
+            </div>
           </div>
         </div>
       )}
@@ -393,15 +486,17 @@ export function AdminSupportCenterPage() {
                             <Trash2 size={12} />
                           </button>
                         )}
+                        {mine && !system && <span className="support-read-state">{message.READ_AT ? "Read" : "Sent"}</span>}
                       </header>
                       <p>{message.MESSAGE_TEXT}</p>
                       {!!message.attachments?.length && (
                         <div className="support-center-files">
                           {message.attachments.map((item) => (
-                            <a href={item.DATA_URL || item.FILE_URL} target="_blank" rel="noreferrer" key={item.ATTACHMENT_ID || item.FILE_NAME}>
+                            <button type="button" onClick={() => setPreviewAttachment(item)} key={item.ATTACHMENT_ID || item.FILE_NAME}>
                               {String(item.FILE_TYPE || "").startsWith("image/") ? <img src={item.DATA_URL || item.FILE_URL} alt={item.FILE_NAME || "Attachment"} /> : <Paperclip size={14} />}
                               <span>{item.FILE_NAME}</span>
-                            </a>
+                              <Eye size={13} />
+                            </button>
                           ))}
                         </div>
                       )}
@@ -412,6 +507,9 @@ export function AdminSupportCenterPage() {
             </div>
 
             <footer className="support-center-composer">
+              {!!Object.keys(typingUsers).length && (
+                <div className="support-typing-indicator">{Object.values(typingUsers).join(", ")} typing...</div>
+              )}
               {!!attachments.length && (
                 <div className="support-center-pending">
                   {attachments.map((file, index) => (
@@ -422,9 +520,16 @@ export function AdminSupportCenterPage() {
                 </div>
               )}
               <div className="support-center-emoji-row" aria-label="Quick emojis">
-                {SUPPORT_EMOJIS.map((emoji) => (
+                {SUPPORT_QUICK_EMOJIS.map((emoji) => (
                   <button type="button" key={emoji} onClick={() => setCompose((current) => `${current}${current ? " " : ""}${emoji}`)} disabled={!selectedTicket} title={`Add ${emoji}`}>
                     {emoji}
+                  </button>
+                ))}
+              </div>
+              <div className="support-quick-replies" aria-label="Quick replies">
+                {QUICK_REPLIES.map((reply) => (
+                  <button type="button" key={reply} disabled={!selectedTicket} onClick={() => setCompose(reply)}>
+                    {reply}
                   </button>
                 ))}
               </div>
@@ -435,7 +540,7 @@ export function AdminSupportCenterPage() {
                 <textarea
                   value={compose}
                   onPaste={onPaste}
-                  onChange={(event) => setCompose(event.target.value)}
+                  onChange={(event) => onComposeChange(event.target.value)}
                   placeholder={selectedTicket ? "Reply to customer or paste a screenshot..." : "Select a ticket before replying..."}
                   disabled={!selectedTicket}
                   onKeyDown={(event) => {
@@ -458,6 +563,9 @@ export function AdminSupportCenterPage() {
             </footer>
           </main>
         </div>
+      )}
+      {previewAttachment && (
+        <AttachmentPreviewModal attachment={previewAttachment} onClose={() => setPreviewAttachment(null)} />
       )}
     </section>
   );
@@ -503,6 +611,40 @@ function InsightBar({ label, value, max, tone }: { label: string; value: number;
     <div className="support-center-insight-bar">
       <div><span>{label}</span><strong>{value}</strong></div>
       <i className={tone}><b style={{ width: `${percent}%` }} /></i>
+    </div>
+  );
+}
+
+function PresenceCard({ item, name, online }: { item: SupportUser; name: string; online: boolean }) {
+  return (
+    <div className={cn("support-center-presence-card", online && "online")}>
+      <div className="support-center-avatar">{name.slice(0, 2).toUpperCase()}<i className={online ? "online" : ""} /></div>
+      <div>
+        <strong>{name}</strong>
+        <span>{item.LOGINID}</span>
+        <small>{item.TENANT_ID || item.COMPANY_CODE || "Tenant"}</small>
+      </div>
+      <em>{online ? "Online" : "Away"}</em>
+    </div>
+  );
+}
+
+function AttachmentPreviewModal({ attachment, onClose }: { attachment: SupportAttachment; onClose: () => void }) {
+  const src = attachment.DATA_URL || attachment.FILE_URL || attachment.data_url || "";
+  const type = String(attachment.FILE_TYPE || attachment.file_type || "");
+  const name = attachment.FILE_NAME || attachment.file_name || "Attachment";
+  return (
+    <div className="support-preview-backdrop" role="dialog" aria-label="Attachment preview">
+      <div className="support-preview-card">
+        <header>
+          <strong>{name}</strong>
+          <button type="button" onClick={onClose} aria-label="Close preview"><X size={16} /></button>
+        </header>
+        {type.startsWith("image/") ? <img src={src} alt={name} /> : <iframe src={src} title={name} />}
+        <footer>
+          <a href={src} target="_blank" rel="noreferrer" download={name}>Open / download</a>
+        </footer>
+      </div>
     </div>
   );
 }

@@ -3,6 +3,7 @@ let lastPlayedAt = 0;
 
 export function playSupportRing() {
   if (typeof window === "undefined") return;
+  if (isSupportRingMuted()) return;
   const now = Date.now();
   if (now - lastPlayedAt < 2500) return;
   lastPlayedAt = now;
@@ -22,6 +23,17 @@ export function playSupportRing() {
   } catch {
     // Some browsers block audio until user interaction. The next admin click will unlock it.
   }
+}
+
+export function isSupportRingMuted() {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem("bayanat_support_ring_muted") === "Y";
+}
+
+export function setSupportRingMuted(muted: boolean) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem("bayanat_support_ring_muted", muted ? "Y" : "N");
+  window.dispatchEvent(new CustomEvent("support:ring-muted-changed", { detail: { muted } }));
 }
 
 function playTone(context: AudioContext, start: number, frequency: number, duration: number, volume: number) {
