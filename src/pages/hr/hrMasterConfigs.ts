@@ -84,7 +84,7 @@ const religionLookup = {
     getDynamicLookup({
       parameter: "MST_HR_MS_HR_RELIGION",
       loginid: context.loginid,
-      code1: "",
+      code1: context.companyCode,
       code2: "",
     }),
 };
@@ -477,10 +477,11 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     routeKeys: ["religion", "hr_religion"],
     keyField: "religion_code",
     source: "dynamic",
-    listQuery: dynamicList("MST_HR_MS_HR_RELIGION"),
+    listQuery: dynamicList("MST_HR_MS_HR_RELIGION",true),
     buildSave: (form, context) => ({
       parameter: "MST_HR_RELIGION",
       loginid: context.loginid,
+      val1s6: context.companyCode,
       val1s1: text(form, "religion_code", "0") || "0",
       val1s2: text(form, "religion_name"),
       val1s3: text(form, "religion_short_name"),
@@ -506,11 +507,12 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     routeKeys: ["caste", "hr_caste"],
     keyField: "caste_code",
     source: "dynamic",
-    listQuery: dynamicList("MST_HR_MS_HR_CASTE"),
+    listQuery: dynamicList("MST_HR_MS_HR_CASTE",true),
     autoGenerateKey: true,
     buildSave: (form, context) => ({
       parameter: "MST_HR_CASTE",
       loginid: context.loginid,
+      val1s7:context.companyCode,
       val1s1: text(form, "caste_code"),
       val1s2: text(form, "religion_code"),
       val1s3: text(form, "caste_name"),
@@ -574,6 +576,7 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     buildSave: (form, context) => ({
       parameter: "MST_HR_EDU_DISCIPLINE",
       loginid: context.loginid,
+      val1s6: context.companyCode,
       val1s1: text(form, "edu_disc_code"),
       val1s2: text(form, "edu_disc_desc"),
       val1s3: text(form, "edu_disc_short_desc"),
@@ -599,11 +602,12 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     routeKeys: ["languages", "language", "hr_languages"],
     keyField: "lang_code",
     source: "dynamic",
-    listQuery: dynamicList("MST_HR_MS_HR_LANGUAGES"),
+    listQuery: dynamicList("MST_HR_MS_HR_LANGUAGES",true),
     autoGenerateKey: true,
     buildSave: (form, context) => ({
       parameter: "MST_HR_LANGUAGES",
       loginid: context.loginid,
+      val1s6: context.companyCode,
       val1s1: text(form, "lang_code"),
       val1s2: text(form, "lang_desc"),
       val1s3: text(form, "lang_short_desc"),
