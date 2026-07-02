@@ -192,7 +192,7 @@ export function OutboundOperationalTab({
     try {
       if (mode === "PICK") {
         const issueRows = await executeWmsInboundSql(
-          `SELECT * FROM VW_PICK_QTY_BALANCE WHERE JOB_NO = '${sqlEscape(jobNo)}' AND PRIN_CODE = '${sqlEscape(prinCode)}'`
+          `SELECT * FROM VW_PICK_QTY_BALANCE WHERE JOB_NO = '${sqlEscape(jobNo)}' AND PRIN_CODE = '${sqlEscape(prinCode)} AND COMPANY_CODE = '${sqlEscape(user?.company_code || "")}'`
         );
         if (issueRows.length) {
           setPickingIssues(issueRows.map(normalizeRow));

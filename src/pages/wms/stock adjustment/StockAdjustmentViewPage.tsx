@@ -797,7 +797,7 @@ function CreateDetailDialog({
                         P_UOM, QTY_STOCK, QTY_AVL, L_UOM, JOB_NO, TXN_DATE, LOT_NO, MANU_CODE,
                         DOC_REF, KEY_NUMBER, UOM_COUNT, PALLET_ID, MFG_DATE, EXP_DATE
                       FROM VW_STKLED
-                      WHERE PRIN_CODE = '${prin_code}'`
+                      WHERE PRIN_CODE = '${prin_code}' AND COMPANY_CODE = '${company_code}'`
                     );
                     return rows.map((r) => normalizeRow(r as WmsRow));
                   }}

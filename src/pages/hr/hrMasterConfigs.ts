@@ -520,8 +520,13 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       val1s5: text(form, "remarks"),
       val1s6: text(form, "status", "A"),
     }),
-    buildDelete: (row, context) => ({ parameter: "MST_HR_DEL_CASTE", loginid: context.loginid, code1: text(row, "caste_code"), code2: text(row, "religion_code") }),
-    fields: [
+buildDelete: (row, context) => ({
+  parameter: "MST_HR_DEL_CASTE",
+  loginid: context.loginid,
+  code1: context.companyCode,
+  code2: text(row, "caste_code"),
+  code3: text(row, "religion_code"),
+}),    fields: [
       { name: "caste_code", label: "Caste Code", disabledOnEdit: true, disabledOnAdd: true, width: 140 },
       // { name: "religion_code", label: "Religion Code", required: true, disabledOnEdit: true, width: 150 },
       { name: "religion_code", label: "Religion", required: true, lookup: religionLookup, width: 150 },
@@ -544,16 +549,21 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
     listQuery: dynamicList("HR_EDUCATIONAL_LEVEL_SELECT", true),
     autoGenerateKey: true,
     buildSave: (form, context) => ({
-      parameter: "MST_HR_EDU_LEVEL",
-      loginid: context.loginid,
-      val1s1: text(form, "edu_level_code"),
-      val1s2: text(form, "edu_level_desc"),
-      val1s3: text(form, "edu_level_short_desc"),
-      val1s4: text(form, "remarks"),
-      val1s5: text(form, "status", "A"),
-    }),
-    buildDelete: (row, context) => ({ parameter: "MST_HR_DEL_EDU_LEVEL", loginid: context.loginid, code1: text(row, "edu_level_code"), code2: context.companyCode }),
-    fields: [
+  parameter: "MST_HR_EDU_LEVEL",
+  loginid: context.loginid,
+  val1s1: context.companyCode,
+  val1s2: text(form, "edu_level_code"),
+  val1s3: text(form, "edu_level_desc"),
+  val1s4: text(form, "edu_level_short_desc"),
+  val1s5: text(form, "remarks"),
+  val1s6: text(form, "status", "A"),
+}),
+buildDelete: (row, context) => ({
+  parameter: "MST_HR_DEL_EDU_LEVEL",
+  loginid: context.loginid,
+  code1: context.companyCode,
+  code2: text(row, "edu_level_code"),
+}),    fields: [
       { name: "edu_level_code", label: "Level Code", required: true, disabledOnEdit: true, width: 140 },
       { name: "edu_level_desc", label: "Level Description", required: true, width: 280 },
       { name: "edu_level_short_desc", label: "Short Description", width: 170 },
@@ -583,8 +593,12 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       val1s4: text(form, "remarks"),
       val1s5: text(form, "status", "A"),
     }),
-    buildDelete: (row, context) => ({ parameter: "MST_HR_DEL_EDU_DISCIPLINE", loginid: context.loginid, code1: text(row, "edu_disc_code"), code2: "" }),
-    fields: [
+buildDelete: (row, context) => ({
+  parameter: "MST_HR_DEL_EDU_DISCIPLINE",
+  loginid: context.loginid,
+  code1: text(row, "company_code"),
+  code2: text(row, "edu_disc_code"),
+}),    fields: [
       { name: "edu_disc_code", label: "Discipline Code", required: true, disabledOnEdit: true, width: 160 },
       { name: "edu_disc_desc", label: "Discipline Description", required: true, width: 300 },
       { name: "edu_disc_short_desc", label: "Short Description", width: 170 },
@@ -614,8 +628,12 @@ export const hrMasterConfigs: Record<string, HrMasterConfig> = {
       val1s4: text(form, "remarks"),
       val1s5: text(form, "status", "A"),
     }),
-    buildDelete: (row, context) => ({ parameter: "MST_HR_DEL_LANGUAGES", loginid: context.loginid, code1: text(row, "lang_code"), code2: "" }),
-    fields: [
+buildDelete: (row, context) => ({
+  parameter: "MST_HR_DEL_LANGUAGES",
+  loginid: context.loginid,
+  code1: text(row, "company_code"),
+  code2: text(row, "lang_code"),
+}),    fields: [
       { name: "lang_code", label: "Language Code", required: true, disabledOnEdit: true, width: 150 },
       { name: "lang_desc", label: "Language Description", required: true, width: 280 },
       { name: "lang_short_desc", label: "Short Description", width: 170 },

@@ -170,6 +170,7 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
   const { toast } = useToast();
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState(""); 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
@@ -181,6 +182,13 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
   const [original, setOriginal] = useState<Record<string, unknown> | null>(null);
   const [form, setForm] = useState<Record<string, unknown>>({});
   const [deleteTarget, setDeleteTarget] = useState<Record<string, unknown> | null>(null);
+
+  useEffect(() => {
+  const timer = setTimeout(() => {
+    setDebouncedQuery(query);
+  }, 400);
+  return () => clearTimeout(timer);
+}, [query]);
 
   const editableFields = config.fields;
   const tableFields = config.fields.filter((field) => field.table !== false);
@@ -200,7 +208,7 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
         setRows(response.tableData.map(normalizeRow));
         setTotalRows(response.count || response.tableData.length);
       } else {
-        const hasSearch = Boolean(query.trim() || columnFilters.some((filter) => String(filter.value ?? "").trim()));
+        const hasSearch = Boolean(debouncedQuery.trim()); 
         const requestPageIndex = hasSearch ? 0 : nextPageIndex;
         const requestPageSize = hasSearch ? 100000 : nextPageSize;
         const activeFilters = columnFilters
@@ -222,9 +230,10 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
       setLoading(false);
     }
   };
-  useEffect(() => {
-    void loadRows();
-  }, [config.master, pageIndex, pageSize, query, columnFilters]);
+useEffect(() => {
+  void loadRows();
+}, [config.master, pageIndex, pageSize, debouncedQuery, columnFilters]);
+
 
   const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(
     () => [
@@ -368,11 +377,11 @@ const saveRecord = async (event: FormEvent) => {
         data={rows}
         title={loading ? "Loading" : `${totalRows.toLocaleString()} Records`}
         subtitle={`${config.title} List`}
-        searchValue={query}
-        onSearchChange={(value) => {
-          setQuery(value);
-          setPageIndex(0);
-        }}
+          searchValue={query}
+          onSearchChange={(value) => {
+            setQuery(value);   // fires only after delay, inside DebouncedSearchInput
+            setPageIndex(0);
+          }}
         searchPlaceholder={`Search ${config.title.toLowerCase()}...`}
         loading={loading}
         emptyText={`No ${config.title.toLowerCase()} records found`}

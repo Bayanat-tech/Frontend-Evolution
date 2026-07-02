@@ -62,10 +62,11 @@ const tabConfigs: Record<string, TabConfig> = {
     title: "Shipment Details", minWidth: 1060,
     addLabel: "Add Shipment", addEndpoint: "shipment_details",
     addFields: shipmentFormFields,
-    sql: ({ jobNo, prinCode }) =>
+    sql: ({ jobNo, prinCode, companyCode }) =>
       `SELECT * FROM TI_CONTAINER
        WHERE PRIN_CODE = '${sqlEscape(prinCode)}'
-         AND JOB_NO    = '${sqlEscape(jobNo)}'`,
+         AND JOB_NO    = '${sqlEscape(jobNo)}'
+         AND COMPANY_CODE = '${sqlEscape(companyCode)}'`,
     columns: [
       { key: "container_no", label: "Container No", size: 150 },
       { key: "vehicle_no",   label: "Vehicle No",   size: 130 },
