@@ -49,7 +49,7 @@ import {
   oxMaintMasterConfigs,
 } from "../pages/oxmaint/OxMaintPages";
 import { SalaryAdvancePage } from "../pages/hr/SalaryAdvancePage";
-import { TrainingFeedbackPage } from "../pages/hr/Hrtrainingfeedbackpage";
+import { TrainingFeedbackPage } from "../pages/hr/Trainingfeedbackpage";
 import { Leaf } from "lucide-react";
 import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics";
 import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
@@ -78,9 +78,26 @@ import JobListingReport from "../pages/wms/stock transfer/JobListingReport";
 import PLSetupPage from "../pages/finance/PLSetupPage";
 import StockDetailReport from "../pages/wms_report/StockDetailReport";
 import StockAdjustmentPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
+import { VendorWorkspacePage } from "../pages/vendor/VendorWorkspacePage";
+import { isVendorRouteText } from "../pages/vendor/vendorRoutes";
 import { StockAdjViewPage } from "../pages/wms/stock adjustment/StockAdjustmentViewPage";
 import StockAdjPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
 import {StorageComputationPage} from "../pages/wms/storage computation/StorageComputation";
+import LeaveEncashmentPage from "../pages/hr/LeaveEncashmentPage";
+import EmployeeSalaryIncrement from "../pages/hr/EmployeeSalaryIncrement";
+
+import { ContinuousAutoMemoPage } from "../pages/hr/HrContinuousAutoMemo";
+
+import { ApplicantInfoPage } from "../pages/hr/Applicantinfopage";
+
+import { InterviewEvalPage } from "../pages/hr/Interviewevalpage";
+
+import { HrJoiningPage } from "../pages/hr/HrJoiningPage";
+
+import { HrEmpEducationPage } from "../pages/hr/HrEmpEducationPage";  
+import GradeSalaryIncrement from "../pages/hr/GradeSalaryIncrement.";
+
+
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -99,6 +116,26 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name:"HR Grade Salary Increment",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/grade_salary_increment"),
+    element: () => <GradeSalaryIncrement />
+  },
+  {
+    name: "HR Employee Salary Increment",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/salary%20increment"),
+    element: () => <EmployeeSalaryIncrement />
+  },
+  {
+    name: "HR Leave Encashment",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/leave_encashment"),
+    element: () => <LeaveEncashmentPage />
+  },
+  {
+    name: "Vendor System",
+    match: (context) => isVendorRoute(context),
+    element: (context) => <VendorWorkspacePage routePath={getGenericMatchText(context)} />,
+  },
   {
     name: "Finance Ledger Basics",
     match: ({ pathname }) => pathname.toLowerCase().includes("/wms/wms/reports/stock%20report/stock_detail"),
@@ -581,6 +618,24 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => isHrRoute(context) && isHrMemosAndFormsWarningLetterRoute(context),
     element: () => <SalaryAdvancePage />,
   },
+  
+  {
+  name: "HR Applicant Info",
+  match: (context) => isHrRoute(context) && isHrApplicantInfoRoute(context),
+  element: () => <ApplicantInfoPage />,
+  },
+
+  {
+  name: "HR Continuous Auto Memo",
+  match: (context) => isHrRoute(context) && isHrContinuousAutoMemoRoute(context),
+  element: () => <ContinuousAutoMemoPage />,
+},
+
+{
+  name: "HR Interview Evaluation",
+  match: (context) => isHrRoute(context) && isHrInterviewEvalRoute(context),
+  element: () => <InterviewEvalPage />,
+},
 
   {
   name: "HR Training Feedback",
@@ -589,6 +644,18 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
 
   {
+  name: "HR Joining",
+  match: (context) => isHrRoute(context) && isHrJoiningRoute(context),
+  element: () => <HrJoiningPage />,
+},
+
+{
+  name: "HR Employee Education",
+  match: (context) => isHrRoute(context) && isHrEmpEducationRoute(context),
+  element: () => <HrEmpEducationPage />,
+},
+
+{
     name: "HR Payroll Account Setup",
     match: (context) => isHrRoute(context) && isHrPayrollAccountSetupRoute(context),
     element: () => <HrPayrollAccountSetupPage />,
@@ -1122,6 +1189,10 @@ function getGenericMatchText(context: WorkspaceRouteContext) {
   return [pathname, context.activeApp?.title, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
 }
 
+function isVendorRoute(context: WorkspaceRouteContext) {
+  return isVendorRouteText(getGenericMatchText(context));
+}
+
 function isApplicationProgressRoute(context: WorkspaceRouteContext) {
   const matchText = getGenericMatchText(context);
   const compact = matchText.replace(/[^a-z0-9]/g, "");
@@ -1232,3 +1303,60 @@ function isHrTrainingFeedbackRoute(context: WorkspaceRouteContext) {
 }
 
 
+function isHrContinuousAutoMemoRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("continuousautomemo") ||
+    normalized.includes("continuous_auto_memo") ||
+    normalized.includes("continuous-auto-memo")
+  );
+}
+
+function isHrApplicantInfoRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("applicantinfo") ||
+    compact.includes("applicantinformation") ||
+    normalized.includes("applicant_info") ||
+    normalized.includes("applicant-info")
+  );
+}
+
+
+function isHrInterviewEvalRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("intervieweval") ||
+    compact.includes("interviewevaluation") ||
+    normalized.includes("interview_eval") ||
+    normalized.includes("int_eval")
+  );
+}
+
+function isHrJoiningRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("hrjoining") ||
+    compact.includes("joiningform") ||
+    compact.includes("hrjoin") ||
+    normalized.includes("hr_joining") ||
+    normalized.includes("joining_form") ||
+    normalized.includes("cam_join")
+  );
+}
+
+function isHrEmpEducationRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("empeducation") ||
+    compact.includes("educationqualification") ||
+    normalized.includes("emp_education") ||
+    normalized.includes("educational_qualification") ||
+    normalized.includes("education_qualification")
+  );
+}

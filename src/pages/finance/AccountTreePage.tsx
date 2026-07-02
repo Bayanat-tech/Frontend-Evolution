@@ -820,7 +820,7 @@ function AccountLevelFiveForm({
       columns: ["1", "2", "3"].includes(value.l4_code.slice(0, 1))
         ? [
             { field: "bl_code", header: "Code" },
-            { field: "bl_name", header: "Name" },
+            { field: "bl_description", header: "Description" },
           ]
         : [
             { field: "pl_code", header: "Code" },
