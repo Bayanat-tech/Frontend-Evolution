@@ -302,7 +302,6 @@ function AddSalaryIncrementDialog({
             value={form.increment_type}
             displayName={form.increment_type_desc}
             onChange={handleIncrementTypeChange}
-            code1={companyCode}
           />
         </label>
 
@@ -388,7 +387,6 @@ function AddSalaryIncrementDialog({
             value={form.approval_status}
             displayName={form.approval_status_desc}
             onChange={handleApprovalStatusChange}
-            code1={companyCode}
           />
         </label>
 
@@ -400,7 +398,6 @@ function AddSalaryIncrementDialog({
             value={form.status_flag}
             displayName={form.status_flag_desc}
             onChange={handleStatusFlagChange}
-            code1={companyCode}
           />
         </label>
 
@@ -779,9 +776,6 @@ export default function EmployeeSalaryIncrement() {
               onChange={handleSectionChange}
               disabled={!employeeDetail.dept_code}
               key={`section-${employeeDetail.div_code}-${employeeDetail.dept_code}-${employeeDetail.section_code}`}
-              code1={employeeDetail.div_code || undefined}
-              code2={employeeDetail.dept_code || undefined}
-              code3={user?.company_code}
             />
           </label>
 
@@ -795,7 +789,6 @@ export default function EmployeeSalaryIncrement() {
               code1={employeeDetail.div_code || undefined}
               code2={employeeDetail.dept_code || undefined}
               code3={employeeDetail.section_code || undefined}
-              code4={user?.company_code}
               key={`employee-${employeeDetail.div_code}-${employeeDetail.dept_code}-${employeeDetail.section_code}-${employeeDetail.emp_id}`}
             />
           </label>

@@ -282,7 +282,6 @@ function AddGradeIncrementDialog({
             value={form.increment_type}
             displayName={form.increment_type_desc}
             onChange={handleIncrementTypeChange}
-            code1={companyCode}
           />
         </label>
 
@@ -366,7 +365,6 @@ function AddGradeIncrementDialog({
             value={form.approval_status}
             displayName={form.approval_status_desc}
             onChange={handleApprovalStatusChange}
-            code1={companyCode}
           />
         </label>
 
