@@ -97,6 +97,7 @@ import { HrJoiningPage } from "../pages/hr/HrJoiningPage";
 import { HrEmpEducationPage } from "../pages/hr/HrEmpEducationPage";  
 import GradeSalaryIncrement from "../pages/hr/GradeSalaryIncrement.";
 import SalaryAdditionDeductionMainPage from "../pages/hr/addition_deduction/SalaryAdditionDeductionMainPage";
+import AbsentMemoMainPage from "../pages/hr/absent_memo/AbsentMemoMainPage";
 
 
 
@@ -117,6 +118,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: "HR Absent Memo",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/memo_and_forms/absent_memo"),
+    element: () => <AbsentMemoMainPage />,
+  },
   {
     name: "HR Salary Addition Deduction Page",
     match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/memo_and_forms/addition/deduction_letter"),
