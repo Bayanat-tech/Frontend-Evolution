@@ -250,18 +250,49 @@ export function AdminSupportCenterPage() {
               <span>{onlineUsers.length} online</span>
             </div>
             <div className="support-center-mini-users">
-              {activeUsers.slice(0, 5).map((item) => {
+              {activeUsers.slice(0, 6).map((item) => {
                 const online = isSupportUserOnline(item);
                 const name = item.USERNAME || item.LOGINID || "User";
                 return (
                   <button key={`${item.LOGINID}-${item.TENANT_ID || ""}`} onClick={() => setActiveTab("users")}>
                     <span className="support-center-avatar">{name.slice(0, 2).toUpperCase()}<i className={online ? "online" : ""} /></span>
-                    <strong>{name}</strong>
-                    <em>{online ? "Online" : "Away"}</em>
+                    <span>
+                      <strong>{name}</strong>
+                      <em>{online ? "Online" : "Away"}</em>
+                    </span>
                   </button>
                 );
               })}
               {!activeUsers.length && <p>No active users found.</p>}
+            </div>
+          </div>
+
+          <div className="support-center-card support-center-insight-card">
+            <div className="support-center-card-head">
+              <h3>Queue insight</h3>
+              <span>Workload view</span>
+            </div>
+            <div className="support-center-insight-grid">
+              <InsightBar label="Open workload" value={openTickets.length} max={maxMetric} tone="blue" />
+              <InsightBar label="Closed ratio" value={closedTickets.length} max={maxMetric} tone="green" />
+              <InsightBar label="Online coverage" value={onlineUsers.length} max={Math.max(activeUsers.length, 1)} tone="teal" />
+            </div>
+          </div>
+
+          <div className="support-center-card support-center-attention-card">
+            <div className="support-center-card-head">
+              <h3>Attention queue</h3>
+              <span>{openTickets.length} open</span>
+            </div>
+            <div className="support-center-attention-list">
+              {openTickets.slice(0, 4).map((ticket) => (
+                <button key={ticket.TICKET_ID} onClick={() => { setSelectedId(Number(ticket.TICKET_ID)); setActiveTab("tickets"); }}>
+                  <strong>{ticket.SUBJECT || `Ticket ${ticket.TICKET_ID}`}</strong>
+                  <span>{ticket.REQUESTER_NAME || ticket.REQUESTER_LOGINID}</span>
+                  <em>{ticket.LAST_MESSAGE || "Waiting for first reply"}</em>
+                </button>
+              ))}
+              {!openTickets.length && <p>All open requests are cleared.</p>}
             </div>
           </div>
         </div>
@@ -462,6 +493,16 @@ function TicketStatusChart({ open, closed, total }: { open: number; closed: numb
           <strong>{closed}</strong>
         </div>
       </div>
+    </div>
+  );
+}
+
+function InsightBar({ label, value, max, tone }: { label: string; value: number; max: number; tone: "blue" | "green" | "teal" }) {
+  const percent = Math.max(4, Math.round((value / Math.max(max, 1)) * 100));
+  return (
+    <div className="support-center-insight-bar">
+      <div><span>{label}</span><strong>{value}</strong></div>
+      <i className={tone}><b style={{ width: `${percent}%` }} /></i>
     </div>
   );
 }

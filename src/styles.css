@@ -5766,15 +5766,20 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 }
 
 .workspace-content .support-center-dashboard .support-center-status-card {
-  grid-column: span 7;
+  grid-column: span 5;
 }
 
 .workspace-content .support-center-dashboard .support-center-recent-card {
-  grid-column: span 3;
+  grid-column: span 4;
 }
 
 .workspace-content .support-center-dashboard .support-center-live-card {
-  grid-column: span 2;
+  grid-column: span 3;
+}
+
+.workspace-content .support-center-dashboard .support-center-insight-card,
+.workspace-content .support-center-dashboard .support-center-attention-card {
+  grid-column: span 6;
 }
 
 .workspace-content .support-center-card {
@@ -5896,24 +5901,28 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 
 .workspace-content .support-center-mini-users {
   display: grid;
-  gap: 7px;
-  max-height: 160px;
-  overflow: auto;
-  padding-right: 3px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  align-content: start;
 }
 
 .workspace-content .support-center-mini-users button {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 8px;
-  min-height: 42px;
+  min-height: 50px;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  background: #f8fafc;
+  background: linear-gradient(145deg, #ffffff 0%, #f8fbff 100%);
   padding: 6px 8px;
   text-align: left;
   cursor: pointer;
+}
+
+.workspace-content .support-center-mini-users button:has(.online) {
+  border-color: #bbf7d0;
+  background: linear-gradient(145deg, #ecfdf5 0%, #ffffff 100%);
 }
 
 .workspace-content .support-center-mini-users .support-center-avatar {
@@ -5921,6 +5930,12 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   height: 30px;
   border-radius: 11px;
   font-size: 10px;
+}
+
+.workspace-content .support-center-mini-users button > span:not(.support-center-avatar) {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
 }
 
 .workspace-content .support-center-mini-users strong {
@@ -5937,6 +5952,100 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   font-size: 11px;
   font-style: normal;
   font-weight: 800;
+}
+
+.workspace-content .support-center-insight-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.workspace-content .support-center-insight-bar {
+  display: grid;
+  gap: 7px;
+}
+
+.workspace-content .support-center-insight-bar div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.workspace-content .support-center-insight-bar span {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.workspace-content .support-center-insight-bar strong {
+  color: hsl(var(--foreground));
+  font-size: 14px;
+}
+
+.workspace-content .support-center-insight-bar i {
+  display: block;
+  height: 11px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.workspace-content .support-center-insight-bar b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.workspace-content .support-center-insight-bar i.blue b {
+  background: linear-gradient(90deg, #0b76db, #38bdf8);
+}
+
+.workspace-content .support-center-insight-bar i.green b {
+  background: linear-gradient(90deg, #16a34a, #86efac);
+}
+
+.workspace-content .support-center-insight-bar i.teal b {
+  background: linear-gradient(90deg, #0f766e, #5eead4);
+}
+
+.workspace-content .support-center-attention-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.workspace-content .support-center-attention-list button {
+  display: grid;
+  gap: 3px;
+  min-height: 62px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #ffffff 0%, #f8fbff 100%);
+  padding: 9px 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workspace-content .support-center-attention-list strong,
+.workspace-content .support-center-attention-list span,
+.workspace-content .support-center-attention-list em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-content .support-center-attention-list strong {
+  color: hsl(var(--foreground));
+  font-size: 13px;
+}
+
+.workspace-content .support-center-attention-list span,
+.workspace-content .support-center-attention-list em,
+.workspace-content .support-center-attention-list p {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  font-style: normal;
 }
 
 .workspace-content .support-center-user-grid {
@@ -6053,7 +6162,9 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 
   .workspace-content .support-center-dashboard .support-center-status-card,
   .workspace-content .support-center-dashboard .support-center-recent-card,
-  .workspace-content .support-center-dashboard .support-center-live-card {
+  .workspace-content .support-center-dashboard .support-center-live-card,
+  .workspace-content .support-center-dashboard .support-center-insight-card,
+  .workspace-content .support-center-dashboard .support-center-attention-card {
     grid-column: span 6;
   }
 }
@@ -6074,7 +6185,9 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   .workspace-content .support-center-dashboard .support-center-metric,
   .workspace-content .support-center-dashboard .support-center-status-card,
   .workspace-content .support-center-dashboard .support-center-recent-card,
-  .workspace-content .support-center-dashboard .support-center-live-card {
+  .workspace-content .support-center-dashboard .support-center-live-card,
+  .workspace-content .support-center-dashboard .support-center-insight-card,
+  .workspace-content .support-center-dashboard .support-center-attention-card {
     grid-column: span 12;
   }
 
