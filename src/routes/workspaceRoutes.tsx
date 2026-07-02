@@ -93,6 +93,7 @@ import { InterviewEvalPage } from "../pages/hr/Interviewevalpage";
 import { HrJoiningPage } from "../pages/hr/HrJoiningPage";
 
 import { HrEmpEducationPage } from "../pages/hr/HrEmpEducationPage";  
+import { AdminSupportCenterPage } from "../pages/support/AdminSupportCenterPage";
 
 
 
@@ -113,6 +114,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: "Admin Support Center",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/support/admin"),
+    element: () => <AdminSupportCenterPage />,
+  },
   {
     name: "Vendor System",
     match: (context) => isVendorRoute(context),

@@ -39,6 +39,9 @@ export type SupportMessage = {
   SENDER_NAME?: string;
   SENDER_ROLE?: string;
   MESSAGE_TEXT?: string;
+  IS_DELETED?: string;
+  DELETED_BY?: string;
+  DELETED_AT?: string;
   CREATED_AT?: string;
   attachments?: SupportAttachment[];
 };
@@ -76,6 +79,12 @@ export async function createSupportTicket(payload: Record<string, unknown>) {
 
 export async function sendSupportMessage(ticketId: number, payload: Record<string, unknown>, role: "user" | "admin") {
   return unwrap<{ ticketId: number; messageId: number }>(await api.post(`/api/support/tickets/${ticketId}/messages`, { ...payload, role }));
+}
+
+export async function deleteSupportMessage(ticketId: number, messageId: number, role: "user" | "admin") {
+  return unwrap<{ ticketId: number; messageId: number; deleted: boolean }>(
+    await api.delete(`/api/support/tickets/${ticketId}/messages/${messageId}`, { data: { role } })
+  );
 }
 
 export async function updateSupportTicket(ticketId: number, payload: Record<string, unknown>, role: "user" | "admin") {

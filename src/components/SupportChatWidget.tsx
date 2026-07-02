@@ -1,5 +1,6 @@
 import { ChangeEvent, ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { CheckCircle2, Headphones, ImagePlus, MessageSquarePlus, Paperclip, RefreshCw, Send, ShieldCheck, UserRoundCheck, X } from "lucide-react";
 import { io, Socket } from "socket.io-client";
 import {
@@ -8,6 +9,7 @@ import {
   SupportTicket,
   SupportUser,
   createSupportTicket,
+  deleteSupportMessage,
   getSupportActiveUsers,
   getSupportMessages,
   getSupportTickets,
@@ -21,11 +23,15 @@ import { useAuth } from "../state/AuthContext";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { cn } from "../lib/utils";
+import { playSupportRing } from "../utils/supportNotification";
 
 type ChatRole = "user" | "admin";
 
 export function SupportChatWidget() {
   const { user } = useAuth();
+  const { appCode } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<ChatRole>("user");
   const [serverCanAdmin, setServerCanAdmin] = useState(false);
@@ -42,11 +48,14 @@ export function SupportChatWidget() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  const adminNotifySocketRef = useRef<Socket | null>(null);
 
   const selectedTicket = useMemo(() => tickets.find((ticket) => Number(ticket.TICKET_ID) === selectedId) || null, [tickets, selectedId]);
   const unreadTotal = tickets.reduce((sum, ticket) => sum + Number(ticket.UNREAD_COUNT || 0), 0);
   const currentUser = user?.loginid || user?.username || "";
   const canUseAdmin = serverCanAdmin;
+  const canOpenAdminPage = canUseAdmin || isLikelySupportAdmin(user);
+  const selectedTicketClosed = selectedTicket?.STATUS === "CLOSED";
   const onlineUsers = activeUsers.filter(isSupportUserOnline).length;
   const visibleActiveUsers = [...activeUsers]
     .sort((first, second) => Number(isSupportUserOnline(second)) - Number(isSupportUserOnline(first)))
@@ -78,6 +87,42 @@ export function SupportChatWidget() {
     const timer = window.setInterval(() => void loadAll(false), 30000);
     return () => window.clearInterval(timer);
   }, [open, role]);
+
+  useEffect(() => {
+    if (!canOpenAdminPage) return undefined;
+    const token = localStorage.getItem("bayanat_service_token");
+    if (!token) return undefined;
+
+    const connectedAt = Date.now();
+    const socket = io(API_URL, {
+      path: "/socket.io",
+      auth: { token },
+      transports: ["websocket", "polling"],
+    });
+    adminNotifySocketRef.current = socket;
+
+    socket.on("support:ready", (payload: { role?: string }) => {
+      const isAdmin = payload.role === "admin";
+      setServerCanAdmin(isAdmin);
+      if (isAdmin) void getSupportTickets("admin").then(setTickets).catch(() => undefined);
+    });
+    socket.on("support:tickets-changed", (payload: { ticketId?: number; actorLoginid?: string; senderLoginid?: string; loginid?: string } = {}) => {
+      void getSupportTickets("admin").then(setTickets).catch(() => undefined);
+      const actor = String(payload.actorLoginid || payload.senderLoginid || payload.loginid || "").trim().toUpperCase();
+      const isOwnAction = actor && actor === String(currentUser || "").trim().toUpperCase();
+      if (!isOwnAction && Date.now() - connectedAt > 1500) {
+        playSupportRing();
+      }
+    });
+    socket.on("connect_error", () => {
+      if (!isLikelySupportAdmin(user)) setServerCanAdmin(false);
+    });
+
+    return () => {
+      socket.disconnect();
+      adminNotifySocketRef.current = null;
+    };
+  }, [canOpenAdminPage, currentUser, user]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -214,9 +259,27 @@ export function SupportChatWidget() {
     await loadAll(false);
   };
 
+  const deleteMessage = async (messageId: number) => {
+    if (!selectedId) return;
+    const ok = window.confirm("Delete this message for everyone?");
+    if (!ok) return;
+    await deleteSupportMessage(selectedId, messageId, role);
+    await loadAll(false);
+    await loadMessages(selectedId);
+  };
+
   const clearDraft = () => {
     setCompose("");
     setAttachments([]);
+  };
+
+  const openSupport = () => {
+    if (canOpenAdminPage) {
+      navigate(`/workspace/${appCode || "security"}/support/admin`);
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
   };
 
   const onFiles = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -248,7 +311,7 @@ export function SupportChatWidget() {
 
   return (
     <>
-      <button className="support-launcher" onClick={() => setOpen(true)} title="Support chat" aria-label="Support chat">
+      <button className="support-launcher" onClick={openSupport} title={canOpenAdminPage ? "Admin support center" : "Support chat"} aria-label={canOpenAdminPage ? "Admin support center" : "Support chat"}>
         <Headphones size={17} />
         {unreadTotal > 0 && <span>{unreadTotal > 9 ? "9+" : unreadTotal}</span>}
       </button>
@@ -361,6 +424,15 @@ export function SupportChatWidget() {
 
                 <div className="support-messages" ref={scrollerRef}>
                   {threadNotice && <div className="support-thread-notice">{threadNotice}</div>}
+                  {selectedTicketClosed && (
+                    <div className="support-closed-banner">
+                      <CheckCircle2 size={16} />
+                      <div>
+                        <strong>Ticket closed</strong>
+                        <p>{canUseAdmin ? "This ticket is closed and remains visible for review." : "Support has closed this ticket. If the issue is not solved, reply below to reopen it."}</p>
+                      </div>
+                    </div>
+                  )}
                   {!selectedId && canUseAdmin && (
                     <div className="support-admin-empty">
                       <MessageSquarePlus size={24} />
@@ -375,12 +447,20 @@ export function SupportChatWidget() {
                   )}
                   {messages.map((message) => {
                     const mine = String(message.SENDER_LOGINID || "").toUpperCase() === String(currentUser || "").toUpperCase();
+                    const deleted = message.IS_DELETED === "Y";
+                    const system = message.SENDER_ROLE === "SYSTEM";
+                    const canDeleteMessage = !deleted && !system && selectedId && (canUseAdmin || mine);
                     return (
-                      <div className={cn("support-message", mine && "mine")} key={message.MESSAGE_ID}>
+                      <div className={cn("support-message", mine && "mine", system && "system", deleted && "deleted")} key={message.MESSAGE_ID}>
                         <div className="support-message-bubble">
                           <div className="support-message-meta">
                             <strong>{message.SENDER_NAME || message.SENDER_LOGINID}</strong>
                             <span>{message.CREATED_AT}</span>
+                            {canDeleteMessage && (
+                              <button type="button" onClick={() => void deleteMessage(Number(message.MESSAGE_ID))} title="Delete message for everyone">
+                                <X size={11} /> Delete
+                              </button>
+                            )}
                           </div>
                           <p>{message.MESSAGE_TEXT}</p>
                           {!!message.attachments?.length && (
@@ -414,7 +494,7 @@ export function SupportChatWidget() {
                     <button className="icon-button" onClick={() => fileInputRef.current?.click()} title="Attach screenshot or file">
                       <ImagePlus size={17} />
                     </button>
-                    <textarea value={compose} onPaste={onPaste} onChange={(event) => setCompose(event.target.value)} placeholder="Type your message or paste a screenshot..." onKeyDown={(event) => {
+                    <textarea value={compose} onPaste={onPaste} onChange={(event) => setCompose(event.target.value)} placeholder={selectedTicketClosed && !canUseAdmin ? "Reply to reopen this ticket..." : "Type your message or paste a screenshot..."} onKeyDown={(event) => {
                       if (event.key === "Enter" && !event.shiftKey) {
                         event.preventDefault();
                         void send();
@@ -426,7 +506,7 @@ export function SupportChatWidget() {
                       </button>
                     )}
                     <Button onClick={() => void send()} disabled={(canUseAdmin && !selectedId) || loading || (!compose.trim() && !attachments.length)}>
-                      <Send size={15} /> Send
+                      <Send size={15} /> {selectedTicketClosed && !canUseAdmin ? "Reopen" : "Send"}
                     </Button>
                   </div>
                   <input ref={fileInputRef} className="hidden" type="file" accept="image/*,.pdf,.txt,.doc,.docx,.xls,.xlsx" multiple onChange={onFiles} />
@@ -474,4 +554,12 @@ function isSupportUserOnline(item: SupportUser) {
   const lastSeen = new Date(normalized);
   if (Number.isNaN(lastSeen.getTime())) return false;
   return Date.now() - lastSeen.getTime() <= 5 * 60 * 1000;
+}
+
+function isLikelySupportAdmin(user: unknown) {
+  const record = (user || {}) as Record<string, unknown>;
+  const values = [record.loginid, record.username, record.role, record.user_role, record.USER_ROLE, record.isAdmin]
+    .filter((value) => value !== undefined && value !== null)
+    .map((value) => String(value).trim().toUpperCase());
+  return values.some((value) => value === "ADMIN" || value === "Y" || value === "TRUE" || value.includes("ADMIN"));
 }
