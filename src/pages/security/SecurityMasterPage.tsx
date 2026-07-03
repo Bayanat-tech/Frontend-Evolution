@@ -366,7 +366,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
 
   useEffect(() => {
     if (!isModuleData || !formOpen) return;
-    if (editMode || String(form.url_path ?? "").trim()) return;
+    if (editMode) return;
     const nextPath = buildModuleUrlPath(form);
     if (nextPath && nextPath !== form.url_path) {
       setForm((current) => ({ ...current, url_path: nextPath }));
@@ -472,11 +472,18 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
         if (field.name === "level3") {
           next.level3 = String(value ?? "").toUpperCase();
         }
-        if (!editMode && !String(current.url_path ?? "").trim()) {
+        if (!editMode) {
           next.url_path = buildModuleUrlPath(next);
         }
       }
       return next;
+    });
+  };
+
+  const showLockedScreenKeyNotice = () => {
+    setNotice({
+      type: "error",
+      message: "Screen Key is locked after creation. To change page mapping, update the frontend route or use Component Name for the new screen.",
     });
   };
 
@@ -559,28 +566,33 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
               </div>
             </CardHeader>
             <CardContent className="grid gap-3 pt-4 md:grid-cols-2 xl:grid-cols-3">
-              {config.fields.map((field) => (
-                <Field label={field.label} required={isRequiredField(field, editMode)} key={field.name}>
-                  {renderInput(
-                    field,
-                    form[field.name],
-                    Boolean((editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd)),
-                    editMode,
-                    showPassword,
-                    getFieldOptions(field.name, form, moduleDropdownRows, isModuleData),
-                    getSelectOptions(field, masterOptionRows, form[field.name]),
-                    selectSearch[field.name] || "",
-                    openOptionField === field.name,
-                    (open) => {
-                      setOpenOptionField(open ? field.name : null);
-                      if (!open) setSelectSearch((current) => ({ ...current, [field.name]: "" }));
-                    },
-                    (nextSearch) => setSelectSearch((current) => ({ ...current, [field.name]: nextSearch })),
-                    () => setShowPassword((current) => !current),
-                    (value) => updateFormField(field, value),
-                  )}
-                </Field>
-              ))}
+              {config.fields.map((field) => {
+                const lockedScreenKey = isModuleData && editMode && field.name === "url_path";
+                return (
+                  <Field label={field.label} required={isRequiredField(field, editMode)} key={field.name}>
+                    <div className="relative" onMouseDown={lockedScreenKey ? showLockedScreenKeyNotice : undefined}>
+                      {renderInput(
+                        field,
+                        form[field.name],
+                        Boolean((editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd) || lockedScreenKey),
+                        editMode,
+                        showPassword,
+                        getFieldOptions(field.name, form, moduleDropdownRows, isModuleData),
+                        getSelectOptions(field, masterOptionRows, form[field.name]),
+                        selectSearch[field.name] || "",
+                        openOptionField === field.name,
+                        (open) => {
+                          setOpenOptionField(open ? field.name : null);
+                          if (!open) setSelectSearch((current) => ({ ...current, [field.name]: "" }));
+                        },
+                        (nextSearch) => setSelectSearch((current) => ({ ...current, [field.name]: nextSearch })),
+                        () => setShowPassword((current) => !current),
+                        (value) => updateFormField(field, value),
+                      )}
+                    </div>
+                  </Field>
+                );
+              })}
             </CardContent>
           </Card>
           <div className="flex justify-end gap-2">
