@@ -14,6 +14,56 @@ export function firstLeafPath(node: MenuNode): string {
   return "";
 }
 
+export function getMenuSerial(node?: MenuNode | null): string {
+  const serial = node?.serial_no ?? node?.id;
+  return serial === undefined || serial === null ? "" : String(serial).trim();
+}
+
+export function getMenuRouteTarget(node: MenuNode | undefined, appCode: string): string | null {
+  if (!node || !appCode) return null;
+  const serial = getMenuSerial(node);
+  if (serial) return `/workspace/${appCode}/menu/${encodeURIComponent(serial)}`;
+  const directPath = cleanPath(node.url_path);
+  if (directPath) return `/workspace/${appCode}/${directPath}`;
+  const firstLeaf = firstMenuLeaf(node);
+  const firstLeafSerial = getMenuSerial(firstLeaf);
+  if (firstLeafSerial) return `/workspace/${appCode}/menu/${encodeURIComponent(firstLeafSerial)}`;
+  const firstLeafPath = cleanPath(firstLeaf?.url_path);
+  return firstLeafPath ? `/workspace/${appCode}/${firstLeafPath}` : null;
+}
+
+export function firstMenuLeaf(node?: MenuNode): MenuNode | undefined {
+  if (!node) return undefined;
+  if (node.type === "item" || node.url_path) return node;
+  for (const child of node.children || []) {
+    const found = firstMenuLeaf(child);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+export function findMenuBySerial(nodes: MenuNode[], serialNo?: string | number | null): MenuNode | undefined {
+  const wanted = serialNo === undefined || serialNo === null ? "" : String(serialNo).trim();
+  if (!wanted) return undefined;
+  for (const node of nodes) {
+    if (getMenuSerial(node) === wanted) return node;
+    const found = findMenuBySerial(node.children || [], wanted);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+export function findMenuPathBySerial(nodes: MenuNode[], serialNo?: string | number | null): MenuNode[] {
+  const wanted = serialNo === undefined || serialNo === null ? "" : String(serialNo).trim();
+  if (!wanted) return [];
+  for (const node of nodes) {
+    if (getMenuSerial(node) === wanted) return [node];
+    const childPath = findMenuPathBySerial(node.children || [], wanted);
+    if (childPath.length) return [node, ...childPath];
+  }
+  return [];
+}
+
 export function flattenLeaves(nodes: MenuNode[]): MenuNode[] {
   const leaves: MenuNode[] = [];
 

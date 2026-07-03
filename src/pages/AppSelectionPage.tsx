@@ -20,7 +20,7 @@ import {
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
-import { firstLeafPath } from "../utils/menu";
+import { cleanPath, firstMenuLeaf, getMenuRouteTarget } from "../utils/menu";
 
 const appIcons = [
   Database, Warehouse, ArrowRightLeft, Building2, ShieldCheck,
@@ -44,8 +44,9 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
   const openApp = (index: number) => {
     const app = menuTree[index];
     if (!app) return;
-    const firstPath = firstLeafPath(app);
-    navigate(`/workspace/${cleanAppCode(app.title)}${firstPath ? `/${firstPath}` : ""}`);
+    const appCode = cleanAppCode(app.url_path || app.app_code || app.title);
+    const target = getMenuRouteTarget(firstMenuLeaf(app), appCode);
+    navigate(target || `/workspace/${appCode}`);
   };
 
   const handleLogout = () => {
@@ -255,7 +256,7 @@ function ModuleCard({
 }
 
 function cleanAppCode(value: string) {
-  return value.toLowerCase().replace(/\s+/g, "-");
+  return cleanPath(value).toLowerCase().replace(/\s+/g, "-");
 }
 
 function formatTenant(value?: string) {

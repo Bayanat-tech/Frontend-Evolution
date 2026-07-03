@@ -125,7 +125,8 @@ export const securityMasterConfigs: Record<string, SecurityMasterConfig> = {
       { name: "level2", label: "Level 2", table: true, width: 180 },
       { name: "level3", label: "Level 3", table: true, width: 220 },
       { name: "position", label: "Position", type: "number", table: true, width: 110 },
-      { name: "url_path", label: "Route Path", placeholder: "Auto built from App Code and levels", table: true, width: 320 },
+      { name: "url_path", label: "Screen Key", placeholder: "Stable technical route path", table: true, width: 320 },
+      { name: "component_name", label: "Component Name", placeholder: "Frontend component key for new screens", table: true, width: 220 },
       { name: "icon", label: "Icon", table: true, width: 120 },
       { name: "company_code", label: "Company", disabledOnEdit: true, table: true, width: 110 },
     ],
@@ -365,11 +366,12 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
 
   useEffect(() => {
     if (!isModuleData || !formOpen) return;
+    if (editMode || String(form.url_path ?? "").trim()) return;
     const nextPath = buildModuleUrlPath(form);
     if (nextPath && nextPath !== form.url_path) {
       setForm((current) => ({ ...current, url_path: nextPath }));
     }
-  }, [isModuleData, formOpen, form.app_code, form.level1, form.level2, form.level3]);
+  }, [editMode, isModuleData, formOpen, form.app_code, form.level1, form.level2, form.level3, form.url_path]);
 
   const loadModuleDropdownRows = async () => {
     try {
@@ -470,7 +472,9 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
         if (field.name === "level3") {
           next.level3 = String(value ?? "").toUpperCase();
         }
-        next.url_path = buildModuleUrlPath(next);
+        if (!editMode && !String(current.url_path ?? "").trim()) {
+          next.url_path = buildModuleUrlPath(next);
+        }
       }
       return next;
     });
@@ -560,7 +564,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
                   {renderInput(
                     field,
                     form[field.name],
-                    Boolean((editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd) || (isModuleData && field.name === "url_path")),
+                    Boolean((editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd)),
                     editMode,
                     showPassword,
                     getFieldOptions(field.name, form, moduleDropdownRows, isModuleData),

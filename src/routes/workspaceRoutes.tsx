@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { MenuNode } from "../types/auth";
+import { cleanPath } from "../utils/menu";
 import { AccountWiseBudgetPage } from "../pages/finance/AccountWiseBudgetPage";
 import { AccountTreePage } from "../pages/finance/AccountTreePage";
 import { AllocatedInvoicePage } from "../pages/finance/AllocatedInvoicePage";
@@ -105,6 +106,7 @@ import { HrManpowerPage } from "../pages/hr/HrManpower";
 type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
+  activeMenu?: MenuNode;
 };
 
 type WorkspaceRoute = {
@@ -114,8 +116,9 @@ type WorkspaceRoute = {
 };
 
 export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
-  const route = workspaceRoutes.find((item) => item.match(context));
-  return route?.element(context) || null;
+  const resolvedContext = withMenuRoutePath(context);
+  const route = workspaceRoutes.find((item) => item.match(resolvedContext));
+  return route?.element(resolvedContext) || null;
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
@@ -1116,11 +1119,7 @@ function getSecurityMasterConfig(context: WorkspaceRouteContext) {
 
 function getSecurityMatchText(context: WorkspaceRouteContext) {
   const pathname = context.pathname.toLowerCase();
-  const leaves = collectMenuLeaves(context.activeApp?.children || []);
-  const activeLeaf = leaves.find((leaf) => {
-    const path = (leaf.url_path || "").replace(/^\/+/, "").toLowerCase();
-    return path && pathname.includes(path);
-  });
+  const activeLeaf = context.activeMenu || findActiveLeaf(context, pathname);
   return [pathname, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
 }
 
@@ -1134,6 +1133,28 @@ function collectMenuLeaves(nodes: MenuNode[]) {
   };
   walk(nodes);
   return leaves;
+}
+
+function withMenuRoutePath(context: WorkspaceRouteContext): WorkspaceRouteContext {
+  if (!/\/workspace\/[^/]+\/menu\/[^/]+/i.test(context.pathname)) return context;
+  const routePath = cleanPath(context.activeMenu?.url_path);
+  if (!routePath) return context;
+  return {
+    ...context,
+    pathname: `/workspace/${getWorkspaceAppCode(context.pathname)}/${routePath}`,
+  };
+}
+
+function getWorkspaceAppCode(pathname: string) {
+  return pathname.match(/\/workspace\/([^/]+)/i)?.[1] || cleanPath(pathname).split("/")[1] || "";
+}
+
+function findActiveLeaf(context: WorkspaceRouteContext, pathname: string) {
+  const leaves = collectMenuLeaves(context.activeApp?.children || []);
+  return leaves.find((leaf) => {
+    const path = (leaf.url_path || "").replace(/^\/+/, "").toLowerCase();
+    return path && pathname.includes(path);
+  });
 }
 
 function isPamsRoute(pathname: string) {
@@ -1190,21 +1211,13 @@ function getPamsMasterConfig(context: WorkspaceRouteContext) {
 
 function getPamsMatchText(context: WorkspaceRouteContext) {
   const pathname = context.pathname.toLowerCase();
-  const leaves = collectMenuLeaves(context.activeApp?.children || []);
-  const activeLeaf = leaves.find((leaf) => {
-    const path = (leaf.url_path || "").replace(/^\/+/, "").toLowerCase();
-    return path && pathname.includes(path);
-  });
+  const activeLeaf = context.activeMenu || findActiveLeaf(context, pathname);
   return [pathname, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
 }
 
 function getGenericMatchText(context: WorkspaceRouteContext) {
   const pathname = context.pathname.toLowerCase();
-  const leaves = collectMenuLeaves(context.activeApp?.children || []);
-  const activeLeaf = leaves.find((leaf) => {
-    const path = (leaf.url_path || "").replace(/^\/+/, "").toLowerCase();
-    return path && pathname.includes(path);
-  });
+  const activeLeaf = context.activeMenu || findActiveLeaf(context, pathname);
   return [pathname, context.activeApp?.title, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
 }
 
@@ -1264,11 +1277,7 @@ function getHrMasterConfig(context: WorkspaceRouteContext) {
 
 function getHrMatchText(context: WorkspaceRouteContext) {
   const pathname = context.pathname.toLowerCase();
-  const leaves = collectMenuLeaves(context.activeApp?.children || []);
-  const activeLeaf = leaves.find((leaf) => {
-    const path = (leaf.url_path || "").replace(/^\/+/, "").toLowerCase();
-    return path && pathname.includes(path);
-  });
+  const activeLeaf = context.activeMenu || findActiveLeaf(context, pathname);
   return [pathname, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
 }
 

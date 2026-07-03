@@ -55,7 +55,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import type { MenuNode } from "../types/auth";
-import { cleanPath, flattenLeaves, titleCase } from "../utils/menu";
+import { cleanPath, findMenuBySerial, findMenuPathBySerial, firstMenuLeaf, getMenuRouteTarget, getMenuSerial, titleCase } from "../utils/menu";
 import { resolveWorkspaceRoute } from "../routes/workspaceRoutes";
 import { cn } from "../lib/utils";
 
@@ -70,10 +70,18 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const activeApp = useMemo(() => {
-    return menuTree.find((item) => item.title.toLowerCase().replace(/\s+/g, "-") === appCode) || menuTree[0];
+    return menuTree.find((item) => getAppCode(item) === appCode) || menuTree[0];
   }, [appCode, menuTree]);
 
-  const activeMenuPath = useMemo(() => findActiveMenuPath(activeApp?.children || [], location.pathname), [activeApp, location.pathname]);
+  const activeSerialNo = getSerialFromWorkspacePath(location.pathname);
+  const activeMenu = useMemo(
+    () => findMenuBySerial(activeApp?.children || [], activeSerialNo),
+    [activeApp, activeSerialNo],
+  );
+  const activeMenuPath = useMemo(() => {
+    if (activeSerialNo) return findMenuPathBySerial(activeApp?.children || [], activeSerialNo);
+    return findActiveMenuPath(activeApp?.children || [], location.pathname);
+  }, [activeApp, activeSerialNo, location.pathname]);
   const appRouteTarget = getMenuNodeTarget(activeApp, appCode || "");
 
   const handleLogout = () => {
@@ -105,7 +113,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
     return () => document.body.classList.remove("mobile-menu-lock");
   }, [isMobile, mobileMenuOpen]);
 
-  const workspaceRoute = resolveWorkspaceRoute({ pathname: location.pathname, activeApp });
+  const workspaceRoute = resolveWorkspaceRoute({ pathname: location.pathname, activeApp, activeMenu });
   const displayCollapsed = isMobile ? false : collapsed;
   const toggleSidebar = () => {
     if (isMobile) {
@@ -145,7 +153,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
         <nav className="sidebar-nav">
           {(activeApp?.children || []).map((item) => (
             <MenuItem
-              key={item.id || item.title}
+              key={getMenuSerial(item) || item.id || item.title}
               item={item}
               collapsed={displayCollapsed}
               expanded={expanded}
@@ -224,7 +232,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
               const isLast = index === activeMenuPath.length - 1;
               const target = getMenuNodeTarget(node, appCode || "");
               return (
-                <span className="breadcrumb-segment" key={node.id || `${node.title}-${index}`}>
+                <span className="breadcrumb-segment" key={getMenuSerial(node) || node.id || `${node.title}-${index}`}>
                   <ChevronRight size={14} />
                   {isLast || !target ? (
                     <span className={isLast ? "breadcrumb-current" : undefined}>{titleCase(node.title)}</span>
@@ -263,8 +271,7 @@ function MenuItem({
   const key = item.id || item.title;
   const children = item.children || [];
   const hasChildren = children.length > 0;
-  const path = cleanPath(item.url_path);
-  const to = path ? `/workspace/${appCode}/${path}` : "#";
+  const to = getMenuNodeTarget(item, appCode) || "#";
   const active = isMenuNodeActive(item, pathname);
   const shouldRenderChildren = !collapsed && expanded[key];
   const displayTitle = titleCase(item.title);
@@ -288,7 +295,7 @@ function MenuItem({
           <div className={cn("nav-children", collapsed && "collapsed")}>
             {children.map((child) => (
               <MenuItem
-                key={child.id || child.title}
+                key={getMenuSerial(child) || child.id || child.title}
                 item={child}
                 collapsed={collapsed}
                 expanded={expanded}
@@ -375,6 +382,8 @@ function getMenuIcon(item: MenuNode): LucideIcon {
 }
 
 function isMenuNodeActive(item: MenuNode, pathname: string): boolean {
+  const serial = getMenuSerial(item);
+  if (serial && getSerialFromWorkspacePath(pathname) === serial) return true;
   const path = cleanPath(item.url_path);
   if (isPathActive(path, pathname)) return true;
   return Boolean(item.children?.some((child) => isMenuNodeActive(child, pathname)));
@@ -392,11 +401,10 @@ function findActiveMenuPath(items: MenuNode[], pathname: string): MenuNode[] {
 
 function getMenuNodeTarget(item: MenuNode | undefined, appCode: string): string | null {
   if (!item || !appCode) return null;
-  const directPath = cleanPath(item.url_path);
-  if (directPath) return `/workspace/${appCode}/${directPath}`;
-  const firstLeaf = flattenLeaves(item.children || [])[0];
-  const firstLeafPath = cleanPath(firstLeaf?.url_path);
-  return firstLeafPath ? `/workspace/${appCode}/${firstLeafPath}` : null;
+  if (item.children?.length && !item.url_path) {
+    return getMenuRouteTarget(firstMenuLeaf(item), appCode);
+  }
+  return getMenuRouteTarget(item, appCode);
 }
 
 function isPathActive(menuPath: string, pathname: string): boolean {
@@ -411,4 +419,13 @@ function normalizeRoutePath(path: string) {
     .replace(/^\/+|\/+$/g, "")
     .replace(/^workspace\/[^/]+\//i, "")
     .toLowerCase();
+}
+
+function getSerialFromWorkspacePath(pathname: string): string {
+  const match = pathname.match(/\/workspace\/[^/]+\/menu\/([^/?#]+)/i);
+  return match?.[1] ? decodeURIComponent(match[1]) : "";
+}
+
+function getAppCode(item: MenuNode) {
+  return cleanPath(item.url_path || item.app_code || item.title.toLowerCase().replace(/\s+/g, "-")).toLowerCase();
 }

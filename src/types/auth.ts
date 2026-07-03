@@ -1,9 +1,17 @@
 export type MenuNode = {
   id?: string;
+  serial_no?: string | number | null;
   title: string;
   type: "collapse" | "group" | "item";
   icon?: string;
   url_path?: string;
+  app_code?: string;
+  level1?: string;
+  level2?: string;
+  level3?: string;
+  component_name?: string | null;
+  api_endpoint?: string | null;
+  route_type?: string | null;
   children?: MenuNode[];
 };
 
