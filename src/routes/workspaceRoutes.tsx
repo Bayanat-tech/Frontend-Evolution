@@ -99,6 +99,7 @@ import { HrEmpEducationPage } from "../pages/hr/HrEmpEducationPage";
 import GradeSalaryIncrement from "../pages/hr/GradeSalaryIncrement.";
 import SalaryAdditionDeductionMainPage from "../pages/hr/addition_deduction/SalaryAdditionDeductionMainPage";
 import AbsentMemoMainPage from "../pages/hr/absent_memo/AbsentMemoMainPage";
+import { AdminSupportCenterPage } from "../pages/support/AdminSupportCenterPage";
 
 import { HrManpowerPage } from "../pages/hr/HrManpower";
 
@@ -146,6 +147,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "HR Leave Encashment",
     match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/leave_encashment"),
     element: () => <LeaveEncashmentPage />
+  },
+  {
+    name: "Admin Support Center",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/support/admin"),
+    element: () => <AdminSupportCenterPage />,
   },
   {
     name: "Vendor System",
