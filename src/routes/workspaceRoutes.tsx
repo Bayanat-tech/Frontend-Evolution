@@ -76,6 +76,7 @@ import TaxReportFilter from "../pages/accounts_report/tax_report/TaxReport";
 import JobListingReport from "../pages/wms/stock transfer/JobListingReport";
 import StockDetailReport from "../pages/wms_report/StockDetailReport";
 import StockAdjustmentPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
+import Mytaskalmspage from "../pages/almswf/Mytaskalmspage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -332,6 +333,43 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: (context) => <SecurityMasterPage config={getSecurityMasterConfig(context)!} />,
   },
 
+   // ── ALMS My Task Routes (specific tabs first, then generic fallback) ──
+  {
+    name: "ALMS My Task Pending",
+    match: (context) => isAlmsMyTaskTabRoute(context, ["pending"]),
+    element: () => <Mytaskalmspage initialTab={0} />,
+  },
+  {
+    name: "ALMS My Task In Progress",
+    match: (context) => isAlmsMyTaskTabRoute(context, ["in_progress", "in-progress"]),
+    element: () => <Mytaskalmspage initialTab={1} />,
+  },
+  {
+    name: "ALMS My Task Rejected",
+    match: (context) => isAlmsMyTaskTabRoute(context, ["rejected"]),
+    element: () => <Mytaskalmspage initialTab={2} />,
+  },
+  {
+    name: "ALMS My Task Sent Back",
+    match: (context) => isAlmsMyTaskTabRoute(context, ["sent_back", "sent-back"]),
+    element: () => <Mytaskalmspage initialTab={3} />,
+  },
+  {
+    name: "ALMS My Task Approved",
+    match: (context) => isAlmsMyTaskTabRoute(context, ["approved", "final_approved", "final-approved"]),
+    element: () => <Mytaskalmspage initialTab={4} />,
+  },
+  {
+    name: "ALMS My Task Po Generated",
+    match: (context) => isAlmsMyTaskTabRoute(context, ["po_generated", "po-generated"]),
+    element: () => <Mytaskalmspage initialTab={5} />,
+  },
+  {
+    name: 'My Task',
+    match:(context) => isMyTaskRoute(context),
+    element: () => <Mytaskalmspage initialTab={0} />
+  },
+
   //// PAMS Routes
   {
     name: "PAMS Dashboard",
@@ -519,6 +557,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isPamsRoute(pathname) && isPamsAppraisalWeightageRoute(pathname),
     element: () => <AppraisalWeightageMaster />,
   },
+ 
   {
     name: "Application Progress",
     match: (context) => isApplicationProgressRoute(context),
@@ -907,6 +946,29 @@ function getAlmsSimpleMasterConfig(pathname: string) {
   return matches.find(({ key }) => normalized.includes(`/${key}`) || normalized.includes(`/${key.replace(/_/g, "-")}`))?.config || null;
 }
 
+function isAlmsRoute(pathname: string) {
+  return pathname.toLowerCase().includes("/almswf/");
+}
+
+function isMyTaskRoute(context: WorkspaceRouteContext) {
+  const normalized = getGenericMatchText(context);
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    isAlmsRoute(context.pathname) &&
+    (normalized.includes("/my_task") ||
+      normalized.includes("/my-task") ||
+      compact.includes("mytask")) &&
+    !normalized.includes("/view/") &&
+    !normalized.includes("/edit/")
+  );
+}
+
+function isAlmsMyTaskTabRoute(context: WorkspaceRouteContext, tabKeys: string[]) {
+  if (!isMyTaskRoute(context)) return false;
+  const normalized = getGenericMatchText(context);
+  return tabKeys.some((key) => normalized.includes(`/${key}`));
+}
+
 function isSecurityContext({ pathname, activeApp }: WorkspaceRouteContext) {
   const normalized = pathname.toLowerCase();
   const appTitle = activeApp?.title?.toLowerCase() || "";
@@ -1162,5 +1224,3 @@ function isHrTrainingFeedbackRoute(context: WorkspaceRouteContext) {
     normalized.includes("training-feedback")
   );
 }
-
-
