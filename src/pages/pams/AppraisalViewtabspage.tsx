@@ -41,9 +41,9 @@ function calcFinalRating(taskTotal: number, charTotal: number, cfg: WeightageCon
 
 function getRatingMeta(rating: number): { label: string; numColor: string; labelColor: string } {
   if (rating === 5) return { label: "Exceptional",        numColor: "#16a34a", labelColor: "#16a34a" };
-  if (rating === 4) return { label: "Above Expectations", numColor: "#2563eb", labelColor: "#2563eb" };
-  if (rating === 3) return { label: "Meets Expectations", numColor: "#7c3aed", labelColor: "#7c3aed" };
-  if (rating === 2) return { label: "Below Expectations", numColor: "#d97706", labelColor: "#d97706" };
+  if (rating === 4) return { label: "Above Expectation", numColor: "#2563eb", labelColor: "#2563eb" };
+  if (rating === 3) return { label: "Meets Expectation", numColor: "#7c3aed", labelColor: "#7c3aed" };
+  if (rating === 2) return { label: "Below Expectation", numColor: "#d97706", labelColor: "#d97706" };
   if (rating === 1) return { label: "Unsatisfactory",     numColor: "#dc2626", labelColor: "#dc2626" };
   return             { label: "—",                        numColor: "#6b7280", labelColor: "#6b7280" };
 }
