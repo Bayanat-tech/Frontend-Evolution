@@ -32,7 +32,7 @@ type Props = {
 
 type TallySubTab = "pallet" | "product" | "serial";
 
-// Explicit return type for getLookupProps so TS never infers `unknown` on the fields
+// Explicit return type for getLookupProps so TS never infers `unknown` on the fields commit
 type LookupProps = {
   valueField:    string;
   displayFields: string[];
