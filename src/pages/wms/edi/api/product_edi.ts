@@ -14,6 +14,32 @@ class Product {
         }
     };
 
+    insUpdMsProductEdiBlkApi = async (params: { products: any[]; loginid?: string }) => {
+        try {
+            if (!params?.products?.length) {
+                return {
+                    success: false,
+                    message: 'No product records provided'
+                };
+            }
+
+            const response = await api.post('/api/wms/inbound/insUpdMsProductEdiBulk', {
+                products: params.products,
+                loginid: params.loginid
+            });
+
+            return {
+                success: response.data?.success === true,
+                message: response.data?.message || 'Products uploaded to EDI'
+            };
+        } catch (error: any) {
+            return {
+                success: false,
+                message: error?.message || 'Something went wrong while uploading products'
+            };
+        }
+    };
+
     getProductEDI = async () => {
     try {
         const response = await api.get('api/wms/gm/product/edi');
