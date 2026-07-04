@@ -2,6 +2,7 @@ import { executeDynamicMutation } from "../../api/lookups";
 import { executeWmsInboundSql } from "../../api/wms";
 import msPrincipalServiceInstance from "../../api/principal";
 import type { WmsSimpleMasterConfig } from "./WmsSimpleMasterPage";
+import ImportLocationEdi from "./edi/ImportLocationEdi";
 import { api } from "../../api/client";
 
 const yesNo = [
@@ -34,27 +35,27 @@ export const wmsSimpleMasterConfigs: Record<string, WmsSimpleMasterConfig> = {
     ],
     deleteConfig: { mode: "registered", payload: (row) => [row.prodtype_code] },
   },
-country: {
-  title: "Country Master",
-  subtitle: "Maintain country code, country name, GCC flag, short description, and nationality.",
-  master: "country",
-  gmEndpoint: "country",
-  routeKeys: ["country"],
-  keyField: "country_code",
-  // formTabs: [
-  //   { key: "basic", label: "Basic Info" },
-  //   { key: "extra", label: "Extra Details" },
-  // ],
-  fields: [
-    { name: "country_code", label: "Country Code", required: true, disabledOnEdit: true, width: 150 },
-    { name: "country_name", label: "Country Name", required: true, width: 260 },
-    { name: "country_gcc",     label: "GCC",           type: "select", options: yesNo, width: 100 },
-    { name: "short_desc",   label: "Short Description", width: 200 },
-    { name: "nationality",  label: "Nationality",   width: 180 },
-  ],
-  defaults: { country_gcc: "N" },
-  deleteConfig: { mode: "registered", payload: (row) => [row.country_code] },
-},
+  country: {
+    title: "Country Master",
+    subtitle: "Maintain country code, country name, GCC flag, short description, and nationality.",
+    master: "country",
+    gmEndpoint: "country",
+    routeKeys: ["country"],
+    keyField: "country_code",
+    // formTabs: [
+    //   { key: "basic", label: "Basic Info" },
+    //   { key: "extra", label: "Extra Details" },
+    // ],
+    fields: [
+      { name: "country_code", label: "Country Code", required: true, disabledOnEdit: true, width: 150 },
+      { name: "country_name", label: "Country Name", required: true, width: 260 },
+      { name: "country_gcc",     label: "GCC",           type: "select", options: yesNo, width: 100 },
+      { name: "short_desc",   label: "Short Description", width: 200 },
+      { name: "nationality",  label: "Nationality",   width: 180 },
+    ],
+    defaults: { country_gcc: "N" },
+    deleteConfig: { mode: "registered", payload: (row) => [row.country_code] },
+  },
   activitygroup: {
     fieldsPerRow: 4,
     title: "Activity Group Master",
@@ -594,6 +595,10 @@ customSave: async (form, context) => {
     loginid: typedUser.loginid,
   });
 },
+ediUploadConfig: {
+  open: true,
+  name: "product",
+}
   },
   site: {
     title: "Site Master",
@@ -617,6 +622,10 @@ customSave: async (form, context) => {
     ],
     defaults: { inc_storage: "N", status: "A" },
     deleteConfig: { mode: "disabled", payload: () => null, reason: "Delete endpoint is not registered in the existing backend" },
+    ediUploadConfig: {
+      open: true,
+      name: "site",
+    }
   },
   warehouse: {
     title: "Warehouse Master",
@@ -669,6 +678,10 @@ customSave: async (form, context) => {
       { name:"reorder_qty", label:"Reorder Qty", type:"number", width:110, section:"Dimensions" },
     ],
     deleteConfig: { mode: "registered", payload: (row) => [row.location_code] },
+    ediUploadConfig: {
+      open: true,
+      name: "location",
+    }
   },
   assetgroup: {
     title: "Asset Group Master",
