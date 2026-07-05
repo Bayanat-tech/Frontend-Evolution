@@ -105,6 +105,7 @@ export function BankReconciliationPage() {
           cheque_no: row.cheque_no,
           recon_ind: row.recon_ind,
           recon_date: row.recon_date || today(),
+          company_code: user?.company_code,
         })),
       });
       if (!response.data?.success) throw new Error(response.data?.message || "Unable to update reconciliation");

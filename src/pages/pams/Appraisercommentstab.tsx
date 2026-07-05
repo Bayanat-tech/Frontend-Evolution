@@ -102,33 +102,25 @@ const AppraiserCommentsTab: React.FC<Props> = ({
   const { user }  = useAuth();
   const loginid   = user?.loginid || user?.username || "";
   const myName    = (user as Row | undefined)?.name as string | undefined;
-
   const [appraiserComment, setAppraiserComment] = useState("");
   const [appraiseeComment, setAppraiseeComment] = useState("");
   const [existingData,     setExistingData]     = useState<Row | null>(null);
   const [loading,          setLoading]          = useState(false);
-
   const isEmployee          = loginid.trim().toUpperCase() === employeeCode.trim().toUpperCase();
   const isFinal             = flowLevel >= 6;
   const isCurrentActionUser = userFlowLevel === 0 && !isEmployee && !isFinal;
   const appraiserReadOnly   = isEmployee || isFinal || !isCurrentActionUser;
   const appraiseeReadOnly   = !isEmployee || isFinal;
-
   const effectiveLevel = userFlowLevel === 0 ? flowLevel : userFlowLevel;
-
   const prevLevelNum        = effectiveLevel - 1;
   const prevLevelCommentRaw = effectiveLevel >= 2 ? commentForLevel(existingData, prevLevelNum) : "";
   const prevLevelComment    = prevLevelCommentRaw.trim();
   const showPrevLevel       = prevLevelComment.length > 0;
   const prevLevelName       = showPrevLevel ? nameForLevel(existingData, prevLevelNum) : "";
-  
   const currentActorName = userFlowLevel === 0
     ? (text(existingData?.CURRENT_USER_NAME) || myName || loginid)
     : nameForLevel(existingData, userFlowLevel);
-
   const employeeName = text(existingData?.EMPLOYEE_NAME);
-
-  // ── Final rating ──
   const { finalRating, taskWeighted, charWeighted } = useMemo(() => {
     const t = Number(taskTotal      || 0);
     const c = Number(characterTotal || 0);

@@ -89,14 +89,14 @@ const S = {
 const TaskDetailsAppraisalTab: React.FC<Props> = ({
   docNo, employeeCode, onRowsChange, onGrandTotalChange,
 }) => {
-  const { user }    = useAuth();
-  const loginid     = user?.loginid || user?.username || "";
+  const { user } = useAuth();
+  const loginid = user?.loginid || user?.username || "";
   const companyCode = user?.company_code || "";
 
-  const [rows,      setRows]      = useState<Row[]>([]);
+  const [rows, setRows] = useState<Row[]>([]);
   const [rowStates, setRowStates] = useState<Record<string, RowState>>({});
-  const [expanded,  setExpanded]  = useState<Record<string, boolean>>({});
-  const [loading,   setLoading]   = useState(true);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(true);
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -116,9 +116,9 @@ const TaskDetailsAppraisalTab: React.FC<Props> = ({
         sorted.forEach((row) => {
           const key = text(row.KPI_CODE);
           fresh[key] = {
-            RATING:             num(row.RATING) !== 0 ? num(row.RATING) : "",
+            RATING: num(row.RATING) !== 0 ? num(row.RATING) : "",
             STANDARD_WEIGHTAGE: num(row.STANDARD_WEIGHTAGE) !== 0 ? num(row.STANDARD_WEIGHTAGE) : "",
-            TOTAL:              num(row.TOTAL),
+            TOTAL: num(row.TOTAL),
           };
         });
         setRowStates(fresh);
@@ -131,7 +131,7 @@ const TaskDetailsAppraisalTab: React.FC<Props> = ({
   useEffect(() => {
     if (!rows.length || !onRowsChange) return;
     const updated = rows.map((row) => {
-      const key   = text(row.KPI_CODE);
+      const key = text(row.KPI_CODE);
       const state = rowStates[key];
       const safeW = state?.STANDARD_WEIGHTAGE === "" ? num(row.STANDARD_WEIGHTAGE) : num(state?.STANDARD_WEIGHTAGE);
       const safeR = state?.RATING === "" ? 0 : num(state?.RATING);
@@ -168,7 +168,7 @@ const TaskDetailsAppraisalTab: React.FC<Props> = ({
     if (n > 5) n = 5;
     const allowed = getClosestAllowedRating(n);
     setRowStates((prev) => {
-      const w     = prev[key]?.STANDARD_WEIGHTAGE === "" ? num(row.STANDARD_WEIGHTAGE) : num(prev[key]?.STANDARD_WEIGHTAGE);
+      const w = prev[key]?.STANDARD_WEIGHTAGE === "" ? num(row.STANDARD_WEIGHTAGE) : num(prev[key]?.STANDARD_WEIGHTAGE);
       const total = (w * allowed) / 100;
       return { ...prev, [key]: { ...prev[key], RATING: allowed, TOTAL: total } };
     });
@@ -200,13 +200,13 @@ const TaskDetailsAppraisalTab: React.FC<Props> = ({
           ) : rows.length === 0 ? (
             <tr><td colSpan={5} style={S.emptyMsg}>No records found</td></tr>
           ) : rows.map((row, idx) => {
-            const key     = text(row.KPI_CODE);
-            const isOpen  = !!expanded[key];
-            const items   = text(row.KPI_ITEM_DESC).split(",").map((s) => s.trim()).filter(Boolean);
-            const state   = rowStates[key];
-            const rating  = state?.RATING ?? "";
+            const key = text(row.KPI_CODE);
+            const isOpen = !!expanded[key];
+            const items = text(row.KPI_ITEM_DESC).split(",").map((s) => s.trim()).filter(Boolean);
+            const state = rowStates[key];
+            const rating = state?.RATING ?? "";
             const weightage = state?.STANDARD_WEIGHTAGE ?? "";
-            const total   = state?.TOTAL ?? num(row.TOTAL);
+            const total = state?.TOTAL ?? num(row.TOTAL);
 
             return (
               <React.Fragment key={`task-${key}`}>
@@ -254,13 +254,15 @@ const TaskDetailsAppraisalTab: React.FC<Props> = ({
                   </td>
                 </tr>
 
-                {isOpen && items.map((item, iIdx) => (
-                  <tr key={`child-${key}-${iIdx}`}>
+                {isOpen && (
+                  <tr key={`child-${key}`}>
                     <td style={{ ...S.tdChild, textAlign: "center" }} />
-                    <td style={{ ...S.tdChild, paddingLeft: "38px" }}>◾ {item}</td>
+                    <td style={{ ...S.tdChild, paddingLeft: "38px", whiteSpace: "pre-wrap" }}>
+                      ◾ {text(row.KPI_ITEM_DESC)}
+                    </td>
                     <td style={S.tdChild} /><td style={S.tdChild} /><td style={S.tdChild} />
                   </tr>
-                ))}
+                )}
               </React.Fragment>
             );
           })}

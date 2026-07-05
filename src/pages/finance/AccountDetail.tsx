@@ -169,7 +169,7 @@ function ApprovalTab({
       setData(result);
       setForm({
         cr_no:       result.CR_NO       || "",
-        ac_status:   result.AC_STATUS   || "",
+        ac_status:   result.AC_STATUS   || "A",
         ac_active:   result.AC_ACTIVE   || "Y",
         approved_by: result.APPROVED_BY || "",
         approved_date: result.APPROVED_DATE
@@ -249,7 +249,7 @@ function ApprovalTab({
           >
             <option value="">— Select —</option>
             <option value="Y">Approved</option>
-            <option value="N">Not Approved</option>
+            <option value="A">Not Approved</option>
           </Select>
         </label>
 
@@ -261,7 +261,7 @@ function ApprovalTab({
           >
             <option value="">— Select —</option>
             <option value="A">Active</option>
-            <option value="I">Inactive</option>
+            <option value="C">Inactive</option>
           </Select>
         </label>
 

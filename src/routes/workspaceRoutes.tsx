@@ -97,7 +97,10 @@ import { HrJoiningPage } from "../pages/hr/HrJoiningPage";
 import { HrEmpEducationPage } from "../pages/hr/HrEmpEducationPage";  
 import GradeSalaryIncrement from "../pages/hr/GradeSalaryIncrement.";
 import EmployeeMasterPage from "../pages/hr/Employee Master/EmployeeMasterPage";
+import SalaryAdditionDeductionMainPage from "../pages/hr/addition_deduction/SalaryAdditionDeductionMainPage";
+import AbsentMemoMainPage from "../pages/hr/absent_memo/AbsentMemoMainPage";
 
+import { HrManpowerPage } from "../pages/hr/HrManpower";
 
 
 type WorkspaceRouteContext = {
@@ -117,6 +120,16 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: "HR Absent Memo",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/memo_and_forms/absent_memo"),
+    element: () => <AbsentMemoMainPage />,
+  },
+  {
+    name: "HR Salary Addition Deduction Page",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/memo_and_forms/addition/deduction_letter"),
+    element: () => <SalaryAdditionDeductionMainPage />,
+  },
   {
     name:"HR Grade Salary Increment",
     match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/grade_salary_increment"),
@@ -653,6 +666,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   name: "HR Joining",
   match: (context) => isHrRoute(context) && isHrJoiningRoute(context),
   element: () => <HrJoiningPage />,
+},
+
+{
+  name: "HR Manpower Requisition",
+  match: (context) => isHrRoute(context) && isHrManpowerRequisitionRoute(context),
+  element: () => <HrManpowerPage />,
 },
 
 {
@@ -1364,5 +1383,17 @@ function isHrEmpEducationRoute(context: WorkspaceRouteContext) {
     normalized.includes("emp_education") ||
     normalized.includes("educational_qualification") ||
     normalized.includes("education_qualification")
+  );
+}
+
+function isHrManpowerRequisitionRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("manpowerrequisition") ||
+    compact.includes("confirmationreview") ||
+    normalized.includes("manpower_requisition") ||
+    normalized.includes("manpower-requisition") ||
+    normalized.includes("confirmation_review")
   );
 }
