@@ -96,6 +96,7 @@ import { HrJoiningPage } from "../pages/hr/HrJoiningPage";
 
 import { HrEmpEducationPage } from "../pages/hr/HrEmpEducationPage";  
 import GradeSalaryIncrement from "../pages/hr/GradeSalaryIncrement.";
+import EmployeeMasterPage from "../pages/hr/Employee Master/EmployeeMasterPage";
 
 
 
@@ -130,6 +131,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "HR Leave Encashment",
     match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/leave_encashment"),
     element: () => <LeaveEncashmentPage />
+  },
+  {
+    name: "Employee Master",
+    match: ({pathname})=> pathname.toLocaleLowerCase().includes("/hr/hr/employee/employee_master"),
+    element: () => <EmployeeMasterPage />
   },
   {
     name: "Vendor System",

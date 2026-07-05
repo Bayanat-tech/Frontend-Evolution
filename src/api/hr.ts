@@ -1,3 +1,4 @@
+import { TEmployeeHr } from "../pages/hr/Employee Master/employee-hr.types";
 import { api } from "./client";
 import { LookupRow } from "./lookups";
 
@@ -61,4 +62,22 @@ export async function saveHrPayCompDepend(payload: { header: Record<string, unkn
   const response = await api.post<ApiResponse<unknown>>("/api/finance/insUpdHrPayCompDepend", payload);
   if (!response.data.success) throw new Error(response.data.message || "Unable to save pay units dependant");
   return response.data;
-}
+};
+
+export async function insUpdHrEmployee(employee: TEmployeeHr): Promise<boolean> {
+    try {
+      const response = await api.post('/api/finance/insUpdHrEmployee',{ employee });  
+      return response.data?.success === true;
+    } catch (err) {
+      console.error('Failed to save employee:', err);
+      return false;
+    }
+  };
+
+export async function uploadFile(file: Blob | File, filename?: string) {
+    const chatFileUpload = new FormData();
+    chatFileUpload.append(`file`, file);
+    const response = await api.post<ApiResponse<unknown>>('api/files/upload', chatFileUpload, {headers: {'Content-Type': 'multipart/form-data' }})
+    if (!response.data.success) throw new Error(response.data.message || "Unable to save Image");
+    return response.data;
+};
