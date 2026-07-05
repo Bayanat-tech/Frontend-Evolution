@@ -12,8 +12,6 @@ import { useAuth } from "../../state/AuthContext";
 import { pamsSelect, pamsSave, pamsDelete } from "../../api/pams";
 import type { PamsProcedureParams } from "../../api/pams";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 type Row = Record<string, unknown>;
 
 type TKpiItem = {
@@ -24,8 +22,6 @@ type TKpiItem = {
   DIV_CODE?: string;
   DEPT_CODE?: string;
 };
-
-// ─── Helpers (same as PamsPages) ──────────────────────────────────────────────
 
 function text(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -48,7 +44,6 @@ function normalizeRow(row: Row): Row {
   return normalized;
 }
 
-// ─── SearchableSelect (same as PamsPages) ─────────────────────────────────────
 
 function SearchableSelect({
   value,
@@ -161,7 +156,6 @@ function SearchableSelect({
   );
 }
 
-// ─── Field wrapper (same as PamsPages) ────────────────────────────────────────
 
 function Field({
   label,
@@ -183,36 +177,29 @@ function Field({
   );
 }
 
-// ─── pamsProc helper ──────────────────────────────────────────────────────────
 
 async function pamsProc(params: PamsProcedureParams): Promise<Row[]> {
   return pamsSelect(params);
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export function KpiActivityPage() {
   const { user } = useAuth();
   const loginid = user?.loginid ?? "";
   const companyCode = user?.company_code ?? "";
 
-  // ── Cascade filter state ──────────────────────────────────────────────────
   const [selectedDivision, setSelectedDivision] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState("");
   const [selectedSection, setSelectedSection] = useState("");
   const [selectedDesignation, setSelectedDesignation] = useState("");
   const [selectedKpiType, setSelectedKpiType] = useState("");
   const [selectedKpiDesc, setSelectedKpiDesc] = useState("");
-
-  // ── Lookup lists ──────────────────────────────────────────────────────────
   const [divisionList, setDivisionList] = useState<Row[]>([]);
   const [departmentList, setDepartmentList] = useState<Row[]>([]);
   const [sectionList, setSectionList] = useState<Row[]>([]);
   const [designationList, setDesignationList] = useState<Row[]>([]);
   const [kpiTypeList, setKpiTypeList] = useState<Row[]>([]);
   const [kpiDescList, setKpiDescList] = useState<Row[]>([]);
-
-  // ── Grid + UI state ───────────────────────────────────────────────────────
   const [rows, setRows] = useState<Row[]>([]);
   const [kpiItemLoading, setKpiItemLoading] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
@@ -224,7 +211,6 @@ export function KpiActivityPage() {
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState("");
 
-  // ── 1. Division — load on mount ───────────────────────────────────────────
   useEffect(() => {
     if (!companyCode) return;
     pamsProc({ parameter: "division", loginid, code1: companyCode, code2: "NULL", code3: "NULL", code4: "NULL" })
@@ -232,7 +218,6 @@ export function KpiActivityPage() {
       .catch(() => setDivisionList([]));
   }, [loginid, companyCode]);
 
-  // ── 2. Department — reset + load when division changes ───────────────────
   useEffect(() => {
     setSelectedDepartment("");
     setSelectedSection("");
@@ -251,7 +236,6 @@ export function KpiActivityPage() {
       .catch(() => setDepartmentList([]));
   }, [selectedDivision]);
 
-  // ── 3. Section + 4. Designation — load when department changes ───────────
   useEffect(() => {
     setSelectedSection("");
     setSelectedDesignation("");
@@ -271,7 +255,6 @@ export function KpiActivityPage() {
       .catch(() => setDesignationList([]));
   }, [selectedDepartment]);
 
-  // ── 5. KPI Type — load when designation changes ──────────────────────────
   useEffect(() => {
     setSelectedKpiType("");
     setSelectedKpiDesc("");
@@ -284,7 +267,6 @@ export function KpiActivityPage() {
       .catch(() => setKpiTypeList([]));
   }, [selectedDesignation]);
 
-  // ── 6. KPI Desc — load when KPI Type changes ─────────────────────────────
   useEffect(() => {
     setSelectedKpiDesc("");
     setKpiDescList([]);
@@ -299,7 +281,6 @@ export function KpiActivityPage() {
       code4: `${selectedDesignation}$$${selectedDivision}$$${selectedSection}`,
     })
       .then((data) => {
-        // deduplicate by KPI_CODE (same as old uniqueKpiDescList logic)
         const seen = new Set<string>();
         setKpiDescList(
           data.filter((k) => {
@@ -313,7 +294,6 @@ export function KpiActivityPage() {
       .catch(() => setKpiDescList([]));
   }, [selectedKpiType]);
 
-  // ── 7. KPI Items grid — load when KPI Desc changes ───────────────────────
   const loadItems = () => {
     if (!selectedKpiDesc) { setRows([]); return; }
     setKpiItemLoading(true);
@@ -338,7 +318,6 @@ export function KpiActivityPage() {
     loadItems();
   }, [selectedKpiDesc]);
 
-  // ── Delete ────────────────────────────────────────────────────────────────
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setSaving(true);
@@ -361,7 +340,6 @@ export function KpiActivityPage() {
     }
   };
 
-  // ── Open helpers ──────────────────────────────────────────────────────────
   const openAdd = () => {
     setEditMode(false);
     setViewMode(false);
@@ -404,7 +382,6 @@ export function KpiActivityPage() {
     []
   );
 
-  // ── Select options ────────────────────────────────────────────────────────
   const divisionOptions = divisionList.map((d, i) => ({ value: text(d.DIV_CODE), label: `${d.DIV_CODE} - ${d.DIV_NAME}`, key: `div_${i}` }));
   const departmentOptions = departmentList.map((d, i) => ({ value: text(d.dept_code ?? d.DEPT_CODE), label: text(d.dept_name ?? d.DEPT_NAME), key: `dept_${i}` }));
   const sectionOptions = sectionList.map((s, i) => ({ value: text(s.section_code ?? s.SECTION_CODE), label: text(s.section_name ?? s.SECTION_NAME), key: `sec_${i}` }));
@@ -418,7 +395,6 @@ export function KpiActivityPage() {
 
   return (
     <section className="grid gap-4">
-      {/* ── Page header ─────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="m-0 text-2xl font-semibold text-foreground">KPI Activities</h1>
@@ -427,8 +403,6 @@ export function KpiActivityPage() {
       </div>
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
-
-      {/* ── Cascade filters card ─────────────────────────────────────────────── */}
       <Card>
         <CardHeader className="border-b bg-muted/30">
           <div>
@@ -457,14 +431,12 @@ export function KpiActivityPage() {
         </CardContent>
       </Card>
 
-      {/* ── Create KPI Item button ─────────────────────────────────────────── */}
       <div className="flex justify-end">
         <Button disabled={!selectedKpiDesc} onClick={openAdd}>
           <Plus size={15} /> Create KPI Item
         </Button>
       </div>
 
-      {/* ── Data table ───────────────────────────────────────────────────────── */}
       <DataTable
         columns={columns}
         data={rows}
@@ -482,7 +454,6 @@ export function KpiActivityPage() {
         getRowId={(row, index) => `kpi_item_${text(row.KPI_CODE)}_${text(row.KPI_ITEM_SRNO)}_${index}`}
       />
 
-      {/* ── Add / Edit / View dialog ─────────────────────────────────────────── */}
       <Dialog
         open={formOpen}
         wide
@@ -506,7 +477,6 @@ export function KpiActivityPage() {
         />
       </Dialog>
 
-      {/* ── Delete confirm dialog ─────────────────────────────────────────────── */}
       <Dialog
         open={Boolean(deleteTarget)}
         compact
@@ -526,7 +496,6 @@ export function KpiActivityPage() {
   );
 }
 
-// ─── KpiItemForm — plain useState, no formik/react-query ─────────────────────
 
 function KpiItemForm({
   isEditMode,
@@ -547,7 +516,6 @@ function KpiItemForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // Re-sync when existingData changes (dialog re-opens with new data)
   useEffect(() => {
     setKpiItemDesc(existingData.KPI_ITEM_DESC ?? "");
     setError("");

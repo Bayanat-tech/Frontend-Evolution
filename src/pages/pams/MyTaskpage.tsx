@@ -32,24 +32,16 @@ interface FormData {
   [key: string]: unknown;
 }
 
-// Active weightage config fetched from appraisal_weightage_list
 interface ActiveWeightage {
   taskPct: number;
   charPct: number;
   isHrDefined: boolean;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
 const TAB_STATUS   = ["PENDING", "IN PROGRESS", "REJECTED", "SENT BACK", "APPROVED"] as const;
 const TAB_LABELS   = ["Pending", "In Progress", "Rejected", "Sent Back", "Closed"]   as const;
 const HR_APPROVERS = ["2021060535", "2010080001", "2018030473"];
-
-// ─── Module-level cache ─────────────────────────────────────────────────────
-// Lives outside the component, so it survives unmount/remount when navigating
-// away to AppraisalViewTabsPage and back. Keyed by company + tab status.
 const taskPageCache = new Map<string, Row[]>();
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 function text(val: unknown): string {
   if (val === null || val === undefined) return "";
   return String(val);
@@ -91,40 +83,30 @@ function normalizeRow(row: Row): Row {
   return normalized;
 }
 
-// ─── Compute final rating using active weightage ──────────────────────────────
 function computeFinalRating(
   taskScore: number,
   charScore: number,
   weightage: ActiveWeightage | null
 ): number {
   if (weightage?.isHrDefined) {
-    // Active weightage hai → weighted formula
     return Math.round((taskScore * weightage.taskPct / 100) + (charScore * weightage.charPct / 100));
   }
-  // Koi active weightage nahi → old logic
   return Math.round((taskScore + charScore) / 2);
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
 const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
-  const navigate     = useNavigate();
-  const { user }     = useAuth();
-  const loginid      = user?.loginid || user?.username || "";
-  const companyCode  = user?.company_code || "";
+  const navigate    = useNavigate();
+  const { user }    = useAuth();
+  const loginid     = user?.loginid || user?.username || "";
+  const companyCode = user?.company_code || "";
   const isHRApprover = HR_APPROVERS.includes(loginid);
 
-  // ── Cache key helper — MUST include loginid, not just companyCode.
-  // Without loginid, switching from User A to User B (same company) would
-  // hit User A's cached rows and flash their data for a few seconds.
   const cacheKey = useCallback(
     (tabIdx: number) => `${loginid}-${companyCode}-${TAB_STATUS[tabIdx]}`,
     [loginid, companyCode]
   );
 
-  // ── State ──────────────────────────────────────────────────────────────────
   const [activeTab,    setActiveTab]    = useState(initialTab);
-  // Lazy-init rows/loading from cache so the FIRST render already shows
-  // previously-fetched data instead of an empty/skeleton table.
   const [rows,         setRows]         = useState<Row[]>(
     () => taskPageCache.get(`${loginid}-${companyCode}-${TAB_STATUS[initialTab]}`) ?? []
   );
@@ -134,71 +116,48 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   const [notice,       setNotice]       = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
   const [query,        setQuery]        = useState("");
-
-  // ── Active weightage config — fetched once on mount ────────────────────────
   const [activeWeightage, setActiveWeightage] = useState<ActiveWeightage | null>(null);
-
-  // Dialog state for Edit/View
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [viewMode, setViewMode] = useState(false);
-  const [editMode, setEditMode] = useState(false);
+  const [viewMode,   setViewMode]   = useState(false);
+  const [editMode,   setEditMode]   = useState(false);
   const [currentRow, setCurrentRow] = useState<Row | null>(null);
-  const [formData, setFormData] = useState<FormData>({
-    APPRAISAL_DOC_NO: "",
-    APPRAISAL_DOC_DATE: "",
-    EMPLOYEE_CODE: "",
-    EMPLOYEE_NAME: "",
-    PERIOD_NUMBER: "",
-    APPRAISAL_FROM: "",
-    APPRAISAL_TO: "",
-    COMPANY_CODE: companyCode,
+  const [formData,   setFormData]   = useState<FormData>({
+    APPRAISAL_DOC_NO: "", APPRAISAL_DOC_DATE: "",
+    EMPLOYEE_CODE: "",    EMPLOYEE_NAME: "",
+    PERIOD_NUMBER: "",    APPRAISAL_FROM: "",
+    APPRAISAL_TO: "",     COMPANY_CODE: companyCode,
   });
-  const [saving, setSaving] = useState(false);
-  const [periods, setPeriods] = useState<Row[]>([]);
+  const [saving,    setSaving]    = useState(false);
+  const [periods,   setPeriods]   = useState<Row[]>([]);
   const [employees, setEmployees] = useState<Row[]>([]);
-
-  const isInitialMount = useRef(true);
-  const currentTabRef = useRef(initialTab);
-  // Tracks the last loginid+companyCode we fetched for, so we can detect a
-  // user switch (e.g. impersonation / re-login without full page reload)
-  // and instantly wipe stale rows before fetching the new user's data.
-  const prevUserKeyRef = useRef(`${loginid}-${companyCode}`);
+  const fetchRequestId  = useRef(0);
+  const prevUserKeyRef  = useRef(`${loginid}-${companyCode}`);
 
   const statusFilter = TAB_STATUS[activeTab];
 
-  // ── Fetch active weightage config ──────────────────────────────────────────
-  // This ensures Avg Score in the table uses the SAME formula as AppraiserCommentsTab
   useEffect(() => {
     if (!companyCode) return;
     pamsSelect({ parameter: "appraisal_weightage_list", loginid, code1: companyCode })
       .then((data) => {
-        const rows = data as unknown as Array<Record<string, unknown>>;
-        const active = rows?.find((r) => String(r.IS_ACTIVE) === "Y");
+        const wRows = data as unknown as Array<Record<string, unknown>>;
+        const active = wRows?.find((r) => String(r.IS_ACTIVE) === "Y");
         if (active) {
           const taskPct = Number(active.TASK_PCT || 0);
           const charPct = Number(active.CHARACTER_PCT || 0);
-          setActiveWeightage({
-            taskPct,
-            charPct,
-            isHrDefined: taskPct > 0 && charPct > 0,
-          });
+          setActiveWeightage({ taskPct, charPct, isHrDefined: taskPct > 0 && charPct > 0 });
         } else {
-          // No active weightage — use default 50/50
           setActiveWeightage({ taskPct: 50, charPct: 50, isHrDefined: false });
         }
       })
-      .catch(() => {
-        setActiveWeightage({ taskPct: 50, charPct: 50, isHrDefined: false });
-      });
+      .catch(() => setActiveWeightage({ taskPct: 50, charPct: 50, isHrDefined: false }));
   }, [companyCode, loginid]);
 
-  // Load periods and employees for lookup
   useEffect(() => {
     const loadLookups = async () => {
       try {
         const [periodsData, employeesData] = await Promise.all([
-          pamsSelect({ parameter: "period", loginid, code1: companyCode }),
-          pamsSelect({ parameter: "employee_hierarchy", loginid, code1: companyCode }),
+          pamsSelect({ parameter: "period",              loginid, code1: companyCode }),
+          pamsSelect({ parameter: "employee_hierarchy",  loginid, code1: companyCode }),
         ]);
         setPeriods(periodsData.map(normalizeRow));
         setEmployees(employeesData.map(normalizeRow));
@@ -206,16 +165,17 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         console.error("Error loading lookups:", error);
       }
     };
-    loadLookups();
+    void loadLookups();
   }, [loginid, companyCode]);
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
-  // isBackground=true → don't toggle the loading skeleton (used when we already
-  // have cached rows on screen and just want to silently refresh them).
+
   const fetchData = useCallback(async (tabIndex: number, isBackground = false) => {
-    const tabStatus = TAB_STATUS[tabIndex];
+    const myRequestId = ++fetchRequestId.current;
+    const tabStatus   = TAB_STATUS[tabIndex];
+
     if (!isBackground) setLoading(true);
     setNotice(null);
+
     try {
       const data = await pamsSelect({
         parameter: "Trn_appraisal",
@@ -224,6 +184,8 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         code2: "NULL",
         code3: tabStatus,
       });
+      if (myRequestId !== fetchRequestId.current) return;
+
       const normalizedData = data.map(normalizeRow);
       setRows(normalizedData);
       taskPageCache.set(cacheKey(tabIndex), normalizedData);
@@ -234,26 +196,19 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       });
       setSelectedRows(initSelected);
     } catch (err: unknown) {
+      if (myRequestId !== fetchRequestId.current) return; // stale error, ignore
       setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to load data" });
     } finally {
-      setLoading(false);
+      // Only clear loading spinner if we're still the latest request
+      if (myRequestId === fetchRequestId.current) setLoading(false);
     }
   }, [loginid, companyCode, cacheKey]);
 
-  // ── Mount / activeTab change ────────────────────────────────────────────────
   useEffect(() => {
     const hasCached = taskPageCache.has(cacheKey(activeTab));
-    // If we already have cached rows showing (lazy-init or tab-switch handled
-    // them), just refresh silently in the background — no skeleton flash.
     void fetchData(activeTab, hasCached);
-    isInitialMount.current = false;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, fetchData]);
 
-  // ── User switch detection ────────────────────────────────────────────────
-  // If loginid/companyCode changes WITHOUT a full component remount (e.g. an
-  // in-app "switch user" action), wipe rows + cache synchronously so the
-  // previous user's data never flashes on screen, even for a moment.
   useEffect(() => {
     const userKey = `${loginid}-${companyCode}`;
     if (prevUserKeyRef.current === userKey) return;
@@ -271,7 +226,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
 
     const cached = taskPageCache.get(cacheKey(index));
     if (cached) {
-      // Show cached data for the new tab instantly — no skeleton.
       setRows(cached);
       setLoading(false);
       const initSelected: Record<string, boolean> = {};
@@ -283,84 +237,67 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     }
 
     setActiveTab(index);
-    currentTabRef.current = index;
     setQuery("");
   }, [activeTab, cacheKey]);
 
   const openAppraisalTabsPage = (row: Row, mode: "view" | "edit" = "view") => {
-  const docNo = text(row.APPRAISAL_DOC_NO);
-  const employeeCode = text(row.EMPLOYEE_CODE);
-  const employeeName = encodeURIComponent(text(row.EMPLOYEE_NAME));
-  const designation = encodeURIComponent(text(row.DESG_NAME));
-  const department = encodeURIComponent(text(row.DEPT_NAME));
-  navigate(
-    `/workspace/pams/appraisal/view/${docNo}?employee_code=${employeeCode}&employee_name=${employeeName}&designation=${designation}&department=${department}&mode=${mode}`,
-    { state: { prefetchedRow: row } }  
-  );
-};
+    const docNo        = text(row.APPRAISAL_DOC_NO);
+    const employeeCode = text(row.EMPLOYEE_CODE);
+    const employeeName = encodeURIComponent(text(row.EMPLOYEE_NAME));
+    const designation  = encodeURIComponent(text(row.DESG_NAME));
+    const department   = encodeURIComponent(text(row.DEPT_NAME));
+    navigate(
+      `/workspace/pams/appraisal/view/${docNo}?employee_code=${employeeCode}&employee_name=${employeeName}&designation=${designation}&department=${department}&mode=${mode}`,
+      { state: { prefetchedRow: row } }
+    );
+  };
 
-  // ── Dialog Handlers ────────────────────────────────────────────────────────
+  function dateToString(value: unknown): string {
+    if (!value) return "";
+    const d = new Date(String(value));
+    if (isNaN(d.getTime())) return "";
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  const buildFormData = (row: Row): FormData => ({
+    APPRAISAL_DOC_NO:   text(row.APPRAISAL_DOC_NO),
+    APPRAISAL_DOC_DATE: dateToString(row.APPRAISAL_DOC_DATE),
+    EMPLOYEE_CODE:      text(row.EMPLOYEE_CODE),
+    EMPLOYEE_NAME:      text(row.EMPLOYEE_NAME),
+    PERIOD_NUMBER:      text(row.PERIOD_NUMBER),
+    APPRAISAL_FROM:     dateToString(row.APPRAISAL_FROM),
+    APPRAISAL_TO:       dateToString(row.APPRAISAL_TO),
+    COMPANY_CODE:       text(row.COMPANY_CODE) || companyCode,
+  });
+
   const openViewDialog = (row: Row) => {
     setCurrentRow(row);
-    setFormData({
-      APPRAISAL_DOC_NO: text(row.APPRAISAL_DOC_NO),
-      APPRAISAL_DOC_DATE: dateToString(row.APPRAISAL_DOC_DATE),
-      EMPLOYEE_CODE: text(row.EMPLOYEE_CODE),
-      EMPLOYEE_NAME: text(row.EMPLOYEE_NAME),
-      PERIOD_NUMBER: text(row.PERIOD_NUMBER),
-      APPRAISAL_FROM: dateToString(row.APPRAISAL_FROM),
-      APPRAISAL_TO: dateToString(row.APPRAISAL_TO),
-      COMPANY_CODE: text(row.COMPANY_CODE) || companyCode,
-    });
-    setViewMode(true);
-    setEditMode(false);
-    setDialogOpen(true);
+    setFormData(buildFormData(row));
+    setViewMode(true); setEditMode(false); setDialogOpen(true);
   };
 
   const openEditDialog = (row: Row) => {
     setCurrentRow(row);
-    setFormData({
-      APPRAISAL_DOC_NO: text(row.APPRAISAL_DOC_NO),
-      APPRAISAL_DOC_DATE: dateToString(row.APPRAISAL_DOC_DATE),
-      EMPLOYEE_CODE: text(row.EMPLOYEE_CODE),
-      EMPLOYEE_NAME: text(row.EMPLOYEE_NAME),
-      PERIOD_NUMBER: text(row.PERIOD_NUMBER),
-      APPRAISAL_FROM: dateToString(row.APPRAISAL_FROM),
-      APPRAISAL_TO: dateToString(row.APPRAISAL_TO),
-      COMPANY_CODE: text(row.COMPANY_CODE) || companyCode,
-    });
-    setViewMode(false);
-    setEditMode(true);
-    setDialogOpen(true);
+    setFormData(buildFormData(row));
+    setViewMode(false); setEditMode(true); setDialogOpen(true);
   };
 
   const closeDialog = () => {
-    setDialogOpen(false);
-    setViewMode(false);
-    setEditMode(false);
-    setCurrentRow(null);
-    setFormData({
-      APPRAISAL_DOC_NO: "",
-      APPRAISAL_DOC_DATE: "",
-      EMPLOYEE_CODE: "",
-      EMPLOYEE_NAME: "",
-      PERIOD_NUMBER: "",
-      APPRAISAL_FROM: "",
-      APPRAISAL_TO: "",
-      COMPANY_CODE: companyCode,
-    });
+    setDialogOpen(false); setViewMode(false); setEditMode(false); setCurrentRow(null);
+    setFormData({ APPRAISAL_DOC_NO: "", APPRAISAL_DOC_DATE: "", EMPLOYEE_CODE: "",
+      EMPLOYEE_NAME: "", PERIOD_NUMBER: "", APPRAISAL_FROM: "", APPRAISAL_TO: "",
+      COMPANY_CODE: companyCode });
   };
 
-  const updateFormField = (key: string, value: unknown) => {
+  const updateFormField = (key: string, value: unknown) =>
     setFormData((prev) => ({ ...prev, [key]: value }));
-  };
 
   const handlePeriodChange = (periodNumber: string) => {
     const period = periods.find((p) => text(p.PERIOD_NUMBER) === periodNumber);
     updateFormField("PERIOD_NUMBER", periodNumber);
     if (period) {
       updateFormField("APPRAISAL_FROM", dateToString(period.PERIOD_FROM_DATE));
-      updateFormField("APPRAISAL_TO", dateToString(period.PERIOD_TO_DATE));
+      updateFormField("APPRAISAL_TO",   dateToString(period.PERIOD_TO_DATE));
     }
   };
 
@@ -375,21 +312,15 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       setNotice({ type: "error", message: "Employee and period are required" });
       return;
     }
-    setSaving(true);
-    setNotice(null);
+    setSaving(true); setNotice(null);
     try {
       await pamsSave({
-        parameter: "Trn_ems_appraisal_hdr",
-        loginid,
-        val1s1: formData.COMPANY_CODE,
-        val1s4: formData.EMPLOYEE_CODE,
-        val1s5: formData.APPRAISAL_DOC_NO,
-        val1s6: formData.APPRAISAL_DOC_DATE,
-        val1s7: formData.APPRAISAL_FROM,
-        val1s8: formData.APPRAISAL_TO,
+        parameter: "Trn_ems_appraisal_hdr", loginid,
+        val1s1: formData.COMPANY_CODE,   val1s4: formData.EMPLOYEE_CODE,
+        val1s5: formData.APPRAISAL_DOC_NO, val1s6: formData.APPRAISAL_DOC_DATE,
+        val1s7: formData.APPRAISAL_FROM,  val1s8: formData.APPRAISAL_TO,
         val1s9: formData.PERIOD_NUMBER,
-        wval1s1: formData.COMPANY_CODE,
-        wval1s5: formData.APPRAISAL_DOC_NO,
+        wval1s1: formData.COMPANY_CODE,  wval1s5: formData.APPRAISAL_DOC_NO,
       });
       setNotice({ type: "success", message: "Appraisal updated successfully" });
       closeDialog();
@@ -401,15 +332,12 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     }
   };
 
-  // ── Delete ─────────────────────────────────────────────────────────────────
   const handleDelete = async (row: Row) => {
     if (!window.confirm("Are you sure you want to delete this appraisal?")) return;
     try {
       await pamsDelete({
-        parameter: "delete_appraisal_hdr",
-        loginid,
-        code1: text(row.APPRAISAL_DOC_NO),
-        code2: text(row.COMPANY_CODE)
+        parameter: "delete_appraisal_hdr", loginid,
+        code1: text(row.APPRAISAL_DOC_NO), code2: text(row.COMPANY_CODE),
       });
       setNotice({ type: "success", message: "Appraisal deleted successfully" });
       void fetchData(activeTab);
@@ -418,7 +346,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     }
   };
 
-  // ── Bulk approve ───────────────────────────────────────────────────────────
   const handleBulkApprove = async () => {
     const ids = Object.entries(selectedRows).filter(([, v]) => v).map(([id]) => id);
     if (!ids.length) {
@@ -427,12 +354,8 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     }
     try {
       await pamsSelect({
-        parameter: "proc_update_pams_doc_status_bulk",
-        loginid,
-        code1: companyCode,
-        code2: ids.join(","),
-        code3: "A",
-        code4: ""
+        parameter: "proc_update_pams_doc_status_bulk", loginid,
+        code1: companyCode, code2: ids.join(","), code3: "A", code4: "",
       });
       setNotice({ type: "success", message: "Appraisals approved successfully!" });
       setSelectedRows({});
@@ -442,10 +365,8 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     }
   };
 
-  // ── Checkbox handlers ──────────────────────────────────────────────────────
-  const toggleSelect = (id: string, checked: boolean) => {
+  const toggleSelect = (id: string, checked: boolean) =>
     setSelectedRows((prev) => ({ ...prev, [id]: checked }));
-  };
 
   const toggleSelectAll = (checked: boolean) => {
     const next: Record<string, boolean> = {};
@@ -453,14 +374,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     setSelectedRows(next);
   };
 
-  function dateToString(value: unknown): string {
-    if (!value) return "";
-    const d = new Date(String(value));
-    if (isNaN(d.getTime())) return "";
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }
-
-  // ── Columns Definition ─────────────────────────────────────────────────────
   const columns = useMemo<ColumnDef<Row>[]>(() => {
     const cols: ColumnDef<Row>[] = [];
 
@@ -474,15 +387,12 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         return (
           <div
             onClick={(e) => {
-              if ((e.target as HTMLElement).tagName !== "INPUT") {
+              if ((e.target as HTMLElement).tagName !== "INPUT")
                 openAppraisalTabsPage(row.original, "view");
-              }
             }}
-            style={{
-              display: "flex", alignItems: "center", gap: "8px",
+            style={{ display: "flex", alignItems: "center", gap: "8px",
               cursor: "pointer", whiteSpace: "nowrap",
-              overflow: "hidden", textOverflow: "ellipsis",
-            }}
+              overflow: "hidden", textOverflow: "ellipsis" }}
           >
             {isHRApprover && (
               <input
@@ -493,10 +403,8 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
               />
             )}
             <span
-              style={{
-                color: "#082A89", fontWeight: 600, fontSize: "0.82rem",
-                cursor: "pointer", display: "inline-block", minWidth: 80,
-              }}
+              style={{ color: "#082A89", fontWeight: 600, fontSize: "0.82rem",
+                cursor: "pointer", display: "inline-block", minWidth: 80 }}
               onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
               onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
             >
@@ -537,8 +445,8 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       header: "Designation",
       size: 200,
       cell: ({ row }) => {
-        const desgCode = text(row.original.DESG_CODE);
-        const desgName = text(row.original.DESG_NAME);
+        const desgCode  = text(row.original.DESG_CODE);
+        const desgName  = text(row.original.DESG_NAME);
         const desgLabel = desgCode && desgName ? `${desgCode} - ${desgName}` : desgCode || desgName || "—";
         return <span style={{ whiteSpace: "nowrap" }}>{desgLabel}</span>;
       },
@@ -562,27 +470,16 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       },
     });
 
-    // ── Avg Score ─────────────────────────────────────────────────────────────
-    // DB SP (Trn_appraisal) ab TASK_TOTAL + CHAR_TOTAL return karta hai
-    // VW_KPI_APPRAISAL_DATA se per-appraisal scores.
-    // Client-side activeWeightage se recompute → same formula as AppraiserCommentsTab.
     cols.push({
       accessorKey: "FINAL_RATING",
       header: "Avg Score",
       size: 110,
       cell: ({ row }) => {
-        // Direct se DB fields use karo — SP ne TASK_TOTAL aur CHAR_TOTAL diye hain
         const taskScore = Number(row.original.TASK_TOTAL ?? row.original.task_total ?? 0);
         const charScore = Number(row.original.CHAR_TOTAL ?? row.original.char_total ?? 0);
-
-        let avg: number;
-        if (taskScore > 0 || charScore > 0) {
-          // Recompute using active weightage — same formula as AppraiserCommentsTab
-          avg = computeFinalRating(taskScore, charScore, activeWeightage);
-        } else {
-          // Fallback: TASK_TOTAL still 0 means no ratings given yet → show FINAL_RATING from DB
-          avg = Math.round(Number(row.original.FINAL_RATING || 0));
-        }
+        const avg = (taskScore > 0 || charScore > 0)
+          ? computeFinalRating(taskScore, charScore, activeWeightage)
+          : Math.round(Number(row.original.FINAL_RATING || 0));
 
         if (!avg) return <span style={{ color: "#9ca3af" }}>—</span>;
 
@@ -594,11 +491,8 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         else if (avg >= 1) { bg = "#fdecea"; color = "#d80a0a"; border = "#f5b3b3"; }
 
         return (
-          <span style={{
-            display: "inline-block", padding: "2px 12px", borderRadius: "999px",
-            fontSize: "0.75rem", fontWeight: 700,
-            background: bg, color, border: `1px solid ${border}`,
-          }}>
+          <span style={{ display: "inline-block", padding: "2px 12px", borderRadius: "999px",
+            fontSize: "0.75rem", fontWeight: 700, background: bg, color, border: `1px solid ${border}` }}>
             {avg}
           </span>
         );
@@ -613,11 +507,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         const code = text(row.original.NEXT_ACTION_BY);
         const name = text(row.original.NEXT_ACTION_BY_NAME);
         if (!code) return <span style={{ color: "#9ca3af" }}>—</span>;
-        return (
-          <span style={{ fontWeight: 500, whiteSpace: "nowrap" }}>
-            {code} {name ? `- ${name}` : ""}
-          </span>
-        );
+        return <span style={{ fontWeight: 500, whiteSpace: "nowrap" }}>{code}{name ? ` - ${name}` : ""}</span>;
       },
     });
 
@@ -631,11 +521,8 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         if (!reason) return <span style={{ color: "#9ca3af" }}>—</span>;
         return (
           <div style={{ lineHeight: 1.4 }}>
-            <div title={reason} style={{
-              maxWidth: "210px", overflow: "hidden",
-              textOverflow: "ellipsis", whiteSpace: "nowrap",
-              fontSize: "0.8rem", fontWeight: 500,
-            }}>
+            <div title={reason} style={{ maxWidth: "210px", overflow: "hidden",
+              textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "0.8rem", fontWeight: 500 }}>
               {reason}
             </div>
             {by && <div style={{ fontSize: "0.7rem", color: "#9ca3af", marginTop: "2px" }}>by {by}</div>}
@@ -655,36 +542,29 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
           text(row.original.STATUS)
         );
         return (
-          <span style={{
-            display: "inline-block", padding: "2px 10px", borderRadius: "999px",
+          <span style={{ display: "inline-block", padding: "2px 10px", borderRadius: "999px",
             fontSize: "0.7rem", fontWeight: 700, whiteSpace: "nowrap",
-            background: status.bg, color: status.color, border: `1px solid ${status.border}`,
-          }}>
+            background: status.bg, color: status.color, border: `1px solid ${status.border}` }}>
             {status.label || "—"}
           </span>
         );
       },
     });
 
-    // Actions column — Edit + View only (no Delete per original spec)
     cols.push({
       id: "actions",
       header: "Actions",
       size: 100,
       cell: ({ row }) => (
         <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-          <Button
-            size="sm" variant="ghost" title="Edit"
+          <Button size="sm" variant="ghost" title="Edit"
             onClick={() => openEditDialog(row.original)}
-            style={{ padding: "4px", height: "28px", width: "28px" }}
-          >
+            style={{ padding: "4px", height: "28px", width: "28px" }}>
             <Edit2 size={14} />
           </Button>
-          <Button
-            size="sm" variant="ghost" title="View"
+          <Button size="sm" variant="ghost" title="View"
             onClick={() => openViewDialog(row.original)}
-            style={{ padding: "4px", height: "28px", width: "28px" }}
-          >
+            style={{ padding: "4px", height: "28px", width: "28px" }}>
             <Eye size={14} />
           </Button>
         </div>
@@ -694,9 +574,9 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     return cols;
   }, [isHRApprover, selectedRows, activeWeightage]);
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "16px" }}>
+
       {/* Breadcrumb */}
       <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "#6b7280" }}>
         <a href="/dashboard" style={{ color: "#6b7280", textDecoration: "none" }}>Home</a>
@@ -706,7 +586,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         <span style={{ color: "#111827", fontWeight: 500 }}>Appraisal</span>
       </div>
 
-      {/* Notice */}
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
       {/* Tabs */}
@@ -731,7 +610,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         ))}
       </div>
 
-      {/* Select All Checkbox */}
+      {/* Select All */}
       {isHRApprover && rows.length > 0 && (
         <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "0 4px" }}>
           <input
@@ -746,7 +625,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         </div>
       )}
 
-      {/* Data Table */}
       <DataTable
         columns={columns}
         data={rows}
@@ -765,7 +643,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         getRowId={(row) => text(row.APPRAISAL_DOC_NO)}
       />
 
-      {/* Bulk Approve Button */}
+      {/* Bulk Approve */}
       {isHRApprover && Object.values(selectedRows).some(Boolean) && (
         <div style={{ marginTop: "10px", display: "flex", justifyContent: "flex-end" }}>
           <Button onClick={handleBulkApprove} style={{ background: "#082a89" }}>
@@ -774,7 +652,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         </div>
       )}
 
-      {/* Edit/View Dialog */}
       <Dialog
         open={dialogOpen}
         wide
@@ -783,9 +660,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         onClose={closeDialog}
         footer={
           <>
-            <Button variant="outline" onClick={closeDialog}>
-              <X size={15} /> Close
-            </Button>
+            <Button variant="outline" onClick={closeDialog}><X size={15} /> Close</Button>
             {editMode && (
               <Button disabled={saving} onClick={saveRecord}>
                 <Save size={15} /> {saving ? "Saving..." : "Save Changes"}
@@ -820,13 +695,15 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
                     disabled={viewMode}
                     label="Employee"
                     value={formData.EMPLOYEE_CODE}
-                    displayValue={formData.EMPLOYEE_NAME ? `${formData.EMPLOYEE_CODE} - ${formData.EMPLOYEE_NAME}` : formData.EMPLOYEE_CODE}
+                    displayValue={formData.EMPLOYEE_NAME
+                      ? `${formData.EMPLOYEE_CODE} - ${formData.EMPLOYEE_NAME}`
+                      : formData.EMPLOYEE_CODE}
                     placeholder="Search employee"
                     columns={[
-                      { field: "EMPLOYEE_ID", header: "Employee ID" },
+                      { field: "EMPLOYEE_ID",   header: "Employee ID" },
                       { field: "EMPLOYEE_CODE", header: "Employee Code" },
-                      { field: "RPT_NAME", header: "Employee Name" },
-                      { field: "EMP_NAME", header: "Employee Name" },
+                      { field: "RPT_NAME",      header: "Employee Name" },
+                      { field: "EMP_NAME",      header: "Employee Name" },
                     ]}
                     valueField="EMPLOYEE_CODE"
                     displayFields={["EMPLOYEE_CODE", "RPT_NAME", "EMP_NAME"]}
