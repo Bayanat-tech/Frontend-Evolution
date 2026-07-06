@@ -11,6 +11,7 @@ export function ResetPasswordPage({ dark, onToggleTheme }: { dark: boolean; onTo
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const tokenFromLink = useMemo(() => searchParams.get("token") || "", [searchParams]);
   const emailFromLink = useMemo(() => searchParams.get("email") || "", [searchParams]);
   const [email, setEmail] = useState(emailFromLink);
   const [password, setPassword] = useState("");
@@ -27,8 +28,8 @@ export function ResetPasswordPage({ dark, onToggleTheme }: { dark: boolean; onTo
     event.preventDefault();
     setNotice(null);
 
-    if (!email.trim() || !password || !confirmPassword) {
-      setNotice({ type: "error", message: "Email, new password and confirmation are required." });
+    if ((!tokenFromLink && !email.trim()) || !password || !confirmPassword) {
+      setNotice({ type: "error", message: "Reset link, new password and confirmation are required." });
       return;
     }
 
@@ -39,7 +40,11 @@ export function ResetPasswordPage({ dark, onToggleTheme }: { dark: boolean; onTo
 
     try {
       setLoading(true);
-      const result = await resetPasswordRequest(email.trim(), password);
+      const result = await resetPasswordRequest({
+        email: tokenFromLink ? undefined : email.trim(),
+        password,
+        token: tokenFromLink || undefined,
+      });
       if (!result.success) {
         throw new Error(result.message || "Unable to reset password.");
       }
@@ -91,21 +96,23 @@ export function ResetPasswordPage({ dark, onToggleTheme }: { dark: boolean; onTo
 
           <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-          <label className="field">
-            <span>Email address</span>
-            <input
-              autoFocus={!emailFromLink}
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="Enter your email address"
-            />
-          </label>
+          {!tokenFromLink ? (
+            <label className="field">
+              <span>Email address</span>
+              <input
+                autoFocus={!emailFromLink}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="Enter your email address"
+              />
+            </label>
+          ) : null}
 
           <label className="field">
             <span>New password</span>
             <div className="password-field">
               <input
-                autoFocus={Boolean(emailFromLink)}
+                autoFocus={Boolean(emailFromLink || tokenFromLink)}
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}

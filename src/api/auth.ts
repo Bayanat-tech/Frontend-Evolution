@@ -48,11 +48,12 @@ export async function forgotPasswordRequest(email: string) {
   }
 }
 
-export async function resetPasswordRequest(email: string, password: string) {
+export async function resetPasswordRequest(params: { email?: string; password: string; token?: string }) {
   try {
     const response = await api.post<{ success: boolean; message?: string }>("/api/auth/resetPassword", {
-      email,
-      password,
+      email: params.email,
+      password: params.password,
+      token: params.token,
     });
     return response.data;
   } catch (error) {
