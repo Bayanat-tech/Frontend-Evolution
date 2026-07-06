@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { LoginPage } from "./pages/LoginPage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { AppSelectionPage } from "./pages/AppSelectionPage";
 import { WorkspacePage } from "./pages/WorkspacePage";
 import { ProtectedRoute } from "./routes/ProtectedRoute";
@@ -38,6 +39,7 @@ if (isBooting) {
         <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<LoginPage dark={dark} onToggleTheme={toggleTheme} />} />
+          <Route path="/reset-password" element={<ResetPasswordPage dark={dark} onToggleTheme={toggleTheme} />} />
           <Route
           path="/apps"
           element={
