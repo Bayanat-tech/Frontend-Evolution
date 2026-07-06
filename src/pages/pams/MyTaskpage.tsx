@@ -12,6 +12,7 @@ import { LookupField } from "../../components/ui/LookupField";
 import { NoticeToast } from "../../components/ui/NoticeToast";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { LookupRow } from "../../api/lookups";
+import { useToast } from "../../components/ui/AlertToast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Row = Record<string, unknown>;
@@ -38,10 +39,19 @@ interface ActiveWeightage {
   isHrDefined: boolean;
 }
 
+interface HodBatch {
+  PERIOD_NUMBER: string;
+  READY_COUNT: number | string;
+  PENDING_COUNT: number | string;
+}
+
 const TAB_STATUS   = ["PENDING", "IN PROGRESS", "REJECTED", "SENT BACK", "APPROVED"] as const;
 const TAB_LABELS   = ["Pending", "In Progress", "Rejected", "Sent Back", "Closed"]   as const;
 const HR_APPROVERS = ["2021060535", "2010080001", "2018030473"];
+// FLOW_LEVEL jispe HOD ke docs pahunchte hain jab HOD apna review complete kar leta hai (2 -> 3)
+const HOD_READY_FLOW_LEVEL = 3;
 const taskPageCache = new Map<string, Row[]>();
+
 function text(val: unknown): string {
   if (val === null || val === undefined) return "";
   return String(val);
@@ -97,6 +107,7 @@ function computeFinalRating(
 const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   const navigate    = useNavigate();
   const { user }    = useAuth();
+  const { toast }   = useToast();
   const loginid     = user?.loginid || user?.username || "";
   const companyCode = user?.company_code || "";
   const isHRApprover = HR_APPROVERS.includes(loginid);
@@ -132,8 +143,24 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   const [employees, setEmployees] = useState<Row[]>([]);
   const fetchRequestId  = useRef(0);
   const prevUserKeyRef  = useRef(`${loginid}-${companyCode}`);
-
   const statusFilter = TAB_STATUS[activeTab];
+
+  const [hodBatches, setHodBatches] = useState<HodBatch[]>([]);
+  const [notifying, setNotifying]   = useState<string | null>(null);
+
+  const loadHodBatches = useCallback(async () => {
+    try {
+      const data = await pamsSelect({
+        parameter: "hod_ready_batches",
+        loginid, code1: companyCode,
+      });
+      setHodBatches((data as unknown as HodBatch[]) ?? []);
+    } catch (error) {
+      console.error("Error loading HOD batches:", error);
+    }
+  }, [loginid, companyCode]);
+
+  useEffect(() => { void loadHodBatches(); }, [loadHodBatches]);
 
   useEffect(() => {
     if (!companyCode) return;
@@ -372,6 +399,38 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     const next: Record<string, boolean> = {};
     rows.forEach((row) => { next[text(row.APPRAISAL_DOC_NO)] = checked; });
     setSelectedRows(next);
+  };
+
+  // flowLevel = jis level pe docs abhi khade hain (HOD ke liye ye hamesha 3 hai)
+  const handleNotifyNextLevel = async (flowLevel: number, periodNumber: string) => {
+    const key = `${flowLevel}-${periodNumber}`;
+    setNotifying(key);
+    try {
+      const res = await pamsSelect({
+        parameter: "notify_next_level_hod_bulk",
+        loginid, code1: companyCode,
+        code2: String(flowLevel - 1),   // p_flow_level jispe wo baitha tha (2 for HOD)
+        code3: periodNumber,
+      });
+      const result = text((res as unknown as Row[])?.[0]?.P_RESULT);
+
+      if (result === "SUCCESS") {
+        toast.success(`Period ${periodNumber} has been sent to the next level for review.`);
+      } else if (result?.startsWith("PENDING")) {
+        const pendingCount = result.split(":")[1];
+        toast.warning(`${pendingCount} employee appraisal(s) are still pending your review. Please complete all reviews before notifying the next level.`);
+      } else if (result === "NOTHING_TO_NOTIFY") {
+        toast.warning("There are no completed appraisals ready to notify at this time.");
+      } else {
+        toast.error(result || "Something went wrong while notifying the next level.");
+      }
+
+      void loadHodBatches();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to notify the next level. Please try again.");
+    } finally {
+      setNotifying(null);
+    }
   };
 
   const columns = useMemo<ColumnDef<Row>[]>(() => {
@@ -624,6 +683,32 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
           </span>
         </div>
       )}
+
+      {/* HOD — Notify Next Level batches */}
+      {hodBatches
+        .filter((b) => Number(b.PENDING_COUNT) === 0 && Number(b.READY_COUNT) > 0)
+        .map((batch) => {
+          const key = `${HOD_READY_FLOW_LEVEL}-${batch.PERIOD_NUMBER}`;
+          return (
+            <div key={batch.PERIOD_NUMBER} style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "10px 14px", background: "#f0f4ff", border: "1px solid #b3caf5",
+              borderRadius: "8px", marginBottom: "8px",
+            }}>
+              <span style={{ fontSize: "13px", color: "#082A89", fontWeight: 500 }}>
+                Period {batch.PERIOD_NUMBER} — {Number(batch.READY_COUNT)} employees reviewed, ready for next level
+              </span>
+              <Button
+                size="sm"
+                disabled={notifying === key}
+                onClick={() => handleNotifyNextLevel(HOD_READY_FLOW_LEVEL, batch.PERIOD_NUMBER)}
+                style={{ background: "#082a89" }}
+              >
+                <CheckCircle size={14} /> {notifying === key ? "Sending..." : "Notify Next Level"}
+              </Button>
+            </div>
+          );
+        })}
 
       <DataTable
         columns={columns}
