@@ -307,7 +307,15 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
     return (
       <label className="field" key={field.name}>
         <span>{field.label}{field.required ? <strong className="text-destructive"> *</strong> : null}</span>
-        {renderInput(field, form[field.name], form[`${field.name}_name`], Boolean((editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd)), buildContext(), (value, row) => setForm((current) => ({ ...current, [field.name]: value, ...(row ? displayPatch(field, row) : { [`${field.name}_name`]: "" }) })))}
+        {renderInput(field, form[field.name], form[`${field.name}_name`], Boolean((editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd)), buildContext(), 
+      (value, row) => setForm((current) => {
+  if (!field.lookup) return { ...current, [field.name]: value };
+  return {
+    ...current,
+    [field.name]: value,
+    ...(row ? displayPatch(field, row) : { [`${field.name}_name`]: "" }),
+  };
+}))}
       </label>
     );
   })}

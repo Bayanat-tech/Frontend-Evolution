@@ -30,7 +30,7 @@ import {
   upsertBulkAccountEntryApi,
   getFinanceOutstanding,
 } from "../../api/transactions";
-import { getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
+import { getDynamicLookup, getDynamicFinanceLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { Badge } from "../../components/ui/Badge";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
@@ -732,10 +732,17 @@ function PaymentDocumentEditor({
     if (detail.child_table !== "invoice") return false;
     const childRows = (form.children[detail.id] || []) as TransactionChildRow[];
     if (childRows.length === 0) return false;
-    const totalOutstanding = childRows.reduce(
-      (sum, r) => sum + (Number(r.c_bal_amt_org) || 0), 0
-    );
-    return Number(detail.amount || 0) > totalOutstanding;
+
+    // In edit mode: outstanding may be 0 because THIS doc already holds the allocation.
+    // Use max(c_bal_amt_org, child.amount) per row as the effective ceiling.
+    const effectiveCeiling = childRows.reduce((sum, r) => {
+      const outstanding = Number(r.c_bal_amt_org) || 0;
+      const allocated = Number(r.amount) || 0;
+      // effective ceiling = outstanding + what this doc already allocated to it
+      return sum + Math.max(outstanding, allocated);
+    }, 0);
+
+    return Number(detail.amount || 0) > effectiveCeiling + 0.001; // small epsilon for float
   });
 
   return (
@@ -859,12 +866,37 @@ function PaymentDocumentEditor({
                   disabled={disabled || !form.div_code}
 
                   onChange={async (value, row) => {
+                    const selectedCurrency = text(getLookupValue(row || {}, "curr_code"));
+                    const selectedCurrName = text(getLookupValue(row || {}, "curr_name"));
+                    const selectedExRate = Number(getLookupValue(row || {}, "ex_rate") || row?.ex_rate || 0);
+                    let resolvedExRate = selectedExRate;
+
+                    if (!resolvedExRate && selectedCurrency) {
+                      try {
+                        const currencyRows = await getDynamicFinanceLookup({
+                          parameter: "Account_Currency_CODE_Search",
+                          code1: user?.company_code || "",
+                        });
+                        const match = currencyRows.find(
+                          (currencyRow) =>
+                            String(getLookupValue(currencyRow, "curr_code") || "").toUpperCase() ===
+                            selectedCurrency.toUpperCase(),
+                        );
+                        resolvedExRate = Number(getLookupValue(match || {}, "ex_rate") || match?.ex_rate || 0);
+                      } catch {
+                        resolvedExRate = 0;
+                      }
+                    }
+
                     setForm((current) => ({
                       ...current,
                       ac_code: value,
                       ac_name: text(getLookupValue(row || {}, "ac_name")),
-                      curr_code: text(getLookupValue(row || {}, "curr_code")),
+                      curr_code: selectedCurrency,
+                      curr_name: selectedCurrName,
+                      ex_rate: resolvedExRate || current.ex_rate || 1,
                     }));
+
                     if (docType !== "CR" && value) {
                       const cheque: Record<string, unknown> = await getCheque(value).catch(() => ({}));
                       setForm((current) => ({
@@ -891,8 +923,9 @@ function PaymentDocumentEditor({
                     ...current,
                     curr_code: value,
                     curr_name: text(getLookupValue(row || {}, "curr_name")),
-                    ex_rate: Number(row?.ex_rate ?? 1),
+                    ex_rate: Number(getLookupValue(row || {}, "ex_rate") || row?.ex_rate || current.ex_rate || 1),
                   }))}
+
                 />
                 <Field label="Exchange Rate*"><Input disabled={disabled} required type="number" style={{ textAlign: "right" }} step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} /></Field>
                 {/* {docType !== "CR" && (
@@ -1034,14 +1067,15 @@ function PaymentDocumentEditor({
                               const childRows = (form.children[detail.id] || []) as TransactionChildRow[];
                               if (detail.child_table !== "invoice" || childRows.length === 0) return null;
 
-                              const totalOutstanding = childRows.reduce(
-                                (sum, r) => sum + (Number(r.c_bal_amt_org) || 0), 0
-                              );
+                              const effectiveCeiling = childRows.reduce((sum, r) => {
+                                const outstanding = Number(r.c_bal_amt_org) || 0;
+                                const allocated = Number(r.amount) || 0;
+                                return sum + Math.max(outstanding, allocated);
+                              }, 0);
 
-                              // ✅ Compare user's typed detail amount against total outstanding
-                              return Number(detail.amount || 0) > totalOutstanding ? (
+                              return Number(detail.amount || 0) > effectiveCeiling + 0.001 ? (
                                 <span className="text-xs text-red-500">
-                                  Amount exceeds total outstanding ({totalOutstanding.toFixed(3)})
+                                  Amount exceeds total outstanding ({effectiveCeiling.toFixed(3)})
                                 </span>
                               ) : null;
                             })()}
@@ -1310,7 +1344,7 @@ function ChildAllocationTable({
                         type="number"
                         style={{ textAlign: "right" }}
                         step="0.001"
-                        value={Number(row.amount.toFixed(3) || 0)}
+                        value={Number(((Number(row.amount) || 0) * (Number(row.ex_rate) || 1)).toFixed(3))}
                         onChange={(event) =>
                           onChange(row.id, {
                             amount: Number(event.target.value || 0),
@@ -1323,11 +1357,12 @@ function ChildAllocationTable({
                         }
                       />
 
-                      {Number(row.amount || 0) > Number(row.c_bal_amt_org || 0) && (
-                        <span className="text-xs text-red-500">
-                          Amount exceeds available balance
-                        </span>
-                      )}
+                      {Number(row.c_bal_amt_org || 0) > 0 &&
+                        Number(row.amount || 0) > Number(row.c_bal_amt_org || 0) + 0.001 && (
+                          <span className="text-xs text-red-500">
+                            Amount exceeds available balance
+                          </span>
+                        )}
                     </div>
                   </td>
                 </>

@@ -85,9 +85,6 @@ type FormState = {
   payment_terms?: string;
   delivery_info?: string;
   dlvr_term?: string;  
-  // contact?: string;
-  // mobile?: string;
-  // email?: string;
   tax_category?: string;
   tax_cat_code?: string;
   tax_type?: string;
@@ -455,7 +452,13 @@ function CommercialEditor({
   const dir = Number(line.sign_ind || 1) === baseSign ? 1 : -1;
   return sum + amt * dir;
   }, 0);
-  const taxTotal = form.detail.filter((line) => Number(line.serial_no) < 9000).reduce((sum, line) => sum + (Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100, 0);
+  // const taxTotal = form.detail.filter((line) => Number(line.serial_no) < 9000).reduce((sum, line) => sum + (Number(line.amount || 0) * Number(line.tx_compnt_perc_1 || 0)) / 100, 0);
+
+  const taxTotal = visibleLines.reduce((sum, line) => {
+  const taxAmt = Math.abs(Number(line.amount || 0)) * Number(line.tx_compnt_perc_1 || 0) / 100;
+  const dir = Number(line.sign_ind || 1) === baseSign ? 1 : -1;
+  return sum + taxAmt * dir;
+}, 0);
 
   const update = (field: keyof FormState, value: string | number) => setForm((current) => ({ ...current, [field]: value }));
   const updateLine = (id: string, patch: Partial<Line>) => {
@@ -476,7 +479,7 @@ function CommercialEditor({
     //   tx_compnt_perc_1:    current.tx_compnt_perc_1 ?? 0,
     // };
     const resolvedExpmt = current.tx_compnt_1_expmt || current.tax_type || "S";
-const resolvedPerc  = (current.tx_compnt_perc_1 != null && current.tx_compnt_perc_1 !== 0)
+    const resolvedPerc  = (current.tx_compnt_perc_1 != null && current.tx_compnt_perc_1 !== 0)
   ? current.tx_compnt_perc_1
   : resolvedExpmt === "S" ? 5 : 0;
 
@@ -581,7 +584,7 @@ const withTax = {
 };
 
   return (
-    <form className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`} onSubmit={submit}>
+    <form className={`payment-workbench commercial-editor commercial-document-workbench grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`} onSubmit={submit}>
       <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
@@ -650,7 +653,6 @@ const withTax = {
        <div className="commercial-section-title">
          <div>
            <p className="eyebrow m-0">Header</p>
-           <h3 className="m-0 text-sm font-semibold leading-tight">Document Information</h3>
          </div>
          <span>{showHeaderDetails ? "Full header" : "Compact header"}</span>
        </div>
@@ -698,6 +700,73 @@ const withTax = {
     </Field>
   )}
 
+  {isSales && !isPO && (
+    <LookupField
+      label="Ref Doc"
+      disabled={isCancelled}
+      value={form.ref_doc_no || ""}
+      displayValue={form.ref_doc_no || ""}
+      columns={[
+        { field: "DOC_NO", header: "Doc No" },
+        { field: "DOC_DATE", header: "Date" },
+        { field: "REF_NO", header: "Ref No" },
+        { field: "REMARKS", header: "Remarks" },
+      ]}
+      valueField="DOC_NO"
+      displayFields={["DOC_NO"]}
+      loadOptions={() =>
+        getDynamicFinanceLookup({
+          parameter: "Account_LPO_REF_DOC",
+          code1: user?.company_code || "",
+          number1: form.div_code ? Number(form.div_code) : undefined,
+        })
+      }
+      onChange={async (value, row) => {
+        if (!value || !row) return;
+        const r = row as Record<string, unknown>;
+        const docNo = String(r["DOC_NO"] ?? r["doc_no"] ?? value);
+        const srcType = String(r["DOC_TYPE"] ?? r["doc_type"] ?? "PO");
+        setForm((c) => ({ ...c, ref_doc_no: docNo }));
+        try {
+          let header: Record<string, unknown> = {};
+          try {
+            header = await getPurchaseHeader(docNo, srcType);
+            if (!hasRecordData(header)) header = await getLpoHeader(docNo, srcType);
+          } catch {
+            header = await getLpoHeader(docNo, srcType);
+          }
+
+          let rawDetail: Record<string, unknown>[] = [];
+          try {
+            const res = await getTransactionDetail(docNo, form.div_code, srcType as TransactionType);
+            if (res.length) rawDetail = res;
+          } catch {}
+          if (!rawDetail.length) {
+            try {
+              rawDetail = await getLpoDetail(docNo, srcType);
+            } catch {}
+          }
+
+          const targetDocType: CommercialType = srcType.toUpperCase() === "PO" ? "PI" : (srcType as CommercialType);
+          const mapped = mapForm(targetDocType, header, rawDetail);
+          setForm((c) => ({
+            ...c,
+            ...mapped,
+            doc_type: targetDocType,
+            doc_no: c.doc_no,
+            div_code: c.div_code,
+            div_name: c.div_name,
+            ref_doc_no: docNo,
+            detail: mapped.detail,
+          }));
+        } catch (err) {
+          console.error("Failed to load ref doc", err);
+          setError(err instanceof Error ? err.message : "Unable to load reference document");
+        }
+      }}
+    />
+  )}
+
   {/* ── PO-only: Ref No / Ref Date / APP Ref No / LPO Category ── */}
   {isPO && (
     <Field label="Ref No">
@@ -737,7 +806,7 @@ const withTax = {
           </div>
         </section>
 
-        <section className="commercial-header-block commercial-header-block-party">
+        <section className={`commercial-header-block commercial-header-block-party ${isSales ? "commercial-header-block-party-sales" : ""}`}>
           <div className="commercial-header-block-title">
             <span>{isSales ? "Customer" : "Supplier"}</span>
           </div>
@@ -834,7 +903,7 @@ const withTax = {
   </div>
 
   <Field label="Ex Rate" required error={fieldErrors.ex_rate}>
-    <Input disabled={isCancelled} type="number" step="0.0001" value={form.ex_rate}
+    <Input disabled={isCancelled} type="number" step="0.000001" value={form.ex_rate}
       className={fieldErrors.ref_no ? "border-destructive" : ""}
       onChange={(e) => update("ex_rate", Number(e.target.value || 1))} />
   </Field>
@@ -859,6 +928,62 @@ const withTax = {
     <Input disabled={isCancelled} value={form.payment_terms || ""} onChange={(e) => update("payment_terms", e.target.value)} />
   </Field>
 
+  {isSales && (
+  <LookupField
+    label="Salesman"
+    disabled={isCancelled}
+    value={form.salesman_code ?? ""}
+    displayValue={[form.salesman_code, form.salesman_name].filter(Boolean).join(" - ")}
+    columns={[
+      { field: "salesman_code", header: "Code" },
+      { field: "salesman_name", header: "Name" },
+    ]}
+    valueField="salesman_code"
+    displayFields={["salesman_code", "salesman_name"]}
+    loadOptions={() =>
+      getDynamicFinanceLookup({
+        parameter: "Salesman_Search",
+        code1: user?.company_code || "",
+      })
+    }
+    onChange={(value, row) =>
+      setForm((c) => ({
+        ...c,
+        salesman_code: value,
+        salesman_name: text(getLookupValue(row || {}, "salesman_name")),
+      }))
+    }
+  />
+  )}
+
+  {isSales && (
+   <LookupField
+    label="Sector"
+    disabled={isCancelled}
+    value={form.sector_code ?? ""}
+    displayValue={[form.sector_code, form.sector_name].filter(Boolean).join(" - ")}
+    columns={[
+      { field: "sector_code", header: "Code" },
+      { field: "sector_name", header: "Name" },
+    ]}
+    valueField="sector_code"
+    displayFields={["sector_code", "sector_name"]}
+    loadOptions={() =>
+      getDynamicFinanceLookup({
+        parameter: "Sector_Search",
+        code1: user?.company_code || "",
+      })
+    }
+    onChange={(value, row) =>
+      setForm((c) => ({
+        ...c,
+        sector_code: value,
+        sector_name: text(getLookupValue(row || {}, "sector_name")),
+      }))
+    }
+  />
+  )}
+
   {isPO && (
     <Field label="Delivery Term">
       <Input disabled={isCancelled} value={form.dlvr_term || ""} onChange={(e) => update("dlvr_term", e.target.value)} />
@@ -873,7 +998,7 @@ const withTax = {
           </div>
         </section>
 
-        {showReferenceBlock && (
+        {showReferenceBlock && !isSales && (
         <section className="commercial-header-block commercial-header-block-extra">
           <div className="commercial-header-block-title">
             <span>Reference</span>
@@ -915,7 +1040,7 @@ const withTax = {
     label="Salesman"
     disabled={isCancelled}
     value={form.salesman_code ?? ""}
-    displayValue={form.salesman_name ? `${form.salesman_code} - ${form.salesman_name}` : form.salesman_code ?? ""}
+    displayValue={[form.salesman_code, form.salesman_name].filter(Boolean).join(" - ")}
     columns={[
       { field: "salesman_code", header: "Code" },
       { field: "salesman_name", header: "Name" },
@@ -937,11 +1062,11 @@ const withTax = {
     }
   />
   )}
-  {isSales && (
+  {/* {isSales && (
   <Field label="Salesman Name">
     <Input disabled value={form.salesman_name || ""} />
   </Field>
- )}
+ )} */}
 
   {/* ── Sector Code + Name — SI / SV only ── */}
    {isSales && (
@@ -949,7 +1074,7 @@ const withTax = {
     label="Sector"
     disabled={isCancelled}
     value={form.sector_code ?? ""}
-    displayValue={form.sector_name ? `${form.sector_code} - ${form.sector_name}` : form.sector_code ?? ""}
+    displayValue={[form.sector_code, form.sector_name].filter(Boolean).join(" - ")}
     columns={[
       { field: "sector_code", header: "Code" },
       { field: "sector_name", header: "Name" },
@@ -971,18 +1096,18 @@ const withTax = {
     }
   />
   )}
-  {isSales && (
+  {/* {isSales && (
     <Field label="Sector Name">
       <Input disabled value={form.sector_name || ""} />
     </Field>
-  )}
+  )} */}
 
   {/* ── Tax Category  ── */}
           </div>
         </section>
         )}
 
-        <section className={`commercial-header-block commercial-header-block-tax ${!showReferenceBlock ? "commercial-header-block-tax-wide" : ""}`}>
+        <section className={`commercial-header-block commercial-header-block-tax ${(!showReferenceBlock || isSales) ? "commercial-header-block-tax-wide" : ""} ${isSales ? "commercial-header-block-tax-sales-wide" : ""}`}>
           <div className="commercial-header-block-title">
             <span>Tax & Remarks</span>
           </div>
@@ -1142,7 +1267,7 @@ const withTax = {
                 <Button disabled={isCancelled} size="sm" type="button" variant="outline" onClick={addLine}><Plus size={14} /> Add Line</Button>
               </div>
               <div className="commercial-lines-scroll overflow-auto">
-                <table className="finance-lines-table w-full min-w-[2400px] text-[12px]">
+                <table className="finance-lines-table w-full min-w-[3300px] text-[12px]">
                   <thead className="sticky top-0 bg-primary text-xs text-primary-foreground">
                     <tr>
                       <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
@@ -1206,7 +1331,7 @@ const withTax = {
     />
   </td>
 )}
-                        <td className="w-[360px] px-2 py-1">
+                        <td className="w-[960px] px-2 py-1">
                           <textarea
                             disabled={isCancelled}
                             className="commercial-line-description"
@@ -1277,7 +1402,7 @@ const withTax = {
                             onChange={(value, row) => setForm((c) => ({ ...c, curr_code: value, curr_name: text(getLookupValue(row || {}, "curr_name")), ex_rate: Number(getLookupValue(row || {}, "ex_rate") || 1) }))}
                           />
                         </td>
-                        <td className="w-40 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.0001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></td>
+                        <td className="w-40 px-2 py-1"><Input disabled={isCancelled} className="commercial-number-input finance-money-input" type="number" step="0.000001" value={form.ex_rate} onChange={(event) => update("ex_rate", Number(event.target.value || 1))} /></td>
                         <td className="w-40 px-2 py-1"><Input disabled={isCancelled} value={line.job_no || ""} onChange={(event) => updateLine(line.id, { job_no: event.target.value })} /></td>
                         {isPO && (
                           <td className="w-36 px-2 py-1"> <Input disabled={isCancelled}  value={line.dept_code || ""}  onChange={(e) => updateLine(line.id, { dept_code: e.target.value })}/> </td>

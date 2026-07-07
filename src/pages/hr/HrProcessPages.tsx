@@ -13,7 +13,7 @@ import { NoticeToast } from "../../components/ui/NoticeToast";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import { SalaryAdvancePage } from "./SalaryAdvancePage";
-import {TrainingFeedbackPage} from "./Hrtrainingfeedbackpage";
+import {TrainingFeedbackPage} from "./Trainingfeedbackpage";
 
 type Notice = { type: "success" | "error"; message: string } | null;
 

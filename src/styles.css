@@ -158,6 +158,105 @@ body {
   }
 }
 
+.vendor-compact {
+  --app-control-font-size: 12px;
+  --app-table-font-size: 11.5px;
+  --app-label-font-size: 11px;
+}
+
+.vendor-compact section {
+  gap: 10px;
+}
+
+.vendor-compact .eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+}
+
+.vendor-compact .vendor-page-header h1 {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.vendor-compact .ui-button {
+  min-height: 30px;
+  height: 30px;
+  padding-inline: 10px;
+  font-size: 12px;
+}
+
+.vendor-compact .ui-button-icon {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+}
+
+.vendor-compact .ui-input,
+.vendor-compact .ui-select {
+  height: 32px;
+  font-size: 12px;
+}
+
+.vendor-compact .data-table-header {
+  padding: 6px 8px;
+}
+
+.vendor-compact .data-table-search {
+  height: 34px;
+  max-width: 430px;
+}
+
+.vendor-compact .data-table-scroll table {
+  font-size: 11.5px;
+}
+
+.vendor-compact .data-table-scroll th,
+.vendor-compact .data-table-scroll td {
+  font-size: 11.5px;
+}
+
+.vendor-compact .vendor-detail-panel {
+  font-size: 11.5px;
+}
+
+.vendor-invoice-dialog {
+  width: min(98vw, 1680px) !important;
+}
+
+.vendor-pending-dialog {
+  width: min(96vw, 1180px) !important;
+}
+
+.vendor-compact .vendor-detail-scroll {
+  height: min(52dvh, 520px);
+  min-height: 320px;
+}
+
+.vendor-compact .vendor-detail-table th,
+.vendor-compact .vendor-detail-table td {
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+.vendor-compact .vendor-detail-table tbody tr {
+  height: 24px;
+}
+
+.vendor-compact .vendor-line-input {
+  height: 22px;
+  min-height: 22px;
+  padding: 0 5px;
+  font-size: 11px;
+  box-shadow: none;
+}
+
+.vendor-compact .vendor-line-icon {
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+}
+
 button,
 input,
 select,
@@ -1009,9 +1108,10 @@ footer,
 }
 
 .workspace {
-  min-height: 100vh;
+  height: 100vh;        /* was: min-height: 100vh */
   display: flex;
   background: var(--bg);
+  overflow: hidden;      /* new */
 }
 
 body.mobile-menu-lock {
@@ -1027,7 +1127,7 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   width: var(--app-sidebar-width);
   min-width: var(--app-sidebar-width);
   max-width: var(--app-sidebar-width);
-  min-height: 100vh;
+  height: 100vh;         /* was: min-height: 100vh */
   display: flex;
   flex-direction: column;
   background: var(--panel);
@@ -1406,6 +1506,10 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .workspace-main {
   flex: 1;
   min-width: 0;
+  height: 100vh;          /* new */
+  display: flex;           /* new */
+  flex-direction: column;  /* new */
+  overflow: hidden;        /* new */
 }
 
 .mobile-appbar,
@@ -1461,8 +1565,10 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 
 .workspace-content {
   padding: var(--app-content-padding-y) var(--app-content-padding-x);
+  flex: 1;              /* new */
+  min-height: 0;         /* new — critical for flex children to scroll properly */
+  overflow-y: auto;      /* new */
 }
-
 .workspace-content > section > div:first-child:has(h1) {
   align-items: flex-end;
   padding-bottom: 10px;
@@ -2206,8 +2312,11 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   max-width: none;
 }
 
+/* .commercial-header-block-fields > .field,
+.commercial-header-block-fields > label.field { */
 .commercial-header-block-fields > .field,
-.commercial-header-block-fields > label.field {
+.commercial-header-block-fields > label.field,
+.commercial-header-block-fields > div {
   position: relative;
   min-height: 44px;
   padding: 4px 6px;
@@ -2322,7 +2431,8 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 }
 
 .commercial-header-panel.is-collapsed .commercial-header-block-fields > .field,
-.commercial-header-panel.is-collapsed .commercial-header-block-fields > label.field {
+.commercial-header-panel.is-collapsed .commercial-header-block-fields > label.field,
+.commercial-header-panel.is-collapsed .commercial-header-block-fields > div  {
   min-height: 42px;
   padding: 4px 6px;
   border-radius: 8px;
@@ -2339,7 +2449,8 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .commercial-header-panel.is-collapsed select,
 .commercial-header-panel.is-collapsed textarea,
 .commercial-header-panel.is-collapsed button[role="combobox"],
-.commercial-header-panel.is-collapsed .lookup-field-trigger {
+.commercial-header-panel.is-collapsed .lookup-field-trigger,
+.commercial-header-panel.is-collapsed .field > div.flex.overflow-hidden {
   min-height: 28px;
   height: 28px;
   font-size: 12px;
@@ -3013,6 +3124,292 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .commercial-line-description:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--ring);
+}
+
+.commercial-document-workbench .commercial-section-title {
+  min-height: 18px;
+  padding: 1px 8px;
+}
+
+.commercial-document-workbench .commercial-section-title > div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.commercial-document-workbench .commercial-section-title .eyebrow {
+  font-size: 9.5px;
+  line-height: 1;
+}
+
+.commercial-document-workbench .commercial-section-title h3 {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.commercial-document-workbench .commercial-section-title > span {
+  padding: 0 7px;
+  font-size: 9.5px;
+  line-height: 15px;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded {
+  gap: 4px;
+  padding: 4px !important;
+  grid-template-columns: minmax(280px, 0.56fr) minmax(0, 1.78fr) minmax(0, 1.18fr);
+}
+
+.commercial-document-workbench .commercial-header-block {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.02);
+}
+
+.commercial-document-workbench .commercial-header-block-title {
+  min-height: 17px;
+  padding: 1px 8px;
+}
+
+.commercial-document-workbench .commercial-header-block-title span {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+}
+
+.commercial-document-workbench .commercial-header-block-fields {
+  gap: 3px;
+  padding: 4px;
+}
+
+.commercial-document-workbench .commercial-header-block-fields > .field,
+.commercial-document-workbench .commercial-header-block-fields > label.field,
+.commercial-document-workbench .commercial-header-block-fields > div {
+  min-height: 34px;
+  padding: 2px 5px;
+  border-radius: 6px;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-doc {
+  align-self: stretch;
+}
+
+.commercial-document-workbench .commercial-header-block-fields > .field > span,
+.commercial-document-workbench .commercial-header-block-fields > label.field > span {
+  margin-bottom: 0;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded input,
+.commercial-document-workbench .commercial-header-panel.is-expanded select,
+.commercial-document-workbench .commercial-header-panel.is-expanded textarea,
+.commercial-document-workbench .commercial-header-panel.is-expanded button[role="combobox"],
+.commercial-document-workbench .commercial-header-panel.is-expanded .lookup-field-trigger,
+.commercial-document-workbench .commercial-header-panel.is-expanded .field > div.flex.overflow-hidden {
+  min-height: 23px;
+  height: 23px;
+  font-size: 11.5px;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-doc .commercial-header-block-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-extra .commercial-header-block-fields {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-extra:not(.commercial-header-block-extra-sales-compact) .commercial-header-block-fields > :only-child {
+  grid-column: 1 / -1;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-extra-sales-compact .commercial-header-block-fields {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-extra-sales-compact .commercial-header-block-fields > .field,
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-extra-sales-compact .commercial-header-block-fields > label.field {
+  min-height: 29px;
+  padding: 2px 5px;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-extra-sales-compact .lookup-field-trigger {
+  width: 100%;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party {
+  grid-column: span 2;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party .commercial-header-block-fields {
+  grid-template-columns:
+    minmax(270px, 1.35fr)
+    minmax(210px, 1fr)
+    minmax(150px, 0.7fr)
+    minmax(105px, 0.46fr)
+    minmax(150px, 0.7fr);
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-party-primary {
+  grid-column: span 2;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party .commercial-header-block-fields > .field.col-span-2,
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party .commercial-header-block-fields > label.field.col-span-2 {
+  grid-column: span 2;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party .commercial-header-block-fields > :nth-child(9) {
+  grid-column: span 2;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party .commercial-header-block-fields > :nth-child(9):last-child {
+  grid-column: 1 / -1;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party .commercial-header-block-fields > :nth-child(11) {
+  grid-column: span 2;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party-sales .commercial-header-block-fields {
+  grid-template-columns:
+    minmax(340px, 1.75fr)
+    minmax(190px, 0.96fr)
+    minmax(145px, 0.7fr)
+    minmax(105px, 0.5fr)
+    minmax(135px, 0.62fr)
+    minmax(135px, 0.62fr);
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party-sales .commercial-party-primary {
+  grid-column: span 3;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party-sales .commercial-header-block-fields > :nth-child(5) {
+  grid-column: span 2;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party-sales .commercial-header-block-fields > :nth-child(8) {
+  grid-column: span 2;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party-sales .commercial-header-block-fields > :nth-child(9) {
+  grid-column: span 2;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party-sales .commercial-header-block-fields > :nth-child(10),
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party-sales .commercial-header-block-fields > :nth-child(11) {
+  grid-column: span 2;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax {
+  grid-column: span 2;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax-wide {
+  grid-column: 2 / -1;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax-sales-wide {
+  grid-column: 1 / -1;
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax .commercial-header-block-fields {
+  grid-template-columns:
+    minmax(210px, 1fr)
+    minmax(92px, 0.42fr)
+    minmax(120px, 0.52fr)
+    minmax(260px, 1.18fr);
+}
+
+.commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax .commercial-header-block-fields > :nth-child(4) {
+  grid-column: auto;
+}
+
+.commercial-document-workbench .commercial-header-footer {
+  min-height: 28px;
+  padding: 3px 10px;
+  font-size: 11px;
+}
+
+.commercial-document-workbench .commercial-lines-card {
+  display: flex;
+  min-height: 260px;
+  flex-direction: column;
+}
+
+.commercial-document-workbench .commercial-lines-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.commercial-document-workbench .commercial-lines-card tbody tr {
+  height: 28px;
+}
+
+.commercial-document-workbench .commercial-lines-card table .ui-input,
+.commercial-document-workbench .commercial-lines-card table .ui-select,
+.commercial-document-workbench .commercial-lines-card table .field > div,
+.commercial-document-workbench .commercial-line-description {
+  height: 24px;
+  min-height: 24px;
+}
+
+.commercial-document-workbench .commercial-lines-card table th {
+  height: 26px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.commercial-document-workbench .commercial-lines-card table td {
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+
+@media (max-width: 1536px) {
+  .commercial-document-workbench .commercial-header-panel.is-expanded {
+    grid-template-columns: minmax(270px, 0.68fr) minmax(0, 1.62fr);
+  }
+
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party,
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax,
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax-wide {
+    grid-column: span 1;
+  }
+
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party .commercial-header-block-fields,
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax .commercial-header-block-fields {
+    grid-template-columns:
+      minmax(230px, 1.35fr)
+      minmax(160px, 0.9fr)
+      minmax(120px, 0.62fr)
+      minmax(120px, 0.62fr);
+  }
+
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-party-primary,
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party .commercial-header-block-fields > .field.col-span-2,
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party .commercial-header-block-fields > label.field.col-span-2 {
+    grid-column: span 2;
+  }
+
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party .commercial-header-block-fields > :nth-child(9):last-child {
+    grid-column: 1 / -1;
+  }
+
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-extra .commercial-header-block-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1180px) {
+  .commercial-document-workbench .commercial-header-panel.is-expanded,
+  .commercial-document-workbench .commercial-header-panel.is-collapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-party,
+  .commercial-document-workbench .commercial-header-panel.is-expanded .commercial-header-block-tax {
+    grid-column: span 1;
+  }
 }
 
 .commercial-sticky-footer {

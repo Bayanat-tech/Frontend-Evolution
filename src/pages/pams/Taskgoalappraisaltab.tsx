@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "../../state/AuthContext";
 import { pamsSelect } from "../../api/pams";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 type Row = Record<string, unknown>;
 
 interface Props {
@@ -28,7 +27,6 @@ function num(val: unknown): number {
   return isFinite(n) ? n : 0;
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const S = {
   wrapper: {
     width: "100%", height: "420px", overflowY: "auto" as const,
@@ -58,19 +56,16 @@ const S = {
   emptyMsg: { padding: "40px", textAlign: "center" as const, color: "#9ca3af", fontSize: "13px" },
 };
 
-// ─── Component ────────────────────────────────────────────────────────────────
 const TaskGoalAppraisalTab: React.FC<Props> = ({
   docNo, employeeCode, onRowsChange,
 }) => {
   const { user }    = useAuth();
   const loginid     = user?.loginid || user?.username || "";
   const companyCode = user?.company_code || "";
-
   const [rows,      setRows]      = useState<Row[]>([]);
   const [rowStates, setRowStates] = useState<Record<string, RowState>>({});
   const [loading,   setLoading]   = useState(true);
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!docNo) return;
     setLoading(true);
@@ -95,7 +90,6 @@ const TaskGoalAppraisalTab: React.FC<Props> = ({
       .finally(() => setLoading(false));
   }, [docNo, employeeCode, loginid, companyCode]);
 
-  // ── Notify parent ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!rows.length || !onRowsChange) return;
     const updated = rows.map((row) => {
@@ -106,14 +100,12 @@ const TaskGoalAppraisalTab: React.FC<Props> = ({
     onRowsChange(updated);
   }, [rowStates, rows, onRowsChange]);
 
-  // ── Grand total ────────────────────────────────────────────────────────────
   const grandTotal = useMemo(() => {
     let t = 0;
     rows.forEach((row) => { t += rowStates[text(row.KPI_CODE)]?.TOTAL ?? num(row.TOTAL); });
     return Number(t.toFixed(2));
   }, [rows, rowStates]);
 
-  // ── Rating change ──────────────────────────────────────────────────────────
   const handleRatingChange = (row: Row, value: string) => {
     const key = text(row.KPI_CODE);
     if (value === "") {
@@ -127,7 +119,6 @@ const TaskGoalAppraisalTab: React.FC<Props> = ({
     setRowStates((prev) => ({ ...prev, [key]: { RATING: rating, TOTAL: total } }));
   };
 
-  // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div style={S.wrapper}>
       <table style={S.table}>

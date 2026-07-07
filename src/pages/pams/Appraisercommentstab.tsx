@@ -18,7 +18,7 @@ interface Props {
   characterTotal: number;
   flowLevel?: number;
   userFlowLevel?: number;
-  weightageConfig?: WeightageConfig;            // from parent (AppraisalViewTabsPage)
+  weightageConfig?: WeightageConfig;
   onAppraiserCommentChange?: (val: string) => void;
   onAppraiseeCommentChange?: (val: string) => void;
 }
@@ -33,6 +33,16 @@ function fmtDateTime(val: unknown): string {
   const d = new Date(String(val));
   if (isNaN(d.getTime())) return "";
   return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+}
+
+function commentForLevel(row: Row | null, level: number): string {
+  if (!row || level < 1 || level > 5) return "";
+  return text(row[`APPRAISER_COMMENTS${level}`]);
+}
+
+function nameForLevel(row: Row | null, level: number): string {
+  if (!row || level < 1 || level > 5) return "";
+  return text(row[`APPRAISER_NAME${level}`]);
 }
 
 const S = {
@@ -66,6 +76,16 @@ const S = {
   meta: { fontSize: "11px", color: "#6b7280", marginTop: "4px" },
   readOnlyTag: { fontSize: "11px", color: "#ef4444", marginTop: "4px" },
   spinner: { padding: "40px", textAlign: "center" as const, color: "#9ca3af", fontSize: "13px" },
+  prevBlock: {
+    padding: "8px", marginBottom: "8px", borderRadius: "6px",
+    background: "#f9fafb", border: "1px solid #e5e7eb",
+  },
+  prevName: { fontSize: "12px", fontWeight: 700, color: "#374151", marginBottom: "4px" },
+  prevComment: {
+    fontSize: "13px", color: "#4b5563", whiteSpace: "pre-wrap" as const,
+  },
+  currentName: { fontSize: "12px", fontWeight: 700, color: "#374151", marginBottom: "4px" },
+  nameBox: { fontSize: "12px", fontWeight: 700, color: "#374151", marginBottom: "4px" },
 };
 
 const AppraiserCommentsTab: React.FC<Props> = ({
@@ -81,30 +101,35 @@ const AppraiserCommentsTab: React.FC<Props> = ({
 }) => {
   const { user }  = useAuth();
   const loginid   = user?.loginid || user?.username || "";
-
+  const myName    = (user as Row | undefined)?.name as string | undefined;
   const [appraiserComment, setAppraiserComment] = useState("");
   const [appraiseeComment, setAppraiseeComment] = useState("");
   const [existingData,     setExistingData]     = useState<Row | null>(null);
   const [loading,          setLoading]          = useState(false);
-
   const isEmployee          = loginid.trim().toUpperCase() === employeeCode.trim().toUpperCase();
   const isFinal             = flowLevel >= 6;
   const isCurrentActionUser = userFlowLevel === 0 && !isEmployee && !isFinal;
   const appraiserReadOnly   = isEmployee || isFinal || !isCurrentActionUser;
   const appraiseeReadOnly   = !isEmployee || isFinal;
-
-  // ── Final rating — uses weightageConfig from parent (HR logic or default) ──
+  const effectiveLevel = userFlowLevel === 0 ? flowLevel : userFlowLevel;
+  const prevLevelNum        = effectiveLevel - 1;
+  const prevLevelCommentRaw = effectiveLevel >= 2 ? commentForLevel(existingData, prevLevelNum) : "";
+  const prevLevelComment    = prevLevelCommentRaw.trim();
+  const showPrevLevel       = prevLevelComment.length > 0;
+  const prevLevelName       = showPrevLevel ? nameForLevel(existingData, prevLevelNum) : "";
+  const currentActorName = userFlowLevel === 0
+    ? (text(existingData?.CURRENT_USER_NAME) || myName || loginid)
+    : nameForLevel(existingData, userFlowLevel);
+  const employeeName = text(existingData?.EMPLOYEE_NAME);
   const { finalRating, taskWeighted, charWeighted } = useMemo(() => {
     const t = Number(taskTotal      || 0);
     const c = Number(characterTotal || 0);
 
     if (weightageConfig?.isHrDefined) {
-      // HR logic: weighted formula
       const tw  = (t * weightageConfig.taskPct) / 100;
       const cw  = (c * weightageConfig.charPct) / 100;
       return { finalRating: Math.round(tw + cw), taskWeighted: tw, charWeighted: cw };
     }
-    // Default: simple average
     return {
       finalRating:  Math.round((t + c) / 2),
       taskWeighted: t / 2,
@@ -112,7 +137,7 @@ const AppraiserCommentsTab: React.FC<Props> = ({
     };
   }, [taskTotal, characterTotal, weightageConfig]);
 
-  // ── Fetch comments ────────────────────────────────────────────────────────
+  // ── Fetch comments ──
   useEffect(() => {
     if (!docNo) return;
     setLoading(true);
@@ -121,6 +146,7 @@ const AppraiserCommentsTab: React.FC<Props> = ({
         if (res.length > 0) {
           const row = res[0] as Row;
           setExistingData(row);
+          console.log("APPRAISAL DATA =", row);
           let ac = "";
           if      (userFlowLevel === 0) ac = text(row.APPRAISER_COMMENTS);
           else if (userFlowLevel === 1) ac = text(row.APPRAISER_COMMENTS1);
@@ -145,30 +171,22 @@ const AppraiserCommentsTab: React.FC<Props> = ({
 
   if (loading) return <div style={S.spinner}>Loading comments...</div>;
 
-  const isHrLogic  = weightageConfig?.isHrDefined ?? false;
-  const taskPctLbl = weightageConfig?.taskPct ?? 50;
-  const charPctLbl = weightageConfig?.charPct ?? 50;
-
   return (
     <div>
       {/* ── Score summary ── */}
       <div style={S.scoreRow}>
-
         <div style={S.scoreBox("#1976d2")}>
           <div style={S.scoreLabel}>Task Score</div>
           <div style={S.scoreValue("#1976d2")}>{Math.round(taskTotal)}</div>
         </div>
-
         <div style={S.scoreBox("#9c27b0")}>
           <div style={S.scoreLabel}>Character Score</div>
           <div style={S.scoreValue("#9c27b0")}>{Math.round(characterTotal)}</div>
         </div>
-
         <div style={S.scoreBox("#2e7d32")}>
           <div style={S.scoreLabel}>Final Rating</div>
           <div style={S.scoreValue("#2e7d32")}>{finalRating}</div>
         </div>
-
       </div>
 
       {/* ── Comments grid ── */}
@@ -176,7 +194,18 @@ const AppraiserCommentsTab: React.FC<Props> = ({
         <div style={{ ...S.header, borderRight: "1px solid #111" }}>Appraiser Comments</div>
         <div style={S.header}>Appraisee Comments</div>
 
+        {/* Appraiser Comments Column */}
         <div style={{ padding: "8px", borderTop: "1px solid #111", borderRight: "1px solid #111" }}>
+          {showPrevLevel && (
+            <div style={S.prevBlock}>
+              <div style={S.prevName}>{prevLevelName || `Level ${prevLevelNum}`}</div>
+              <div style={S.prevComment}>{prevLevelComment}</div>
+            </div>
+          )}
+
+          {/* Show name ALWAYS - both in edit and view only mode */}
+          {currentActorName && <div style={S.nameBox}>{currentActorName}</div>}
+
           <textarea
             style={S.textarea(appraiserReadOnly)}
             value={appraiserComment}
@@ -192,7 +221,11 @@ const AppraiserCommentsTab: React.FC<Props> = ({
           {appraiserReadOnly && <div style={S.readOnlyTag}>View only</div>}
         </div>
 
+        {/* Appraisee Comments Column */}
         <div style={{ padding: "8px", borderTop: "1px solid #111" }}>
+          {/* Show name ALWAYS - both in edit and view only mode */}
+          {employeeName && <div style={S.nameBox}>{employeeName}</div>}
+
           <textarea
             style={S.textarea(appraiseeReadOnly)}
             value={appraiseeComment}

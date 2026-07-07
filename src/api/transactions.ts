@@ -531,20 +531,20 @@ export async function openChequeDateWiseReport(params: ReportParams) {
 // }
 
 // ── 3. Ledger With Details ────────────────────────────────────────────────
-// export async function openLedgerWithDetailsReport(params: ReportParams) {
-//     await openReportInTab(
-//         `/api/finance/transactions/reports/ledger-with-details/html`,
-//         params
-//     );
-// }
+export async function openLedgerWithDetailsReport(params: ReportParams) {
+    await openReportInTab(
+        `/api/finance/transactions/reports/ledger-with-details/html`,
+        params
+    );
+}
 
-// // ── 4. Ledger With Opposite Entry ─────────────────────────────────────────
-// export async function openLedgerOppositeEntryReport(params: ReportParams) {
-//     await openReportInTab(
-//         `/api/finance/transactions/reports/ledger-opposite-entry/html`,
-//         params
-//     );
-// }
+// ── 4. Ledger With Opposite Entry ─────────────────────────────────────────
+export async function openLedgerOppositeEntryReport(params: ReportParams) {
+    await openReportInTab(
+        `/api/finance/transactions/reports/ledger-opposite-entry/html`,
+        params
+    );
+}
 
 // // ── 5. Summary Dump ───────────────────────────────────────────────────────
 // export async function openSummaryDumpReport(params: ReportParams) {
@@ -688,7 +688,24 @@ export async function exportOutstandingListExcel(params: ReportParams): Promise<
     window.URL.revokeObjectURL(url);
 }
 
-
+export async function exportLedgerWithDetailsExcel(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/ledger-with-details/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "ledgerbasicwithdetails.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
 
 
 

@@ -107,14 +107,6 @@ const BellCurveChart: React.FC<{ ratingCounts: Record<number, number>; total: nu
   );
 };
 
-// ─────────────────────────────────────────────────────────────
-// ReportContent
-// Total columns = 9:
-//   SL | Division | Department | R1 | R2 | R3 | R4 | R5 | Total
-// Col widths: 36 + 160 + 180 + (40×5) + 52 = 628px
-// Division Total row  → colSpan=1 (Dept only, SL+Div already rowSpanned) + 5 rating + 1 total = 9 ✓
-// Grand Total row     → colSpan=3 (SL+Div+Dept)                          + 5 rating + 1 total = 9 ✓
-// ─────────────────────────────────────────────────────────────
 
 const ReportContent = React.forwardRef<HTMLDivElement, {
   divGroups: DivGroup[];
@@ -210,30 +202,19 @@ const ReportContent = React.forwardRef<HTMLDivElement, {
           </div>
         </div>
 
-        {/* ══════════════════════════════════════════════════════
-            MAIN TABLE — 9 columns
-            Col#  Width     Purpose
-            1     36px      SL
-            2     160px     Division
-            3     180px     Department
-            4–8   40px×5    R1–R5
-            9     52px      Total
-            Total = 36+160+180+(40×5)+52 = 628px  ✓
-        ══════════════════════════════════════════════════════ */}
         <table className="asr-tbl">
           <colgroup>
-            <col style={{ width: "36px"  }} />{/* SL */}
-            <col style={{ width: "160px" }} />{/* Division */}
-            <col style={{ width: "180px" }} />{/* Department */}
-            <col style={{ width: "40px"  }} />{/* R1 */}
-            <col style={{ width: "40px"  }} />{/* R2 */}
-            <col style={{ width: "40px"  }} />{/* R3 */}
-            <col style={{ width: "40px"  }} />{/* R4 */}
-            <col style={{ width: "40px"  }} />{/* R5 */}
-            <col style={{ width: "52px"  }} />{/* Total */}
+            <col style={{ width: "36px"  }} />
+            <col style={{ width: "160px" }} />
+            <col style={{ width: "180px" }} />
+            <col style={{ width: "40px"  }} />
+            <col style={{ width: "40px"  }} />
+            <col style={{ width: "40px"  }} />
+            <col style={{ width: "40px"  }} />
+            <col style={{ width: "40px"  }} />
+            <col style={{ width: "52px"  }} />
           </colgroup>
 
-          {/* thead: 9 leaf columns */}
           <thead>
             <tr>
               <th className="c-header" rowSpan={2}>SL.</th>
@@ -249,44 +230,32 @@ const ReportContent = React.forwardRef<HTMLDivElement, {
 
           <tbody>
             {divGroups.map((div, dIdx) => {
-              // rowSpan = number of dept rows + 1 Division-Total row
               const span = div.depts.length + 1;
               return (
                 <React.Fragment key={div.divCode}>
-                  {/* ── dept rows ── */}
                   {div.depts.map((dept, depIdx) => (
                     <tr key={dept.deptCode}>
-                      {/* SL — only on first dept, spans whole div block */}
                       {depIdx === 0 && (
                         <td className="td-div c-center" rowSpan={span} style={{ verticalAlign: "middle" }}>
                           {dIdx + 1}
                         </td>
                       )}
-                      {/* Division name — only on first dept */}
                       {depIdx === 0 && (
                         <td className="td-div c-bold c-wrap" rowSpan={span} style={{ verticalAlign: "middle" }}>
                           {div.divName || div.divCode}
                         </td>
                       )}
-                      {/* Department */}
                       <td className="c-wrap">{dept.deptName || dept.deptCode}</td>
-                      {/* R1–R5 */}
                       {RC.map((r) => {
                         const v = dept[`r${r}` as "r1" | "r2" | "r3" | "r4" | "r5"];
                         return (
                           <td key={r} className={`c-center${v > 0 ? ` r${r}` : ""}`}>{v}</td>
                         );
                       })}
-                      {/* Total */}
                       <td className="c-center c-bold">{dept.total}</td>
                     </tr>
                   ))}
 
-                  {/* ── Division Total row ──
-                      SL & Division already rowSpanned above.
-                      Remaining columns to fill: Dept(1) + R1-R5(5) + Total(1) = 7
-                      colSpan=1 on "Division Total" label covers only the Dept column.
-                  ── */}
                   <tr>
                     <td colSpan={1} className="td-divtot c-right c-bold" style={{ paddingRight: 8 }}>
                       Division Total
@@ -303,7 +272,6 @@ const ReportContent = React.forwardRef<HTMLDivElement, {
               );
             })}
 
-            {/* ── Grand Total — colSpan=3 covers SL+Division+Department ── */}
             <tr>
               <td colSpan={3} className="td-grand c-bold c-right" style={{ paddingRight: 8 }}>
                 Grand Total
@@ -317,7 +285,6 @@ const ReportContent = React.forwardRef<HTMLDivElement, {
           </tbody>
         </table>
 
-        {/* ── Grade Summary ── */}
         <table className="asr-tbl asr-sec">
           <thead>
             <tr>
@@ -351,10 +318,8 @@ const ReportContent = React.forwardRef<HTMLDivElement, {
           </tbody>
         </table>
 
-        {/* ── Bell Curve ── */}
         <BellCurveChart ratingCounts={overallRatingCounts} total={grandTotal.total} />
 
-        {/* ── Legend ── */}
         <table className="asr-tbl asr-sec">
           <tbody>
             <tr>
@@ -370,7 +335,6 @@ const ReportContent = React.forwardRef<HTMLDivElement, {
           </tbody>
         </table>
 
-        {/* ── Signatures ── */}
         <table className="asr-tbl asr-sec">
           <tbody>
             <tr>
@@ -395,9 +359,6 @@ const ReportContent = React.forwardRef<HTMLDivElement, {
 
 ReportContent.displayName = "ReportContent";
 
-// ─────────────────────────────────────────────────────────────
-// Main Page
-// ─────────────────────────────────────────────────────────────
 const AppraisalSummaryReportDesign: React.FC<Props> = ({ required_values }) => {
   const { user } = useAuth();
   const { company_code = "" } = required_values;
@@ -500,8 +461,6 @@ const AppraisalSummaryReportDesign: React.FC<Props> = ({ required_values }) => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-
-      {/* Breadcrumb */}
       <div style={{ padding: "12px 24px", borderBottom: "1px solid #e0e0e0" }}>
         <nav aria-label="breadcrumb" style={{ marginBottom: 4, fontSize: 13, color: "#666" }}>
           <a href="/dashboard" style={{ color: "inherit", textDecoration: "none" }}>Home</a>
@@ -514,8 +473,6 @@ const AppraisalSummaryReportDesign: React.FC<Props> = ({ required_values }) => {
         </nav>
         <h6 style={{ margin: 0, fontWeight: 600, fontSize: 18 }}>Appraisal Summary Report</h6>
       </div>
-
-      {/* Preview */}
       <div style={{ padding: 16, backgroundColor: "#eef1f5", flex: 1, minHeight: 0, overflow: "auto" }}>
         {isFetching ? (
           <div style={{ padding: 24 }}>Loading…</div>
@@ -532,8 +489,6 @@ const AppraisalSummaryReportDesign: React.FC<Props> = ({ required_values }) => {
           </div>
         )}
       </div>
-
-      {/* Print */}
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: 16, borderTop: "1px solid #e0e0e0" }} className="no-print">
         <Button variant="default" size="default" onClick={handlePrint}>
           <Printer size={16} />
@@ -544,5 +499,4 @@ const AppraisalSummaryReportDesign: React.FC<Props> = ({ required_values }) => {
     </div>
   );
 };
-
 export default AppraisalSummaryReportDesign;

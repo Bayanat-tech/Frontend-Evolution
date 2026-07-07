@@ -18,7 +18,6 @@ import { ExpenseTypePage } from "../pages/finance/ExpenseTypePage";
 import { FinanceUtilityMasterPage, financeUtilityConfigs } from "../pages/finance/FinanceUtilityMasterPage";
 // import { JournalVoucherPage } from "../pages/finance/JournalVoucherPage";
 import { PaymentDocumentPage } from "../pages/finance/PaymentDocumentPage";
-import { PLSetupPage } from "../pages/finance/PLSetupPage";
 import { PrepaidRegisterPage } from "../pages/finance/PrepaidRegisterPage";
 import { WmsInboundPage } from "../pages/wms/inbound/WmsInboundPage";
 import { WmsOutboundPage } from "../pages/wms/outbound/WmsOutboundPage";
@@ -50,7 +49,7 @@ import {
   oxMaintMasterConfigs,
 } from "../pages/oxmaint/OxMaintPages";
 import { SalaryAdvancePage } from "../pages/hr/SalaryAdvancePage";
-import { TrainingFeedbackPage } from "../pages/hr/Hrtrainingfeedbackpage";
+import { TrainingFeedbackPage } from "../pages/hr/Trainingfeedbackpage";
 import { Leaf } from "lucide-react";
 import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics";
 import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
@@ -69,14 +68,39 @@ import { StockTransferViewPage } from "../pages/wms/stock transfer/GetStockTrans
 import ProfitLossPage from "../pages/accounts_report/ProfitLossPage";
 import VisaExpiryListingPage from "../pages/hr/Reports/Visaexpirylistingpage";
 import Dnsummaryreportpage from "../pages/wms/Reports/Dnsummaryreportpage";
+import StockSummaryReportPage from "../pages/wms/Reports/StockSummaryReportPage";
 import { RJVDocumentEditor } from "../pages/finance/RJVDocuments";
 import { AlmsSimpleMasterConfigs } from "../pages/almswf/almsMasterConfig";
 import { AlmsSimpleMasterPage } from "../pages/almswf/AlmsMasterPage";
 import TransactionReportPage from "../pages/wms/Stock_Reports/Transaction_report";
 import TaxReportFilter from "../pages/accounts_report/tax_report/TaxReport";
 import JobListingReport from "../pages/wms/stock transfer/JobListingReport";
+import PLSetupPage from "../pages/finance/PLSetupPage";
 import StockDetailReport from "../pages/wms_report/StockDetailReport";
 import StockAdjustmentPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
+import { VendorWorkspacePage } from "../pages/vendor/VendorWorkspacePage";
+import { isVendorRouteText } from "../pages/vendor/vendorRoutes";
+import { StockAdjViewPage } from "../pages/wms/stock adjustment/StockAdjustmentViewPage";
+import StockAdjPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
+import {StorageComputationPage} from "../pages/wms/storage computation/StorageComputation";
+import LeaveEncashmentPage from "../pages/hr/LeaveEncashmentPage";
+import EmployeeSalaryIncrement from "../pages/hr/EmployeeSalaryIncrement";
+
+import { ContinuousAutoMemoPage } from "../pages/hr/HrContinuousAutoMemo";
+
+import { ApplicantInfoPage } from "../pages/hr/Applicantinfopage";
+
+import { InterviewEvalPage } from "../pages/hr/Interviewevalpage";
+
+import { HrJoiningPage } from "../pages/hr/HrJoiningPage";
+
+import { HrEmpEducationPage } from "../pages/hr/HrEmpEducationPage";  
+import GradeSalaryIncrement from "../pages/hr/GradeSalaryIncrement.";
+import SalaryAdditionDeductionMainPage from "../pages/hr/addition_deduction/SalaryAdditionDeductionMainPage";
+import AbsentMemoMainPage from "../pages/hr/absent_memo/AbsentMemoMainPage";
+
+import { HrManpowerPage } from "../pages/hr/HrManpower";
+
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -95,6 +119,36 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: "HR Absent Memo",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/memo_and_forms/absent_memo"),
+    element: () => <AbsentMemoMainPage />,
+  },
+  {
+    name: "HR Salary Addition Deduction Page",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/memo_and_forms/addition/deduction_letter"),
+    element: () => <SalaryAdditionDeductionMainPage />,
+  },
+  {
+    name:"HR Grade Salary Increment",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/grade_salary_increment"),
+    element: () => <GradeSalaryIncrement />
+  },
+  {
+    name: "HR Employee Salary Increment",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/salary%20increment"),
+    element: () => <EmployeeSalaryIncrement />
+  },
+  {
+    name: "HR Leave Encashment",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/leave_encashment"),
+    element: () => <LeaveEncashmentPage />
+  },
+  {
+    name: "Vendor System",
+    match: (context) => isVendorRoute(context),
+    element: (context) => <VendorWorkspacePage routePath={getGenericMatchText(context)} />,
+  },
   {
     name: "Finance Ledger Basics",
     match: ({ pathname }) => pathname.toLowerCase().includes("/wms/wms/reports/stock%20report/stock_detail"),
@@ -132,7 +186,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   element: () => <AC_StatementPage />,
 },
 
-
+{
+  name: "Storage Computation",
+  match: ({ pathname }) => isStorageComputationRoute(pathname),
+  element: () => <StorageComputationPage />,
+},
 {
   name: "Finance Outstanding Statement",
   match: ({ pathname }) => isOutstandingStatementRoute(pathname),
@@ -188,10 +246,15 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isStockTransferRoute(pathname),
     element: () => <StockTransferPage />,
   },
+  {
+  name: "Stock Adjustment View",
+  match: ({ pathname }) => isStockAdjViewRoute(pathname),
+  element: () => <StockAdjViewPage />,
+},
 {
   name: "Stock Adjustment",
   match: ({ pathname }) => isStockAdjustmentRoute(pathname),
-  element: () => <StockAdjustmentPage />,
+  element: () => <StockAdjPage />,
 },
   {
     name: "WMS Stock Transaction Report",
@@ -308,7 +371,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isWmsBillingActRoute(pathname),
     element: () => <WmsBillingActPage />,
   },
-     {
+  {
+    name: "WMS Stock Summary Report",
+    match: ({ pathname }) => isStockSummaryRoute(pathname),
+    element: () => <StockSummaryReportPage />,
+  },
+  {
     name: "WMS Stock Report Job Listing",
     match: ({ pathname }) => isJobListingRoute(pathname),
     element: () => <JobListingReport />,
@@ -563,6 +631,24 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => isHrRoute(context) && isHrMemosAndFormsWarningLetterRoute(context),
     element: () => <SalaryAdvancePage />,
   },
+  
+  {
+  name: "HR Applicant Info",
+  match: (context) => isHrRoute(context) && isHrApplicantInfoRoute(context),
+  element: () => <ApplicantInfoPage />,
+  },
+
+  {
+  name: "HR Continuous Auto Memo",
+  match: (context) => isHrRoute(context) && isHrContinuousAutoMemoRoute(context),
+  element: () => <ContinuousAutoMemoPage />,
+},
+
+{
+  name: "HR Interview Evaluation",
+  match: (context) => isHrRoute(context) && isHrInterviewEvalRoute(context),
+  element: () => <InterviewEvalPage />,
+},
 
   {
   name: "HR Training Feedback",
@@ -571,6 +657,24 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
 
   {
+  name: "HR Joining",
+  match: (context) => isHrRoute(context) && isHrJoiningRoute(context),
+  element: () => <HrJoiningPage />,
+},
+
+{
+  name: "HR Manpower Requisition",
+  match: (context) => isHrRoute(context) && isHrManpowerRequisitionRoute(context),
+  element: () => <HrManpowerPage />,
+},
+
+{
+  name: "HR Employee Education",
+  match: (context) => isHrRoute(context) && isHrEmpEducationRoute(context),
+  element: () => <HrEmpEducationPage />,
+},
+
+{
     name: "HR Payroll Account Setup",
     match: (context) => isHrRoute(context) && isHrPayrollAccountSetupRoute(context),
     element: () => <HrPayrollAccountSetupPage />,
@@ -582,6 +686,17 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
 ];
 
+function isStorageComputationRoute(pathname: string) {
+  return pathname.toLowerCase().includes("wms/activity/request/storage_computation");
+}
+
+function isStockAdjViewRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.includes("wms/activity/request/stock_adj") &&
+    normalized.includes("/view/")
+  );
+}
 function isBankMasterRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return (
@@ -831,7 +946,30 @@ function isStockTransferViewRoute(pathname: string) {
 
 function isJobListingRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  return (normalized.includes("/wms/reports/stock%20report/job_listing") || normalized.includes("/wms/reports/stock-report/job_listing") || normalized.includes("/wms/reports/stock-report/job-listing"));
+  return (
+    normalized.includes("/wms/reports/stock%20report/job_listing") ||
+    normalized.includes("/wms/reports/stock-report/job_listing") ||
+    normalized.includes("/wms/reports/stock-report/job-listing")
+  );
+}
+function isStockSummaryRoute(pathname: string) {  
+  const normalized = pathname.toLowerCase();
+  const stockReportPath =
+    normalized.includes("/wms/wms/reports/stock%20report/") ||
+    normalized.includes("/wms/wms/reports/stock_report/") ||
+    normalized.includes("/wms/wms/reports/stock-report/") ||
+    normalized.includes("/wms/wms/reports/stockreport/") ||
+    normalized.includes("/wms/reports/stock%20report/") ||
+    normalized.includes("/wms/reports/stock_report/") ||
+    normalized.includes("/wms/reports/stock-report/") ||
+    normalized.includes("/wms/reports/stockreport/");
+
+  const stockSummarySegment =
+    normalized.includes("/stock_summary") ||
+    normalized.includes("/stock-summary") ||
+    normalized.includes("/stock_detail");
+
+  return stockReportPath && stockSummarySegment;
 }
 function isAssetDepreciationRoute(pathname: string) {
   return pathname.toLowerCase().includes("/finance/a/c_others/assets/asset_depreciation");
@@ -1070,6 +1208,10 @@ function getGenericMatchText(context: WorkspaceRouteContext) {
   return [pathname, context.activeApp?.title, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
 }
 
+function isVendorRoute(context: WorkspaceRouteContext) {
+  return isVendorRouteText(getGenericMatchText(context));
+}
+
 function isApplicationProgressRoute(context: WorkspaceRouteContext) {
   const matchText = getGenericMatchText(context);
   const compact = matchText.replace(/[^a-z0-9]/g, "");
@@ -1180,3 +1322,72 @@ function isHrTrainingFeedbackRoute(context: WorkspaceRouteContext) {
 }
 
 
+function isHrContinuousAutoMemoRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("continuousautomemo") ||
+    normalized.includes("continuous_auto_memo") ||
+    normalized.includes("continuous-auto-memo")
+  );
+}
+
+function isHrApplicantInfoRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("applicantinfo") ||
+    compact.includes("applicantinformation") ||
+    normalized.includes("applicant_info") ||
+    normalized.includes("applicant-info")
+  );
+}
+
+
+function isHrInterviewEvalRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("intervieweval") ||
+    compact.includes("interviewevaluation") ||
+    normalized.includes("interview_eval") ||
+    normalized.includes("int_eval")
+  );
+}
+
+function isHrJoiningRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("hrjoining") ||
+    compact.includes("joiningform") ||
+    compact.includes("hrjoin") ||
+    normalized.includes("hr_joining") ||
+    normalized.includes("joining_form") ||
+    normalized.includes("cam_join")
+  );
+}
+
+function isHrEmpEducationRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("empeducation") ||
+    compact.includes("educationqualification") ||
+    normalized.includes("emp_education") ||
+    normalized.includes("educational_qualification") ||
+    normalized.includes("education_qualification")
+  );
+}
+
+function isHrManpowerRequisitionRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("manpowerrequisition") ||
+    compact.includes("confirmationreview") ||
+    normalized.includes("manpower_requisition") ||
+    normalized.includes("manpower-requisition") ||
+    normalized.includes("confirmation_review")
+  );
+}
