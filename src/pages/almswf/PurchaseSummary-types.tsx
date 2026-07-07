@@ -76,6 +76,7 @@ export interface TPRHeader {
   HOD_USER: string | null;
 
   PDO_TYPE: string | null;
+  TAX_TYPE: string | null;
 }
 
 export type TPRItem = {

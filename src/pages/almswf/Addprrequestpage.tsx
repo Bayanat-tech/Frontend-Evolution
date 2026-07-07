@@ -14,6 +14,7 @@ import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { Badge } from "../../components/ui/Badge";
 import { CardHeader } from "../../components/ui/Card";
 import { useAuth } from "../../state/AuthContext";
+import { LookupField } from "../../components/ui/LookupField";
 
 import type { TPRHeader, TPRItem } from "./PurchaseSummary-types";
 import { almsSave, almsCommonSelect } from "../../api/alms";
@@ -293,6 +294,26 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
 
   const removeItem = (index: number) => setItems(items.filter((_, i) => i !== index).map((it, i) => ({ ...it, item_srno: i + 1 })));
 
+  // Lookup field configurations
+  const taxCategoryColumns = [
+    { field: "TX_CAT_CODE", header: "Code" },
+    { field: "TX_CAT_NAME", header: "Name" },
+    { field: "TX_COMPNTCAT_CODE_1", header: "Tax Code" },
+    { field: "TX_COMPNT_PERC_1", header: "Tax %" },
+  ];
+
+  const taxTypeColumns = [
+    { field: "TX_TYPE_CODE", header: "Code" },
+    { field: "TX_TYPE_NAME", header: "Name" },
+    { field: "TX_TYPE_DESC", header: "Description" },
+  ];
+
+  const currencyColumns = [
+    { field: "CURR_CODE", header: "Code" },
+    { field: "CURR_NAME", header: "Name" },
+    { field: "CURR_SYMBOL", header: "Symbol" },
+  ];
+
   const itemColumns = useMemo<ColumnDef<TPRItem>[]>(() => [
     { accessorKey: "item_srno", header: "No", size: 50, cell: ({ row }) => <span className="text-xs">{row.original.ITEM_SRNO}</span> },
     { accessorKey: "item_code", header: "Item", cell: ({ row }) => {
@@ -371,8 +392,9 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                   <p className="eyebrow m-0">Header</p>
                   <h3 className="m-0 text-sm font-semibold leading-tight">Request Information</h3>
                 </div>
-                <div className="payment-header-grid grid grid-cols-6 gap-2.5 p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
-                  <label className="field">
+                <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                  
+                   <label className="field">
                     <span>Request Date</span>
                     <Input disabled={disabled} type="date" value={header.REQUEST_DATE ? String(header.REQUEST_DATE).slice(0, 10) : ""} onChange={(e) => setHdr("REQUEST_DATE", e.target.value)} />
                   </label>
@@ -404,6 +426,18 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                     <span>Tax Code</span>
                     <Input disabled={disabled} value={String(header.TX_COMPNTCAT_CODE_1 || "")} onChange={(e) => setHdr("TX_COMPNTCAT_CODE_1", e.target.value)} />
                   </label>
+                   <LookupField
+                    label="Tax Type"
+                    value={String(header.TAX_TYPE || "")}
+                    // displayValue={header.TAX_TYPE}
+                    columns={taxTypeColumns}
+                    valueField="TX_TYPE_CODE"
+                    displayFields={["TX_TYPE_CODE", "TX_TYPE_NAME"]}
+                    loadOptions={() => almsCommonSelect({ parameter: "Amlspf_MsTaxType", loginid, code1: companyCode })}
+                    onChange={(val) => setHdr("TAX_TYPE", val)}
+                    disabled={disabled}
+                  />
+                  
                   <label className="field col-span-3 max-lg:col-span-2 max-md:col-span-1">
                     <span>Description / Reason</span>
                     <Input disabled={disabled} value={String(header.DESCRIPTION || "")} onChange={(e) => setHdr("DESCRIPTION", e.target.value)} />
@@ -467,7 +501,8 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
 
       {itemModal.open && itemModal.data && (
         <Dialog
-          open wide
+          open
+          wide
           title={itemModal.mode === "add" ? "Add Item" : "Edit Item"}
           description="Fill in item details. Amount and tax are calculated automatically."
           onClose={closeItemModal}
@@ -501,39 +536,88 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                 {costCodes.map((c) => <option key={c.cost_code} value={c.cost_code}>{c.cost_code} — {c.cost_name}</option>)}
               </select>
             </label>
-            <label className="field"><span>Currency</span><Input value={itemModal.data.CURR_CODE || header.CURR_CODE || ""} onChange={(e) => setItemField("CURR_CODE", e.target.value)} /></label>
-            {[
-              { label: "Request Qty", field: "request_quantity", readOnly: false },
-              { label: "Approved Qty", field: "allocated_approved_quantity", readOnly: false },
-              { label: "Item Rate", field: "item_rate", readOnly: false },
-              { label: "Discount", field: "discount_amount", readOnly: false },
-              { label: "Exchange Rate", field: "currency_rate", readOnly: false },
-              { label: "Final Rate", field: "final_rate", readOnly: true },
-              { label: "Amount", field: "amount", readOnly: true },
-              { label: "Base Amount", field: "base_amount", readOnly: true },
-            ].map(({ label, field, readOnly }) => (
-              <label key={field} className="field">
-                <span>{label}</span>
-                <Input type="number" step="0.001" disabled={readOnly}
-                  value={field === "base_amount" ? (num(itemModal.data!.AMOUNT) * num(itemModal.data!.CURRENCY_RATE)).toFixed(3) : String((itemModal.data as any)[field] ?? "")}
-                  onChange={(e) => !readOnly && setItemField(field as keyof TPRItem, Number(e.target.value))} />
-              </label>
-            ))}
+            
+            <LookupField
+              label="Currency"
+              value={String(itemModal.data.CURR_CODE || header.CURR_CODE || "")}
+              columns={currencyColumns}
+              valueField="CURR_CODE"
+              displayFields={["CURR_CODE", "CURR_NAME"]}
+              loadOptions={() => almsCommonSelect({ parameter: "Amlspf_MsCurrency", loginid, code1: companyCode })}
+              onChange={(val) => setItemField("CURR_CODE", val)}
+              disabled={disabled}
+              compact
+            />
+            
+            <label className="field"><span>Request Qty</span>
+              <Input type="number" step="0.001" value={itemModal.data.REQUEST_QUANTITY ?? ""} 
+                onChange={(e) => setItemField("REQUEST_QUANTITY", Number(e.target.value))} />
+            </label>
+            <label className="field"><span>Approved Qty</span>
+              <Input type="number" step="0.001" value={itemModal.data.ALLOCATED_APPROVED_QUANTITY ?? ""} 
+                onChange={(e) => setItemField("ALLOCATED_APPROVED_QUANTITY", Number(e.target.value))} />
+            </label>
+            <label className="field"><span>Item Rate</span>
+              <Input type="number" step="0.001" value={itemModal.data.ITEM_RATE ?? ""} 
+                onChange={(e) => setItemField("ITEM_RATE", Number(e.target.value))} />
+            </label>
+            <label className="field"><span>Discount</span>
+              <Input type="number" step="0.001" value={itemModal.data.DISCOUNT_AMOUNT ?? ""} 
+                onChange={(e) => setItemField("DISCOUNT_AMOUNT", Number(e.target.value))} />
+            </label>
+            <label className="field"><span>Exchange Rate</span>
+              <Input type="number" step="0.0001" value={itemModal.data.CURRENCY_RATE ?? header.CURRENCY_RATE ?? 1} 
+                onChange={(e) => setItemField("CURRENCY_RATE", Number(e.target.value))} />
+            </label>
+            <label className="field"><span>Final Rate</span>
+              <Input disabled value={String(itemModal.data.FINAL_RATE ?? 0)} />
+            </label>
+            <label className="field"><span>Amount</span>
+              <Input disabled value={String(itemModal.data.AMOUNT ?? 0)} />
+            </label>
+            <label className="field"><span>Base Amount</span>
+              <Input disabled value={String((num(itemModal.data.AMOUNT) * num(itemModal.data.CURRENCY_RATE)).toFixed(3))} />
+            </label>
+            
             <label className="field col-span-2 max-md:col-span-1">
               <span>Tax Category</span>
               <select className="flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm" value={itemModal.data.TX_CAT_CODE || ""}
                 onChange={(e) => {
                   const found = taxCodes.find((t) => t.TX_CAT_CODE === e.target.value);
                   setItemField("TX_CAT_CODE", e.target.value);
-                  if (found) { setItemField("TX_COMPNTCAT_CODE_1", found.TX_COMPNTCAT_CODE_1 || ""); setItemField("TX_COMPNT_PERC_1", found.TX_COMPNT_PERC_1 || 0); }
+                  if (found) { 
+                    setItemField("TX_COMPNTCAT_CODE_1", found.TX_COMPNTCAT_CODE_1 || ""); 
+                    setItemField("TX_COMPNT_PERC_1", found.TX_COMPNT_PERC_1 || 0); 
+                  }
                 }}>
                 <option value="">— Select —</option>
                 {taxCodes.map((t) => <option key={t.TX_CAT_CODE} value={t.TX_CAT_CODE}>{t.TX_CAT_CODE} — {t.TX_CAT_NAME}</option>)}
               </select>
             </label>
-            <label className="field"><span>Tax Code</span><Input value={itemModal.data.TX_COMPNTCAT_CODE_1 || ""} onChange={(e) => setItemField("TX_COMPNTCAT_CODE_1", e.target.value)} /></label>
-            <label className="field"><span>Tax %</span><Input type="number" step="0.01" value={itemModal.data.TX_COMPNT_PERC_1 ?? ""} onChange={(e) => setItemField("TX_COMPNT_PERC_1", Number(e.target.value))} /></label>
-            <label className="field"><span>Tax Amount</span><Input disabled value={String(itemModal.data.TX_COMPNT_AMT_1 ?? 0)} /></label>
+            <label className="field"><span>Tax Code</span>
+              <Input value={itemModal.data.TX_COMPNTCAT_CODE_1 || ""} 
+                onChange={(e) => setItemField("TX_COMPNTCAT_CODE_1", e.target.value)} />
+            </label>
+            
+            <LookupField
+              label="Tax Type"
+              value={String(itemModal.data.TAX_TYPE || "Std.")}
+              columns={taxTypeColumns}
+              valueField="TX_TYPE_CODE"
+              displayFields={["TX_TYPE_CODE", "TX_TYPE_NAME"]}
+              loadOptions={() => almsCommonSelect({ parameter: "Amlspf_MsTaxType", loginid, code1: companyCode })}
+              onChange={(val) => setItemField("TAX_TYPE", val)}
+              disabled={disabled}
+              compact
+            />
+            
+            <label className="field"><span>Tax %</span>
+              <Input type="number" step="0.01" value={itemModal.data.TX_COMPNT_PERC_1 ?? ""} 
+                onChange={(e) => setItemField("TX_COMPNT_PERC_1", Number(e.target.value))} />
+            </label>
+            <label className="field"><span>Tax Amount</span>
+              <Input disabled value={String(itemModal.data.TX_COMPNT_AMT_1 ?? 0)} />
+            </label>
           </div>
         </Dialog>
       )}
