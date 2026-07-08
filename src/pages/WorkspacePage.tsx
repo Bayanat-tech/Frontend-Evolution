@@ -54,8 +54,10 @@ import { useEffect, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
+import { HeaderProfile } from "../components/HeaderProfile";
 import type { MenuNode } from "../types/auth";
 import { cleanPath, flattenLeaves, titleCase } from "../utils/menu";
+import { buildWorkspaceApps, cleanAppCode } from "../utils/workspaceApps";
 import { resolveWorkspaceRoute } from "../routes/workspaceRoutes";
 import { cn } from "../lib/utils";
 
@@ -68,10 +70,11 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const workspaceApps = useMemo(() => buildWorkspaceApps(menuTree), [menuTree]);
 
   const activeApp = useMemo(() => {
-    return menuTree.find((item) => item.title.toLowerCase().replace(/\s+/g, "-") === appCode) || menuTree[0];
-  }, [appCode, menuTree]);
+    return workspaceApps.find((item) => cleanAppCode(item.title) === appCode) || workspaceApps[0];
+  }, [appCode, workspaceApps]);
 
   const activeMenuPath = useMemo(() => findActiveMenuPath(activeApp?.children || [], location.pathname), [activeApp, location.pathname]);
   const appRouteTarget = getMenuNodeTarget(activeApp, appCode || "");
@@ -107,12 +110,33 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
 
   const workspaceRoute = resolveWorkspaceRoute({ pathname: location.pathname, activeApp });
   const displayCollapsed = isMobile ? false : collapsed;
+  const userDisplayName = user?.username || user?.loginid || "User";
+  const companyName = user?.company_name || user?.company_code || "Company";
+
+  useEffect(() => {
+    setExpanded(collectExpandedPath(activeMenuPath));
+  }, [activeApp?.id, activeApp?.title, location.pathname]);
+
   const toggleSidebar = () => {
     if (isMobile) {
       setMobileMenuOpen((value) => !value);
       return;
     }
-    setCollapsed((value) => !value);
+    setCollapsed((value) => {
+      const nextCollapsed = !value;
+      if (!nextCollapsed) {
+        setExpanded(collectExpandedPath(activeMenuPath));
+      }
+      return nextCollapsed;
+    });
+  };
+
+  const handleMenuNavigate = () => {
+    if (isMobile) {
+      setMobileMenuOpen(false);
+      return;
+    }
+    setCollapsed(true);
   };
 
   return (
@@ -153,6 +177,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
               appCode={appCode || ""}
               pathname={location.pathname}
               level={1}
+              onNavigate={handleMenuNavigate}
             />
           ))}
         </nav>
@@ -161,7 +186,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
           {!displayCollapsed && (
             <div className="sidebar-company-card">
               <span>Company</span>
-              <strong>{user?.company_code || "Company"}</strong>
+              <strong>{companyName}</strong>
             </div>
           )}
           <Link className={cn("sidebar-switch-module", displayCollapsed && "icon-only")} to="/apps" title="Switch Module" aria-label="Switch Module">
@@ -189,19 +214,12 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
             <input placeholder="Search menu, reports, forms..." />
           </div>
           <div className="workspace-header-actions">
-            <button className="icon-button" onClick={onToggleTheme} title={dark ? "Light mode" : "Dark mode"}>
-              {dark ? <Sun size={17} /> : <Moon size={17} />}
-            </button>
-            <div className="header-user compact">
-              <div className="avatar">{(user?.username || user?.loginid || "U").slice(0, 2).toUpperCase()}</div>
-              <div>
-                <strong>{user?.username || user?.loginid}</strong>
-                <span>{user?.company_code || "Company"}</span>
-              </div>
-              <button className="icon-button" onClick={handleLogout}>
-                <LogOut size={17} />
-              </button>
-            </div>
+            <HeaderProfile
+              user={user}
+              dark={dark}
+              onToggleTheme={onToggleTheme}
+              onLogout={handleLogout}
+            />
           </div>
         </header>
 
@@ -243,6 +261,16 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   );
 }
 
+function collectExpandedPath(nodes: MenuNode[]): Record<string, boolean> {
+  const expanded: Record<string, boolean> = {};
+  nodes.slice(0, -1).forEach((node) => {
+    if (node.children?.length) {
+      expanded[node.id || node.title] = true;
+    }
+  });
+  return expanded;
+}
+
 function MenuItem({
   item,
   collapsed,
@@ -251,6 +279,7 @@ function MenuItem({
   appCode,
   pathname,
   level,
+  onNavigate,
 }: {
   item: MenuNode;
   collapsed: boolean;
@@ -259,6 +288,7 @@ function MenuItem({
   appCode: string;
   pathname: string;
   level: number;
+  onNavigate: () => void;
 }) {
   const key = item.id || item.title;
   const children = item.children || [];
@@ -296,6 +326,7 @@ function MenuItem({
                 appCode={appCode}
                 pathname={pathname}
                 level={level + 1}
+                onNavigate={onNavigate}
               />
             ))}
           </div>
@@ -305,7 +336,7 @@ function MenuItem({
   }
 
   return (
-    <Link className={cn("nav-item", active && "active", collapsed && "icon-only", `nav-level-${level}`)} to={to} title={displayTitle} aria-label={displayTitle}>
+    <Link className={cn("nav-item", active && "active", collapsed && "icon-only", `nav-level-${level}`)} to={to} title={displayTitle} aria-label={displayTitle} onClick={onNavigate}>
       <span className="nav-link-copy">
         <MenuIcon item={item} level={level} className="nav-leading-icon" />
         {!collapsed && <span title={displayTitle}>{displayTitle}</span>}

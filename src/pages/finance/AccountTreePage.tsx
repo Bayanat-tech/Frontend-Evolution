@@ -239,16 +239,7 @@ export function AccountTreePage() {
     try {
       const data = await getAccountTree();
       setTree(data);
-      setExpanded((prev) => {
-        const newExpanded = { ...prev };
-         const seed = seedExpansion(data);
-        flattenTree(data).forEach((node) => {
-          if (node.children && node.children.length > 0) {
-            newExpanded[node.id] = false;
-          }
-        });
-        return { ...seed, ...prev };
-      });
+      setExpanded(seedExpansion(data));
       setSelectedId((prev) => (prev && flattenTree(data).some((node) => node.id === prev) ? prev : data[0]?.id || ""));
       if (data.length === 0) {
         setNotice({
@@ -1113,7 +1104,7 @@ function flattenTree(nodes: AccountTreeNode[]): AccountTreeNode[] {
 function seedExpansion(nodes: AccountTreeNode[]) {
   const next: Record<string, boolean> = {};
   flattenTree(nodes).forEach((node) => {
-    if (node.level <= 2) next[node.id] = true;
+    if (node.children && node.children.length > 0) next[node.id] = false;
   });
   return next;
 }
