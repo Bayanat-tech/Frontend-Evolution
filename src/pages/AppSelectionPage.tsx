@@ -20,6 +20,7 @@ import {
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
+import { HeaderProfile } from "../components/HeaderProfile";
 import { firstLeafPath } from "../utils/menu";
 
 const appIcons = [
@@ -64,21 +65,13 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
             <strong>Bayanat</strong>
             <span>Technology</span>
           </div>
-          <span className="tenant-pill">{formatTenant(tenantId)}</span>
         </div>
-        <div className="header-user">
-          <button className="icon-button" onClick={onToggleTheme} title={dark ? "Light mode" : "Dark mode"}>
-            {dark ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
-          <div className="avatar">{(user?.username || user?.loginid || "U").slice(0, 2).toUpperCase()}</div>
-          <div>
-            <strong>{user?.username || user?.loginid || "User"}</strong>
-            <span>{user?.company_code || "Company"}</span>
-          </div>
-          <button className="icon-button" onClick={handleLogout} title="Logout">
-            <LogOut size={18} />
-          </button>
-        </div>
+        <HeaderProfile
+          user={user}
+          dark={dark}
+          onToggleTheme={onToggleTheme}
+          onLogout={handleLogout}
+        />
       </header>
 
       <main className="selection-main">
@@ -258,7 +251,3 @@ function cleanAppCode(value: string) {
   return value.toLowerCase().replace(/\s+/g, "-");
 }
 
-function formatTenant(value?: string) {
-  if (!value) return "Tenant workspace";
-  return value;
-}

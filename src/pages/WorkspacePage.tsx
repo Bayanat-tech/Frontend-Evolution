@@ -54,6 +54,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
+import { HeaderProfile } from "../components/HeaderProfile";
 import type { MenuNode } from "../types/auth";
 import { cleanPath, flattenLeaves, titleCase } from "../utils/menu";
 import { resolveWorkspaceRoute } from "../routes/workspaceRoutes";
@@ -105,8 +106,24 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
     return () => document.body.classList.remove("mobile-menu-lock");
   }, [isMobile, mobileMenuOpen]);
 
+  useEffect(() => {
+    const menuItems = activeApp?.children || [];
+    if (!menuItems.length) return;
+
+    const nextExpanded = collectExpandedGroups(menuItems);
+    setExpanded((prev) => {
+      const merged = { ...prev };
+      Object.entries(nextExpanded).forEach(([key, value]) => {
+        merged[key] = value;
+      });
+      return merged;
+    });
+  }, [activeApp?.id, activeApp?.title, activeApp?.children?.length]);
+
   const workspaceRoute = resolveWorkspaceRoute({ pathname: location.pathname, activeApp });
   const displayCollapsed = isMobile ? false : collapsed;
+  const userDisplayName = user?.username || user?.loginid || "User";
+  const companyName = user?.company_name || user?.company_code || "Company";
   const toggleSidebar = () => {
     if (isMobile) {
       setMobileMenuOpen((value) => !value);
@@ -161,7 +178,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
           {!displayCollapsed && (
             <div className="sidebar-company-card">
               <span>Company</span>
-              <strong>{user?.company_code || "Company"}</strong>
+              <strong>{companyName}</strong>
             </div>
           )}
           <Link className={cn("sidebar-switch-module", displayCollapsed && "icon-only")} to="/apps" title="Switch Module" aria-label="Switch Module">
@@ -189,19 +206,12 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
             <input placeholder="Search menu, reports, forms..." />
           </div>
           <div className="workspace-header-actions">
-            <button className="icon-button" onClick={onToggleTheme} title={dark ? "Light mode" : "Dark mode"}>
-              {dark ? <Sun size={17} /> : <Moon size={17} />}
-            </button>
-            <div className="header-user compact">
-              <div className="avatar">{(user?.username || user?.loginid || "U").slice(0, 2).toUpperCase()}</div>
-              <div>
-                <strong>{user?.username || user?.loginid}</strong>
-                <span>{user?.company_code || "Company"}</span>
-              </div>
-              <button className="icon-button" onClick={handleLogout}>
-                <LogOut size={17} />
-              </button>
-            </div>
+            <HeaderProfile
+              user={user}
+              dark={dark}
+              onToggleTheme={onToggleTheme}
+              onLogout={handleLogout}
+            />
           </div>
         </header>
 
@@ -241,6 +251,24 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
       </section>
     </div>
   );
+}
+
+function collectExpandedGroups(nodes: MenuNode[]): Record<string, boolean> {
+  const expanded: Record<string, boolean> = {};
+
+  const visit = (items: MenuNode[]) => {
+    items.forEach((item) => {
+      const key = item.id || item.title;
+      const children = item.children || [];
+      if (children.length > 0) {
+        expanded[key] = true;
+        visit(children);
+      }
+    });
+  };
+
+  visit(nodes);
+  return expanded;
 }
 
 function MenuItem({
