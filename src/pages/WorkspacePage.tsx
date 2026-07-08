@@ -57,6 +57,7 @@ import { useAuth } from "../state/AuthContext";
 import { HeaderProfile } from "../components/HeaderProfile";
 import type { MenuNode } from "../types/auth";
 import { cleanPath, flattenLeaves, titleCase } from "../utils/menu";
+import { buildWorkspaceApps, cleanAppCode } from "../utils/workspaceApps";
 import { resolveWorkspaceRoute } from "../routes/workspaceRoutes";
 import { cn } from "../lib/utils";
 
@@ -69,10 +70,11 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const workspaceApps = useMemo(() => buildWorkspaceApps(menuTree), [menuTree]);
 
   const activeApp = useMemo(() => {
-    return menuTree.find((item) => item.title.toLowerCase().replace(/\s+/g, "-") === appCode) || menuTree[0];
-  }, [appCode, menuTree]);
+    return workspaceApps.find((item) => cleanAppCode(item.title) === appCode) || workspaceApps[0];
+  }, [appCode, workspaceApps]);
 
   const activeMenuPath = useMemo(() => findActiveMenuPath(activeApp?.children || [], location.pathname), [activeApp, location.pathname]);
   const appRouteTarget = getMenuNodeTarget(activeApp, appCode || "");
@@ -106,30 +108,35 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
     return () => document.body.classList.remove("mobile-menu-lock");
   }, [isMobile, mobileMenuOpen]);
 
-  useEffect(() => {
-    const menuItems = activeApp?.children || [];
-    if (!menuItems.length) return;
-
-    const nextExpanded = collectExpandedGroups(menuItems);
-    setExpanded((prev) => {
-      const merged = { ...prev };
-      Object.entries(nextExpanded).forEach(([key, value]) => {
-        merged[key] = value;
-      });
-      return merged;
-    });
-  }, [activeApp?.id, activeApp?.title, activeApp?.children?.length]);
-
   const workspaceRoute = resolveWorkspaceRoute({ pathname: location.pathname, activeApp });
   const displayCollapsed = isMobile ? false : collapsed;
   const userDisplayName = user?.username || user?.loginid || "User";
   const companyName = user?.company_name || user?.company_code || "Company";
+
+  useEffect(() => {
+    setExpanded(collectExpandedPath(activeMenuPath));
+  }, [activeApp?.id, activeApp?.title, location.pathname]);
+
   const toggleSidebar = () => {
     if (isMobile) {
       setMobileMenuOpen((value) => !value);
       return;
     }
-    setCollapsed((value) => !value);
+    setCollapsed((value) => {
+      const nextCollapsed = !value;
+      if (!nextCollapsed) {
+        setExpanded(collectExpandedPath(activeMenuPath));
+      }
+      return nextCollapsed;
+    });
+  };
+
+  const handleMenuNavigate = () => {
+    if (isMobile) {
+      setMobileMenuOpen(false);
+      return;
+    }
+    setCollapsed(true);
   };
 
   return (
@@ -170,6 +177,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
               appCode={appCode || ""}
               pathname={location.pathname}
               level={1}
+              onNavigate={handleMenuNavigate}
             />
           ))}
         </nav>
@@ -253,21 +261,13 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   );
 }
 
-function collectExpandedGroups(nodes: MenuNode[]): Record<string, boolean> {
+function collectExpandedPath(nodes: MenuNode[]): Record<string, boolean> {
   const expanded: Record<string, boolean> = {};
-
-  const visit = (items: MenuNode[]) => {
-    items.forEach((item) => {
-      const key = item.id || item.title;
-      const children = item.children || [];
-      if (children.length > 0) {
-        expanded[key] = true;
-        visit(children);
-      }
-    });
-  };
-
-  visit(nodes);
+  nodes.slice(0, -1).forEach((node) => {
+    if (node.children?.length) {
+      expanded[node.id || node.title] = true;
+    }
+  });
   return expanded;
 }
 
@@ -279,6 +279,7 @@ function MenuItem({
   appCode,
   pathname,
   level,
+  onNavigate,
 }: {
   item: MenuNode;
   collapsed: boolean;
@@ -287,6 +288,7 @@ function MenuItem({
   appCode: string;
   pathname: string;
   level: number;
+  onNavigate: () => void;
 }) {
   const key = item.id || item.title;
   const children = item.children || [];
@@ -324,6 +326,7 @@ function MenuItem({
                 appCode={appCode}
                 pathname={pathname}
                 level={level + 1}
+                onNavigate={onNavigate}
               />
             ))}
           </div>
@@ -333,7 +336,7 @@ function MenuItem({
   }
 
   return (
-    <Link className={cn("nav-item", active && "active", collapsed && "icon-only", `nav-level-${level}`)} to={to} title={displayTitle} aria-label={displayTitle}>
+    <Link className={cn("nav-item", active && "active", collapsed && "icon-only", `nav-level-${level}`)} to={to} title={displayTitle} aria-label={displayTitle} onClick={onNavigate}>
       <span className="nav-link-copy">
         <MenuIcon item={item} level={level} className="nav-leading-icon" />
         {!collapsed && <span title={displayTitle}>{displayTitle}</span>}
