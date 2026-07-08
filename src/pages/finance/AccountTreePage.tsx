@@ -463,25 +463,27 @@ function TreeNodeView({
   expanded,
   setExpanded,
   setSelectedId,
+  depth = 0,
 }: {
   node: AccountTreeNode;
   selectedId: string;
   expanded: Record<string, boolean>;
   setExpanded: Dispatch<SetStateAction<Record<string, boolean>>>;
   setSelectedId: (id: string) => void;
+  depth?: number;
 }) {
   const hasChildren = node.children.length > 0;
   const isExpanded = expanded[node.id] ?? node.level <= 2;
   const selected = selectedId === node.id;
 
   return (
-    <div className="tree-node">
+    <div className="tree-node" data-depth={depth} data-selected={selected ? "true" : undefined}>
       <div
         className={cn(
           "tree-row flex min-h-8 items-center gap-1 rounded-md pr-2 text-sm hover:bg-accent",
           selected && "selected bg-primary/10 text-primary",
         )}
-        style={{ paddingLeft: 8 + node.level * 14 }}
+        style={{ paddingLeft: 8 }}
       >
         <button
           className="tree-caret grid h-7 w-6 place-items-center rounded border-0 bg-transparent text-muted-foreground disabled:cursor-default"
@@ -503,16 +505,21 @@ function TreeNodeView({
           {node.level >= 3 && <code className="ml-auto rounded border bg-card px-1.5 py-0.5 text-[11px] text-primary">{node.id}</code>}
         </button>
       </div>
-      {hasChildren && isExpanded && node.children.map((child) => (
-        <TreeNodeView
-          key={child.id}
-          node={child}
-          selectedId={selectedId}
-          expanded={expanded}
-          setExpanded={setExpanded}
-          setSelectedId={setSelectedId}
-        />
-      ))}
+      {hasChildren && isExpanded && (
+        <div className="tree-children">
+          {node.children.map((child) => (
+            <TreeNodeView
+              key={child.id}
+              node={child}
+              selectedId={selectedId}
+              expanded={expanded}
+              setExpanded={setExpanded}
+              setSelectedId={setSelectedId}
+              depth={depth + 1}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

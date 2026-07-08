@@ -1807,7 +1807,55 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   padding: 0 10px 14px;
 }
 
+.tree-node {
+  position: relative;
+  min-width: 0;
+}
+
+.tree-children {
+  position: relative;
+  margin-left: 22px;
+  padding-left: 18px;
+}
+
+.tree-children::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -4px;
+  bottom: 16px;
+  width: 1px;
+  background: #c7d2e3;
+}
+
+.tree-children > .tree-node::before {
+  content: "";
+  position: absolute;
+  left: -18px;
+  top: 17px;
+  width: 14px;
+  height: 1px;
+  background: #c7d2e3;
+}
+
+.tree-children > .tree-node[data-selected="true"]::before {
+  background: #10b981;
+}
+
+.tree-children > .tree-node[data-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: -19px;
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
+  border-radius: 999px;
+  background: #10b981;
+}
+
 .tree-row {
+  position: relative;
+  z-index: 1;
   min-height: 34px;
   display: flex;
   align-items: center;
