@@ -1263,10 +1263,10 @@ function getHrMasterConfig(context: WorkspaceRouteContext) {
 }
 
 function getHrMatchText(context: WorkspaceRouteContext) {
-  const pathname = context.pathname.toLowerCase();
+  const pathname = decodeRouteText(context.pathname).toLowerCase();
   const leaves = collectMenuLeaves(context.activeApp?.children || []);
   const activeLeaf = leaves.find((leaf) => {
-    const path = (leaf.url_path || "").replace(/^\/+/, "").toLowerCase();
+    const path = decodeRouteText((leaf.url_path || "").replace(/^\/+/, "")).toLowerCase();
     return path && pathname.includes(path);
   });
   return [pathname, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
@@ -1274,7 +1274,23 @@ function getHrMatchText(context: WorkspaceRouteContext) {
 
 function isHrRoute(context: WorkspaceRouteContext) {
   const matchText = getHrMatchText(context);
-  return matchText.includes("/hr/") || matchText.includes(" hr ") || matchText.includes("human");
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return (
+    matchText.includes("/hr/") ||
+    matchText.includes("/hcm/") ||
+    matchText.includes(" hr ") ||
+    matchText.includes(" hcm ") ||
+    matchText.includes("human") ||
+    compact.includes("humancapitalmanagement")
+  );
+}
+
+function decodeRouteText(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function isHrPayrollProcessRoute(context: WorkspaceRouteContext) {
