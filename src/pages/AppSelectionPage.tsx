@@ -5,17 +5,21 @@ import {
   BriefcaseBusiness,
   Building2,
   ChevronRight,
-  Database,
   Factory,
   FolderCog,
   Gauge,
   Globe,
+  IdCard,
+  Landmark,
+  LifeBuoy,
   Layers,
   Package,
+  PackageCheck,
+  Settings2,
   ShieldCheck,
   Sparkles,
   Truck,
-  Users,
+  UserRoundCheck,
   Warehouse,
 } from "lucide-react";
 import type { CSSProperties, ElementType } from "react";
@@ -67,7 +71,7 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
   {
     keys: ["finance", "accounts"],
     meta: {
-      Icon: Database,
+      Icon: Landmark,
       accent: { gradient: "linear-gradient(135deg, #2563eb 0%, #0f766e 100%)", light: "#eaf3ff", border: "#9cc2ff", icon: "#0f4fa8", text: "#0f2f64", glow: "rgba(37, 99, 235, 0.16)" },
       code: "Finance",
       fullForm: "Finance Management System",
@@ -78,7 +82,7 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
   {
     keys: ["hr", "human", "hcm"],
     meta: {
-      Icon: Users,
+      Icon: UserRoundCheck,
       accent: { gradient: "linear-gradient(135deg, #16a34a 0%, #0f766e 100%)", light: "#eaf8df", border: "#b7e7a7", icon: "#15803d", text: "#14532d", glow: "rgba(22, 163, 74, 0.14)" },
       code: "HCM",
       fullForm: "Human Capital Management",
@@ -89,7 +93,7 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
   {
     keys: ["ems", "employee"],
     meta: {
-      Icon: Users,
+      Icon: IdCard,
       accent: { gradient: "linear-gradient(135deg, #16a34a 0%, #0f766e 100%)", light: "#eaf8df", border: "#b7e7a7", icon: "#15803d", text: "#14532d", glow: "rgba(22, 163, 74, 0.14)" },
       code: "EMS",
       fullForm: "Employee Management System",
@@ -122,7 +126,7 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
   {
     keys: ["lms"],
     meta: {
-      Icon: Truck,
+      Icon: PackageCheck,
       accent: { gradient: "linear-gradient(135deg, #0891b2 0%, #6366f1 100%)", light: "#ecfeff", border: "#a5f3fc", icon: "#0891b2", text: "#164e63", glow: "rgba(6, 182, 212, 0.14)" },
       code: "LMS",
       fullForm: "Logistics Management System",
@@ -144,7 +148,7 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
   {
     keys: ["mms", "maintenance"],
     meta: {
-      Icon: Factory,
+      Icon: Settings2,
       accent: { gradient: "linear-gradient(135deg, #8b5cf6 0%, #0f766e 100%)", light: "#f0edff", border: "#c4b5fd", icon: "#6d28d9", text: "#40237a", glow: "rgba(139, 92, 246, 0.14)" },
       code: "MMS",
       fullForm: "Maintenance Management System",
@@ -203,14 +207,7 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
   const securityApp = useMemo(() => workspaceApps.find((app) => isSecurityModule(app)), [workspaceApps]);
   const coreApps = useMemo(() => workspaceApps.filter((app) => !isUtilitiesApp(app) && !isSecurityModule(app)), [workspaceApps]);
   const btMastersApp = useMemo(() => workspaceApps.find((app) => isUtilitiesApp(app)), [workspaceApps]);
-  const completedApps = useMemo(
-    () => sortAppsByDisplayOrder(coreApps.filter((app, index) => getModuleMeta(app, index).status === "completed")),
-    [coreApps],
-  );
-  const inProgressApps = useMemo(
-    () => sortAppsByDisplayOrder(coreApps.filter((app, index) => getModuleMeta(app, index).status === "in-progress")),
-    [coreApps],
-  );
+  const displayCoreApps = useMemo(() => sortAppsByDisplayOrder(coreApps), [coreApps]);
   const openApp = (app: MenuNode) => {
     const firstPath = firstLeafPath(app);
     navigate(`/workspace/${cleanAppCode(app.title)}${firstPath ? `/${firstPath}` : ""}`);
@@ -247,10 +244,10 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
           <div className="app-launch-sections">
             <section className="app-launch-section">
               <div className="app-launch-section-title">
-                <span>Core Apps - Completed</span>
+                <span>Core Apps</span>
               </div>
               <div className="module-grid app-launch-grid">
-                {completedApps.map((app, index) => {
+                {displayCoreApps.map((app, index) => {
                   const meta = getModuleMeta(app, index);
                   const childCount = app.children?.length || 0;
                   const screenCount = flattenLeaves(app.children || []).length;
@@ -267,30 +264,6 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
               </div>
             </section>
 
-            {inProgressApps.length > 0 ? (
-              <section className="app-launch-section">
-                <div className="app-launch-section-title">
-                  <span>Core Apps - In Progress</span>
-                </div>
-                <div className="module-grid app-launch-grid app-launch-grid-progress">
-                  {inProgressApps.map((app, index) => {
-                    const meta = getModuleMeta(app, completedApps.length + index);
-                    const childCount = app.children?.length || 0;
-                    const screenCount = flattenLeaves(app.children || []).length;
-                    return (
-                      <ModuleCard
-                        key={app.id || app.title}
-                        childCount={childCount}
-                        screenCount={screenCount}
-                        meta={meta}
-                        onClick={() => openApp(app)}
-                      />
-                    );
-                  })}
-                </div>
-              </section>
-            ) : null}
-
             {btMastersApp ? (
               <section className="app-launch-section app-launch-utility-section">
                 <div className="app-launch-section-title">
@@ -301,7 +274,7 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
                     code="Support"
                     fullForm="Support and Development Tickets"
                     description="Support and development tickets with resolution tracking."
-                    Icon={BriefcaseBusiness}
+                    Icon={LifeBuoy}
                     disabled
                   />
                   {securityApp ? (
@@ -346,7 +319,10 @@ function ModuleCard({
         <span className="app-module-card__icon">
           <Icon size={24} />
         </span>
-        <span className="app-module-card__badge">{childCount} GRP</span>
+        <span className="app-module-card__badges">
+          {meta.status === "in-progress" ? <span className="app-module-card__status">In progress</span> : null}
+          <span className="app-module-card__badge">{childCount} GRP</span>
+        </span>
       </div>
       <Icon size={86} className="app-module-card__watermark" aria-hidden="true" />
       <div className="app-module-card__copy">
