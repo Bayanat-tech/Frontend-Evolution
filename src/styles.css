@@ -5290,7 +5290,7 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 /* Finance document editors are rendered as fixed overlays from inside the
    workspace content. Offset them from the persistent workspace chrome so the
    blue document command header is never hidden behind the app header/sidebar. */
-.workspace-content > .fixed.inset-0.z-50.bg-background {
+.workspace-content .fixed.inset-0.z-50.bg-background {
   top: 58px !important;
   right: 0 !important;
   bottom: 0 !important;
@@ -5300,32 +5300,37 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   overflow: hidden !important;
 }
 
-.workspace:has(.sidebar.collapsed) .workspace-content > .fixed.inset-0.z-50.bg-background {
+.workspace:has(.sidebar.collapsed) .workspace-content .fixed.inset-0.z-50.bg-background {
   left: var(--app-sidebar-collapsed-width) !important;
 }
 
-.workspace-content > .fixed.inset-0.z-50.bg-background .payment-workbench {
+.workspace-content .fixed.inset-0.z-50.bg-background .payment-workbench {
   height: calc(100dvh - 58px) !important;
   max-height: calc(100dvh - 58px) !important;
 }
 
-.workspace-content > .fixed.inset-0.z-50.bg-background .commercial-command-header {
-  min-height: 58px;
+.workspace-content .fixed.inset-0.z-50.bg-background .commercial-command-header {
+  min-height: 64px;
   flex: 0 0 auto;
+  padding-block: 9px !important;
 }
 
-.workspace-content > .fixed.inset-0.z-50.bg-background .commercial-command-header > div {
+.workspace-content .fixed.inset-0.z-50.bg-background .commercial-command-header > div {
   min-width: 0;
 }
 
+.workspace-content .fixed.inset-0.z-50.bg-background .commercial-editor > .min-h-0 {
+  padding-top: 14px !important;
+}
+
 @media (max-width: 768px) {
-  .workspace-content > .fixed.inset-0.z-50.bg-background,
-  .workspace:has(.sidebar.collapsed) .workspace-content > .fixed.inset-0.z-50.bg-background {
+  .workspace-content .fixed.inset-0.z-50.bg-background,
+  .workspace:has(.sidebar.collapsed) .workspace-content .fixed.inset-0.z-50.bg-background {
     top: 56px !important;
     left: 0 !important;
   }
 
-  .workspace-content > .fixed.inset-0.z-50.bg-background .payment-workbench {
+  .workspace-content .fixed.inset-0.z-50.bg-background .payment-workbench {
     height: calc(100dvh - 56px) !important;
     max-height: calc(100dvh - 56px) !important;
   }
