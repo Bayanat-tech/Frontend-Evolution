@@ -774,9 +774,9 @@ buildDelete: (row, context) => ({
   grademaster: {
     title: "Grade Master",
     subtitle: "Maintain employee grades, entitlement flags, and benefit limits.",
-    master: "grademaster",
-    gmEndpoint: "grade",
-    routeKeys: ["grademaster", "grade"],
+    master: "grade_master",
+    gmEndpoint: "grade_master",
+    routeKeys: ["grade_master"],
     keyField: "grade_code",
     fields: [
       { name: "grade_code", label: "Grade Code", required: true, disabledOnEdit: true, width: 140 },
