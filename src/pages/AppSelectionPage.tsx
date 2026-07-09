@@ -203,14 +203,7 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
   const securityApp = useMemo(() => workspaceApps.find((app) => isSecurityModule(app)), [workspaceApps]);
   const coreApps = useMemo(() => workspaceApps.filter((app) => !isUtilitiesApp(app) && !isSecurityModule(app)), [workspaceApps]);
   const btMastersApp = useMemo(() => workspaceApps.find((app) => isUtilitiesApp(app)), [workspaceApps]);
-  const completedApps = useMemo(
-    () => sortAppsByDisplayOrder(coreApps.filter((app, index) => getModuleMeta(app, index).status === "completed")),
-    [coreApps],
-  );
-  const inProgressApps = useMemo(
-    () => sortAppsByDisplayOrder(coreApps.filter((app, index) => getModuleMeta(app, index).status === "in-progress")),
-    [coreApps],
-  );
+  const displayCoreApps = useMemo(() => sortAppsByDisplayOrder(coreApps), [coreApps]);
   const openApp = (app: MenuNode) => {
     const firstPath = firstLeafPath(app);
     navigate(`/workspace/${cleanAppCode(app.title)}${firstPath ? `/${firstPath}` : ""}`);
@@ -247,10 +240,10 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
           <div className="app-launch-sections">
             <section className="app-launch-section">
               <div className="app-launch-section-title">
-                <span>Core Apps - Completed</span>
+                <span>Core Apps</span>
               </div>
               <div className="module-grid app-launch-grid">
-                {completedApps.map((app, index) => {
+                {displayCoreApps.map((app, index) => {
                   const meta = getModuleMeta(app, index);
                   const childCount = app.children?.length || 0;
                   const screenCount = flattenLeaves(app.children || []).length;
@@ -266,30 +259,6 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
                 })}
               </div>
             </section>
-
-            {inProgressApps.length > 0 ? (
-              <section className="app-launch-section">
-                <div className="app-launch-section-title">
-                  <span>Core Apps - In Progress</span>
-                </div>
-                <div className="module-grid app-launch-grid app-launch-grid-progress">
-                  {inProgressApps.map((app, index) => {
-                    const meta = getModuleMeta(app, completedApps.length + index);
-                    const childCount = app.children?.length || 0;
-                    const screenCount = flattenLeaves(app.children || []).length;
-                    return (
-                      <ModuleCard
-                        key={app.id || app.title}
-                        childCount={childCount}
-                        screenCount={screenCount}
-                        meta={meta}
-                        onClick={() => openApp(app)}
-                      />
-                    );
-                  })}
-                </div>
-              </section>
-            ) : null}
 
             {btMastersApp ? (
               <section className="app-launch-section app-launch-utility-section">
@@ -346,7 +315,10 @@ function ModuleCard({
         <span className="app-module-card__icon">
           <Icon size={24} />
         </span>
-        <span className="app-module-card__badge">{childCount} GRP</span>
+        <span className="app-module-card__badges">
+          {meta.status === "in-progress" ? <span className="app-module-card__status">In progress</span> : null}
+          <span className="app-module-card__badge">{childCount} GRP</span>
+        </span>
       </div>
       <Icon size={86} className="app-module-card__watermark" aria-hidden="true" />
       <div className="app-module-card__copy">
