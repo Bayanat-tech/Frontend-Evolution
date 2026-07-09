@@ -5,17 +5,21 @@ import {
   BriefcaseBusiness,
   Building2,
   ChevronRight,
-  Database,
   Factory,
   FolderCog,
   Gauge,
   Globe,
+  IdCard,
+  Landmark,
+  LifeBuoy,
   Layers,
   Package,
+  PackageCheck,
+  Settings2,
   ShieldCheck,
   Sparkles,
   Truck,
-  Users,
+  UserRoundCheck,
   Warehouse,
 } from "lucide-react";
 import type { CSSProperties, ElementType } from "react";
@@ -67,7 +71,7 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
   {
     keys: ["finance", "accounts"],
     meta: {
-      Icon: Database,
+      Icon: Landmark,
       accent: { gradient: "linear-gradient(135deg, #2563eb 0%, #0f766e 100%)", light: "#eaf3ff", border: "#9cc2ff", icon: "#0f4fa8", text: "#0f2f64", glow: "rgba(37, 99, 235, 0.16)" },
       code: "Finance",
       fullForm: "Finance Management System",
@@ -78,7 +82,7 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
   {
     keys: ["hr", "human", "hcm"],
     meta: {
-      Icon: Users,
+      Icon: UserRoundCheck,
       accent: { gradient: "linear-gradient(135deg, #16a34a 0%, #0f766e 100%)", light: "#eaf8df", border: "#b7e7a7", icon: "#15803d", text: "#14532d", glow: "rgba(22, 163, 74, 0.14)" },
       code: "HCM",
       fullForm: "Human Capital Management",
@@ -89,7 +93,7 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
   {
     keys: ["ems", "employee"],
     meta: {
-      Icon: Users,
+      Icon: IdCard,
       accent: { gradient: "linear-gradient(135deg, #16a34a 0%, #0f766e 100%)", light: "#eaf8df", border: "#b7e7a7", icon: "#15803d", text: "#14532d", glow: "rgba(22, 163, 74, 0.14)" },
       code: "EMS",
       fullForm: "Employee Management System",
@@ -122,7 +126,7 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
   {
     keys: ["lms"],
     meta: {
-      Icon: Truck,
+      Icon: PackageCheck,
       accent: { gradient: "linear-gradient(135deg, #0891b2 0%, #6366f1 100%)", light: "#ecfeff", border: "#a5f3fc", icon: "#0891b2", text: "#164e63", glow: "rgba(6, 182, 212, 0.14)" },
       code: "LMS",
       fullForm: "Logistics Management System",
@@ -144,7 +148,7 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
   {
     keys: ["mms", "maintenance"],
     meta: {
-      Icon: Factory,
+      Icon: Settings2,
       accent: { gradient: "linear-gradient(135deg, #8b5cf6 0%, #0f766e 100%)", light: "#f0edff", border: "#c4b5fd", icon: "#6d28d9", text: "#40237a", glow: "rgba(139, 92, 246, 0.14)" },
       code: "MMS",
       fullForm: "Maintenance Management System",
@@ -270,7 +274,7 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
                     code="Support"
                     fullForm="Support and Development Tickets"
                     description="Support and development tickets with resolution tracking."
-                    Icon={BriefcaseBusiness}
+                    Icon={LifeBuoy}
                     disabled
                   />
                   {securityApp ? (
