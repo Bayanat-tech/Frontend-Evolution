@@ -22,6 +22,7 @@ const tabActions: Record<ApprovalTab, string[]> = {
 
 export function VendorApprovalsPage() {
   const { user } = useAuth();
+  console.log("User:", user);
   const [tab, setTab] = useState<ApprovalTab>("pending");
   const [rows, setRows] = useState<VendorTableRow[]>([]);
   const [query, setQuery] = useState("");
@@ -32,6 +33,13 @@ export function VendorApprovalsPage() {
   const loadRows = useCallback(async () => {
     const company = user?.company_code || "";
     const loginid = user?.loginid || user?.username || "";
+    const sql = vendorApprovalSql(company, loginid, tabActions[tab]);
+console.log(sql);
+
+const data = await executeVendorSql(sql);
+console.log(data);
+
+setRows(data);
     if (!company || !loginid) return;
     setLoading(true);
     try {
