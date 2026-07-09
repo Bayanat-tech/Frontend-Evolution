@@ -207,16 +207,16 @@ const ACCOUNT_FORM_SECTIONS: Array<{
       { name: "exp_subtype_description", label: "Exp SubType Description" },
     ],
   },
-  {
-    title: "Approval",
-    fields: [
-      // { name: "cr_no", label: "CR No" },
-      // { name: "apprval_factor", label: "Approval Factor" },
-      // { name: "request_number", label: "Request Number" },
-      // { name: "ac_type", label: "Account Type" },
-      { name: "ac_active", label: "Active", type: "flag" },
-    ],
-  },
+  // {
+  //   title: "Approval",
+  //   fields: [
+  //     // { name: "cr_no", label: "CR No" },
+  //     // { name: "apprval_factor", label: "Approval Factor" },
+  //     // { name: "request_number", label: "Request Number" },
+  //     // { name: "ac_type", label: "Account Type" },
+  //     { name: "ac_active", label: "Active", type: "flag" },
+  //   ],
+  // },
 ];
 
 export function AccountTreePage() {
@@ -824,11 +824,10 @@ function AccountLevelFiveForm({
           ]
         : [
             { field: "pl_code", header: "Code" },
-            { field: "pl_name", header: "Name" },
             { field: "pl_description", header: "Description" },
           ],
       valueField: ["1", "2", "3"].includes(value.l4_code.slice(0, 1)) ? "bl_code" : "pl_code",
-      displayFields: ["1", "2", "3"].includes(value.l4_code.slice(0, 1)) ? ["bl_code", "bl_name", "bl_description"] : ["pl_code", "pl_name", "pl_description"],
+      displayFields: ["1", "2", "3"].includes(value.l4_code.slice(0, 1)) ? ["bl_code", "bl_description"] : ["pl_code", "pl_description"],
       loadOptions: () => getMasterLookup("finance", ["1", "2", "3"].includes(value.l4_code.slice(0, 1)) ? "bl_setup" : "pl_setup"),
       onChange: (nextValue) => setField("pl_bl_code", nextValue),
     },

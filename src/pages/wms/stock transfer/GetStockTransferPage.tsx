@@ -866,7 +866,7 @@ useEffect(() => {
                             P_UOM, QTY_STOCK, QTY_AVL, L_UOM, JOB_NO, TXN_DATE, LOT_NO, MANU_CODE,
                             DOC_REF, KEY_NUMBER, UOM_COUNT, PALLET_ID, MFG_DATE, EXP_DATE
                           FROM VW_STKLED
-                          WHERE PRIN_CODE = '${prin_code}' AND COMPANY_CODE = '${company_code}'`,
+                          WHERE PRIN_CODE = '${prin_code}'`,
                       });
                       return Array.isArray(res.data?.data) ? res.data.data
                           : Array.isArray(res.data)        ? res.data : [];
@@ -916,7 +916,7 @@ useEffect(() => {
                       loadOptions={async () => {
                         const res = await api.post("/api/wms/inbound/executeRawSql", {
                           raw_sql: `SELECT *
-                                    FROM MS_SITE WHERE COMPANY_CODE = '${company_code}'
+                                    FROM MS_SITE
                                     `,
                         });
                         return Array.isArray(res.data?.data) ? res.data.data
@@ -927,7 +927,7 @@ useEffect(() => {
                       loadOptions={async () => {
                         const res = await api.post("/api/wms/inbound/executeRawSql", {
                                raw_sql: `SELECT *
-                                    FROM MS_SITE WHERE COMPANY_CODE = '${company_code}'
+                                    FROM MS_SITE
                                     `,
                         });
                         return Array.isArray(res.data?.data) ? res.data.data

@@ -371,7 +371,7 @@ const [putawayForm, setPutawayForm] = useState({ site_from: "", site_to: "", loc
             ],
             loadOptions: async () => {
               const res = await api.post("/api/wms/inbound/executeRawSql", {
-                raw_sql: `SELECT * FROM TI_CONTAINER WHERE PRIN_CODE = '${sqlEscape(prinCode)}' AND JOB_NO = '${sqlEscape(jobNo)}' AND COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY CONTAINER_NO`,
+                raw_sql: `SELECT * FROM TI_CONTAINER WHERE PRIN_CODE = '${sqlEscape(prinCode)}' AND JOB_NO = '${sqlEscape(jobNo)}'`,
               });
               return Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
             },

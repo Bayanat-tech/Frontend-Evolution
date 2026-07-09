@@ -96,7 +96,7 @@ import { HrJoiningPage } from "../pages/hr/HrJoiningPage";
 
 import { HrEmpEducationPage } from "../pages/hr/HrEmpEducationPage";  
 import GradeSalaryIncrement from "../pages/hr/GradeSalaryIncrement.";
-
+import { HrManpowerPage } from "../pages/hr/HrManpower";
 
 
 type WorkspaceRouteContext = {
@@ -647,6 +647,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   name: "HR Joining",
   match: (context) => isHrRoute(context) && isHrJoiningRoute(context),
   element: () => <HrJoiningPage />,
+},
+
+{
+  name: "HR Manpower Requisition",
+  match: (context) => isHrRoute(context) && isHrManpowerRequisitionRoute(context),
+  element: () => <HrManpowerPage />,
 },
 
 {
@@ -1358,5 +1364,17 @@ function isHrEmpEducationRoute(context: WorkspaceRouteContext) {
     normalized.includes("emp_education") ||
     normalized.includes("educational_qualification") ||
     normalized.includes("education_qualification")
+  );
+}
+
+function isHrManpowerRequisitionRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("manpowerrequisition") ||
+    compact.includes("confirmationreview") ||
+    normalized.includes("manpower_requisition") ||
+    normalized.includes("manpower-requisition") ||
+    normalized.includes("confirmation_review")
   );
 }
