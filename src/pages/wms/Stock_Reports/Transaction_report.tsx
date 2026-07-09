@@ -114,18 +114,19 @@ const GROUP_OPTIONS = [
     { value: "PRODUCT", label: "Product" },
     { value: "PRODUCT_LOT", label: "Product + Lot No." },
     { value: "PRODUCT_DOC", label: "Product + Doc. Ref." },
-    { value: "SITE_LOC_PRODUCT", label: "Site + Location + Product" },
-    { value: "GROUP_BRAND_PRODUCT", label: "Group + Brand + Product" },
-    { value: "BRAND_PRODUCT", label: "Brand + Product" },
-    { value: "CUSTOMERWISE", label: "Customerwise" },
-    { value: "JOB_SUMMARY", label: "Job wise Summary" },
-    { value: "WITHOUT_TRANSFERS", label: "Without Transfers" },
-    { value: "WITHOUT_TRANSFERS_EXP", label: "Without Transfers - Exp Date" },
-    { value: "PRODUCT_TXN_TOTALS", label: "Product with Transaction Totals" },
-    { value: "production_report", label: "Production Report" },
-    { value: "production_crosstab", label: "Production Report Crosstab" },
-    { value: "model_product", label: "Model No. + Product" },
+    { value: "SITE_LOC_PRODUCT", label: "Product + Site + Location" },
+    { value: "GROUP_BRAND_PRODUCT", label: "Product + Group + Brand " },
+    { value: "BRAND_PRODUCT", label: "Product + Brand " },
+     { value: "model_product", label: "Product + Model No." },
     { value: "product_batch", label: "Product + Batch No." },
+    // { value: "CUSTOMERWISE", label: "Customerwise" },
+    // { value: "JOB_SUMMARY", label: "Job wise Summary" },
+    { value: "WITHOUT_TRANSFERS", label: "Without Transfers" },
+    // { value: "WITHOUT_TRANSFERS_EXP", label: "Without Transfers - Exp Date" },
+    // { value: "PRODUCT_TXN_TOTALS", label: "Product with Transaction Totals" },
+    // { value: "production_report", label: "Production Report" },
+    // { value: "production_crosstab", label: "Production Report Crosstab" },
+   
 ];
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -295,7 +296,9 @@ export default function TransactionReportPage() {
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
 
                             {/* Principal + Product From + Product To */}
-                            <div className="field-row" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 6, width: "100%" }}>
+                            {/* <div className="field-row" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 6, width: "100%" }}> */}
+                            <div className="field-row" style={row3}>
+
                                 <FloatLabel label="Principal" required bgColor={BG}>
                                     <LookupField
                                         label=""
@@ -330,7 +333,7 @@ export default function TransactionReportPage() {
                                         onChange={(val) => setPrincipal([{ prin_code: val, prin_name: "" }])}
                                     />
                                 </FloatLabel>
-                                <FloatLabel label="Product From" bgColor={BG}>
+                                <FloatLabel label="Product" bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={productFrom}
@@ -351,7 +354,7 @@ export default function TransactionReportPage() {
                                         onChange={(val) => setProductFrom(val)}
                                     />
                                 </FloatLabel>
-                                <FloatLabel label="Product To" bgColor={BG}>
+                                {/* <FloatLabel label="Product To" bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={productTo}
@@ -371,11 +374,98 @@ export default function TransactionReportPage() {
                                         }
                                         onChange={(val) => setProductTo(val)}
                                     />
+                                </FloatLabel> */}
+
+                                <FloatLabel label="Site" bgColor={BG}>
+                                    <LookupField
+                                        label=""
+                                        value={siteFrom}
+                                        displayValue={siteFromName}
+                                        columns={[
+                                            { field: "SITE_CODE", header: "Code" },
+                                            { field: "SITE_NAME", header: "Name" },
+                                        ]}
+                                        valueField="SITE_CODE"
+                                        displayFields={["SITE_CODE", "SITE_NAME"]}
+                                        loadOptions={() =>
+                                            getDynamicLookupaccount({
+                                                parameter: "WMS_Stock_Site_transfer_report",
+                                                code1: user?.company_code || "",
+                                            })
+                                        }
+                                        onChange={(val) => setSiteFrom(val)}
+                                    />
+                                </FloatLabel>
+
+                                 <FloatLabel label="Location" bgColor={BG}>
+                                    <LookupField
+                                        label=""
+                                        value={locationFrom}
+                                        displayValue={locationFromName}
+                                        columns={[
+                                            { field: "LOCATION_CODE", header: "Code" },
+                                            { field: "LOC_DESC", header: "Description" },
+                                        ]}
+                                        valueField="LOCATION_CODE"
+                                        displayFields={["LOCATION_CODE", "LOC_DESC"]}
+                                        loadOptions={() =>
+                                            getDynamicLookupaccount({
+                                                parameter: "WMS_Stock_Location_transfer_report",
+                                                code1: user?.company_code || "",
+                                                code2: siteFrom || "",
+                                            })
+                                        }
+                                        onChange={(val) => setLocationFrom(val)}
+                                    />
+                                </FloatLabel>
+
+                                 <FloatLabel label="Customer" bgColor={BG}>
+                                    <LookupField
+                                        label=""
+                                        value={customerFrom}
+                                        displayValue={customerFromName}
+                                        columns={[
+                                            { field: "CUST_CODE", header: "Code" },
+                                            { field: "CUST_NAME", header: "Name" },
+                                        ]}
+                                        valueField="CUST_CODE"
+                                        displayFields={["CUST_CODE", "CUST_NAME"]}
+                                        loadOptions={() =>
+                                            getDynamicLookupaccount({
+                                                parameter: "WMS_Stock_Customer_transfer_report",
+                                                code1: user?.company_code || "",
+                                                code2: principal[0]?.prin_code || "",
+                                            })
+                                        }
+                                        onChange={(val) => setCustomerFrom(val)}
+                                    />
+                                </FloatLabel>
+
+                                <FloatLabel label="Job No" bgColor={BG}>
+                                    <LookupField
+                                        label=""
+                                        value={jobNo}
+                                        displayValue={jobNoName}
+                                        columns={[
+                                            { field: "JOB_NO", header: "Job No" },
+                                            { field: "JOB_TYPE", header: "Type" },
+                                            { field: "JOB_DATE", header: "Date" },
+                                        ]}
+                                        valueField="JOB_NO"
+                                        displayFields={["JOB_NO", "JOB_TYPE"]}
+                                        loadOptions={() =>
+                                            getDynamicLookupaccount({
+                                                parameter: "WMS_Stock_Job_transfer_report",
+                                                code1: user?.company_code || "",
+                                            })
+                                        }
+                                        onChange={(val) => setJobNo(val)}
+                                    />
                                 </FloatLabel>
                             </div>
 
                             {/* Site From | Site To */}
-                            <div className="field-row" style={row2}>
+                            {/* <div className="field-row" style={row2}>
                                 <FloatLabel label="Site From" bgColor={BG}>
                                     <LookupField
                                         label=""
@@ -416,10 +506,10 @@ export default function TransactionReportPage() {
                                         onChange={(val) => setSiteTo(val)}
                                     />
                                 </FloatLabel>
-                            </div>
+                            </div> */}
 
                             {/* Location From | Location To */}
-                            <div className="field-row" style={row2}>
+                            {/* <div className="field-row" style={row2}>
                                 <FloatLabel label="Location From" bgColor={BG}>
                                     <LookupField
                                         label=""
@@ -462,7 +552,7 @@ export default function TransactionReportPage() {
                                         onChange={(val) => setLocationTo(val)}
                                     />
                                 </FloatLabel>
-                            </div>
+                            </div> */}
 
                             {/* Transaction Date + Exp Date */}
                             <div className="field-row" style={{ display: "flex", gap: "12px", width: "100%" }}>
@@ -508,7 +598,7 @@ export default function TransactionReportPage() {
                             </div>
 
                             {/* Customer From | Customer To */}
-                            <div className="field-row" style={row2}>
+                            {/* <div className="field-row" style={row2}>
                                 <FloatLabel label="Customer From" bgColor={BG}>
                                     <LookupField
                                         label=""
@@ -529,8 +619,8 @@ export default function TransactionReportPage() {
                                         }
                                         onChange={(val) => setCustomerFrom(val)}
                                     />
-                                </FloatLabel>
-                                <FloatLabel label="Customer To" bgColor={BG}>
+                                </FloatLabel> 
+                                 <FloatLabel label="Customer To" bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={customerTo}
@@ -551,11 +641,11 @@ export default function TransactionReportPage() {
                                         onChange={(val) => setCustomerTo(val)}
                                     />
                                 </FloatLabel>
-                            </div>
+                            </div> */}
 
                             {/* Job No + Txn Type */}
-                            <div className="field-row" style={row2}>
-                                <FloatLabel label="Job No" bgColor={BG}>
+                            <div className="field-row" style={row3}>
+                                {/* <FloatLabel label="Job No" bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={jobNo}
@@ -575,24 +665,8 @@ export default function TransactionReportPage() {
                                         }
                                         onChange={(val) => setJobNo(val)}
                                     />
-                                </FloatLabel>
-                                <Field label="Txn Type">
-                                    <select value={txnType} onChange={(e) => setTxnType(e.target.value)} style={inputStyle}>
-                                        <option value="">All</option>
-                                        <option value="ADJ-">ADJ-</option>
-                                        <option value="ADJ+">ADJ+</option>
-                                        <option value="EXP">EXP</option>
-                                        <option value="IMP">IMP</option>
-                                        <option value="TFI">TFI</option>
-                                        <option value="TFO">TFO</option>
-                                    </select>
-                                </Field>
-                                <div />
-                            </div>
-
-                            {/* Doc Ref From | Doc Ref To */}
-                            <div className="field-row" style={row2}>
-                                <FloatLabel label="Doc. Ref. From" bgColor={BG}>
+                                </FloatLabel> */}
+                                <FloatLabel label="Doc. Ref." bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={docRefFrom}
@@ -612,11 +686,22 @@ export default function TransactionReportPage() {
                                         onChange={(val) => setDocRefFrom(val)}
                                     />
                                 </FloatLabel>
-                                <FloatLabel label="Doc. Ref. To" bgColor={BG}>
+                                <Field label="Txn Type">
+                                    <select value={txnType} onChange={(e) => setTxnType(e.target.value)} style={inputStyle}>
+                                        <option value="">All</option>
+                                        <option value="ADJ-">ADJ-</option>
+                                        <option value="ADJ+">ADJ+</option>
+                                        <option value="EXP">EXP</option>
+                                        <option value="IMP">IMP</option>
+                                        <option value="TFI">TFI</option>
+                                        <option value="TFO">TFO</option>
+                                    </select>
+                                </Field>
+                                 {/* <FloatLabel label="Doc. Ref. From" bgColor={BG}>
                                     <LookupField
                                         label=""
-                                        value={docRefTo}
-                                        displayValue={docRefTo}
+                                        value={docRefFrom}
+                                        displayValue={docRefFrom}
                                         columns={[
                                             { field: "DOC_REF", header: "Doc Ref" },
                                         ]}
@@ -629,14 +714,11 @@ export default function TransactionReportPage() {
                                                 code2: principal[0]?.prin_code || "",
                                             })
                                         }
-                                        onChange={(val) => setDocRefTo(val)}
+                                        onChange={(val) => setDocRefFrom(val)}
                                     />
-                                </FloatLabel>
-                            </div>
+                                </FloatLabel> */}
 
-                            {/* Lot No From | Lot No To */}
-                            <div className="field-row" style={row2}>
-                                <FloatLabel label="Lot No. From" bgColor={BG}>
+                                <FloatLabel label="Lot No." bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={lotNoFrom}
@@ -656,11 +738,60 @@ export default function TransactionReportPage() {
                                         onChange={(val) => setLotNoFrom(val)}
                                     />
                                 </FloatLabel>
-                                <FloatLabel label="Lot No. To" bgColor={BG}>
+                                <div />
+                            </div>
+
+                            {/* Doc Ref From | Doc Ref To */}
+                            <div className="field-row" style={row2}>
+                                {/* <FloatLabel label="Doc. Ref. From" bgColor={BG}>
                                     <LookupField
                                         label=""
-                                        value={lotNoTo}
-                                        displayValue={lotNoTo}
+                                        value={docRefFrom}
+                                        displayValue={docRefFrom}
+                                        columns={[
+                                            { field: "DOC_REF", header: "Doc Ref" },
+                                        ]}
+                                        valueField="DOC_REF"
+                                        displayFields={["DOC_REF"]}
+                                        loadOptions={() =>
+                                            getDynamicLookupaccount({
+                                                parameter: "WMS_Stock_DOC_REF",
+                                                code1: user?.company_code || "",
+                                                code2: principal[0]?.prin_code || "",
+                                            })
+                                        }
+                                        onChange={(val) => setDocRefFrom(val)}
+                                    />
+                                </FloatLabel> */}
+                                {/* <FloatLabel label="Doc. Ref. To" bgColor={BG}>
+                                    <LookupField
+                                        label=""
+                                        value={docRefTo}
+                                        displayValue={docRefTo}
+                                        columns={[
+                                            { field: "DOC_REF", header: "Doc Ref" },
+                                        ]}
+                                        valueField="DOC_REF"
+                                        displayFields={["DOC_REF"]}
+                                        loadOptions={() =>
+                                            getDynamicLookupaccount({
+                                                parameter: "WMS_Stock_DOC_REF",
+                                                code1: user?.company_code || "",
+                                                code2: principal[0]?.prin_code || "",
+                                            })
+                                        }
+                                        onChange={(val) => setDocRefTo(val)}
+                                    />
+                                </FloatLabel> */}
+                            </div>
+
+                            {/* Lot No From | Lot No To */}
+                            <div className="field-row" style={row3}>
+                                {/* <FloatLabel label="Lot No." bgColor={BG}>
+                                    <LookupField
+                                        label=""
+                                        value={lotNoFrom}
+                                        displayValue={lotNoFrom}
                                         columns={[
                                             { field: "LOT_NO", header: "Lot No" },
                                         ]}
@@ -673,14 +804,10 @@ export default function TransactionReportPage() {
                                                 code2: principal[0]?.prin_code || "",
                                             })
                                         }
-                                        onChange={(val) => setLotNoTo(val)}
+                                        onChange={(val) => setLotNoFrom(val)}
                                     />
-                                </FloatLabel>
-                            </div>
-
-                            {/* Batch No From | Batch No To */}
-                            <div className="field-row" style={row2}>
-                                <FloatLabel label="Batch No. From" bgColor={BG}>
+                                </FloatLabel> */}
+                                 <FloatLabel label="Batch No." bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={batchNoFrom}
@@ -700,7 +827,51 @@ export default function TransactionReportPage() {
                                         onChange={(val) => setBatchNoFrom(val)}
                                     />
                                 </FloatLabel>
-                                <FloatLabel label="Batch No. To" bgColor={BG}>
+                                {/* <FloatLabel label="Lot No. To" bgColor={BG}>
+                                    <LookupField
+                                        label=""
+                                        value={lotNoTo}
+                                        displayValue={lotNoTo}
+                                        columns={[
+                                            { field: "LOT_NO", header: "Lot No" },
+                                        ]}
+                                        valueField="LOT_NO"
+                                        displayFields={["LOT_NO"]}
+                                        loadOptions={() =>
+                                            getDynamicLookupaccount({
+                                                parameter: "WMS_Stock_Lot_no",
+                                                code1: user?.company_code || "",
+                                                code2: principal[0]?.prin_code || "",
+                                            })
+                                        }
+                                        onChange={(val) => setLotNoTo(val)}
+                                    />
+                                </FloatLabel> */}
+                            </div>
+
+                            {/* Batch No From | Batch No To */}
+                            <div className="field-row" style={row2}>
+                                {/* <FloatLabel label="Batch No. From" bgColor={BG}>
+                                    <LookupField
+                                        label=""
+                                        value={batchNoFrom}
+                                        displayValue={batchNoFrom}
+                                        columns={[
+                                            { field: "BATCH_NO", header: "Batch No" },
+                                        ]}
+                                        valueField="BATCH_NO"
+                                        displayFields={["BATCH_NO"]}
+                                        loadOptions={() =>
+                                            getDynamicLookupaccount({
+                                                parameter: "WMS_Stock_batch_no",
+                                                code1: user?.company_code || "",
+                                                code2: principal[0]?.prin_code || "",
+                                            })
+                                        }
+                                        onChange={(val) => setBatchNoFrom(val)}
+                                    />
+                                </FloatLabel> */}
+                                {/* <FloatLabel label="Batch No. To" bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={batchNoTo}
@@ -719,7 +890,7 @@ export default function TransactionReportPage() {
                                         }
                                         onChange={(val) => setBatchNoTo(val)}
                                     />
-                                </FloatLabel>
+                                </FloatLabel> */}
                             </div>
 
                         </div>
