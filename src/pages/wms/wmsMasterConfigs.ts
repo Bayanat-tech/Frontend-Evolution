@@ -673,6 +673,19 @@ saveEndpoint: (form, { editMode, original }) => {
       { name: "address", label: "Address", table: false },
     ],
     deleteConfig: { mode: "disabled", payload: () => null, reason: "Delete endpoint is not registered in the existing backend" },
+    customLoad: async (user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      const data = await executeWmsInboundSql(`
+        SELECT *
+        FROM MS_WAREHOUSE
+        WHERE COMPANY_CODE = '${typedUser.company_code}'
+        ORDER BY WH_CODE
+      `);
+      return {
+        tableData: data as Record<string, unknown>[],
+        count: data.length,
+      };
+    },
   },
   location: {
     title: "Location Master",
