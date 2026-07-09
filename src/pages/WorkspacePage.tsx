@@ -113,8 +113,15 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   const userDisplayName = user?.username || user?.loginid || "User";
   const companyName = user?.company_name || user?.company_code || "Company";
 
+  // useEffect(() => {
+  //   setExpanded(collectExpandedPath(activeMenuPath));
+  // }, [activeApp?.id, activeApp?.title, location.pathname]);
+
   useEffect(() => {
-    setExpanded(collectExpandedPath(activeMenuPath));
+    setExpanded({
+      ...collectDefaultExpanded(activeApp?.children || [], 1),
+      ...collectExpandedPath(activeMenuPath),
+    });
   }, [activeApp?.id, activeApp?.title, location.pathname]);
 
   const toggleSidebar = () => {
@@ -125,7 +132,11 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
     setCollapsed((value) => {
       const nextCollapsed = !value;
       if (!nextCollapsed) {
-        setExpanded(collectExpandedPath(activeMenuPath));
+        // setExpanded(collectExpandedPath(activeMenuPath));
+         setExpanded({
+          ...collectDefaultExpanded(activeApp?.children || [], 1),
+          ...collectExpandedPath(activeMenuPath),
+        });
       }
       return nextCollapsed;
     });
@@ -266,6 +277,17 @@ function collectExpandedPath(nodes: MenuNode[]): Record<string, boolean> {
   nodes.slice(0, -1).forEach((node) => {
     if (node.children?.length) {
       expanded[node.id || node.title] = true;
+    }
+  });
+  return expanded;
+}
+
+function collectDefaultExpanded(nodes: MenuNode[], maxLevel: number, level = 1): Record<string, boolean> {
+  const expanded: Record<string, boolean> = {};
+  nodes.forEach((node) => {
+    if (node.children?.length && level <= maxLevel) {
+      expanded[node.id || node.title] = true;
+      Object.assign(expanded, collectDefaultExpanded(node.children, maxLevel, level + 1));
     }
   });
   return expanded;
