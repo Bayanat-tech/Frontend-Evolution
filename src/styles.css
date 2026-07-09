@@ -5181,3 +5181,153 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   color: #e2e8f0 !important;
 }
 
+/* Dark-mode finance/commercial screens.
+   Finance list and document pages have their own light polish rules above;
+   keep these late overrides broad so Cheque Payment/Receipt, Cash, JV and
+   similar document screens remain readable without per-page fixes. */
+.app.dark .workspace-content :where(.finance-list-page, .finance-page, .payment-workbench, .commercial-editor, .security-page) {
+  background:
+    radial-gradient(circle at 82% 0%, rgba(77, 143, 218, 0.08), transparent 28%),
+    linear-gradient(180deg, #0c111b 0%, #0a0e16 100%) !important;
+  color: #e2e8f0 !important;
+}
+
+.app.dark .workspace-content :where(.finance-list-heading, .finance-toolbar, .commercial-command-header) {
+  border-color: #33415d !important;
+  background:
+    linear-gradient(180deg, rgba(21, 25, 39, 0.98) 0%, rgba(17, 24, 39, 0.98) 100%) !important;
+  color: #e2e8f0 !important;
+  box-shadow: none !important;
+}
+
+.app.dark .workspace-content :where(.finance-list-heading)::after {
+  background: linear-gradient(90deg, #4d8fda 0%, rgba(77, 143, 218, 0.35) 36%, transparent 100%) !important;
+}
+
+.app.dark .workspace-content :where(.finance-list-heading h1, .finance-list-title h1, .finance-toolbar h1, .commercial-command-header h1) {
+  color: #f8fafc !important;
+  text-shadow: none !important;
+}
+
+.app.dark .workspace-content :where(.finance-list-heading p, .finance-list-title p, .finance-toolbar p, .commercial-command-header p) {
+  color: #a9b8ce !important;
+}
+
+.app.dark .workspace-content :where(.finance-list-page > div, .finance-page > div, .payment-workbench > div, .commercial-editor > div) {
+  color: #e2e8f0;
+}
+
+.app.dark .workspace-content :where(.finance-list-page .min-h-\[650px\], .finance-page .min-h-\[650px\]) {
+  background: transparent !important;
+}
+
+.app.dark .workspace-content :where(.finance-list-page .data-table-shell, .finance-page .data-table-shell, .security-page .data-table-shell) {
+  border-color: #2f3a52 !important;
+  background: #151927 !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.34) !important;
+}
+
+.app.dark .workspace-content :where(.finance-list-page .data-table-header, .finance-page .data-table-header, .security-page .data-table-header) {
+  border-color: #2f3a52 !important;
+  background: #181d2d !important;
+}
+
+.app.dark .workspace-content :where(.finance-list-page .data-table-pagination, .finance-page .data-table-pagination, .security-page .data-table-pagination) {
+  border-color: #2f3a52 !important;
+  background: #151927 !important;
+}
+
+.app.dark .workspace-content :where(.finance-period-control) {
+  border-color: #33415d !important;
+  background: #111827 !important;
+  color: #e2e8f0 !important;
+  box-shadow: none !important;
+}
+
+.app.dark .workspace-content :where(.finance-period-control span, .finance-period-control select) {
+  color: #e2e8f0 !important;
+  border-color: #33415d !important;
+}
+
+.app.dark .workspace-content :where(.commercial-header-shell, .commercial-lines-card, .commercial-section-title, .commercial-header-footer, .commercial-lines-scroll) {
+  border-color: #2f3a52 !important;
+  background: #151927 !important;
+  color: #e2e8f0 !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28) !important;
+}
+
+.app.dark .workspace-content :where(.commercial-section-title h2, .commercial-section-title h3, .commercial-section-title strong, .commercial-header-block-title strong) {
+  color: #f8fafc !important;
+}
+
+.app.dark .workspace-content :where(.commercial-section-title span, .commercial-header-block-title span, .commercial-header-block-fields > .field > span, .commercial-header-block-fields > label.field > span) {
+  color: #9ec5ff !important;
+}
+
+.app.dark .workspace-content :where(.commercial-header-panel, .commercial-header-block, .commercial-header-block-fields > .field, .commercial-header-block-fields > label.field, .commercial-header-block-fields > div) {
+  border-color: #33415d !important;
+  background: #111827 !important;
+  color: #e2e8f0 !important;
+}
+
+.app.dark .workspace-content :where(.commercial-lines-card table, .commercial-lines-card thead, .commercial-lines-card tbody, .commercial-lines-card tr, .commercial-lines-card td) {
+  background: #101522 !important;
+  color: #d7e0ee !important;
+  border-color: #273247 !important;
+}
+
+.app.dark .workspace-content :where(.commercial-lines-card th, .finance-lines-table th) {
+  background: #1d2435 !important;
+  color: #9ec5ff !important;
+  border-color: #33415d !important;
+}
+
+.app.dark .workspace-content :where(.commercial-lines-card tbody tr:hover) {
+  background: #1d2940 !important;
+  box-shadow: inset 3px 0 0 #4d8fda !important;
+}
+
+/* Finance document editors are rendered as fixed overlays from inside the
+   workspace content. Offset them from the persistent workspace chrome so the
+   blue document command header is never hidden behind the app header/sidebar. */
+.workspace-content > .fixed.inset-0.z-50.bg-background {
+  top: 58px !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: var(--app-sidebar-width) !important;
+  width: auto !important;
+  height: auto !important;
+  overflow: hidden !important;
+}
+
+.workspace:has(.sidebar.collapsed) .workspace-content > .fixed.inset-0.z-50.bg-background {
+  left: var(--app-sidebar-collapsed-width) !important;
+}
+
+.workspace-content > .fixed.inset-0.z-50.bg-background .payment-workbench {
+  height: calc(100dvh - 58px) !important;
+  max-height: calc(100dvh - 58px) !important;
+}
+
+.workspace-content > .fixed.inset-0.z-50.bg-background .commercial-command-header {
+  min-height: 58px;
+  flex: 0 0 auto;
+}
+
+.workspace-content > .fixed.inset-0.z-50.bg-background .commercial-command-header > div {
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .workspace-content > .fixed.inset-0.z-50.bg-background,
+  .workspace:has(.sidebar.collapsed) .workspace-content > .fixed.inset-0.z-50.bg-background {
+    top: 56px !important;
+    left: 0 !important;
+  }
+
+  .workspace-content > .fixed.inset-0.z-50.bg-background .payment-workbench {
+    height: calc(100dvh - 56px) !important;
+    max-height: calc(100dvh - 56px) !important;
+  }
+}
+
