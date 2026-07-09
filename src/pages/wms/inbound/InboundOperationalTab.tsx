@@ -21,7 +21,9 @@ import {
   value, normalizeRow, sqlEscape, stripUiFields, recalcQuantity, makeColumns,
 } from "../../../utils/inboundHelpers";
 import { useDebounce } from "../../../hooks/useDebounce";
-
+import { Upload, AlertTriangle } from "lucide-react";
+import * as XLSX from "xlsx";
+import { FileSpreadsheet, Download, CheckCircle2 as CheckCircle2Icon } from "lucide-react";
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Props = {
   job:        WmsRow | null;
@@ -32,7 +34,7 @@ type Props = {
 
 type TallySubTab = "pallet" | "product" | "serial";
 
-// Explicit return type for getLookupProps so TS never infers `unknown` on the fields
+// Explicit return type for getLookupProps so TS never infers `unknown` on the fields commit
 type LookupProps = {
   valueField:    string;
   displayFields: string[];
@@ -52,7 +54,11 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
     const { toast }   = useToast();
     const prinCode    = value(job || {}, "prin_code");
     const companyCode = user?.company_code || "";
-
+const [ediImportOpen, setEdiImportOpen] = useState(false);
+const [ediImportFile, setEdiImportFile] = useState<File | null>(null);
+const [ediTempData, setEdiTempData]     = useState<any[]>([]);
+const [ediLoading, setEdiLoading]       = useState(false);
+const [ediDragActive, setEdiDragActive] = useState(false);
     // ── tab flags ────────────────────────────────────────────────────────────
     const isPutawayHHT    = tab === "putway_hht";
     const isManualPutaway = tab === "putway_manual";
@@ -673,7 +679,10 @@ setPutawayForm({ site_from: "", site_to: "", location_from: "", location_code: "
         setModalNotice(msg); toast.error(msg);
       } finally { setSaving(false); }
     };
-
+const openEdiImportModal = () => {
+  setEdiImportFile(null); setEdiTempData([]); setEdiLoading(false);
+  setEdiImportOpen(true);
+};
     // ── save edit ────────────────────────────────────────────────────────────
     const saveEdit = async (e: FormEvent) => {
       e.preventDefault();
@@ -722,6 +731,17 @@ setPutawayForm({ site_from: "", site_to: "", location_from: "", location_code: "
           return <Button size="sm" variant="outline" onClick={() => setProcessOpen(true)} disabled={selectedRows.length === 0}><Settings2 size={14} /> Process Clearance</Button>;
         case "putway_details":
           return <Button size="sm" variant="outline" onClick={openPutawayModal} disabled={selectedRows.length === 0}><Truck size={14} /> Process Putaway</Button>;
+          case "packing_details":
+  return (
+    <>
+      <Button size="sm" variant="outline" onClick={openAddModal}>
+        <Plus size={14} /> {config.addLabel || `Add ${config.title}`}
+      </Button>
+      <Button size="sm" variant="outline" onClick={openEdiImportModal}>
+        <Upload size={14} /> Import EDI
+      </Button>
+    </>
+  )
         case "job_confirmation":
           return <Button size="sm" variant="outline" onClick={() => setProcessOpen(true)} disabled={selectedRows.length === 0}><CheckCircle2 size={14} /> Process Confirm Selected</Button>;
         case "receiving_details":
@@ -1134,6 +1154,157 @@ setPutawayForm({ site_from: "", site_to: "", location_from: "", location_code: "
       return <Input type={field.type || "text"} value={String(formData[field.name] || "")} onChange={(e) => setData((c) => ({ ...c, [field.name]: e.target.value }))} />;
     };
 
+    const parseDate = (v: string): Date | undefined => {
+  const t = v?.trim();
+  if (!t) return undefined;
+  const d = new Date(t);
+  return isNaN(d.getTime()) ? undefined : d;
+};
+const parseNumber = (v: any): number | undefined => {
+  const n = parseFloat(v);
+  return isNaN(n) ? undefined : n;
+};
+const safeTrim = (v: any): string | undefined =>
+  v === null || v === undefined ? undefined : String(v).trim();
+
+const transformPackDetailEDI = (rawData: any[]) =>
+  rawData.map((row: any, index: number) => ({
+    user_id:      String(user?.USERNAME || user?.username || ""),
+    company_code: companyCode,
+    prin_code:    safeTrim(row["prin_code"]) || prinCode,
+    job_no:       safeTrim(row["job_no"]) || jobNo,
+    packdet_no:   index + 1,
+    container_no: safeTrim(row["Container no"]),
+    vessel_name:  safeTrim(row["Vessel name"]),
+    voyage_no:    safeTrim(row["Voyage no"]),
+    product_code: safeTrim(row["Product code"]) || "",
+    puom:         safeTrim(row["Primary UOM"]),
+    qty_puom:     parseNumber(row["Primary Qty"]),
+    luom:         safeTrim(row["Lowest UOM"]),
+    qty_luom:     parseNumber(row["Lowest Qty"]),
+    unit_price:   parseNumber(row["Rate"]),
+    curr_code:    safeTrim(row["currency"]),
+    lot_no:       safeTrim(row["lot no"]),
+    mfg_date:     parseDate(row["mfg date"]),
+    exp_date:     parseDate(row["exp date"]),
+    manu_code:    safeTrim(row["manu"]),
+    origin_country: safeTrim(row["origin country"]),
+    from_site:    row["site code"] !== undefined ? String(row["site code"]) : undefined,
+    location_from: safeTrim(row["location code"]),
+    batch_no:     safeTrim(row["BATCH_NO"]),
+    po_no:        safeTrim(row["PO NO"]),
+    created_by:   "SYSTEM",
+    updated_by:   "SYSTEM",
+  }));
+
+const getEdiUniqueKey = (row: any) =>
+  `${row.product_code || ""}|${row.container_no || ""}|${row.lot_no || ""}|${row.po_no || ""}`;
+
+const mergeEdiValidation = (original: any[], validated: any[]) => {
+  if (!validated?.length) return original;
+  const map = new Map(validated.map((v) => [getEdiUniqueKey(v), v]));
+  return original.map((row) => {
+    const v = map.get(getEdiUniqueKey(row));
+    return v ? { ...row, error_msg: v.error_msg ?? v.ERROR_MSG ?? null } : row;
+  });
+};
+
+const getEdiErrorCount = () => ediTempData.filter((r) => r.error_msg).length;
+const getEdiValidCount = () => ediTempData.filter((r) => !r.error_msg).length;
+
+const getEdiErrorSummary = () => {
+  const counts: Record<string, number> = {};
+  ediTempData.forEach((r) => {
+    if (!r.error_msg) return;
+    String(r.error_msg).split(/[.;]/).map((s) => s.trim()).filter(Boolean)
+      .forEach((msg) => { counts[msg] = (counts[msg] || 0) + 1; });
+  });
+  return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5)
+    .map(([message, count]) => ({ message, count }));
+};
+
+const getEdiErrorFixSuggestion = (msg: string): string => {
+  if (msg.includes("Invalid PROD_CODE")) return "Product code doesn't exist — check the product master list.";
+  if (msg.includes("Invalid P_UOM"))      return "Primary UOM must be a valid code (e.g. PC, BOX, KG, CTN).";
+  if (msg.includes("Invalid L_UOM"))      return "Loose UOM must be a valid code (e.g. PC, BOX, KG, CTN).";
+  if (msg.includes("Invalid MANU_CODE"))  return "Manufacturer code doesn't exist in the system.";
+  return "Verify the data format matches system requirements.";
+};
+
+const handleDownloadEdiTemplate = () => {
+  const templateData = [{
+    "Product code": "BM0001", P_UOM: "PC", QTY_PUOM: "10", L_UOM: "PC", QTY_LUOM: "1",
+    "Container no": "CONT001", "Vessel name": "VESSEL1", "Voyage no": "VOY001",
+    "Po No": "PO001", "lot no": "LOT001", "mfg date": "2023-01-01", "exp date": "2024-01-01",
+    manu: "MANU001", "origin country": "OMN", "site code": "1", "location code": "A-01-01",
+    currency: "OMR", Rate: "0",
+  }];
+  const ws = XLSX.utils.json_to_sheet(templateData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "PackingTemplate");
+  XLSX.writeFile(wb, "PackingDetails_Template.xlsx");
+};
+
+
+
+const handleEdiFileUpload = async () => {
+  if (!ediImportFile) return;
+  setEdiLoading(true);
+  try {
+    const buf = await ediImportFile.arrayBuffer();
+    const wb = XLSX.read(buf, { type: "array" });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+    const ediData = transformPackDetailEDI(jsonData);
+    setEdiTempData(ediData);
+
+    await api.put("/api/wms/inbound/upsertPackDetailEDIHandler", ediData);
+
+    const userId = String(user?.USERNAME || user?.username || "");
+    const query = new URLSearchParams({ job_no: jobNo, prin_code: prinCode, company_code: companyCode, user_id: userId }).toString();
+    const res = await api.get(`/api/wms/inbound/getEDIPackdetHandler?${query}`);
+    const validated = Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
+    if (validated.length) setEdiTempData(mergeEdiValidation(ediData, validated));
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : "Failed to process EDI file");
+  } finally {
+    setEdiLoading(false);
+  }
+};
+
+const handleEdiSave = async () => {
+  setEdiLoading(true);
+  try {
+    const userId = String(user?.USERNAME || user?.username || "");
+    await api.post("/api/wms/inbound/copyEDIToPackdetHandler", {
+      login_id: userId, job_no: jobNo, prin_code: prinCode, company_code: companyCode,
+    });
+    toast.success("EDI data imported successfully");
+    setEdiImportOpen(false); setEdiImportFile(null); setEdiTempData([]);
+    await loadRows();
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : "Failed to save EDI data");
+  } finally {
+    setEdiLoading(false);
+  }
+};
+
+const ediPreviewColumns = makeColumns(
+  [
+    { key: "product_code", label: "Product Code" },
+    { key: "container_no", label: "Container No" },
+    { key: "puom",         label: "P UOM" },
+    { key: "qty_puom",     label: "Qty (Primary)" },
+    { key: "luom",         label: "L UOM" },
+    { key: "qty_luom",     label: "Qty (Lowest)" },
+    { key: "batch_no",     label: "Batch No" },
+    { key: "lot_no",       label: "Lot No" },
+    { key: "po_no",        label: "PO No" },
+    { key: "error_msg",    label: "Error" },
+  ],
+  false, // no checkbox column
+);
+
     // ── render ───────────────────────────────────────────────────────────────
     return (
       <section className="grid gap-3">
@@ -1199,7 +1370,122 @@ setPutawayForm({ site_from: "", site_to: "", location_from: "", location_code: "
             </div>
           </form>
         </Dialog>
+{tab === "packing_details" && (
+  <Dialog wide open={ediImportOpen} title="Import Packing Details (EDI)"
+    description={ediTempData.length ? `${ediTempData.length} records parsed from file` : "Upload a .csv or .xlsx file to bulk-import packing details"}
+    onClose={() => { setEdiImportOpen(false); setEdiImportFile(null); setEdiTempData([]); }}
+  >
+    <div className="grid gap-4">
+      {!ediTempData.length ? (
+        <div className="grid gap-4">
+          {/* Dropzone */}
+          <label
+            htmlFor="edi-file-input"
+            onDragOver={(e) => { e.preventDefault(); setEdiDragActive(true); }}
+            onDragLeave={() => setEdiDragActive(false)}
+            onDrop={(e) => {
+              e.preventDefault(); setEdiDragActive(false);
+              const file = e.dataTransfer.files?.[0];
+              if (file) setEdiImportFile(file);
+            }}
+            className={`flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed px-6 py-10 text-center transition-colors
+              ${ediDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/25 bg-muted/20 hover:border-primary/50 hover:bg-muted/30"}`}
+          >
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Upload size={22} />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                {ediImportFile ? "Change file" : "Click to upload or drag & drop"}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Supports .csv and .xlsx</p>
+            </div>
+            {ediImportFile && (
+              <span className="mt-1 flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-xs font-medium text-foreground shadow-sm">
+                <FileSpreadsheet size={13} className="text-primary" />
+                {ediImportFile.name}
+              </span>
+            )}
+            <input id="edi-file-input" type="file" accept=".csv,.xlsx" className="hidden"
+              onChange={(e) => setEdiImportFile(e.target.files?.[0] || null)} />
+          </label>
 
+          <div className="flex items-center justify-between">
+            <button type="button" onClick={handleDownloadEdiTemplate}
+              className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline">
+              <Download size={13} /> Download Template
+            </button>
+            <Button type="button" disabled={!ediImportFile || ediLoading} onClick={handleEdiFileUpload}>
+              <Upload size={15} /> {ediLoading ? "Processing..." : "Upload & Validate"}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Summary bar */}
+          <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card px-3 py-2 shadow-sm">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <FileSpreadsheet size={16} />
+            </span>
+            <span className="text-sm font-semibold text-foreground">{ediTempData.length} records parsed</span>
+            <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-600">
+              <CheckCircle2Icon size={12} /> {getEdiValidCount()} valid
+            </span>
+            {getEdiErrorCount() > 0 && (
+              <span className="flex items-center gap-1 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-semibold text-destructive">
+                <AlertTriangle size={12} /> {getEdiErrorCount()} errors
+              </span>
+            )}
+          </div>
+
+          {getEdiErrorCount() > 0 && (
+            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm">
+              <div className="flex items-center gap-1.5 font-semibold text-destructive">
+                <AlertTriangle size={14} /> Validation issues found
+              </div>
+              <ul className="mt-1.5 grid gap-1 pl-1 text-xs text-muted-foreground">
+                {getEdiErrorSummary().map((e, i) => (
+                  <li key={i} className="flex gap-1.5">
+                    <span className="font-medium text-destructive">{e.message} ({e.count})</span>
+                    <span>— {getEdiErrorFixSuggestion(e.message)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <DataTable
+            columns={ediPreviewColumns}
+            data={ediTempData}
+            title={`${ediTempData.length} Rows`}
+            subtitle="EDI Preview"
+            loading={ediLoading}
+            height="340px"
+            density="grid"
+            rowClassName={(row: any) => (row.error_msg ? "bg-destructive/5" : "")}
+            getRowId={(row: any, index: number) => `${row.product_code || "row"}_${index}`}
+          />
+
+          <div className="flex justify-between gap-2 pt-1">
+            <button type="button" onClick={handleDownloadEdiTemplate}
+              className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline">
+              <Download size={13} /> Download Template
+            </button>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline"
+                onClick={() => { setEdiImportFile(null); setEdiTempData([]); }}>
+                <X size={14} /> Start Over
+              </Button>
+              <Button type="button" disabled={ediLoading || getEdiValidCount() === 0} onClick={handleEdiSave}>
+                <Save size={15} /> {ediLoading ? "Saving..." : `Save ${getEdiValidCount()} Valid Records`}
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  </Dialog>
+)}
         {/* ── Edit Modal ── */}
         {(tab === "packing_details" || tab === "receiving_details") && (
           <Dialog wide open={editOpen}

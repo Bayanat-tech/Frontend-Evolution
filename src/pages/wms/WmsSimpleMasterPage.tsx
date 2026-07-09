@@ -1,4 +1,4 @@
-import { Edit2, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { CloudUpload, Edit2, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { useToast } from "../../components/ui/AlertToast";
@@ -11,6 +11,8 @@ import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import {WmsMasterForm} from "../../components/WmsMasterForm";
+import ImportLocationEdi from "./edi/ImportLocationEdi";
+// import ImportProductEdi from "./edi/ImportProductEdi";
 
 export type WmsMasterField = {
   name: string;
@@ -75,6 +77,10 @@ export type WmsSimpleMasterConfig = {
   customSave?: (form: Record<string, unknown>, context: { editMode: boolean; original: Record<string, unknown> | null; user: unknown }) => Promise<void>;
   customDelete?: (row: Record<string, unknown>, user: unknown) => Promise<void>;
   rowIdSeparator?: string;  // Separator for composite row IDs (default: '_')
+  ediUploadConfig?: {
+    open: boolean;
+    name: "location" | "product" | "site";
+  }
 };
 
 function generateRowId(row: Record<string, unknown>, config: WmsSimpleMasterConfig, index: number): string {
@@ -182,6 +188,7 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
   const [original, setOriginal] = useState<Record<string, unknown> | null>(null);
   const [form, setForm] = useState<Record<string, unknown>>({});
   const [deleteTarget, setDeleteTarget] = useState<Record<string, unknown> | null>(null);
+  const [ediUploadOpen, setEdiUploadOpen] = useState(false);
 
   useEffect(() => {
   const timer = setTimeout(() => {
@@ -230,9 +237,9 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
       setLoading(false);
     }
   };
-useEffect(() => {
-  void loadRows();
-}, [config.master, pageIndex, pageSize, debouncedQuery, columnFilters]);
+  useEffect(() => {
+    void loadRows();
+  }, [config.master, pageIndex, pageSize, debouncedQuery, columnFilters]);
 
 
   const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(
@@ -293,45 +300,45 @@ useEffect(() => {
     setFormOpen(true);
   };
 
-const saveRecord = async (event: FormEvent) => {
-  let response;
-  event.preventDefault();
-  const missing = editableFields.find((field) => field.required && !String(form[field.name] ?? "").trim());
-  if (missing) {
-    toast.error(`${missing.label} is required`);
-    return;
-  }
-  setSaving(true);
-  try {
-    const transformedForm = editableFields.reduce((acc, field) => {
-      let value = form[field.name];
-      if (field.type === "checkbox") {
-        value = value === true || value === "Y" ? "Y" : "N";
-      }
-      if (value === "") value = null;
-      acc[field.name] = value;
-      return acc;
-    }, {} as Record<string, unknown>);
-
-    const finalForm = { ...transformedForm, company_code: transformedForm.company_code || user?.company_code || "" };
-    if (config.customSave) {
-     response = await config.customSave(finalForm, { editMode, original, user });
-    } else {
-      const mapped = config.mapBeforeSave?.(finalForm, { editMode, original }) || finalForm;
-      const endpoint = config.saveEndpoint?.(mapped, { editMode, original }) || config.gmEndpoint;
-      response = await saveWmsGm(endpoint, mapped, editMode ? "put" : "post");
+  const saveRecord = async (event: FormEvent) => {
+    let response;
+    event.preventDefault();
+    const missing = editableFields.find((field) => field.required && !String(form[field.name] ?? "").trim());
+    if (missing) {
+      toast.error(`${missing.label} is required`);
+      return;
     }
-    console.log("Save response", response);
-    setFormOpen(false);
-    toast.success(editMode ? "Successfully updated" : "Successfully created");
-    await loadRows(pageIndex, pageSize);
-  } catch (error) {
-    console.log("Save response", response);
-    toast.error(getErrorMessage(error, `Unable to save ${config.title}`));
-  } finally {
-    setSaving(false);
-  }
-};
+    setSaving(true);
+    try {
+      const transformedForm = editableFields.reduce((acc, field) => {
+        let value = form[field.name];
+        if (field.type === "checkbox") {
+          value = value === true || value === "Y" ? "Y" : "N";
+        }
+        if (value === "") value = null;
+        acc[field.name] = value;
+        return acc;
+      }, {} as Record<string, unknown>);
+
+      const finalForm = { ...transformedForm, company_code: transformedForm.company_code || user?.company_code || "" };
+      if (config.customSave) {
+      response = await config.customSave(finalForm, { editMode, original, user });
+      } else {
+        const mapped = config.mapBeforeSave?.(finalForm, { editMode, original }) || finalForm;
+        const endpoint = config.saveEndpoint?.(mapped, { editMode, original }) || config.gmEndpoint;
+        response = await saveWmsGm(endpoint, mapped, editMode ? "put" : "post");
+      }
+      console.log("Save response", response);
+      setFormOpen(false);
+      toast.success(editMode ? "Successfully updated" : "Successfully created");
+      await loadRows(pageIndex, pageSize);
+    } catch (error) {
+      console.log("Save response", response);
+      toast.error(getErrorMessage(error, `Unable to save ${config.title}`));
+    } finally {
+      setSaving(false);
+    }
+  };
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setSaving(true);
@@ -369,6 +376,13 @@ const saveRecord = async (event: FormEvent) => {
           <Button title={`Add ${config.title}`} onClick={openAdd}>
             <Plus size={15} /> Add
           </Button>
+          {
+            config.ediUploadConfig?.open && (
+              <Button title={`Upload ${config.title} via EDI`} onClick={() => setEdiUploadOpen(true)}>
+                <CloudUpload size={15} /> EDI Upload
+              </Button>
+            )
+          }
         </div>
       </div>
 
@@ -470,6 +484,41 @@ const saveRecord = async (event: FormEvent) => {
       >
         <p className="m-0 text-sm text-muted-foreground">This action cannot be undone.</p>
       </Dialog>
+
+      {config.ediUploadConfig?.name === "location" && ediUploadOpen && (
+        <Dialog
+          open={ediUploadOpen}
+          title={`${config.title} EDI Upload`}
+          description="Import records via Excel/EDI"
+          compact
+          wide
+          onClose={() => setEdiUploadOpen(false)}
+        >
+          <div style={{ maxHeight: 'calc(90vh - 180px)', overflowY: 'auto', width: '100%' }}>
+            <ImportLocationEdi
+              onSuccess={() => setEdiUploadOpen(false)}
+              onClose={() => setEdiUploadOpen(false)}
+            />
+          </div>
+        </Dialog>
+      )}
+      {/* {config.ediUploadConfig?.name === "product" && ediUploadOpen && (
+        <Dialog
+          open={ediUploadOpen}
+          title={`${config.title} EDI Upload`}
+          description="Import records via Excel/EDI"
+          compact
+          wide
+          onClose={() => setEdiUploadOpen(false)}
+        >
+          <div style={{ maxHeight: 'calc(90vh - 180px)', overflowY: 'auto', width: '100%' }}>
+            <ImportProductEdi
+              onSuccess={() => setEdiUploadOpen(false)}
+              onClose={() => setEdiUploadOpen(false)}
+            />
+          </div>
+        </Dialog>
+      )} */}
     </section>
   );
 }

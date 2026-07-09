@@ -10,21 +10,21 @@
     header: string;
   };
 
-  type LookupFieldProps = {
-    label: string;
-    value: string;
-    displayValue?: string;
-    columns: LookupColumn[];
-    valueField: string;
-    displayFields: string[];
-    loadOptions: () => Promise<LookupRow[]>;
-    onChange: (value: string, row: LookupRow | null) => void;
-    disabled?: boolean;
-    compact?: boolean;
-    placeholder?: string;
-    required?: boolean;
-    multiSelect?: boolean;
-  };
+type LookupFieldProps = {
+  label?: string;
+  value: string;
+  displayValue?: string;
+  columns: LookupColumn[];
+  valueField: string;
+  displayFields: string[];
+  loadOptions: () => Promise<LookupRow[]>;
+  onChange: (value: string, row: LookupRow | null) => void;
+  disabled?: boolean;
+  compact?: boolean;
+  placeholder?: string;
+  required?: boolean;
+  multiSelect?: boolean;
+};
 
   export function LookupField({
     label,

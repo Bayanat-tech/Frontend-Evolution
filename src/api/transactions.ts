@@ -722,15 +722,37 @@ export async function taxOutInReport(params: ReportParams) {
   await openReportInTab(
     "/api/finance/transactions/reports/tax-vat-out-ledger/html",
     params
-    // ---------AC_statement report-----
+    
   )
 }
 
+// ---------AC_statement report-----
 export async function openAcStatementReport(params: ReportParams) {
   await openReportInTab(
     "/api/finance/transactions/reports/AcStatementReport/html",
     params
   );
+}
+
+
+// AC Statement Excel Export
+export async function exportAcStatementExcel(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/AcStatement/excel`,
+        params,
+        { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "AcStatement.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
 }
 
 
@@ -755,6 +777,35 @@ export async function openOutstandingStatementSummaryReport(params: ReportParams
     params
   );
 }
+
+// Outstanding Statement Excel Export
+export async function exportOutstandingDetailExcel(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/OutstandingDetail/excel`,
+        params, { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url; link.download = "OutstandingDetail.xlsx";
+    document.body.appendChild(link); link.click();
+    link.remove(); window.URL.revokeObjectURL(url);
+}
+
+export async function exportOutstandingSummaryExcel(params: ReportParams): Promise<void> {
+    const response = await api.post(
+        `/api/finance/transactions/reports/OutstandingSummary/excel`,
+        params, { responseType: "blob" }
+    );
+    const blob = new Blob([response.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url; link.download = "OutstandingSummary.xlsx";
+    document.body.appendChild(link); link.click();
+    link.remove(); window.URL.revokeObjectURL(url);
+}
+
+
 
 export async function jobListingReport(params: ReportParams) {
   await openReportInTab(
