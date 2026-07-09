@@ -4,13 +4,14 @@ import {
   RotateCcw,
   BarChart2,
   Loader2,
+  Download,
 } from 'lucide-react';
 // import useAuth from 'hooks/useAuth';
 // import ReportDialogPage from 'report/ReportDialogPage';
 // import OutstandingStatementReport from './OutstandingStatementReport';
 import { getDynamicLookup, getDynamicLookupaccount } from '../../../api/lookups';
 import { useAuth } from '../../../state/AuthContext';
-import { openOutstandingStatementDetailReport, openOutstandingStatementSummaryReport } from '../../../api/transactions';
+import { exportOutstandingDetailExcel, exportOutstandingSummaryExcel, openOutstandingStatementDetailReport, openOutstandingStatementSummaryReport } from '../../../api/transactions';
 
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -147,6 +148,7 @@ const OutstandingStatementPage: React.FC = () => {
   const [reportOpen, setReportOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [generatingExcel, setGeneratingExcel] = useState(false);
 
 
   // ── Track fetched tabs ──────────────────────────────────────────────────────
@@ -336,6 +338,49 @@ const OutstandingStatementPage: React.FC = () => {
     }
   };
 
+  const handleExportExcel = async () => {
+    if (!division) {
+      setReportError("Please select a Division before exporting.");
+      return;
+    }
+    setReportError(null);
+    setGeneratingExcel(true);
+    try {
+      const params = {
+        parameter: reportType === 'detail'
+          ? 'Account_Report_Outstanding_Detail'
+          : 'Account_Report_Outstanding_Summary',
+        loginid: user?.loginid ?? '',
+        code1: user?.company_code ?? '',
+        code2: division,
+        code3: activeTab === 'acCode'
+          ? (acLeftSelected.size > 0 ? Array.from(acLeftSelected).join(',') : 'All')
+          : 'All',
+        code4: activeTab === 'group'
+          ? (groupLeftSelected.size > 0 ? Array.from(groupLeftSelected).join(',') : 'All')
+          : 'All',
+        code5: 'OMR',
+        code6: formatDateOracle(dateFrom),
+        code20: "RAWSQL",
+      };
+
+      if (reportType === 'detail') {
+        await exportOutstandingDetailExcel(params);
+      } else {
+        await exportOutstandingSummaryExcel(params);
+      }
+    } catch (err: any) {
+      setReportError("Failed to export Excel.");
+      console.error(err);
+    } finally {
+      setGeneratingExcel(false);
+    }
+  };
+
+
+
+
+
   return (
     <div style={{ background: '#f3f4f6', padding: '6px 10px', fontFamily: 'system-ui, sans-serif' }}>
       <style>{`
@@ -349,6 +394,7 @@ const OutstandingStatementPage: React.FC = () => {
         tbody tr:hover td { background: #f9fafb; }
         .div-option:hover { background: #f0f7ff; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        .action-btn-excel:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
       `}</style>
 
 
@@ -613,12 +659,24 @@ const OutstandingStatementPage: React.FC = () => {
           {/* Action bar */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8, paddingTop: 8, borderTop: '0.5px solid #e5e7eb' }}>
             <button
-              className="action-btn"
+              className="action-btn action-btn-excel"
               onClick={handleReset}
               style={{ padding: '7px 16px', border: '0.5px solid #d1d5db', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, borderRadius: 6, color: '#374151' }}
             >
               <RotateCcw size={13} /> Reset
             </button>
+
+
+            <button
+              className="action-btn action-btn-excel"
+              onClick={handleExportExcel}
+              disabled={generatingExcel}
+              style={{ padding: '7px 16px', border: '0.5px solid #d1d5db', background: '#fff', cursor: generatingExcel ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, borderRadius: 6, color: '#374151', opacity: generatingExcel ? 0.7 : 1 }}
+            >
+              <Download size={13} /> {generatingExcel ? 'Exporting...' : 'Export Excel'}
+            </button>
+
+
             <button
               className="action-btn-primary"
               onClick={handleGenerate}

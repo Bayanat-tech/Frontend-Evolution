@@ -67,6 +67,22 @@ const mainBankLookup = {
 
 
 
+// const religionLookup = {
+//   columns: [
+//     { field: "religion_code", header: "Code" },
+//     { field: "religion_name", header: "Religion Name" },
+//   ],
+//   valueField: "religion_code",
+//   displayFields: ["religion_code", "religion_name"],
+//   loadOptions: (context: { loginid: string; companyCode: string }) =>
+//     getDynamicLookup({
+//       parameter: "MST_HR_MS_HR_RELIGION",
+//       loginid: context.loginid,
+//       code1: context.companyCode,
+//       code2: "",
+//     }),
+// };
+
 const religionLookup = {
   columns: [
     { field: "religion_code", header: "Code" },
@@ -78,10 +94,11 @@ const religionLookup = {
     getDynamicLookup({
       parameter: "MST_HR_MS_HR_RELIGION",
       loginid: context.loginid,
-      code1: "",
+      code1: context.companyCode,
       code2: "",
     }),
 };
+
 
 export const hrMasterConfigs: Record<string, HrMasterConfig> = {
   department: {
@@ -463,6 +480,7 @@ hrbank: {
     defaults: { status: "A" },
     deleteMode: "master",
   },
+
   religion: {
     title: "Religion Master",
     subtitle: "Maintain religion code, name, short name, remarks, and status using the existing HR procedure.",
@@ -475,6 +493,7 @@ hrbank: {
     buildSave: (form, context) => ({
       parameter: "MST_HR_RELIGION",
       loginid: context.loginid,
+      code1: context.companyCode,
       val1s1: text(form, "religion_code", "0") || "0",
       val1s2: text(form, "religion_name"),
       val1s3: text(form, "religion_short_name"),
@@ -505,6 +524,7 @@ hrbank: {
     buildSave: (form, context) => ({
       parameter: "MST_HR_CASTE",
       loginid: context.loginid,
+       code1: context.companyCode,
       val1s1: text(form, "caste_code"),
       val1s2: text(form, "religion_code"),
       val1s3: text(form, "caste_name"),
@@ -612,6 +632,7 @@ buildDelete: (row, context) => ({
     buildSave: (form, context) => ({
       parameter: "MST_HR_LANGUAGES",
       loginid: context.loginid,
+      code1: context.companyCode,
       val1s1: text(form, "lang_code"),
       val1s2: text(form, "lang_desc"),
       val1s3: text(form, "lang_short_desc"),
