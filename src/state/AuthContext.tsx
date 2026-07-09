@@ -32,7 +32,9 @@ function normalizeUser(user: UserProfile, tenantId?: string): UserProfile {
     email_id: user.email_id || user.EMAIL_ID,
     loginid: user.loginid || user.LOGINID,
     company_code: user.company_code || user.COMPANY_CODE,
+    company_name: user.company_name || user.COMPANY_NAME || user.company_code || user.COMPANY_CODE,
     tenantId: tenantId || user.tenantId,
+    tenant_name: user.tenant_name || user.TENANT_NAME || user.tenantName || user.TENANTNAME || tenantId || user.tenantId,
   };
 }
 

@@ -16,7 +16,13 @@ export type UserProfile = {
   LOGINID?: string;
   company_code?: string;
   COMPANY_CODE?: string;
+  company_name?: string;
+  COMPANY_NAME?: string;
   tenantId?: string;
+  tenant_name?: string;
+  TENANT_NAME?: string;
+  tenantName?: string;
+  TENANTNAME?: string;
 };
 
 export type LoginResponse = {
