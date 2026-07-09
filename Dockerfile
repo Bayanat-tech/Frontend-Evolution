@@ -2,16 +2,16 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
-COPY package.json yarn.lock ./
+COPY package.json package-lock.json ./
 
-RUN corepack enable && yarn install --frozen-lockfile
+RUN npm install
 
 COPY . .
 
 ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 
-RUN yarn build
+RUN npm run build
 
 FROM nginx:1.27-alpine
 
