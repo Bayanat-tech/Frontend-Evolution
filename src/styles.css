@@ -2277,6 +2277,7 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 
 .workspace-content {
   padding: var(--app-content-padding-y) var(--app-content-padding-x);
+  position: relative;
   flex: 1;              /* new */
   min-height: 0;         /* new — critical for flex children to scroll properly */
   overflow-y: auto;      /* new */
@@ -5287,26 +5288,26 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   box-shadow: inset 3px 0 0 #4d8fda !important;
 }
 
-/* Finance document editors are rendered as fixed overlays from inside the
-   workspace content. Offset them from the persistent workspace chrome so the
-   blue document command header is never hidden behind the app header/sidebar. */
+/* Finance document editors are mounted with fixed utility classes in the page
+   components. Keep them as workspace-local overlays instead of browser-fixed
+   layers, so the app header/profile menu stays separate and the form starts
+   cleanly inside the content area. */
 .workspace-content .fixed.inset-0.z-50.bg-background {
-  top: 58px !important;
-  right: 0 !important;
-  bottom: 0 !important;
-  left: var(--app-sidebar-width) !important;
+  position: absolute !important;
+  inset: 0 !important;
   width: auto !important;
   height: auto !important;
+  z-index: 45 !important;
   overflow: hidden !important;
 }
 
 .workspace:has(.sidebar.collapsed) .workspace-content .fixed.inset-0.z-50.bg-background {
-  left: var(--app-sidebar-collapsed-width) !important;
+  left: 0 !important;
 }
 
 .workspace-content .fixed.inset-0.z-50.bg-background .payment-workbench {
-  height: calc(100dvh - 58px) !important;
-  max-height: calc(100dvh - 58px) !important;
+  height: 100% !important;
+  max-height: 100% !important;
 }
 
 .workspace-content .fixed.inset-0.z-50.bg-background .commercial-command-header {
@@ -5323,16 +5324,24 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   padding-top: 14px !important;
 }
 
+.workspace-main:has(.workspace-content .fixed.inset-0.z-50.bg-background) .workspace-header {
+  display: none !important;
+}
+
+.workspace-main:has(.workspace-content .fixed.inset-0.z-50.bg-background) .workspace-content {
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
 @media (max-width: 768px) {
   .workspace-content .fixed.inset-0.z-50.bg-background,
   .workspace:has(.sidebar.collapsed) .workspace-content .fixed.inset-0.z-50.bg-background {
-    top: 56px !important;
-    left: 0 !important;
+    inset: 0 !important;
   }
 
   .workspace-content .fixed.inset-0.z-50.bg-background .payment-workbench {
-    height: calc(100dvh - 56px) !important;
-    max-height: calc(100dvh - 56px) !important;
+    height: 100% !important;
+    max-height: 100% !important;
   }
 }
 
