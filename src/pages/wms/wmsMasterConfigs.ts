@@ -587,18 +587,18 @@ saveEndpoint: (form, { editMode, original }) => {
         count: data.length,
       };
     },
-customSave: async (form, context) => {
-  const { user } = context;
-  const typedUser = user as { loginid: string };
-  await api.post('api/wms/inbound/upsertMsProduct', {
-    ...form,
-    loginid: typedUser.loginid,
-  });
-},
-ediUploadConfig: {
-  open: true,
-  name: "product",
-}
+    customSave: async (form, context) => {
+      const { user } = context;
+      const typedUser = user as { loginid: string };
+      await api.post('api/wms/inbound/upsertMsProduct', {
+        ...form,
+        loginid: typedUser.loginid,
+      });
+    },
+    ediUploadConfig: {
+      open: true,
+      name: "product",
+    }
   },
   site: {
     title: "Site Master",
