@@ -5402,8 +5402,9 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 }
 
 .support-panel.user-mode {
-  width: min(620px, calc(100vw - 34px));
-  height: min(780px, calc(100vh - 34px));
+  width: min(440px, calc(100vw - 28px));
+  height: min(690px, calc(100vh - 28px));
+  border-radius: 18px;
 }
 
 .support-header,
@@ -5500,7 +5501,7 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 }
 
 .support-panel.user-mode .support-sidebar {
-  max-height: 210px;
+  max-height: 142px;
   border-right: 0;
   border-bottom: 1px solid #d9e5f2;
 }
@@ -5546,6 +5547,12 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .support-thread-head p,
 .support-center-thread > header p {
   color: #64748b;
+}
+
+.support-thread-head p.is-typing,
+.support-center-thread > header p.is-typing {
+  color: #0f9f6e;
+  font-weight: 800;
 }
 
 .support-section-title {
@@ -5707,6 +5714,12 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   white-space: nowrap;
   font-style: normal;
   font-size: 12px;
+}
+
+.support-ticket em.support-ticket-typing,
+.support-center-ticket em.support-ticket-typing {
+  color: #0f9f6e;
+  font-weight: 800;
 }
 
 .support-ticket > b {
@@ -6023,6 +6036,178 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .support-center-muted {
   color: #64748b;
   font-size: 13px;
+}
+
+.support-panel.user-mode .support-header {
+  min-height: 66px;
+  padding: 12px 16px;
+}
+
+.support-panel.user-mode .support-header .eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+}
+
+.support-panel.user-mode .support-header h2 {
+  margin-top: 3px;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.support-panel.user-mode .support-mode-badge {
+  height: 32px;
+  padding: 0 11px;
+  font-size: 12px;
+}
+
+.support-panel.user-mode .support-header .icon-button {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+}
+
+.support-panel.user-mode .support-sidebar {
+  gap: 8px;
+  padding: 10px 12px;
+  background: #f8fafc;
+}
+
+.support-panel.user-mode .support-new-ticket {
+  min-height: 36px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.support-panel.user-mode .support-ticket-list {
+  gap: 8px;
+  padding-right: 0;
+}
+
+.support-panel.user-mode .support-ticket {
+  min-height: 58px;
+  padding: 8px 10px;
+  border-radius: 14px;
+}
+
+.support-panel.user-mode .support-ticket-avatar {
+  width: 32px;
+  height: 32px;
+  flex-basis: 32px;
+  border-radius: 11px;
+  font-size: 12px;
+}
+
+.support-panel.user-mode .support-ticket strong {
+  font-size: 13px;
+}
+
+.support-panel.user-mode .support-ticket small,
+.support-panel.user-mode .support-ticket em {
+  font-size: 11px;
+}
+
+.support-panel.user-mode .support-status-chip {
+  min-width: 48px;
+  height: 22px;
+  font-size: 10px;
+}
+
+.support-panel.user-mode .support-thread-head {
+  min-height: 58px;
+  padding: 10px 14px;
+}
+
+.support-panel.user-mode .support-thread-head h3 {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.support-panel.user-mode .support-thread-head p {
+  margin: 2px 0 0;
+  font-size: 12px;
+}
+
+.support-panel.user-mode .support-messages {
+  padding: 12px 12px 8px;
+}
+
+.support-panel.user-mode .support-message {
+  margin-bottom: 9px;
+}
+
+.support-panel.user-mode .support-message-bubble {
+  max-width: 84%;
+  padding: 9px 11px;
+  border-radius: 15px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.07);
+}
+
+.support-panel.user-mode .support-message-meta {
+  gap: 7px;
+  margin-bottom: 5px;
+  font-size: 10.5px;
+}
+
+.support-panel.user-mode .support-message p {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.support-panel.user-mode .support-compose {
+  padding: 9px 12px 12px;
+}
+
+.support-panel.user-mode .support-emoji-row,
+.support-panel.user-mode .support-quick-replies {
+  gap: 5px;
+  margin-bottom: 6px;
+}
+
+.support-panel.user-mode .support-emoji-row button {
+  min-height: 26px;
+  min-width: 28px;
+  border-radius: 9px;
+  font-size: 13px;
+}
+
+.support-panel.user-mode .support-quick-replies button {
+  min-height: 26px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+}
+
+.support-panel.user-mode .support-compose-row {
+  grid-template-columns: 38px minmax(0, 1fr) 78px;
+  gap: 8px;
+}
+
+.support-panel.user-mode .support-compose-row .icon-button {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+}
+
+.support-panel.user-mode .support-compose textarea {
+  min-height: 42px;
+  max-height: 92px;
+  padding: 11px 38px 11px 13px;
+  border-radius: 14px;
+  font-size: 13px;
+}
+
+.support-panel.user-mode .support-compose .ui-button {
+  min-width: 78px;
+  height: 42px;
+  border-radius: 13px;
+  font-size: 13px;
+}
+
+.support-panel.user-mode .support-clear-draft {
+  right: 88px;
+  bottom: 9px;
+  width: 24px;
+  height: 24px;
 }
 
 .support-empty.centered {

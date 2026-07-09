@@ -46,6 +46,7 @@ export function SupportChatWidget() {
   const [attachments, setAttachments] = useState<SupportAttachment[]>([]);
   const [previewAttachment, setPreviewAttachment] = useState<SupportAttachment | null>(null);
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
+  const [typingByTicket, setTypingByTicket] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
   const [threadNotice, setThreadNotice] = useState("");
@@ -178,6 +179,16 @@ export function SupportChatWidget() {
       void loadAll(false);
     });
     socket.on("support:typing", (payload: { ticketId?: number; loginid?: string; username?: string; typing?: boolean }) => {
+      const ticketId = Number(payload.ticketId || 0);
+      const typingName = payload.username || payload.loginid || "User";
+      if (ticketId) {
+        setTypingByTicket((current) => {
+          const next = { ...current };
+          if (payload.typing) next[ticketId] = `${typingName} typing...`;
+          else delete next[ticketId];
+          return next;
+        });
+      }
       const activeTicketId = selectedIdRef.current;
       if (!payload.ticketId || Number(payload.ticketId) !== activeTicketId) return;
       const loginid = String(payload.loginid || "").toUpperCase();
@@ -419,27 +430,29 @@ export function SupportChatWidget() {
                   </div>
                 )}
 
-                <div className="support-active-users">
-                  <div className="support-section-title">
-                    <UserRoundCheck size={14} /> Active users <span>{onlineUsers} online</span>
+                {canUseAdmin && (
+                  <div className="support-active-users">
+                    <div className="support-section-title">
+                      <UserRoundCheck size={14} /> Active users <span>{onlineUsers} online</span>
+                    </div>
+                    <div className="support-user-strip">
+                      {visibleActiveUsers.map((item) => {
+                        const online = isSupportUserOnline(item);
+                        const name = item.USERNAME || item.LOGINID || "User";
+                        return (
+                          <div className={cn("support-avatar-wrap", online && "online")} title={`${name} ${online ? "online" : "away"}`} key={item.LOGINID || name}>
+                            <div className="support-avatar">{String(name).slice(0, 2).toUpperCase()}</div>
+                            <span className={cn("presence-dot", online && "online")} />
+                            <span className="support-active-copy">
+                              <strong>{name}</strong>
+                              <small>{online ? "Online" : "Away"}</small>
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="support-user-strip">
-                    {visibleActiveUsers.map((item) => {
-                      const online = isSupportUserOnline(item);
-                      const name = item.USERNAME || item.LOGINID || "User";
-                      return (
-                        <div className={cn("support-avatar-wrap", online && "online")} title={`${name} ${online ? "online" : "away"}`} key={item.LOGINID || name}>
-                          <div className="support-avatar">{String(name).slice(0, 2).toUpperCase()}</div>
-                          <span className={cn("presence-dot", online && "online")} />
-                          <span className="support-active-copy">
-                            <strong>{name}</strong>
-                            <small>{online ? "Online" : "Away"}</small>
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                )}
 
                 {!canUseAdmin && (
                   <Button className="support-new-ticket" variant="outline" onClick={() => { setSelectedId(null); setMessages([]); setThreadNotice(""); }}>
@@ -464,7 +477,9 @@ export function SupportChatWidget() {
                           <span className={cn("support-status-chip", ticket.STATUS === "CLOSED" && "closed")}>{ticket.STATUS}</span>
                         </span>
                         <small>{ticket.REQUESTER_NAME || ticket.REQUESTER_LOGINID} - {ticket.PRIORITY || "NORMAL"}</small>
-                        <em>{ticket.LAST_MESSAGE || "No messages yet"}</em>
+                        <em className={typingByTicket[Number(ticket.TICKET_ID)] ? "support-ticket-typing" : ""}>
+                          {typingByTicket[Number(ticket.TICKET_ID)] || ticket.LAST_MESSAGE || "No messages yet"}
+                        </em>
                       </span>
                       {Number(ticket.UNREAD_COUNT || 0) > 0 && <b>{ticket.UNREAD_COUNT}</b>}
                     </button>
@@ -477,7 +492,15 @@ export function SupportChatWidget() {
                 <div className="support-thread-head">
                   <div>
                     <h3>{selectedTicket ? selectedTicket.SUBJECT || `Ticket ${selectedTicket.TICKET_ID}` : canUseAdmin ? "Support Queue" : "New Support Request"}</h3>
-                    <p>{selectedTicket ? `${selectedTicket.REQUESTER_NAME || selectedTicket.REQUESTER_LOGINID} - ${canUseAdmin ? "Customer thread" : "Support thread"}` : canUseAdmin ? "Select a customer ticket from the queue to reply or close it." : "Describe the issue and attach a screenshot if needed."}</p>
+                    <p className={Object.keys(typingUsers).length ? "is-typing" : ""}>
+                      {Object.keys(typingUsers).length
+                        ? `${Object.values(typingUsers).join(", ")} typing...`
+                        : selectedTicket
+                          ? `${selectedTicket.REQUESTER_NAME || selectedTicket.REQUESTER_LOGINID} - ${canUseAdmin ? "Customer thread" : "Support thread"}`
+                          : canUseAdmin
+                            ? "Select a customer ticket from the queue to reply or close it."
+                            : "Describe the issue and attach a screenshot if needed."}
+                    </p>
                   </div>
                   {selectedTicket && (
                     <div className="support-thread-actions">

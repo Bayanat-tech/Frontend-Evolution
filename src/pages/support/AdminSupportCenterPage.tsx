@@ -37,6 +37,7 @@ export function AdminSupportCenterPage() {
   const [attachments, setAttachments] = useState<SupportAttachment[]>([]);
   const [previewAttachment, setPreviewAttachment] = useState<SupportAttachment | null>(null);
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
+  const [typingByTicket, setTypingByTicket] = useState<Record<number, string>>({});
   const [ringMuted, setRingMuted] = useState(() => isSupportRingMuted());
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
@@ -109,6 +110,16 @@ export function AdminSupportCenterPage() {
     socket.on("support:ready", () => void loadAll(false));
     socket.on("support:presence-changed", () => void loadAll(false));
     socket.on("support:typing", (payload: { ticketId?: number; loginid?: string; username?: string; typing?: boolean }) => {
+      const ticketId = Number(payload.ticketId || 0);
+      const typingName = payload.username || payload.loginid || "User";
+      if (ticketId) {
+        setTypingByTicket((current) => {
+          const next = { ...current };
+          if (payload.typing) next[ticketId] = `${typingName} typing...`;
+          else delete next[ticketId];
+          return next;
+        });
+      }
       const activeTicketId = selectedIdRef.current;
       if (!payload.ticketId || Number(payload.ticketId) !== activeTicketId) return;
       const loginid = String(payload.loginid || "").toUpperCase();
@@ -469,7 +480,9 @@ export function AdminSupportCenterPage() {
                   <span>
                     <strong>{ticket.SUBJECT || `Ticket ${ticket.TICKET_ID}`}</strong>
                     <small>{ticket.REQUESTER_NAME || ticket.REQUESTER_LOGINID} - {ticket.PRIORITY || "NORMAL"}</small>
-                    <em>{ticket.LAST_MESSAGE || "No messages yet"}</em>
+                    <em className={typingByTicket[Number(ticket.TICKET_ID)] ? "support-ticket-typing" : ""}>
+                      {typingByTicket[Number(ticket.TICKET_ID)] || ticket.LAST_MESSAGE || "No messages yet"}
+                    </em>
                   </span>
                   <b className={cn(ticket.STATUS === "CLOSED" && "closed")}>{ticket.STATUS}</b>
                 </button>
@@ -482,7 +495,13 @@ export function AdminSupportCenterPage() {
             <header>
               <div>
                 <h2>{selectedTicket ? selectedTicket.SUBJECT || `Ticket ${selectedTicket.TICKET_ID}` : "Select a support ticket"}</h2>
-                <p>{selectedTicket ? `${selectedTicket.REQUESTER_NAME || selectedTicket.REQUESTER_LOGINID} - ${selectedTicket.STATUS}` : "Customer conversations appear here with realtime updates."}</p>
+                <p className={Object.keys(typingUsers).length ? "is-typing" : ""}>
+                  {Object.keys(typingUsers).length
+                    ? `${Object.values(typingUsers).join(", ")} typing...`
+                    : selectedTicket
+                      ? `${selectedTicket.REQUESTER_NAME || selectedTicket.REQUESTER_LOGINID} - ${selectedTicket.STATUS}`
+                      : "Customer conversations appear here with realtime updates."}
+                </p>
               </div>
               {selectedTicket && selectedTicket.STATUS !== "CLOSED" && (
                 <Button variant="outline" onClick={() => void closeTicket()}>
