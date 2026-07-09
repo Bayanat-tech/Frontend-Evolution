@@ -12,6 +12,7 @@ import {
   getSupportTickets,
   markSupportRead,
   sendSupportMessage,
+  supportHeartbeat,
   updateSupportTicket,
 } from "../../api/support";
 import { API_URL } from "../../api/client";
@@ -44,6 +45,8 @@ export function AdminSupportCenterPage() {
   const socketRef = useRef<Socket | null>(null);
   const typingStopRef = useRef<number | null>(null);
   const loadAllInFlightRef = useRef(false);
+  const selectedIdRef = useRef<number | null>(null);
+  const currentUserRef = useRef("");
 
   const selectedTicket = useMemo(() => tickets.find((ticket) => Number(ticket.TICKET_ID) === selectedId) || null, [tickets, selectedId]);
   const currentUser = user?.loginid || user?.username || "";
@@ -65,6 +68,30 @@ export function AdminSupportCenterPage() {
   const maxMetric = Math.max(tickets.length, 1);
 
   useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
+  useEffect(() => {
+    void supportHeartbeat().catch(() => undefined);
+    const beat = () => void supportHeartbeat().catch(() => undefined);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") beat();
+    };
+    window.addEventListener("focus", beat);
+    document.addEventListener("visibilitychange", onVisible);
+    const timer = window.setInterval(beat, 15000);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", beat);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
+  useEffect(() => {
     void loadAll();
     const timer = window.setInterval(() => void loadAll(false), 30000);
     return () => window.clearInterval(timer);
@@ -82,9 +109,10 @@ export function AdminSupportCenterPage() {
     socket.on("support:ready", () => void loadAll(false));
     socket.on("support:presence-changed", () => void loadAll(false));
     socket.on("support:typing", (payload: { ticketId?: number; loginid?: string; username?: string; typing?: boolean }) => {
-      if (!payload.ticketId || Number(payload.ticketId) !== selectedId) return;
+      const activeTicketId = selectedIdRef.current;
+      if (!payload.ticketId || Number(payload.ticketId) !== activeTicketId) return;
       const loginid = String(payload.loginid || "").toUpperCase();
-      if (!loginid || loginid === String(currentUser || "").toUpperCase()) return;
+      if (!loginid || loginid === String(currentUserRef.current || "").toUpperCase()) return;
       setTypingUsers((current) => {
         const next = { ...current };
         if (payload.typing) next[loginid] = payload.username || payload.loginid || "User";
@@ -93,17 +121,18 @@ export function AdminSupportCenterPage() {
       });
     });
     socket.on("support:tickets-changed", (payload: { ticketId?: number }) => {
-      void loadAll(false);
-      if (selectedId && (!payload.ticketId || Number(payload.ticketId) === selectedId)) {
-        void loadMessages(selectedId);
+      const activeTicketId = selectedIdRef.current;
+      if (activeTicketId && (!payload.ticketId || Number(payload.ticketId) === activeTicketId)) {
+        void loadMessages(activeTicketId);
       }
+      void loadAll(false);
     });
     socket.on("connect_error", () => setNotice("Realtime support connection is not available. Data will refresh automatically."));
     return () => {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [selectedId]);
+  }, []);
 
   useEffect(() => {
     const onMuteChanged = (event: Event) => setRingMuted(Boolean((event as CustomEvent<{ muted?: boolean }>).detail?.muted));
@@ -132,7 +161,8 @@ export function AdminSupportCenterPage() {
       const [nextTickets, nextUsers] = await Promise.all([getSupportTickets("admin"), getSupportActiveUsers()]);
       setTickets(nextTickets);
       setActiveUsers(nextUsers);
-      if (selectedId && !nextTickets.some((ticket) => Number(ticket.TICKET_ID) === selectedId)) {
+      const activeTicketId = selectedIdRef.current;
+      if (activeTicketId && !nextTickets.some((ticket) => Number(ticket.TICKET_ID) === activeTicketId)) {
         setSelectedId(null);
         setMessages([]);
       }

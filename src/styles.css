@@ -6781,3 +6781,48 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   }
 }
 
+/* Final support safeguards: keep the help desk from inheriting generic page/card typography. */
+.support-center-page,
+.support-panel {
+  font-family: var(--app-font-family) !important;
+}
+
+.support-center-hero h1,
+.support-header h2 {
+  color: #fff !important;
+  letter-spacing: 0 !important;
+}
+
+.support-center-hero .eyebrow,
+.support-header .eyebrow {
+  color: rgba(255, 255, 255, 0.72) !important;
+}
+
+.support-center-hero > div > span {
+  color: rgba(255, 255, 255, 0.86) !important;
+}
+
+.support-center-card h3,
+.support-center-thread h2,
+.support-thread-head h3,
+.support-ticket strong,
+.support-center-ticket strong {
+  color: var(--text) !important;
+}
+
+.support-center-mini-users button > span:not(.support-center-avatar),
+.support-center-presence-card > div:not(.support-center-avatar),
+.support-center-user > div:not(.support-center-avatar) {
+  min-width: 0;
+  display: grid !important;
+  gap: 1px;
+}
+
+.support-center-mini-users button em,
+.support-center-presence-card em {
+  color: var(--muted) !important;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.2;
+}
+

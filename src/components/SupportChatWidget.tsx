@@ -56,6 +56,8 @@ export function SupportChatWidget() {
   const typingStopRef = useRef<number | null>(null);
   const loadAllInFlightRef = useRef(false);
   const adminTicketRefreshInFlightRef = useRef(false);
+  const selectedIdRef = useRef<number | null>(null);
+  const currentUserRef = useRef("");
 
   const selectedTicket = useMemo(() => tickets.find((ticket) => Number(ticket.TICKET_ID) === selectedId) || null, [tickets, selectedId]);
   const unreadTotal = tickets.reduce((sum, ticket) => sum + Number(ticket.UNREAD_COUNT || 0), 0);
@@ -68,6 +70,14 @@ export function SupportChatWidget() {
   const visibleActiveUsers = [...activeUsers]
     .sort((first, second) => Number(isSupportUserOnline(second)) - Number(isSupportUserOnline(first)))
     .slice(0, 8);
+
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
 
   useEffect(() => {
     setRole((current) => (canUseAdmin ? current : "user"));
@@ -168,9 +178,10 @@ export function SupportChatWidget() {
       void loadAll(false);
     });
     socket.on("support:typing", (payload: { ticketId?: number; loginid?: string; username?: string; typing?: boolean }) => {
-      if (!payload.ticketId || Number(payload.ticketId) !== selectedId) return;
+      const activeTicketId = selectedIdRef.current;
+      if (!payload.ticketId || Number(payload.ticketId) !== activeTicketId) return;
       const loginid = String(payload.loginid || "").toUpperCase();
-      if (!loginid || loginid === String(currentUser || "").toUpperCase()) return;
+      if (!loginid || loginid === String(currentUserRef.current || "").toUpperCase()) return;
       setTypingUsers((current) => {
         const next = { ...current };
         if (payload.typing) next[loginid] = payload.username || payload.loginid || "User";
@@ -179,10 +190,11 @@ export function SupportChatWidget() {
       });
     });
     socket.on("support:tickets-changed", (payload: { ticketId?: number }) => {
-      void loadAll(false);
-      if (selectedId && (!payload.ticketId || Number(payload.ticketId) === selectedId)) {
-        void loadMessages(selectedId);
+      const activeTicketId = selectedIdRef.current;
+      if (activeTicketId && (!payload.ticketId || Number(payload.ticketId) === activeTicketId)) {
+        void loadMessages(activeTicketId);
       }
+      void loadAll(false);
     });
     socket.on("connect_error", () => {
       setServerCanAdmin(false);
@@ -192,7 +204,7 @@ export function SupportChatWidget() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [open, selectedId, role]);
+  }, [open, role]);
 
   useEffect(() => {
     if (!selectedId || !open) {
@@ -215,12 +227,13 @@ export function SupportChatWidget() {
       const [nextTickets, nextActive] = await Promise.all([getSupportTickets(role), getSupportActiveUsers()]);
       setTickets(nextTickets);
       setActiveUsers(nextActive);
-      const stillVisible = selectedId ? nextTickets.some((ticket) => Number(ticket.TICKET_ID) === selectedId) : true;
-      if (selectedId && !stillVisible) {
+      const activeTicketId = selectedIdRef.current;
+      const stillVisible = activeTicketId ? nextTickets.some((ticket) => Number(ticket.TICKET_ID) === activeTicketId) : true;
+      if (activeTicketId && !stillVisible) {
         setSelectedId(null);
         setMessages([]);
         setThreadNotice("That ticket is no longer available in this view. Select another ticket or start a new request.");
-      } else if (!selectedId && nextTickets[0] && !threadNotice) {
+      } else if (!activeTicketId && nextTickets[0] && !threadNotice) {
         setSelectedId(Number(nextTickets[0].TICKET_ID));
       }
     } catch (error) {
