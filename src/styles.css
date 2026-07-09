@@ -1281,9 +1281,10 @@ footer,
 }
 
 .app-launch-main {
+  --app-launch-card-height: 178px;
   height: calc(100vh - 58px);
   max-width: 1320px;
-  padding: 10px 22px 12px;
+  padding: 10px 22px 10px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1299,8 +1300,9 @@ footer,
   min-height: 0;
   flex: 1;
   display: grid;
-  grid-template-rows: auto auto auto;
-  gap: 8px;
+  grid-template-rows: max-content max-content;
+  align-content: start;
+  gap: 20px;
 }
 
 .app-launch-section {
@@ -1369,7 +1371,8 @@ footer,
 .app-module-card {
   position: relative;
   isolation: isolate;
-  min-height: 124px;
+  height: var(--app-launch-card-height);
+  min-height: var(--app-launch-card-height);
   padding: 0;
   overflow: hidden;
   border-color: #dce5f0;
@@ -1437,13 +1440,13 @@ footer,
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 10px 12px 0;
+  padding: 13px 14px 0;
 }
 
 .app-module-card__icon {
   position: relative;
-  width: 32px;
-  height: 32px;
+  width: 38px;
+  height: 38px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1496,13 +1499,38 @@ footer,
   text-align: center;
 }
 
+.app-module-card__badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+  max-width: 142px;
+}
+
+.app-module-card__status {
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: #7c2d12;
+  background: #ffedd5;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
 .app.dark .app-module-card__badge {
   color: #cbd5e1;
   background: rgba(148, 163, 184, 0.12);
 }
 
+.app.dark .app-module-card__status {
+  color: #fed7aa;
+  background: rgba(249, 115, 22, 0.16);
+}
+
 .app-module-card__copy {
-  padding: 6px 12px 0;
+  padding: 9px 14px 0;
 }
 
 .app-module-card__eyebrow {
@@ -1516,9 +1544,9 @@ footer,
 }
 
 .app-module-card h2 {
-  margin: 0 0 3px;
+  margin: 0 0 4px;
   color: #101827;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 850;
   letter-spacing: 0;
 }
@@ -1544,9 +1572,9 @@ footer,
 .app-module-card em,
 .utility-card em {
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   color: #6b7280;
-  font-size: 10.5px;
+  font-size: 11px;
   font-style: italic;
   line-height: 1.2;
 }
@@ -1562,10 +1590,10 @@ footer,
   margin: 0;
   overflow: hidden;
   color: #68778d;
-  font-size: 10.5px;
+  font-size: 11px;
   font-style: italic;
-  line-height: 1.28;
-  -webkit-line-clamp: 2;
+  line-height: 1.35;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
 }
 
@@ -1576,7 +1604,7 @@ footer,
 
 .app-module-card__footer {
   margin-top: auto;
-  padding: 7px 12px 9px;
+  padding: 9px 14px 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1617,11 +1645,12 @@ footer,
 .utility-card {
   position: relative;
   isolation: isolate;
-  min-height: 108px;
-  padding: 10px 12px 9px;
+  height: var(--app-launch-card-height);
+  min-height: var(--app-launch-card-height);
+  padding: 13px 14px 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   overflow: hidden;
   text-align: left;
   border: 1px solid color-mix(in srgb, var(--module-border), #ffffff 18%);
@@ -1666,9 +1695,9 @@ footer,
 
 .utility-card__icon {
   position: relative;
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1686,9 +1715,9 @@ footer,
 }
 
 .utility-card h2 {
-  margin: 0 0 3px;
+  margin: 0 0 4px;
   color: #101827;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 850;
   letter-spacing: 0;
 }
@@ -1698,10 +1727,10 @@ footer,
   margin: 0;
   overflow: hidden;
   color: #68778d;
-  font-size: 10.5px;
+  font-size: 11px;
   font-style: italic;
-  line-height: 1.28;
-  -webkit-line-clamp: 2;
+  line-height: 1.35;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
 }
 
@@ -2248,6 +2277,7 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 
 .workspace-content {
   padding: var(--app-content-padding-y) var(--app-content-padding-x);
+  position: relative;
   flex: 1;              /* new */
   min-height: 0;         /* new — critical for flex children to scroll properly */
   overflow-y: auto;      /* new */
@@ -2778,6 +2808,10 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 
 .payment-workbench {
   background: #f5f7fb;
+  height: auto !important;
+  min-height: 0;
+  max-height: calc(100dvh - 58px - (var(--app-content-padding-y) * 2));
+  overflow: hidden;
 }
 
 .payment-workbench .field {
@@ -2837,6 +2871,8 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 }
 
 .commercial-command-header {
+  position: relative;
+  z-index: 12;
   background: #003f98;
 }
 
@@ -3602,8 +3638,8 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .commercial-lines-scroll {
   width: 100%;
   max-width: 100%;
-  min-height: 430px;
-  max-height: calc(100vh - 360px);
+  min-height: 300px;
+  max-height: calc(100dvh - 420px);
   background: #ffffff;
 }
 
@@ -4824,8 +4860,8 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   }
 
   .commercial-lines-scroll {
-    min-height: 280px;
-    max-height: calc(100dvh - 330px);
+    min-height: 240px;
+    max-height: calc(100dvh - 430px);
   }
 
   .commercial-header-footer {
@@ -4960,6 +4996,88 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   color: #77849a !important;
 }
 
+.app.dark .workspace-content {
+  background:
+    radial-gradient(circle at 84% 0%, rgba(77, 143, 218, 0.08), transparent 24%),
+    linear-gradient(180deg, #0c111b 0%, #0a0e16 100%) !important;
+  color: #e2e8f0;
+}
+
+.app.dark .workspace-content :where(
+  .bg-white,
+  .bg-card,
+  .bg-background,
+  .bg-secondary\/60,
+  .bg-muted\/20,
+  .rounded-md.border,
+  .rounded-lg.border,
+  .overflow-hidden.rounded-md.border,
+  .overflow-hidden.rounded-lg.border,
+  .ui-card,
+  .modal-card
+) {
+  border-color: #2f3a52 !important;
+  background-color: #151927 !important;
+  color: #e2e8f0 !important;
+}
+
+.app.dark .workspace-content :where(.bg-white, .bg-card, .bg-background) :where(h1, h2, h3, h4, strong) {
+  color: #f8fafc !important;
+}
+
+.app.dark .workspace-content :where(.text-muted-foreground, .text-slate-500, .text-gray-500) {
+  color: #94a3b8 !important;
+}
+
+.app.dark .workspace-content :where(.border, .border-t, .border-b, .border-l, .border-r) {
+  border-color: #2f3a52 !important;
+}
+
+.app.dark .workspace-content :where(.ui-input, .ui-select, .ui-textarea, input, select, textarea, [role="combobox"], .lookup-field-trigger) {
+  border-color: #33415d !important;
+  background-color: #101522 !important;
+  color: #e2e8f0 !important;
+}
+
+.app.dark .workspace-content :where(.ui-input, .ui-select, .ui-textarea, input, select, textarea)::placeholder {
+  color: #77849a !important;
+}
+
+.app.dark .workspace-content :where(.shadow-sm, .shadow, .shadow-md, .shadow-lg, .shadow-xl) {
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28) !important;
+}
+
+.app.dark .workspace-content :where(.hover\:bg-accent:hover, .hover\:bg-muted:hover) {
+  background-color: #1d2940 !important;
+}
+
+.app.dark .workspace-content .finance-page {
+  background: transparent !important;
+  color: #e2e8f0 !important;
+}
+
+.app.dark .workspace-content .finance-toolbar {
+  border-color: #33415d !important;
+  background: #0f1522 !important;
+}
+
+.app.dark .workspace-content .finance-toolbar h1 {
+  color: #f8fafc !important;
+  text-shadow: none !important;
+}
+
+.app.dark .workspace-content :where(.tree-panel, .account-detail-panel, .detail-head, .tree-panel-head) {
+  border-color: #2f3a52 !important;
+  background: #151927 !important;
+  color: #e2e8f0 !important;
+}
+
+.app.dark .workspace-content :where(.tree-search, .detail-grid > div, .commercial-header-block-fields > .field, .commercial-header-block-fields > label.field, .commercial-header-block-fields > div) {
+  border-color: #33415d !important;
+  background: #101522 !important;
+  color: #e2e8f0 !important;
+}
+
 .app.dark .workspace-content > section > div:first-child {
   border-color: #33415d !important;
 }
@@ -5062,5 +5180,168 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   border-color: #33415d !important;
   background: #111827 !important;
   color: #e2e8f0 !important;
+}
+
+/* Dark-mode finance/commercial screens.
+   Finance list and document pages have their own light polish rules above;
+   keep these late overrides broad so Cheque Payment/Receipt, Cash, JV and
+   similar document screens remain readable without per-page fixes. */
+.app.dark .workspace-content :where(.finance-list-page, .finance-page, .payment-workbench, .commercial-editor, .security-page) {
+  background:
+    radial-gradient(circle at 82% 0%, rgba(77, 143, 218, 0.08), transparent 28%),
+    linear-gradient(180deg, #0c111b 0%, #0a0e16 100%) !important;
+  color: #e2e8f0 !important;
+}
+
+.app.dark .workspace-content :where(.finance-list-heading, .finance-toolbar, .commercial-command-header) {
+  border-color: #33415d !important;
+  background:
+    linear-gradient(180deg, rgba(21, 25, 39, 0.98) 0%, rgba(17, 24, 39, 0.98) 100%) !important;
+  color: #e2e8f0 !important;
+  box-shadow: none !important;
+}
+
+.app.dark .workspace-content :where(.finance-list-heading)::after {
+  background: linear-gradient(90deg, #4d8fda 0%, rgba(77, 143, 218, 0.35) 36%, transparent 100%) !important;
+}
+
+.app.dark .workspace-content :where(.finance-list-heading h1, .finance-list-title h1, .finance-toolbar h1, .commercial-command-header h1) {
+  color: #f8fafc !important;
+  text-shadow: none !important;
+}
+
+.app.dark .workspace-content :where(.finance-list-heading p, .finance-list-title p, .finance-toolbar p, .commercial-command-header p) {
+  color: #a9b8ce !important;
+}
+
+.app.dark .workspace-content :where(.finance-list-page > div, .finance-page > div, .payment-workbench > div, .commercial-editor > div) {
+  color: #e2e8f0;
+}
+
+.app.dark .workspace-content :where(.finance-list-page .min-h-\[650px\], .finance-page .min-h-\[650px\]) {
+  background: transparent !important;
+}
+
+.app.dark .workspace-content :where(.finance-list-page .data-table-shell, .finance-page .data-table-shell, .security-page .data-table-shell) {
+  border-color: #2f3a52 !important;
+  background: #151927 !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.34) !important;
+}
+
+.app.dark .workspace-content :where(.finance-list-page .data-table-header, .finance-page .data-table-header, .security-page .data-table-header) {
+  border-color: #2f3a52 !important;
+  background: #181d2d !important;
+}
+
+.app.dark .workspace-content :where(.finance-list-page .data-table-pagination, .finance-page .data-table-pagination, .security-page .data-table-pagination) {
+  border-color: #2f3a52 !important;
+  background: #151927 !important;
+}
+
+.app.dark .workspace-content :where(.finance-period-control) {
+  border-color: #33415d !important;
+  background: #111827 !important;
+  color: #e2e8f0 !important;
+  box-shadow: none !important;
+}
+
+.app.dark .workspace-content :where(.finance-period-control span, .finance-period-control select) {
+  color: #e2e8f0 !important;
+  border-color: #33415d !important;
+}
+
+.app.dark .workspace-content :where(.commercial-header-shell, .commercial-lines-card, .commercial-section-title, .commercial-header-footer, .commercial-lines-scroll) {
+  border-color: #2f3a52 !important;
+  background: #151927 !important;
+  color: #e2e8f0 !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28) !important;
+}
+
+.app.dark .workspace-content :where(.commercial-section-title h2, .commercial-section-title h3, .commercial-section-title strong, .commercial-header-block-title strong) {
+  color: #f8fafc !important;
+}
+
+.app.dark .workspace-content :where(.commercial-section-title span, .commercial-header-block-title span, .commercial-header-block-fields > .field > span, .commercial-header-block-fields > label.field > span) {
+  color: #9ec5ff !important;
+}
+
+.app.dark .workspace-content :where(.commercial-header-panel, .commercial-header-block, .commercial-header-block-fields > .field, .commercial-header-block-fields > label.field, .commercial-header-block-fields > div) {
+  border-color: #33415d !important;
+  background: #111827 !important;
+  color: #e2e8f0 !important;
+}
+
+.app.dark .workspace-content :where(.commercial-lines-card table, .commercial-lines-card thead, .commercial-lines-card tbody, .commercial-lines-card tr, .commercial-lines-card td) {
+  background: #101522 !important;
+  color: #d7e0ee !important;
+  border-color: #273247 !important;
+}
+
+.app.dark .workspace-content :where(.commercial-lines-card th, .finance-lines-table th) {
+  background: #1d2435 !important;
+  color: #9ec5ff !important;
+  border-color: #33415d !important;
+}
+
+.app.dark .workspace-content :where(.commercial-lines-card tbody tr:hover) {
+  background: #1d2940 !important;
+  box-shadow: inset 3px 0 0 #4d8fda !important;
+}
+
+/* Finance document editors are mounted with fixed utility classes in the page
+   components. Keep them as workspace-local overlays instead of browser-fixed
+   layers, so the app header/profile menu stays separate and the form starts
+   cleanly inside the content area. */
+.workspace-content .fixed.inset-0.z-50.bg-background {
+  position: absolute !important;
+  inset: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  z-index: 45 !important;
+  overflow: hidden !important;
+}
+
+.workspace:has(.sidebar.collapsed) .workspace-content .fixed.inset-0.z-50.bg-background {
+  left: 0 !important;
+}
+
+.workspace-content .fixed.inset-0.z-50.bg-background .payment-workbench {
+  height: 100% !important;
+  max-height: 100% !important;
+}
+
+.workspace-content .fixed.inset-0.z-50.bg-background .commercial-command-header {
+  min-height: 64px;
+  flex: 0 0 auto;
+  padding-block: 9px !important;
+}
+
+.workspace-content .fixed.inset-0.z-50.bg-background .commercial-command-header > div {
+  min-width: 0;
+}
+
+.workspace-content .fixed.inset-0.z-50.bg-background .commercial-editor > .min-h-0 {
+  padding-top: 14px !important;
+}
+
+.workspace-main:has(.workspace-content .fixed.inset-0.z-50.bg-background) .workspace-header {
+  display: none !important;
+}
+
+.workspace-main:has(.workspace-content .fixed.inset-0.z-50.bg-background) .workspace-content {
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+@media (max-width: 768px) {
+  .workspace-content .fixed.inset-0.z-50.bg-background,
+  .workspace:has(.sidebar.collapsed) .workspace-content .fixed.inset-0.z-50.bg-background {
+    inset: 0 !important;
+  }
+
+  .workspace-content .fixed.inset-0.z-50.bg-background .payment-workbench {
+    height: 100% !important;
+    max-height: 100% !important;
+  }
 }
 

@@ -770,7 +770,49 @@ function OrderEntryDialog({
     </OutboundFormFrame>
   );
 }
+// ── DateFieldWithClear ─────────────────────────────────────────────────────
+function DateFieldWithClear({
+  name,
+  label,
+  form,
+  setForm,
+  onPicked,
+}: {
+  name: string;
+  label: string;
+  form: WmsRow;
+  setForm: React.Dispatch<React.SetStateAction<WmsRow>>;
+  onPicked?: (selected: string) => void;
+}) {
+  const hasValue = Boolean(form[name]);
 
+  return (
+    <div className="relative">
+      <DateField
+        name={name}
+        label={label}
+        form={form}
+        setForm={setForm}
+        onPicked={onPicked}
+      />
+      {hasValue && (
+        <button
+          type="button"
+          title="Clear date"
+          onClick={() =>
+            setForm((current) => ({
+              ...current,
+              [name]: "",
+            }))
+          }
+          className="absolute right-2 top-[27px] rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-destructive"
+        >
+          <X size={13} />
+        </button>
+      )}
+    </div>
+  );
+}
 // ── OrderDetailDialog ──────────────────────────────────────────────────────────
 function OrderDetailDialog({
   open,
@@ -1064,44 +1106,44 @@ function OrderDetailDialog({
             Dates And Conversion
           </legend>
           <div className="grid gap-2.5 lg:grid-cols-5">
-            <DateField
-              name="production_from"
-              label="Production From"
-              form={form}
-              setForm={setForm}
-              onPicked={(selected) =>
-                setForm((current) => ({
-                  ...current,
-                  production_from: selected,
-                  production_to: current.production_to || selected,
-                }))
-              }
-            />
-            <DateField
-              name="production_to"
-              label="Production To"
-              form={form}
-              setForm={setForm}
-            />
-            <DateField
-              name="expiry_from"
-              label="Expiry From"
-              form={form}
-              setForm={setForm}
-              onPicked={(selected) =>
-                setForm((current) => ({
-                  ...current,
-                  expiry_from: selected,
-                  expiry_to: current.expiry_to || selected,
-                }))
-              }
-            />
-            <DateField
-              name="expiry_to"
-              label="Expiry To"
-              form={form}
-              setForm={setForm}
-            />
+        <DateFieldWithClear
+          name="production_from"
+          label="Production From"
+          form={form}
+          setForm={setForm}
+          onPicked={(selected) =>
+            setForm((current) => ({
+              ...current,
+              production_from: selected,
+              production_to: current.production_to || selected,
+            }))
+          }
+        />
+        <DateFieldWithClear
+          name="production_to"
+          label="Production To"
+          form={form}
+          setForm={setForm}
+        />
+        <DateFieldWithClear
+          name="expiry_from"
+          label="Expiry From"
+          form={form}
+          setForm={setForm}
+          onPicked={(selected) =>
+            setForm((current) => ({
+              ...current,
+              expiry_from: selected,
+              expiry_to: current.expiry_to || selected,
+            }))
+          }
+        />
+        <DateFieldWithClear
+          name="expiry_to"
+          label="Expiry To"
+          form={form}
+          setForm={setForm}
+        />
             <ReadOnlyField label="UPPP" value={String(form.uppp || "")} />
           </div>
         </fieldset>
