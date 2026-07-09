@@ -274,13 +274,13 @@ export function Addinterviewevalform({ mode, existingData, onClose }: Props) {
 
       {/* ── Document ──────────────────────────────────────────────────────── */}
       <Card>
-        <CardHeader>
+        {/* <CardHeader>
           <div>
             <p className="eyebrow">Document</p>
             <h2 className="m-0 text-sm font-semibold">Basic Information</h2>
           </div>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        </CardHeader> */}
+       <CardContent className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
           <label className="field">
             <span>Doc No</span>
             <Input
@@ -289,7 +289,7 @@ export function Addinterviewevalform({ mode, existingData, onClose }: Props) {
             />
           </label>
 
-          <label className="field">
+          {/* <label className="field">
             <span>Doc Type</span>
             <Select
               disabled={readonly}
@@ -298,7 +298,7 @@ export function Addinterviewevalform({ mode, existingData, onClose }: Props) {
             >
               <option value="MRF">Interview Evaluation</option>
             </Select>
-          </label>
+          </label> */}
 
           <label className="field">
             <span>Doc Date <strong className="text-destructive">*</strong></span>
@@ -316,17 +316,17 @@ export function Addinterviewevalform({ mode, existingData, onClose }: Props) {
           {field("Ref No", "doc_ref_no")}
           {field("Candidate No", "cand_no")}
         </CardContent>
-      </Card>
+      {/* </Card> */}
 
       {/* ── Candidate ─────────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
+      {/* <Card> */}
+        {/* <CardHeader>
           <div>
             <p className="eyebrow">Candidate</p>
             <h2 className="m-0 text-sm font-semibold">Interview Details</h2>
           </div>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        </CardHeader> */}
+       <CardContent className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
           <label className="field">
             <span>Candidate Name <strong className="text-destructive">*</strong></span>
             <Input
@@ -380,17 +380,17 @@ export function Addinterviewevalform({ mode, existingData, onClose }: Props) {
             </Select>
           </label>
         </CardContent>
-      </Card>
+      {/* </Card> */}
 
       {/* ── Evaluation ────────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
+      {/* <Card> */}
+        {/* <CardHeader>
           <div>
             <p className="eyebrow">Evaluation</p>
             <h2 className="m-0 text-sm font-semibold">Candidate Evaluation</h2>
           </div>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        </CardHeader> */}
+        <CardContent className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
           {evalField("Specific Job Skill", "spec_job_skill")}
           {evalField("Relevant Job Experience", "rel_job_exp")}
           {evalField("Relevant Edu / Training", "rel_edu_training")}
@@ -399,17 +399,17 @@ export function Addinterviewevalform({ mode, existingData, onClose }: Props) {
           {evalField("Attitude", "attitude")}
           {evalField("Interest in Company / Position", "interest_comp_pos")}
         </CardContent>
-      </Card>
+      {/* </Card> */}
 
       {/* ── Remarks ───────────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
+      {/* <Card> */}
+        {/* <CardHeader>
           <div>
             <p className="eyebrow">Remarks</p>
             <h2 className="m-0 text-sm font-semibold">Comments & Observations</h2>
           </div>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        </CardHeader> */}
+        <CardContent className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
           {field("Positive Points", "pos_points", "textarea")}
           {field("Negative Points", "neg_points", "textarea")}
           {field("Overall Observation / Comment", "obs_comment", "textarea")}

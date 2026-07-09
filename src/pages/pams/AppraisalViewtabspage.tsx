@@ -376,13 +376,9 @@ const AppraisalViewTabsPage: React.FC = () => {
   const docNo        = getDocNoFromPath();
   const employeeCode = searchParams.get("employee_code") ?? "";
   const employeeName = searchParams.get("employee_name") ?? "";
-
   const { user }    = useAuth();
   const loginid     = user?.loginid || user?.username || "";
   const companyCode = user?.company_code || "";
-
-  // ── State — prefetchedRow se seedha initialize karo ────────────────────────
-  // Isse page mount hote hi correct values hongi, "Loading..." nahi dikhega
   const [selectedTab,    setSelectedTab]    = useState<SelectedTab>("task_details");
   const [flowLevel,      setFlowLevel]      = useState<number>(
     prefetchedRow ? num(prefetchedRow.FLOW_LEVEL_RUNNING) : 0
@@ -426,14 +422,13 @@ const AppraisalViewTabsPage: React.FC = () => {
   const showApproveRejectButtons = !isFinalized && flowLevel >= 3 && flowLevel <= 7;
   const finalRating              = calcFinalRating(taskTotal, characterTotal, weightageConfig);
   const showFinalRating          = taskTotal > 0 && characterTotal > 0;
+  const [reportReady, setReportReady] = useState(false);
 
   // ── Fetch — prefetchedRow hai to background mein, nahi to blocking ─────────
   useEffect(() => {
     if (!docNo || !employeeCode) { setLoading(false); return; }
 
     const fetchInitialData = async () => {
-      // Agar prefetchedRow nahi hai to pehle loading dikhao (purana behavior)
-      // Agar hai to silently background mein refresh karo
       if (!prefetchedRow) setLoading(true);
       else setBackgroundRefreshing(true);
 
@@ -537,7 +532,17 @@ const AppraisalViewTabsPage: React.FC = () => {
         if (appraiseeCommentRef.current.trim())
           await pamsSelect({ parameter: "update_appraisee_comments", loginid, code1: docNo, code2: employeeCode, code3: appraiseeCommentRef.current.trim() });
       }
-      await pamsSelect({ parameter: "update_appraisal_status", loginid, code1: docNo, code2: employeeCode, code3: action, code4: "" });
+      const ratingToSend = (action === "S" || action === "A") ? finalRating : 0;
+
+      await pamsSelect({
+        parameter: "update_appraisal_status",
+        loginid,
+        code1: docNo,
+        code2: employeeCode,
+        code3: action,
+        code4: "",
+        number1: ratingToSend,   // <-- yeh naya param add hua
+      });
       const msg =
         action === "D" ? "Saved as draft" :
         action === "S" ? "Submitted successfully" :
@@ -570,7 +575,7 @@ const AppraisalViewTabsPage: React.FC = () => {
 
   // ── Print ──────────────────────────────────────────────────────────────────
   const handlePrintReport = () => {
-    if (!reportPrintRef.current) return;
+    if (!reportReady || !reportPrintRef.current) return; 
     const fileName = `Performance-Report-${docNo}-${new Date().toISOString().slice(0, 10)}`;
     const printStyles = `
       @page { size: A4 portrait; margin: 10mm 8mm; }
@@ -609,8 +614,6 @@ const AppraisalViewTabsPage: React.FC = () => {
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div style={S.container}>
-
-      {/* Pulse animation for skeleton */}
       <style>{`
         @keyframes pulse {
           0%, 100% { opacity: 1; }
@@ -620,7 +623,6 @@ const AppraisalViewTabsPage: React.FC = () => {
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      {/* Background refresh indicator — subtle, non-blocking */}
       {backgroundRefreshing && (
         <div style={{
           position: "fixed", top: "12px", right: "16px", zIndex: 9998,
@@ -632,9 +634,6 @@ const AppraisalViewTabsPage: React.FC = () => {
           Refreshing...
         </div>
       )}
-
-      {/* ── Header ── */}
-      {/* Prefetched data se turant render, background fetch baad mein update karega */}
       <div style={S.header}>
         <button
           style={S.backBtn}
@@ -665,7 +664,6 @@ const AppraisalViewTabsPage: React.FC = () => {
         )}
       </div>
 
-      {/* ── Tab bar ── */}
       <div style={S.tabBar}>
         {(
           [
@@ -682,7 +680,6 @@ const AppraisalViewTabsPage: React.FC = () => {
         ))}
       </div>
 
-      {/* ── Tab panels ── */}
       <div style={S.panel}>
         <div style={{ display: selectedTab === "task_details"    ? "block" : "none" }}>
           <TaskDetailsAppraisalTab
@@ -730,7 +727,6 @@ const AppraisalViewTabsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Action buttons ── */}
       <div style={S.btnRow}>
         <div style={S.btnGroup}>
           {showSaveSubmitButtons && (
@@ -800,7 +796,7 @@ const AppraisalViewTabsPage: React.FC = () => {
             onMouseLeave={e => (e.currentTarget.style.background = "#E8F0FF")}
             onMouseDown={e => (e.currentTarget.style.transform = "scale(0.97)")}
             onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
-            onClick={() => setShowReportModal(true)}
+            onClick={() => { setReportReady(false); setShowReportModal(true); }}
           >🖨️ Print</button>
           <button
             style={S.solidBtn("#E8F0FF")}
@@ -874,6 +870,7 @@ const AppraisalViewTabsPage: React.FC = () => {
                   company_code:  "BSG",
                 }}
                 printRef={reportPrintRef}
+                onReady={setReportReady}
               />
             </div>
             <div style={S.reportModalFooter}>
@@ -883,9 +880,7 @@ const AppraisalViewTabsPage: React.FC = () => {
           </div>
         </div>
       )}
-
     </div>
   );
 };
-
 export default AppraisalViewTabsPage;

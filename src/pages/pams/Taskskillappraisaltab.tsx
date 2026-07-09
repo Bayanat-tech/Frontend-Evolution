@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "../../state/AuthContext";
 import { pamsSelect } from "../../api/pams";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 type Row = Record<string, unknown>;
 
 interface Props {
@@ -27,7 +26,6 @@ function num(val: unknown): number {
   return isFinite(n) ? n : 0;
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const S = {
   wrapper: {
     width: "100%", height: "420px", overflowY: "auto" as const,
@@ -57,7 +55,6 @@ const S = {
   emptyMsg: { padding: "40px", textAlign: "center" as const, color: "#9ca3af", fontSize: "13px" },
 };
 
-// ─── Component ────────────────────────────────────────────────────────────────
 const TaskSkillAppraisalTab: React.FC<Props> = ({
   docNo, employeeCode, onRowsChange,
 }) => {
@@ -69,7 +66,6 @@ const TaskSkillAppraisalTab: React.FC<Props> = ({
   const [rowStates, setRowStates] = useState<Record<string, RowState>>({});
   const [loading,   setLoading]   = useState(true);
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!docNo) return;
     setLoading(true);
@@ -91,7 +87,6 @@ const TaskSkillAppraisalTab: React.FC<Props> = ({
       .finally(() => setLoading(false));
   }, [docNo, employeeCode, loginid, companyCode]);
 
-  // ── Notify parent ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!rows.length || !onRowsChange) return;
     const updated = rows.map((row) => {
@@ -102,7 +97,6 @@ const TaskSkillAppraisalTab: React.FC<Props> = ({
     onRowsChange(updated);
   }, [rowStates, rows, onRowsChange]);
 
-  // ── Grand total ────────────────────────────────────────────────────────────
   const grandTotal = useMemo(() => {
     let t = 0;
     rows.forEach((row) => {
@@ -112,7 +106,6 @@ const TaskSkillAppraisalTab: React.FC<Props> = ({
     return Number(t.toFixed(2));
   }, [rows, rowStates]);
 
-  // ── Rating change ──────────────────────────────────────────────────────────
   const handleRatingChange = (row: Row, value: string) => {
     const key = text(row.KPI_CODE);
     if (value === "") {
@@ -124,7 +117,6 @@ const TaskSkillAppraisalTab: React.FC<Props> = ({
     setRowStates((prev) => ({ ...prev, [key]: { RATING: rating } }));
   };
 
-  // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div style={S.wrapper}>
       <table style={S.table}>

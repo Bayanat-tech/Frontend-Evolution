@@ -4,12 +4,12 @@ import { ColumnDef } from '@tanstack/react-table';
 import { CloudUpload, Undo2, Loader2 } from 'lucide-react';
 import { DataTable } from '../../../components/ui/DataTable';
 import { useAuth } from '../../../state/AuthContext';
-import { executeCommonProcedure, getDynamicLookup } from '../../../api/lookups';
 import { useToast } from '../../../components/ui/AlertToast';
 import { Button } from '../../../components/ui/Button';
-import { insUpdMsLocationEdiBlkApi } from '../../../api/edi';
+import { insUpdMsSiteEdiBlkApi } from '../../../api/edi';
+import { executeCommonProcedure, getDynamicLookup } from '../../../api/lookups';
 
-interface ImportLocationProps {
+interface ImportSiteProps {
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -17,16 +17,26 @@ interface ImportLocationProps {
 interface EdiRow {
   error_message?: string;
   site_code?: string;
-  location_code?: string;
-  loc_desc?: string;
+  site_name?: string;
+  site_ind?: string;
   loc_type?: string;
-  loc_stat?: string;
-  aisle?: string;
-  column_no?: number;
-  height?: number;
+  site_type?: string;
+  site_addr1?: string;
+  site_addr2?: string;
+  site_addr3?: string;
+  site_addr4?: string;
+  city?: string;
+  country_code?: string;
+  contact_name?: string;
+  tel_no?: string;
+  charge_ind?: string;
+  prin_code?: string;
+  group_code?: string;
+  div_code?: string;
+  site_rpt_name?: string;
 }
 
-const ImportLocationEdi: React.FC<ImportLocationProps> = ({ onClose, onSuccess }) => {
+const ImportSiteEdi: React.FC<ImportSiteProps> = ({ onClose, onSuccess }) => {
   const [excelData, setExcelData] = useState<any[]>([]);
   const [ediRows, setEdiRows] = useState<EdiRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -66,30 +76,39 @@ const ImportLocationEdi: React.FC<ImportLocationProps> = ({ onClose, onSuccess }
     try {
       setIsLoading(true);
 
-      const mappedLocations = excelData.map((row: any) => ({
+      const mappedSites = excelData.map((row: any) => ({
         company_code: user?.company_code || '',
         site_code: row.SITE_CODE?.toString() || '',
-        location_code: row.LOCATION_CODE?.toString() || '',
-        loc_desc: row.LOC_DESC?.toString() || '',
+        site_ind: row.SITE_IND?.toString() || '',
+        site_type: row.SITE_TYPE?.toString() || '',
+        site_name: row.SITE_NAME?.toString() || '',
+        site_addr1: row.SITE_ADDR1?.toString() || '',
+        site_addr2: row.SITE_ADDR2?.toString() || '',
+        site_addr3: row.SITE_ADDR3?.toString() || '',
+        site_addr4: row.SITE_ADDR4?.toString() || '',
+        city: row.CITY?.toString() || '',
+        country_code: row.COUNTRY_CODE?.toString() || '',
+        contact_name: row.CONTACT_NAME?.toString() || '',
+        tel_no: row.TEL_NO?.toString() || '',
+        charge_ind: row.CHARGE_IND?.toString() || '',
+        prin_code: row.PRIN_CODE?.toString() || '',
+        group_code: row.GROUP_CODE?.toString() || '',
         loc_type: row.LOC_TYPE?.toString() || '',
-        loc_stat: row.LOC_STAT?.toString() || '',
-        aisle: row.AISLE?.toString() || '',
-        column_no: row.COLUMN_NO ? parseInt(row.COLUMN_NO) : 0,
-        height: row.HEIGHT ? parseInt(row.HEIGHT) : 0,
-        blockcyc: 'N'
+        div_code: row.DIV_CODE?.toString() || '',
+        site_rpt_name: row.SITE_RPT_NAME?.toString() || ''
       }));
 
-      const result = await insUpdMsLocationEdiBlkApi({
+      const result = await insUpdMsSiteEdiBlkApi({
         loginid: user?.loginid,
-        locations: mappedLocations
+        sites: mappedSites
       });
 
       if (result?.success) {
         await fetchEDIData();
         setEdiUploaded(true);
-        toast.success(result.message || 'Locations uploaded to EDI');
+        toast.success(result.message || 'Sites uploaded to EDI');
       } else {
-        toast.error(result?.message || 'Failed to upload locations to EDI');
+        toast.error(result?.message || 'Failed to upload sites to EDI');
         handleReset();
       }
     } catch (err: any) {
@@ -102,7 +121,7 @@ const ImportLocationEdi: React.FC<ImportLocationProps> = ({ onClose, onSuccess }
   const fetchEDIData = async () => {
     try {
       const response: any = await getDynamicLookup({
-        parameter: 'MWMS_get_Location_Edi',
+        parameter: 'MWMS_Get_Site_Edi',
         loginid: user?.loginid ?? '',
         code1: user?.company_code ?? ''
       });
@@ -124,16 +143,15 @@ const ImportLocationEdi: React.FC<ImportLocationProps> = ({ onClose, onSuccess }
       setIsLoading(true);
 
       const result = await executeCommonProcedure({
-        parameter: 'SP_COPY_MS_LOCATION_EDI',
+        parameter: 'SP_COPY_MS_SITE_EDI',
         loginid: user?.loginid ?? '',
-        val1s1: user?.loginid ?? '',
-        val1s2: user?.company_code ?? ''
+        val1s1: user?.loginid ?? ''
       });
 
       if (result) {
         await fetchEDIData();
         await handleReset();
-        toast.success('Valid location records saved successfully');
+        toast.success('Valid site records saved successfully');
         onSuccess();
       }
     } catch (err: any) {
@@ -157,24 +175,44 @@ const ImportLocationEdi: React.FC<ImportLocationProps> = ({ onClose, onSuccess }
   const getSampleTemplateData = () => {
     return [
       {
-        SITE_CODE: 'HR',
-        LOCATION_CODE: 'R01-05-L2-P11',
-        LOC_DESC: 'HQ-R01-05-L2-P11',
-        LOC_TYPE: '1',
-        LOC_STAT: 'M',
-        AISLE: 'R01',
-        COLUMN_NO: '5',
-        HEIGHT: 2
+        SITE_CODE: 'A1',
+        SITE_IND: 'DR',
+        SITE_TYPE: 'SPL',
+        SITE_NAME: 'AMBIENT SITE',
+        SITE_ADDR1: 'Plot 21',
+        SITE_ADDR2: 'MIDC Area',
+        SITE_ADDR3: 'Andheri East',
+        SITE_ADDR4: null,
+        CITY: 'Mumbai',
+        COUNTRY_CODE: 'IN',
+        CONTACT_NAME: 'Rajesh Sharma',
+        TEL_NO: '9876543210',
+        CHARGE_IND: 'Y',
+        PRIN_CODE: '00001',
+        GROUP_CODE: 'GRP01',
+        LOC_TYPE: 'MAIN',
+        DIV_CODE: 'DIV01',
+        SITE_RPT_NAME: 'Mumbai Warehouse Report'
       },
       {
-        SITE_CODE: 'A1',
-        LOCATION_CODE: '062801',
-        LOC_DESC: 'A1-062801',
-        LOC_TYPE: '1',
-        LOC_STAT: 'M',
-        AISLE: '06',
-        COLUMN_NO: '28',
-        HEIGHT: 1
+        SITE_CODE: 'CFSDS',
+        SITE_IND: 'DR',
+        SITE_TYPE: 'SPL',
+        SITE_NAME: 'CFS DESPATCH SITE',
+        SITE_ADDR1: 'Sector 12',
+        SITE_ADDR2: 'Industrial Area',
+        SITE_ADDR3: 'Noida',
+        SITE_ADDR4: null,
+        CITY: 'Delhi',
+        COUNTRY_CODE: 'IN',
+        CONTACT_NAME: 'Amit Verma',
+        TEL_NO: '9898989898',
+        CHARGE_IND: 'N',
+        PRIN_CODE: '00002',
+        GROUP_CODE: 'GRP02',
+        LOC_TYPE: 'BRANCH',
+        DIV_CODE: 'DIV01',
+        SITE_RPT_NAME: 'Delhi Hub Report'
       }
     ];
   };
@@ -186,22 +224,32 @@ const ImportLocationEdi: React.FC<ImportLocationProps> = ({ onClose, onSuccess }
       const worksheet = XLSX.utils.json_to_sheet(templateData);
 
       const colWidths = [
-        { wch: 15 },
-        { wch: 18 },
-        { wch: 18 },
-        { wch: 10 },
-        { wch: 10 },
-        { wch: 10 },
-        { wch: 12 },
-        { wch: 10 }
+        { wch: 12 }, // SITE_CODE
+        { wch: 10 }, // SITE_IND
+        { wch: 10 }, // SITE_TYPE
+        { wch: 22 }, // SITE_NAME
+        { wch: 18 }, // SITE_ADDR1
+        { wch: 18 }, // SITE_ADDR2
+        { wch: 18 }, // SITE_ADDR3
+        { wch: 18 }, // SITE_ADDR4
+        { wch: 14 }, // CITY
+        { wch: 12 }, // COUNTRY_CODE
+        { wch: 18 }, // CONTACT_NAME
+        { wch: 14 }, // TEL_NO
+        { wch: 10 }, // CHARGE_IND
+        { wch: 12 }, // PRIN_CODE
+        { wch: 12 }, // GROUP_CODE
+        { wch: 10 }, // LOC_TYPE
+        { wch: 10 }, // DIV_CODE
+        { wch: 22 } // SITE_RPT_NAME
       ];
 
       worksheet['!cols'] = colWidths;
 
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'LocationEdiTemplate');
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'SiteEdiTemplate');
 
-      XLSX.writeFile(workbook, 'Location_Edi_Template.xlsx');
+      XLSX.writeFile(workbook, 'Site_Edi_Template.xlsx');
     } catch (error) {
       console.error('Error generating template:', error);
       toast.error('Failed to generate template. Please try again.');
@@ -218,32 +266,72 @@ const ImportLocationEdi: React.FC<ImportLocationProps> = ({ onClose, onSuccess }
       header: 'Site Code'
     },
     {
-      accessorKey: 'location_code',
-      header: 'Location Code'
+      accessorKey: 'site_name',
+      header: 'Site Name'
     },
     {
-      accessorKey: 'loc_desc',
-      header: 'Loc Desc'
+      accessorKey: 'site_ind',
+      header: 'Site Ind'
     },
     {
       accessorKey: 'loc_type',
       header: 'Loc Type'
     },
     {
-      accessorKey: 'loc_stat',
-      header: 'Loc Stat'
+      accessorKey: 'site_type',
+      header: 'Site Type'
     },
     {
-      accessorKey: 'aisle',
-      header: 'Aisle'
+      accessorKey: 'site_addr1',
+      header: 'Address 1'
     },
     {
-      accessorKey: 'column_no',
-      header: 'Column No'
+      accessorKey: 'site_addr2',
+      header: 'Address 2'
     },
     {
-      accessorKey: 'height',
-      header: 'Height'
+      accessorKey: 'site_addr3',
+      header: 'Address 3'
+    },
+    {
+      accessorKey: 'site_addr4',
+      header: 'Address 4'
+    },
+    {
+      accessorKey: 'city',
+      header: 'City'
+    },
+    {
+      accessorKey: 'country_code',
+      header: 'Country Code'
+    },
+    {
+      accessorKey: 'contact_name',
+      header: 'Contact Name'
+    },
+    {
+      accessorKey: 'tel_no',
+      header: 'Tel No'
+    },
+    {
+      accessorKey: 'charge_ind',
+      header: 'Charge Ind'
+    },
+    {
+      accessorKey: 'prin_code',
+      header: 'Prin Code'
+    },
+    {
+      accessorKey: 'group_code',
+      header: 'Group Code'
+    },
+    {
+      accessorKey: 'div_code',
+      header: 'Div Code'
+    },
+    {
+      accessorKey: 'site_rpt_name',
+      header: 'Rpt Name'
     }
   ];
 
@@ -321,4 +409,4 @@ const ImportLocationEdi: React.FC<ImportLocationProps> = ({ onClose, onSuccess }
   );
 };
 
-export default ImportLocationEdi;
+export default ImportSiteEdi;

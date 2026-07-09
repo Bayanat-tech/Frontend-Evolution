@@ -79,12 +79,17 @@ function DateInput({ value, onChange }: { value: string; onChange: (v: string) =
     );
 }
 
-function FloatLabel({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function FloatLabel({ label, required, children, bgColor = "#fff" }: {
+    label: string;
+    required?: boolean;
+    children: React.ReactNode;
+    bgColor?: string;
+}) {
     return (
         <div style={{ position: "relative", marginTop: 6 }}>
             <span style={{
                 position: "absolute", top: -8, left: 10,
-                fontSize: 11, color: "#6b7280", background: "#fff",
+                fontSize: 11, color: "#6b7280", background: bgColor,
                 padding: "0 4px", zIndex: 1, textTransform: "uppercase",
                 letterSpacing: "0.05em", fontWeight: 500,
             }}>
@@ -128,9 +133,9 @@ const GROUP_OPTIONS = [
 export default function TransactionReportPage() {
     const { user } = useAuth();
 
-
     const [generatingExcel, setGeneratingExcel] = useState(false);
     const [reportError, setReportError] = useState<string | null>(null);
+
     // Principal
     const [principal, setPrincipal] = useState([{ prin_code: "", prin_name: "" }]);
 
@@ -139,7 +144,6 @@ export default function TransactionReportPage() {
     const [productFromName, setProductFromName] = useState("");
     const [productTo, setProductTo] = useState("");
     const [productToName, setProductToName] = useState("");
-    // const [productDesc, setProductDesc] = useState("");
 
     // Site
     const [siteFrom, setSiteFrom] = useState("");
@@ -168,6 +172,7 @@ export default function TransactionReportPage() {
     const [customerFromName, setCustomerFromName] = useState("");
     const [customerTo, setCustomerTo] = useState("");
     const [customerToName, setCustomerToName] = useState("");
+
     // Txn Type
     const [txnType, setTxnType] = useState("");
 
@@ -184,8 +189,6 @@ export default function TransactionReportPage() {
     const [batchNoTo, setBatchNoTo] = useState("");
 
     // Report group
-    // const [groupedOn, setGroupedOn] = useState("group_brand_product");
-    // const [groupedOn, setGroupedOn] = useState("product");
     const [groupedOn, setGroupedOn] = useState("PRODUCT");
 
     const reportDate = (() => {
@@ -197,7 +200,6 @@ export default function TransactionReportPage() {
         setPrincipal([{ prin_code: "", prin_name: "" }]);
         setProductFrom(""); setProductFromName("");
         setProductTo(""); setProductToName("");
-
         setSiteFrom(""); setSiteFromName("");
         setSiteTo(""); setSiteToName("");
         setLocationFrom(""); setLocationFromName("");
@@ -217,31 +219,22 @@ export default function TransactionReportPage() {
     const buildParams = () => ({
         parameter: "WMS_Stock_TRANSACTION_PRODUCT_REPORT",
         loginid: user?.loginid || user?.username || "ADMIN",
-
         code1: user?.company_code || "",
         code2: principal[0]?.prin_code || "",
-
         code3: productFrom || "",
         code4: productTo || productFrom || "",
-
         code5: siteFrom || "",
         code6: siteTo || siteFrom || "",
-
         code7: locationFrom || "",
         code8: locationTo || locationFrom || "",
-
         code9: customerFrom || "",
         code10: customerTo || customerFrom || "",
-
         code11: lotNoFrom || "",
         code12: lotNoTo || lotNoFrom || "",
-
         code13: batchNoFrom || "",
         code14: batchNoTo || batchNoFrom || "",
-
         date1: expDateFrom ? formatDateOracle(expDateFrom) : "",
         date2: expDateTo ? formatDateOracle(expDateTo) : "",
-
         date3: dateFrom ? formatDateOracle(dateFrom) : "",
         date4: dateTo ? formatDateOracle(dateTo) : "",
     });
@@ -275,12 +268,15 @@ export default function TransactionReportPage() {
     const row2: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 };
     const row3: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 };
 
+    const BG = "#EEF5FD"; // shared light blue for all field-rows
+
     return (
         <div style={{ background: "#f3f4f6", padding: "6px 10px", fontFamily: "system-ui, sans-serif" }}>
             <style>{`
                 .grp-opt:hover { background: #EFF6FF !important; }
                 .action-btn:hover { background: #f9fafb !important; }
-                .action-btn-primary:hover { background: #0C447C !important; border-color: #0C447C !important; }
+                .action-btn-excel:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
+                .field-row { background: #EEF5FD; border-radius: 8px; padding: 10px 12px; }
             `}</style>
 
             <div style={{ maxWidth: 1200, margin: "0 auto" }}>
@@ -298,10 +294,9 @@ export default function TransactionReportPage() {
                         {/* ── Left: form fields ── */}
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
 
-                            {/* Principal */}
-
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 6, width: "100%" }}>
-                                <FloatLabel label="Principal" required>
+                            {/* Principal + Product From + Product To */}
+                            <div className="field-row" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 6, width: "100%" }}>
+                                <FloatLabel label="Principal" required bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={principal[0]?.prin_code || ""}
@@ -315,14 +310,27 @@ export default function TransactionReportPage() {
                                         loadOptions={() =>
                                             getDynamicLookupaccount({
                                                 parameter: "WMS_Stock_principal",
-                                                code1: user?.company_code || "",
                                                 loginid: user?.loginid || user?.username || "ADMIN",
+                                                code1: user?.company_code || "",
+                                                code2: principal[0]?.prin_code || "",   // PRIN_CODE filter
+                                                code3: productFrom || "",               // PROD_CODE filter
+                                                code4: siteFrom || "",                  // SITE_CODE filter
+                                                code5: locationFrom || "",              // LOCATION_CODE filter
+                                                code6: customerFrom || "",              // CUST_CODE filter
+                                                code7: jobNo || "",                     // JOB_NO filter
+                                                code8: txnType || "",                   // TXN_TYPE filter
+                                                code9: docRefFrom || "",                // DOC_REF filter
+                                                code10: lotNoFrom || "",                // LOT_NO filter
+                                                date1: dateFrom ? formatDateOracle(dateFrom) : "",       // TXN_DATE >=
+                                                date2: dateTo ? formatDateOracle(dateTo) : "",           // TXN_DATE <=
+                                                date3: expDateFrom ? formatDateOracle(expDateFrom) : "", // EXP_DATE >=
+                                                date4: expDateTo ? formatDateOracle(expDateTo) : "",     // EXP_DATE <=
                                             })
                                         }
                                         onChange={(val) => setPrincipal([{ prin_code: val, prin_name: "" }])}
                                     />
                                 </FloatLabel>
-                                <FloatLabel label="Product From">
+                                <FloatLabel label="Product From" bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={productFrom}
@@ -338,13 +346,12 @@ export default function TransactionReportPage() {
                                                 parameter: "WMS_Stock_product_transfer_report",
                                                 code1: user?.company_code || "",
                                                 code2: principal[0]?.prin_code || "",
-
                                             })
                                         }
                                         onChange={(val) => setProductFrom(val)}
                                     />
                                 </FloatLabel>
-                                <FloatLabel label="Product To">
+                                <FloatLabel label="Product To" bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={productTo}
@@ -360,18 +367,16 @@ export default function TransactionReportPage() {
                                                 parameter: "WMS_Stock_product_transfer_report",
                                                 code1: user?.company_code || "",
                                                 code2: principal[0]?.prin_code || "",
-
                                             })
                                         }
                                         onChange={(val) => setProductTo(val)}
                                     />
                                 </FloatLabel>
-
                             </div>
 
                             {/* Site From | Site To */}
-                            <div style={row2}>
-                                <FloatLabel label="Site From">
+                            <div className="field-row" style={row2}>
+                                <FloatLabel label="Site From" bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={siteFrom}
@@ -391,7 +396,7 @@ export default function TransactionReportPage() {
                                         onChange={(val) => setSiteFrom(val)}
                                     />
                                 </FloatLabel>
-                                <FloatLabel label="Site To">
+                                <FloatLabel label="Site To" bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={siteTo}
@@ -414,8 +419,8 @@ export default function TransactionReportPage() {
                             </div>
 
                             {/* Location From | Location To */}
-                            <div style={row2}>
-                                <FloatLabel label="Location From">
+                            <div className="field-row" style={row2}>
+                                <FloatLabel label="Location From" bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={locationFrom}
@@ -436,7 +441,7 @@ export default function TransactionReportPage() {
                                         onChange={(val) => setLocationFrom(val)}
                                     />
                                 </FloatLabel>
-                                <FloatLabel label="Location To">
+                                <FloatLabel label="Location To" bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={locationTo}
@@ -458,33 +463,11 @@ export default function TransactionReportPage() {
                                     />
                                 </FloatLabel>
                             </div>
-                            <div
-                                style={{
-                                    display: "flex",
-                                    gap: "12px",
-                                    width: "100%",
-                                }}
-                            >
-                                {/* Transaction Date */}
-                                <fieldset
-                                    style={{
-                                        flex: 1,
-                                        border: "0.5px solid #d1d5db",
-                                        borderRadius: 6,
-                                        padding: "6px 12px 10px",
-                                        margin: 0,
-                                    }}
-                                >
-                                    <legend
-                                        style={{
-                                            fontSize: 10,
-                                            color: "#6b7280",
-                                            padding: "0 4px",
-                                            textTransform: "uppercase",
-                                            letterSpacing: "0.05em",
-                                            fontWeight: 500,
-                                        }}
-                                    >
+
+                            {/* Transaction Date + Exp Date */}
+                            <div className="field-row" style={{ display: "flex", gap: "12px", width: "100%" }}>
+                                <fieldset style={{ flex: 1, border: "0.5px solid #BFDBFE", borderRadius: 6, padding: "6px 12px 10px", margin: 0, background: "transparent" }}>
+                                    <legend style={{ fontSize: 10, color: "#6b7280", padding: "0 4px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>
                                         Transaction Date
                                     </legend>
                                     <div style={row2}>
@@ -497,10 +480,7 @@ export default function TransactionReportPage() {
                                     </div>
                                 </fieldset>
 
-                                {/* Transaction EXP Date */}
-                                {/* Exp Date From | Exp Date To */}
-                                {/* Exp Date From | Exp Date To */}
-                                <fieldset style={{ border: "0.5px solid #d1d5db", borderRadius: 6, padding: "6px 12px 10px", margin: 0 }}>
+                                <fieldset style={{ border: "0.5px solid #BFDBFE", borderRadius: 6, padding: "6px 12px 10px", margin: 0, background: "transparent" }}>
                                     <legend style={{ fontSize: 10, color: "#6b7280", padding: "0 4px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>
                                         Exp Date
                                     </legend>
@@ -525,14 +505,11 @@ export default function TransactionReportPage() {
                                         </Field>
                                     </div>
                                 </fieldset>
-
-
                             </div>
 
-
-                            {/* Customer From | Customer To | Description */}
-                            <div style={row2}>
-                                <FloatLabel label="Customer From">
+                            {/* Customer From | Customer To */}
+                            <div className="field-row" style={row2}>
+                                <FloatLabel label="Customer From" bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={customerFrom}
@@ -553,7 +530,7 @@ export default function TransactionReportPage() {
                                         onChange={(val) => setCustomerFrom(val)}
                                     />
                                 </FloatLabel>
-                                <FloatLabel label="Customer To">
+                                <FloatLabel label="Customer To" bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={customerTo}
@@ -576,9 +553,9 @@ export default function TransactionReportPage() {
                                 </FloatLabel>
                             </div>
 
-                            {/* Job No */}
-                            <div style={row2}>
-                                <FloatLabel label="Job No">
+                            {/* Job No + Txn Type */}
+                            <div className="field-row" style={row2}>
+                                <FloatLabel label="Job No" bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={jobNo}
@@ -599,7 +576,6 @@ export default function TransactionReportPage() {
                                         onChange={(val) => setJobNo(val)}
                                     />
                                 </FloatLabel>
-
                                 <Field label="Txn Type">
                                     <select value={txnType} onChange={(e) => setTxnType(e.target.value)} style={inputStyle}>
                                         <option value="">All</option>
@@ -614,11 +590,9 @@ export default function TransactionReportPage() {
                                 <div />
                             </div>
 
-
-
                             {/* Doc Ref From | Doc Ref To */}
-                            <div style={row2}>
-                                <FloatLabel label="Doc. Ref. From">
+                            <div className="field-row" style={row2}>
+                                <FloatLabel label="Doc. Ref. From" bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={docRefFrom}
@@ -638,8 +612,7 @@ export default function TransactionReportPage() {
                                         onChange={(val) => setDocRefFrom(val)}
                                     />
                                 </FloatLabel>
-
-                                <FloatLabel label="Doc. Ref. To">
+                                <FloatLabel label="Doc. Ref. To" bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={docRefTo}
@@ -662,8 +635,8 @@ export default function TransactionReportPage() {
                             </div>
 
                             {/* Lot No From | Lot No To */}
-                            <div style={row2}>
-                                <FloatLabel label="Lot No. From">
+                            <div className="field-row" style={row2}>
+                                <FloatLabel label="Lot No. From" bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={lotNoFrom}
@@ -683,8 +656,7 @@ export default function TransactionReportPage() {
                                         onChange={(val) => setLotNoFrom(val)}
                                     />
                                 </FloatLabel>
-
-                                <FloatLabel label="Lot No. To">
+                                <FloatLabel label="Lot No. To" bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={lotNoTo}
@@ -707,8 +679,8 @@ export default function TransactionReportPage() {
                             </div>
 
                             {/* Batch No From | Batch No To */}
-                            <div style={row2}>
-                                <FloatLabel label="Batch No. From">
+                            <div className="field-row" style={row2}>
+                                <FloatLabel label="Batch No. From" bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={batchNoFrom}
@@ -728,8 +700,7 @@ export default function TransactionReportPage() {
                                         onChange={(val) => setBatchNoFrom(val)}
                                     />
                                 </FloatLabel>
-
-                                <FloatLabel label="Batch No. To">
+                                <FloatLabel label="Batch No. To" bgColor={BG}>
                                     <LookupField
                                         label=""
                                         value={batchNoTo}
@@ -750,14 +721,6 @@ export default function TransactionReportPage() {
                                     />
                                 </FloatLabel>
                             </div>
-
-                            {/* Report Date */}
-                            {/* <div style={row2}>
-                                <Field label="Report Date">
-                                    <TextInput value={reportDate} readOnly />
-                                </Field>
-                                <div />
-                            </div> */}
 
                         </div>
 
@@ -782,32 +745,51 @@ export default function TransactionReportPage() {
                                 Report Grouped On
                             </div>
                             <div style={{ padding: "4px 0" }}>
-                                {GROUP_OPTIONS.map((opt) => (
-                                    <label
-                                        key={opt.value}
-                                        className="grp-opt"
-                                        style={{
-                                            ...radioLabelStyle,
-                                            background: groupedOn === opt.value ? "#E6F1FB" : "transparent",
-                                        }}
-                                    >
-                                        <input
-                                            type="radio"
-                                            name="groupedOn"
-                                            value={opt.value}
-                                            checked={groupedOn === opt.value}
-                                            onChange={() => setGroupedOn(opt.value.toUpperCase())}
-                                            style={{ accentColor: "#185FA5", cursor: "pointer" }}
-                                        />
-                                        <span style={{
-                                            color: groupedOn === opt.value ? "#0C447C" : "#374151",
-                                            fontWeight: groupedOn === opt.value ? 500 : 400,
-                                            fontSize: 12,
-                                        }}>
-                                            {opt.label}
-                                        </span>
-                                    </label>
-                                ))}
+                                {GROUP_OPTIONS.map((opt) => {
+                                    const isSelected = groupedOn === opt.value;
+                                    return (
+                                        <label
+                                            key={opt.value}
+                                            className="grp-opt"
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 8,
+                                                fontSize: 12,
+                                                cursor: "pointer",
+                                                padding: "5px 12px",
+                                                borderLeft: isSelected
+                                                    ? "3px solid #185FA5"
+                                                    : "3px solid transparent",
+                                                background: isSelected ? "#EEF5FD" : "transparent",
+                                                transition: "all 0.15s ease",
+                                            }}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name="groupedOn"
+                                                value={opt.value}
+                                                checked={isSelected}
+                                                onChange={() => setGroupedOn(opt.value.toUpperCase())}
+                                                style={{ display: "none" }}
+                                            />
+                                            <span style={{
+                                                width: 7,
+                                                height: 7,
+                                                borderRadius: "50%",
+                                                background: isSelected ? "#185FA5" : "#d1d5db",
+                                                flexShrink: 0,
+                                                transition: "background 0.15s ease",
+                                            }} />
+                                            <span style={{
+                                                color: isSelected ? "#0C447C" : "#374151",
+                                                fontWeight: isSelected ? 600 : 400,
+                                            }}>
+                                                {opt.label}
+                                            </span>
+                                        </label>
+                                    );
+                                })}
                             </div>
                         </div>
 
@@ -816,16 +798,14 @@ export default function TransactionReportPage() {
                     {/* Action bar */}
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10, paddingTop: 8, borderTop: "0.5px solid #e5e7eb" }}>
                         <button
-                            className="action-btn"
+                            className="action-btn action-btn-excel"
                             onClick={handleReset}
                             style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151" }}
                         >
                             <RotateCcw size={13} /> Reset
                         </button>
-
-
                         <button
-                            className="action-btn"
+                            className="action-btn action-btn-excel"
                             onClick={handleExportExcel}
                             disabled={generatingExcel}
                             style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: generatingExcel ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: generatingExcel ? 0.7 : 1 }}
