@@ -625,7 +625,37 @@ saveEndpoint: (form, { editMode, original }) => {
     ediUploadConfig: {
       open: true,
       name: "site",
-    }
+    },
+    customLoad: async (user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      const data = await executeWmsInboundSql(`
+        SELECT
+          SITE_CODE AS "site_code",
+          SITE_IND AS "site_ind",
+          SITE_TYPE AS "site_type",
+          SITE_NAME AS "site_name",
+          SITE_ADDR1 AS "site_addr1",
+          SITE_ADDR2 AS "site_addr2",
+          SITE_ADDR3 AS "site_addr3",
+          SITE_ADDR4 AS "site_addr4",
+          CITY AS "city",
+          COUNTRY_CODE AS "country_code",
+          CONTACT_NAME AS "contact_name",
+          TEL_NO AS "tel_no",
+          CHARGE_IND AS "charge_ind",
+          PRIN_CODE AS "prin_code",
+          GROUP_CODE AS "group_code",
+          LOC_TYPE AS "loc_type",
+          COMPANY_CODE AS "company_code"
+        FROM MS_SITE
+        WHERE COMPANY_CODE = '${typedUser.company_code}'
+        ORDER BY SITE_CODE
+      `);
+      return {
+        tableData: data as Record<string, unknown>[],
+        count: data.length,
+      };
+    },
   },
   warehouse: {
     title: "Warehouse Master",

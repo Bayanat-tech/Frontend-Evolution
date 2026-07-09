@@ -144,12 +144,6 @@ const ImportLocationEdi: React.FC<ImportLocationProps> = ({ onClose, onSuccess }
   };
 
   const handleReset = async () => {
-    // try {
-    //   await productServiceInstance.clearProductEDI();
-    // } catch (err) {
-    //   console.error(err);
-    // }
-
     setExcelData([]);
     setEdiRows([]);
     setEdiUploaded(false);
