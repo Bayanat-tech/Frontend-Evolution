@@ -6520,3 +6520,264 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   }
 }
 
+/* Support center polish aligned with the BISC workspace visual system. */
+.workspace-content .support-center-page {
+  height: calc(100vh - 118px);
+  min-height: 560px;
+  gap: 8px;
+  color: var(--text);
+}
+
+.workspace-content .support-center-hero {
+  min-height: 86px;
+  align-items: center;
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--primary) 0%, #0b82d4 100%);
+  box-shadow: 0 14px 32px rgba(0, 55, 140, 0.14);
+}
+
+.workspace-content .support-center-hero .eyebrow {
+  margin-bottom: 5px;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+}
+
+.workspace-content .support-center-hero h1 {
+  margin: 0;
+  color: #fff !important;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.workspace-content .support-center-hero span {
+  display: block;
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.84) !important;
+  font-size: 13px;
+}
+
+.workspace-content .support-center-actions .ui-button,
+.workspace-content .support-center-live {
+  height: 34px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.workspace-content .support-center-tabs {
+  min-height: 38px;
+  background: transparent;
+}
+
+.workspace-content .support-center-tabs button {
+  min-height: 38px;
+  padding: 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.workspace-content .support-center-tabs button.active {
+  color: var(--primary);
+}
+
+.workspace-content .support-center-dashboard {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-rows: 72px minmax(190px, 0.8fr) minmax(150px, 0.65fr);
+  gap: 8px;
+}
+
+.workspace-content .support-center-metric {
+  grid-column: span 3;
+  min-height: 72px;
+  padding: 10px 12px;
+  border-color: #dfe7f2;
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+}
+
+.workspace-content .support-center-metric > span {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+}
+
+.workspace-content .support-center-metric strong {
+  font-size: 23px;
+}
+
+.workspace-content .support-center-metric small {
+  font-size: 12px;
+}
+
+.workspace-content .support-center-card {
+  padding: 12px;
+  border-color: #dfe7f2;
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+}
+
+.workspace-content .support-center-card-head {
+  margin-bottom: 10px;
+}
+
+.workspace-content .support-center-card-head h3 {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.workspace-content .support-center-card-head span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.workspace-content .support-center-status-card {
+  grid-column: span 6;
+}
+
+.workspace-content .support-center-recent-card,
+.workspace-content .support-center-live-card {
+  grid-column: span 3;
+}
+
+.workspace-content .support-center-insight-card {
+  grid-column: span 6;
+}
+
+.workspace-content .support-center-attention-card {
+  grid-column: span 3;
+}
+
+.workspace-content .support-center-status-chart {
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.workspace-content .support-center-donut {
+  width: 108px;
+  height: 108px;
+}
+
+.workspace-content .support-center-donut::after {
+  inset: 14px;
+}
+
+.workspace-content .support-center-donut span {
+  font-size: 24px;
+}
+
+.workspace-content .support-center-status-lines > div,
+.workspace-content .support-center-mini-list button,
+.workspace-content .support-center-attention-list button,
+.workspace-content .support-center-mini-users button {
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: var(--text);
+  background: #f8fafc;
+}
+
+.workspace-content .support-center-mini-users button > span:not(.support-center-avatar) {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.workspace-content .support-center-mini-users button strong,
+.workspace-content .support-center-mini-list button strong,
+.workspace-content .support-center-attention-list button strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.workspace-content .support-center-mini-users button em,
+.workspace-content .support-center-mini-list button span,
+.workspace-content .support-center-attention-list button span,
+.workspace-content .support-center-attention-list button em {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.workspace-content .support-center-avatar {
+  width: 34px;
+  height: 34px;
+  flex-basis: 34px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.workspace-content .support-center-workbench {
+  border-radius: 12px;
+}
+
+.workspace-content .support-center-queue {
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.workspace-content .support-center-ticket {
+  min-height: 66px;
+  border-radius: 12px;
+}
+
+.workspace-content .support-center-ticket.active {
+  background: #eaf4ff;
+}
+
+.workspace-content .support-center-thread > header {
+  min-height: 64px;
+  padding: 12px 16px;
+}
+
+.workspace-content .support-center-thread > header h2 {
+  color: var(--text);
+  font-size: 18px;
+}
+
+.workspace-content .support-center-messages {
+  padding: 14px 16px;
+}
+
+.workspace-content .support-center-composer {
+  padding: 10px 14px 12px;
+}
+
+.workspace-content .support-center-composer textarea {
+  min-height: 42px;
+  border-radius: 14px;
+  font-size: 13px;
+}
+
+.workspace-content .support-center-users-page {
+  gap: 8px;
+}
+
+.workspace-content .support-center-presence-summary div {
+  padding: 10px 12px;
+  border-radius: 12px;
+}
+
+.workspace-content .support-center-presence-summary strong {
+  font-size: 22px;
+}
+
+.workspace-content .support-center-presence-card,
+.workspace-content .support-center-user {
+  border-radius: 12px;
+  background: #fff;
+}
+
+@media (max-width: 1400px) {
+  .workspace-content .support-center-dashboard {
+    grid-template-rows: 68px minmax(180px, 0.8fr) minmax(140px, 0.65fr);
+  }
+
+  .workspace-content .support-center-hero {
+    min-height: 78px;
+    padding: 14px 18px;
+  }
+}
+
