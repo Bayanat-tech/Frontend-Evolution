@@ -29,7 +29,7 @@ import { HeaderProfile } from "../components/HeaderProfile";
 import { useAuth } from "../state/AuthContext";
 import type { MenuNode } from "../types/auth";
 import { firstLeafPath, flattenLeaves } from "../utils/menu";
-import { buildWorkspaceApps, cleanAppCode, isUtilitiesApp } from "../utils/workspaceApps";
+import { buildWorkspaceApps, cleanAppCode, isBtMastersApp, isUtilitiesApp } from "../utils/workspaceApps";
 
 type ModuleAccent = {
   gradient: string;
@@ -206,7 +206,7 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
   const workspaceApps = useMemo(() => buildWorkspaceApps(menuTree), [menuTree]);
   const securityApp = useMemo(() => workspaceApps.find((app) => isSecurityModule(app)), [workspaceApps]);
   const coreApps = useMemo(() => workspaceApps.filter((app) => !isUtilitiesApp(app) && !isSecurityModule(app)), [workspaceApps]);
-  const btMastersApp = useMemo(() => workspaceApps.find((app) => isUtilitiesApp(app)), [workspaceApps]);
+  const btMastersApp = useMemo(() => workspaceApps.find((app) => isBtMastersApp(app)) || workspaceApps.find((app) => isUtilitiesApp(app)), [workspaceApps]);
   const displayCoreApps = useMemo(() => sortAppsByDisplayOrder(coreApps), [coreApps]);
   const openApp = (app: MenuNode) => {
     const firstPath = firstLeafPath(app);
