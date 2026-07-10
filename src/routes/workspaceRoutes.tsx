@@ -103,7 +103,7 @@ import SalaryAdditionDeductionMainPage from "../pages/hr/addition_deduction/Sala
 import AbsentMemoMainPage from "../pages/hr/absent_memo/AbsentMemoMainPage";
 
 import { HrManpowerPage } from "../pages/hr/HrManpower";
-
+import InvoicePage from "../pages/wms/invoice/InvoicePage";
 
 
 
@@ -260,6 +260,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   name: "Stock Adjustment",
   match: ({ pathname }) => isStockAdjustmentRoute(pathname),
   element: () => <StockAdjPage />,
+},
+{
+  name: "WMS Invoice",
+  match: ({ pathname }) => isInvoiceRoute(pathname),
+  element: () => <InvoicePage />,
 },
   {
     name: "WMS Stock Transaction Report",
@@ -937,6 +942,10 @@ function isStockTransferRoute(pathname: string) {
     normalized.includes("wms/activity/request/stock_transfer") &&
     !normalized.includes("/view/")  // ← add this
   );
+}
+function isInvoiceRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("wms/activity/request/invoice");
 }
 function isStockAdjustmentRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
