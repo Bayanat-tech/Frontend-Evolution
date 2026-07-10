@@ -103,6 +103,7 @@ import SalaryAdditionDeductionMainPage from "../pages/hr/addition_deduction/Sala
 import AbsentMemoMainPage from "../pages/hr/absent_memo/AbsentMemoMainPage";
 
 import { HrManpowerPage } from "../pages/hr/HrManpower";
+import InspectionReportMainPage from "../pages/oxmaint/inspection-report-tailwind/InspectionReportMainPage";
 
 
 
@@ -124,6 +125,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: "MMS inspection Report",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/mms/masters/gm/inspection_report"),
+    element: () => <InspectionReportMainPage />,
+  },
   {
     name: "HR Absent Memo",
     match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/memo_and_forms/absent_memo"),
