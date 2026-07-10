@@ -23,8 +23,10 @@ const excludedUtilitySignals = [
 export function buildWorkspaceApps(menuTree: MenuNode[]): MenuNode[] {
   const mastersApp = buildBtMastersApp(menuTree);
   if (!mastersApp) return menuTree;
-  const hasMasters = menuTree.some((item) => isUtilitiesApp(item));
-  return hasMasters ? menuTree : [...menuTree, mastersApp];
+
+  const moduleApps = menuTree.map((item) => (isUtilitiesApp(item) ? item : stripMasterBranches(item)));
+  const hasBtMasters = moduleApps.some((item) => isBtMastersApp(item));
+  return hasBtMasters ? moduleApps : [...moduleApps, mastersApp];
 }
 
 export function cleanAppCode(value: string) {
@@ -34,6 +36,10 @@ export function cleanAppCode(value: string) {
 export function isUtilitiesApp(node?: MenuNode | null) {
   const title = normalizeTitle(node?.title || "");
   return title === "bt masters" || title === "utilities";
+}
+
+export function isBtMastersApp(node?: MenuNode | null) {
+  return normalizeTitle(node?.title || "") === "bt masters";
 }
 
 export function buildBtMastersApp(menuTree: MenuNode[]): MenuNode | null {
@@ -78,6 +84,33 @@ function collectMasterLeaves(app: MenuNode): MenuNode[] {
 
   (app.children || []).forEach((child) => walk(child, [app.title || ""]));
   return dedupeLeaves(leaves);
+}
+
+function stripMasterBranches(app: MenuNode): MenuNode {
+  return {
+    ...app,
+    children: (app.children || [])
+      .map((child) => pruneMasterNode(child, [app.title || ""]))
+      .filter(Boolean) as MenuNode[],
+  };
+}
+
+function pruneMasterNode(node: MenuNode, ancestry: string[]): MenuNode | null {
+  const trail = [...ancestry, node.title || "", node.url_path || ""];
+  if (isMasterTrail(trail)) return null;
+
+  const children = (node.children || [])
+    .map((child) => pruneMasterNode(child, trail))
+    .filter(Boolean) as MenuNode[];
+
+  if (node.children?.length && !children.length && node.type !== "item" && !node.url_path) {
+    return null;
+  }
+
+  return {
+    ...node,
+    children,
+  };
 }
 
 function isMasterTrail(parts: string[]) {

@@ -168,7 +168,7 @@ type LookupFieldProps = {
         ? rows
             .filter((row) => selectedValues.includes(String(getLookupValue(row, valueField) ?? "")))
             .map((row) => getLookupText(row, displayFields.length ? displayFields : [valueField]))
-            .join(", ") || value || "None"
+            .join(", ") || value || " "
         : value
         ? getLookupText(
             rows.find((row) => String(getLookupValue(row, valueField) ?? "") === String(value)) || {
@@ -176,7 +176,7 @@ type LookupFieldProps = {
             },
             displayFields.length ? displayFields : [valueField],
           ) || String(value)
-        : "None");
+        : " ");
 
     return (
       <>

@@ -348,7 +348,7 @@ const [putawayForm, setPutawayForm] = useState({ site_from: "", site_to: "", loc
                 raw_sql: `SELECT CONTAINER_NO, VEHICLE_NO, VESSEL_NAME, SEAL_NO, PO_NO
                           FROM TI_CONTAINER
                           WHERE JOB_NO    = '${sqlEscape(jobNo)}'
-                            AND PRIN_CODE = '${sqlEscape(prinCode)}'
+                            AND PRIN_CODE = '${sqlEscape(prinCode)}' AND COMPANY_CODE = '${sqlEscape(companyCode)}'
                           ORDER BY CONTAINER_NO`,
               });
               const data = Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];

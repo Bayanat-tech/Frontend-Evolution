@@ -69,6 +69,9 @@ import ProfitLossPage from "../pages/accounts_report/ProfitLossPage";
 import VisaExpiryListingPage from "../pages/hr/Reports/Visaexpirylistingpage";
 import Dnsummaryreportpage from "../pages/wms/Reports/Dnsummaryreportpage";
 import StockSummaryReportPage from "../pages/wms/Reports/StockSummaryReportPage";
+import StockAgeingQuantityReport from "../pages/wms/Reports/StockAgeingQuantityReport";
+import StockAgeingVolumeReport from "../pages/wms/Reports/StockAgeingVolumeReport";
+
 import { RJVDocumentEditor } from "../pages/finance/RJVDocuments";
 import { AlmsSimpleMasterConfigs } from "../pages/almswf/almsMasterConfig";
 import { AlmsSimpleMasterPage } from "../pages/almswf/AlmsMasterPage";
@@ -102,6 +105,8 @@ import { BudgetRequestEditor } from "../pages/finance/budget/BudgetRequestEditor
 
 import { HrManpowerPage } from "../pages/hr/HrManpower";
 import { BudgetRequestPage } from "../pages/finance/budget/BudgetRequestPage";
+
+
 
 
 type WorkspaceRouteContext = {
@@ -142,7 +147,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <EmployeeSalaryIncrement />
   },
   {
-    name: "HR Leave Encashment",
+    name: "HR Leave Encashmen",
     match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/leave_encashment"),
     element: () => <LeaveEncashmentPage />
   },
@@ -384,6 +389,16 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "WMS Stock Summary Report",
     match: ({ pathname }) => isStockSummaryRoute(pathname),
     element: () => <StockSummaryReportPage />,
+  },
+  {
+  name: "WMS Stock Ageing Quantity Report",
+  match: ({ pathname }) => isStockAgeingQuantityRoute(pathname),
+  element: () => <StockAgeingQuantityReport />,
+  },
+  {
+  name: "WMS Stock Ageing Volume Report",
+  match: ({ pathname }) => isStockAgeingVolumeRoute(pathname),
+  element: () => <StockAgeingVolumeReport />,
   },
   {
     name: "WMS Stock Report Job Listing",
@@ -1278,10 +1293,10 @@ function getHrMasterConfig(context: WorkspaceRouteContext) {
 }
 
 function getHrMatchText(context: WorkspaceRouteContext) {
-  const pathname = context.pathname.toLowerCase();
+  const pathname = decodeRouteText(context.pathname).toLowerCase();
   const leaves = collectMenuLeaves(context.activeApp?.children || []);
   const activeLeaf = leaves.find((leaf) => {
-    const path = (leaf.url_path || "").replace(/^\/+/, "").toLowerCase();
+    const path = decodeRouteText((leaf.url_path || "").replace(/^\/+/, "")).toLowerCase();
     return path && pathname.includes(path);
   });
   return [pathname, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
@@ -1289,7 +1304,23 @@ function getHrMatchText(context: WorkspaceRouteContext) {
 
 function isHrRoute(context: WorkspaceRouteContext) {
   const matchText = getHrMatchText(context);
-  return matchText.includes("/hr/") || matchText.includes(" hr ") || matchText.includes("human");
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return (
+    matchText.includes("/hr/") ||
+    matchText.includes("/hcm/") ||
+    matchText.includes(" hr ") ||
+    matchText.includes(" hcm ") ||
+    matchText.includes("human") ||
+    compact.includes("humancapitalmanagement")
+  );
+}
+
+function decodeRouteText(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function isHrPayrollProcessRoute(context: WorkspaceRouteContext) {
@@ -1404,5 +1435,33 @@ function isHrManpowerRequisitionRoute(context: WorkspaceRouteContext) {
     normalized.includes("manpower_requisition") ||
     normalized.includes("manpower-requisition") ||
     normalized.includes("confirmation_review")
+  );
+}
+
+function isStockAgeingQuantityRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+    normalized.includes("/wms/wms/reports/stock%20report/stock_ageing_quantity") ||
+    normalized.includes("/wms/wms/reports/stock_report/stock_ageing_quantity") ||
+    normalized.includes("/wms/wms/reports/stock-report/stock_ageing_quantity") ||
+
+    normalized.includes("/wms/reports/stock%20report/stock_ageing_quantity") ||
+    normalized.includes("/wms/reports/stock_report/stock_ageing_quantity") ||
+    normalized.includes("/wms/reports/stock-report/stock_ageing_quantity")
+  );
+}
+
+function isStockAgeingVolumeRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+    normalized.includes("/wms/wms/reports/stock%20report/stock_ageing_volume") ||
+    normalized.includes("/wms/wms/reports/stock_report/stock_ageing_volume") ||
+    normalized.includes("/wms/wms/reports/stock-report/stock_ageing_volume") ||
+
+    normalized.includes("/wms/reports/stock%20report/stock_ageing_volume") ||
+    normalized.includes("/wms/reports/stock_report/stock_ageing_volume") ||
+    normalized.includes("/wms/reports/stock-report/stock_ageing_volume")
   );
 }
