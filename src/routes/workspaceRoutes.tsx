@@ -103,6 +103,7 @@ import SalaryAdditionDeductionMainPage from "../pages/hr/addition_deduction/Sala
 import AbsentMemoMainPage from "../pages/hr/absent_memo/AbsentMemoMainPage";
 
 import { HrManpowerPage } from "../pages/hr/HrManpower";
+import { GradeMasterPage } from "../pages/hr/Grademasterpage";
 import InvoicePage from "../pages/wms/invoice/InvoicePage";
 
 
@@ -134,6 +135,19 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/memo_and_forms/addition/deduction_letter"),
     element: () => <SalaryAdditionDeductionMainPage />,
   },
+
+//Grade master page route hcm/hr/transactions/memo_and_forms/absent_memo
+ {
+  name: "HR Grade Master",
+  match: ({ pathname }) =>
+    pathname.toLowerCase().includes("/workspace/bt-masters/hcm/general%20master/grade%20master"),
+  element: () => <GradeMasterPage />,
+},
+
+
+
+
+
   {
     name:"HR Grade Salary Increment",
     match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/grade_salary_increment"),
