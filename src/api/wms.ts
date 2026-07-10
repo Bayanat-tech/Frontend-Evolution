@@ -781,3 +781,28 @@ export async function procBuildDynamicDelCommon(params: DynamicDelCommonParams) 
   if (!response.data.success) throw new Error(response.data.message || "Delete failed");
   return response.data;
 }
+
+/** GET-style dynamic SELECT via stored proc — base variant (code1-4, number1-4, date1-4) */
+export async function procBuildDynamicSqlCommonBase(params: {
+  parameter: string;
+  loginid?: string;
+  code1?: string;
+  code2?: string;
+  code3?: string;
+  code4?: string;
+  number1?: number;
+  number2?: number;
+  number3?: number;
+  number4?: number;
+  date1?: string | null;
+  date2?: string | null;
+  date3?: string | null;
+  date4?: string | null;
+}) {
+  const response = await api.post<ApiResponse<LookupRow[]>>(
+    "/api/wms/common/proc_build_dynamic_sql_common", // ← no "20" — matches old commonservices.ts
+    params
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load data");
+  return response.data.data || [];
+}
