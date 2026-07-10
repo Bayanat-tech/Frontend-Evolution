@@ -424,6 +424,32 @@ export async function upsertBulkAccountEntryApi(payload: {
   if (!response.data.success) throw new Error(response.data.message || details || "Unable to save transaction");
   return response.data;
 }
+export async function upsertBulkAccountBudgetEntryApi(
+  payload: {
+    header: Record<string, unknown>;
+    details: Record<string, unknown>[];
+    company_code: string;
+    loginid: string;
+  },
+  action: "SAVEASDRAFT" | "SUBMITTED" | "REJECTED" | "SENTBACK"
+) {
+  const response = await api.post<ApiResponse<unknown>>(
+    "/api/finance/insUpdBudgetRequestBulk",
+    {
+      ...payload,
+      header: {
+        ...payload.header,
+        last_action: action,
+      },
+    }
+  );
+
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Unable to perform budget request action");
+  }
+
+  return response.data;
+}
 
 export async function cancelTransactionDocument(docNo: string, docType: TransactionType) {
   const response = await api.put<ApiResponse<null>>("/api/finance/transactions/cancel_cheque", {}, {
