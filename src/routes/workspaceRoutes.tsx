@@ -52,7 +52,7 @@ import { SalaryAdvancePage } from "../pages/hr/SalaryAdvancePage";
 import { TrainingFeedbackPage } from "../pages/hr/Trainingfeedbackpage";
 import { Leaf } from "lucide-react";
 import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics";
-import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
+import { WmsBillingActPage } from "../pages/wms/Masters/WmsBillingActivityPage";
 // import ProfitLossPage from "../pages/accounts_report/ProfitLossPage";
 import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
 import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseReport";
@@ -101,6 +101,7 @@ import SalaryAdditionDeductionMainPage from "../pages/hr/addition_deduction/Sala
 import AbsentMemoMainPage from "../pages/hr/absent_memo/AbsentMemoMainPage";
 
 import { HrManpowerPage } from "../pages/hr/HrManpower";
+import { ProductWmsPage } from "../pages/wms/Masters/Product_Master/WmsProductPage";
 
 
 type WorkspaceRouteContext = {
@@ -376,6 +377,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "WMS Billing Activity Master",
     match: ({ pathname }) => isWmsBillingActRoute(pathname),
     element: () => <WmsBillingActPage />,
+  },
+  {
+    name: "Product Master",
+    match: ({pathname})=> pathname.toLocaleLowerCase().includes("/wms/wms/masters/gm/product"),
+    element: () => <ProductWmsPage />
   },
   {
     name: "WMS Stock Summary Report",
