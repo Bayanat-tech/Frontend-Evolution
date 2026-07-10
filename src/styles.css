@@ -1284,8 +1284,8 @@ footer,
   --app-launch-card-height: 178px;
   height: calc(100vh - 58px);
   max-width: 1320px;
-  padding: 10px 22px 10px;
-  overflow: hidden;
+  padding: 10px 22px 32px;
+  overflow: auto;
   display: flex;
   flex-direction: column;
 }

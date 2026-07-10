@@ -94,11 +94,11 @@ export function LoginPage({ dark, onToggleTheme }: { dark: boolean; onToggleThem
           <img src="/bayanat-logo.png" alt="Bayanat Technology" className="login-logo" />
           <div>
             <strong>Bayanat Technology</strong>
-            <span>Enterprise Operations</span>
+            {/* <span>Enterprise Operations</span> */}
           </div>
         </div>
         <div className="brand-copy">
-          <h1>Accounts, WMS, HR and approvals in one secure console.</h1>
+          <h1>Enterprise Resource Planning (ERP)</h1>
         </div>
         <div className="brand-status">
           <span>Version 0.1</span>

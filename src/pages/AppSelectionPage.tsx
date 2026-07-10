@@ -69,6 +69,50 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
     },
   },
   {
+    keys: ["progress", "freight", "fms"],
+    meta: {
+      Icon: Truck,
+      accent: { gradient: "linear-gradient(135deg, #64748b 0%, #0ea5e9 100%)", light: "#f1f5f9", border: "#cbd5e1", icon: "#334155", text: "#1e293b", glow: "rgba(100, 116, 139, 0.14)" },
+      code: "FMS",
+      fullForm: "Freight Management System",
+      description: "Enquiry, quotation, BL/AWB, tracking, costing and invoicing.",
+      status: "in-progress",
+    },
+  },
+  {
+    keys: ["progress", "Transport", "tms"],
+    meta: {
+      Icon: Truck,
+      accent: { gradient: "linear-gradient(135deg, #64748b 0%, #81b454 100%)", light: "#f1f5f9", border: "#cbd5e1", icon: "#334155", text: "#1e293b", glow: "rgba(100, 116, 139, 0.14)" },
+      code: "TMS",
+      fullForm: "Transport Management System",
+      description: "Operational workflows, integrations and reports.",
+      status: "in-progress",
+    },
+  },
+  {
+    keys: ["mms", "maintenance"],
+    meta: {
+      Icon: Settings2,
+      accent: { gradient: "linear-gradient(135deg, #8b5cf6 0%, #0f766e 100%)", light: "#f0edff", border: "#c4b5fd", icon: "#6d28d9", text: "#40237a", glow: "rgba(139, 92, 246, 0.14)" },
+      code: "MMS",
+      fullForm: "Maintenance Management System",
+      description: "Equipment, preventive service, work orders and spare inventory.",
+      status: "completed",
+    },
+  },
+  {
+    keys: ["progress", "Procurement", "pms"],
+    meta: {
+      Icon: Truck,
+      accent: { gradient: "linear-gradient(135deg, #64748b 0%, #242f34 100%)", light: "#f1f5f9", border: "#cbd5e1", icon: "#334155", text: "#1e293b", glow: "rgba(100, 116, 139, 0.14)" },
+      code: "PMS",
+      fullForm: "Procurement Management System",
+      description: "Operational workflows, integrations and reports.",
+      status: "in-progress",
+    },
+  },
+  {
     keys: ["finance", "accounts"],
     meta: {
       Icon: Landmark,
@@ -76,6 +120,17 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
       code: "Finance",
       fullForm: "Finance Management System",
       description: "Receivables, payables, bank reconciliation, invoices and P&L.",
+      status: "completed",
+    },
+  },
+  {
+    keys: ["vms", "vendor"],
+    meta: {
+      Icon: BriefcaseBusiness,
+      accent: { gradient: "linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)", light: "#fff6e8", border: "#f5c56f", icon: "#b45309", text: "#78350f", glow: "rgba(245, 158, 11, 0.16)" },
+      code: "VMS",
+      fullForm: "Vendor Management System",
+      description: "Vendor onboarding, invoices, payment status and statements.",
       status: "completed",
     },
   },
@@ -102,17 +157,6 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
     },
   },
   {
-    keys: ["vms", "vendor"],
-    meta: {
-      Icon: BriefcaseBusiness,
-      accent: { gradient: "linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)", light: "#fff6e8", border: "#f5c56f", icon: "#b45309", text: "#78350f", glow: "rgba(245, 158, 11, 0.16)" },
-      code: "VMS",
-      fullForm: "Vendor Management System",
-      description: "Vendor onboarding, invoices, payment status and statements.",
-      status: "completed",
-    },
-  },
-  {
     keys: ["pams", "performance"],
     meta: {
       Icon: BarChart3,
@@ -134,28 +178,8 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
       status: "completed",
     },
   },
-  {
-    keys: ["progress", "freight", "fms"],
-    meta: {
-      Icon: Truck,
-      accent: { gradient: "linear-gradient(135deg, #64748b 0%, #0ea5e9 100%)", light: "#f1f5f9", border: "#cbd5e1", icon: "#334155", text: "#1e293b", glow: "rgba(100, 116, 139, 0.14)" },
-      code: "FMS",
-      fullForm: "Freight Management System",
-      description: "Enquiry, quotation, BL/AWB, tracking, costing and invoicing.",
-      status: "in-progress",
-    },
-  },
-  {
-    keys: ["mms", "maintenance"],
-    meta: {
-      Icon: Settings2,
-      accent: { gradient: "linear-gradient(135deg, #8b5cf6 0%, #0f766e 100%)", light: "#f0edff", border: "#c4b5fd", icon: "#6d28d9", text: "#40237a", glow: "rgba(139, 92, 246, 0.14)" },
-      code: "MMS",
-      fullForm: "Maintenance Management System",
-      description: "Equipment, preventive service, work orders and spare inventory.",
-      status: "completed",
-    },
-  },
+  
+  
   {
     keys: ["security"],
     meta: {
@@ -181,7 +205,7 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
 ];
 
 const fallbackIcons = [Layers, Package, Boxes, Truck, Building2, ArrowRightLeft, Factory, Gauge];
-const completedModuleOrder = ["WMS", "Finance", "HCM", "EMS", "MMS", "VMS", "PAMS", "LMS", "Other"];
+// const completedModuleOrder = ["WMS", "Finance", "HCM", "EMS", "MMS", "VMS", "PAMS", "LMS", "Other"];
 
 function isSecurityModule(app: MenuNode) {
   const text = `${app.title} ${app.id || ""}`.toLowerCase();
@@ -189,13 +213,14 @@ function isSecurityModule(app: MenuNode) {
 }
 
 function sortAppsByDisplayOrder(apps: MenuNode[]) {
+  const catalogOrder = moduleCatalog.map((entry) => entry.meta.code);
   return [...apps].sort((first, second) => {
     const firstCode = getModuleMeta(first, 0).code;
     const secondCode = getModuleMeta(second, 0).code;
-    const firstIndex = completedModuleOrder.indexOf(firstCode);
-    const secondIndex = completedModuleOrder.indexOf(secondCode);
-    const normalizedFirst = firstIndex === -1 ? completedModuleOrder.length : firstIndex;
-    const normalizedSecond = secondIndex === -1 ? completedModuleOrder.length : secondIndex;
+    const firstIndex = catalogOrder.indexOf(firstCode);
+    const secondIndex = catalogOrder.indexOf(secondCode);
+    const normalizedFirst = firstIndex === -1 ? catalogOrder.length : firstIndex;
+    const normalizedSecond = secondIndex === -1 ? catalogOrder.length : secondIndex;
     return normalizedFirst - normalizedSecond || first.title.localeCompare(second.title);
   });
 }
