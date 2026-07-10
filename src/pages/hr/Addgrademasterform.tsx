@@ -4,17 +4,26 @@
 // way as Addinterviewevalform.tsx (Card/CardContent sections, field()
 // helper, useAuth, save via a dedicated service instance) but laid out to
 // match the legacy "HR General Masters - Grades" screen:
-//   Company | Grade Code | Name | Short Name | OT Eligibility | Grade Status
+//   Company | Grade Code (+ search) | Name | Short Name | OT Eligibility | Grade Status
 //   Airfare Entitlement (Self/Spouse/Dependent)
 //   Medical Entitlement (Self/Spouse/Dependent)
 //   Remarks | Status
 //   Grade Components grid: SlNo, Pay Unit, Min Pay Amount, Max Pay Amount, Approved Date
+//
+// Grade Components grid is driven purely off the *live* grade_code value
+// (form.grade_code), debounced — so it refetches whenever the code changes,
+// whether that's from an existing row (edit/view) or from typing / picking
+// a code via the new search icon while adding a brand new grade. Picking an
+// existing code in Add mode is a "template copy": only the Components grid
+// loads from that code, header fields are left exactly as the user typed
+// them (see selectGradeFromLookup below).
 
-import { Plus, Save, X } from "lucide-react";
+import { Save, Search, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { getDynamicLookup } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent } from "../../components/ui/Card";
+import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
@@ -36,6 +45,12 @@ type GradeComponentFormRow = {
 type PayComponentOption = {
   pay_comp_id: string;
   pay_comp_desc: string;
+};
+
+type GradeLookupRow = {
+  grade_code: string;
+  grade_name: string;
+  grade_short_name?: string;
 };
 
 type FormMode = "add" | "edit" | "view";
@@ -89,13 +104,21 @@ export function AddGradeMasterForm({ mode, existingData, onClose }: Props) {
   const { user } = useAuth();
   const readonly = mode === "view";
   const isEdit = mode === "edit";
+  const isAdd = mode === "add";
 
   const [form, setForm] = useState<GradeFormState>({ ...EMPTY });
   const [components, setComponents] = useState<GradeComponentFormRow[]>([]);
+  const [componentsError, setComponentsError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Partial<Record<keyof GradeFormState, string>>>({});
   const [saving, setSaving] = useState(false);
   const [apiError, setApiError] = useState("");
   const [payComponents, setPayComponents] = useState<PayComponentOption[]>([]);
+
+  // ── Grade Code search/lookup (Add mode "template copy") ─────────────────
+  const [gradeLookupOpen, setGradeLookupOpen] = useState(false);
+  const [gradeLookupRows, setGradeLookupRows] = useState<GradeLookupRow[]>([]);
+  const [gradeLookupLoading, setGradeLookupLoading] = useState(false);
+  const [gradeLookupSearch, setGradeLookupSearch] = useState("");
 
   // ── Load pay components for the "Pay Unit" dropdown ────────────────────
   // NOTE: parameter name is a guess (mirrors the HR_CAM_DEPARTMENT_DEPTCODE
@@ -135,48 +158,82 @@ export function AddGradeMasterForm({ mode, existingData, onClose }: Props) {
     void loadPayComponents();
   }, [loadPayComponents]);
 
-  // ── Load grade components for edit/view ─────────────────────────────────
+  // ── Grade Components: fetch by the *live* grade_code, debounced ─────────
   // NOTE: parameter name is a guess — swap for your actual grade-components
   // select proc. insUpdHrGrade only covers save, so a separate read call is
   // needed here to populate the detail grid.
-  const loadComponents = useCallback(async () => {
-    if (!(isEdit || readonly) || !existingData?.grade_code) return;
-    try {
-      const res = await getDynamicLookup({
-        parameter: "MST_HR_MS_HR_GRADE_COMPONENTS_SELECT",
-        loginid: user?.loginid ?? "",
-        code1: user?.company_code ?? "",
-        code2: String(existingData.grade_code ?? ""),
-        code3: "",
-        code4: "",
-        number1: 0,
-        number2: 0,
-        number3: 0,
-        number4: 0,
-        date1: null,
-        date2: null,
-        date3: null,
-        date4: null,
-      });
-      const list = Array.isArray(res) ? (res as Record<string, unknown>[]) : [];
-      setComponents(
-        list.map((c) => ({
-          id: newId(),
-          pay_comp_id: String(c.PAY_COMP_ID ?? c.pay_comp_id ?? ""),
-          pay_comp_desc: String(c.PAY_COMP_DESC ?? c.pay_comp_desc ?? ""),
-          min_pay_amt: Number(c.MIN_PAY_AMT ?? c.min_pay_amt ?? 0),
-          max_pay_amt: Number(c.MAX_PAY_AMT ?? c.max_pay_amt ?? 0),
-          approved_date: toDate(c.APPROVED_DATE ?? c.approved_date),
-        })),
-      );
-    } catch {
-      // non-critical; grid opens empty if the read fails
-    }
-  }, [isEdit, readonly, existingData?.grade_code, user?.loginid, user?.company_code]);
+  const loadComponents = useCallback(
+    async (code: string) => {
+      if (!code) {
+        setComponents([]);
+        setComponentsError(null);
+        return;
+      }
+      setComponentsError(null);
+      try {
+        const res = await getDynamicLookup({
+          parameter: "MST_HR_MS_HR_Grade_Components_Page",
+          loginid: user?.loginid ?? "",
+          code1: user?.company_code ?? "",
+          code2: code,
+          code3: "",
+          code4: "",
+          number1: 0,
+          number2: 0,
+          number3: 0,
+          number4: 0,
+          date1: null,
+          date2: null,
+          date3: null,
+          date4: null,
+        });
 
+        // TEMP DEBUG: check the browser console when you pick a grade code —
+        // this shows exactly what the backend returned. Remove once fixed.
+        // eslint-disable-next-line no-console
+        console.log("[GradeComponents] fetch for grade_code =", code, "-> raw response:", res);
+
+        const list = Array.isArray(res) ? (res as Record<string, unknown>[]) : [];
+        if (list.length === 0) {
+          setComponentsError(
+            `No component rows came back for grade code "${code}" (company_code "${user?.company_code ?? ""}"). ` +
+              `Check the console log above for the raw API response — if it's not an array, the "parameter" name ` +
+              `(MST_HR_MS_HR_GRADE_COMPONENTS_SELECT) is likely not wired up in the backend dynamic-lookup dispatcher yet.`,
+          );
+        }
+        setComponents(
+          list.map((c) => ({
+            id: newId(),
+            pay_comp_id: String(c.PAY_COMP_ID ?? c.pay_comp_id ?? ""),
+            pay_comp_desc: String(c.PAY_COMP_DESC ?? c.pay_comp_desc ?? ""),
+            min_pay_amt: Number(c.MIN_PAY_AMT ?? c.min_pay_amt ?? 0),
+            max_pay_amt: Number(c.MAX_PAY_AMT ?? c.max_pay_amt ?? 0),
+            approved_date: toDate(c.APPROVED_DATE ?? c.approved_date),
+          })),
+        );
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[GradeComponents] fetch failed for grade_code =", code, err);
+        setComponents([]);
+        setComponentsError(
+          err instanceof Error
+            ? `Failed to load grade components: ${err.message}`
+            : "Failed to load grade components (see console for details).",
+        );
+      }
+    },
+    [user?.loginid, user?.company_code],
+  );
+
+  // Debounced: fires on every change to form.grade_code — covers the
+  // initial edit/view population below AND add-mode typing/lookup-selection.
   useEffect(() => {
-    void loadComponents();
-  }, [loadComponents]);
+    const code = form.grade_code.trim();
+    const timer = window.setTimeout(() => {
+      void loadComponents(code);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [form.grade_code, loadComponents]);
 
   // ── Populate header on edit / view ──────────────────────────────────────
   useEffect(() => {
@@ -205,14 +262,63 @@ export function AddGradeMasterForm({ mode, existingData, onClose }: Props) {
   const setChecked = (field: keyof GradeFormState, checked: boolean) =>
     set(field, checked ? "Y" : "N");
 
-  // ── Component row handlers ──────────────────────────────────────────────
-  const addComponentRow = () => {
-    setComponents((prev) => [
-      ...prev,
-      { id: newId(), pay_comp_id: "", min_pay_amt: 0, max_pay_amt: 0, approved_date: "" },
-    ]);
+  // ── Grade Code search/lookup (Add mode only) ─────────────────────────────
+  const loadGradeLookupList = useCallback(async () => {
+    setGradeLookupLoading(true);
+    try {
+      const res = await getDynamicLookup({
+        parameter: "MST_HR_MS_HR_Grade_Page",
+        loginid: user?.loginid ?? "",
+        code1: user?.company_code ?? "",
+        code2: "",
+        code3: "",
+        code4: "",
+        number1: 0,
+        number2: 0,
+        number3: 0,
+        number4: 0,
+        date1: null,
+        date2: null,
+        date3: null,
+        date4: null,
+      });
+      const list = Array.isArray(res) ? (res as Record<string, unknown>[]) : [];
+      setGradeLookupRows(
+        list.map((r) => ({
+          grade_code: String(r.grade_code ?? r.GRADE_CODE ?? ""),
+          grade_name: String(r.grade_name ?? r.GRADE_NAME ?? ""),
+          grade_short_name: String(r.grade_short_name ?? r.GRADE_SHORT_NAME ?? ""),
+        })),
+      );
+    } catch {
+      setGradeLookupRows([]);
+    } finally {
+      setGradeLookupLoading(false);
+    }
+  }, [user?.loginid, user?.company_code]);
+
+  const openGradeLookup = () => {
+    setGradeLookupSearch("");
+    setGradeLookupOpen(true);
+    void loadGradeLookupList();
   };
 
+  const filteredGradeLookupRows = gradeLookupRows.filter((r) =>
+    `${r.grade_code} ${r.grade_name}`.toLowerCase().includes(gradeLookupSearch.toLowerCase()),
+  );
+
+  // Template-copy: only load that grade's Components below. Header fields
+  // (Name, Short Name, entitlements, etc.) are left exactly as the user
+  // typed them — this is only meant to pull in a starting components list.
+  const selectGradeFromLookup = (code: string) => {
+    set("grade_code", code);
+    setGradeLookupOpen(false);
+  };
+
+  // ── Component row handlers ──────────────────────────────────────────────
+  // NOTE: rows are populated only from the grade-code fetch below — there's
+  // no "Add Line" button, components come purely from the backend for the
+  // selected grade code.
   const updateComponentRow = (id: string, patch: Partial<GradeComponentFormRow>) => {
     setComponents((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
@@ -295,12 +401,25 @@ export function AddGradeMasterForm({ mode, existingData, onClose }: Props) {
 
           <label className="field">
             <span>Grade Code <strong className="text-destructive">*</strong></span>
-            <Input
-              disabled={readonly || isEdit}
-              placeholder="Auto-generated if left blank"
-              value={form.grade_code}
-              onChange={(e) => set("grade_code", e.target.value)}
-            />
+            <div className="flex items-center gap-1">
+              <Input
+                disabled={readonly || isEdit}
+                placeholder="Auto-generated if left blank"
+                value={form.grade_code}
+                onChange={(e) => set("grade_code", e.target.value)}
+              />
+              {isAdd && (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  title="Search existing grade (loads its components as a template)"
+                  onClick={openGradeLookup}
+                >
+                  <Search size={14} />
+                </Button>
+              )}
+            </div>
           </label>
 
           <label className="field">
@@ -449,12 +568,13 @@ export function AddGradeMasterForm({ mode, existingData, onClose }: Props) {
         <CardContent className="grid gap-3">
           <div className="flex items-center justify-between">
             <h3 className="m-0 text-sm font-semibold text-primary">Grade Components</h3>
-            {!readonly && (
-              <Button size="sm" variant="outline" onClick={addComponentRow}>
-                <Plus size={14} /> Add Line
-              </Button>
-            )}
           </div>
+
+          {componentsError && (
+            <div className="rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
+              {componentsError}
+            </div>
+          )}
 
           <div className="overflow-auto rounded-md border">
             <table className="w-full min-w-[720px] text-sm">
@@ -565,6 +685,55 @@ export function AddGradeMasterForm({ mode, existingData, onClose }: Props) {
           </Button>
         )}
       </div>
+
+      {/* ── Grade Code search/lookup dialog (Add mode) ───────────────────── */}
+      {gradeLookupOpen && (
+        <Dialog
+          open
+          title="Select Grade Code"
+          compact
+          onClose={() => setGradeLookupOpen(false)}
+        >
+          <div className="grid gap-2">
+            <div className="flex items-center gap-2 rounded border border-input bg-background px-2">
+              <Search size={13} className="text-muted-foreground flex-shrink-0" />
+              <input
+                autoFocus
+                type="text"
+                placeholder="Search grade code, name..."
+                value={gradeLookupSearch}
+                onChange={(e) => setGradeLookupSearch(e.target.value)}
+                className="h-8 w-full bg-transparent text-[12px] text-foreground outline-none"
+              />
+            </div>
+            <div className="max-h-72 overflow-y-auto rounded border border-border">
+              {gradeLookupLoading ? (
+                <div className="px-3 py-4 text-center text-xs text-muted-foreground">Loading…</div>
+              ) : filteredGradeLookupRows.length === 0 ? (
+                <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                  No grades found
+                </div>
+              ) : (
+                filteredGradeLookupRows.map((r) => (
+                  <button
+                    key={r.grade_code}
+                    type="button"
+                    className="flex w-full items-center gap-2 border-b border-border px-3 py-2 text-left text-[12px] last:border-b-0 hover:bg-muted/40"
+                    onClick={() => selectGradeFromLookup(r.grade_code)}
+                  >
+                    <span className="w-16 flex-shrink-0 font-medium">{r.grade_code}</span>
+                    <span className="truncate text-muted-foreground">{r.grade_name}</span>
+                  </button>
+                ))
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Selecting a code loads its <strong>Grade Components</strong> below as a starting
+              template — header fields above stay exactly as you entered them.
+            </p>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }
