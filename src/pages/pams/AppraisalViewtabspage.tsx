@@ -532,7 +532,17 @@ const AppraisalViewTabsPage: React.FC = () => {
         if (appraiseeCommentRef.current.trim())
           await pamsSelect({ parameter: "update_appraisee_comments", loginid, code1: docNo, code2: employeeCode, code3: appraiseeCommentRef.current.trim() });
       }
-      await pamsSelect({ parameter: "update_appraisal_status", loginid, code1: docNo, code2: employeeCode, code3: action, code4: "" });
+      const ratingToSend = (action === "S" || action === "A") ? finalRating : 0;
+
+      await pamsSelect({
+        parameter: "update_appraisal_status",
+        loginid,
+        code1: docNo,
+        code2: employeeCode,
+        code3: action,
+        code4: "",
+        number1: ratingToSend,   // <-- yeh naya param add hua
+      });
       const msg =
         action === "D" ? "Saved as draft" :
         action === "S" ? "Submitted successfully" :
