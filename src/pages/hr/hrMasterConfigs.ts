@@ -486,10 +486,10 @@ hrbank: {
     subtitle: "Maintain religion code, name, short name, remarks, and status using the existing HR procedure.",
     master: "religion",
     gmEndpoint: "religion",
-    routeKeys: ["religion", "hr_religion"],
+    routeKeys: ["religion", "hr_religion",],
     keyField: "religion_code",
     source: "dynamic",
-    listQuery: dynamicList("MST_HR_MS_HR_RELIGION"),
+    listQuery: dynamicList("MST_HR_MS_HR_RELIGION",true),
     buildSave: (form, context) => ({
       parameter: "MST_HR_RELIGION",
       loginid: context.loginid,
@@ -519,7 +519,7 @@ hrbank: {
     routeKeys: ["caste", "hr_caste"],
     keyField: "caste_code",
     source: "dynamic",
-    listQuery: dynamicList("MST_HR_MS_HR_CASTE"),
+    listQuery: dynamicList("MST_HR_MS_HR_CASTE",true),
     autoGenerateKey: true,
     buildSave: (form, context) => ({
       parameter: "MST_HR_CASTE",
@@ -593,7 +593,7 @@ buildDelete: (row, context) => ({
     routeKeys: ["educational_discipline", "education_discipline", "edu_discipline"],
     keyField: "edu_disc_code",
     source: "dynamic",
-    listQuery: dynamicList("MST_HR_MS_HR_EDU_DISCIPLINE"),
+    listQuery: dynamicList("MST_HR_MS_HR_EDU_DISCIPLINE",true),
     autoGenerateKey: true,
     buildSave: (form, context) => ({
       parameter: "MST_HR_EDU_DISCIPLINE",
@@ -627,7 +627,7 @@ buildDelete: (row, context) => ({
     routeKeys: ["languages", "language", "hr_languages"],
     keyField: "lang_code",
     source: "dynamic",
-    listQuery: dynamicList("MST_HR_MS_HR_LANGUAGES"),
+    listQuery: dynamicList("MST_HR_MS_HR_LANGUAGES",true),
     autoGenerateKey: true,
     buildSave: (form, context) => ({
       parameter: "MST_HR_LANGUAGES",
@@ -662,7 +662,7 @@ buildDelete: (row, context) => ({
     routeKeys: ["skills", "skill", "hr_skills"],
     keyField: "skill_code",
     source: "dynamic",
-    listQuery: dynamicList("MST_HR_MS_HR_SKILLS"),
+    listQuery: dynamicList("MST_HR_MS_HR_SKILLS",true),
     autoGenerateKey: true,
     buildSave: (form, context) => ({
       parameter: "MST_HR_SKILLS",

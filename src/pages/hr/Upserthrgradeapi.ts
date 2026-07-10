@@ -43,7 +43,7 @@ export type TGradeHeaderPayload = {
   user_dt?: string;
 };
 
-const ENDPOINT = "/api/hr/grade/insupd";
+const ENDPOINT = "/api/finance/insUpdHrGrade";
 
 class HrGradeService {
   async upsertHrGradeApi(params: {

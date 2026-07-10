@@ -18,8 +18,9 @@ import { Card, CardContent } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
-import hrGradeServiceInstance from "./upsertHrGradeApi";
-import type { GradeRow } from "./GradeMasterPage";
+import { GradeRow } from "./Grademasterpage";
+import hrGradeServiceInstance from "./Upserthrgradeapi";
+
 
 const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
@@ -103,7 +104,7 @@ export function AddGradeMasterForm({ mode, existingData, onClose }: Props) {
   const loadPayComponents = useCallback(async () => {
     try {
       const res = await getDynamicLookup({
-        parameter: "HR_PAY_COMPONENT_LOOKUP",
+        parameter: "PAY_COMPONENT_LOOKUP",
         loginid: user?.loginid ?? "",
         code1: user?.company_code ?? "",
         code2: "",
