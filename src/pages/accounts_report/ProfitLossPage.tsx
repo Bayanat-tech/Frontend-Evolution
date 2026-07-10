@@ -1,13 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Play, RefreshCw, X, Search, ChevronLeft } from "lucide-react";
+import { Play, RefreshCw, X, Search } from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { useAuth } from "../../state/AuthContext";
 import { getDynamicLookup } from "../../api/lookups";
-import ReportDialogPage from "../../components/ReportDialogPage";
 import {
   getProfitLossReportHtml,
   getProfitLossReportExcelDownload,
@@ -42,88 +41,129 @@ const getToday = (): string => {
   ).padStart(2, "0")}`;
 };
 
-// ─── Iframe renderer ──────────────────────────────────────────────────────────
+const REPORT_WINDOW_NAME = "pnl_report_window";
 
-function IframeReportRenderer({
-  required_values,
-}: {
-  required_values: { html: string };
-}) {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+// ─── Popup window shell ────────────────────────────────────────────────────────
+// The popup gets its own tiny toolbar (Back / Download Excel / Close) since the
+// React overlay controls that used to sit on top of the in-page dialog aren't
+// available inside a separate browser window.
 
-  useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-    const doc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (!doc) return;
-
-    const win = iframe.contentWindow as any;
-    let originalPrint: (() => void) | undefined;
-    if (win) {
-      originalPrint = win.print;
-      win.print = () => {};
-    }
-
-    doc.open();
-    doc.write(required_values.html);
-    doc.close();
-
-    const restorePrint = () => {
-      if (win && originalPrint) win.print = originalPrint;
-    };
-    if (doc.readyState === "complete") {
-      restorePrint();
-    } else {
-      iframe.addEventListener("load", restorePrint, { once: true });
-    }
-  }, [required_values.html]);
-
-  return (
-    <iframe
-      ref={iframeRef}
-      style={{ width: "100%", minHeight: "70vh", border: "none" }}
-      title="report"
-    />
-  );
+function buildShellHtml(title: string): string {
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>${title.replace(/</g, "&lt;")}</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body { font-family: Arial, Helvetica, sans-serif; }
+  #toolbar {
+    position: sticky;
+    top: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: #1a5f4a;
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    z-index: 10;
+  }
+  #toolbar button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  #toolbar button:hover { background: rgba(255,255,255,0.28); }
+  #toolbar button:disabled { opacity: 0.5; cursor: default; }
+  #toolbar .title {
+    margin-left: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #reportFrame {
+    width: 100%;
+    height: calc(100vh - 46px);
+    border: none;
+    display: block;
+  }
+</style>
+</head>
+<body>
+  <div id="toolbar">
+    <button id="btnBack" style="display:none;">&larr; Back</button>
+    <span class="title" id="titleSpan">${title.replace(/</g, "&lt;")}</span>
+    <button id="btnExcel">Download Excel</button>
+    <button id="btnClose">Close</button>
+  </div>
+  <iframe id="reportFrame"></iframe>
+</body>
+</html>`;
 }
 
-// ─── Drill-back overlay button (renders on top of the dialog) ─────────────────
+function getLoadingHtml(label = "Loading…"): string {
+  return `<!doctype html><html><body style="display:flex;align-items:center;justify-content:center;height:60vh;font-family:Arial,sans-serif;color:#1a5f4a;font-size:14px">
+  <div style="text-align:center">
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;display:block;margin:0 auto 12px">
+      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+    </svg>
+    <style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>
+    ${label}
+  </div>
+</body></html>`;
+}
 
-function DrillBackButton({ onClick }: { onClick: () => void }) {
-  return (
-    <div
-      style={{
-        position: "fixed",
-        top: "72px",
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 9999,
-      }}
-    >
-      <button
-        onClick={onClick}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "4px",
-          padding: "4px 12px",
-          fontSize: "11px",
-          fontWeight: 600,
-          background: "#1a5f4a",
-          color: "#fff",
-          border: "none",
-          borderRadius: "4px",
-          cursor: "pointer",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
-        }}
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-          <path d="M15 18l-6-6 6-6"/>
-        </svg>
-        Back
-      </button>
-    </div>
-  );
+/** Writes report HTML into the popup's inner iframe (keeps toolbar intact). */
+function writeReportContent(win: Window, html: string) {
+  const doc = win.document;
+  const frame = doc.getElementById("reportFrame") as HTMLIFrameElement | null;
+  if (!frame) return;
+  const frameDoc = frame.contentDocument || frame.contentWindow?.document;
+  if (!frameDoc) return;
+
+  const frameWin = frame.contentWindow as any;
+  if (frameWin) {
+    // Suppress the report's own print() call, same as before.
+    const originalPrint = frameWin.print;
+    frameWin.print = () => {};
+    const restore = () => {
+      frameWin.print = originalPrint;
+    };
+    frameDoc.open();
+    frameDoc.write(html);
+    frameDoc.close();
+    if (frameDoc.readyState === "complete") {
+      restore();
+    } else {
+      frame.addEventListener("load", restore, { once: true });
+    }
+  } else {
+    frameDoc.open();
+    frameDoc.write(html);
+    frameDoc.close();
+  }
+}
+
+/** Updates the popup toolbar's title + back-button visibility. */
+function updateShellChrome(win: Window, title: string, showBack: boolean) {
+  const doc = win.document;
+  doc.title = title;
+  const titleSpan = doc.getElementById("titleSpan");
+  if (titleSpan) titleSpan.textContent = title;
+  const backBtn = doc.getElementById("btnBack") as HTMLButtonElement | null;
+  if (backBtn) backBtn.style.display = showBack ? "inline-flex" : "none";
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -154,6 +194,14 @@ export default function ProfitLossPage() {
   // Drill-down stack: each entry is a level pushed on top
   const [drillStack, setDrillStack] = useState<DrillState[]>([]);
   const [drillLoading, setDrillLoading] = useState(false);
+
+  // ── Popup window plumbing ────────────────────────────────────────────────
+  const reportWinRef = useRef<Window | null>(null);
+  const pollRef = useRef<number | null>(null);
+
+  const onBackRef = useRef<() => void>(() => {});
+  const onExcelRef = useRef<() => void>(() => {});
+  const onCloseRef = useRef<() => void>(() => {});
 
   // ── Derived ──────────────────────────────────────────────────────────────
   const filteredDivisions = divisionList.filter((d) =>
@@ -186,7 +234,7 @@ export default function ProfitLossPage() {
     fetchDivisions();
   }, [companyCode, loginId]);
 
-  // ── postMessage listener for drill-down clicks inside the iframe ─────────
+  // ── postMessage listener for drill-down clicks inside the report HTML ────
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
       const data = event.data;
@@ -249,16 +297,27 @@ export default function ProfitLossPage() {
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
-  const handleReset = () => {
-    setDivision("");
-    setDivisionDisplay("");
-    setDivisionSearch("");
-    setDateFrom(getStartOfYear());
-    setDateTo(getToday());
-    setReportHtml(null);
-    setReportError(null);
-    setDrillStack([]);
+  const stopPolling = () => {
+    if (pollRef.current !== null) {
+      window.clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
   };
+
+  const handleCloseReport = useCallback(() => {
+    stopPolling();
+    if (reportWinRef.current && !reportWinRef.current.closed) {
+      reportWinRef.current.close();
+    }
+    reportWinRef.current = null;
+    setReportHtml(null);
+    setDrillStack([]);
+  }, []);
+
+  const handleDrillBack = useCallback(() => {
+    setDrillStack((prev) => prev.slice(0, -1));
+    setReportError(null);
+  }, []);
 
   const buildPayload = useCallback(
     () => ({
@@ -271,22 +330,6 @@ export default function ProfitLossPage() {
     }),
     [companyCode, loginId, division, dateFrom, dateTo]
   );
-
-  const handleGenerate = async () => {
-    if (!canGenerate) return;
-    setReportLoading(true);
-    setReportError(null);
-    setReportHtml(null);
-    setDrillStack([]);
-    try {
-      const html = await getProfitLossReportHtml(buildPayload());
-      setReportHtml(html);
-    } catch (err: any) {
-      setReportError(err?.message ?? "Failed to generate report");
-    } finally {
-      setReportLoading(false);
-    }
-  };
 
   const triggerDownload = (data: Blob, filename: string) => {
     const blob = new Blob([data], {
@@ -302,7 +345,7 @@ export default function ProfitLossPage() {
     window.URL.revokeObjectURL(url);
   };
 
-  const handleExcel = async () => {
+  const handleExcel = useCallback(async () => {
     try {
       if (currentDrill?.level === "l2" && currentDrill.pl_code) {
         const response = await api.post(
@@ -324,203 +367,281 @@ export default function ProfitLossPage() {
     } catch (err: any) {
       setReportError(err?.message ?? "Failed to download Excel");
     }
+  }, [currentDrill, buildPayload]);
+
+  // Keep refs pointing at the latest handlers so the popup's toolbar buttons
+  // (wired up once, outside React) always call current logic.
+  useEffect(() => {
+    onBackRef.current = handleDrillBack;
+  }, [handleDrillBack]);
+  useEffect(() => {
+    onExcelRef.current = handleExcel;
+  }, [handleExcel]);
+  useEffect(() => {
+    onCloseRef.current = handleCloseReport;
+  }, [handleCloseReport]);
+
+  /** Opens (or reuses) the popup window and wires up its toolbar buttons. */
+  const ensureReportWindow = (title: string): Window | null => {
+    let win = reportWinRef.current;
+    if (!win || win.closed) {
+      // No size/feature string => browsers open this as a normal new tab
+      // (with the usual address bar, back/forward, etc.) instead of a
+      // stripped-down popup window.
+      win = window.open("", REPORT_WINDOW_NAME);
+      reportWinRef.current = win;
+    }
+    if (!win) {
+      setReportError(
+        "Unable to open the report window. Please allow pop-ups for this site."
+      );
+      return null;
+    }
+
+    win.document.open();
+    win.document.write(buildShellHtml(title));
+    win.document.close();
+
+    const btnBack = win.document.getElementById("btnBack");
+    const btnExcel = win.document.getElementById("btnExcel");
+    const btnClose = win.document.getElementById("btnClose");
+    if (btnBack) btnBack.onclick = () => onBackRef.current();
+    if (btnExcel) btnExcel.onclick = () => onExcelRef.current();
+    if (btnClose) btnClose.onclick = () => onCloseRef.current();
+
+    // Detect the user closing the popup manually and reset our state to match.
+    stopPolling();
+    pollRef.current = window.setInterval(() => {
+      if (win && win.closed) {
+        stopPolling();
+        reportWinRef.current = null;
+        setReportHtml(null);
+        setDrillStack([]);
+      }
+    }, 500);
+
+    return win;
   };
 
-  const handleDrillBack = () => {
-    setDrillStack((prev) => prev.slice(0, -1));
+  const handleReset = () => {
+    setDivision("");
+    setDivisionDisplay("");
+    setDivisionSearch("");
+    setDateFrom(getStartOfYear());
+    setDateTo(getToday());
     setReportError(null);
+    handleCloseReport();
   };
 
-  const handleCloseReport = () => {
+  const handleGenerate = async () => {
+    if (!canGenerate) return;
+    setReportLoading(true);
+    setReportError(null);
     setReportHtml(null);
     setDrillStack([]);
+
+    // Open the window synchronously (in direct response to the click) so
+    // browsers don't treat it as a blocked popup.
+    const win = ensureReportWindow("Profit & Loss");
+    if (win) writeReportContent(win, getLoadingHtml("Generating report…"));
+
+    try {
+      const html = await getProfitLossReportHtml(buildPayload());
+      setReportHtml(html);
+      if (reportWinRef.current && !reportWinRef.current.closed) {
+        writeReportContent(reportWinRef.current, html);
+        updateShellChrome(reportWinRef.current, "Profit & Loss", false);
+      }
+    } catch (err: any) {
+      const message = err?.message ?? "Failed to generate report";
+      setReportError(message);
+      if (reportWinRef.current && !reportWinRef.current.closed) {
+        writeReportContent(
+          reportWinRef.current,
+          getLoadingHtml(`Error: ${message.replace(/</g, "&lt;")}`)
+        );
+      }
+    } finally {
+      setReportLoading(false);
+    }
   };
+
+  // Keep the popup's content in sync with drill-down state changes.
+  useEffect(() => {
+    const win = reportWinRef.current;
+    if (!win || win.closed) return;
+    if (activeHtml === null) return;
+
+    updateShellChrome(win, dialogTitle, drillStack.length > 0);
+    writeReportContent(
+      win,
+      drillLoading ? getLoadingHtml("Loading drill-down data…") : activeHtml
+    );
+  }, [activeHtml, dialogTitle, drillStack.length, drillLoading]);
+
+  // Close the popup and stop polling if this component unmounts.
+  useEffect(() => {
+    return () => {
+      stopPolling();
+      if (reportWinRef.current && !reportWinRef.current.closed) {
+        reportWinRef.current.close();
+      }
+    };
+  }, []);
 
   const pageTitle = "Profit & Loss";
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <>
-      <section className="grid gap-4">
+    <section className="grid gap-4">
 
-        {/* Page Header */}
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">
-              {pageTitle}
-            </h1>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Financial Reports</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" title="Reset" onClick={handleReset}>
-              <RefreshCw size={15} />
-            </Button>
-            <Button disabled={!canGenerate || reportLoading} onClick={handleGenerate}>
-              {reportLoading ? (
-                <>
-                  <svg
-                    className="animate-spin h-3.5 w-3.5"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                  </svg>
-                  Generating…
-                </>
-              ) : (
-                <>
-                  <Play size={15} /> Generate Report
-                </>
-              )}
-            </Button>
-          </div>
+      {/* Page Header */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">
+            {pageTitle}
+          </h1>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Financial Reports</p>
         </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" title="Reset" onClick={handleReset}>
+            <RefreshCw size={15} />
+          </Button>
+          <Button disabled={!canGenerate || reportLoading} onClick={handleGenerate}>
+            {reportLoading ? (
+              <>
+                <svg
+                  className="animate-spin h-3.5 w-3.5"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                </svg>
+                Generating…
+              </>
+            ) : (
+              <>
+                <Play size={15} /> Generate Report
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
 
-        {/* Error Banner */}
-        {reportError && (
-          <div className="flex items-center gap-2 rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
-            <span className="font-semibold">Error:</span> {reportError}
-            <button
-              onClick={() => setReportError(null)}
-              className="ml-auto text-destructive/60 hover:text-destructive"
-            >
-              <X size={12} />
-            </button>
+      {/* Error Banner */}
+      {reportError && (
+        <div className="flex items-center gap-2 rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
+          <span className="font-semibold">Error:</span> {reportError}
+          <button
+            onClick={() => setReportError(null)}
+            className="ml-auto text-destructive/60 hover:text-destructive"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
+      {/* Filters Card */}
+      <Card className="border-border shadow-sm overflow-visible">
+        <CardHeader className="bg-muted/30 border-b border-border px-4 py-2">
+          <div className="flex items-center gap-2">
+            <div className="h-3.5 w-1 rounded-full bg-primary" />
+            <div>
+              <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">
+                Parameters
+              </p>
+              <h2 className="text-[11px] font-semibold text-foreground leading-tight">
+                Report Filters
+              </h2>
+            </div>
           </div>
-        )}
+        </CardHeader>
+        <CardContent className="px-4 py-3 overflow-visible">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4 overflow-visible">
 
-        {/* Filters Card */}
-        <Card className="border-border shadow-sm overflow-visible">
-          <CardHeader className="bg-muted/30 border-b border-border px-4 py-2">
-            <div className="flex items-center gap-2">
-              <div className="h-3.5 w-1 rounded-full bg-primary" />
-              <div>
-                <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">
-                  Parameters
-                </p>
-                <h2 className="text-[11px] font-semibold text-foreground leading-tight">
-                  Report Filters
-                </h2>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="px-4 py-3 overflow-visible">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4 overflow-visible">
-
-              {/* Division searchable select */}
-              <label className="flex flex-col gap-1.5 sm:col-span-2 overflow-visible">
-                <span className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide">
-                  Division <strong className="text-destructive">*</strong>
-                </span>
-                <div className="relative z-50 overflow-visible">
-                  <div className="flex items-center gap-2 rounded border border-input bg-background px-2">
-                    <Search size={13} className="text-muted-foreground flex-shrink-0" />
-                    <input
-                      type="text"
-                      placeholder={divisionLoading ? "Loading…" : "Search division…"}
-                      value={showDivisionDropdown ? divisionSearch : divisionDisplay}
-                      onChange={(e) => {
-                        setDivisionSearch(e.target.value);
-                        setShowDivisionDropdown(true);
-                      }}
-                      onFocus={() => setShowDivisionDropdown(true)}
-                      onBlur={() =>
-                        setTimeout(() => setShowDivisionDropdown(false), 200)
-                      }
-                      disabled={divisionLoading}
-                      className="h-8 w-full bg-transparent text-[11px] text-foreground outline-none disabled:opacity-50"
-                    />
-                  </div>
-                  {showDivisionDropdown && filteredDivisions.length > 0 && (
-                    <div className="absolute left-0 right-0 top-full z-[9999] mt-1 max-h-52 overflow-y-auto rounded border border-border bg-background shadow-lg">
-                      {filteredDivisions.map((d) => (
-                        <button
-                          key={d.div_code}
-                          type="button"
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] hover:bg-muted/40"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            setDivision(d.div_code);
-                            setDivisionDisplay(`${d.div_code} – ${d.div_name}`);
-                            setDivisionSearch("");
-                            setShowDivisionDropdown(false);
-                            setReportError(null);
-                          }}
-                        >
-                          <span className="w-20 flex-shrink-0 font-medium">{d.div_code}</span>
-                          <span className="truncate text-muted-foreground">{d.div_name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+            {/* Division searchable select */}
+            <label className="flex flex-col gap-1.5 sm:col-span-2 overflow-visible">
+              <span className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide">
+                Division <strong className="text-destructive">*</strong>
+              </span>
+              <div className="relative z-50 overflow-visible">
+                <div className="flex items-center gap-2 rounded border border-input bg-background px-2">
+                  <Search size={13} className="text-muted-foreground flex-shrink-0" />
+                  <input
+                    type="text"
+                    placeholder={divisionLoading ? "Loading…" : "Search division…"}
+                    value={showDivisionDropdown ? divisionSearch : divisionDisplay}
+                    onChange={(e) => {
+                      setDivisionSearch(e.target.value);
+                      setShowDivisionDropdown(true);
+                    }}
+                    onFocus={() => setShowDivisionDropdown(true)}
+                    onBlur={() =>
+                      setTimeout(() => setShowDivisionDropdown(false), 200)
+                    }
+                    disabled={divisionLoading}
+                    className="h-8 w-full bg-transparent text-[11px] text-foreground outline-none disabled:opacity-50"
+                  />
                 </div>
-              </label>
+                {showDivisionDropdown && filteredDivisions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full z-[9999] mt-1 max-h-52 overflow-y-auto rounded border border-border bg-background shadow-lg">
+                    {filteredDivisions.map((d) => (
+                      <button
+                        key={d.div_code}
+                        type="button"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] hover:bg-muted/40"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setDivision(d.div_code);
+                          setDivisionDisplay(`${d.div_code} – ${d.div_name}`);
+                          setDivisionSearch("");
+                          setShowDivisionDropdown(false);
+                          setReportError(null);
+                        }}
+                      >
+                        <span className="w-20 flex-shrink-0 font-medium">{d.div_code}</span>
+                        <span className="truncate text-muted-foreground">{d.div_name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </label>
 
-              {/* From Date */}
-              <label className="flex flex-col gap-0.5">
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                  From Date <strong className="text-destructive">*</strong>
-                </span>
-                <input
-                  type="date"
-                  value={dateFrom}
-                  max={dateTo || undefined}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="h-8 w-full rounded border border-input bg-background px-2 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
-                />
-              </label>
+            {/* From Date */}
+            <label className="flex flex-col gap-0.5">
+              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                From Date <strong className="text-destructive">*</strong>
+              </span>
+              <input
+                type="date"
+                value={dateFrom}
+                max={dateTo || undefined}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="h-8 w-full rounded border border-input bg-background px-2 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+              />
+            </label>
 
-              {/* To Date */}
-              <label className="flex flex-col gap-0.5">
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                  To Date <strong className="text-destructive">*</strong>
-                </span>
-                <input
-                  type="date"
-                  value={dateTo}
-                  min={dateFrom || undefined}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="h-8 w-full rounded border border-input bg-background px-2 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
-                />
-              </label>
+            {/* To Date */}
+            <label className="flex flex-col gap-0.5">
+              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                To Date <strong className="text-destructive">*</strong>
+              </span>
+              <input
+                type="date"
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="h-8 w-full rounded border border-input bg-background px-2 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+              />
+            </label>
 
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </CardContent>
+      </Card>
 
-      </section>
-
-      {/* ── Back button floats over the dialog when drilling down ── */}
-      {activeHtml !== null && drillStack.length > 0 && (
-        <DrillBackButton onClick={handleDrillBack} />
-      )}
-
-      {/* ── Report Dialog ── */}
-      {activeHtml !== null && (
-        <ReportDialogPage
-          title={dialogTitle}
-          Report={IframeReportRenderer}
-          required_values={{ html: drillLoading ? getLoadingHtml() : activeHtml! }}
-          excel={handleExcel}
-          onClose={handleCloseReport}
-        />
-      )}
-    </>
+    </section>
   );
-}
-
-// ─── Loading placeholder HTML ─────────────────────────────────────────────────
-
-function getLoadingHtml(): string {
-  return `<!doctype html><html><body style="display:flex;align-items:center;justify-content:center;height:60vh;font-family:Arial,sans-serif;color:#1a5f4a;font-size:14px">
-  <div style="text-align:center">
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;display:block;margin:0 auto 12px">
-      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-    </svg>
-    <style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>
-    Loading drill-down data…
-  </div>
-</body></html>`;
 }
