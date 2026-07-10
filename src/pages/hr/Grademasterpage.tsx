@@ -14,7 +14,7 @@ import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { useAuth } from "../../state/AuthContext";
-import { AddGradeMasterForm } from "./AddGrademasterform";
+import { AddGradeMasterForm } from "./Addgrademasterform";
 
 
 export type GradeRow = {

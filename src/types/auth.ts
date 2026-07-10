@@ -14,6 +14,8 @@ export type UserProfile = {
   EMAIL_ID?: string;
   loginid?: string;
   LOGINID?: string;
+  loginid1?: string;
+  LOGINID1?: string;
   company_code?: string;
   COMPANY_CODE?: string;
   company_name?: string;
