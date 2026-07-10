@@ -993,6 +993,14 @@ export async function TransationReport(params: ReportParams) {
     );
 }
 
+
+export async function TransationReportwithoutTransafer(params: ReportParams) {
+    await openReportInTab(
+        "/api/finance/transactions/reports/wms-TransactionProductWithoutTransfersReport/html", 
+        params
+    );
+}
+
 export async function exportTransactionProductExcel(params: ReportParams): Promise<void> {
     const response = await api.post(
         `/api/finance/transactions/reports/wms-exportTransactionProductExcel/excel`,
