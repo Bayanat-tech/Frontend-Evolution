@@ -311,9 +311,22 @@ function InvoiceDetailsTab({
         <table className="vendor-detail-table w-full min-w-[1360px] text-xs">
           <thead className="sticky top-0 z-10 bg-slate-50 text-left text-muted-foreground">
             <tr>
-              {["Sr No", "Description", "Qty", "Org Qty", "Rate", "Amount", "Currency", "Ex Rate", "Base Amt", "Attach", "Tax Code", "Tax %", "Tax Local Amt", "Final Amt", "Item Remark", ""].map((head) => (
-                <th key={head} className="border-b px-1.5 py-1 font-semibold">{head}</th>
-              ))}
+              <th className="border-b px-1.5 py-1 font-semibold w-12">Sr No</th>
+              <th className="border-b px-1.5 py-1 font-semibold min-w-[240px] max-w-[340px]">Description</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[72px]">Qty</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[90px]">Org Qty</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[100px]">Rate</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[110px]">Amount</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[78px]">Currency</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[84px]">Ex Rate</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[110px]">Base Amt</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[56px]">Attach</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[90px]">Tax Code</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[74px]">Tax %</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[110px]">Tax Local Amt</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[110px]">Final Amt</th>
+              <th className="border-b px-1.5 py-1 font-semibold min-w-[220px] max-w-[280px]">Item Remark</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[48px]" />
             </tr>
           </thead>
           <tbody>
@@ -330,9 +343,9 @@ function InvoiceDetailsTab({
               return (
                 <tr key={`${item.SERIAL_NO || index}`} className="h-6 border-b">
                   <td className="px-1.5 py-0.5 text-muted-foreground">{String(item.SERIAL_NO || index + 1)}</td>
-                  <td className="min-w-[280px] max-w-[360px] truncate px-1.5 py-0.5 text-muted-foreground" title={String(item.REMARKS || item.ITEM_DESC || "")}>{String(item.REMARKS || item.ITEM_DESC || "")}</td>
-                  <td className="px-1.5 py-0.5"><Input className="vendor-line-input text-right" type="number" value={String(item.QTY ?? 0)} onChange={(event) => setItem(index, "QTY", event.target.value)} /></td>
-                  <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(item.ORIGINAL_QTY)}</td>
+                  <td className="min-w-[240px] max-w-[340px] truncate px-1.5 py-0.5 text-muted-foreground" title={String(item.REMARKS || item.ITEM_DESC || "")}>{String(item.REMARKS || item.ITEM_DESC || "")}</td>
+                  <td className="w-[72px] px-1.5 py-0.5"><Input className="vendor-line-input text-right w-full" type="number" value={String(item.QTY ?? 0)} onChange={(event) => setItem(index, "QTY", event.target.value)} /></td>
+                  <td className="w-[90px] px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(item.ORIGINAL_QTY)}</td>
                   <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(price)}</td>
                   <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(amount)}</td>
                   <td className="px-1.5 py-0.5 text-muted-foreground">{String(item.CURR_CODE || "")}</td>
@@ -437,6 +450,7 @@ function VendorFilesDialog({ requestNumber, srNo, title, onClose }: { requestNum
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<import("../../components/ui/NoticeToast").ToastNotice>(null);
+  const [previewFile, setPreviewFile] = useState<VendorRow | null>(null);
 
   const fileCount = files.length;
   const selectedCount = picked.length;
@@ -644,6 +658,42 @@ function VendorFilesDialog({ requestNumber, srNo, title, onClose }: { requestNum
         )}
       </div>
     </Dialog>
+
+      <Dialog
+        open={Boolean(previewFile)}
+        title={previewFile ? String(previewFile.orgFileName || previewFile.ORG_FILE_NAME || previewFile.fileName || previewFile.FILE_NAME || previewFile.file_name || "Attachment Preview") : "Attachment Preview"}
+        description={previewFile ? String(previewFile.type || previewFile.TYPE || "") : undefined}
+        compact
+        onClose={closePreview}
+        footer={(
+          <Button variant="outline" onClick={closePreview}>Close</Button>
+        )}
+      >
+        {previewFile ? (
+          <div className="min-h-[320px] max-h-[72vh] overflow-hidden rounded-md border bg-background text-sm">
+            {getPreviewType(previewFile) === "pdf" ? (
+              <iframe
+                title="attachment-preview"
+                src={String(previewFile.awsFileLocn)}
+                className="h-[72vh] w-full"
+              />
+            ) : getPreviewType(previewFile) === "image" ? (
+              <img
+                src={String(previewFile.awsFileLocn)}
+                alt={String(previewFile.orgFileName || previewFile.fileName || "Attachment")}
+                className="h-[72vh] w-full object-contain"
+              />
+            ) : (
+              <div className="grid min-h-[260px] place-items-center p-6 text-center text-sm text-muted-foreground">
+                <p>No preview available for this file type.</p>
+                <a href={String(previewFile.awsFileLocn)} target="_blank" rel="noreferrer" className="mt-4 inline-flex rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground">
+                  Open in new tab
+                </a>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </Dialog>
     </>
   );
 }
