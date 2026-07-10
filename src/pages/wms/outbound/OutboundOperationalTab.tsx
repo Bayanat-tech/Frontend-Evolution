@@ -217,12 +217,20 @@ export function OutboundOperationalTab({
           }
         );
       } else if (mode === "CONFIRM") {
-        await putWmsOutbound(
-          `picking_details/confirm_order/${encodeURIComponent(jobNo)}`,
-          { serial_no: selectedPayloadKeys },
-          { prin_code: prinCode, confirm_date: pickOptions.confirm_date }
-        );
-      } else {
+        const [year, month, day] = pickOptions.confirm_date.split("-");
+        const formattedConfirmDate = `${day}/${month}/${year}`;
+
+        await executeCommonProcedure({
+          parameter: "SP_PICK_CONFIRM_PARENT",
+          loginid: user?.loginid || "",
+          val1s1: user?.company_code || "",
+          val1s2: prinCode,
+          val1s3: jobNo,
+          val1s4: formattedConfirmDate,
+          val1s5: selectedKeys.join(","),
+        });
+      }
+      else {
         await putWmsOutbound(
           `picking_details/oubcancelPick/${encodeURIComponent(jobNo)}`,
           { serial_no: selectedPayloadKeys },
