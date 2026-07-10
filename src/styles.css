@@ -2230,9 +2230,9 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 }
 
 .workspace-header {
-  position: sticky;
-  top: 0;
-  z-index: 80;
+    position: static;
+    top: auto;
+    z-index: auto;
 }
 
 .workspace-header-actions {
@@ -5324,11 +5324,11 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   padding-top: 14px !important;
 }
 
-.workspace-main:has(.workspace-content .fixed.inset-0.z-50.bg-background) .workspace-header {
+.workspace-main:has(.workspace-content .fixed.inset-0.z-50) .workspace-header {
   display: none !important;
 }
 
-.workspace-main:has(.workspace-content .fixed.inset-0.z-50.bg-background) .workspace-content {
+.workspace-main:has(.workspace-content .fixed.inset-0.z-50) .workspace-content {
   padding: 0 !important;
   overflow: hidden !important;
 }
