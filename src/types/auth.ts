@@ -4,6 +4,8 @@ export type MenuNode = {
   type: "collapse" | "group" | "item";
   icon?: string;
   url_path?: string;
+  component_name?: string;
+  componentName?: string;
   children?: MenuNode[];
 };
 

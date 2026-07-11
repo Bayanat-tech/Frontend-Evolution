@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { LoginPage } from "./pages/LoginPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
@@ -12,13 +12,22 @@ import { WmsBootScreen } from "./components/BootScreen";
 
 export function App() {
   const { isBooting } = useAuth();
-  const [dark, setDark] = useState(() => localStorage.getItem("bayanat_theme") === "dark");
+  const location = useLocation();
+  const [authDark, setAuthDark] = useState(() => localStorage.getItem("bayanat_auth_theme") !== "light");
+  const [workspaceDark, setWorkspaceDark] = useState(() => localStorage.getItem("bayanat_workspace_theme") === "dark");
 
   useEffect(() => {
-    localStorage.setItem("bayanat_theme", dark ? "dark" : "light");
-  }, [dark]);
+    localStorage.setItem("bayanat_auth_theme", authDark ? "dark" : "light");
+  }, [authDark]);
 
-  const toggleTheme = () => setDark((value) => !value);
+  useEffect(() => {
+    localStorage.setItem("bayanat_workspace_theme", workspaceDark ? "dark" : "light");
+  }, [workspaceDark]);
+
+  const toggleAuthTheme = () => setAuthDark((value) => !value);
+  const toggleWorkspaceTheme = () => setWorkspaceDark((value) => !value);
+  const isAuthRoute = location.pathname === "/login" || location.pathname === "/reset-password";
+  const activeDark = isAuthRoute ? authDark : workspaceDark;
 
   // if (isBooting) {
   //   return (
@@ -34,17 +43,17 @@ if (isBooting) {
 }
 
   return (
-    <div className={dark ? "app dark" : "app"}>
+    <div className={activeDark ? "app dark" : "app"}>
       <ToastProvider>
         <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="/login" element={<LoginPage dark={dark} onToggleTheme={toggleTheme} />} />
-          <Route path="/reset-password" element={<ResetPasswordPage dark={dark} onToggleTheme={toggleTheme} />} />
+          <Route path="/login" element={<LoginPage dark={authDark} onToggleTheme={toggleAuthTheme} />} />
+          <Route path="/reset-password" element={<ResetPasswordPage dark={authDark} onToggleTheme={toggleAuthTheme} />} />
           <Route
           path="/apps"
           element={
             <ProtectedRoute>
-              <AppSelectionPage dark={dark} onToggleTheme={toggleTheme} />
+              <AppSelectionPage dark={workspaceDark} onToggleTheme={toggleWorkspaceTheme} />
             </ProtectedRoute>
           }
         />
@@ -52,7 +61,7 @@ if (isBooting) {
           path="/workspace/:appCode/*"
           element={
             <ProtectedRoute>
-              <WorkspacePage dark={dark} onToggleTheme={toggleTheme} />
+              <WorkspacePage dark={workspaceDark} onToggleTheme={toggleWorkspaceTheme} />
             </ProtectedRoute>
           }
         />

@@ -77,6 +77,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   }, [appCode, workspaceApps]);
 
   const activeMenuPath = useMemo(() => findActiveMenuPath(activeApp?.children || [], location.pathname), [activeApp, location.pathname]);
+  const activeMenu = activeMenuPath[activeMenuPath.length - 1];
   const appRouteTarget = getMenuNodeTarget(activeApp, appCode || "");
 
   const handleLogout = () => {
@@ -108,7 +109,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
     return () => document.body.classList.remove("mobile-menu-lock");
   }, [isMobile, mobileMenuOpen]);
 
-  const workspaceRoute = resolveWorkspaceRoute({ pathname: location.pathname, activeApp });
+  const workspaceRoute = resolveWorkspaceRoute({ pathname: location.pathname, activeApp, activeMenu });
   const displayCollapsed = isMobile ? false : collapsed;
   const userDisplayName = user?.username || user?.loginid || "User";
   const companyName = user?.company_name || user?.company_code || "Company";
