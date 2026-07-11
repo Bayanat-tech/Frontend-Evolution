@@ -2,18 +2,17 @@ import { useEffect, useState } from "react";
 import { Dialog } from "../../../components/ui/Dialog";
 import { Button } from "../../../components/ui/Button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/Table";
-// import { getStorageDetails } from "../../../api/billing";
-import { executeWmsInboundSql } from "../../../api/wms";
-
+import { useAuth } from "../../../state/AuthContext";
+import { getStorageSelection, normalizeStorageRow, StorageSelectionRow } from "../../../api/billing";
 
 type StorageSelectionModalProps = {
+  prinCode: string;
+  consolidatedInvNo: string;
+  fromDate?: string | Date | null;
+  toDate?: string | Date | null;
   onClose: () => void;
-  onSelect: (selectedRows: any[]) => void;
+  onSelect: (selectedRows: StorageSelectionRow[]) => void;
 };
-
-function val(row: any, key: string) {
-  return row[key] ?? row[key.toUpperCase()] ?? row[key.toLowerCase()] ?? "";
-}
 
 function formatDate(input: any) {
   if (!input) return "";
@@ -22,38 +21,52 @@ function formatDate(input: any) {
   return date.toLocaleDateString("en-GB");
 }
 
-const COLUMNS = [
-  { key: "prin_code", header: "Principal Code" },
-  { key: "txn_date", header: "Txn Date", isDate: true },
-  { key: "qty", header: "Qty", align: "right" as const },
-  { key: "amount", header: "Amount", align: "right" as const },
-];
+const toDDMMYYYY = (d?: string | Date | null) => {
+  if (!d) return undefined;
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return undefined;
+  const dd = String(dt.getDate()).padStart(2, "0");
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${dt.getFullYear()}`;
+};
 
-export async function getStorageDetails(): Promise<any[]> {
-  try {
-    return await executeWmsInboundSql("SELECT * FROM MNSTORAGE_DET");
-  } catch (error) {
-    console.error("Error in getStorageDetails:", error instanceof Error ? error.message : error);
-    return [];
-  }
-}
-
-export function StorageSelectionModal({ onClose, onSelect }: StorageSelectionModalProps) {
-  const [rows, setRows] = useState<any[]>([]);
+export function StorageSelectionModal({
+  prinCode,
+  consolidatedInvNo,
+  fromDate,
+  toDate,
+  onClose,
+  onSelect,
+}: StorageSelectionModalProps) {
+  const { user } = useAuth();
+  const [rows, setRows] = useState<StorageSelectionRow[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!user?.loginid || !user?.company_code || !prinCode) return;
     (async () => {
       setLoading(true);
       try {
-        const data = await getStorageDetails();
-        setRows(Array.isArray(data) ? data : []);
+        const response = await getStorageSelection({
+          loginid: user.loginid ?? "",
+          company_code: user.company_code ?? "",
+          prin_code: prinCode,
+          consolidated_invno: consolidatedInvNo,
+          from_date: toDDMMYYYY(fromDate),
+          to_date: toDDMMYYYY(toDate),
+        });
+        const normalized = Array.isArray(response)
+          ? response.map((r) => normalizeStorageRow(r, consolidatedInvNo))
+          : [];
+        setRows(normalized);
+      } catch {
+        setRows([]);
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [prinCode, consolidatedInvNo, user?.loginid, user?.company_code]);
 
   const toggleRow = (index: number) => {
     setSelected((prev) => {
@@ -82,23 +95,22 @@ export function StorageSelectionModal({ onClose, onSelect }: StorageSelectionMod
               <TableHead className="w-10">
                 <input type="checkbox" checked={rows.length > 0 && selected.size === rows.length} onChange={toggleAll} />
               </TableHead>
-              {COLUMNS.map((col) => (
-                <TableHead key={col.key} className={col.align === "right" ? "text-right" : undefined}>
-                  {col.header}
-                </TableHead>
-              ))}
+              <TableHead>Principal Code</TableHead>
+              <TableHead>Txn Date</TableHead>
+              <TableHead className="text-right">Qty</TableHead>
+              <TableHead className="text-right">Amount</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={COLUMNS.length + 1} className="py-6 text-center text-muted-foreground">
+                <TableCell colSpan={5} className="py-6 text-center text-muted-foreground">
                   Loading...
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={COLUMNS.length + 1} className="py-6 text-center text-muted-foreground">
+                <TableCell colSpan={5} className="py-6 text-center text-muted-foreground">
                   No storage records found
                 </TableCell>
               </TableRow>
@@ -114,11 +126,10 @@ export function StorageSelectionModal({ onClose, onSelect }: StorageSelectionMod
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <input type="checkbox" checked={isSelected} onChange={() => toggleRow(index)} />
                     </TableCell>
-                    {COLUMNS.map((col) => (
-                      <TableCell key={col.key} className={col.align === "right" ? "text-right" : undefined}>
-                        {col.isDate ? formatDate(val(row, col.key)) : String(val(row, col.key) ?? "")}
-                      </TableCell>
-                    ))}
+                    <TableCell>{row.PRIN_CODE}</TableCell>
+                    <TableCell>{formatDate(row.TXN_DATE)}</TableCell>
+                    <TableCell className="text-right">{row.QTY}</TableCell>
+                    <TableCell className="text-right">{row.AMOUNT}</TableCell>
                   </TableRow>
                 );
               })
@@ -136,5 +147,3 @@ export function StorageSelectionModal({ onClose, onSelect }: StorageSelectionMod
 }
 
 export default StorageSelectionModal;
-
-
