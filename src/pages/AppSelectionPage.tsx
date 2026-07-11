@@ -21,9 +21,10 @@ import {
   Truck,
   UserRoundCheck,
   Warehouse,
+  Route,
 } from "lucide-react";
 import type { CSSProperties, ElementType } from "react";
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { HeaderProfile } from "../components/HeaderProfile";
 import { useAuth } from "../state/AuthContext";
@@ -82,7 +83,7 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
   {
     keys: ["progress", "Transport", "tms"],
     meta: {
-      Icon: Truck,
+      Icon: Route,
       accent: { gradient: "linear-gradient(135deg, #64748b 0%, #81b454 100%)", light: "#f1f5f9", border: "#cbd5e1", icon: "#334155", text: "#1e293b", glow: "rgba(100, 116, 139, 0.14)" },
       code: "TMS",
       fullForm: "Transport Management System",
@@ -146,17 +147,6 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
     },
   },
   {
-    keys: ["ems", "employee"],
-    meta: {
-      Icon: IdCard,
-      accent: { gradient: "linear-gradient(135deg, #16a34a 0%, #0f766e 100%)", light: "#eaf8df", border: "#b7e7a7", icon: "#15803d", text: "#14532d", glow: "rgba(22, 163, 74, 0.14)" },
-      code: "EMS",
-      fullForm: "Employee Management System",
-      description: "Leave, payslip, advances, letters, appraisal and reports.",
-      status: "completed",
-    },
-  },
-  {
     keys: ["pams", "performance"],
     meta: {
       Icon: BarChart3,
@@ -164,6 +154,17 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
       code: "PAMS",
       fullForm: "Performance Appraisal Management System",
       description: "KPI cycles, appraisals, approvals and performance reports.",
+      status: "completed",
+    },
+  },
+  {
+    keys: ["ems", "employee"],
+    meta: {
+      Icon: IdCard,
+      accent: { gradient: "linear-gradient(135deg, #16a34a 0%, #0f766e 100%)", light: "#eaf8df", border: "#b7e7a7", icon: "#15803d", text: "#14532d", glow: "rgba(22, 163, 74, 0.14)" },
+      code: "EMS",
+      fullForm: "Employee Management System",
+      description: "Leave, payslip, advances, letters, appraisal and reports.",
       status: "completed",
     },
   },
@@ -179,6 +180,17 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
     },
   },
   
+  {
+    keys: ["cms"],
+    meta: {
+      Icon: Globe,
+      accent: { gradient: "linear-gradient(135deg, #74d6ec 0%, #8788ce 100%)", light: "#ecfeff", border: "#a5f3fc", icon: "#0891b2", text: "#164e63", glow: "rgba(6, 182, 212, 0.14)" },
+      code: "CMS",
+      fullForm: "Customer Management System",
+      description: "Customer documentation, alerts, costing and reports.",
+      status: "in-progress",
+    },
+  },
   
   {
     keys: ["security"],
@@ -212,18 +224,40 @@ function isSecurityModule(app: MenuNode) {
   return text.includes("security");
 }
 
+//
+const trailingCodes = ["EMS","CMS"];
+
+function getSortWeight(code: string, catalogOrder: string[]) {
+  if (trailingCodes.includes(code)) {
+    return catalogOrder.length - 0.5;
+  }
+  const index = catalogOrder.indexOf(code);
+  return index === -1 ? catalogOrder.length : index;
+}
+
 function sortAppsByDisplayOrder(apps: MenuNode[]) {
   const catalogOrder = moduleCatalog.map((entry) => entry.meta.code);
   return [...apps].sort((first, second) => {
     const firstCode = getModuleMeta(first, 0).code;
     const secondCode = getModuleMeta(second, 0).code;
-    const firstIndex = catalogOrder.indexOf(firstCode);
-    const secondIndex = catalogOrder.indexOf(secondCode);
-    const normalizedFirst = firstIndex === -1 ? catalogOrder.length : firstIndex;
-    const normalizedSecond = secondIndex === -1 ? catalogOrder.length : secondIndex;
+    const normalizedFirst = getSortWeight(firstCode, catalogOrder);
+    const normalizedSecond = getSortWeight(secondCode, catalogOrder);
     return normalizedFirst - normalizedSecond || first.title.localeCompare(second.title);
   });
 }
+
+// function sortAppsByDisplayOrder(apps: MenuNode[]) {
+//   const catalogOrder = moduleCatalog.map((entry) => entry.meta.code);
+//   return [...apps].sort((first, second) => {
+//     const firstCode = getModuleMeta(first, 0).code;
+//     const secondCode = getModuleMeta(second, 0).code;
+//     const firstIndex = catalogOrder.indexOf(firstCode,);
+//     const secondIndex = catalogOrder.indexOf(secondCode);
+//     const normalizedFirst = firstIndex === -1 ? catalogOrder.length : firstIndex;
+//     const normalizedSecond = secondIndex === -1 ? catalogOrder.length : secondIndex;
+//     return normalizedFirst - normalizedSecond || first.title.localeCompare(second.title);
+//   });
+// }
 
 export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => void }) {
   const { user, menuTree, logout } = useAuth();
@@ -233,6 +267,14 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
   const coreApps = useMemo(() => workspaceApps.filter((app) => !isUtilitiesApp(app) && !isSecurityModule(app)), [workspaceApps]);
   const btMastersApp = useMemo(() => workspaceApps.find((app) => isBtMastersApp(app)) || workspaceApps.find((app) => isUtilitiesApp(app)), [workspaceApps]);
   const displayCoreApps = useMemo(() => sortAppsByDisplayOrder(coreApps), [coreApps]);
+
+  const catalogOrderCodes = useMemo(() => moduleCatalog.map((entry) => entry.meta.code), []);
+  const trailingBreakIndex = useMemo(() => {
+  return displayCoreApps.findIndex((app) => {
+    const weight = getSortWeight(getModuleMeta(app, 0).code, catalogOrderCodes);
+    return weight >= catalogOrderCodes.length - 0.5;
+  });
+}, [displayCoreApps, catalogOrderCodes]);
   const openApp = (app: MenuNode) => {
     const firstPath = firstLeafPath(app);
     navigate(`/workspace/${cleanAppCode(app.title)}${firstPath ? `/${firstPath}` : ""}`);
@@ -271,22 +313,27 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
               <div className="app-launch-section-title">
                 <span>Core Apps</span>
               </div>
+
               <div className="module-grid app-launch-grid">
-                {displayCoreApps.map((app, index) => {
-                  const meta = getModuleMeta(app, index);
-                  const childCount = app.children?.length || 0;
-                  const screenCount = flattenLeaves(app.children || []).length;
+                 {displayCoreApps.map((app, index) => {
+                   const meta = getModuleMeta(app, index);
+                   const childCount = app.children?.length || 0;
+                   const screenCount = flattenLeaves(app.children || []).length;
                   return (
-                    <ModuleCard
-                      key={app.id || app.title}
-                      childCount={childCount}
-                      screenCount={screenCount}
-                      meta={meta}
-                      onClick={() => openApp(app)}
-                    />
-                  );
+                    <Fragment key={app.id || app.title}>
+                    {index === trailingBreakIndex && trailingBreakIndex > 0 ? (
+                      <div className="app-launch-row-break" aria-hidden="true" />
+                        ) : null}
+                       <ModuleCard
+                       childCount={childCount}
+                       screenCount={screenCount}
+                       meta={meta}
+                       onClick={() => openApp(app)}
+                      />
+                    </Fragment>
+                 );
                 })}
-              </div>
+             </div>
             </section>
 
             {btMastersApp ? (

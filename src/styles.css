@@ -1576,10 +1576,10 @@ footer,
 
 .app-launch-main {
   --app-launch-card-height: 178px;
-  height: calc(100vh - 58px);
+  /* height: calc(100vh - 58px); */
   max-width: 1320px;
   padding: 10px 22px 32px;
-  overflow: auto;
+  /* overflow: auto; */
   display: flex;
   flex-direction: column;
 }
@@ -1588,6 +1588,14 @@ footer,
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   align-items: stretch;
+}
+
+.app-launch-row-break {
+  grid-column: 1 / -1;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  visibility: hidden;
 }
 
 .app-launch-sections {
