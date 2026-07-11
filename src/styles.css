@@ -241,6 +241,10 @@ body {
   width: min(96vw, 1180px) !important;
 }
 
+.vendor-attachment-preview-dialog {
+  width: min(96vw, 1180px) !important;
+}
+
 .vendor-compact .vendor-detail-scroll {
   height: min(52dvh, 520px);
   min-height: 320px;

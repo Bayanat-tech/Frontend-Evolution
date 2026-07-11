@@ -13,6 +13,7 @@ import {
   getVendorAccounts,
   saveVendorFiles,
   saveVendorRequest,
+  uploadVendorAttachment,
   deleteVendorAttachment,
   type VendorRequestPayload,
   type VendorRow,
@@ -220,7 +221,7 @@ export function VendorRequestDialog({
             </div>
           ) : <span />}
           <div className="flex gap-2">
-            <Button type="button" variant="outline" disabled={!savedDocNo} onClick={() => setFilesOpen({ title: "All Attachments" })}><Paperclip size={15} /></Button>
+            <Button type="button" variant="outline" disabled={!savedDocNo} onClick={() => setFilesOpen({ title: "Global Attachments" })}><Paperclip size={15} /></Button>
             <Button type="button" variant="outline" onClick={onClose}><X size={15} /></Button>
           </div>
         </div>
@@ -483,12 +484,14 @@ function VendorFilesDialog({ requestNumber, srNo, title, onClose }: { requestNum
   const selectedCount = picked.length;
   const totalFileLabel = `${fileCount} file${fileCount === 1 ? "" : "s"}`;
   const selectedLabel = selectedCount ? `${selectedCount} file${selectedCount === 1 ? "" : "s"} selected` : "Select files to upload";
+  const attachmentScopeLabel = srNo ? `Detail row ${srNo}` : "Global document";
+  const filterByScope = (rows: VendorRow[]) => srNo ? rows.filter((row) => getFileSrNo(row) === srNo) : rows.filter((row) => getFileSrNo(row) === 0);
 
   useEffect(() => {
     if (!requestNumber) return;
     setLoading(true);
     void getAllVendorFiles(requestNumber).then((rows) => {
-      setFiles(srNo ? rows.filter((row) => Number(row.SR_NO ?? row.sr_no ?? 0) === srNo) : rows);
+      setFiles(filterByScope(rows));
       setError(null);
     }).catch(() => {
       setFiles([]);
@@ -503,7 +506,7 @@ function VendorFilesDialog({ requestNumber, srNo, title, onClose }: { requestNum
   };
 
   const openPreview = (file: VendorRow) => {
-    if (!file.awsFileLocn) {
+    if (!getFileUrl(file)) {
       setError({ type: "error", message: "No preview URL available for this attachment." });
       return;
     }
@@ -514,32 +517,29 @@ function VendorFilesDialog({ requestNumber, srNo, title, onClose }: { requestNum
 
   const getPreviewType = (file: VendorRow) => {
     const fileType = String(file.type || file.TYPE || "").toLowerCase();
+    const fileUrl = getFileUrl(file);
     if (fileType.includes("pdf")) return "pdf";
-    if (fileType.includes("image") || /\.(png|jpe?g|gif|bmp|svg)$/i.test(String(file.awsFileLocn || ""))) return "image";
+    if (fileType.includes("image") || /\.(png|jpe?g|gif|bmp|svg)$/i.test(fileUrl)) return "image";
     return "other";
   };
 
   const deleteAttachment = async (file: VendorRow) => {
-    const srNoValue = Number(file.srNo ?? file.SR_NO ?? file.sr_no ?? 0);
-    const attachmentSrNoValue = file.attachmentSrNo !== undefined
-      ? Number(file.attachmentSrNo)
-      : file.ATTACHMENT_SR_NO !== undefined
-        ? Number(file.ATTACHMENT_SR_NO)
-        : undefined;
+    const srNoValue = getFileSrNo(file);
+    const attachmentSrNoValue = getFileAttachmentSrNo(file);
 
-    if (!requestNumber || !srNoValue) return;
+    if (!requestNumber) return;
+    if (attachmentSrNoValue === undefined) {
+      setError({ type: "error", message: "Attachment serial number is missing." });
+      return;
+    }
 
     setSaving(true);
     setError(null);
     try {
       await deleteVendorAttachment(requestNumber, srNoValue, attachmentSrNoValue);
       setFiles((current) => current.filter((item) => {
-        const itemSrNo = Number(item.srNo ?? item.SR_NO ?? item.sr_no ?? 0);
-        const itemAttachmentSrNo = item.attachmentSrNo !== undefined
-          ? Number(item.attachmentSrNo)
-          : item.ATTACHMENT_SR_NO !== undefined
-            ? Number(item.ATTACHMENT_SR_NO)
-            : undefined;
+        const itemSrNo = getFileSrNo(item);
+        const itemAttachmentSrNo = getFileAttachmentSrNo(item);
         return itemSrNo !== srNoValue || itemAttachmentSrNo !== attachmentSrNoValue;
       }));
       setError({ type: "success", message: "Attachment deleted successfully." });
@@ -555,22 +555,27 @@ function VendorFilesDialog({ requestNumber, srNo, title, onClose }: { requestNum
     setSaving(true);
     setError(null);
     try {
-      await saveVendorFiles(requestNumber, picked.map((file) => ({
-        company_code: user?.company_code || "",
-        request_number: requestNumber,
-        sr_no: srNo || 0,
-        file_name: file.name,
-        org_file_name: file.name,
-        user_file_name: file.name,
-        extensions: file.name.split(".").pop() || "",
-        modules: "Vendor",
-        type: file.type,
-        file_transfer: "N",
-        created_by: user?.loginid || user?.username || "",
-        updated_by: user?.loginid || user?.username || "",
-      })));
+      const uploadedFiles = await Promise.all(picked.map(async (file) => {
+        const fileUrl = await uploadVendorAttachment(requestNumber, file);
+        return {
+          company_code: user?.company_code || "",
+          request_number: requestNumber,
+          sr_no: srNo ?? 0,
+          file_name: file.name,
+          org_file_name: file.name,
+          user_file_name: file.name,
+          aws_file_locn: fileUrl,
+          extensions: file.name.split(".").pop() || "",
+          modules: "Vendor",
+          type: file.type,
+          file_transfer: "N",
+          created_by: user?.loginid || user?.username || "",
+          updated_by: user?.loginid || user?.username || "",
+        };
+      }));
+      await saveVendorFiles(requestNumber, uploadedFiles);
       setPicked([]);
-      setFiles(await getAllVendorFiles(requestNumber));
+      setFiles(filterByScope(await getAllVendorFiles(requestNumber)));
       setError({ type: "success", message: "Attachments saved successfully." });
     } catch (err) {
       setError({ type: "error", message: err instanceof Error ? err.message : "Unable to save attachment metadata" });
@@ -585,7 +590,7 @@ function VendorFilesDialog({ requestNumber, srNo, title, onClose }: { requestNum
         <>
           <Button variant="outline" onClick={onClose}>Close</Button>
           <Button disabled={!picked.length || saving} onClick={() => void save()}>
-            <Download size={15} /> Save Files
+            <UploadCloud size={15} /> Save Files
           </Button>
         </>
       )}>
@@ -597,7 +602,7 @@ function VendorFilesDialog({ requestNumber, srNo, title, onClose }: { requestNum
             </span>
             <div>
               <h3 className="m-0 text-sm font-semibold">Document Files</h3>
-              <p className="m-0 text-xs text-muted-foreground">{requestNumber ? totalFileLabel : "No document number available yet"}</p>
+              <p className="m-0 text-xs text-muted-foreground">{requestNumber ? `${attachmentScopeLabel} - ${totalFileLabel}` : "No document number available yet"}</p>
             </div>
           </div>
           <input ref={inputRef} className="hidden" multiple type="file" onChange={handleFileInput} disabled={!requestNumber} />
@@ -636,6 +641,7 @@ function VendorFilesDialog({ requestNumber, srNo, title, onClose }: { requestNum
               <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2 text-left">SR. No</th>
+                  <th className="px-3 py-2 text-left">Line</th>
                   <th className="px-3 py-2 text-left">File Name</th>
                   <th className="px-3 py-2 text-left">File Type</th>
                   <th className="px-3 py-2 text-right">Action</th>
@@ -643,13 +649,16 @@ function VendorFilesDialog({ requestNumber, srNo, title, onClose }: { requestNum
               </thead>
               <tbody>
                 {files.map((file, index) => {
-                  const attachmentSrNoValue = file.attachmentSrNo ?? file.ATTACHMENT_SR_NO ?? file.attachment_sr_no ?? file.ATTACHMENT_SR_NO;
-                  const fileName = String(file.orgFileName || file.ORG_FILE_NAME || file.org_file_name || file.fileName || file.FILE_NAME || file.file_name || "");
-                  const fileType = String(file.type || file.TYPE || "");
-                  const previewAvailable = Boolean(file.awsFileLocn);
+                  const srNoValue = getFileSrNo(file);
+                  const attachmentSrNoValue = getFileAttachmentSrNo(file);
+                  const fileName = getFileName(file);
+                  const fileType = getFileType(file);
+                  const fileUrl = getFileUrl(file);
+                  const previewAvailable = Boolean(fileUrl);
                   return (
                     <tr className="border-t" key={index}>
                       <td className="px-3 py-2">{String(attachmentSrNoValue ?? "")}</td>
+                      <td className="px-3 py-2">{srNoValue ? `Detail ${srNoValue}` : "Global"}</td>
                       <td className="px-3 py-2">{fileName}</td>
                       <td className="px-3 py-2">{fileType}</td>
                       <td className="px-3 py-2 text-right">
@@ -663,6 +672,18 @@ function VendorFilesDialog({ requestNumber, srNo, title, onClose }: { requestNum
                             title={previewAvailable ? "Preview file" : "Preview unavailable"}
                           >
                             <Eye size={16} />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            type="button"
+                            disabled={!fileUrl}
+                            title={fileUrl ? "Download file" : "Download unavailable"}
+                            onClick={() => {
+                              if (fileUrl) window.open(fileUrl, "_blank", "noopener,noreferrer");
+                            }}
+                          >
+                            <Download size={16} />
                           </Button>
                           <Button
                             size="icon"
@@ -688,32 +709,39 @@ function VendorFilesDialog({ requestNumber, srNo, title, onClose }: { requestNum
 
       <Dialog
         open={Boolean(previewFile)}
-        title={previewFile ? String(previewFile.orgFileName || previewFile.ORG_FILE_NAME || previewFile.fileName || previewFile.FILE_NAME || previewFile.file_name || "Attachment Preview") : "Attachment Preview"}
-        description={previewFile ? String(previewFile.type || previewFile.TYPE || "") : undefined}
-        compact
+        title={previewFile ? getFileName(previewFile) : "Attachment Preview"}
+        description={previewFile ? getFileType(previewFile) : undefined}
+        contentClassName="vendor-attachment-preview-dialog"
         onClose={closePreview}
         footer={(
-          <Button variant="outline" onClick={closePreview}>Close</Button>
+          <>
+            {previewFile && getFileUrl(previewFile) ? (
+              <Button type="button" onClick={() => window.open(getFileUrl(previewFile), "_blank", "noopener,noreferrer")}>
+                <Download size={15} /> Download
+              </Button>
+            ) : null}
+            <Button variant="outline" onClick={closePreview}>Close</Button>
+          </>
         )}
       >
         {previewFile ? (
-          <div className="min-h-[320px] max-h-[72vh] overflow-hidden rounded-md border bg-background text-sm">
+          <div className="min-h-[520px] max-h-[78vh] overflow-hidden rounded-md border bg-background text-sm">
             {getPreviewType(previewFile) === "pdf" ? (
               <iframe
                 title="attachment-preview"
-                src={String(previewFile.awsFileLocn)}
-                className="h-[72vh] w-full"
+                src={getFileUrl(previewFile)}
+                className="h-[78vh] w-full"
               />
             ) : getPreviewType(previewFile) === "image" ? (
               <img
-                src={String(previewFile.awsFileLocn)}
-                alt={String(previewFile.orgFileName || previewFile.fileName || "Attachment")}
-                className="h-[72vh] w-full object-contain"
+                src={getFileUrl(previewFile)}
+                alt={getFileName(previewFile)}
+                className="h-[78vh] w-full object-contain"
               />
             ) : (
               <div className="grid min-h-[260px] place-items-center p-6 text-center text-sm text-muted-foreground">
                 <p>No preview available for this file type.</p>
-                <a href={String(previewFile.awsFileLocn)} target="_blank" rel="noreferrer" className="mt-4 inline-flex rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground">
+                <a href={getFileUrl(previewFile)} target="_blank" rel="noreferrer" className="mt-4 inline-flex rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground">
                   Open in new tab
                 </a>
               </div>
@@ -723,6 +751,37 @@ function VendorFilesDialog({ requestNumber, srNo, title, onClose }: { requestNum
       </Dialog>
     </>
   );
+}
+
+function getFileField(file: VendorRow, keys: string[]) {
+  for (const key of keys) {
+    const value = file[key];
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+  const lowerKeys = keys.map((key) => key.toLowerCase());
+  const matchedKey = Object.keys(file).find((key) => lowerKeys.includes(key.toLowerCase()));
+  return matchedKey ? file[matchedKey] : undefined;
+}
+
+function getFileSrNo(file: VendorRow) {
+  return Number(getFileField(file, ["srNo", "SR_NO", "sr_no"]) ?? 0);
+}
+
+function getFileAttachmentSrNo(file: VendorRow) {
+  const value = getFileField(file, ["attachmentSrNo", "ATTACHMENT_SR_NO", "attachment_sr_no"]);
+  return value === undefined ? undefined : Number(value);
+}
+
+function getFileUrl(file: VendorRow) {
+  return String(getFileField(file, ["awsFileLocn", "AWS_FILE_LOCN", "aws_file_locn", "awsFileLocation", "AWS_FILE_LOCATION"]) || "");
+}
+
+function getFileName(file: VendorRow) {
+  return String(getFileField(file, ["orgFileName", "ORG_FILE_NAME", "org_file_name", "fileName", "FILE_NAME", "file_name", "userFileName", "USER_FILE_NAME"]) || "Attachment");
+}
+
+function getFileType(file: VendorRow) {
+  return String(getFileField(file, ["type", "TYPE", "extensions", "EXTENSIONS"]) || "");
 }
 
 function TabButton({ active, children, onClick }: { active: boolean; children: string; onClick: () => void }) {

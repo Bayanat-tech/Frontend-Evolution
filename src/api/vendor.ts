@@ -142,6 +142,19 @@ export async function saveVendorFiles(requestNumber: string, files: VendorRow[])
   return data;
 }
 
+export async function uploadVendorAttachment(requestNumber: string, file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("doc_no", requestNumber);
+  formData.append("request_number", requestNumber);
+
+  const { data } = await api.post<ApiResponse<string>>("/api/files/uploadVendorAttachment", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  assertSuccess(data, "Unable to upload vendor attachment");
+  return String(data.data || "");
+}
+
 export async function deleteVendorAttachment(requestNumber: string, srNo: number, attachmentSrNo?: number) {
   const url = attachmentSrNo !== undefined
     ? `/api/files/deleteVendorAttachment/${encodeURIComponent(requestNumber)}/${encodeURIComponent(String(srNo))}/${encodeURIComponent(String(attachmentSrNo))}`
