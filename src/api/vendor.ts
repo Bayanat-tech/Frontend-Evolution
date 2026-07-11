@@ -133,9 +133,22 @@ export async function saveVendorFiles(requestNumber: string, files: VendorRow[])
   return data;
 }
 
+export async function deleteVendorAttachment(requestNumber: string, srNo: number, attachmentSrNo?: number) {
+  const url = attachmentSrNo !== undefined
+    ? `/api/files/deleteVendorAttachment/${encodeURIComponent(requestNumber)}/${encodeURIComponent(String(srNo))}/${encodeURIComponent(String(attachmentSrNo))}`
+    : `/api/files/deleteVendorAttachment/${encodeURIComponent(requestNumber)}/${encodeURIComponent(String(srNo))}`;
+  const { data } = await api.delete<ApiResponse<unknown>>(url);
+  assertSuccess(data, "Unable to delete vendor attachment");
+  return data;
+}
+
 export async function getAllVendorFiles(requestNumber: string) {
   const { data } = await api.get<ApiResponse<VendorRow[]> | VendorRow[]>(`/api/files/getAllVendorFiles/${encodeURIComponent(requestNumber)}`);
   assertSuccess(data as ApiResponse<VendorRow[]>, "Unable to load vendor files");
+  const payload = (data as ApiResponse<unknown>).data ?? data;
+  if (payload && typeof payload === "object" && Array.isArray((payload as any).allFiles)) {
+    return (payload as any).allFiles as VendorRow[];
+  }
   return unwrapRows(data);
 }
 

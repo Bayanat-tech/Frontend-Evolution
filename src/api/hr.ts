@@ -51,6 +51,14 @@ export async function getHrLeaveCancel(loginid: string, page = 1, limit = 100) {
   return response.data.data || { tableData: [], count: 0 };
 }
 
+export async function getHrLeaveFlow(master: string, loginid: string, page = 1, limit = 1000) {
+  const response = await api.get<ApiResponse<HrLeaveFlowResponse>>(`/api/hr/${master}`, {
+    params: { code: loginid, page, limit },
+  });
+  if (!response.data.success) throw new Error(response.data.message || `Unable to load ${master}`);
+  return response.data.data || { tableData: [], count: 0 };
+}
+
 export async function saveHrPayComponent(payload: { header: Record<string, unknown>; details: Record<string, unknown>[] }) {
   const response = await api.post<ApiResponse<unknown>>("/api/finance/insUpdHrPayComponent", payload);
   if (!response.data.success) throw new Error(response.data.message || "Unable to save pay unit");

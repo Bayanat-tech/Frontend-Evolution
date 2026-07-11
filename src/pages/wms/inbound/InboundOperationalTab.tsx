@@ -54,6 +54,7 @@ export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Pro
     const { toast }   = useToast();
     const prinCode    = value(job || {}, "prin_code");
     const companyCode = user?.company_code || "";
+    const todayDateStr = new Date().toISOString().split("T")[0]; // ← add this
 const [ediImportOpen, setEdiImportOpen] = useState(false);
 const [ediImportFile, setEdiImportFile] = useState<File | null>(null);
 const [ediTempData, setEdiTempData]     = useState<any[]>([]);
@@ -348,7 +349,7 @@ const [putawayForm, setPutawayForm] = useState({ site_from: "", site_to: "", loc
                 raw_sql: `SELECT CONTAINER_NO, VEHICLE_NO, VESSEL_NAME, SEAL_NO, PO_NO
                           FROM TI_CONTAINER
                           WHERE JOB_NO    = '${sqlEscape(jobNo)}'
-                            AND PRIN_CODE = '${sqlEscape(prinCode)}'
+                            AND PRIN_CODE = '${sqlEscape(prinCode)}' AND COMPANY_CODE = '${sqlEscape(companyCode)}'
                           ORDER BY CONTAINER_NO`,
               });
               const data = Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
@@ -840,10 +841,10 @@ const openEdiImportModal = () => {
           <div className="grid gap-3">
             <SectionHeader icon={CalendarDays} label="Dates" caption="Production and expiry" />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">Production Date</span>
-                <Input type="date" value={String(addForm.mfg_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, mfg_date: e.target.value }))} /></label>
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">Expiry Date</span>
-                <Input type="date" value={String(addForm.exp_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, exp_date: e.target.value }))} /></label>
+      <label className="field"><span className="text-xs font-medium text-muted-foreground">Production Date</span>
+  <Input type="date" value={String(addForm.mfg_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, mfg_date: e.target.value }))} /></label>
+<label className="field"><span className="text-xs font-medium text-muted-foreground">Expiry Date</span>
+  <Input type="date" min={todayDateStr} value={String(addForm.exp_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, exp_date: e.target.value }))} /></label>
             </div>
           </div>
         </>
@@ -1033,8 +1034,8 @@ const openEdiImportModal = () => {
             <div className="grid grid-cols-4 gap-2.5 px-2.5 py-2">
               <label className="field"><span className="text-xs font-medium text-muted-foreground">Production Date</span>
                 <Input className="h-8" type="date" value={String(addForm.mfg_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, mfg_date: e.target.value }))} /></label>
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">Expiry Date</span>
-                <Input className="h-8" type="date" value={String(addForm.exp_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, exp_date: e.target.value }))} /></label>
+<label className="field"><span className="text-xs font-medium text-muted-foreground">Expiry Date</span>
+  <Input className="h-8" type="date" min={todayDateStr} value={String(addForm.exp_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, exp_date: e.target.value }))} /></label>
               <label className="field"><span className="text-xs font-medium text-muted-foreground">Shelf Life (Date)</span>
                 <Input className="h-8" type="date" value={String(addForm.shelf_life_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, shelf_life_date: e.target.value }))} /></label>
               <label className="field"><span className="text-xs font-medium text-muted-foreground">Shelf Life Days</span>
@@ -1111,7 +1112,8 @@ const openEdiImportModal = () => {
             <SectionHeader icon={CalendarDays} label="Dates & Shelf Life" caption="Manufacturing, expiry and shelf life" />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <label className="field"><span className="text-xs font-medium text-muted-foreground">Manufacturing Date</span><Input type="date" value={String(addForm.mfg_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, mfg_date: e.target.value }))} /></label>
-              <label className="field"><span className="text-xs font-medium text-muted-foreground">Expiry Date</span><Input type="date" value={String(addForm.expiry_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, expiry_date: e.target.value }))} /></label>
+<label className="field"><span className="text-xs font-medium text-muted-foreground">Expiry Date</span>
+  <Input type="date" min={todayDateStr} value={String(addForm.expiry_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, expiry_date: e.target.value }))} /></label>
               <label className="field"><span className="text-xs font-medium text-muted-foreground">Shelf Life (Date)</span><Input type="date" value={String(addForm.shelf_life_date || "")} onChange={(e) => setAddForm((c) => ({ ...c, shelf_life_date: e.target.value }))} /></label>
               <label className="field"><span className="text-xs font-medium text-muted-foreground">Shelf Life Days</span><Input type="number" min="0" value={String(addForm.shelf_life_days ?? "")} onChange={(e) => setAddForm((c) => ({ ...c, shelf_life_days: e.target.value }))} /></label>
             </div>
@@ -1151,6 +1153,16 @@ const openEdiImportModal = () => {
       if (field.name === "qty_puom") return <Input type="number" min="0" value={String(formData.qty_puom ?? "")} onChange={(e) => setData((c) => ({ ...c, ...recalcQuantity(c, "qty_puom", e.target.value) }))} />;
       if (field.name === "qty_luom") return <Input type="number" min="0" disabled={Number(formData.uom_count ?? 1) <= 1} value={String(formData.qty_luom ?? "")} onChange={(e) => setData((c) => ({ ...c, ...recalcQuantity(c, "qty_luom", e.target.value) }))} />;
       if (field.disabled || field.name === "quantity") return <Input type="number" disabled value={String(formData.quantity ?? 0)} className="bg-muted text-muted-foreground" />;
+        if (field.name === "exp_date") {
+    return (
+      <Input
+        type="date"
+        min={todayDateStr}
+        value={String(formData.exp_date || "")}
+        onChange={(e) => setData((c) => ({ ...c, exp_date: e.target.value }))}
+      />
+    );
+  }
       return <Input type={field.type || "text"} value={String(formData[field.name] || "")} onChange={(e) => setData((c) => ({ ...c, [field.name]: e.target.value }))} />;
     };
 

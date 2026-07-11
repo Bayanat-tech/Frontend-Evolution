@@ -22,6 +22,7 @@ const tabActions: Record<ApprovalTab, string[]> = {
 
 export function VendorApprovalsPage() {
   const { user } = useAuth();
+  console.log("User:", user);
   const [tab, setTab] = useState<ApprovalTab>("pending");
   const [rows, setRows] = useState<VendorTableRow[]>([]);
   const [query, setQuery] = useState("");
@@ -32,16 +33,18 @@ export function VendorApprovalsPage() {
   const loadRows = useCallback(async () => {
     const company = user?.company_code || "";
     const loginid = user?.loginid || user?.username || "";
+    const approverLoginid = user?.loginid1 || loginid;
     if (!company || !loginid) return;
     setLoading(true);
     try {
-      setRows(await executeVendorSql(vendorApprovalSql(company, loginid, tabActions[tab])));
+      const sql = vendorApprovalSql(company, loginid, tabActions[tab], approverLoginid);
+      setRows(await executeVendorSql(sql));
     } catch (err) {
       setNotice({ type: "error", message: err instanceof Error ? err.message : "Unable to load approval queue" });
     } finally {
       setLoading(false);
     }
-  }, [tab, user?.company_code, user?.loginid, user?.username]);
+  }, [tab, user?.company_code, user?.loginid, user?.loginid1, user?.username]);
 
   useEffect(() => {
     void loadRows();

@@ -1,9 +1,10 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Download, Paperclip, Plus, RotateCcw, Save, Send, Trash2, X } from "lucide-react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Download, Eye, Paperclip, Plus, RotateCcw, Save, Send, Trash2, X, UploadCloud } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
+import { NoticeToast } from "../../components/ui/NoticeToast";
 import {
   executeVendorSql,
   getAllVendorFiles,
@@ -12,6 +13,7 @@ import {
   getVendorAccounts,
   saveVendorFiles,
   saveVendorRequest,
+  deleteVendorAttachment,
   type VendorRequestPayload,
   type VendorRow,
 } from "../../api/vendor";
@@ -69,6 +71,7 @@ export function VendorRequestDialog({
   const [saving, setSaving] = useState(false);
   const [loadingRef, setLoadingRef] = useState(false);
   const [error, setError] = useState("");
+  const [previewFile, setPreviewFile] = useState<VendorRow | null>(null);
   const [savedDocNo, setSavedDocNo] = useState("");
 
   useEffect(() => {
@@ -308,9 +311,22 @@ function InvoiceDetailsTab({
         <table className="vendor-detail-table w-full min-w-[1360px] text-xs">
           <thead className="sticky top-0 z-10 bg-slate-50 text-left text-muted-foreground">
             <tr>
-              {["Sr No", "Description", "Qty", "Org Qty", "Rate", "Amount", "Currency", "Ex Rate", "Base Amt", "Attach", "Tax Code", "Tax %", "Tax Local Amt", "Final Amt", "Item Remark", ""].map((head) => (
-                <th key={head} className="border-b px-1.5 py-1 font-semibold">{head}</th>
-              ))}
+              <th className="border-b px-1.5 py-1 font-semibold w-12">Sr No</th>
+              <th className="border-b px-1.5 py-1 font-semibold min-w-[240px] max-w-[340px]">Description</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[72px]">Qty</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[90px]">Org Qty</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[100px]">Rate</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[110px]">Amount</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[78px]">Currency</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[84px]">Ex Rate</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[110px]">Base Amt</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[56px]">Attach</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[90px]">Tax Code</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[74px]">Tax %</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[110px]">Tax Local Amt</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[110px]">Final Amt</th>
+              <th className="border-b px-1.5 py-1 font-semibold min-w-[220px] max-w-[280px]">Item Remark</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[48px]" />
             </tr>
           </thead>
           <tbody>
@@ -327,9 +343,9 @@ function InvoiceDetailsTab({
               return (
                 <tr key={`${item.SERIAL_NO || index}`} className="h-6 border-b">
                   <td className="px-1.5 py-0.5 text-muted-foreground">{String(item.SERIAL_NO || index + 1)}</td>
-                  <td className="min-w-[280px] max-w-[360px] truncate px-1.5 py-0.5 text-muted-foreground" title={String(item.REMARKS || item.ITEM_DESC || "")}>{String(item.REMARKS || item.ITEM_DESC || "")}</td>
-                  <td className="px-1.5 py-0.5"><Input className="vendor-line-input text-right" type="number" value={String(item.QTY ?? 0)} onChange={(event) => setItem(index, "QTY", event.target.value)} /></td>
-                  <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(item.ORIGINAL_QTY)}</td>
+                  <td className="min-w-[240px] max-w-[340px] truncate px-1.5 py-0.5 text-muted-foreground" title={String(item.REMARKS || item.ITEM_DESC || "")}>{String(item.REMARKS || item.ITEM_DESC || "")}</td>
+                  <td className="w-[72px] px-1.5 py-0.5"><Input className="vendor-line-input text-right w-full" type="number" value={String(item.QTY ?? 0)} onChange={(event) => setItem(index, "QTY", event.target.value)} /></td>
+                  <td className="w-[90px] px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(item.ORIGINAL_QTY)}</td>
                   <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(price)}</td>
                   <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(amount)}</td>
                   <td className="px-1.5 py-0.5 text-muted-foreground">{String(item.CURR_CODE || "")}</td>
@@ -428,22 +444,89 @@ function PendingItemsDialog({
 
 function VendorFilesDialog({ requestNumber, srNo, title, onClose }: { requestNumber: string; srNo?: number; title: string; onClose: () => void }) {
   const { user } = useAuth();
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const [files, setFiles] = useState<VendorRow[]>([]);
   const [picked, setPicked] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<import("../../components/ui/NoticeToast").ToastNotice>(null);
+  const [previewFile, setPreviewFile] = useState<VendorRow | null>(null);
+
+  const fileCount = files.length;
+  const selectedCount = picked.length;
+  const totalFileLabel = `${fileCount} file${fileCount === 1 ? "" : "s"}`;
+  const selectedLabel = selectedCount ? `${selectedCount} file${selectedCount === 1 ? "" : "s"} selected` : "Select files to upload";
 
   useEffect(() => {
     if (!requestNumber) return;
+    setLoading(true);
     void getAllVendorFiles(requestNumber).then((rows) => {
       setFiles(srNo ? rows.filter((row) => Number(row.SR_NO ?? row.sr_no ?? 0) === srNo) : rows);
-    }).catch(() => setFiles([]));
+      setError(null);
+    }).catch(() => {
+      setFiles([]);
+      setError({ type: "error", message: "Unable to load attachments." });
+    }).finally(() => setLoading(false));
   }, [requestNumber, srNo]);
+
+  const handleFileInput = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setPicked(Array.from(event.target.files || []));
+    event.target.value = "";
+    setError(null);
+  };
+
+  const openPreview = (file: VendorRow) => {
+    if (!file.awsFileLocn) {
+      setError({ type: "error", message: "No preview URL available for this attachment." });
+      return;
+    }
+    setPreviewFile(file);
+  };
+
+  const closePreview = () => setPreviewFile(null);
+
+  const getPreviewType = (file: VendorRow) => {
+    const fileType = String(file.type || file.TYPE || "").toLowerCase();
+    if (fileType.includes("pdf")) return "pdf";
+    if (fileType.includes("image") || /\.(png|jpe?g|gif|bmp|svg)$/i.test(String(file.awsFileLocn || ""))) return "image";
+    return "other";
+  };
+
+  const deleteAttachment = async (file: VendorRow) => {
+    const srNoValue = Number(file.srNo ?? file.SR_NO ?? file.sr_no ?? 0);
+    const attachmentSrNoValue = file.attachmentSrNo !== undefined
+      ? Number(file.attachmentSrNo)
+      : file.ATTACHMENT_SR_NO !== undefined
+        ? Number(file.ATTACHMENT_SR_NO)
+        : undefined;
+
+    if (!requestNumber || !srNoValue) return;
+
+    setSaving(true);
+    setError(null);
+    try {
+      await deleteVendorAttachment(requestNumber, srNoValue, attachmentSrNoValue);
+      setFiles((current) => current.filter((item) => {
+        const itemSrNo = Number(item.srNo ?? item.SR_NO ?? item.sr_no ?? 0);
+        const itemAttachmentSrNo = item.attachmentSrNo !== undefined
+          ? Number(item.attachmentSrNo)
+          : item.ATTACHMENT_SR_NO !== undefined
+            ? Number(item.ATTACHMENT_SR_NO)
+            : undefined;
+        return itemSrNo !== srNoValue || itemAttachmentSrNo !== attachmentSrNoValue;
+      }));
+      setError({ type: "success", message: "Attachment deleted successfully." });
+    } catch (err) {
+      setError({ type: "error", message: err instanceof Error ? err.message : "Unable to delete attachment" });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const save = async () => {
     if (!requestNumber || picked.length === 0) return;
     setSaving(true);
-    setError("");
+    setError(null);
     try {
       await saveVendorFiles(requestNumber, picked.map((file) => ({
         company_code: user?.company_code || "",
@@ -461,30 +544,157 @@ function VendorFilesDialog({ requestNumber, srNo, title, onClose }: { requestNum
       })));
       setPicked([]);
       setFiles(await getAllVendorFiles(requestNumber));
+      setError({ type: "success", message: "Attachments saved successfully." });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to save attachment metadata");
+      setError({ type: "error", message: err instanceof Error ? err.message : "Unable to save attachment metadata" });
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Dialog open wide title={title} onClose={onClose} footer={<><Button variant="outline" onClick={onClose}>Close</Button><Button disabled={!picked.length || saving} onClick={() => void save()}><Download size={15} /> Save Files</Button></>}>
-      <div className="grid gap-3">
-        {error && <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{error}</div>}
-        <Input type="file" multiple onChange={(event) => setPicked(Array.from(event.target.files || []))} disabled={!requestNumber} />
-        <div className="rounded-md border">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-muted-foreground"><tr><th className="p-2">File</th><th className="p-2">Sr No</th><th className="p-2">Type</th></tr></thead>
-            <tbody>
-              {files.length ? files.map((file, index) => (
-                <tr key={index} className="border-t"><td className="p-2">{String(file.ORG_FILE_NAME || file.org_file_name || file.FILE_NAME || file.file_name || "")}</td><td className="p-2">{String(file.SR_NO || file.sr_no || "")}</td><td className="p-2">{String(file.TYPE || file.type || "")}</td></tr>
-              )) : <tr><td colSpan={3} className="p-6 text-center text-muted-foreground">No attachments found.</td></tr>}
-            </tbody>
-          </table>
+    <>
+      <Dialog open wide title={title} onClose={onClose} footer={(
+        <>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+          <Button disabled={!picked.length || saving} onClick={() => void save()}>
+            <Download size={15} /> Save Files
+          </Button>
+        </>
+      )}>
+      <div className="grid gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-secondary/30 p-3">
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 place-items-center rounded-md bg-primary/10 text-primary">
+              <Paperclip size={18} />
+            </span>
+            <div>
+              <h3 className="m-0 text-sm font-semibold">Document Files</h3>
+              <p className="m-0 text-xs text-muted-foreground">{requestNumber ? totalFileLabel : "No document number available yet"}</p>
+            </div>
+          </div>
+          <input ref={inputRef} className="hidden" multiple type="file" onChange={handleFileInput} disabled={!requestNumber} />
+          <Button disabled={!requestNumber || saving} type="button" onClick={() => inputRef.current?.click()}>
+            <UploadCloud size={15} /> {requestNumber ? selectedLabel : "Upload Files"}
+          </Button>
         </div>
+
+        <NoticeToast notice={error} onClose={() => setError(null)} />
+
+        {!requestNumber ? (
+          <div className="grid min-h-[260px] place-items-center rounded-md border border-dashed bg-secondary/20 p-8 text-center">
+            <div>
+              <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-md bg-primary/10 text-primary">
+                <Paperclip size={20} />
+              </div>
+              <h3 className="m-0 text-base font-semibold">Save Required</h3>
+              <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">Attachments need a saved document or account code before upload.</p>
+            </div>
+          </div>
+        ) : loading ? (
+          <div className="grid min-h-[260px] place-items-center text-sm text-muted-foreground">Loading attachments...</div>
+        ) : files.length === 0 ? (
+          <div className="grid min-h-[260px] place-items-center rounded-md border border-dashed bg-secondary/20 p-8 text-center">
+            <div>
+              <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-md bg-primary/10 text-primary">
+                <Paperclip size={20} />
+              </div>
+              <h3 className="m-0 text-base font-semibold">No Attachments</h3>
+              <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">Upload supporting documents, invoices, approvals, or scanned files.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="max-h-[430px] overflow-auto rounded-md border">
+            <table className="w-full min-w-[760px] text-sm">
+              <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 text-left">SR. No</th>
+                  <th className="px-3 py-2 text-left">File Name</th>
+                  <th className="px-3 py-2 text-left">File Type</th>
+                  <th className="px-3 py-2 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {files.map((file, index) => {
+                  const attachmentSrNoValue = file.attachmentSrNo ?? file.ATTACHMENT_SR_NO ?? file.attachment_sr_no ?? file.ATTACHMENT_SR_NO;
+                  const fileName = String(file.orgFileName || file.ORG_FILE_NAME || file.org_file_name || file.fileName || file.FILE_NAME || file.file_name || "");
+                  const fileType = String(file.type || file.TYPE || "");
+                  const previewAvailable = Boolean(file.awsFileLocn);
+                  return (
+                    <tr className="border-t" key={index}>
+                      <td className="px-3 py-2">{String(attachmentSrNoValue ?? "")}</td>
+                      <td className="px-3 py-2">{fileName}</td>
+                      <td className="px-3 py-2">{fileType}</td>
+                      <td className="px-3 py-2 text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            type="button"
+                            onClick={() => openPreview(file)}
+                            disabled={!previewAvailable}
+                            title={previewAvailable ? "Preview file" : "Preview unavailable"}
+                          >
+                            <Eye size={16} />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            type="button"
+                            onClick={() => void deleteAttachment(file)}
+                            disabled={saving}
+                            title="Delete"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </Dialog>
+
+      <Dialog
+        open={Boolean(previewFile)}
+        title={previewFile ? String(previewFile.orgFileName || previewFile.ORG_FILE_NAME || previewFile.fileName || previewFile.FILE_NAME || previewFile.file_name || "Attachment Preview") : "Attachment Preview"}
+        description={previewFile ? String(previewFile.type || previewFile.TYPE || "") : undefined}
+        compact
+        onClose={closePreview}
+        footer={(
+          <Button variant="outline" onClick={closePreview}>Close</Button>
+        )}
+      >
+        {previewFile ? (
+          <div className="min-h-[320px] max-h-[72vh] overflow-hidden rounded-md border bg-background text-sm">
+            {getPreviewType(previewFile) === "pdf" ? (
+              <iframe
+                title="attachment-preview"
+                src={String(previewFile.awsFileLocn)}
+                className="h-[72vh] w-full"
+              />
+            ) : getPreviewType(previewFile) === "image" ? (
+              <img
+                src={String(previewFile.awsFileLocn)}
+                alt={String(previewFile.orgFileName || previewFile.fileName || "Attachment")}
+                className="h-[72vh] w-full object-contain"
+              />
+            ) : (
+              <div className="grid min-h-[260px] place-items-center p-6 text-center text-sm text-muted-foreground">
+                <p>No preview available for this file type.</p>
+                <a href={String(previewFile.awsFileLocn)} target="_blank" rel="noreferrer" className="mt-4 inline-flex rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground">
+                  Open in new tab
+                </a>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </Dialog>
+    </>
   );
 }
 

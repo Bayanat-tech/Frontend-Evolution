@@ -39,16 +39,32 @@ export function VendorRequestsPage() {
   useEffect(() => {
     void loadRows();
   }, [loadRows]);
-
+    
   const openExisting = async (row: VendorTableRow) => {
-    const docNo = String(row.DOC_NO || "");
-    if (!docNo) return;
-    try {
-      setEditor(await getVendorRequest(docNo));
-    } catch (err) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Unable to open request" });
-    }
-  };
+    console.log('row data:', row);
+  const rawDocNo = String(row.DOC_NO || "");
+  const acCode = String(row.AC_CODE || "");
+  console.log('rawDocNo:', rawDocNo, 'acCode:', acCode);
+  if (!rawDocNo || !acCode) return;
+
+  const docNo = `${rawDocNo}$$$${acCode}`;
+  try {
+    setEditor(await getVendorRequest(docNo));
+  } catch (err) {
+    setNotice({ type: "error", message: err instanceof Error ? err.message : "Unable to open request" });
+  }
+ };
+
+  // const openExisting = async (row: VendorTableRow) => {
+  //   const docNo = String(row.DOC_NO || "");
+  //   if (!docNo) return;
+  //   try {
+  //     setEditor(await getVendorRequest(docNo));
+  //   } catch (err) {
+  //     setNotice({ type: "error", message: err instanceof Error ? err.message : "Unable to open request" });
+  //   }
+  // };
+
 
   const columns = useMemo<ColumnDef<VendorTableRow>[]>(() => makeVendorColumns([
     {
