@@ -1,5 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { CalendarClock, CheckCircle2, Clock3, FileDown, RefreshCw, Search, ShieldCheck, UsersRound, XCircle } from "lucide-react";
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { getHrLeaveFlow } from "../../../api/hr";
 import { Badge } from "../../../components/ui/Badge";
@@ -38,7 +39,15 @@ const toneClasses: Record<LeaveFlowConfig["statusTone"], string> = {
   slate: "border-slate-200 bg-slate-50 text-slate-700",
 };
 
-export function LeaveFlowTable({ config }: { config: LeaveFlowConfig }) {
+export function LeaveFlowTable({
+  config,
+  headerActions,
+  refreshToken,
+}: {
+  config: LeaveFlowConfig;
+  headerActions?: ReactNode;
+  refreshToken?: number;
+}) {
   const { user } = useAuth();
   const [rows, setRows] = useState<LeaveFlowRow[]>([]);
   const [query, setQuery] = useState("");
@@ -67,7 +76,7 @@ export function LeaveFlowTable({ config }: { config: LeaveFlowConfig }) {
 
   useEffect(() => {
     void loadRows(false);
-  }, [config.endpoint, loginId]);
+  }, [config.endpoint, loginId, refreshToken]);
 
   const columns = useMemo<ColumnDef<LeaveFlowRow>[]>(() => {
     const sample = rows[0] || {};
@@ -99,6 +108,7 @@ export function LeaveFlowTable({ config }: { config: LeaveFlowConfig }) {
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{config.description}</p>
         </div>
         <div className="flex items-center gap-2">
+          {headerActions}
           <Button variant="outline" onClick={() => void loadRows()} disabled={loading}>
             <RefreshCw size={15} /> Refresh
           </Button>

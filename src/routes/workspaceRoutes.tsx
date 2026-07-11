@@ -104,7 +104,10 @@ import AbsentMemoMainPage from "../pages/hr/absent_memo/AbsentMemoMainPage";
 
 import { HrManpowerPage } from "../pages/hr/HrManpower";
 import {
-  HrFlowPendingPage,
+  EmployeePayslipPage,
+  EmployeePayslipViewPage,
+  LeaveRegisterPage,
+  LeaveResumptionWorkspacePage,
   LeaveCancelRequestPage,
   LeaveClosedRequestPage,
   LeaveInProgressPage,
@@ -182,50 +185,22 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: "HR Employee Payslip",
     match: (context) => isHrRoute(context) && isHrEmployeePayslipRoute(context),
-    element: () => (
-      <HrFlowPendingPage
-        title="Employee Payslip"
-        oldRoute="hr/Activity/Request/employee_payslip"
-        sourceComponent="HRPayslips"
-        description="Employee payslip search and view entry point from the old HRFlow module."
-      />
-    ),
+    element: () => <EmployeePayslipPage />,
   },
   {
     name: "HR Employee Payslip View",
     match: (context) => isHrRoute(context) && isHrEmployeePayslipViewRoute(context),
-    element: () => (
-      <HrFlowPendingPage
-        title="Employee Payslip View"
-        oldRoute="hr/Activity/Request/employee_payslip_view/:employeeId/:month/:year"
-        sourceComponent="ViewPayslipReport"
-        description="Detailed payslip report page from the old HRFlow module."
-      />
-    ),
+    element: () => <EmployeePayslipViewPage />,
   },
   {
     name: "HR Leave Register",
     match: (context) => isHrRoute(context) && isHrLeaveRegisterRoute(context),
-    element: () => (
-      <HrFlowPendingPage
-        title="Leave Register"
-        oldRoute="hr/Activity/Request/leave_register"
-        sourceComponent="HrEmployeeRegisterMainPage"
-        description="Employee leave register and balance lookup from the old HRFlow module."
-      />
-    ),
+    element: () => <LeaveRegisterPage />,
   },
   {
     name: "HR Leave Resumption",
     match: (context) => isHrRoute(context) && isHrLeaveResumptionRoute(context),
-    element: () => (
-      <HrFlowPendingPage
-        title="Leave Resumption"
-        oldRoute="hr/Activity/Request/leave_resumption"
-        sourceComponent="HRLeaveResumptionMainPage"
-        description="Leave resumption request and approval flow from the old HRFlow module."
-      />
-    ),
+    element: () => <LeaveResumptionWorkspacePage />,
   },
   {
     name: "HR Absent Memo",
@@ -1451,9 +1426,13 @@ function isHrRoute(context: WorkspaceRouteContext) {
   return (
     matchText.includes("/hr/") ||
     matchText.includes("/hcm/") ||
+    matchText.includes("/ems/") ||
     matchText.includes(" hr ") ||
     matchText.includes(" hcm ") ||
+    matchText.includes(" ems ") ||
     matchText.includes("human") ||
+    matchText.includes("employee management") ||
+    compact.includes("employeemanagement") ||
     compact.includes("humancapitalmanagement")
   );
 }

@@ -1,4 +1,8 @@
 export { HrFlowPendingPage } from "./HrFlowPendingPage";
+export { EmployeePayslipPage } from "./EmployeePayslipPage";
+export { EmployeePayslipViewPage } from "./EmployeePayslipViewPage";
+export { LeaveRegisterPage } from "./LeaveRegisterPage";
+export { LeaveResumptionWorkspacePage } from "./LeaveResumptionWorkspacePage";
 export { LeaveRequestPage } from "./LeaveRequestPage";
 export { LeaveWorkspacePage } from "./LeaveWorkspacePage";
 export { LeaveInProgressPage } from "./LeaveInProgressPage";
