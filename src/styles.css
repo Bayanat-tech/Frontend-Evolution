@@ -162,6 +162,7 @@ body {
   --app-control-font-size: 12px;
   --app-table-font-size: 11.5px;
   --app-label-font-size: 11px;
+  color: #172033;
 }
 
 .vendor-compact section {
@@ -174,8 +175,10 @@ body {
 }
 
 .vendor-compact .vendor-page-header h1 {
-  font-size: 20px;
+  font-size: 18px;
+  font-weight: 750;
   line-height: 1.2;
+  letter-spacing: 0;
 }
 
 .vendor-compact .ui-button {
@@ -214,6 +217,16 @@ body {
 .vendor-compact .data-table-scroll th,
 .vendor-compact .data-table-scroll td {
   font-size: 11.5px;
+  line-height: 1.25;
+}
+
+.vendor-compact .data-table-scroll th {
+  color: #334155;
+  font-weight: 750;
+}
+
+.vendor-compact .data-table-scroll td {
+  color: #1f2937;
 }
 
 .vendor-compact .vendor-detail-panel {
@@ -255,6 +268,20 @@ body {
   width: 22px;
   height: 22px;
   min-height: 22px;
+}
+
+.vendor-action-dialog {
+  width: min(94vw, 520px) !important;
+}
+
+.vendor-action-dialog .ui-input,
+.vendor-action-dialog .ui-select {
+  height: 38px;
+  font-size: 13px;
+}
+
+.vendor-action-dialog form {
+  gap: 12px;
 }
 
 button,

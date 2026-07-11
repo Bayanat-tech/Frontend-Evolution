@@ -95,12 +95,21 @@ export async function saveVendorRequest(payload: VendorRequestPayload) {
 
 export async function updateVendorLpoStatus(payload: {
   doc_no: string;
+  company_code: string;
+  flow_level: string | number;
+  remarks: string;
   action: string;
-  remarks?: string;
-  company_code?: string;
-  flow_level?: number | string;
+  DOC_NO?: string;
+  LAST_ACTION?: string;
+  REMARKS?: string;
+  COMPANY_CODE?: string;
+  FLOW_LEVEL?: number | string;
 }) {
-  const { data } = await api.post<ApiResponse<unknown>>("/api/vendor/gm/updateLpoStatus", payload);
+  const normalizedPayload = {
+    ...payload,
+    flow_level: Number(payload.flow_level),
+  };
+  const { data } = await api.post<ApiResponse<unknown>>("/api/vendor/gm/updateLpoStatus", normalizedPayload);
   assertSuccess(data, "Unable to update vendor status");
   return data;
 }

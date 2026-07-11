@@ -1,5 +1,5 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Download, Eye, Paperclip, Plus, RotateCcw, Save, Send, Trash2, X, UploadCloud } from "lucide-react";
+import { CheckCircle2, Download, Eye, Paperclip, Plus, RotateCcw, Save, Send, Trash2, X, XCircle, UploadCloud } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
@@ -45,16 +45,27 @@ const emptyRequest = (companyCode = ""): VendorRequestPayload => ({
   items: [],
 });
 
+type VendorRequestSaveAction = "SAVEASDRAFT" | "SUBMITTED" | "APPROVED";
+type VendorApprovalAction = "SENTBACK" | "REJECTED";
+
 export function VendorRequestDialog({
   open,
   request,
+  readOnly = false,
+  approvalMode = false,
+  approvalFlowLevel,
+  onApprovalAction,
   onClose,
   onSaved,
 }: {
   open: boolean;
   request?: VendorRequestPayload | null;
+  readOnly?: boolean;
+  approvalMode?: boolean;
+  approvalFlowLevel?: string | number;
+  onApprovalAction?: (action: VendorApprovalAction, flowLevel?: string | number) => void;
   onClose: () => void;
-  onSaved: () => Promise<void>;
+  onSaved?: (action: VendorRequestSaveAction) => Promise<void>;
 }) {
   const { user } = useAuth();
   const companyCode = user?.company_code || "";
@@ -136,14 +147,14 @@ export function VendorRequestDialog({
     }
   };
 
-  const save = async (event: FormEvent | undefined, action: "SAVEASDRAFT" | "SUBMITTED") => {
+  const save = async (event: FormEvent | undefined, action: VendorRequestSaveAction) => {
     event?.preventDefault();
     setError("");
     const totalQty = items.reduce((sum, item) => sum + Number(item.QTY || 0), 0);
     if (!form.REF_DOC_NO && !isEdit) return setError("Ref Doc No is required.");
     if (!form.INVOICE_NUMBER) return setError("Invoice No is required.");
     if (!form.INVOICE_DATE) return setError("Invoice Date is required.");
-    if (action === "SUBMITTED" && totalQty <= 0) return setError("Total quantity cannot be 0.");
+    if (action !== "SAVEASDRAFT" && totalQty <= 0) return setError("Total quantity cannot be 0.");
 
     const filteredItems = action === "SAVEASDRAFT" ? items : items.filter((item) => Number(item.QTY || 0) > 0);
     try {
@@ -163,10 +174,12 @@ export function VendorRequestDialog({
         PDO_TYPE: String(selectedRef?.PDO_TYPE || form.PDO_TYPE || ""),
         CURR_CODE: String(selectedRef?.CURR_CODE || form.CURR_CODE || ""),
         EX_RATE: selectedRef?.EX_RATE ?? form.EX_RATE,
+        DOC_DATE: toBackendDate(form.DOC_DATE),
+        INVOICE_DATE: toBackendDate(form.INVOICE_DATE),
         items: filteredItems.map((item) => ({
           ...item,
           QTY: Number(item.QTY || 0),
-          DOC_DATE: form.DOC_DATE,
+          DOC_DATE: toBackendDate(item.DOC_DATE || form.DOC_DATE),
           AC_CODE: String(item.AC_CODE || account.AC_CODE || form.AC_CODE || ""),
           ORIGINAL_QTY: Number(item.ORIGINAL_QTY ?? item.QTY ?? 0),
         })),
@@ -177,7 +190,7 @@ export function VendorRequestDialog({
         setSavedDocNo(generated);
         setForm((prev) => ({ ...prev, DOC_NO: generated }));
       }
-      if (action === "SUBMITTED") await onSaved();
+      await onSaved?.(action);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save purchase invoice");
     } finally {
@@ -190,17 +203,25 @@ export function VendorRequestDialog({
       open={open}
       wide
       contentClassName="vendor-invoice-dialog"
-      title={isEdit ? "Edit Purchase Invoices" : "Add Purchase Invoices"}
+      title={readOnly ? "View Purchase Invoices" : isEdit ? "Edit Purchase Invoices" : "Add Purchase Invoices"}
       onClose={onClose}
       footer={
         <div className="flex w-full items-center justify-between gap-2">
+          {approvalMode && !readOnly ? (
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" disabled={saving} onClick={() => onApprovalAction?.("SENTBACK", approvalFlowLevel)}><RotateCcw size={15} /> Send Back</Button>
+              <Button type="button" variant="destructive" disabled={saving} onClick={() => onApprovalAction?.("REJECTED", approvalFlowLevel)}><XCircle size={15} /> Reject</Button>
+              <Button type="button" disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, "APPROVED")}><CheckCircle2 size={15} /> Approve</Button>
+            </div>
+          ) : !readOnly ? (
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, "SAVEASDRAFT")}><Save size={15} /> Save As Draft</Button>
+              <Button type="button" disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, "SUBMITTED")}><Send size={15} /> Submit</Button>
+            </div>
+          ) : <span />}
           <div className="flex gap-2">
-            <Button variant="outline" disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, "SAVEASDRAFT")}><Save size={15} /> Save As Draft</Button>
-            <Button disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, "SUBMITTED")}><Send size={15} /> Submit</Button>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" disabled={!savedDocNo} onClick={() => setFilesOpen({ title: "All Attachments" })}><Paperclip size={15} /></Button>
-            <Button variant="outline" onClick={onClose}><X size={15} /></Button>
+            <Button type="button" variant="outline" disabled={!savedDocNo} onClick={() => setFilesOpen({ title: "All Attachments" })}><Paperclip size={15} /></Button>
+            <Button type="button" variant="outline" onClick={onClose}><X size={15} /></Button>
           </div>
         </div>
       }
@@ -216,19 +237,19 @@ export function VendorRequestDialog({
         {activeTab === "info" ? (
           <div className="grid gap-3 rounded-md border bg-white p-4 md:grid-cols-4">
             <FormInput label="Doc No" value={savedDocNo || String(form.DOC_NO || "")} readOnly />
-            <FormInput label="Doc Date" value={toInputDate(form.DOC_DATE)} type="date" onChange={(value) => setField("DOC_DATE", value)} />
+            <FormInput label="Doc Date" value={toInputDate(form.DOC_DATE)} type="date" onChange={(value) => setField("DOC_DATE", value)} readOnly={readOnly} />
             <label className="grid gap-1 text-sm md:col-span-1">
               <span className="font-medium text-muted-foreground">Ref Doc No</span>
-              <Select value={String(form.REF_DOC_NO || "")} onChange={(event) => void loadRefDetails(event.target.value)} disabled={loadingRef || isEdit}>
+              <Select value={String(form.REF_DOC_NO || "")} onChange={(event) => void loadRefDetails(event.target.value)} disabled={readOnly || loadingRef || isEdit}>
                 <option value="">Select Ref Doc</option>
                 {refDocs.map((item) => <option key={String(item.DOC_NO)} value={String(item.DOC_NO)}>{String(item.DOC_NO)}</option>)}
               </Select>
             </label>
-            <FormInput label="Well Id" value={String(form.REF_DOC1 || "")} onChange={(value) => setField("REF_DOC1", value)} />
-            <FormInput label="RIG No" value={String(form.REF_DOC2 || "")} onChange={(value) => setField("REF_DOC2", value)} />
-            <FormInput label="Truck No" value={String(form.REF_DOC3 || "")} onChange={(value) => setField("REF_DOC3", value)} />
-            <FormInput label="Invoice No" value={String(form.INVOICE_NUMBER || "")} onChange={(value) => setField("INVOICE_NUMBER", value)} required />
-            <FormInput label="Invoice Date" value={toInputDate(form.INVOICE_DATE)} type="date" onChange={(value) => setField("INVOICE_DATE", value)} required />
+            <FormInput label="Well Id" value={String(form.REF_DOC1 || "")} onChange={(value) => setField("REF_DOC1", value)} readOnly={readOnly} />
+            <FormInput label="RIG No" value={String(form.REF_DOC2 || "")} onChange={(value) => setField("REF_DOC2", value)} readOnly={readOnly} />
+            <FormInput label="Truck No" value={String(form.REF_DOC3 || "")} onChange={(value) => setField("REF_DOC3", value)} readOnly={readOnly} />
+            <FormInput label="Invoice No" value={String(form.INVOICE_NUMBER || "")} onChange={(value) => setField("INVOICE_NUMBER", value)} required readOnly={readOnly} />
+            <FormInput label="Invoice Date" value={toInputDate(form.INVOICE_DATE)} type="date" onChange={(value) => setField("INVOICE_DATE", value)} required readOnly={readOnly} />
             <FormInput label="Account Number" value={String(account.AC_CODE || form.AC_CODE || "")} readOnly />
             <FormInput label="Account Name" value={String(account.AC_NAME || form.AC_NAME || "")} readOnly className="md:col-span-4" />
             <FormInput label="Phone" value={String(account.PHONE || form.PHONE || "")} readOnly />
@@ -236,7 +257,7 @@ export function VendorRequestDialog({
             <FormInput label="Fax" value={String(account.FAX || form.FAX || "")} readOnly />
             <FormInput label="Division Code" value={String(form.DIV_CODE || "")} readOnly />
             <FormInput label="Division Name" value={String(form.DIV_NAME || "")} readOnly className="md:col-span-2" />
-            <FormInput label="Remarks" value={String(form.REMARKS || "")} onChange={(value) => setField("REMARKS", value)} className="md:col-span-4" />
+            <FormInput label="Remarks" value={String(form.REMARKS || "")} onChange={(value) => setField("REMARKS", value)} className="md:col-span-4" readOnly={readOnly} />
           </div>
         ) : (
           <InvoiceDetailsTab
@@ -247,11 +268,12 @@ export function VendorRequestDialog({
             onItemsChange={setItems}
             onAddPending={() => setPendingOpen(true)}
             onOpenAttachment={(srNo) => setFilesOpen({ srNo, title: `Attachments for Serial No: ${srNo}` })}
+            readOnly={readOnly}
           />
         )}
       </form>
 
-      {pendingOpen && (
+      {pendingOpen && !readOnly && (
         <PendingItemsDialog
           refDocNo={String(form.REF_DOC_NO || "")}
           headerAcCode={String(items[0]?.HEADER_AC_CODE || account.AC_CODE || form.AC_CODE || "")}
@@ -284,6 +306,7 @@ function InvoiceDetailsTab({
   onItemsChange,
   onAddPending,
   onOpenAttachment,
+  readOnly,
 }: {
   items: VendorRow[];
   loading: boolean;
@@ -292,6 +315,7 @@ function InvoiceDetailsTab({
   onItemsChange: (rows: VendorRow[]) => void;
   onAddPending: () => void;
   onOpenAttachment: (srNo: number) => void;
+  readOnly?: boolean;
 }) {
   const setItem = (index: number, field: string, value: string) => onItemsChange(items.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: field === "QTY" ? Number(value) : value } : item));
   const reset = () => onItemsChange(items.map((item) => ({ ...item, QTY: 0 })));
@@ -302,10 +326,12 @@ function InvoiceDetailsTab({
         <div className="text-xs font-semibold text-muted-foreground">
           {items.length} lines loaded
         </div>
-        <div className="flex justify-end gap-2">
-          <Button type="button" size="sm" variant="outline" onClick={onAddPending}><Plus size={14} /> Add Pending Items</Button>
-          <Button type="button" size="sm" variant="outline" onClick={reset}><RotateCcw size={14} /> Reset</Button>
-        </div>
+        {!readOnly && (
+          <div className="flex justify-end gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={onAddPending}><Plus size={14} /> Add Pending Items</Button>
+            <Button type="button" size="sm" variant="outline" onClick={reset}><RotateCcw size={14} /> Reset</Button>
+          </div>
+        )}
       </div>
       <div className="vendor-detail-scroll overflow-auto rounded-md border">
         <table className="vendor-detail-table w-full min-w-[1360px] text-xs">
@@ -344,7 +370,7 @@ function InvoiceDetailsTab({
                 <tr key={`${item.SERIAL_NO || index}`} className="h-6 border-b">
                   <td className="px-1.5 py-0.5 text-muted-foreground">{String(item.SERIAL_NO || index + 1)}</td>
                   <td className="min-w-[240px] max-w-[340px] truncate px-1.5 py-0.5 text-muted-foreground" title={String(item.REMARKS || item.ITEM_DESC || "")}>{String(item.REMARKS || item.ITEM_DESC || "")}</td>
-                  <td className="w-[72px] px-1.5 py-0.5"><Input className="vendor-line-input text-right w-full" type="number" value={String(item.QTY ?? 0)} onChange={(event) => setItem(index, "QTY", event.target.value)} /></td>
+                  <td className="w-[72px] px-1.5 py-0.5"><Input className="vendor-line-input text-right w-full" type="number" value={String(item.QTY ?? 0)} readOnly={readOnly} onChange={(event) => setItem(index, "QTY", event.target.value)} /></td>
                   <td className="w-[90px] px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(item.ORIGINAL_QTY)}</td>
                   <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(price)}</td>
                   <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(amount)}</td>
@@ -358,8 +384,8 @@ function InvoiceDetailsTab({
                   <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(taxPerc)}</td>
                   <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(taxLocal)}</td>
                   <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(baseAmt + taxLocal)}</td>
-                  <td className="px-1.5 py-0.5"><Input className="vendor-line-input" value={String(item.ITEM_REMARK || "")} onChange={(event) => setItem(index, "ITEM_REMARK", event.target.value)} /></td>
-                  <td className="px-1.5 py-0.5"><Button className="vendor-line-icon" type="button" size="icon" variant="ghost" onClick={() => onItemsChange(items.filter((_, rowIndex) => rowIndex !== index))}><Trash2 size={12} /></Button></td>
+                  <td className="px-1.5 py-0.5"><Input className="vendor-line-input" value={String(item.ITEM_REMARK || "")} readOnly={readOnly} onChange={(event) => setItem(index, "ITEM_REMARK", event.target.value)} /></td>
+                  <td className="px-1.5 py-0.5">{!readOnly && <Button className="vendor-line-icon" type="button" size="icon" variant="ghost" onClick={() => onItemsChange(items.filter((_, rowIndex) => rowIndex !== index))}><Trash2 size={12} /></Button>}</td>
                 </tr>
               );
             }) : (
@@ -404,12 +430,13 @@ function PendingItemsDialog({
 
   useEffect(() => {
     if (!refDocNo || !headerAcCode) return;
+    const safeHeader = escapeSql(headerAcCode);
     const existingSerials = existingItems.map((item) => Number(item.SERIAL_NO || 0)).filter(Boolean).join(",") || "0";
     const sql = `
       SELECT *
       FROM VW_VM_LPO_DTL_PENDING_AWARE
       WHERE DOC_NO = '${escapeSql(refDocNo)}'
-        AND HEADER_AC_CODE = '${escapeSql(headerAcCode)}'
+        AND HEADER_AC_CODE = '${safeHeader}'
         AND SERIAL_NO NOT IN (${existingSerials})
       ORDER BY SERIAL_NO
     `;
@@ -745,6 +772,13 @@ function toInputDate(value: unknown) {
   if (match) return `${match[3]}-${match[2]}-${match[1]}`;
   const parsed = new Date(raw);
   return Number.isNaN(parsed.getTime()) ? raw : parsed.toISOString().slice(0, 10);
+}
+
+function toBackendDate(value: unknown) {
+  const inputDate = toInputDate(value);
+  const match = inputDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return String(value || "");
+  return `${match[3]}-${match[2]}-${match[1]}`;
 }
 
 function escapeSql(value: string) {

@@ -41,30 +41,17 @@ export function VendorRequestsPage() {
   }, [loadRows]);
     
   const openExisting = async (row: VendorTableRow) => {
-    console.log('row data:', row);
-  const rawDocNo = String(row.DOC_NO || "");
-  const acCode = String(row.AC_CODE || "");
-  console.log('rawDocNo:', rawDocNo, 'acCode:', acCode);
-  if (!rawDocNo || !acCode) return;
+    const rawDocNo = String(row.DOC_NO || "");
+    const loginid = user?.loginid || user?.username || "";
+    if (!rawDocNo || !loginid) return;
 
-  const docNo = `${rawDocNo}$$$${acCode}`;
-  try {
-    setEditor(await getVendorRequest(docNo));
-  } catch (err) {
-    setNotice({ type: "error", message: err instanceof Error ? err.message : "Unable to open request" });
-  }
- };
-
-  // const openExisting = async (row: VendorTableRow) => {
-  //   const docNo = String(row.DOC_NO || "");
-  //   if (!docNo) return;
-  //   try {
-  //     setEditor(await getVendorRequest(docNo));
-  //   } catch (err) {
-  //     setNotice({ type: "error", message: err instanceof Error ? err.message : "Unable to open request" });
-  //   }
-  // };
-
+    const docNo = `${rawDocNo}$$$${loginid}`;
+    try {
+      setEditor(await getVendorRequest(docNo));
+    } catch (err) {
+      setNotice({ type: "error", message: err instanceof Error ? err.message : "Unable to open request" });
+    }
+  };
 
   const columns = useMemo<ColumnDef<VendorTableRow>[]>(() => makeVendorColumns([
     {
@@ -117,9 +104,9 @@ export function VendorRequestsPage() {
           open
           request={editor}
           onClose={() => setEditor(undefined)}
-          onSaved={async () => {
-            setEditor(undefined);
-            setNotice({ type: "success", message: "Vendor request saved" });
+          onSaved={async (action) => {
+            if (action === "SUBMITTED") setEditor(undefined);
+            setNotice({ type: "success", message: action === "SAVEASDRAFT" ? "Vendor draft saved" : "Vendor request submitted" });
             await loadRows();
           }}
         />

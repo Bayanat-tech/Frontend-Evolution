@@ -59,7 +59,7 @@ export function vendorApprovalSql(companyCode: string, loginid: string, actions:
       return `
         SELECT V.*
         FROM VW_VMS_FLOW_HDR_FINAL_APPROVER V
-        WHERE V.LAST_ACTION = 'REJECTED'
+        WHERE V.LAST_ACTION = 'APPROVED'
           AND '${approver}' IN (
             SELECT EMP_ID_LEVEL3
             FROM MS_VENDOR_APPROVER
@@ -71,7 +71,7 @@ export function vendorApprovalSql(companyCode: string, loginid: string, actions:
     return `
       SELECT H.*,
         (SELECT AMOUNT FROM VW_VENDOR_AMOUNT K WHERE K.COMPANY_CODE = H.COMPANY_CODE AND K.DOC_NO = H.DOC_NO) AS AMOUNT
-      FROM VW_TR_AC_LPO_HEADER H
+      FROM VW_VMS_FLOW_HDR H
       CROSS JOIN VW_VENDOR_APPROVER_STRING V
       WHERE H.LAST_ACTION NOT IN ('REJECTED')
         AND (
