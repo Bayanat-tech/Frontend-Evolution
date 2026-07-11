@@ -104,11 +104,12 @@ import AbsentMemoMainPage from "../pages/hr/absent_memo/AbsentMemoMainPage";
 
 import { HrManpowerPage } from "../pages/hr/HrManpower";
 import {
+  HrFlowPendingPage,
   LeaveCancelRequestPage,
   LeaveClosedRequestPage,
   LeaveInProgressPage,
   LeaveRejectedRequestPage,
-  LeaveRequestPage,
+  LeaveWorkspacePage,
   leaveFlowConfigList,
   type LeaveFlowKey,
 } from "../pages/hr/leave";
@@ -154,9 +155,9 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: (context) => <SmsMasterPage config={getSmsMasterConfig(context)!} />,
   },
   {
-    name: "HR Leave Request",
+    name: "HR Leave Workspace",
     match: (context) => isLeaveFlowRoute(context, "request"),
-    element: () => <LeaveRequestPage />,
+    element: () => <LeaveWorkspacePage initialTab="request" />,
   },
   {
     name: "HR Leave In Progress",
@@ -177,6 +178,54 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "HR Leave Rejected Request",
     match: (context) => isLeaveFlowRoute(context, "rejected"),
     element: () => <LeaveRejectedRequestPage />,
+  },
+  {
+    name: "HR Employee Payslip",
+    match: (context) => isHrRoute(context) && isHrEmployeePayslipRoute(context),
+    element: () => (
+      <HrFlowPendingPage
+        title="Employee Payslip"
+        oldRoute="hr/Activity/Request/employee_payslip"
+        sourceComponent="HRPayslips"
+        description="Employee payslip search and view entry point from the old HRFlow module."
+      />
+    ),
+  },
+  {
+    name: "HR Employee Payslip View",
+    match: (context) => isHrRoute(context) && isHrEmployeePayslipViewRoute(context),
+    element: () => (
+      <HrFlowPendingPage
+        title="Employee Payslip View"
+        oldRoute="hr/Activity/Request/employee_payslip_view/:employeeId/:month/:year"
+        sourceComponent="ViewPayslipReport"
+        description="Detailed payslip report page from the old HRFlow module."
+      />
+    ),
+  },
+  {
+    name: "HR Leave Register",
+    match: (context) => isHrRoute(context) && isHrLeaveRegisterRoute(context),
+    element: () => (
+      <HrFlowPendingPage
+        title="Leave Register"
+        oldRoute="hr/Activity/Request/leave_register"
+        sourceComponent="HrEmployeeRegisterMainPage"
+        description="Employee leave register and balance lookup from the old HRFlow module."
+      />
+    ),
+  },
+  {
+    name: "HR Leave Resumption",
+    match: (context) => isHrRoute(context) && isHrLeaveResumptionRoute(context),
+    element: () => (
+      <HrFlowPendingPage
+        title="Leave Resumption"
+        oldRoute="hr/Activity/Request/leave_resumption"
+        sourceComponent="HRLeaveResumptionMainPage"
+        description="Leave resumption request and approval flow from the old HRFlow module."
+      />
+    ),
   },
   {
     name: "HR Absent Memo",
@@ -1443,6 +1492,30 @@ function isHrPayUnitsDependantRoute(context: WorkspaceRouteContext) {
 function isHrLeaveCancelRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
   return compact.includes("leavecancel") || compact.includes("leavecancellation") || compact.includes("pgleaveflowcancel");
+}
+
+function isHrEmployeePayslipRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return (
+    !compact.includes("employeepayslipview") &&
+    !compact.includes("viewpayslipreport") &&
+    (compact.includes("employeepayslip") || compact.includes("hrpayslips") || compact.includes("payslip"))
+  );
+}
+
+function isHrEmployeePayslipViewRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("employeepayslipview") || compact.includes("viewpayslipreport");
+}
+
+function isHrLeaveRegisterRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("leaveregister") || compact.includes("hremployeeregistermainpage");
+}
+
+function isHrLeaveResumptionRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("leaveresumption") || compact.includes("hrleaveresumptionmainpage");
 }
 
 function isHrPayrollAccountSetupRoute(context: WorkspaceRouteContext) {
