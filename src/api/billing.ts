@@ -169,19 +169,90 @@ export async function deleteInvoice(params: {
   }
 }
 
-/* ================= SAVE INVOICE (header + lines) ================= */
+/* ================= STORAGE SELECTION (TBILL_invoice_storage_selection) ================= */
+
+export type StorageSelectionRow = {
+  SELECTED: string;
+  STORAGE_NO: string;
+  PRIN_CODE: string;
+  SITE_IND: string;
+  RCPT_DATE: string | null;
+  TXN_DATE: string | null;
+  QTY: number;
+  VOLUME: number;
+  AMOUNT: number;
+  PROD_CODE: string;
+  SEQ_NUMBER: number;
+  CONSOLIDATED_INVNO: string;
+  ACTIVITY: string;
+};
+
+export async function getStorageSelection(params: {
+  loginid: string;
+  company_code: string;
+  prin_code: string;
+  consolidated_invno?: string;
+  from_date?: string; // DD/MM/YYYY
+  to_date?: string; // DD/MM/YYYY
+}): Promise<LookupRow[]> {
+  return fetchDynamicSql({
+    parameter: "TBILL_invoice_storage_selection",
+    loginid: params.loginid,
+    code1: params.company_code,
+    code2: `${params.prin_code}$$${params.consolidated_invno ?? ""}`,
+    code3: params.from_date || "",
+    code4: params.to_date || "",
+    number1: 0,
+    number2: 0,
+    number3: 0,
+    number4: 0,
+    date1: null,
+    date2: null,
+    date3: null,
+    date4: null,
+  });
+}
+
+/** Normalize a raw storage row into the exact T_MNSTORAGE_DET_SELECT_BILLING shape */
+export function normalizeStorageRow(row: any, consolidatedInvNo: string): StorageSelectionRow {
+  const get = (key: string) => row[key] ?? row[key.toUpperCase()] ?? row[key.toLowerCase()];
+  return {
+    SELECTED: "Y",
+    STORAGE_NO: String(get("storage_no") ?? ""),
+    PRIN_CODE: String(get("prin_code") ?? ""),
+    SITE_IND: String(get("site_ind") ?? ""),
+    RCPT_DATE: get("rcpt_date") ?? null,
+    TXN_DATE: get("txn_date") ?? null,
+    QTY: Number(get("qty") ?? 0),
+    VOLUME: Number(get("volume") ?? 0),
+    AMOUNT: Number(get("amount") ?? 0),
+    PROD_CODE: String(get("prod_code") ?? ""),
+    SEQ_NUMBER: Number(get("seq_number") ?? 0),
+    CONSOLIDATED_INVNO: consolidatedInvNo,
+    ACTIVITY: String(get("activity") ?? ""),
+  };
+}
+
+/* ================= SAVE INVOICE (header + lines + storage + job selection) ================= */
 
 export async function updateBillingApi(params: {
   invoiceHeader: TInvoice[];
   invoiceDetails: TInvoiceDetail[];
+  storageSelection?: StorageSelectionRow[];
+  jobSelection?: Record<string, unknown>[];
 }): Promise<{ success: boolean; message: string }> {
-  if (!params?.invoiceHeader?.length || !params?.invoiceDetails?.length) {
-    return { success: false, message: "Missing invoice header or detail lines." };
+  if (!params?.invoiceHeader?.length) {
+    return { success: false, message: "Missing invoice header data." };
   }
   try {
     const response = await api.post<{ message?: string; success?: boolean }>(
       "/api/wms/billing/updatebilling",
-      params
+      {
+        invoiceHeader: params.invoiceHeader,
+        invoiceDetails: params.invoiceDetails,
+        storageSelection: params.storageSelection ?? [],
+        jobSelection: params.jobSelection ?? [],
+      }
     );
     const ok = response.data?.message === "Invoice updated successfully" || response.data?.success === true;
     return { success: ok, message: response.data?.message || (ok ? "Saved." : "Save did not return success.") };

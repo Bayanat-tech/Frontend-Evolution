@@ -104,6 +104,7 @@ import SalaryAdditionDeductionMainPage from "../pages/hr/addition_deduction/Sala
 import AbsentMemoMainPage from "../pages/hr/absent_memo/AbsentMemoMainPage";
 
 import { HrManpowerPage } from "../pages/hr/HrManpower";
+<<<<<<< HEAD
 import {
   EmployeePayslipPage,
   EmployeePayslipViewPage,
@@ -120,6 +121,10 @@ import {
 import { SmsDashboardPage } from "../pages/sms/SmsDashboardPage";
 import { SmsMasterPage, smsMasterConfigs } from "../pages/sms/SmsMasterPage";
 import { SmsSalesRequestPage } from "../pages/sms/SmsSalesRequestPage";
+=======
+import InspectionReportMainPage from "../pages/oxmaint/inspection-report-tailwind/InspectionReportMainPage";
+
+>>>>>>> QA
 import { GradeMasterPage } from "../pages/hr/Grademasterpage";
 import InvoicePage from "../pages/wms/invoice/InvoicePage";
 
@@ -144,6 +149,7 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 
 export const workspaceRoutes: WorkspaceRoute[] = [
   {
+<<<<<<< HEAD
     name: "SMS Dashboard",
     match: (context) => isSmsRoute(context) && getGenericMatchText(context).includes("dashboard"),
     element: () => <SmsDashboardPage />,
@@ -207,6 +213,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "HR Employee Profile",
     match: (context) => isHrRoute(context) && isHrEmployeeProfileRoute(context),
     element: () => <EmployeeProfilePage />,
+=======
+    name: "MMS inspection Report",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/mms/masters/gm/inspection_report"),
+    element: () => <InspectionReportMainPage />,
+>>>>>>> QA
   },
   {
     name: "HR Absent Memo",

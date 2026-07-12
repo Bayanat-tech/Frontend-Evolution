@@ -1,0 +1,52 @@
+export type InspectionReportMainRow = {
+  rowType: 'main';
+  id: string;
+  reportNumber: string;
+  date: string;
+  time: string;
+  assetNumber: string;
+  assetName: string;
+  location: string;
+  inspector: string;
+  inventory: string;
+  runningHours: string | number;
+  runningHoursUnit: string;
+  inspectionFormId: string | number;
+  overallCondition: string;
+  assetSafeToUse: string;
+  maintenanceRequired: string;
+  assetStatus: string;
+  additionalNote: string;
+  createdBy: string;
+  updateBy: string;
+  createdAt: string;
+};
+
+export type InspectionReportDetailRow = {
+  rowType: 'detail';
+  id: string;
+  parentId: string;
+  reportNumber: string;
+  date: string;
+  time: string;
+  assetNumber: string;
+  assetName: string;
+  location: string;
+  inspector: string;
+  inventory: string;
+  runningHours: string | number;
+  runningHoursUnit: string;
+  inspectionFormId: string | number;
+  overallCondition: string;
+  assetSafeToUse: string;
+  maintenanceRequired: string;
+  assetStatus: string;
+  additionalNote: string;
+  createdBy: string;
+  updateBy: string;
+  createdAt: string;
+  inspectionForm: string;
+  note: string;
+};
+
+export type InspectionReportGridRow = InspectionReportMainRow | InspectionReportDetailRow;
