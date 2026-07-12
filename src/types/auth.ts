@@ -3,6 +3,9 @@ export type MenuNode = {
   title: string;
   type: "collapse" | "group" | "item";
   icon?: string;
+  serial_no?: string | number;
+  serial_number?: string | number;
+  SERIAL_NO?: string | number;
   url_path?: string;
   component_name?: string;
   componentName?: string;
