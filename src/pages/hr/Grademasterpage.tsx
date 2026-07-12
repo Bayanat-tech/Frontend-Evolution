@@ -9,7 +9,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { Edit2, Eye, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { executeDynamicDelete, getDynamicLookup } from "../../api/lookups";
+import { executeCommonProcedure, executeDynamicDelete, getDynamicLookup } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
@@ -115,7 +115,7 @@ export function GradeMasterPage() {
     setNotice(null);
     try {
       await executeDynamicDelete({
-        parameter: "MST_HR_DEL_Grade",
+        parameter: "MST_HR_GRADE_DELETE",
         loginid,
         code1: deleteTarget.grade_code,
         code2: companyCode,
