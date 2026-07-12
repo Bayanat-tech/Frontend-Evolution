@@ -198,22 +198,6 @@ tally_details: {
     columns: confirmationColumns(),
   },
 
-  activity_billing: {
-    title: "Activity Billing", minWidth: 1180,
-    sql: ({ companyCode, jobNo, prinCode }) =>
-      `SELECT * FROM VW_WM_INB_ACTIVITY_BILLING
-       WHERE company_code = '${sqlEscape(companyCode)}'
-         AND job_no       = '${sqlEscape(jobNo)}'
-         AND prin_code    = '${sqlEscape(prinCode)}'`,
-    columns: [
-      { key: "activity_code", label: "Activity Code", size: 150 },
-      { key: "activity_name", label: "Activity Name", size: 260 },
-      { key: "charge_code",   label: "Charge Code",   size: 140 },
-      { key: "qty",           label: "Qty",           size: 100 },
-      { key: "rate",          label: "Rate",          size: 100 },
-      { key: "amount",        label: "Amount",        size: 120 },
-    ],
-  },
 };
 
 export function getInboundTabConfig(tab: string): TabConfig | undefined {

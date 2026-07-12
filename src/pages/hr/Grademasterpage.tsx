@@ -17,6 +17,7 @@ import { useAuth } from "../../state/AuthContext";
 import { AddGradeMasterForm } from "./Addgrademasterform";
 
 
+
 export type GradeRow = {
   company_code: string;
   grade_code: string;
