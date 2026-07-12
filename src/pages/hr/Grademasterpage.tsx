@@ -15,10 +15,7 @@ import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { useAuth } from "../../state/AuthContext";
 import { AddGradeMasterForm } from "./Addgrademasterform";
-<<<<<<< HEAD
-=======
 
->>>>>>> QA
 
 
 export type GradeRow = {
