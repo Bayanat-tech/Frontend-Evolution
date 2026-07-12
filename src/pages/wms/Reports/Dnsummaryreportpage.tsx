@@ -1,6 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import {
+    Printer,
+    RotateCcw,
+    FileText,
+    Download,
+    Eye,
+} from "lucide-react";
 import { useAuth } from "../../../state/AuthContext";
 import { getDynamicLookupaccount } from "../../../api/lookups";
 import {
@@ -58,14 +65,57 @@ const toApiDateString = (isoDate: string): string => {
     return `${d}/${m}/${y}`;
 };
 
-// ─── Select (single value) ─────────────────────────────────────────────────────
+// ─── Shared styles ─────────────────────────────────────────────────────────────
 
 const fieldLabelStyle: React.CSSProperties = {
-    display: "block",
     fontSize: 11,
-    fontWeight: 600,
-    color: "#374151",
-    marginBottom: 4,
+    fontWeight: 500,
+    color: "#6b7280",
+    marginBottom: 2,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+};
+
+// ─── Reusable components ──────────────────────────────────────────────────────
+
+function FloatLabel({ label, required, children, bgColor = "#fff" }: {
+    label: string;
+    required?: boolean;
+    children: React.ReactNode;
+    bgColor?: string;
+}) {
+    return (
+        <div style={{ position: "relative", marginTop: 6 }}>
+            <span style={{
+                position: "absolute",
+                top: -8,
+                left: 10,
+                fontSize: 11,
+                color: "#6b7280",
+                background: bgColor,
+                padding: "0 4px",
+                zIndex: 1,
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                fontWeight: 500,
+            }}>
+                {label} {required && <span style={{ color: "#dc2626" }}>*</span>}
+            </span>
+            {children}
+        </div>
+    );
+}
+
+const selectStyle: React.CSSProperties = {
+    width: "100%",
+    fontSize: 12,
+    padding: "8px 10px",
+    border: "1px solid #d1d5db",
+    borderRadius: 7,
+    background: "#fff",
+    color: "#111827",
+    boxSizing: "border-box",
+    outline: "none",
 };
 
 const SelectField: React.FC<{
@@ -76,18 +126,16 @@ const SelectField: React.FC<{
     placeholder?: string;
     loading?: boolean;
 }> = ({ label, options, value, onChange, placeholder, loading }) => (
-    <div style={{ marginBottom: 14 }}>
-        <label style={fieldLabelStyle}>{label}</label>
+    <div style={{ marginBottom: 0 }}>
+        {label && <label style={fieldLabelStyle}>{label}</label>}
         <select
             value={value}
             onChange={(e) => onChange(e.target.value)}
             disabled={loading}
             style={{
-                width: "100%", fontSize: 12, padding: "8px 10px",
-                border: "1px solid #d1d5db", borderRadius: 7,
+                ...selectStyle,
                 background: loading ? "#f9fafb" : "#fff",
-                color: "#111827", boxSizing: "border-box",
-                outline: "none", cursor: loading ? "not-allowed" : "pointer",
+                cursor: loading ? "not-allowed" : "pointer",
             }}
         >
             <option value="All">{loading ? "Loading…" : (placeholder ?? "All")}</option>
@@ -105,8 +153,8 @@ const DateField: React.FC<{
     max?: string;
     min?: string;
 }> = ({ label, value, onChange, max, min }) => (
-    <div style={{ marginBottom: 14 }}>
-        <label style={fieldLabelStyle}>{label}</label>
+    <div>
+        {label && <label style={fieldLabelStyle}>{label}</label>}
         <input
             type="date"
             value={value}
@@ -114,10 +162,9 @@ const DateField: React.FC<{
             min={min}
             max={max}
             style={{
-                width: "100%", fontSize: 12, padding: "8px 10px",
-                border: "1px solid #d1d5db", borderRadius: 7,
-                background: "#fff", color: value ? "#111827" : "#9ca3af",
-                boxSizing: "border-box", outline: "none", cursor: "pointer",
+                ...selectStyle,
+                color: value ? "#111827" : "#9ca3af",
+                cursor: "pointer",
             }}
         />
     </div>
@@ -131,11 +178,13 @@ export default function DNSummaryReportPage() {
     const loginId = user?.loginid ?? user?.username ?? "ADMIN";
 
     // ── UI state
-    const [panelOpen, setPanelOpen] = useState(false);
     const [loading,   setLoading]   = useState(false);
     const [exporting, setExporting] = useState(false);
-    const [reportHtml, setReportHtml] = useState<string>("");
     const [error,      setError]      = useState<string>("");
+    const [hasGeneratedReport, setHasGeneratedReport] = useState(false);
+    const [lastGeneratedAt, setLastGeneratedAt] = useState<Date | null>(null);
+
+    const reportWindowRef = useRef<Window | null>(null);
 
     // ── Filter options
     const [principalOptions, setPrincipalOptions] = useState<Option[]>([]);
@@ -146,7 +195,6 @@ export default function DNSummaryReportPage() {
     const [fromDateIso, setFromDateIso] = useState<string>("");   // "" = All
     const [toDateIso,   setToDateIso]   = useState<string>("");   // "" = All
 
-    const iframeRef = useRef<HTMLIFrameElement>(null);
     const lastParamsRef = useRef<Params>(ALL_PARAMS);
 
     const dateRangeValid = !fromDateIso || !toDateIso || fromDateIso <= toDateIso;
@@ -172,11 +220,22 @@ export default function DNSummaryReportPage() {
         })();
     }, [companyCode, loginId]);
 
-    // ── Fetch HTML report
+    // ── Fetch the report HTML from the API and open it in a new browser tab
     const fetchReport = useCallback(async (p: Params) => {
         setLoading(true);
         setError("");
         lastParamsRef.current = p;
+
+        const newTab = window.open("", "_blank");
+        if (!newTab) {
+            setLoading(false);
+            setError("Your browser blocked the new tab. Please allow pop-ups for this site and try again.");
+            return;
+        }
+        newTab.document.write(
+            "<title>DN Summary Report</title><body style='font-family:sans-serif;padding:40px;color:#6b7280;'>Loading report…</body>"
+        );
+
         try {
             const html = await getDnSummaryReportHtml({
                 parameter: "WMS_Stock_DN_Summary_Report",
@@ -186,23 +245,32 @@ export default function DNSummaryReportPage() {
                 code3:     p.from_date,
                 code4:     p.to_date,
             });
-            setReportHtml(html);
+
+            newTab.document.open();
+            newTab.document.write(html);
+            newTab.document.close();
+
+            reportWindowRef.current = newTab;
+            setHasGeneratedReport(true);
+            setLastGeneratedAt(new Date());
         } catch (err: any) {
+            newTab.document.open();
+            newTab.document.write(
+                "<title>DN Summary Report</title><body style='font-family:sans-serif;padding:40px;color:#dc2626;'>Failed to load report. Please close this tab and try again.</body>"
+            );
+            newTab.document.close();
             setError(err?.message ?? "Failed to load report. Please try again.");
-            setReportHtml("");
         } finally {
             setLoading(false);
         }
     }, [loginId, companyCode]);
 
     // ── Auto-load on mount with "All" defaults — full dataset, no filters
-    useEffect(() => {
-        fetchReport(ALL_PARAMS);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    // NOTE: most browsers block auto-opened tabs that aren't triggered by a user
+    // gesture, so we don't auto-fetch on mount anymore — the user clicks "View Report".
 
     // ── Apply current filter selections
-    const handleViewReport = () => {
+    const handleGenerateReport = () => {
         if (!dateRangeValid) return;
         const params: Params = {
             prin_code: principal || "All",
@@ -210,18 +278,25 @@ export default function DNSummaryReportPage() {
             to_date:   toApiDateString(toDateIso),
         };
         fetchReport(params);
-        setPanelOpen(false);
     };
 
     const handleReset = () => {
         setPrincipal("All");
         setFromDateIso("");
         setToDateIso("");
-        fetchReport(ALL_PARAMS);
+        setError("");
+        setHasGeneratedReport(false);
+        setLastGeneratedAt(null);
     };
 
+    // ── Print (targets the most recently opened report tab)
     const handlePrint = () => {
-        iframeRef.current?.contentWindow?.postMessage("print", "*");
+        if (reportWindowRef.current && !reportWindowRef.current.closed) {
+            reportWindowRef.current.focus();
+            reportWindowRef.current.print();
+        } else {
+            setError("No open report tab to print. Generate the report again.");
+        }
     };
 
     const handleExcel = async () => {
@@ -243,372 +318,260 @@ export default function DNSummaryReportPage() {
         }
     };
 
-    // ── Styles (blue theme, matches Stock Detail Report)
-    const THEME = "#1d4ed8";
-    const THEME_DARK = "#1e40af";
-    const THEME_LIGHT = "#bfdbfe";
-
-    const btnBase: React.CSSProperties = {
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "7px 14px",
-        borderRadius: 8,
-        border: "1px solid #d1d5db",
-        background: "#fff",
-        cursor: "pointer",
-        fontSize: 12,
-        fontWeight: 600,
-        color: "#374151",
-        whiteSpace: "nowrap",
-        transition: "background 0.15s",
-    };
+    const BG = "#EEF5FD";
 
     return (
-        <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#f1f5f9", overflow: "hidden" }}>
+        <div style={{ background: "#f3f4f6", padding: "6px 10px", fontFamily: "system-ui, sans-serif", minHeight: "100vh" }}>
+            <style>{`
+                .action-btn-primary:hover { background: #1e40af !important; }
+                .action-btn-excel:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
+                .field-row { background: #EEF5FD; border-radius: 8px; padding: 10px 12px; }
+                @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+            `}</style>
 
-            {/* ── Top toolbar ── */}
-            <div style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "10px 20px",
-                background: "#fff",
-                borderBottom: "1px solid #e5e7eb",
-                flexShrink: 0,
-                gap: 12,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-            }}>
-                {/* Title */}
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{
-                        width: 34, height: 34, borderRadius: 8,
-                        background: THEME,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                            <polyline points="14 2 14 8 20 8" />
-                            <line x1="9" y1="13" x2="15" y2="13" />
-                            <line x1="9" y1="17" x2="15" y2="17" />
-                        </svg>
-                    </div>
-                    <div>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: "#111827" }}>DN Summary Report</div>
-                        <div style={{ fontSize: 10, color: "#6b7280" }}>Delivery Note Summary</div>
-                    </div>
-                </div>
+            <div style={{ maxWidth: 1400, margin: "0 auto" }}>
+                <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "8px 12px" }}>
 
-                {/* Action buttons */}
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    {/* Print */}
-                    <button
-                        style={btnBase}
-                        onClick={handlePrint}
-                        disabled={!reportHtml || loading}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = "#f9fafb")}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
-                    >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                            <rect x="6" y="14" width="12" height="8" />
-                        </svg>
-                        Print
-                    </button>
-
-                    {/* Excel */}
-                    <button
-                        style={{ ...btnBase, color: "#166534", borderColor: "#86efac" }}
-                        onClick={handleExcel}
-                        disabled={!reportHtml || loading || exporting}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = "#f0fdf4")}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
-                    >
-                        {exporting ? (
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: "spin 1s linear infinite" }}>
-                                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-                            </svg>
-                        ) : (
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <polyline points="14 2 14 8 20 8" />
-                                <line x1="12" y1="18" x2="12" y2="12" /><line x1="9" y1="15" x2="15" y2="15" />
-                            </svg>
+                    {/* Header */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                        <FileText size={17} color="#185FA5" />
+                        <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>DN Summary Report</span>
+                        {hasGeneratedReport && (
+                            <span style={{
+                                fontSize: 10,
+                                background: "#d1fae5",
+                                color: "#065f46",
+                                padding: "2px 10px",
+                                borderRadius: 12,
+                                fontWeight: 500,
+                            }}>
+                                Report Generated
+                            </span>
                         )}
-                        {exporting ? "Exporting…" : "Excel"}
-                    </button>
+                    </div>
 
-                    {/* Parameters toggle */}
-                    <button
-                        style={{
-                            ...btnBase,
-                            background: panelOpen ? THEME : "#fff",
-                            color: panelOpen ? "#fff" : "#374151",
-                            borderColor: panelOpen ? THEME : "#d1d5db",
-                        }}
-                        onClick={() => setPanelOpen((p) => !p)}
-                        onMouseEnter={(e) => { if (!panelOpen) e.currentTarget.style.background = "#f9fafb"; }}
-                        onMouseLeave={(e) => { if (!panelOpen) e.currentTarget.style.background = "#fff"; }}
-                    >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <line x1="4" y1="6" x2="20" y2="6" /><line x1="8" y1="12" x2="20" y2="12" />
-                            <line x1="4" y1="18" x2="20" y2="18" />
-                        </svg>
-                        Parameters
-                    </button>
-                </div>
-            </div>
-
-            {/* ── Content area ── */}
-            <div style={{ flex: 1, display: "flex", overflow: "hidden", position: "relative" }}>
-
-                {/* ── Report iframe ── */}
-                <div style={{
-                    flex: 1,
-                    overflow: "hidden",
-                    display: "flex",
-                    flexDirection: "column",
-                    transition: "margin-right 0.3s ease",
-                    marginRight: panelOpen ? 320 : 0,
-                }}>
-                    {loading && (
+                    {/* Error display */}
+                    {error && (
                         <div style={{
-                            position: "absolute",
-                            inset: 0,
-                            background: "rgba(255,255,255,0.85)",
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            zIndex: 50,
-                            gap: 12,
-                        }}>
-                            <div style={{
-                                width: 40, height: 40,
-                                border: "3px solid #e5e7eb",
-                                borderTop: `3px solid ${THEME}`,
-                                borderRadius: "50%",
-                                animation: "spin 0.8s linear infinite",
-                            }} />
-                            <span style={{ fontSize: 13, color: "#6b7280", fontWeight: 500 }}>Loading report…</span>
-                        </div>
-                    )}
-
-                    {error && !loading && (
-                        <div style={{
-                            margin: 20,
-                            padding: "14px 18px",
+                            marginBottom: 10,
+                            padding: "8px 14px",
                             background: "#fef2f2",
                             border: "1px solid #fecaca",
-                            borderRadius: 8,
+                            borderRadius: 6,
                             color: "#dc2626",
-                            fontSize: 13,
+                            fontSize: 12,
                             display: "flex",
                             alignItems: "center",
-                            gap: 10,
+                            gap: 8,
                         }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" />
-                                <line x1="12" y1="16" x2="12.01" y2="16" />
-                            </svg>
+                            <span>⚠️</span>
                             {error}
+                            <button
+                                onClick={() => setError("")}
+                                style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "#dc2626" }}
+                            >
+                                ✕
+                            </button>
                         </div>
                     )}
 
-                    {reportHtml && !error && (
-                        <iframe
-                            ref={iframeRef}
-                            srcDoc={reportHtml}
-                            style={{
-                                flex: 1,
-                                border: "none",
-                                width: "100%",
-                                height: "100%",
-                            }}
-                            title="DN Summary Report"
-                        />
-                    )}
-
-                    {!reportHtml && !loading && !error && (
+                    {!dateRangeValid && (
                         <div style={{
-                            flex: 1,
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            color: "#9ca3af",
-                            gap: 12,
+                            marginBottom: 10,
+                            padding: "8px 14px",
+                            background: "#fffbeb",
+                            border: "1px solid #fde68a",
+                            borderRadius: 6,
+                            color: "#92400e",
+                            fontSize: 12,
                         }}>
-                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <polyline points="14 2 14 8 20 8" />
-                            </svg>
-                            <span style={{ fontSize: 13 }}>No report loaded</span>
+                            From date must be on or before To date.
                         </div>
                     )}
-                </div>
 
-                {/* ── Slide-in Parameter Panel ── */}
-                <div style={{
-                    position: "absolute",
-                    top: 0,
-                    right: 0,
-                    bottom: 0,
-                    width: 320,
-                    background: "#fff",
-                    borderLeft: "1px solid #e5e7eb",
-                    boxShadow: "-4px 0 20px rgba(0,0,0,0.08)",
-                    transform: panelOpen ? "translateX(0)" : "translateX(100%)",
-                    transition: "transform 0.3s ease",
-                    display: "flex",
-                    flexDirection: "column",
-                    zIndex: 40,
-                    overflow: "hidden",
-                }}>
-                    {/* Panel header */}
-                    <div style={{
-                        padding: "14px 18px",
-                        borderBottom: "1px solid #e5e7eb",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        background: THEME,
-                        flexShrink: 0,
-                    }}>
-                        <div>
-                            <div style={{ fontWeight: 700, fontSize: 13, color: "#fff" }}>Report Parameters</div>
-                            <div style={{ fontSize: 10, color: THEME_LIGHT, marginTop: 2 }}>Adjust filters and view report</div>
-                        </div>
-                        <button
-                            onClick={() => setPanelOpen(false)}
-                            style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "#fff" }}
-                        >
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                        </button>
-                    </div>
-
-                    {/* Scrollable params */}
-                    <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
-                        {!dateRangeValid && (
-                            <div style={{
-                                marginBottom: 14,
-                                padding: "8px 10px",
-                                background: "#fffbeb",
-                                border: "1px solid #fde68a",
-                                borderRadius: 6,
-                                color: "#92400e",
-                                fontSize: 11,
-                            }}>
-                                From date must be on or before To date.
-                            </div>
-                        )}
-
-                        <SelectField
-                            label="Principal Code"
-                            options={principalOptions}
-                            value={principal}
-                            onChange={setPrincipal}
-                            placeholder="All"
-                            loading={optLoading}
-                        />
-
-                        {/* Date range */}
-                        <div style={{
-                            background: "#f8fafc", borderRadius: 8, padding: "12px 14px",
-                            border: "1px solid #e5e7eb", marginBottom: 4,
-                        }}>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 10 }}>
-                                Transaction Date Range
-                            </div>
+                    {/* ── Form fields ── */}
+                    <div className="field-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 6, width: "100%" }}>
+                        <FloatLabel label="Principal" bgColor={BG}>
+                            <SelectField
+                                label=""
+                                options={principalOptions}
+                                value={principal}
+                                onChange={setPrincipal}
+                                placeholder="All"
+                                loading={optLoading}
+                            />
+                        </FloatLabel>
+                        <FloatLabel label="From Date" bgColor={BG}>
                             <DateField
-                                label="From Date"
+                                label=""
                                 value={fromDateIso}
                                 onChange={setFromDateIso}
                                 max={toDateIso || undefined}
                             />
+                        </FloatLabel>
+                        <FloatLabel label="To Date" bgColor={BG}>
                             <DateField
-                                label="To Date"
+                                label=""
                                 value={toDateIso}
                                 onChange={setToDateIso}
                                 min={fromDateIso || undefined}
                             />
-                            <div style={{ fontSize: 10, color: "#9ca3af", marginTop: -6 }}>
-                                Leave blank to include all dates
-                            </div>
-                        </div>
+                        </FloatLabel>
+                    </div>
+                    <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4, marginLeft: 4 }}>
+                        Leave dates blank to include all transaction dates
                     </div>
 
-                    {/* Panel footer */}
-                    <div style={{ padding: "14px 18px", borderTop: "1px solid #e5e7eb", flexShrink: 0, display: "flex", gap: 8 }}>
+                    {/* Status bar when report is generated */}
+                    {hasGeneratedReport && (
+                        <div style={{
+                            marginTop: 10,
+                            padding: "8px 14px",
+                            background: "#f0fdf4",
+                            border: "1px solid #bbf7d0",
+                            borderRadius: 6,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 12,
+                        }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <span style={{ fontSize: 16 }}>✅</span>
+                                <span style={{ fontSize: 12, color: "#065f46" }}>
+                                    Report generated successfully at {lastGeneratedAt?.toLocaleTimeString()}
+                                </span>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    if (reportWindowRef.current && !reportWindowRef.current.closed) {
+                                        reportWindowRef.current.focus();
+                                    } else {
+                                        setError("Report tab is closed. Please generate again.");
+                                    }
+                                }}
+                                style={{
+                                    padding: "4px 12px",
+                                    background: "#185FA5",
+                                    color: "#fff",
+                                    border: "none",
+                                    borderRadius: 4,
+                                    fontSize: 11,
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 4,
+                                }}
+                            >
+                                <Eye size={12} /> Open Report
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Action bar */}
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10, paddingTop: 8, borderTop: "0.5px solid #e5e7eb" }}>
                         <button
+                            className="action-btn-excel"
                             onClick={handleReset}
                             disabled={loading}
                             style={{
-                                flex: 1,
-                                padding: "10px",
+                                padding: "7px 16px",
+                                border: "0.5px solid #d1d5db",
                                 background: "#fff",
-                                color: "#374151",
-                                border: "1px solid #d1d5db",
-                                borderRadius: 8,
-                                fontSize: 12,
-                                fontWeight: 600,
                                 cursor: loading ? "not-allowed" : "pointer",
-                                opacity: loading ? 0.5 : 1,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                                fontSize: 12,
+                                borderRadius: 6,
+                                color: "#374151",
+                                opacity: loading ? 0.6 : 1,
                             }}
                         >
-                            Reset
+                            <RotateCcw size={13} /> Reset
                         </button>
+
                         <button
-                            onClick={handleViewReport}
+                            className="action-btn-excel"
+                            onClick={handlePrint}
+                            disabled={!hasGeneratedReport || loading}
+                            style={{
+                                padding: "7px 16px",
+                                border: "0.5px solid #d1d5db",
+                                background: "#fff",
+                                cursor: (!hasGeneratedReport || loading) ? "not-allowed" : "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                                fontSize: 12,
+                                borderRadius: 6,
+                                color: "#374151",
+                                opacity: (!hasGeneratedReport || loading) ? 0.5 : 1,
+                            }}
+                        >
+                            <Printer size={13} /> Print
+                        </button>
+
+                        <button
+                            className="action-btn-excel"
+                            onClick={handleExcel}
+                            disabled={!hasGeneratedReport || loading || exporting}
+                            style={{
+                                padding: "7px 16px",
+                                border: "0.5px solid #d1d5db",
+                                background: "#fff",
+                                cursor: (!hasGeneratedReport || loading || exporting) ? "not-allowed" : "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                                fontSize: 12,
+                                borderRadius: 6,
+                                color: "#374151",
+                                opacity: (!hasGeneratedReport || loading || exporting) ? 0.5 : 1,
+                            }}
+                        >
+                            <Download size={13} /> {exporting ? "Exporting..." : "Export Excel"}
+                        </button>
+
+                        <button
+                            className="action-btn-primary"
+                            onClick={handleGenerateReport}
                             disabled={loading || !dateRangeValid}
                             style={{
-                                flex: 2,
-                                padding: "10px",
-                                background: (loading || !dateRangeValid) ? "#9ca3af" : THEME,
-                                color: "#fff",
-                                border: "none",
-                                borderRadius: 8,
-                                fontSize: 13,
-                                fontWeight: 700,
+                                padding: "7px 16px",
+                                border: "0.5px solid #185FA5",
+                                background: (loading || !dateRangeValid) ? "#94a3b8" : "#185FA5",
                                 cursor: (loading || !dateRangeValid) ? "not-allowed" : "pointer",
                                 display: "flex",
                                 alignItems: "center",
-                                justifyContent: "center",
-                                gap: 8,
-                                transition: "background 0.15s",
+                                gap: 6,
+                                fontSize: 12,
+                                borderRadius: 6,
+                                color: "#fff",
+                                transition: "background 0.2s",
                             }}
-                            onMouseEnter={(e) => { if (!loading && dateRangeValid) e.currentTarget.style.background = THEME_DARK; }}
-                            onMouseLeave={(e) => { if (!loading && dateRangeValid) e.currentTarget.style.background = THEME; }}
                         >
                             {loading ? (
                                 <>
-                                    <div style={{
-                                        width: 14, height: 14,
+                                    <span style={{
+                                        width: 12,
+                                        height: 12,
                                         border: "2px solid rgba(255,255,255,0.3)",
                                         borderTop: "2px solid #fff",
                                         borderRadius: "50%",
                                         animation: "spin 0.8s linear infinite",
                                     }} />
-                                    Loading…
+                                    Generating...
                                 </>
                             ) : (
                                 <>
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                        <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-                                    </svg>
-                                    View Report
+                                    <Eye size={13} /> View Report
                                 </>
                             )}
                         </button>
                     </div>
+
                 </div>
             </div>
-
-            <style>{`
-                @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-            `}</style>
         </div>
     );
 }

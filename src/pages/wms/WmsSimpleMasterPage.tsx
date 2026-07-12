@@ -4,7 +4,6 @@ import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { useToast } from "../../components/ui/AlertToast";
 import { deleteWmsGm, deleteWmsGmRaw, getWmsMaster, saveWmsGm } from "../../api/wms";
 import { Button } from "../../components/ui/Button";
-import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { WmsDataTable } from "../../components/ui/WmsDataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
@@ -12,7 +11,8 @@ import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 import {WmsMasterForm} from "../../components/WmsMasterForm";
 import ImportLocationEdi from "./edi/ImportLocationEdi";
-// import ImportProductEdi from "./edi/ImportProductEdi";
+import ImportProductEdi from "./edi/ImportProductEdi";
+import ImportSiteEdi from "./edi/ImportSiteEdi";
 
 export type WmsMasterField = {
   name: string;
@@ -502,7 +502,7 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
           </div>
         </Dialog>
       )}
-      {/* {config.ediUploadConfig?.name === "product" && ediUploadOpen && (
+      {config.ediUploadConfig?.name === "product" && ediUploadOpen && (
         <Dialog
           open={ediUploadOpen}
           title={`${config.title} EDI Upload`}
@@ -518,7 +518,24 @@ export function WmsSimpleMasterPage({ config }: { config: WmsSimpleMasterConfig 
             />
           </div>
         </Dialog>
-      )} */}
+      )}
+      {config.ediUploadConfig?.name === "site" && ediUploadOpen && (
+        <Dialog
+          open={ediUploadOpen}
+          title={`${config.title} EDI Upload`}
+          description="Import records via Excel/EDI"
+          compact
+          wide
+          onClose={() => setEdiUploadOpen(false)}
+        >
+          <div style={{ maxHeight: 'calc(90vh - 180px)', overflowY: 'auto', width: '100%' }}>
+            <ImportSiteEdi
+              onSuccess={() => setEdiUploadOpen(false)}
+              onClose={() => setEdiUploadOpen(false)}
+            />
+          </div>
+        </Dialog>
+      )}
     </section>
   );
 }

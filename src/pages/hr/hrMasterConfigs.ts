@@ -67,6 +67,22 @@ const mainBankLookup = {
 
 
 
+// const religionLookup = {
+//   columns: [
+//     { field: "religion_code", header: "Code" },
+//     { field: "religion_name", header: "Religion Name" },
+//   ],
+//   valueField: "religion_code",
+//   displayFields: ["religion_code", "religion_name"],
+//   loadOptions: (context: { loginid: string; companyCode: string }) =>
+//     getDynamicLookup({
+//       parameter: "MST_HR_MS_HR_RELIGION",
+//       loginid: context.loginid,
+//       code1: context.companyCode,
+//       code2: "",
+//     }),
+// };
+
 const religionLookup = {
   columns: [
     { field: "religion_code", header: "Code" },
@@ -78,10 +94,11 @@ const religionLookup = {
     getDynamicLookup({
       parameter: "MST_HR_MS_HR_RELIGION",
       loginid: context.loginid,
-      code1: "",
+      code1: context.companyCode,
       code2: "",
     }),
 };
+
 
 export const hrMasterConfigs: Record<string, HrMasterConfig> = {
   department: {
@@ -463,18 +480,20 @@ hrbank: {
     defaults: { status: "A" },
     deleteMode: "master",
   },
+
   religion: {
     title: "Religion Master",
     subtitle: "Maintain religion code, name, short name, remarks, and status using the existing HR procedure.",
     master: "religion",
     gmEndpoint: "religion",
-    routeKeys: ["religion", "hr_religion"],
+    routeKeys: ["religion", "hr_religion",],
     keyField: "religion_code",
     source: "dynamic",
-    listQuery: dynamicList("MST_HR_MS_HR_RELIGION"),
+    listQuery: dynamicList("MST_HR_MS_HR_RELIGION",true),
     buildSave: (form, context) => ({
       parameter: "MST_HR_RELIGION",
       loginid: context.loginid,
+      code1: context.companyCode,
       val1s1: text(form, "religion_code", "0") || "0",
       val1s2: text(form, "religion_name"),
       val1s3: text(form, "religion_short_name"),
@@ -500,11 +519,12 @@ hrbank: {
     routeKeys: ["caste", "hr_caste"],
     keyField: "caste_code",
     source: "dynamic",
-    listQuery: dynamicList("MST_HR_MS_HR_CASTE"),
+    listQuery: dynamicList("MST_HR_MS_HR_CASTE",true),
     autoGenerateKey: true,
     buildSave: (form, context) => ({
       parameter: "MST_HR_CASTE",
       loginid: context.loginid,
+       code1: context.companyCode,
       val1s1: text(form, "caste_code"),
       val1s2: text(form, "religion_code"),
       val1s3: text(form, "caste_name"),
@@ -573,7 +593,7 @@ buildDelete: (row, context) => ({
     routeKeys: ["educational_discipline", "education_discipline", "edu_discipline"],
     keyField: "edu_disc_code",
     source: "dynamic",
-    listQuery: dynamicList("MST_HR_MS_HR_EDU_DISCIPLINE"),
+    listQuery: dynamicList("MST_HR_MS_HR_EDU_DISCIPLINE",true),
     autoGenerateKey: true,
     buildSave: (form, context) => ({
       parameter: "MST_HR_EDU_DISCIPLINE",
@@ -607,11 +627,12 @@ buildDelete: (row, context) => ({
     routeKeys: ["languages", "language", "hr_languages"],
     keyField: "lang_code",
     source: "dynamic",
-    listQuery: dynamicList("MST_HR_MS_HR_LANGUAGES"),
+    listQuery: dynamicList("MST_HR_MS_HR_LANGUAGES",true),
     autoGenerateKey: true,
     buildSave: (form, context) => ({
       parameter: "MST_HR_LANGUAGES",
       loginid: context.loginid,
+      code1: context.companyCode,
       val1s1: text(form, "lang_code"),
       val1s2: text(form, "lang_desc"),
       val1s3: text(form, "lang_short_desc"),
@@ -641,7 +662,7 @@ buildDelete: (row, context) => ({
     routeKeys: ["skills", "skill", "hr_skills"],
     keyField: "skill_code",
     source: "dynamic",
-    listQuery: dynamicList("MST_HR_MS_HR_SKILLS"),
+    listQuery: dynamicList("MST_HR_MS_HR_SKILLS",true),
     autoGenerateKey: true,
     buildSave: (form, context) => ({
       parameter: "MST_HR_SKILLS",
@@ -750,29 +771,29 @@ buildDelete: (row, context) => ({
     defaults: { status: "A" },
     deleteMode: "master",
   },
-  grademaster: {
-    title: "Grade Master",
-    subtitle: "Maintain employee grades, entitlement flags, and benefit limits.",
-    master: "grademaster",
-    gmEndpoint: "grade",
-    routeKeys: ["grademaster", "grade"],
-    keyField: "grade_code",
-    fields: [
-      { name: "grade_code", label: "Grade Code", required: true, disabledOnEdit: true, width: 140 },
-      { name: "grade_name", label: "Grade Name", required: true, width: 240 },
-      { name: "grade_short_name", label: "Short Name", required: true, width: 140 },
-      { name: "ot_eligibility", label: "OT Eligible", type: "select", options: yesNo, required: true, width: 130 },
-      { name: "airfare_entitlement", label: "Airfare", type: "number", width: 130 },
-      { name: "spouse_af_entitlement", label: "Spouse Airfare", type: "number", width: 150 },
-      { name: "dep_af_entitlement", label: "Dependent Airfare", type: "number", width: 165 },
-      { name: "medical_entitlement", label: "Medical", type: "number", width: 130 },
-      { name: "grade_status", label: "Grade Status", width: 140 },
-      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
-      { name: "remarks", label: "Remarks", table: false },
-    ],
-    defaults: { ot_eligibility: "N", status: "A" },
-    deleteMode: "gm",
-  },
+  // grademaster: {
+  //   title: "Grade Master",
+  //   subtitle: "Maintain employee grades, entitlement flags, and benefit limits.",
+  //   master: "grade_master",
+  //   gmEndpoint: "grade_master",
+  //   routeKeys: ["grade_master", "grade master", "grademaster", "grade"],
+  //   keyField: "grade_code",
+  //   fields: [
+  //     { name: "grade_code", label: "Grade Code", required: true, disabledOnEdit: true, width: 140 },
+  //     { name: "grade_name", label: "Grade Name", required: true, width: 240 },
+  //     { name: "grade_short_name", label: "Short Name", required: true, width: 140 },
+  //     { name: "ot_eligibility", label: "OT Eligible", type: "select", options: yesNo, required: true, width: 130 },
+  //     { name: "airfare_entitlement", label: "Airfare", type: "number", width: 130 },
+  //     { name: "spouse_af_entitlement", label: "Spouse Airfare", type: "number", width: 150 },
+  //     { name: "dep_af_entitlement", label: "Dependent Airfare", type: "number", width: 165 },
+  //     { name: "medical_entitlement", label: "Medical", type: "number", width: 130 },
+  //     { name: "grade_status", label: "Grade Status", width: 140 },
+  //     { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
+  //     { name: "remarks", label: "Remarks", table: false },
+  //   ],
+  //   defaults: { ot_eligibility: "N", status: "A" },
+  //   deleteMode: "gm",
+  // },
   designation: {
     title: "Designation Master",
     subtitle: "Maintain employee designation codes, descriptions, and status.",

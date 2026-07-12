@@ -629,9 +629,38 @@ site: {
     ediUploadConfig: {
       open: true,
       name: "site",
-    }
+    },
+    customLoad: async (user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      const data = await executeWmsInboundSql(`
+        SELECT
+          SITE_CODE AS "site_code",
+          SITE_IND AS "site_ind",
+          SITE_TYPE AS "site_type",
+          SITE_NAME AS "site_name",
+          SITE_ADDR1 AS "site_addr1",
+          SITE_ADDR2 AS "site_addr2",
+          SITE_ADDR3 AS "site_addr3",
+          SITE_ADDR4 AS "site_addr4",
+          CITY AS "city",
+          COUNTRY_CODE AS "country_code",
+          CONTACT_NAME AS "contact_name",
+          TEL_NO AS "tel_no",
+          CHARGE_IND AS "charge_ind",
+          PRIN_CODE AS "prin_code",
+          GROUP_CODE AS "group_code",
+          LOC_TYPE AS "loc_type",
+          COMPANY_CODE AS "company_code"
+        FROM MS_SITE
+        WHERE COMPANY_CODE = '${typedUser.company_code}'
+        ORDER BY SITE_CODE
+      `);
+      return {
+        tableData: data as Record<string, unknown>[],
+        count: data.length,
+      };
+    },
   },
-
   warehouse: {
     title: "Warehouse Master",
     subtitle: "Maintain warehouse code, address, country, city, and contact information.",
@@ -642,12 +671,57 @@ site: {
     fields: [
       { name: "wh_code", label: "Warehouse Code", required: true, disabledOnEdit: true, width: 160 },
       { name: "wh_name", label: "Warehouse Name", required: true, width: 280 },
+      { name: "address_1", label: "Address Line 1", width: 220, table: false },
+      { name: "address_2", label: "Address Line 2", width: 220, table: false },
+      { name: "address_3", label: "Address Line 3", width: 220, table: false },
       { name: "country_code", label: "Country Code", width: 140 },
       { name: "city", label: "City", width: 150 },
       { name: "phone", label: "Phone", width: 150 },
-      { name: "address", label: "Address", table: false },
+      { name: "fax", label: "Fax", width: 150, table: false },
+      { name: "contact_person", label: "Contact Person", width: 180, table: false },
     ],
-    deleteConfig: { mode: "disabled", payload: () => null, reason: "Delete endpoint is not registered in the existing backend" },
+    customLoad: async (user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      const data = await executeWmsInboundSql(`
+        SELECT *
+        FROM MS_WAREHOUSE
+        WHERE COMPANY_CODE = '${typedUser.company_code}'
+        ORDER BY WH_CODE
+      `);
+      return {
+        tableData: data as Record<string, unknown>[],
+        count: data.length,
+      };
+    },
+    customSave: async (form, context) => {
+      console.log("Custom save logic for Warehouse Master", form, context);
+      const { editMode, original, user } = context;
+      const typedUser = user as { loginid: string; company_code: string };
+      await executeDynamicMutation({
+        loginid: typedUser.loginid,
+        parameter: "WAREHOUSE_INS_UPD",
+        val1s1: (editMode ? (original?.wh_code ?? form.wh_code) : undefined) as string | undefined,
+        val1s2: form.wh_name as string,
+        val1s3: form.address_1 as string,
+        val1s4: form.address_2 as string,
+        val1s5: form.address_3 as string,
+        val1s6: form.city as string,
+        val1s7: form.country_code as string,
+        val1s8: form.phone as string,
+        val1s9: form.fax as string,
+        val1s10: form.contact_person as string,
+        wval1s1: typedUser.company_code,
+        wval1s2: (editMode ? original?.wh_code : form.wh_code) as string,
+      });
+    },
+    customDelete: async (row, user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      await executeWmsInboundSql(`
+        DELETE FROM MS_WAREHOUSE
+        WHERE COMPANY_CODE = '${typedUser.company_code}'
+        AND WH_CODE = '${row.wh_code}'
+      `);
+    },
   },
 
   location: {

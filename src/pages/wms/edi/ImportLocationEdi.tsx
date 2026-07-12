@@ -7,7 +7,7 @@ import { useAuth } from '../../../state/AuthContext';
 import { executeCommonProcedure, getDynamicLookup } from '../../../api/lookups';
 import { useToast } from '../../../components/ui/AlertToast';
 import { Button } from '../../../components/ui/Button';
-import ediServiceInstance from './api/location_edi';
+import { insUpdMsLocationEdiBlkApi } from '../../../api/edi';
 
 interface ImportLocationProps {
   onClose: () => void;
@@ -79,7 +79,7 @@ const ImportLocationEdi: React.FC<ImportLocationProps> = ({ onClose, onSuccess }
         blockcyc: 'N'
       }));
 
-      const result = await ediServiceInstance.insUpdMsLocationEdiBlkApi({
+      const result = await insUpdMsLocationEdiBlkApi({
         loginid: user?.loginid,
         locations: mappedLocations
       });
@@ -144,12 +144,6 @@ const ImportLocationEdi: React.FC<ImportLocationProps> = ({ onClose, onSuccess }
   };
 
   const handleReset = async () => {
-    // try {
-    //   await productServiceInstance.clearProductEDI();
-    // } catch (err) {
-    //   console.error(err);
-    // }
-
     setExcelData([]);
     setEdiRows([]);
     setEdiUploaded(false);
