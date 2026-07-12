@@ -88,7 +88,11 @@ export function VendorRequestDialog({
 
   useEffect(() => {
     if (!open) return;
-    const next = { ...emptyRequest(companyCode), ...(request || {}) };
+    const next = { ...emptyRequest(companyCode), ...(request || {}),
+    AC_NAME: (request as any)?.PARTY_NAME || "",
+    ADDRESS: (request as any)?.PARTY_ADDRESS || "",
+    PHONE: (request as any)?.PARTY_PHONE || "",
+    FAX: (request as any)?.PARTY_FAX || "",};
     setForm(next);
     setItems(normalizeItems(Array.isArray(request?.items) ? request.items : []));
     setSavedDocNo(String(next.DOC_NO || ""));
@@ -116,6 +120,13 @@ export function VendorRequestDialog({
   }, [companyCode, loginid, open, request]);
 
   const selectedRef = useMemo(() => refDocs.find((item) => String(item.DOC_NO || "") === String(form.REF_DOC_NO || "")), [form.REF_DOC_NO, refDocs]);
+  const refDocOptions = useMemo(() => {
+  const currentRef = String(form.REF_DOC_NO || "");
+  if (currentRef && !refDocs.some((item) => String(item.DOC_NO || "") === currentRef)) {
+    return [{ DOC_NO: currentRef } as RefDoc, ...refDocs];
+  }
+  return refDocs;
+ }, [refDocs, form.REF_DOC_NO]);
   const account = accounts[0] || {};
   const totals = useMemo(() => calculateTotals(items), [items]);
 
@@ -249,7 +260,8 @@ export function VendorRequestDialog({
       <span className="font-medium text-muted-foreground">Ref Doc No</span>
       <Select value={String(form.REF_DOC_NO || "")} onChange={(event) => void loadRefDetails(event.target.value)} disabled={readOnly || loadingRef || isEdit}>
         <option value="">Select Ref Doc</option>
-        {refDocs.map((item) => <option key={String(item.DOC_NO)} value={String(item.DOC_NO)}>{String(item.DOC_NO)}</option>)}
+        {/* {refDocs.map((item) => <option key={String(item.DOC_NO)} value={String(item.DOC_NO)}>{String(item.DOC_NO)}</option>)} */}
+        {refDocOptions.map((item) => <option key={String(item.DOC_NO)} value={String(item.DOC_NO)}>{String(item.DOC_NO)}</option>)}
       </Select>
     </label>
     <FormInput label="Well Id" value={String(form.REF_DOC1 || "")} onChange={(value) => setField("REF_DOC1", value)} readOnly={readOnly} />
