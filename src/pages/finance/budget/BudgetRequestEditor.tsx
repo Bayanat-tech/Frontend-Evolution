@@ -10,6 +10,8 @@ import { Select } from "../../../components/ui/Select";
 import { getDynamicLookup, getLookupValue, LookupRow } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { BudgetRequestRow } from "./BudgetRequestPage";
+import { upsertBulkAccountBudgetEntryApi } from "../../../api/transactions";
+import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
 // Year range this org is currently budgeting for. Bump the upper bound when a new year opens up.
 const MIN_BUDGET_YEAR = 2026;
@@ -25,20 +27,21 @@ interface BudgetAllocationRow {
   id: string;
   cost_code: string;
   cost_name: string;
-  month: string;
-  year: string;
-  requested_amount: number;
-  approved_amount: number;
+  month_budget: string;
+  budget_year: string;
+  requested_amt: number;
+  approved_amt: number;
 }
 
 interface BudgetRequestForm {
-  budget_no: string;
+  request_number: string;
   div_code: string;
   div_name: string;
   curr_code: string;
   curr_name: string;
+  request_date: string;
   ex_rate: number;
-  year: string;
+  budget_year: string;
   description: string;
   remarks: string;
   canceled?: string;
@@ -61,22 +64,25 @@ const emptyAllocationRow = (year: string): BudgetAllocationRow => ({
   id: newId(),
   cost_code: "",
   cost_name: "",
-  month: "",
-  year,
-  requested_amount: 0,
-  approved_amount: 0,
+  month_budget: "",
+  budget_year: year,
+  requested_amt: 0,
+  approved_amt: 0,
 });
 
 function emptyForm(editor: BudgetEditorState): BudgetRequestForm {
   return {
-    budget_no: editor?.mode === "edit" ? editor.row.budget_no : "",
+
+
+    request_number: editor?.mode === "edit" ? editor.row.request_number : "",
     div_code: editor?.mode === "create" ? editor.divCode || "" : editor?.mode === "edit" ? editor.row.div_code : "",
     div_name: editor?.mode === "create" ? editor.divName || "" : editor?.mode === "edit" ? editor.row.div_name || "" : "",
     curr_code: editor?.mode === "edit" ? editor.row.curr_code || "" : "",
     curr_name: "",
     ex_rate: 1,
-    year: editor?.mode === "edit" ? editor.row.year || defaultBudgetYear() : defaultBudgetYear(),
+    budget_year: editor?.mode === "edit" ? editor.row.budget_year || defaultBudgetYear() : defaultBudgetYear(),
     description: editor?.mode === "edit" ? editor.row.description || "" : "",
+    request_date: editor?.mode === "edit" ? editor.row.request_date || "" : new Date().toISOString().slice(0, 10),
     remarks: "",
     canceled: editor?.mode === "edit" ? editor.row.canceled : "N",
   };
@@ -96,7 +102,17 @@ function numberOrZero(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-// Loads the header via Account_Budget_HEADER_PAGE. Returns the first matching row, lower-cased.
+  function monthNameToNumber(monthName: string): number | null {
+    const index = MONTHS.indexOf(monthName);
+    return index === -1 ? null : index + 1; // 1-based: Jan=1, Feb=2, ... Dec=12
+  }
+  function monthNumberToName(monthNumber: unknown): string {
+    const num = Number(monthNumber);
+    if (!Number.isInteger(num) || num < 1 || num > 12) return "";
+    return MONTHS[num - 1];
+  }
+
+ //Loads the header via Account_Budget_HEADER_PAGE. Returns the first matching row, lower-cased.
 async function fetchBudgetHeader(budgetNo: string, companyCode?: string, loginid?: string): Promise<Record<string, unknown>> {
   const rows = await getDynamicLookup({
     parameter: "Account_Budget_Header_PAGE",
@@ -122,19 +138,116 @@ async function fetchBudgetDetail(budgetNo: string, companyCode?: string, loginid
       id: newId(),
       cost_code: text(row.cost_code),
       cost_name: text(row.cost_name),
-      month: text(row.month),
-      year: text(row.year),
-      requested_amount: numberOrZero(row.requested_amount),
-      approved_amount: numberOrZero(row.approved_amount),
+      month_budget: monthNumberToName(row.month_budget),
+      budget_year: text(row.budget_year),
+      requested_amt: numberOrZero(row.requested_amt),
+      approved_amt: numberOrZero(row.approved_amt),
     } satisfies BudgetAllocationRow;
   });
 }
 
 // TODO: swap for real endpoints once the backend routes are ready.
-async function saveBudgetRequestDraft(_form: BudgetRequestForm, _rows: BudgetAllocationRow[]) { /* no-op */ }
-async function submitBudgetRequest(_form: BudgetRequestForm, _rows: BudgetAllocationRow[]) { /* no-op */ }
-async function rejectBudgetRequest(_budgetNo: string) { /* no-op */ }
-async function sendBackBudgetRequest(_budgetNo: string) { /* no-op */ }
+function buildHeaderPayload(form: BudgetRequestForm, companyCode?: string, loginid?: string) {
+  return {
+    request_number: form.request_number || undefined, // omit for create; backend assigns a new one
+    div_code: form.div_code,
+    div_name: form.div_name,
+    curr_code: form.curr_code,
+    curr_name: form.curr_name,
+    ex_rate: form.ex_rate,
+    request_date: form.request_date,
+    budget_year: form.budget_year,
+    description: form.description,
+    remarks: form.remarks,
+    canceled: form.canceled || "N",
+    company_code: companyCode,
+    user_id: loginid ,
+  };
+}
+
+function monthNameToISODate(monthName: string, year: string): string | null {
+  const monthIndex = MONTHS.indexOf(monthName);
+  if (monthIndex === -1 || !year) return null;
+  return new Date(Date.UTC(Number(year), monthIndex, 1)).toISOString();
+}
+
+function buildDetailsPayload(rows: BudgetAllocationRow[]) {
+  return rows.map((row) => ({
+    cost_code: row.cost_code,
+    cost_name: row.cost_name,
+    month_budget: monthNameToNumber(row.month_budget), budget_year: row.budget_year,
+    requested_amt: row.requested_amt,
+    approved_amt: row.approved_amt,
+  }));
+}
+
+async function saveBudgetRequestDraft(
+  form: BudgetRequestForm,
+  rows: BudgetAllocationRow[],
+  companyCode?: string,
+  loginid?: string
+) {
+  return upsertBulkAccountBudgetEntryApi(
+    {
+      header: buildHeaderPayload(form, companyCode),
+      details: buildDetailsPayload(rows),
+      company_code: companyCode || "",
+      loginid: loginid || "ADMIN",
+    },
+    "SAVEASDRAFT"
+  );
+}
+
+async function submitBudgetRequest(
+  form: BudgetRequestForm,
+  rows: BudgetAllocationRow[],
+  companyCode?: string,
+  loginid?: string
+) {
+  return upsertBulkAccountBudgetEntryApi(
+    {
+      header: buildHeaderPayload(form, companyCode,loginid),
+      details: buildDetailsPayload(rows),
+      company_code: companyCode || "",
+      loginid: loginid || "ADMIN",
+    },
+    "SUBMITTED"
+  );
+}
+
+async function rejectBudgetRequest(
+  form: BudgetRequestForm,
+  rows: BudgetAllocationRow[],
+  companyCode?: string,
+  loginid?: string
+) {
+  return upsertBulkAccountBudgetEntryApi(
+    {
+      header: buildHeaderPayload(form, companyCode),
+      details: buildDetailsPayload(rows),
+      company_code: companyCode || "",
+      loginid: loginid || "ADMIN",
+    },
+    "REJECTED"
+  );
+}
+
+async function sendBackBudgetRequest(
+  form: BudgetRequestForm,
+  rows: BudgetAllocationRow[],
+  companyCode?: string,
+  loginid?: string
+) {
+  return upsertBulkAccountBudgetEntryApi(
+    {
+      header: buildHeaderPayload(form, companyCode),
+      details: buildDetailsPayload(rows),
+      company_code: companyCode || "",
+      loginid: loginid || "ADMIN",
+    },
+    "SENTBACK"
+  );
+}
 
 export function BudgetRequestEditor({
   editor,
@@ -148,10 +261,19 @@ export function BudgetRequestEditor({
   const { user } = useAuth();
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<BudgetRequestForm>(() => emptyForm(editor));
-  const [rows, setRows] = useState<BudgetAllocationRow[]>(() => (editMode ? [] : [emptyAllocationRow(form.year)]));
+  const [rows, setRows] = useState<BudgetAllocationRow[]>(() => (editMode ? [] : [emptyAllocationRow(form.budget_year)]));
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!editor) return;
+    const initialForm = emptyForm(editor);
+    setForm(initialForm);
+    setRows(editor.mode === "edit" ? [] : [emptyAllocationRow(initialForm.budget_year)]);
+    setError("");
+    setLoading(editor.mode === "edit");
+  }, [editor]);
 
   // In edit mode, pull the header from Account_Budget_HEADER_PAGE and the lines from Account_Budget_Detail_PAGE.
   useEffect(() => {
@@ -161,26 +283,28 @@ export function BudgetRequestEditor({
       setLoading(true);
       setError("");
       try {
-        const budgetNo = editor.row.budget_no;
+        const requestNumber = editor.row.request_number;
         const [headerRaw, detailRows] = await Promise.all([
-          fetchBudgetHeader(budgetNo, user?.company_code, user?.loginid || user?.username),
-          fetchBudgetDetail(budgetNo, user?.company_code, user?.loginid || user?.username),
+          fetchBudgetHeader(requestNumber, user?.company_code, user?.loginid || user?.username),
+          fetchBudgetDetail(requestNumber, user?.company_code, user?.loginid || user?.username),
         ]);
         if (!mounted) return;
         setForm((current) => ({
           ...current,
-          budget_no: text(headerRaw.budget_no || budgetNo),
+          request_number: text(headerRaw.request_number || requestNumber),
           div_code: text(headerRaw.div_code || current.div_code),
           div_name: text(headerRaw.div_name || current.div_name),
           curr_code: text(headerRaw.curr_code || current.curr_code),
           curr_name: text(headerRaw.curr_name || current.curr_name),
           ex_rate: Number(headerRaw.ex_rate || current.ex_rate || 1),
-          year: text(headerRaw.year || current.year),
+          budget_year: text(headerRaw.budget_year || current.budget_year),
           description: text(headerRaw.description || current.description),
           remarks: text(headerRaw.remarks || current.remarks),
+          request_date: toDateInputValue(headerRaw.request_date) || current.request_date,
+
           canceled: text(headerRaw.canceled || current.canceled || "N"),
         }));
-        setRows(detailRows.length ? detailRows : [emptyAllocationRow(text(headerRaw.year) || defaultBudgetYear())]);
+        setRows(detailRows.length ? detailRows : [emptyAllocationRow(text(headerRaw.budget_year) || defaultBudgetYear())]);
       } catch (loadError) {
         if (!mounted) return;
         setError(loadError instanceof Error ? loadError.message : "Unable to load budget request");
@@ -193,13 +317,13 @@ export function BudgetRequestEditor({
       mounted = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editMode]);
+  }, [editMode, editor?.mode === "edit" ? editor.row.request_number : undefined, user?.company_code, user?.loginid || user?.username]);
 
   const disabled = form.canceled === "Y" || saving || loading;
   const isCancelled = form.canceled === "Y";
 
-  const totalRequested = rows.reduce((sum, row) => sum + (Number(row.requested_amount) || 0), 0);
-  const totalApproved = rows.reduce((sum, row) => sum + (Number(row.approved_amount) || 0), 0);
+  const totalRequested = rows.reduce((sum, row) => sum + (Number(row.requested_amt) || 0), 0);
+  const totalApproved = rows.reduce((sum, row) => sum + (Number(row.approved_amt) || 0), 0);
 
   const updateField = (field: keyof BudgetRequestForm, value: string | number) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -207,15 +331,15 @@ export function BudgetRequestEditor({
 
   // Changing the header Year auto-fills every allocation row's Year with the newly selected year.
   const updateYear = (value: string) => {
-    setForm((current) => ({ ...current, year: value }));
-    setRows((current) => current.map((row) => ({ ...row, year: value })));
+    setForm((current) => ({ ...current, budget_year: value }));
+    setRows((current) => current.map((row) => ({ ...row, budget_year: value })));
   };
 
   const updateRow = (id: string, patch: Partial<BudgetAllocationRow>) => {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
 
-  const addRow = () => setRows((current) => [...current, emptyAllocationRow(form.year)]);
+  const addRow = () => setRows((current) => [...current, emptyAllocationRow(form.budget_year)]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
 
   const runAction = async (action: () => Promise<void> | void, successMessage?: string) => {
@@ -231,15 +355,29 @@ export function BudgetRequestEditor({
     }
   };
 
-  const handleSaveAsDraft = () => runAction(() => saveBudgetRequestDraft(form, rows), "Budget request saved as draft");
+  const handleSaveAsDraft = () =>
+    runAction(async () => {
+      await saveBudgetRequestDraft(form, rows, user?.company_code, user?.loginid || user?.username);
+    }, "Budget request saved as draft");
+
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.curr_code) return setError("Currency is required");
-    if (!form.year) return setError("Year is required");
-    return runAction(() => submitBudgetRequest(form, rows), editMode ? "Budget request updated successfully" : "Budget request created successfully");
+    if (!form.budget_year) return setError("Budget Year is required");
+    return runAction(async () => {
+      await submitBudgetRequest(form, rows, user?.company_code, user?.loginid || user?.username);
+    }, editMode ? "Budget request updated successfully" : "Budget request created successfully");
   };
-  const handleReject = () => runAction(() => rejectBudgetRequest(form.budget_no), "Budget request rejected");
-  const handleSendBack = () => runAction(() => sendBackBudgetRequest(form.budget_no), "Budget request sent back");
+
+  const handleReject = () =>
+    runAction(async () => {
+      await rejectBudgetRequest(form, rows, user?.company_code, user?.loginid || user?.username);
+    }, "Budget request rejected");
+
+  const handleSendBack = () =>
+    runAction(async () => {
+      await sendBackBudgetRequest(form, rows, user?.company_code, user?.loginid || user?.username);
+    }, "Budget request sent back");
 
   return (
     <form
@@ -259,12 +397,12 @@ export function BudgetRequestEditor({
               <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Budget Request</h2>
             </div>
             <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-              <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Budget No</span>
-              <strong className="block text-sm leading-tight text-primary-foreground">{form.budget_no || "New"}</strong>
+              <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Request Number</span>
+              <strong className="block text-sm leading-tight text-primary-foreground">{form.request_number || "New"}</strong>
             </div>
             <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-              <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Year</span>
-              <strong className="block text-sm leading-tight text-primary-foreground">{form.year || "—"}</strong>
+              <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Budget Year</span>
+              <strong className="block text-sm leading-tight text-primary-foreground">{form.budget_year || "—"}</strong>
             </div>
             <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
               <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Requested</span>
@@ -279,7 +417,7 @@ export function BudgetRequestEditor({
           </div>
           <div className="flex items-center gap-2">
             {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
-            {form.budget_no && (
+            {form.request_number && (
               <>
                 <Button type="button" variant="secondary"><Printer size={15} /> Print</Button>
                 <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
@@ -294,7 +432,7 @@ export function BudgetRequestEditor({
         <div className="cancelled-document-banner" role="status">
           <div>
             <span className="cancelled-document-kicker">Cancelled Request</span>
-            <strong>{form.budget_no || "Budget Request"}</strong>
+            <strong>{form.request_number || "Budget Request"}</strong>
           </div>
           <p>This budget request is cancelled and opened in read-only mode.</p>
         </div>
@@ -304,38 +442,38 @@ export function BudgetRequestEditor({
         {loading ? (
           <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading budget request...</div>
         ) : (
-        <div className="grid gap-3">
-          <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
+          <div className="grid gap-3">
+            <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
-          <div className="rounded-md border bg-card">
-            <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
-              <div>
-                <p className="eyebrow m-0">Header</p>
-                <h3 className="m-0 text-sm font-semibold leading-tight">Budget Information</h3>
+            <div className="rounded-md border bg-card">
+              <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
+                <div>
+                  <p className="eyebrow m-0">Header</p>
+                  <h3 className="m-0 text-sm font-semibold leading-tight">Budget Information</h3>
+                </div>
               </div>
-            </div>
-            <div className="payment-header-grid grid grid-cols-4 gap-2.5 p-3 max-2xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
-              {editMode && <Field label="Budget No"><Input disabled value={form.budget_no || ""} /></Field>}
+              <div className="payment-header-grid grid grid-cols-4 gap-2.5 p-3 max-2xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
+                {editMode && <Field label="Budget Number"><Input disabled value={form.request_number || ""} /></Field>}
 
-              <LookupField
-                label="Division *"
-                value={form.div_code}
-                displayValue={form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}
-                columns={[{ field: "div_code", header: "Code" }, { field: "div_name", header: "Name" }]}
-                valueField="div_code"
-                displayFields={["div_code", "div_name"]}
-                loadOptions={() => getDynamicLookup({
-                  parameter: "Account_division",
-                  code1: user?.company_code,
-                  loginid: user?.loginid || user?.username || "ADMIN",
-                })}
-                disabled={disabled}
-                onChange={(value, row) => setForm((current) => ({
-                  ...current,
-                  div_code: value,
-                  div_name: text(getLookupValue(row || {}, "div_name")),
-                }))}
-              />
+                <LookupField
+                  label="Division *"
+                  value={form.div_code}
+                  displayValue={form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}
+                  columns={[{ field: "div_code", header: "Code" }, { field: "div_name", header: "Name" }]}
+                  valueField="div_code"
+                  displayFields={["div_code", "div_name"]}
+                  loadOptions={() => getDynamicLookup({
+                    parameter: "Account_division",
+                    code1: user?.company_code,
+                    loginid: user?.loginid || user?.username || "ADMIN",
+                  })}
+                  disabled={disabled}
+                  onChange={(value, row) => setForm((current) => ({
+                    ...current,
+                    div_code: value,
+                    div_name: text(getLookupValue(row || {}, "div_name")),
+                  }))}
+                />
 
                 <LookupField
                   label="Currency *"
@@ -357,132 +495,135 @@ export function BudgetRequestEditor({
                     ex_rate: Number(getLookupValue(row || {}, "ex_rate") || (row as Record<string, unknown>)?.ex_rate || current.ex_rate || 1),
                   }))}
                 />
-              
 
-              <Field label="Year *">
-                <Select className="max-w-[120px]" disabled={disabled} required value={form.year} onChange={(event) => updateYear(event.target.value)}>
-                  {BUDGET_YEARS.map((year) => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </Select>
-              </Field>
+                <Field label="Request Date *">
+                  <Input type="date" disabled={disabled} required value={form.request_date} onChange={(event) => updateField("request_date", event.target.value)} />
+                </Field>
 
-              <label className="field col-span-1 max-md:col-span-1">
-                <span>Description</span>
-                <Input disabled={disabled} value={form.description} onChange={(event) => updateField("description", event.target.value)} />
-              </label>
+                <Field label="Budget Year *">
+                  <Select className="max-w-[120px]" disabled={disabled} required value={form.budget_year} onChange={(event) => updateYear(event.target.value)}>
+                    {BUDGET_YEARS.map((year) => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </Select>
+                </Field>
 
-              <label className="field col-span-2 max-md:col-span-1">
-                <span>Remarks</span>
-                <Input disabled={disabled} value={form.remarks} onChange={(event) => updateField("remarks", event.target.value)} />
-              </label>
-            </div>
-          </div>
+                <label className="field col-span-1 max-md:col-span-1">
+                  <span>Description</span>
+                  <Input disabled={disabled} value={form.description} onChange={(event) => updateField("description", event.target.value)} />
+                </label>
 
-          <div className="commercial-lines-card rounded-md border bg-card">
-            <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
-              <div>
-                <p className="eyebrow m-0">Allocation</p>
-                <h3 className="m-0 text-sm font-semibold leading-tight">Budget Allocation Lines</h3>
+                <label className="field col-span-2 max-md:col-span-1">
+                  <span>Remarks</span>
+                  <Input disabled={disabled} value={form.remarks} onChange={(event) => updateField("remarks", event.target.value)} />
+                </label>
               </div>
-              <Button disabled={disabled} size="sm" type="button" variant="outline" onClick={addRow}>
-                <Plus size={14} /> Add Line
-              </Button>
             </div>
-            <div className="commercial-lines-scroll max-h-[45vh] overflow-auto">
-              <table className="finance-lines-table w-full min-w-[1200px] text-sm">
-                <thead className="sticky top-0 bg-primary text-xs text-primary-foreground">
-                  <tr>
-                    <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
-                    <th className="px-2 py-2 text-left">Cost Code</th>
-                    <th className="px-2 py-2 text-left">Month</th>
-                    <th className="px-2 py-2 text-left">Year</th>
-                    <th className="finance-amount-cell px-2 py-2 text-left">Requested Amount</th>
-                    <th className="finance-amount-cell px-2 py-2 text-left">Approved Amount</th>
-                    <th className="px-2 py-2 text-left">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.length === 0 ? (
-                    <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={8}>No allocation lines yet</td></tr>
-                  ) : rows.map((row, index) => (
-                    <tr className="border-t odd:bg-muted/20" key={row.id}>
-                      <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{index + 1}</td>
-                      <td className="w-64 px-2 py-1">
-                        {/* TODO: wire to cost code/name master lookup API */}
-                        <LookupField
-                          label=""
-                          value={row.cost_code || ""}
-                          displayValue={row.cost_name ? `${row.cost_code} - ${row.cost_name}` : row.cost_code}
-                          columns={[{ field: "cost_code", header: "Cost Code" }, { field: "cost_name", header: "Cost Name" }]}
-                          valueField="cost_code"
-                          displayFields={["cost_code", "cost_name"]}
-                          loadOptions={() => getDynamicLookup({
-                            parameter: "Account_COST",
-                            code1: user?.company_code,
-                            loginid: user?.loginid || user?.username || "ADMIN",
-                          })}
-                          disabled={disabled}
-                          onChange={(value, selectedRow) => updateRow(row.id, {
-                            cost_code: value,
-                            cost_name: text(getLookupValue(selectedRow || {}, "cost_name")),
-                          })}
-                        />
-                      </td>
-                      <td className="w-36 px-2 py-1">
-                        <Select disabled={disabled} value={row.month} onChange={(event) => updateRow(row.id, { month: event.target.value })}>
-                          <option value="">Select</option>
-                          {MONTHS.map((month) => (
-                            <option key={month} value={month}>{month}</option>
-                          ))}
-                        </Select>
-                      </td>
-                      <td className="w-28 px-2 py-1">
-                        {/* Auto-filled from the header Year; still editable per-line if a row genuinely needs a different year. */}
-                        <Select disabled={disabled} value={row.year} onChange={(event) => updateRow(row.id, { year: event.target.value })}>
-                          {BUDGET_YEARS.map((year) => (
-                            <option key={year} value={year}>{year}</option>
-                          ))}
-                        </Select>
-                      </td>
-                      <td className="finance-amount-cell w-40 px-2 py-1">
-                        <Input
-                          className="finance-money-input"
-                          disabled={disabled}
-                          type="number"
-                          style={{ textAlign: "right" }}
-                          step="0.001"
-                          value={row.requested_amount}
-                          onChange={(event) => updateRow(row.id, { requested_amount: Number(event.target.value || 0) })}
-                        />
-                      </td>
-                      <td className="finance-amount-cell w-40 px-2 py-1">
-                        <Input
-                          className="finance-money-input"
-                          disabled={disabled}
-                          type="number"
-                          style={{ textAlign: "right" }}
-                          step="0.001"
-                          value={row.approved_amount}
-                          onChange={(event) => updateRow(row.id, { approved_amount: Number(event.target.value || 0) })}
-                        />
-                      </td>
-                      <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeRow(row.id)}><X size={14} /></Button></td>
+
+            <div className="commercial-lines-card rounded-md border bg-card">
+              <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
+                <div>
+                  <p className="eyebrow m-0">Allocation</p>
+                  <h3 className="m-0 text-sm font-semibold leading-tight">Budget Allocation Lines</h3>
+                </div>
+                <Button disabled={disabled} size="sm" type="button" variant="outline" onClick={addRow}>
+                  <Plus size={14} /> Add Line
+                </Button>
+              </div>
+              <div className="commercial-lines-scroll max-h-[45vh] overflow-auto">
+                <table className="finance-lines-table w-full min-w-[1200px] text-sm">
+                  <thead className="sticky top-0 bg-primary text-xs text-primary-foreground">
+                    <tr>
+                      <th className="finance-sticky-col finance-col-no px-2 py-2 text-left">No</th>
+                      <th className="px-2 py-2 text-left">Cost Code</th>
+                      <th className="px-2 py-2 text-left">Month</th>
+                      <th className="px-2 py-2 text-left">Year</th>
+                      <th className="finance-amount-cell px-2 py-2 text-left">Requested Amount</th>
+                      <th className="finance-amount-cell px-2 py-2 text-left">Approved Amount</th>
+                      <th className="px-2 py-2 text-left">Action</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex items-center justify-end gap-8 border-t px-3 py-1.5 text-sm">
-              <span className="text-muted-foreground">Total Requested</span>
-              <strong className="text-emerald-600">{formatAmount(totalRequested)}</strong>
-            </div>
-            <div className="flex items-center justify-end gap-8 px-3 py-1.5 text-sm">
-              <span className="text-muted-foreground">Total Approved</span>
-              <strong className="text-emerald-600">{formatAmount(totalApproved)}</strong>
+                  </thead>
+                  <tbody>
+                    {rows.length === 0 ? (
+                      <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={8}>No allocation lines yet</td></tr>
+                    ) : rows.map((row, index) => (
+                      <tr className="border-t odd:bg-muted/20" key={row.id}>
+                        <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{index + 1}</td>
+                        <td className="w-64 px-2 py-1">
+                          {/* TODO: wire to cost code/name master lookup API */}
+                          <LookupField
+                            label=""
+                            value={row.cost_code || ""}
+                            displayValue={row.cost_name ? `${row.cost_code} - ${row.cost_name}` : row.cost_code}
+                            columns={[{ field: "cost_code", header: "Cost Code" }, { field: "cost_name", header: "Cost Name" }]}
+                            valueField="cost_code"
+                            displayFields={["cost_code", "cost_name"]}
+                            loadOptions={() => getDynamicLookup({
+                              parameter: "Account_COST",
+                              code1: user?.company_code,
+                              loginid: user?.loginid || user?.username || "ADMIN",
+                            })}
+                            disabled={disabled}
+                            onChange={(value, selectedRow) => updateRow(row.id, {
+                              cost_code: value,
+                              cost_name: text(getLookupValue(selectedRow || {}, "cost_name")),
+                            })}
+                          />
+                        </td>
+                        <td className="w-36 px-2 py-1">
+                          <Select disabled={disabled} value={row.month_budget} onChange={(event) => updateRow(row.id, { month_budget: event.target.value })}>
+                            <option value="">Select</option>
+                            {MONTHS.map((month) => (
+                              <option key={month} value={month}>{month}</option>
+                            ))}
+                          </Select>
+                        </td>
+                        <td className="w-28 px-2 py-1">
+                          {/* Auto-filled from the header Year; still editable per-line if a row genuinely needs a different year. */}
+                          <Select disabled={disabled} value={row.budget_year} onChange={(event) => updateRow(row.id, { budget_year: event.target.value })}>
+                            {BUDGET_YEARS.map((year) => (
+                              <option key={year} value={year}>{year}</option>
+                            ))}
+                          </Select>
+                        </td>
+                        <td className="finance-amount-cell w-40 px-2 py-1">
+                          <Input
+                            className="finance-money-input"
+                            disabled={disabled}
+                            type="number"
+                            style={{ textAlign: "right" }}
+                            step="0.001"
+                            value={row.requested_amt}
+                            onChange={(event) => updateRow(row.id, { requested_amt: Number(event.target.value || 0) })}
+                          />
+                        </td>
+                        <td className="finance-amount-cell w-40 px-2 py-1">
+                          <Input
+                            className="finance-money-input"
+                            disabled={disabled}
+                            type="number"
+                            style={{ textAlign: "right" }}
+                            step="0.001"
+                            value={row.approved_amt}
+                            onChange={(event) => updateRow(row.id, { approved_amt: Number(event.target.value || 0) })}
+                          />
+                        </td>
+                        <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeRow(row.id)}><X size={14} /></Button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center justify-end gap-8 border-t px-3 py-1.5 text-sm">
+                <span className="text-muted-foreground">Total Requested</span>
+                <strong className="text-emerald-600">{formatAmount(totalRequested)}</strong>
+              </div>
+              <div className="flex items-center justify-end gap-8 px-3 py-1.5 text-sm">
+                <span className="text-muted-foreground">Total Approved</span>
+                <strong className="text-emerald-600">{formatAmount(totalApproved)}</strong>
+              </div>
             </div>
           </div>
-        </div>
         )}
       </CardContent>
 

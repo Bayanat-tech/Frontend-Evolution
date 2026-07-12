@@ -14,10 +14,11 @@ import { useAuth } from "../../../state/AuthContext";
 
 // TODO: replace with the real budget-request row shape once the backend contract is confirmed.
 export interface BudgetRequestRow {
-  budget_no: string;
+  request_number: string;
   div_code: string;
   div_name?: string;
-  year: string;
+  budget_year: string;
+  request_date: string;
   curr_code?: string;
   description?: string;
   status?: string;
@@ -29,8 +30,8 @@ async function cancelBudgetRequestApi(_budgetNo: string): Promise<void> {
   return;
 }
 
-export function BudgetRequestPage() {
-     const { user } = useAuth();
+export function BudgetRequestPage({ onClose }: { onClose?: () => void } = {}) {
+  const { user } = useAuth();
   const [rows, setRows] = useState<BudgetRequestRow[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [query, setQuery] = useState("");
@@ -73,6 +74,7 @@ export function BudgetRequestPage() {
   };
 
   useEffect(() => {
+    
     void loadLookups().catch((error) => {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load lookups" });
       setLoading(false);
@@ -85,9 +87,9 @@ export function BudgetRequestPage() {
 
   const columns = useMemo<ColumnDef<BudgetRequestRow>[]>(() => [
     {
-      accessorKey: "budget_no",
-      header: "Budget No",
-      cell: ({ row }) => <span className="font-semibold">{row.original.budget_no}</span>,
+      accessorKey: "request_number",
+      header: "Budget Number",
+      cell: ({ row }) => <span className="font-semibold">{row.original.request_number}</span>,
     },
     { accessorKey: "request_date", header: "Request Date", cell: ({ getValue }) => formatDate(getValue()) },
     { accessorKey: "div_code", header: "Div" },
@@ -178,13 +180,14 @@ export function BudgetRequestPage() {
             setPageSize(nextPageSize);
             setPageIndex(0);
           }}
-          getRowId={(row, index) => `${row.budget_no}_${index}`}
+          getRowId={(row, index) => `${row.request_number}_${index}`}
         />
       </div>
 
       {editor && (
         <div className="fixed inset-0 z-50 bg-background">
           <BudgetRequestEditor
+            key={editor?.mode === "edit" ? editor.row.request_number : editor?.mode || "create"}
             editor={editor}
             onClose={() => setEditor(null)}
             onSaved={async (message) => {
