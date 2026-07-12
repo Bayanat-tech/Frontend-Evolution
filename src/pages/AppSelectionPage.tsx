@@ -30,6 +30,7 @@ import { Fragment, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { HeaderProfile } from "../components/HeaderProfile";
 import { useAuth } from "../state/AuthContext";
+import { cn } from "../lib/utils";
 import type { MenuNode } from "../types/auth";
 import { firstLeafPath, flattenLeaves } from "../utils/menu";
 import { buildWorkspaceApps, cleanAppCode, isBtMastersApp, isUtilitiesApp } from "../utils/workspaceApps";
@@ -281,6 +282,7 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
   const coreApps = useMemo(() => workspaceApps.filter((app) => !isUtilitiesApp(app) && !isSecurityModule(app)), [workspaceApps]);
   const btMastersApp = useMemo(() => workspaceApps.find((app) => isBtMastersApp(app)) || workspaceApps.find((app) => isUtilitiesApp(app)), [workspaceApps]);
   const displayCoreApps = useMemo(() => sortAppsByDisplayOrder(coreApps), [coreApps]);
+  const canOpenSupportCenter = useMemo(() => isLikelySupportAdmin(user), [user]);
 
   const displayCards = useMemo(() => {
     const appCards = displayCoreApps.map((app, index) => ({
@@ -325,6 +327,11 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
   const openApp = (app: MenuNode) => {
     const firstPath = firstLeafPath(app);
     navigate(`/workspace/${cleanAppCode(app.title)}${firstPath ? `/${firstPath}` : ""}`);
+  };
+
+  const openSupportCenter = () => {
+    const supportHostApp = securityApp || workspaceApps[0];
+    navigate(`/workspace/${cleanAppCode(supportHostApp?.title || "security")}/support/admin`);
   };
 
   const handleLogout = () => {
@@ -408,13 +415,15 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
                   <span>Utilities</span>
                 </div>
                 <div className="utility-card-grid">
-                  <UtilityCard
-                    code="Support"
-                    fullForm="Support and Development Tickets"
-                    description="Support and development tickets with resolution tracking."
-                    Icon={LifeBuoy}
-                    disabled
-                  />
+                  {canOpenSupportCenter ? (
+                    <UtilityCard
+                      code="Support"
+                      fullForm="Support Help Desk"
+                      description="Monitor customer tickets, reply in real time, review attachments and close resolved requests."
+                      Icon={LifeBuoy}
+                      onClick={openSupportCenter}
+                    />
+                  ) : null}
                   {securityApp ? (
                     <UtilityAppCard app={securityApp} meta={getModuleMeta(securityApp, 0)} onClick={() => openApp(securityApp)} />
                   ) : null}
@@ -544,15 +553,17 @@ function UtilityCard({
   description,
   Icon,
   disabled,
+  onClick,
 }: {
   code: string;
   fullForm: string;
   description: string;
   Icon: ElementType;
   disabled?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <button className="utility-card utility-card-disabled" type="button" disabled={disabled}>
+    <button className={cn("utility-card", disabled && "utility-card-disabled")} type="button" disabled={disabled} onClick={onClick}>
       <span className="utility-card__icon">
         <Icon size={22} />
       </span>
@@ -615,4 +626,12 @@ function getModuleMeta(app: MenuNode, index: number): ModuleMeta {
     description: "Operational workflows, integrations and reports.",
     status: "completed",
   };
+}
+
+function isLikelySupportAdmin(user: unknown) {
+  const record = (user || {}) as Record<string, unknown>;
+  const values = [record.loginid, record.LOGINID, record.username, record.USERNAME, record.role, record.user_role, record.USER_ROLE, record.isAdmin]
+    .filter((value) => value !== undefined && value !== null)
+    .map((value) => String(value).trim().toUpperCase());
+  return values.some((value) => value === "ADMIN" || value === "Y" || value === "TRUE" || value.includes("ADMIN"));
 }

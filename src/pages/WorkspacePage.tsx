@@ -55,6 +55,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import { HeaderProfile } from "../components/HeaderProfile";
+import { SupportChatWidget } from "../components/SupportChatWidget";
 import type { MenuNode } from "../types/auth";
 import { cleanPath, flattenLeaves, titleCase } from "../utils/menu";
 import { buildWorkspaceApps, cleanAppCode } from "../utils/workspaceApps";
@@ -226,6 +227,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
             <input placeholder="Search menu, reports, forms..." />
           </div>
           <div className="workspace-header-actions">
+            <SupportChatWidget />
             <HeaderProfile
               user={user}
               dark={dark}
