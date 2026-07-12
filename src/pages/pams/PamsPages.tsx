@@ -7,7 +7,7 @@ import { pamsCommonProcedure, pamsDelete, pamsPopulateDepartmentKpi, pamsSave, p
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
-import { DataTable } from "../../components/ui/DataTable";
+import { DataTable } from "../../components/ui/PamsDataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
@@ -200,8 +200,8 @@ export const pamsMasterConfigs: Record<string, PamsMasterConfig> = {
     deleteParameter: "delete_kpi_period",
     keyFields: ["PERIOD_NUMBER"],
     fields: [
-      { name: "PERIOD_NUMBER", label: "Period Number", disabledOnEdit: true, table: true, width: 150 },
-      { name: "PERIOD_FROM_DATE", label: "From Date", type: "date", required: true, table: true, width: 160, display: (row) => formatDateDisplay(row.PERIOD_FROM_DATE),  },
+      { name: "PERIOD_NUMBER", label: "Period Number", disabledOnEdit: true, table: true, width: 150, display: (row) => formatPeriodQuarter(row) },
+      { name: "PERIOD_FROM_DATE", label: "From Date", type: "date", required: true, table: true, width: 160, display: (row) => formatDateDisplay(row.PERIOD_FROM_DATE), },
       { name: "PERIOD_TO_DATE", label: "To Date", type: "date", required: true, table: true, width: 160, display: (row) => formatDateDisplay(row.PERIOD_TO_DATE), },
     ],
     buildSave: (form, ctx) => ({
@@ -456,12 +456,12 @@ export function PamsMasterPage({ config, extraActions, hideRefresh, headerAction
         </div>
         <div className="flex gap-2">
           {!hideRefresh && <Button
-      size="sm"
-      variant="outline"
-      onClick={() => void loadRows()}
-    >
-      <RefreshCw size={13} /> Refresh
-    </Button>}
+            size="sm"
+            variant="outline"
+            onClick={() => void loadRows()}
+          >
+            <RefreshCw size={13} /> Refresh
+          </Button>}
           <Button
             size="sm"
             variant="default"
@@ -1130,7 +1130,7 @@ export function PamsBulkAppraisalPage() {
               onChange={setSelectedPeriod}
               options={periods.map((period, index) => {
                 const value = text(period.PERIOD_NUMBER || period.period_number);
-                return { value, label: formatPeriodCode(value), key: `period_${value}_${index}` };
+                return { value, label: formatPeriodQuarter(period), key: `period_${value}_${index}` };
               })}
             />
           </Field>
@@ -1710,7 +1710,7 @@ function PamsAppraisalHeaderDialog({ open, row, mode, onClose }: { open: boolean
                 onChange={handlePeriod}
                 options={periods.map((period, index) => {
                   const value = text(period.PERIOD_NUMBER || period.period_number);
-                  return { value, label: value, key: `period_header_${value}_${index}` };
+                  return { value, label: formatPeriodQuarter(period), key: `period_header_${value}_${index}` };
                 })}
               />
             </Field>
@@ -2145,6 +2145,15 @@ function formatPeriodCode(value: unknown) {
   const raw = text(value);
   if (!raw) return "";
   return /^\d+$/.test(raw) ? raw.padStart(4, "0") : raw;
+}
+
+function formatPeriodQuarter(row: Row) {
+  const dateValue = row.PERIOD_FROM_DATE;
+  if (!dateValue) return text(row.PERIOD_NUMBER);
+  const parsed = new Date(String(dateValue));
+  if (Number.isNaN(parsed.getTime())) return text(row.PERIOD_NUMBER);
+  const quarter = Math.floor(parsed.getMonth() / 3) + 1;
+  return `Q${quarter} ${parsed.getFullYear()}`;
 }
 
 function formatEmployeeLabel(employee?: Row) {

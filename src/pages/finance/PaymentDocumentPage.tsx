@@ -982,7 +982,6 @@ function PaymentDocumentEditor({
                       <th className="px-2 py-2 text-left">Tax %</th>
                       <th className="finance-amount-cell px-2 py-2 text-left">Tax Amt</th>
                       <th className="px-2 py-2 text-left">Job No</th>
-                      <th className="px-2 py-2 text-left">Dept</th>
                       <th className="finance-amount-cell px-2 py-2 text-left">Base Amount</th>
                       <th className="px-2 py-2 text-left">Action</th>
                     </tr>
@@ -994,26 +993,28 @@ function PaymentDocumentEditor({
                       <tr className={selectedDetail?.id === detail.id ? "border-t bg-primary/5" : "border-t odd:bg-muted/20"} key={detail.id}>
                         <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{detail.serial_no}</td>
                         <td className="finance-sticky-col finance-col-div px-2 py-1"><Input disabled value={detail.div_code || form.div_code} /></td>
-                        <td className="finance-sticky-col finance-col-account finance-account-cell px-2 py-1">
-                          <LookupField
-                            label="Detail Account"
-                            compact
-                            placeholder="A/c code"
-                            value={detail.ac_code}
-                            displayValue={detail.ac_name ? `${detail.ac_code} - ${detail.ac_name}` : detail.ac_code}
-                            columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
-                            valueField="ac_code"
-                            displayFields={["ac_code", "ac_name", "curr_code"]}
-                            loadOptions={() => getDynamicLookup({
-                              parameter: "Account_AC_CODE_Serach_HDR",
-                              code1: user?.company_code,
-                              code2: "D",
-                              code3: form.doc_type,
-                              code4: form.div_code
-                            })}
-                            disabled={disabled}
-                            onChange={(value, row) => void selectDetailAccount(detail, value, row)}
-                          />
+                        <td className="finance-sticky-col finance-col-account finance-account-cell w-[260px] max-w-[260px] px-2 py-1">
+                          <div className="w-full max-w-[460px] truncate">
+                            <LookupField
+                              label="Detail Account"
+                              compact
+                              placeholder="A/c code"
+                              value={detail.ac_code}
+                              displayValue={detail.ac_name ? `${detail.ac_code} - ${detail.ac_name}` : detail.ac_code}
+                              columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
+                              valueField="ac_code"
+                              displayFields={["ac_code", "ac_name", "curr_code", "exp_type_code"]}
+                              loadOptions={() => getDynamicLookup({
+                                parameter: "Account_AC_CODE_Serach_HDR",
+                                code1: user?.company_code,
+                                code2: "D",
+                                code3: form.doc_type,
+                                code4: form.div_code
+                              })}
+                              disabled={disabled}
+                              onChange={(value, row) => void selectDetailAccount(detail, value, row)}
+                            />
+                          </div>
                         </td>
                         <td className="px-2 py-1 text-center">
                           <input
@@ -1024,7 +1025,8 @@ function PaymentDocumentEditor({
                             type="radio"
                           />
                         </td>
-                        <td className="w-[220px] px-2 py-1"><Input disabled={disabled} value={detail.remarks || ""} onChange={(event) => updateDetail(detail.id, { remarks: event.target.value })} /></td>
+                        <td className="w-[220px] px-2 py-1"><textarea className="border border-gray-400 rounded p-1" disabled={disabled} value={detail.remarks || ""} onChange={(event) => updateDetail(detail.id, { remarks: event.target.value })} /></td>
+
                         <td className="w-[210px] px-2 py-1">
                           <LookupField
                             label="Currency"
@@ -1087,7 +1089,7 @@ function PaymentDocumentEditor({
                             <option value={-1}>Cr</option>
                           </Select>
                         </td>
-                        <td className="w-32 px-2 py-1">
+                        <td className="w-28 px-2 py-1">
                           <LookupField
                             label="Tax Code"
                             compact
@@ -1109,7 +1111,7 @@ function PaymentDocumentEditor({
                             onChange={(value) => updateDetail(detail.id, { tx_compntcat_code_1: value })}
                           />
                         </td>
-                        <td className="w-28 px-2 py-1">
+                        <td className="w-40 px-2 py-1">
                           <Select
                             disabled={disabled}
                             value={detail.tx_compnt_1_expmt || "N"}
@@ -1133,7 +1135,6 @@ function PaymentDocumentEditor({
                         <td className="w-28 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" value={detail.tx_compnt_perc_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
                         <td className="finance-amount-cell px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                         <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
-                        <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
                         <td className="finance-amount-cell px-2 py-1"><Input className="finance-money-input" disabled value={Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1))} /></td>
                         <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
                       </tr>
