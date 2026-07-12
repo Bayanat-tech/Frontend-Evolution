@@ -30,6 +30,12 @@ export type SupportTicket = {
   CREATED_AT?: string;
   REQUESTER_IS_ONLINE?: string;
   UNREAD_COUNT?: number;
+  DEVELOPER_LOGINID?: string;
+  DEVELOPER_NAME?: string;
+  DEVELOPER_EMAIL?: string;
+  DEV_STATUS?: string;
+  ASSIGNED_BY?: string;
+  ASSIGNED_AT?: string;
 };
 
 export type SupportMessage = {
@@ -55,6 +61,16 @@ export type SupportUser = {
   TENANT_ID?: string;
   LAST_SEEN_AT?: string;
   IS_ONLINE?: string;
+};
+
+export type SupportDeveloper = {
+  DEVELOPER_ID?: number;
+  LOGINID: string;
+  USERNAME?: string;
+  EMAIL_ID?: string;
+  COMPANY_CODE?: string;
+  SKILL_TAGS?: string;
+  ACTIVE_FLAG?: string;
 };
 
 function unwrap<T>(response: { data: { success?: boolean; data?: T; message?: string } }) {
@@ -98,4 +114,24 @@ export async function markSupportRead(ticketId: number) {
 
 export async function getSupportActiveUsers() {
   return unwrap<SupportUser[]>(await api.get("/api/support/active-users"));
+}
+
+export async function getSupportDevelopers() {
+  return unwrap<SupportDeveloper[]>(await api.get("/api/support/developers"));
+}
+
+export async function saveSupportDeveloper(payload: Record<string, unknown>) {
+  return unwrap(await api.post("/api/support/developers", payload));
+}
+
+export async function assignSupportDeveloper(ticketId: number, payload: Record<string, unknown>) {
+  return unwrap(await api.post(`/api/support/tickets/${ticketId}/assign-developer`, { ...payload, role: "admin" }));
+}
+
+export async function getDeveloperSupportTickets() {
+  return unwrap<SupportTicket[]>(await api.get("/api/support/developer/tickets"));
+}
+
+export async function updateDeveloperSupportStatus(ticketId: number, devStatus: string) {
+  return unwrap(await api.patch(`/api/support/tickets/${ticketId}/developer-status`, { dev_status: devStatus }));
 }

@@ -355,7 +355,7 @@ export function SupportChatWidget() {
 
   const openSupport = () => {
     if (canOpenAdminPage) {
-      navigate(`/workspace/${appCode || "security"}/support/admin`);
+      navigate("/workspace/bt-support/support/admin");
       setOpen(false);
       return;
     }

@@ -22,9 +22,11 @@ const excludedUtilitySignals = [
 
 export function buildWorkspaceApps(menuTree: MenuNode[]): MenuNode[] {
   const mastersApp = buildBtMastersApp(menuTree);
-  if (!mastersApp) return menuTree;
+  const supportApp = buildBtSupportApp();
+  const withSupport = menuTree.some((item) => isBtSupportApp(item)) ? menuTree : [...menuTree, supportApp];
+  if (!mastersApp) return withSupport;
   const hasBtMasters = menuTree.some((item) => isBtMastersApp(item));
-  return hasBtMasters ? menuTree : [...menuTree, mastersApp];
+  return hasBtMasters ? withSupport : [...withSupport, mastersApp];
 }
 
 export function cleanAppCode(value: string) {
@@ -38,6 +40,45 @@ export function isUtilitiesApp(node?: MenuNode | null) {
 
 export function isBtMastersApp(node?: MenuNode | null) {
   return normalizeTitle(node?.title || "") === "bt masters";
+}
+
+export function isBtSupportApp(node?: MenuNode | null) {
+  return normalizeTitle(node?.title || "") === "bt support";
+}
+
+export function buildBtSupportApp(): MenuNode {
+  return {
+    id: "virtual-bt-support",
+    title: "BT SUPPORT",
+    type: "group",
+    children: [
+      {
+        id: "bt-support-center",
+        title: "Support Center",
+        type: "collapse",
+        children: [
+          {
+            id: "bt-support-admin-dashboard",
+            title: "Admin Dashboard",
+            type: "item",
+            url_path: "support/admin",
+          },
+          {
+            id: "bt-support-developer-assignment",
+            title: "Developer Assignment",
+            type: "item",
+            url_path: "support/developer-assignment",
+          },
+          {
+            id: "bt-support-developer-workbench",
+            title: "Developer Workbench",
+            type: "item",
+            url_path: "support/developer-workbench",
+          },
+        ],
+      },
+    ],
+  };
 }
 
 export function buildBtMastersApp(menuTree: MenuNode[]): MenuNode | null {

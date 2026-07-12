@@ -30,10 +30,9 @@ import { Fragment, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { HeaderProfile } from "../components/HeaderProfile";
 import { useAuth } from "../state/AuthContext";
-import { cn } from "../lib/utils";
 import type { MenuNode } from "../types/auth";
 import { firstLeafPath, flattenLeaves } from "../utils/menu";
-import { buildWorkspaceApps, cleanAppCode, isBtMastersApp, isUtilitiesApp } from "../utils/workspaceApps";
+import { buildWorkspaceApps, cleanAppCode, isBtMastersApp, isBtSupportApp, isUtilitiesApp } from "../utils/workspaceApps";
 
 type ModuleAccent = {
   gradient: string;
@@ -61,6 +60,17 @@ const defaultAccents: ModuleAccent[] = [
 ];
 
 const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta; external?: { url: string } }> = [
+  {
+    keys: ["bt support", "support"],
+    meta: {
+      Icon: LifeBuoy,
+      accent: { gradient: "linear-gradient(135deg, #0b63ce 0%, #1294d8 100%)", light: "#eaf5ff", border: "#abd3ff", icon: "#0b63ce", text: "#0d356d", glow: "rgba(11, 99, 206, 0.18)" },
+      code: "SUPPORT",
+      fullForm: "Support Ticketing System",
+      description: "Realtime help desk, customer chat, ticket assignment and developer workbench.",
+      status: "completed",
+    },
+  },
   {
     keys: ["wms", "warehouse"],
     meta: {
@@ -278,11 +288,16 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
   const { user, menuTree, logout } = useAuth();
   const navigate = useNavigate();
   const workspaceApps = useMemo(() => buildWorkspaceApps(menuTree), [menuTree]);
-  const securityApp = useMemo(() => workspaceApps.find((app) => isSecurityModule(app)), [workspaceApps]);
-  const coreApps = useMemo(() => workspaceApps.filter((app) => !isUtilitiesApp(app) && !isSecurityModule(app)), [workspaceApps]);
-  const btMastersApp = useMemo(() => workspaceApps.find((app) => isBtMastersApp(app)) || workspaceApps.find((app) => isUtilitiesApp(app)), [workspaceApps]);
-  const displayCoreApps = useMemo(() => sortAppsByDisplayOrder(coreApps), [coreApps]);
   const canOpenSupportCenter = useMemo(() => isLikelySupportAdmin(user), [user]);
+  const supportApp = useMemo(() => workspaceApps.find((app) => isBtSupportApp(app)), [workspaceApps]);
+  const securityApp = useMemo(() => workspaceApps.find((app) => isSecurityModule(app)), [workspaceApps]);
+  const coreApps = useMemo(
+    () => workspaceApps.filter((app) => !isUtilitiesApp(app) && !isSecurityModule(app) && !isBtSupportApp(app)),
+    [workspaceApps]
+  );
+  const btMastersApp = useMemo(() => workspaceApps.find((app) => isBtMastersApp(app)) || workspaceApps.find((app) => isUtilitiesApp(app)), [workspaceApps]);
+  const hasUtilityCards = Boolean((canOpenSupportCenter && supportApp) || securityApp || btMastersApp);
+  const displayCoreApps = useMemo(() => sortAppsByDisplayOrder(coreApps), [coreApps]);
 
   const displayCards = useMemo(() => {
     const appCards = displayCoreApps.map((app, index) => ({
@@ -327,11 +342,6 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
   const openApp = (app: MenuNode) => {
     const firstPath = firstLeafPath(app);
     navigate(`/workspace/${cleanAppCode(app.title)}${firstPath ? `/${firstPath}` : ""}`);
-  };
-
-  const openSupportCenter = () => {
-    const supportHostApp = securityApp || workspaceApps[0];
-    navigate(`/workspace/${cleanAppCode(supportHostApp?.title || "security")}/support/admin`);
   };
 
   const handleLogout = () => {
@@ -409,25 +419,19 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
              </div>
             </section>
 
-            {btMastersApp ? (
+            {hasUtilityCards ? (
               <section className="app-launch-section app-launch-utility-section">
                 <div className="app-launch-section-title">
                   <span>Utilities</span>
                 </div>
                 <div className="utility-card-grid">
-                  {canOpenSupportCenter ? (
-                    <UtilityCard
-                      code="Support"
-                      fullForm="Support Help Desk"
-                      description="Monitor customer tickets, reply in real time, review attachments and close resolved requests."
-                      Icon={LifeBuoy}
-                      onClick={openSupportCenter}
-                    />
+                  {canOpenSupportCenter && supportApp ? (
+                    <UtilityAppCard app={supportApp} meta={getModuleMeta(supportApp, 0)} onClick={() => openApp(supportApp)} />
                   ) : null}
                   {securityApp ? (
                     <UtilityAppCard app={securityApp} meta={getModuleMeta(securityApp, 0)} onClick={() => openApp(securityApp)} />
                   ) : null}
-                  <BtMastersCard app={btMastersApp} onClick={() => openApp(btMastersApp)} />
+                  {btMastersApp ? <BtMastersCard app={btMastersApp} onClick={() => openApp(btMastersApp)} /> : null}
                 </div>
               </section>
             ) : null}
@@ -542,40 +546,6 @@ function BtMastersCard({ app, onClick }: { app: MenuNode; onClick: () => void })
         <strong>
           OPEN <ChevronRight size={14} />
         </strong>
-      </div>
-    </button>
-  );
-}
-
-function UtilityCard({
-  code,
-  fullForm,
-  description,
-  Icon,
-  disabled,
-  onClick,
-}: {
-  code: string;
-  fullForm: string;
-  description: string;
-  Icon: ElementType;
-  disabled?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button className={cn("utility-card", disabled && "utility-card-disabled")} type="button" disabled={disabled} onClick={onClick}>
-      <span className="utility-card__icon">
-        <Icon size={22} />
-      </span>
-      <Icon size={78} className="utility-card__watermark" aria-hidden="true" />
-      <div className="utility-card__copy">
-        <h2><span>B<sup>T</sup>-</span>{code}</h2>
-        <em>({fullForm})</em>
-        <p>{description}</p>
-      </div>
-      <div className="bt-masters-card__footer">
-        <span>Future utility</span>
-        <strong>OPEN <ChevronRight size={14} /></strong>
       </div>
     </button>
   );

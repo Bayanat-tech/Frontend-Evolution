@@ -124,6 +124,9 @@ import InspectionReportMainPage from "../pages/oxmaint/inspection-report-tailwin
 
 import { GradeMasterPage } from "../pages/hr/Grademasterpage";
 import InvoicePage from "../pages/wms/invoice/InvoicePage";
+import { AdminSupportCenterPage } from "../pages/support/AdminSupportCenterPage";
+import { SupportDeveloperAssignmentPage } from "../pages/support/SupportDeveloperAssignmentPage";
+import { SupportDeveloperWorkbenchPage } from "../pages/support/SupportDeveloperWorkbenchPage";
 
 
 
@@ -145,6 +148,21 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: "Support Developer Assignment",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/support/developer-assignment"),
+    element: () => <SupportDeveloperAssignmentPage />,
+  },
+  {
+    name: "Support Developer Workbench",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/support/developer-workbench"),
+    element: () => <SupportDeveloperWorkbenchPage />,
+  },
+  {
+    name: "Admin Support Center",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/support/admin"),
+    element: () => <AdminSupportCenterPage />,
+  },
   {
     name: "SMS Dashboard",
     match: (context) => isSmsRoute(context) && getGenericMatchText(context).includes("dashboard"),
