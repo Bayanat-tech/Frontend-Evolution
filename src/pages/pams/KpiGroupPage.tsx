@@ -5,7 +5,6 @@ import { pamsDelete, pamsSave, pamsSelect } from "../../api/pams";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
-import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
@@ -13,6 +12,7 @@ import { NoticeToast } from "../../components/ui/NoticeToast";
 import { useAuth } from "../../state/AuthContext";
 import type { LookupRow } from "../../api/lookups";
 import ImportKpiEdi from "./Importkpiedi";
+import { DataTable } from "../../components/ui/PamsDataTable";
 
 
 

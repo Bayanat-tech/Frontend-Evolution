@@ -20,19 +20,6 @@ const excludedUtilitySignals = [
   "process",
 ];
 
-const moduleOwnedMasterSignals = [
-  "tenant master",
-  "tenant_master",
-  "tenant-master",
-  "tenant admin",
-  "tenant_admin",
-  "tenant-admin",
-  "tenantadmin",
-  "tenet master",
-  "tenet_master",
-  "tenet-master",
-];
-
 export function buildWorkspaceApps(menuTree: MenuNode[]): MenuNode[] {
   const mastersApp = buildBtMastersApp(menuTree);
   if (!mastersApp) return menuTree;
@@ -84,7 +71,7 @@ function collectMasterLeaves(app: MenuNode): MenuNode[] {
   const walk = (node: MenuNode, ancestry: string[]) => {
     const children = node.children || [];
     const trail = [...ancestry, node.title || "", node.url_path || ""];
-    if ((node.type === "item" || node.url_path) && isMasterTrail(trail) && !isModuleOwnedMasterTrail(trail)) {
+    if ((node.type === "item" || node.url_path) && isMasterTrail(trail)) {
       leaves.push({
         ...node,
         id: `bt-masters-${cleanAppCode(app.title)}-${node.id || cleanAppCode(node.title)}`,
@@ -102,15 +89,6 @@ function isMasterTrail(parts: string[]) {
   if (excludedUtilitySignals.some((signal) => text.includes(signal))) return false;
   if (masterSignals.some((signal) => text.includes(signal))) return true;
   return /(^|[^a-z0-9])gm([^a-z0-9]|$)/.test(text);
-}
-
-function isModuleOwnedMasterTrail(parts: string[]) {
-  const text = parts.join(" ").toLowerCase();
-  const compact = text.replace(/[^a-z0-9]/g, "");
-  return moduleOwnedMasterSignals.some((signal) => {
-    const normalizedSignal = signal.toLowerCase();
-    return text.includes(normalizedSignal) || compact.includes(normalizedSignal.replace(/[^a-z0-9]/g, ""));
-  });
 }
 
 function dedupeLeaves(leaves: MenuNode[]) {

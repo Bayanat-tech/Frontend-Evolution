@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import type { MenuNode } from "../types/auth";
-import { cleanPath } from "../utils/menu";
 import { AccountWiseBudgetPage } from "../pages/finance/AccountWiseBudgetPage";
 import { AccountTreePage } from "../pages/finance/AccountTreePage";
 import { AllocatedInvoicePage } from "../pages/finance/AllocatedInvoicePage";
@@ -89,6 +88,7 @@ import StockAdjPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
 import {StorageComputationPage} from "../pages/wms/storage computation/StorageComputation";
 import LeaveEncashmentPage from "../pages/hr/LeaveEncashmentPage";
 import EmployeeSalaryIncrement from "../pages/hr/EmployeeSalaryIncrement";
+import { EmployeeProfilePage } from "../pages/hr/EmployeeProfilePage";
 
 import { ContinuousAutoMemoPage } from "../pages/hr/HrContinuousAutoMemo";
 
@@ -102,10 +102,28 @@ import { HrEmpEducationPage } from "../pages/hr/HrEmpEducationPage";
 import GradeSalaryIncrement from "../pages/hr/GradeSalaryIncrement.";
 import SalaryAdditionDeductionMainPage from "../pages/hr/addition_deduction/SalaryAdditionDeductionMainPage";
 import AbsentMemoMainPage from "../pages/hr/absent_memo/AbsentMemoMainPage";
-import { AdminSupportCenterPage } from "../pages/support/AdminSupportCenterPage";
 
 import { HrManpowerPage } from "../pages/hr/HrManpower";
+import {
+  EmployeePayslipPage,
+  EmployeePayslipViewPage,
+  LeaveRegisterPage,
+  LeaveResumptionWorkspacePage,
+  LeaveCancelRequestPage,
+  LeaveClosedRequestPage,
+  LeaveInProgressPage,
+  LeaveRejectedRequestPage,
+  LeaveWorkspacePage,
+  leaveFlowConfigList,
+  type LeaveFlowKey,
+} from "../pages/hr/leave";
+import { SmsDashboardPage } from "../pages/sms/SmsDashboardPage";
+import { SmsMasterPage, smsMasterConfigs } from "../pages/sms/SmsMasterPage";
+import { SmsSalesRequestPage } from "../pages/sms/SmsSalesRequestPage";
+import InspectionReportMainPage from "../pages/oxmaint/inspection-report-tailwind/InspectionReportMainPage";
 
+import { GradeMasterPage } from "../pages/hr/Grademasterpage";
+import InvoicePage from "../pages/wms/invoice/InvoicePage";
 
 
 
@@ -122,12 +140,81 @@ type WorkspaceRoute = {
 };
 
 export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
-  const resolvedContext = withMenuRoutePath(context);
-  const route = workspaceRoutes.find((item) => item.match(resolvedContext));
-  return route?.element(resolvedContext) || null;
+  const route = workspaceRoutes.find((item) => item.match(context));
+  return route?.element(context) || null;
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: "SMS Dashboard",
+    match: (context) => isSmsRoute(context) && getGenericMatchText(context).includes("dashboard"),
+    element: () => <SmsDashboardPage />,
+  },
+  {
+    name: "SMS Sales Request",
+    match: (context) => isSmsRoute(context) && getGenericMatchText(context).replace(/[^a-z0-9]/g, "").includes("salesrequest"),
+    element: () => <SmsSalesRequestPage />,
+  },
+  {
+    name: "SMS Master",
+    match: (context) => Boolean(getSmsMasterConfig(context)),
+    element: (context) => <SmsMasterPage config={getSmsMasterConfig(context)!} />,
+  },
+  {
+    name: "HR Leave Workspace",
+    match: (context) => isLeaveFlowRoute(context, "request"),
+    element: () => <LeaveWorkspacePage initialTab="request" />,
+  },
+  {
+    name: "HR Leave In Progress",
+    match: (context) => isLeaveFlowRoute(context, "inProgress"),
+    element: () => <LeaveInProgressPage />,
+  },
+  {
+    name: "HR Leave Closed Request",
+    match: (context) => isLeaveFlowRoute(context, "closed"),
+    element: () => <LeaveClosedRequestPage />,
+  },
+  {
+    name: "HR Leave Cancel Request",
+    match: (context) => isLeaveFlowRoute(context, "cancelled"),
+    element: () => <LeaveCancelRequestPage />,
+  },
+  {
+    name: "HR Leave Rejected Request",
+    match: (context) => isLeaveFlowRoute(context, "rejected"),
+    element: () => <LeaveRejectedRequestPage />,
+  },
+  {
+    name: "HR Employee Payslip",
+    match: (context) => isHrRoute(context) && isHrEmployeePayslipRoute(context),
+    element: () => <EmployeePayslipPage />,
+  },
+  {
+    name: "HR Employee Payslip View",
+    match: (context) => isHrRoute(context) && isHrEmployeePayslipViewRoute(context),
+    element: () => <EmployeePayslipViewPage />,
+  },
+  {
+    name: "HR Leave Register",
+    match: (context) => isHrRoute(context) && isHrLeaveRegisterRoute(context),
+    element: () => <LeaveRegisterPage />,
+  },
+  {
+    name: "HR Leave Resumption",
+    match: (context) => isHrRoute(context) && isHrLeaveResumptionRoute(context),
+    element: () => <LeaveResumptionWorkspacePage />,
+  },
+  {
+    name: "HR Employee Profile",
+    match: (context) => isHrRoute(context) && isHrEmployeeProfileRoute(context),
+    element: () => <EmployeeProfilePage />,
+  },
+  {
+    name: "MMS inspection Report",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/mms/masters/gm/inspection_report"),
+    element: () => <InspectionReportMainPage />,
+  },
   {
     name: "HR Absent Memo",
     match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/memo_and_forms/absent_memo"),
@@ -138,6 +225,19 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/memo_and_forms/addition/deduction_letter"),
     element: () => <SalaryAdditionDeductionMainPage />,
   },
+
+//Grade master page route hcm/hr/transactions/memo_and_forms/absent_memo
+ {
+  name: "HR Grade Master",
+  match: ({ pathname }) =>
+    pathname.toLowerCase().includes("/workspace/bt-masters/hcm/general%20master/grade%20master"),
+  element: () => <GradeMasterPage />,
+},
+
+
+
+
+
   {
     name:"HR Grade Salary Increment",
     match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/grade_salary_increment"),
@@ -152,11 +252,6 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "HR Leave Encashmen",
     match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/leave_encashment"),
     element: () => <LeaveEncashmentPage />
-  },
-  {
-    name: "Admin Support Center",
-    match: ({ pathname }) => pathname.toLowerCase().includes("/support/admin"),
-    element: () => <AdminSupportCenterPage />,
   },
   {
     name: "Vendor System",
@@ -269,6 +364,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   name: "Stock Adjustment",
   match: ({ pathname }) => isStockAdjustmentRoute(pathname),
   element: () => <StockAdjPage />,
+},
+{
+  name: "WMS Invoice",
+  match: ({ pathname }) => isInvoiceRoute(pathname),
+  element: () => <InvoicePage />,
 },
   {
     name: "WMS Stock Transaction Report",
@@ -947,6 +1047,10 @@ function isStockTransferRoute(pathname: string) {
     !normalized.includes("/view/")  // ← add this
   );
 }
+function isInvoiceRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("wms/activity/request/invoice");
+}
 function isStockAdjustmentRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("wms/activity/request/stock_adj") && !normalized.includes("/view/");
@@ -1140,7 +1244,11 @@ function getSecurityMasterConfig(context: WorkspaceRouteContext) {
 
 function getSecurityMatchText(context: WorkspaceRouteContext) {
   const pathname = context.pathname.toLowerCase();
-  const activeLeaf = context.activeMenu || findActiveLeaf(context, pathname);
+  const leaves = collectMenuLeaves(context.activeApp?.children || []);
+  const activeLeaf = leaves.find((leaf) => {
+    const path = (leaf.url_path || "").replace(/^\/+/, "").toLowerCase();
+    return path && pathname.includes(path);
+  });
   return [pathname, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
 }
 
@@ -1154,28 +1262,6 @@ function collectMenuLeaves(nodes: MenuNode[]) {
   };
   walk(nodes);
   return leaves;
-}
-
-function withMenuRoutePath(context: WorkspaceRouteContext): WorkspaceRouteContext {
-  if (!/\/workspace\/[^/]+\/menu\/[^/]+/i.test(context.pathname)) return context;
-  const routePath = cleanPath(context.activeMenu?.url_path);
-  if (!routePath) return context;
-  return {
-    ...context,
-    pathname: `/workspace/${getWorkspaceAppCode(context.pathname)}/${routePath}`,
-  };
-}
-
-function getWorkspaceAppCode(pathname: string) {
-  return pathname.match(/\/workspace\/([^/]+)/i)?.[1] || cleanPath(pathname).split("/")[1] || "";
-}
-
-function findActiveLeaf(context: WorkspaceRouteContext, pathname: string) {
-  const leaves = collectMenuLeaves(context.activeApp?.children || []);
-  return leaves.find((leaf) => {
-    const path = (leaf.url_path || "").replace(/^\/+/, "").toLowerCase();
-    return path && pathname.includes(path);
-  });
 }
 
 function isPamsRoute(pathname: string) {
@@ -1232,18 +1318,36 @@ function getPamsMasterConfig(context: WorkspaceRouteContext) {
 
 function getPamsMatchText(context: WorkspaceRouteContext) {
   const pathname = context.pathname.toLowerCase();
-  const activeLeaf = context.activeMenu || findActiveLeaf(context, pathname);
-  return [pathname, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
+  const activeLeaf = getActiveLeaf(context);
+  return buildRouteMatchText(pathname, context.activeApp, activeLeaf);
 }
 
 function getGenericMatchText(context: WorkspaceRouteContext) {
   const pathname = context.pathname.toLowerCase();
-  const activeLeaf = context.activeMenu || findActiveLeaf(context, pathname);
-  return [pathname, context.activeApp?.title, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
+  const activeLeaf = getActiveLeaf(context);
+  return buildRouteMatchText(pathname, context.activeApp, activeLeaf);
 }
 
 function isVendorRoute(context: WorkspaceRouteContext) {
   return isVendorRouteText(getGenericMatchText(context));
+}
+
+function isSmsRoute(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  return matchText.includes("/sms/") || matchText.includes(" sms ") || matchText.startsWith("sms ");
+}
+
+function getSmsMasterConfig(context: WorkspaceRouteContext) {
+  if (!isSmsRoute(context)) return null;
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  const matches = Object.values(smsMasterConfigs)
+    .flatMap((config) => config.routeKeys.map((key) => ({ config, key: key.toLowerCase() })))
+    .sort((a, b) => b.key.length - a.key.length);
+  return matches.find(({ key }) => {
+    const keyCompact = key.replace(/[^a-z0-9]/g, "");
+    return matchText.includes(`/${key}`) || matchText.includes(`/${key.replace(/_/g, "-")}`) || matchText.includes(key) || compact.includes(keyCompact);
+  })?.config || null;
 }
 
 function isApplicationProgressRoute(context: WorkspaceRouteContext) {
@@ -1297,14 +1401,69 @@ function getHrMasterConfig(context: WorkspaceRouteContext) {
 }
 
 function getHrMatchText(context: WorkspaceRouteContext) {
-  const pathname = context.pathname.toLowerCase();
-  const activeLeaf = context.activeMenu || findActiveLeaf(context, pathname);
-  return [pathname, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
+  const pathname = decodeRouteText(context.pathname).toLowerCase();
+  const activeLeaf = getActiveLeaf(context);
+  return buildRouteMatchText(pathname, context.activeApp, activeLeaf);
+}
+
+function getActiveLeaf(context: WorkspaceRouteContext) {
+  if (context.activeMenu) return context.activeMenu;
+  const pathname = decodeRouteText(context.pathname).toLowerCase();
+  const leaves = collectMenuLeaves(context.activeApp?.children || []);
+  return leaves.find((leaf) => {
+    const path = decodeRouteText((leaf.url_path || "").replace(/^\/+/, "")).toLowerCase();
+    return path && pathname.includes(path);
+  });
+}
+
+function buildRouteMatchText(pathname: string, activeApp?: MenuNode, activeLeaf?: MenuNode) {
+  return [
+    pathname,
+    activeApp?.title,
+    activeApp?.url_path,
+    activeApp?.component_name,
+    activeApp?.componentName,
+    activeLeaf?.title,
+    activeLeaf?.url_path,
+    activeLeaf?.component_name,
+    activeLeaf?.componentName,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
 }
 
 function isHrRoute(context: WorkspaceRouteContext) {
   const matchText = getHrMatchText(context);
-  return matchText.includes("/hr/") || matchText.includes(" hr ") || matchText.includes("human");
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return (
+    matchText.includes("/hr/") ||
+    matchText.includes("/hcm/") ||
+    matchText.includes("/ems/") ||
+    matchText.includes(" hr ") ||
+    matchText.includes(" hcm ") ||
+    matchText.includes(" ems ") ||
+    matchText.includes("human") ||
+    matchText.includes("employee management") ||
+    compact.includes("employeemanagement") ||
+    compact.includes("humancapitalmanagement")
+  );
+}
+
+function isLeaveFlowRoute(context: WorkspaceRouteContext, key: LeaveFlowKey) {
+  if (!isHrRoute(context)) return false;
+  const config = leaveFlowConfigList.find((item) => item.key === key);
+  if (!config) return false;
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return config.routeTokens.some((token) => compact.includes(token));
+}
+
+function decodeRouteText(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function isHrPayrollProcessRoute(context: WorkspaceRouteContext) {
@@ -1325,6 +1484,35 @@ function isHrPayUnitsDependantRoute(context: WorkspaceRouteContext) {
 function isHrLeaveCancelRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
   return compact.includes("leavecancel") || compact.includes("leavecancellation") || compact.includes("pgleaveflowcancel");
+}
+
+function isHrEmployeePayslipRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return (
+    !compact.includes("employeepayslipview") &&
+    !compact.includes("viewpayslipreport") &&
+    (compact.includes("employeepayslip") || compact.includes("hrpayslips") || compact.includes("payslip"))
+  );
+}
+
+function isHrEmployeePayslipViewRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("employeepayslipview") || compact.includes("viewpayslipreport");
+}
+
+function isHrLeaveRegisterRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("leaveregister") || compact.includes("hremployeeregistermainpage");
+}
+
+function isHrLeaveResumptionRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("leaveresumption") || compact.includes("hrleaveresumptionmainpage");
+}
+
+function isHrEmployeeProfileRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("employeeprofile") || compact.includes("employeemaster") || compact.includes("hremployeeprofile");
 }
 
 function isHrPayrollAccountSetupRoute(context: WorkspaceRouteContext) {

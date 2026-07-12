@@ -54,11 +54,12 @@ import { useEffect, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
+import { HeaderProfile } from "../components/HeaderProfile";
 import type { MenuNode } from "../types/auth";
-import { cleanPath, findMenuBySerial, findMenuPathBySerial, firstMenuLeaf, getMenuRouteTarget, getMenuSerial, titleCase } from "../utils/menu";
+import { cleanPath, flattenLeaves, titleCase } from "../utils/menu";
+import { buildWorkspaceApps, cleanAppCode } from "../utils/workspaceApps";
 import { resolveWorkspaceRoute } from "../routes/workspaceRoutes";
 import { cn } from "../lib/utils";
-import { SupportChatWidget } from "../components/SupportChatWidget";
 
 export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => void }) {
   const { appCode } = useParams();
@@ -69,20 +70,14 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const workspaceApps = useMemo(() => buildWorkspaceApps(menuTree), [menuTree]);
 
   const activeApp = useMemo(() => {
-    return menuTree.find((item) => getAppCode(item) === appCode) || menuTree[0];
-  }, [appCode, menuTree]);
+    return workspaceApps.find((item) => cleanAppCode(item.title) === appCode) || workspaceApps[0];
+  }, [appCode, workspaceApps]);
 
-  const activeSerialNo = getSerialFromWorkspacePath(location.pathname);
-  const activeMenu = useMemo(
-    () => findMenuBySerial(activeApp?.children || [], activeSerialNo),
-    [activeApp, activeSerialNo],
-  );
-  const activeMenuPath = useMemo(() => {
-    if (activeSerialNo) return findMenuPathBySerial(activeApp?.children || [], activeSerialNo);
-    return findActiveMenuPath(activeApp?.children || [], location.pathname);
-  }, [activeApp, activeSerialNo, location.pathname]);
+  const activeMenuPath = useMemo(() => findActiveMenuPath(activeApp?.children || [], location.pathname), [activeApp, location.pathname]);
+  const activeMenu = activeMenuPath[activeMenuPath.length - 1];
   const appRouteTarget = getMenuNodeTarget(activeApp, appCode || "");
 
   const handleLogout = () => {
@@ -116,12 +111,44 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
 
   const workspaceRoute = resolveWorkspaceRoute({ pathname: location.pathname, activeApp, activeMenu });
   const displayCollapsed = isMobile ? false : collapsed;
+  const userDisplayName = user?.username || user?.loginid || "User";
+  const companyName = user?.company_name || user?.company_code || "Company";
+
+  // useEffect(() => {
+  //   setExpanded(collectExpandedPath(activeMenuPath));
+  // }, [activeApp?.id, activeApp?.title, location.pathname]);
+
+  useEffect(() => {
+    setExpanded({
+      ...collectDefaultExpanded(activeApp?.children || [], 1),
+      ...collectExpandedPath(activeMenuPath),
+    });
+  }, [activeApp?.id, activeApp?.title, location.pathname]);
+
   const toggleSidebar = () => {
     if (isMobile) {
       setMobileMenuOpen((value) => !value);
       return;
     }
-    setCollapsed((value) => !value);
+    setCollapsed((value) => {
+      const nextCollapsed = !value;
+      if (!nextCollapsed) {
+        // setExpanded(collectExpandedPath(activeMenuPath));
+         setExpanded({
+          ...collectDefaultExpanded(activeApp?.children || [], 1),
+          ...collectExpandedPath(activeMenuPath),
+        });
+      }
+      return nextCollapsed;
+    });
+  };
+
+  const handleMenuNavigate = () => {
+    if (isMobile) {
+      setMobileMenuOpen(false);
+      return;
+    }
+    setCollapsed(true);
   };
 
   return (
@@ -154,7 +181,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
         <nav className="sidebar-nav">
           {(activeApp?.children || []).map((item) => (
             <MenuItem
-              key={getMenuSerial(item) || item.id || item.title}
+              key={item.id || item.title}
               item={item}
               collapsed={displayCollapsed}
               expanded={expanded}
@@ -162,6 +189,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
               appCode={appCode || ""}
               pathname={location.pathname}
               level={1}
+              onNavigate={handleMenuNavigate}
             />
           ))}
         </nav>
@@ -170,7 +198,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
           {!displayCollapsed && (
             <div className="sidebar-company-card">
               <span>Company</span>
-              <strong>{user?.company_code || "Company"}</strong>
+              <strong>{companyName}</strong>
             </div>
           )}
           <Link className={cn("sidebar-switch-module", displayCollapsed && "icon-only")} to="/apps" title="Switch Module" aria-label="Switch Module">
@@ -198,20 +226,12 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
             <input placeholder="Search menu, reports, forms..." />
           </div>
           <div className="workspace-header-actions">
-            <button className="icon-button" onClick={onToggleTheme} title={dark ? "Light mode" : "Dark mode"}>
-              {dark ? <Sun size={17} /> : <Moon size={17} />}
-            </button>
-            <SupportChatWidget />
-            <div className="header-user compact">
-              <div className="avatar">{(user?.username || user?.loginid || "U").slice(0, 2).toUpperCase()}</div>
-              <div>
-                <strong>{user?.username || user?.loginid}</strong>
-                <span>{user?.company_code || "Company"}</span>
-              </div>
-              <button className="icon-button" onClick={handleLogout}>
-                <LogOut size={17} />
-              </button>
-            </div>
+            <HeaderProfile
+              user={user}
+              dark={dark}
+              onToggleTheme={onToggleTheme}
+              onLogout={handleLogout}
+            />
           </div>
         </header>
 
@@ -234,7 +254,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
               const isLast = index === activeMenuPath.length - 1;
               const target = getMenuNodeTarget(node, appCode || "");
               return (
-                <span className="breadcrumb-segment" key={getMenuSerial(node) || node.id || `${node.title}-${index}`}>
+                <span className="breadcrumb-segment" key={node.id || `${node.title}-${index}`}>
                   <ChevronRight size={14} />
                   {isLast || !target ? (
                     <span className={isLast ? "breadcrumb-current" : undefined}>{titleCase(node.title)}</span>
@@ -253,6 +273,27 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   );
 }
 
+function collectExpandedPath(nodes: MenuNode[]): Record<string, boolean> {
+  const expanded: Record<string, boolean> = {};
+  nodes.slice(0, -1).forEach((node) => {
+    if (node.children?.length) {
+      expanded[node.id || node.title] = true;
+    }
+  });
+  return expanded;
+}
+
+function collectDefaultExpanded(nodes: MenuNode[], maxLevel: number, level = 1): Record<string, boolean> {
+  const expanded: Record<string, boolean> = {};
+  nodes.forEach((node) => {
+    if (node.children?.length && level <= maxLevel) {
+      expanded[node.id || node.title] = true;
+      Object.assign(expanded, collectDefaultExpanded(node.children, maxLevel, level + 1));
+    }
+  });
+  return expanded;
+}
+
 function MenuItem({
   item,
   collapsed,
@@ -261,6 +302,7 @@ function MenuItem({
   appCode,
   pathname,
   level,
+  onNavigate,
 }: {
   item: MenuNode;
   collapsed: boolean;
@@ -269,11 +311,13 @@ function MenuItem({
   appCode: string;
   pathname: string;
   level: number;
+  onNavigate: () => void;
 }) {
   const key = item.id || item.title;
   const children = item.children || [];
   const hasChildren = children.length > 0;
-  const to = getMenuNodeTarget(item, appCode) || "#";
+  const path = cleanPath(item.url_path);
+  const to = path ? `/workspace/${appCode}/${path}` : "#";
   const active = isMenuNodeActive(item, pathname);
   const shouldRenderChildren = !collapsed && expanded[key];
   const displayTitle = titleCase(item.title);
@@ -297,7 +341,7 @@ function MenuItem({
           <div className={cn("nav-children", collapsed && "collapsed")}>
             {children.map((child) => (
               <MenuItem
-                key={getMenuSerial(child) || child.id || child.title}
+                key={child.id || child.title}
                 item={child}
                 collapsed={collapsed}
                 expanded={expanded}
@@ -305,6 +349,7 @@ function MenuItem({
                 appCode={appCode}
                 pathname={pathname}
                 level={level + 1}
+                onNavigate={onNavigate}
               />
             ))}
           </div>
@@ -314,7 +359,7 @@ function MenuItem({
   }
 
   return (
-    <Link className={cn("nav-item", active && "active", collapsed && "icon-only", `nav-level-${level}`)} to={to} title={displayTitle} aria-label={displayTitle}>
+    <Link className={cn("nav-item", active && "active", collapsed && "icon-only", `nav-level-${level}`)} to={to} title={displayTitle} aria-label={displayTitle} onClick={onNavigate}>
       <span className="nav-link-copy">
         <MenuIcon item={item} level={level} className="nav-leading-icon" />
         {!collapsed && <span title={displayTitle}>{displayTitle}</span>}
@@ -384,8 +429,6 @@ function getMenuIcon(item: MenuNode): LucideIcon {
 }
 
 function isMenuNodeActive(item: MenuNode, pathname: string): boolean {
-  const serial = getMenuSerial(item);
-  if (serial && getSerialFromWorkspacePath(pathname) === serial) return true;
   const path = cleanPath(item.url_path);
   if (isPathActive(path, pathname)) return true;
   return Boolean(item.children?.some((child) => isMenuNodeActive(child, pathname)));
@@ -403,10 +446,11 @@ function findActiveMenuPath(items: MenuNode[], pathname: string): MenuNode[] {
 
 function getMenuNodeTarget(item: MenuNode | undefined, appCode: string): string | null {
   if (!item || !appCode) return null;
-  if (item.children?.length && !item.url_path) {
-    return getMenuRouteTarget(firstMenuLeaf(item), appCode);
-  }
-  return getMenuRouteTarget(item, appCode);
+  const directPath = cleanPath(item.url_path);
+  if (directPath) return `/workspace/${appCode}/${directPath}`;
+  const firstLeaf = flattenLeaves(item.children || [])[0];
+  const firstLeafPath = cleanPath(firstLeaf?.url_path);
+  return firstLeafPath ? `/workspace/${appCode}/${firstLeafPath}` : null;
 }
 
 function isPathActive(menuPath: string, pathname: string): boolean {
@@ -421,13 +465,4 @@ function normalizeRoutePath(path: string) {
     .replace(/^\/+|\/+$/g, "")
     .replace(/^workspace\/[^/]+\//i, "")
     .toLowerCase();
-}
-
-function getSerialFromWorkspacePath(pathname: string): string {
-  const match = pathname.match(/\/workspace\/[^/]+\/menu\/([^/?#]+)/i);
-  return match?.[1] ? decodeURIComponent(match[1]) : "";
-}
-
-function getAppCode(item: MenuNode) {
-  return cleanPath(item.url_path || item.app_code || item.title.toLowerCase().replace(/\s+/g, "-")).toLowerCase();
 }

@@ -1,17 +1,11 @@
 export type MenuNode = {
   id?: string;
-  serial_no?: string | number | null;
   title: string;
   type: "collapse" | "group" | "item";
   icon?: string;
   url_path?: string;
-  app_code?: string;
-  level1?: string;
-  level2?: string;
-  level3?: string;
-  component_name?: string | null;
-  api_endpoint?: string | null;
-  route_type?: string | null;
+  component_name?: string;
+  componentName?: string;
   children?: MenuNode[];
 };
 
@@ -22,6 +16,8 @@ export type UserProfile = {
   EMAIL_ID?: string;
   loginid?: string;
   LOGINID?: string;
+  loginid1?: string;
+  LOGINID1?: string;
   company_code?: string;
   COMPANY_CODE?: string;
   company_name?: string;
