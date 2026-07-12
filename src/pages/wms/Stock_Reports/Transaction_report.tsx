@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Printer, RotateCcw, BarChart2, Download, ChevronDown, ChevronUp } from "lucide-react";
 import { getDynamicLookupaccount, getLookupText, getLookupValue, LookupRow } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
-import { exportTransactionProductExcel, TransationReport, TransationReportwithoutTransafer } from "../../../api/transactions";
+import { exportTransactionProductExcel, exportTransactionWithoutTransfersExcel, TransationReport, TransationReportwithoutTransafer } from "../../../api/transactions";
 
 // ─── Shared styles ─────────────────────────────────────────────────────────────
 
@@ -370,35 +370,87 @@ export default function TransactionReportPage() {
         setGroupedOn("PRODUCT");
     };
 
-    const buildParams = () => ({
+    const buildParams = () => {
+    const isWithout = groupedOn === "WITHOUT_TRANSFERS";
+
+    if (isWithout) {
+        const prodFrom  = productCodes[0] || "";
+        const prodTo    = productCodes[productCodes.length - 1] || "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz";
+        const siteFrom  = siteCodes[0] || "";
+        const siteTo    = siteCodes[siteCodes.length - 1] || "zzzzz";
+        const locFrom   = locationCodes[0] || "";
+        const locTo     = locationCodes[locationCodes.length - 1] || "zzzzzzzzzzzzzzz";
+        const custFrom  = customerCodes[0] || "";
+        const custTo    = customerCodes[customerCodes.length - 1] || "zzzzz";
+        const lotFrom   = lotNoCodes[0] || "";
+        const lotTo     = lotNoCodes[lotNoCodes.length - 1] || "zzzzzzzzzzzzzzzzzzzz";
+        const batchFrom = batchNoCodes[0] || "";
+        const batchTo   = batchNoCodes[batchNoCodes.length - 1] || "zzzzzzzzzzzzzzzzzzzz";
+
+        return {
+            parameter: "WMS_Stock_TRANSACTION_WITHOUT_TRANSFER_REPORT",
+            groupedOn,
+            loginid: user?.loginid || user?.username || "ADMIN",
+            code1:  user?.company_code || "",
+            code2:  principalCodes[0] || "",
+            code3:  prodFrom,
+            code4:  prodTo,
+            code5:  siteFrom,
+            code6:  siteTo,
+            code7:  locFrom,
+            code8:  locTo,
+            code9:  custFrom,
+            code10: custTo,
+            code11: lotFrom,
+            code12: lotTo,
+            code13: batchFrom,
+            code14: batchTo,
+            code15: txnType || "",
+            code16: txnType || "",
+            code17: "", code18: "", code19: "",
+            code20: docRefCodes[0] || "",
+            date1:  expDateFrom ? formatDateOracle(expDateFrom) : "",
+            date2:  expDateTo   ? formatDateOracle(expDateTo)   : "",
+            date3:  dateFrom    ? formatDateOracle(dateFrom)    : "",
+            date4:  dateTo      ? formatDateOracle(dateTo)      : "",
+        };
+    }
+
+    // PRODUCT 
+    return {
         parameter: "WMS_Stock_TRANSACTION_PRODUCT_REPORT",
-        groupedOn: groupedOn,
+        groupedOn,
         loginid: user?.loginid || user?.username || "ADMIN",
         code1:  user?.company_code || "",
         code2:  principalCodes.join(",") || "",
-        code3:  productCodes.join(",") || "",
-        code4:  productCodes.join(",") || "",
-        code5:  siteCodes.join(",") || "",
-        code6:  siteCodes.join(",") || "",
-        code7:  locationCodes.join(",") || "",
-        code8:  locationCodes.join(",") || "",
-        code9:  customerCodes.join(",") || "",
-        code10: customerCodes.join(",") || "",
-        code11: lotNoCodes.join(",") || "",
-        code12: lotNoCodes.join(",") || "",
-        code13: batchNoCodes.join(",") || "",
-        code14: batchNoCodes.join(",") || "",
+        code3:  productCodes.join(",")   || "",
+        code4:  productCodes.join(",")   || "",
+        code5:  siteCodes.join(",")      || "",
+        code6:  siteCodes.join(",")      || "",
+        code7:  locationCodes.join(",")  || "",
+        code8:  locationCodes.join(",")  || "",
+        code9:  customerCodes.join(",")  || "",
+        code10: customerCodes.join(",")  || "",
+        code11: lotNoCodes.join(",")     || "",
+        code12: lotNoCodes.join(",")     || "",
+        code13: batchNoCodes.join(",")   || "",
+        code14: batchNoCodes.join(",")   || "",
         date1:  expDateFrom ? formatDateOracle(expDateFrom) : "",
         date2:  expDateTo   ? formatDateOracle(expDateTo)   : "",
         date3:  dateFrom    ? formatDateOracle(dateFrom)    : "",
         date4:  dateTo      ? formatDateOracle(dateTo)      : "",
-    });
+    };
+};
 
     const handleExportExcel = async () => {
         setReportError(null);
         setGeneratingExcel(true);
         try {
-            await exportTransactionProductExcel(buildParams());
+            if (groupedOn === "WITHOUT_TRANSFERS") {
+                await exportTransactionWithoutTransfersExcel(buildParams());
+            } else {
+                await exportTransactionProductExcel(buildParams());
+            }
         } catch (err: any) {
             setReportError(err.message || "Failed to generate report.");
         } finally {
