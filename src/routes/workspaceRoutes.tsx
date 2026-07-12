@@ -88,6 +88,7 @@ import StockAdjPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
 import {StorageComputationPage} from "../pages/wms/storage computation/StorageComputation";
 import LeaveEncashmentPage from "../pages/hr/LeaveEncashmentPage";
 import EmployeeSalaryIncrement from "../pages/hr/EmployeeSalaryIncrement";
+import { EmployeeProfilePage } from "../pages/hr/EmployeeProfilePage";
 
 import { ContinuousAutoMemoPage } from "../pages/hr/HrContinuousAutoMemo";
 
@@ -201,6 +202,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "HR Leave Resumption",
     match: (context) => isHrRoute(context) && isHrLeaveResumptionRoute(context),
     element: () => <LeaveResumptionWorkspacePage />,
+  },
+  {
+    name: "HR Employee Profile",
+    match: (context) => isHrRoute(context) && isHrEmployeeProfileRoute(context),
+    element: () => <EmployeeProfilePage />,
   },
   {
     name: "HR Absent Memo",
@@ -1495,6 +1501,11 @@ function isHrLeaveRegisterRoute(context: WorkspaceRouteContext) {
 function isHrLeaveResumptionRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
   return compact.includes("leaveresumption") || compact.includes("hrleaveresumptionmainpage");
+}
+
+function isHrEmployeeProfileRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("employeeprofile") || compact.includes("employeemaster") || compact.includes("hremployeeprofile");
 }
 
 function isHrPayrollAccountSetupRoute(context: WorkspaceRouteContext) {

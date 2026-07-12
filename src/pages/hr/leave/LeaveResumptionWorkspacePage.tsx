@@ -21,14 +21,8 @@ export function LeaveResumptionWorkspacePage() {
   const [activeTab, setActiveTab] = useState<ResumptionTab>("request");
 
   return (
-    <section className="grid gap-4">
-      <div>
-        <p className="eyebrow">HR Flow</p>
-        <h1 className="m-0 text-2xl font-semibold text-foreground">Leave Resumption</h1>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">Review leave resumption request, in-progress, closed, and cancelled queues.</p>
-      </div>
-
-      <div className="flex flex-wrap gap-2 rounded-md border bg-card p-2 shadow-sm">
+    <section className="leave-workspace-page">
+      <div className="leave-workspace-tabs">
         {tabs.map((tab) => (
           <Button
             key={tab.key}
@@ -36,6 +30,7 @@ export function LeaveResumptionWorkspacePage() {
             variant={activeTab === tab.key ? "default" : "ghost"}
             size="sm"
             onClick={() => setActiveTab(tab.key)}
+            title={tab.label}
           >
             {tab.icon}
             {tab.label}

@@ -27,18 +27,8 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
   const [activeTab, setActiveTab] = useState<LeaveFlowKey>(initialTab);
 
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="eyebrow">HR Flow</p>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">Leave Request</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Review leave requests across request, in-progress, closed, cancelled, and rejected queues.
-          </p>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-2 rounded-md border bg-card p-2 shadow-sm">
+    <section className="leave-workspace-page">
+      <div className="leave-workspace-tabs">
         {leaveTabs.map((tab) => (
           <Button
             key={tab.key}
@@ -46,6 +36,7 @@ export function LeaveWorkspacePage({ initialTab = "request" }: { initialTab?: Le
             variant={activeTab === tab.key ? "default" : "ghost"}
             size="sm"
             onClick={() => setActiveTab(tab.key)}
+            title={tab.label}
           >
             {tab.icon}
             {tab.label}

@@ -1,15 +1,15 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { CalendarClock, CheckCircle2, Clock3, FileDown, RefreshCw, Search, ShieldCheck, UsersRound, XCircle } from "lucide-react";
+import { CheckCircle2, Eye, FileDown, Pencil, RefreshCw, Search, XCircle } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { getHrLeaveFlow } from "../../../api/hr";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
-import { Card, CardContent } from "../../../components/ui/Card";
 import { DataTable } from "../../../components/ui/DataTable";
 import NoticeToast, { type ToastNotice } from "../../../components/ui/NoticeToast";
 import { useAuth } from "../../../state/AuthContext";
 import type { LeaveFlowConfig } from "./leaveFlowConfig";
+import { LeaveRequestDialog } from "./LeaveRequestDialog";
 
 type LeaveFlowRow = Record<string, unknown>;
 
@@ -43,15 +43,18 @@ export function LeaveFlowTable({
   config,
   headerActions,
   refreshToken,
+  onEditRow,
 }: {
   config: LeaveFlowConfig;
   headerActions?: ReactNode;
   refreshToken?: number;
+  onEditRow?: (row: LeaveFlowRow) => void;
 }) {
   const { user } = useAuth();
   const [rows, setRows] = useState<LeaveFlowRow[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
+  const [viewRow, setViewRow] = useState<LeaveFlowRow | null>(null);
   const [notice, setNotice] = useState<ToastNotice>(null);
 
   const loginId = String(user?.loginid1 || user?.LOGINID1 || user?.loginid || user?.LOGINID || user?.username || "");
@@ -84,30 +87,65 @@ export function LeaveFlowTable({
     const fallbackKeys = Object.keys(sample).filter((key) => !orderedKeys.includes(key)).slice(0, 8);
     const finalKeys = [...orderedKeys, ...fallbackKeys].slice(0, 14);
 
-    return finalKeys.map((key) => ({
+    const dataColumns = finalKeys.map((key) => ({
       accessorKey: key,
       header: titleCase(key),
       size: getColumnSize(key),
       cell: ({ row }: { row: { original: LeaveFlowRow } }) => formatValue(row.original[key]),
     }));
-  }, [rows]);
 
-  const totalDays = rows.reduce((sum, row) => sum + toNumber(row.LEAVE_DAYS ?? row.leaveDays), 0);
-  const uniqueEmployees = new Set(rows.map((row) => String(row.EMPLOYEE_ID ?? row.employeeId ?? row.EMPLOYEE_NAME ?? row.employeeName ?? "")).filter(Boolean)).size;
-  const latestDate = getLatestDate(rows);
+    if (!onEditRow && config.key === "request") return dataColumns;
+
+    return [
+      {
+        id: "actions",
+        header: "Action",
+        size: 84,
+        cell: ({ row }: { row: { original: LeaveFlowRow } }) => (
+          onEditRow ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="leave-row-action"
+              title="Edit leave request"
+              aria-label="Edit leave request"
+              onClick={() => onEditRow(row.original)}
+            >
+              <Pencil size={14} />
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="leave-row-action"
+              title="View leave request"
+              aria-label="View leave request"
+              onClick={() => setViewRow(row.original)}
+            >
+              <Eye size={14} />
+            </Button>
+          )
+        ),
+      },
+      ...dataColumns,
+    ];
+  }, [rows, onEditRow, config.key]);
 
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <section className="leave-flow-page">
+      <div className="leave-flow-header">
         <div className="min-w-0">
-          <p className="eyebrow">{config.eyebrow}</p>
+          <p className="leave-flow-eyebrow">{config.eyebrow}</p>
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="m-0 text-2xl font-semibold text-foreground">{config.title}</h1>
-            <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${toneClasses[config.statusTone]}`}>{config.statusLabel}</span>
+            <h1>{config.title}</h1>
+            <span className={`leave-flow-status ${toneClasses[config.statusTone]}`}>{config.statusLabel}</span>
+            <Badge variant="outline">{rows.length.toLocaleString()} requests</Badge>
           </div>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{config.description}</p>
+          <p>{config.description}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="leave-flow-actions">
           {headerActions}
           <Button variant="outline" onClick={() => void loadRows()} disabled={loading}>
             <RefreshCw size={15} /> Refresh
@@ -116,13 +154,6 @@ export function LeaveFlowTable({
       </div>
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
-
-      <div className="grid gap-3 md:grid-cols-4">
-        <MetricCard icon={<ShieldCheck size={18} />} label="Requests" value={rows.length.toLocaleString()} />
-        <MetricCard icon={<UsersRound size={18} />} label="Employees" value={uniqueEmployees.toLocaleString()} />
-        <MetricCard icon={<Clock3 size={18} />} label="Leave Days" value={formatMetric(totalDays)} />
-        <MetricCard icon={<CalendarClock size={18} />} label="Latest Request" value={latestDate || "-"} />
-      </div>
 
       <DataTable
         columns={columns}
@@ -134,7 +165,7 @@ export function LeaveFlowTable({
         loading={loading}
         emptyText={`No ${config.title.toLowerCase()} found`}
         density="grid"
-        height="calc(100vh - 345px)"
+        height="calc(100vh - 182px)"
         minWidth={1500}
         enablePagination
         enableExport
@@ -142,21 +173,14 @@ export function LeaveFlowTable({
         pageSize={100}
         getRowId={(row, index) => `${String(row.REQUEST_NUMBER ?? row.requestNumber ?? row.SR_NO ?? config.key)}_${index}`}
       />
+      <LeaveRequestDialog
+        open={Boolean(viewRow)}
+        initialRow={viewRow}
+        readOnly
+        onClose={() => setViewRow(null)}
+        onSaved={() => void loadRows(false)}
+      />
     </section>
-  );
-}
-
-function MetricCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <Card className="overflow-hidden border-border/80 shadow-sm">
-      <CardContent className="flex items-center gap-3 p-4">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-muted text-primary">{icon}</div>
-        <div className="min-w-0">
-          <p className="m-0 text-xs font-medium uppercase text-muted-foreground">{label}</p>
-          <p className="m-0 truncate text-xl font-semibold text-foreground">{value}</p>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -207,23 +231,5 @@ function formatValue(value: unknown) {
 
 function formatDate(value: string) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
-}
-
-function toNumber(value: unknown) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : 0;
-}
-
-function formatMetric(value: number) {
-  return Number.isInteger(value) ? value.toLocaleString() : value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-}
-
-function getLatestDate(rows: LeaveFlowRow[]) {
-  const timestamps = rows
-    .map((row) => row.REQUEST_DATE ?? row.requestDate ?? row.LEAVE_START_DATE ?? row.leaveStartDate)
-    .map((value) => (value ? new Date(String(value)).getTime() : Number.NaN))
-    .filter((value) => Number.isFinite(value));
-  if (!timestamps.length) return "";
-  return new Date(Math.max(...timestamps)).toLocaleDateString();
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("en-GB");
 }

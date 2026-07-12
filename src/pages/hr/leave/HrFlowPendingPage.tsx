@@ -12,7 +12,6 @@ export function HrFlowPendingPage({ title, oldRoute, sourceComponent, descriptio
   return (
     <section className="grid gap-4">
       <div className="min-w-0">
-        <p className="eyebrow">HR Flow</p>
         <h1 className="m-0 text-2xl font-semibold text-foreground">{title}</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>
       </div>

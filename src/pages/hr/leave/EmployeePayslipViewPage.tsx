@@ -1,11 +1,8 @@
-import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowLeft, Printer } from "lucide-react";
+import { ArrowLeft, Download, FileText } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { executeHrRawSql } from "../../../api/hr";
 import { Button } from "../../../components/ui/Button";
-import { Card, CardContent } from "../../../components/ui/Card";
-import { DataTable } from "../../../components/ui/DataTable";
 import NoticeToast, { type ToastNotice } from "../../../components/ui/NoticeToast";
 
 type Row = Record<string, unknown>;
@@ -45,77 +42,110 @@ export function EmployeePayslipViewPage() {
     return { totalEarnings, totalDeductions, net: totalEarnings - totalDeductions };
   }, [earnings, deductions]);
 
+  const downloadPdf = () => {
+    document.body.classList.add("printing-payslip");
+    const cleanup = () => document.body.classList.remove("printing-payslip");
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => window.print());
+    });
+    window.setTimeout(cleanup, 30000);
+  };
+
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <section className="payslip-page">
+      <div className="payslip-page-actions">
         <div>
-          <p className="eyebrow">HR Flow</p>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">Employee Payslip View</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {employeeId || "-"} · {month || "-"} / {year || "-"}
-          </p>
+          <p className="leave-flow-eyebrow">HR Flow</p>
+          <h1>Employee Payslip</h1>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => navigate("/workspace/ems/ems/activity/request/employee_payslip")}>
             <ArrowLeft size={15} /> Back
           </Button>
-          <Button onClick={() => window.print()}>
-            <Printer size={15} /> Print
+          <Button onClick={downloadPdf}>
+            <Download size={15} /> Download PDF
           </Button>
         </div>
       </div>
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      <Card className="border-border/80 shadow-sm">
-        <CardContent className="grid gap-3 p-4 md:grid-cols-4">
-          <Metric label="Employee" value={String(header?.EMPLOYEE_NAME || header?.RPT_NAME || employeeId || "-")} />
-          <Metric label="Pay Period" value={`${month || "-"} / ${year || "-"}`} />
-          <Metric label="Total Earnings" value={formatMoney(totals.totalEarnings)} />
-          <Metric label="Net Pay" value={formatMoney(totals.net)} />
-        </CardContent>
-      </Card>
+      <article id="payslip-content" className="payslip-report">
+        <header className="payslip-report-header">
+          <div className="payslip-logo-mark">
+            <FileText size={22} />
+          </div>
+          <div>
+            <h2>Employee Payslip</h2>
+            <p>{getMonthName(month)} {year}</p>
+          </div>
+        </header>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <DataTable
-          columns={payColumns}
-          data={earnings}
-          searchPlaceholder="Search earnings..."
-          loading={loading}
-          emptyText="No earnings found"
-          density="grid"
-          height="420px"
-          minWidth={520}
-          enablePagination
-          pageSize={25}
-        />
-        <DataTable
-          columns={payColumns}
-          data={deductions}
-          searchPlaceholder="Search deductions..."
-          loading={loading}
-          emptyText="No deductions found"
-          density="grid"
-          height="420px"
-          minWidth={520}
-          enablePagination
-          pageSize={25}
-        />
-      </div>
+        <section className="payslip-employee-grid">
+          <Metric label="Employee" value={`${employeeId || "-"} - ${String(header?.RPT_NAME || header?.EMPLOYEE_NAME || "-")}`} />
+          <Metric label="Designation" value={String(header?.DESG_NAME || header?.DESIGNATION || "-")} />
+          <Metric label="Division" value={String(header?.DIV_NAME || "-")} />
+          <Metric label="Department" value={String(header?.DEPT_NAME || "-")} />
+          <Metric label="Pay Period" value={`${month || "-"} / ${year || "-"}`} />
+          <Metric label="Net Pay" value={formatMoney(totals.net)} />
+        </section>
+
+        {loading ? <p className="payslip-loading">Loading payslip...</p> : null}
+
+        <section className="payslip-lines-grid">
+          <PaySection title="Earnings" rows={earnings} total={totals.totalEarnings} />
+          <PaySection title="Deductions" rows={deductions} total={totals.totalDeductions} />
+        </section>
+
+        <footer className="payslip-total-band">
+          <span>Net Pay</span>
+          <strong>{formatMoney(totals.net)}</strong>
+        </footer>
+      </article>
     </section>
   );
 }
 
-const payColumns: ColumnDef<Row>[] = [
-  { accessorKey: "PAY_COMP_DESC", header: "Component" },
-  { accessorKey: "PAY_COMP_AMT", header: "Amount", cell: ({ row }) => formatMoney(row.original.PAY_COMP_AMT) },
-];
+function PaySection({ title, rows, total }: { title: string; rows: Row[]; total: number }) {
+  return (
+    <section className="payslip-pay-section">
+      <h3>{title}</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Component</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length ? rows.map((row, index) => (
+            <tr key={`${title}-${String(row.PAY_COMP_DESC || index)}`}>
+              <td>{String(row.PAY_COMP_DESC || "-")}</td>
+              <td>{formatMoney(row.PAY_COMP_AMT)}</td>
+            </tr>
+          )) : (
+            <tr>
+              <td colSpan={2}>No {title.toLowerCase()} found</td>
+            </tr>
+          )}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>Total {title}</td>
+            <td>{formatMoney(total)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </section>
+  );
+}
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0">
-      <p className="m-0 text-xs font-medium uppercase text-muted-foreground">{label}</p>
-      <p className="m-0 truncate text-lg font-semibold text-foreground">{value}</p>
+    <div className="payslip-metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }
@@ -149,4 +179,10 @@ function escapeSql(value: string) {
 function formatMoney(value: unknown) {
   const number = Number(value || 0);
   return number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function getMonthName(monthValue: string) {
+  const monthIndex = Number(monthValue) - 1;
+  const names = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  return names[monthIndex] || monthValue || "-";
 }

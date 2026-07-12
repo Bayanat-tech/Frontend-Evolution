@@ -1,7 +1,7 @@
 import { FileText, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { executeHrRawSql, type HrEmployee } from "../../../api/hr";
+import { getHrEmployees, type HrEmployee } from "../../../api/hr";
 import { Button } from "../../../components/ui/Button";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { Input } from "../../../components/ui/Input";
@@ -31,10 +31,11 @@ export function EmployeePayslipPage() {
   useEffect(() => {
     if (!loginId) return;
     setLoading(true);
-    executeHrRawSql<HrEmployee>(employeeTreeSql(loginId))
+    getHrEmployees(loginId)
       .then((rows) => {
         const self = { EMPLOYEE_ID: loginId, RPT_NAME: "Current User" } as HrEmployee;
-        const merged = rows.some((row) => String(row.EMPLOYEE_ID || "") === loginId) ? rows : [self, ...rows];
+        const safeRows = rows.length ? rows : [self];
+        const merged = safeRows.some((row) => String(row.EMPLOYEE_ID || row.EMPLOYEE_CODE || "") === loginId) ? safeRows : [self, ...safeRows];
         setEmployees(merged);
         setEmployeeId(loginId);
       })
@@ -52,28 +53,29 @@ export function EmployeePayslipPage() {
   };
 
   return (
-    <section className="grid gap-4">
-      <div>
-        <p className="eyebrow">HR Flow</p>
-        <h1 className="m-0 text-2xl font-semibold text-foreground">Employee Payslip</h1>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">Select an employee and pay period to view the payslip.</p>
+    <section className="payslip-lookup-page">
+      <div className="payslip-page-actions">
+        <div>
+          <p className="leave-flow-eyebrow">HR Flow</p>
+          <h1>Employee Payslip</h1>
+        </div>
       </div>
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      <Card className="max-w-2xl border-border/80 shadow-sm">
-        <CardContent className="grid gap-4 p-5">
-          <div className="flex items-center gap-3 border-b pb-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-md border bg-muted text-primary">
+      <Card className="payslip-lookup-card border-border/80 shadow-sm">
+        <CardContent className="payslip-lookup-content">
+          <div className="payslip-lookup-title">
+            <div className="payslip-logo-mark">
               <FileText size={18} />
             </div>
             <div>
-              <p className="m-0 text-sm font-semibold text-foreground">Payslip Lookup</p>
-              <p className="m-0 text-xs text-muted-foreground">Current and previous year are available.</p>
+              <p>Payslip Lookup</p>
+              <span>Choose employee and payroll month.</span>
             </div>
           </div>
 
-          <label className="field">
+          <label className="field payslip-lookup-field">
             <span>Employee</span>
             <Select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} disabled={loading}>
               <option value="">{loading ? "Loading employees..." : "Select employee"}</option>
@@ -85,38 +87,18 @@ export function EmployeePayslipPage() {
             </Select>
           </label>
 
-          <label className="field">
+          <label className="field payslip-lookup-field">
             <span>Pay Period</span>
             <Input type="month" value={period} min={bounds.min} max={bounds.max} onChange={(event) => setPeriod(event.target.value)} />
           </label>
 
-          <Button onClick={viewPayslip} disabled={loading || !employeeId || !period}>
+          <Button className="payslip-lookup-submit" onClick={viewPayslip} disabled={loading || !employeeId || !period}>
             <Search size={15} /> View Payslip
           </Button>
         </CardContent>
       </Card>
     </section>
   );
-}
-
-function employeeTreeSql(loginId: string) {
-  const safeLogin = loginId.replace(/'/g, "''");
-  return `
-    SELECT DISTINCT *
-    FROM (
-      SELECT *
-      FROM VW_HR_EMPLOYEE_AWARE
-      WHERE EMP_STATUS <> 'S'
-      START WITH
-        EMPLOYEE_ID = '${safeLogin}'
-        OR SUPERVISOR_EMPID = '${safeLogin}'
-        OR DEPT_HEAD_EMPID = '${safeLogin}'
-        OR MANGR_EMPID = '${safeLogin}'
-      CONNECT BY NOCYCLE PRIOR EMPLOYEE_ID = SUPERVISOR_EMPID
-        OR PRIOR EMPLOYEE_ID = DEPT_HEAD_EMPID
-        OR PRIOR EMPLOYEE_ID = MANGR_EMPID
-    )
-  `;
 }
 
 function currentPeriod() {
