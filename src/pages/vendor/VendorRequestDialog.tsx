@@ -203,7 +203,11 @@ export function VendorRequestDialog({
     <Dialog
       open={open}
       wide
-      contentClassName="vendor-invoice-dialog"
+        contentClassName={cn(
+    "vendor-invoice-dialog",
+    activeTab === "details" && "vendor-invoice-dialog-details"
+  )}
+      // contentClassName="vendor-invoice-dialog"
       title={readOnly ? "View Purchase Invoices" : isEdit ? "Edit Purchase Invoices" : "Add Purchase Invoices"}
       onClose={onClose}
       footer={
@@ -227,7 +231,7 @@ export function VendorRequestDialog({
         </div>
       }
     >
-      <form className="grid gap-3" onSubmit={(event) => void save(event, "SAVEASDRAFT")}>
+      <form className="grid gap-3 self-start h-fit" onSubmit={(event) => void save(event, "SAVEASDRAFT")}>
         {error && <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{error}</div>}
 
         <div className="flex border-b">
@@ -236,30 +240,40 @@ export function VendorRequestDialog({
         </div>
 
         {activeTab === "info" ? (
-          <div className="grid gap-3 rounded-md border bg-white p-4 md:grid-cols-4">
-            <FormInput label="Doc No" value={savedDocNo || String(form.DOC_NO || "")} readOnly />
-            <FormInput label="Doc Date" value={toInputDate(form.DOC_DATE)} type="date" onChange={(value) => setField("DOC_DATE", value)} readOnly={readOnly} />
-            <label className="grid gap-1 text-sm md:col-span-1">
-              <span className="font-medium text-muted-foreground">Ref Doc No</span>
-              <Select value={String(form.REF_DOC_NO || "")} onChange={(event) => void loadRefDetails(event.target.value)} disabled={readOnly || loadingRef || isEdit}>
-                <option value="">Select Ref Doc</option>
-                {refDocs.map((item) => <option key={String(item.DOC_NO)} value={String(item.DOC_NO)}>{String(item.DOC_NO)}</option>)}
-              </Select>
-            </label>
-            <FormInput label="Well Id" value={String(form.REF_DOC1 || "")} onChange={(value) => setField("REF_DOC1", value)} readOnly={readOnly} />
-            <FormInput label="RIG No" value={String(form.REF_DOC2 || "")} onChange={(value) => setField("REF_DOC2", value)} readOnly={readOnly} />
-            <FormInput label="Truck No" value={String(form.REF_DOC3 || "")} onChange={(value) => setField("REF_DOC3", value)} readOnly={readOnly} />
-            <FormInput label="Invoice No" value={String(form.INVOICE_NUMBER || "")} onChange={(value) => setField("INVOICE_NUMBER", value)} required readOnly={readOnly} />
-            <FormInput label="Invoice Date" value={toInputDate(form.INVOICE_DATE)} type="date" onChange={(value) => setField("INVOICE_DATE", value)} required readOnly={readOnly} />
-            <FormInput label="Account Number" value={String(account.AC_CODE || form.AC_CODE || "")} readOnly />
-            <FormInput label="Account Name" value={String(account.AC_NAME || form.AC_NAME || "")} readOnly className="md:col-span-4" />
-            <FormInput label="Phone" value={String(account.PHONE || form.PHONE || "")} readOnly />
-            <FormInput label="Address" value={String(account.ADDRESS || form.ADDRESS || "")} readOnly className="md:col-span-3" />
-            <FormInput label="Fax" value={String(account.FAX || form.FAX || "")} readOnly />
-            <FormInput label="Division Code" value={String(form.DIV_CODE || "")} readOnly />
-            <FormInput label="Division Name" value={String(form.DIV_NAME || "")} readOnly className="md:col-span-2" />
-            <FormInput label="Remarks" value={String(form.REMARKS || "")} onChange={(value) => setField("REMARKS", value)} className="md:col-span-4" readOnly={readOnly} />
-          </div>
+
+          <div className="grid-cols-1 grid-gap-2 rounded-md border bg-white p-1">
+  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+    <FormInput label="Doc No" value={savedDocNo || String(form.DOC_NO || "")} readOnly />
+    <FormInput label="Doc Date" value={toInputDate(form.DOC_DATE)} type="date" onChange={(value) => setField("DOC_DATE", value)} readOnly={readOnly} />
+    <label className="grid gap-1 text-sm">
+      <span className="font-medium text-muted-foreground">Ref Doc No</span>
+      <Select value={String(form.REF_DOC_NO || "")} onChange={(event) => void loadRefDetails(event.target.value)} disabled={readOnly || loadingRef || isEdit}>
+        <option value="">Select Ref Doc</option>
+        {refDocs.map((item) => <option key={String(item.DOC_NO)} value={String(item.DOC_NO)}>{String(item.DOC_NO)}</option>)}
+      </Select>
+    </label>
+    <FormInput label="Well Id" value={String(form.REF_DOC1 || "")} onChange={(value) => setField("REF_DOC1", value)} readOnly={readOnly} />
+
+    <FormInput label="RIG No" value={String(form.REF_DOC2 || "")} onChange={(value) => setField("REF_DOC2", value)} readOnly={readOnly} />
+    <FormInput label="Truck No" value={String(form.REF_DOC3 || "")} onChange={(value) => setField("REF_DOC3", value)} readOnly={readOnly} />
+    <FormInput label="Invoice No" value={String(form.INVOICE_NUMBER || "")} onChange={(value) => setField("INVOICE_NUMBER", value)} required readOnly={readOnly} />
+    <FormInput label="Invoice Date" value={toInputDate(form.INVOICE_DATE)} type="date" onChange={(value) => setField("INVOICE_DATE", value)} required readOnly={readOnly} />
+  </div>
+
+  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+    <FormInput label="Account Number" value={String(account.AC_CODE || form.AC_CODE || "")} readOnly />
+    <FormInput label="Account Name" value={String(account.AC_NAME || form.AC_NAME || "")} readOnly className="sm:col-span-2 md:col-span-2" />
+
+    <FormInput label="Phone" value={String(account.PHONE || form.PHONE || "")} readOnly />
+    <FormInput label="Fax" value={String(account.FAX || form.FAX || "")} readOnly />
+    <FormInput label="Division Code" value={String(form.DIV_CODE || "")} readOnly />
+
+    <FormInput label="Division Name" value={String(form.DIV_NAME || "")} readOnly />
+    <FormInput label="Address" value={String(account.ADDRESS || form.ADDRESS || "")} readOnly className="sm:col-span-2 md:col-span-2" />
+
+    <FormInput label="Remarks" value={String(form.REMARKS || "")} onChange={(value) => setField("REMARKS", value)} className="sm:col-span-2 md:col-span-3" readOnly={readOnly} />
+  </div>
+ </div>
         ) : (
           <InvoiceDetailsTab
             items={items}

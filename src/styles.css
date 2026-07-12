@@ -234,7 +234,48 @@ body {
 }
 
 .vendor-invoice-dialog {
-  width: min(98vw, 1680px) !important;
+  width: min(92vw, 1040px) !important;
+  max-height: 88vh;
+  margin: auto;
+}
+
+.vendor-invoice-dialog-details {
+  width: min(96vw, 1420px) !important;  /* wider dialog only for Details tab */
+  max-height: 92vh;
+}
+
+.vendor-invoice-dialog-details .vendor-detail-scroll {
+  height: min(68dvh, 680px);   /* taller detail table */
+  min-height: 420px;
+}
+
+.vendor-invoice-dialog.ui-dialog-content {
+  grid-template-rows: auto max-content auto !important;
+}
+
+.vendor-invoice-dialog .ui-dialog-body {
+  overflow-y: auto;
+}
+
+.vendor-invoice-dialog .ui-input,
+.vendor-invoice-dialog .ui-select,
+.vendor-invoice-dialog input,
+.vendor-invoice-dialog select {
+  height: 32px;
+  font-size: 12px;
+  padding: 0 9px;
+  border-radius: 8px;
+}
+
+.vendor-invoice-dialog label > span {
+  font-size: 11px;
+  font-weight: 600;
+  color: #1e293b;      
+  letter-spacing: 0.02em;
+}
+
+.vendor-invoice-dialog .grid {
+  gap: 10px !important;
 }
 
 .vendor-pending-dialog {
