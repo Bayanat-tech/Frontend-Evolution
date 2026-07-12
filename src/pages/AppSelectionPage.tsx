@@ -22,6 +22,8 @@ import {
   UserRoundCheck,
   Warehouse,
   Route,
+  ExternalLink,
+  ScanFace,
 } from "lucide-react";
 import type { CSSProperties, ElementType } from "react";
 import { Fragment, useMemo } from "react";
@@ -57,7 +59,7 @@ const defaultAccents: ModuleAccent[] = [
   { gradient: "linear-gradient(135deg, #f59e0b 0%, #0f766e 100%)", light: "#fff7df", border: "#f6d68a", icon: "#b45309", text: "#6b3b08", glow: "rgba(245, 158, 11, 0.18)" },
 ];
 
-const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
+const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta; external?: { url: string } }> = [
   {
     keys: ["wms", "warehouse"],
     meta: {
@@ -136,14 +138,14 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
     },
   },
   {
-    keys: ["hr", "human", "hcm"],
+    keys: ["cms"],
     meta: {
-      Icon: UserRoundCheck,
-      accent: { gradient: "linear-gradient(135deg, #16a34a 0%, #0f766e 100%)", light: "#eaf8df", border: "#b7e7a7", icon: "#15803d", text: "#14532d", glow: "rgba(22, 163, 74, 0.14)" },
-      code: "HCM",
-      fullForm: "Human Capital Management",
-      description: "Onboarding, leave, payroll, settlements, advances and reports.",
-      status: "completed",
+      Icon: Globe,
+      accent: { gradient: "linear-gradient(135deg, #74d6ec 0%, #8788ce 100%)", light: "#ecfeff", border: "#a5f3fc", icon: "#0891b2", text: "#164e63", glow: "rgba(6, 182, 212, 0.14)" },
+      code: "CMS",
+      fullForm: "Customer Management System",
+      description: "Customer Onboarding, View services/sales Invoices, Integration ",
+      status: "in-progress", 
     },
   },
   {
@@ -168,6 +170,7 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
       status: "completed",
     },
   },
+  
   {
     keys: ["lms"],
     meta: {
@@ -179,17 +182,28 @@ const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta }> = [
       status: "completed",
     },
   },
-  
   {
-    keys: ["cms"],
+    keys: ["hr", "human", "hcm"],
     meta: {
-      Icon: Globe,
-      accent: { gradient: "linear-gradient(135deg, #74d6ec 0%, #8788ce 100%)", light: "#ecfeff", border: "#a5f3fc", icon: "#0891b2", text: "#164e63", glow: "rgba(6, 182, 212, 0.14)" },
-      code: "CMS",
-      fullForm: "Customer Management System",
-      description: "Customer documentation, alerts, costing and reports.",
-      status: "in-progress",
+      Icon: UserRoundCheck,
+      accent: { gradient: "linear-gradient(135deg, #16a34a 0%, #0f766e 100%)", light: "#eaf8df", border: "#b7e7a7", icon: "#15803d", text: "#14532d", glow: "rgba(22, 163, 74, 0.14)" },
+      code: "HCM",
+      fullForm: "Human Capital Management",
+      description: "Onboarding, leave, payroll, settlements, advances and reports.",
+      status: "completed",
     },
+  },
+  {
+    keys: [],
+    meta: {
+      Icon: ScanFace,
+      accent: { gradient: "linear-gradient(135deg, #ec4899 0%, #f59e0b 100%)", light: "#fff0f6", border: "#f9a8d4", icon: "#be185d", text: "#831843", glow: "rgba(236, 72, 153, 0.18)" },
+      code: "AMS",
+      fullForm: "Attendance Management System",
+      description: "Biometric Attendances with geo location , shifts, OT , Integration , Reports.",
+      status: "completed",
+    },
+    external: { url: "https://ams-new.bayanattechnology.com" },
   },
   
   {
@@ -225,7 +239,7 @@ function isSecurityModule(app: MenuNode) {
 }
 
 //
-const trailingCodes = ["EMS","CMS"];
+const trailingCodes = ["EMS","HCM","AMS"];
 
 function getSortWeight(code: string, catalogOrder: string[]) {
   if (trailingCodes.includes(code)) {
@@ -268,13 +282,46 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
   const btMastersApp = useMemo(() => workspaceApps.find((app) => isBtMastersApp(app)) || workspaceApps.find((app) => isUtilitiesApp(app)), [workspaceApps]);
   const displayCoreApps = useMemo(() => sortAppsByDisplayOrder(coreApps), [coreApps]);
 
+  const displayCards = useMemo(() => {
+    const appCards = displayCoreApps.map((app, index) => ({
+      kind: "app" as const,
+      key: app.id || app.title,
+      app,
+      meta: getModuleMeta(app, index),
+    }));
+
+    const presentCodes = new Set(appCards.map((c) => c.meta.code));
+
+    const externalCards = moduleCatalog
+      .filter((entry) => entry.external && !presentCodes.has(entry.meta.code))
+      .map((entry) => ({
+        kind: "external" as const,
+        key: `external-${entry.meta.code}`,
+        meta: entry.meta,
+        url: entry.external!.url,
+      }));
+
+    const catalogOrderCodes = moduleCatalog.map((entry) => entry.meta.code);
+    return [...appCards, ...externalCards].sort(
+      (a, b) => getSortWeight(a.meta.code, catalogOrderCodes) - getSortWeight(b.meta.code, catalogOrderCodes)
+    );
+  }, [displayCoreApps]);
+
   const catalogOrderCodes = useMemo(() => moduleCatalog.map((entry) => entry.meta.code), []);
+
   const trailingBreakIndex = useMemo(() => {
-  return displayCoreApps.findIndex((app) => {
-    const weight = getSortWeight(getModuleMeta(app, 0).code, catalogOrderCodes);
-    return weight >= catalogOrderCodes.length - 0.5;
-  });
-}, [displayCoreApps, catalogOrderCodes]);
+    return displayCards.findIndex((card) => {
+      const weight = getSortWeight(card.meta.code, catalogOrderCodes);
+      return weight >= catalogOrderCodes.length - 0.5;
+    });
+  }, [displayCards, catalogOrderCodes]);
+
+//   const trailingBreakIndex = useMemo(() => {
+//   return displayCoreApps.findIndex((app) => {
+//     const weight = getSortWeight(getModuleMeta(app, 0).code, catalogOrderCodes);
+//     return weight >= catalogOrderCodes.length - 0.5;
+//   });
+// }, [displayCoreApps, catalogOrderCodes]);
   const openApp = (app: MenuNode) => {
     const firstPath = firstLeafPath(app);
     navigate(`/workspace/${cleanAppCode(app.title)}${firstPath ? `/${firstPath}` : ""}`);
@@ -315,7 +362,26 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
               </div>
 
               <div className="module-grid app-launch-grid">
-                 {displayCoreApps.map((app, index) => {
+
+                {displayCards.map((card, index) => (
+                   <Fragment key={card.key}>
+                     {index === trailingBreakIndex && trailingBreakIndex > 0 ? (
+                       <div className="app-launch-row-break" aria-hidden="true" />
+                     ) : null}
+                     <ModuleCard
+                       childCount={card.kind === "app" ? (card.app.children?.length || 0) : 0}
+                       screenCount={card.kind === "app" ? flattenLeaves(card.app.children || []).length : 0}
+                       meta={card.meta}
+                       isExternal={card.kind === "external"}
+                       onClick={() =>
+                         card.kind === "external"
+                           ? window.open(card.url, "_blank", "noopener,noreferrer")
+                           : openApp(card.app)
+                       }
+                     />
+                   </Fragment>
+                 ))}
+                 {/* {displayCoreApps.map((app, index) => {
                    const meta = getModuleMeta(app, index);
                    const childCount = app.children?.length || 0;
                    const screenCount = flattenLeaves(app.children || []).length;
@@ -332,7 +398,7 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
                       />
                     </Fragment>
                  );
-                })}
+                })} */}
              </div>
             </section>
 
@@ -368,11 +434,13 @@ function ModuleCard({
   screenCount,
   meta,
   onClick,
+  isExternal = false,
 }: {
   childCount: number;
   screenCount: number;
   meta: ModuleMeta;
   onClick: () => void;
+  isExternal?: boolean;
 }) {
   const Icon = meta.Icon;
   const cardStyle = {
@@ -391,9 +459,18 @@ function ModuleCard({
         <span className="app-module-card__icon">
           <Icon size={24} />
         </span>
-        <span className="app-module-card__badges">
+        {/* <span className="app-module-card__badges">
           {meta.status === "in-progress" ? <span className="app-module-card__status">In progress</span> : null}
           <span className="app-module-card__badge">{childCount} GRP</span>
+        </span> */}
+
+        <span className="app-module-card__badges">
+          {isExternal ? (
+            <span className="app-module-card__status">External</span>
+          ) : meta.status === "in-progress" ? (
+            <span className="app-module-card__status">In progress</span>
+          ) : null}
+          {!isExternal ? <span className="app-module-card__badge">{childCount} GRP</span> : null}
         </span>
       </div>
       <Icon size={86} className="app-module-card__watermark" aria-hidden="true" />
@@ -403,9 +480,12 @@ function ModuleCard({
         <p>{meta.description}</p>
       </div>
       <div className="app-module-card__footer">
-        <span>{screenCount} screen{screenCount === 1 ? "" : "s"}</span>
+        <span>{isExternal ? "Opens in new tab" : `${screenCount} screen${screenCount === 1 ? "" : "s"}`}</span>
         <strong>
-          OPEN <ChevronRight size={14} />
+          OPEN {isExternal ? <ExternalLink size={13} /> : <ChevronRight size={14} />}
+        {/* <span>{screenCount} screen{screenCount === 1 ? "" : "s"}</span>
+        <strong>
+          OPEN <ChevronRight size={14} /> */}
         </strong>
       </div>
       <span className="app-module-card__ambient" aria-hidden="true" />
