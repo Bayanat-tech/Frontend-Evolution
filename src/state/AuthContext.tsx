@@ -31,6 +31,7 @@ function normalizeUser(user: UserProfile, tenantId?: string): UserProfile {
     username: user.username || user.USERNAME,
     email_id: user.email_id || user.EMAIL_ID,
     loginid: user.loginid || user.LOGINID,
+    loginid1: user.loginid1 || user.LOGINID1 || user.loginid || user.LOGINID,
     company_code: user.company_code || user.COMPANY_CODE,
     company_name: user.company_name || user.COMPANY_NAME || user.company_code || user.COMPANY_CODE,
     tenantId: tenantId || user.tenantId,
