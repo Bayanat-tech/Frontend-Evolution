@@ -44,9 +44,11 @@ const getToday = (): string => {
 const REPORT_WINDOW_NAME = "pnl_report_window";
 
 // ─── Popup window shell ────────────────────────────────────────────────────────
-// The popup gets its own tiny toolbar (Back / Download Excel / Close) since the
-// React overlay controls that used to sit on top of the in-page dialog aren't
-// available inside a separate browser window.
+// The popup gets its own tiny toolbar (Back / Download Excel / Close).
+// CRITICAL: it also relays PNL_DRILL_DOWN postMessages coming from the inner
+// report iframe up to window.opener (the main app tab). Without this relay,
+// drill-down clicks never reach the React app because the iframe's
+// `window.parent` is this popup, not the app tab that opened it.
 
 function buildShellHtml(title: string): string {
   return `<!doctype html>
@@ -109,6 +111,17 @@ function buildShellHtml(title: string): string {
     <button id="btnClose">Close</button>
   </div>
   <iframe id="reportFrame"></iframe>
+  <script>
+    // Relay drill-down messages from the inner report iframe to the app tab
+    // that opened this popup. Without this, the iframe's postMessage to
+    // window.parent only ever reaches this popup window, never the opener.
+    window.addEventListener("message", function (e) {
+      var data = e.data;
+      if (data && data.type === "PNL_DRILL_DOWN" && window.opener) {
+        window.opener.postMessage(data, "*");
+      }
+    });
+  </script>
 </body>
 </html>`;
 }
@@ -135,7 +148,7 @@ function writeReportContent(win: Window, html: string) {
 
   const frameWin = frame.contentWindow as any;
   if (frameWin) {
-    // Suppress the report's own print() call, same as before.
+    // Suppress the report's own print() call.
     const originalPrint = frameWin.print;
     frameWin.print = () => {};
     const restore = () => {
@@ -191,7 +204,6 @@ export default function ProfitLossPage() {
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
 
-  // Drill-down stack: each entry is a level pushed on top
   const [drillStack, setDrillStack] = useState<DrillState[]>([]);
   const [drillLoading, setDrillLoading] = useState(false);
 
@@ -234,7 +246,7 @@ export default function ProfitLossPage() {
     fetchDivisions();
   }, [companyCode, loginId]);
 
-  // ── postMessage listener for drill-down clicks inside the report HTML ────
+  // ── postMessage listener for drill-down clicks (relayed from the popup) ──
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
       const data = event.data;
@@ -369,8 +381,6 @@ export default function ProfitLossPage() {
     }
   }, [currentDrill, buildPayload]);
 
-  // Keep refs pointing at the latest handlers so the popup's toolbar buttons
-  // (wired up once, outside React) always call current logic.
   useEffect(() => {
     onBackRef.current = handleDrillBack;
   }, [handleDrillBack]);
@@ -385,9 +395,8 @@ export default function ProfitLossPage() {
   const ensureReportWindow = (title: string): Window | null => {
     let win = reportWinRef.current;
     if (!win || win.closed) {
-      // No size/feature string => browsers open this as a normal new tab
-      // (with the usual address bar, back/forward, etc.) instead of a
-      // stripped-down popup window.
+      // No size/feature string => opens as a normal tab with address bar,
+      // back/forward, etc. instead of a stripped-down popup window.
       win = window.open("", REPORT_WINDOW_NAME);
       reportWinRef.current = win;
     }
@@ -409,7 +418,6 @@ export default function ProfitLossPage() {
     if (btnExcel) btnExcel.onclick = () => onExcelRef.current();
     if (btnClose) btnClose.onclick = () => onCloseRef.current();
 
-    // Detect the user closing the popup manually and reset our state to match.
     stopPolling();
     pollRef.current = window.setInterval(() => {
       if (win && win.closed) {

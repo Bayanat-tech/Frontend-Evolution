@@ -14,9 +14,10 @@
 // (form.grade_code), debounced — so it refetches whenever the code changes,
 // whether that's from an existing row (edit/view) or from typing / picking
 // a code via the new search icon while adding a brand new grade. Picking an
-// existing code in Add mode is a "template copy": only the Components grid
-// loads from that code, header fields are left exactly as the user typed
-// them (see selectGradeFromLookup below).
+// existing code in Add mode is a "template copy": Name / Short Name are
+// auto-filled from the picked row, and the Components grid loads from that
+// code — other header fields are left exactly as the user typed them (see
+// selectGradeFromLookup below).
 
 import { Save, Search, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -307,11 +308,17 @@ export function AddGradeMasterForm({ mode, existingData, onClose }: Props) {
     `${r.grade_code} ${r.grade_name}`.toLowerCase().includes(gradeLookupSearch.toLowerCase()),
   );
 
-  // Template-copy: only load that grade's Components below. Header fields
-  // (Name, Short Name, entitlements, etc.) are left exactly as the user
-  // typed them — this is only meant to pull in a starting components list.
+  // Template-copy: loads that grade's Components below, and also auto-fills
+  // Name / Short Name from the picked row (other header fields — entitlements,
+  // remarks, status, etc. — are left exactly as the user typed them).
   const selectGradeFromLookup = (code: string) => {
-    set("grade_code", code);
+    const picked = gradeLookupRows.find((r) => r.grade_code === code);
+    setForm((prev) => ({
+      ...prev,
+      grade_code: code,
+      grade_name: picked?.grade_name ?? prev.grade_name,
+      grade_short_name: picked?.grade_short_name ?? prev.grade_short_name,
+    }));
     setGradeLookupOpen(false);
   };
 
@@ -728,8 +735,8 @@ export function AddGradeMasterForm({ mode, existingData, onClose }: Props) {
               )}
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Selecting a code loads its <strong>Grade Components</strong> below as a starting
-              template — header fields above stay exactly as you entered them.
+              Selecting a code auto-fills <strong>Name</strong> / <strong>Short Name</strong> above
+              and loads its <strong>Grade Components</strong> below as a starting template.
             </p>
           </div>
         </Dialog>
