@@ -4,7 +4,6 @@ import { useAuth } from "../../state/AuthContext";
 import { pamsSelect, pamsDelete, pamsSave } from "../../api/pams";
 import { CheckCircle, Eye, Edit2, X, Save } from "lucide-react";
 import { Button } from "../../components/ui/Button";
-import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
@@ -13,6 +12,7 @@ import { NoticeToast } from "../../components/ui/NoticeToast";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { LookupRow } from "../../api/lookups";
 import { useToast } from "../../components/ui/AlertToast";
+import { DataTable } from "../../components/ui/PamsDataTable";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Row = Record<string, unknown>;
@@ -45,8 +45,8 @@ interface HodBatch {
   PENDING_COUNT: number | string;
 }
 
-const TAB_STATUS   = ["PENDING", "IN PROGRESS", "REJECTED", "SENT BACK", "APPROVED"] as const;
-const TAB_LABELS   = ["Pending", "In Progress", "Rejected", "Sent Back", "Closed"]   as const;
+const TAB_STATUS = ["PENDING", "IN PROGRESS", "REJECTED", "SENT BACK", "APPROVED"] as const;
+const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Closed"] as const;
 const HR_APPROVERS = ["2021060535", "2010080001", "2018030473"];
 // FLOW_LEVEL jispe HOD ke docs pahunchte hain jab HOD apna review complete kar leta hai (2 -> 3)
 const HOD_READY_FLOW_LEVEL = 3;
@@ -65,6 +65,15 @@ function fmtDate(val: unknown): string {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
+function formatPeriodQuarter(row: Row): string {
+  const dateValue = row.PERIOD_FROM_DATE;
+  if (!dateValue) return text(row.PERIOD_NUMBER);
+  const parsed = new Date(String(dateValue));
+  if (isNaN(parsed.getTime())) return text(row.PERIOD_NUMBER);
+  const quarter = Math.floor(parsed.getMonth() / 3) + 1;
+  return `Q${quarter} ${parsed.getFullYear()}`;
+}
+
 function getStatusMeta(
   lastAction: string,
   flowLevel: number,
@@ -74,13 +83,13 @@ function getStatusMeta(
     (flowLevel === 2 || flowLevel === 3) &&
     (status === "DRAFT" || lastAction === "SAVE AS DRAFT" || lastAction === "SAVE_AS_DRAFT");
   const label = isDraft ? "SAVE AS DRAFT" : lastAction;
-  const val   = (lastAction || "").toUpperCase().trim();
+  const val = (lastAction || "").toUpperCase().trim();
 
-  if (isDraft)              return { label, bg: "#fff4e5", color: "#92400e", border: "#fcd38a" };
-  if (val === "SUBMITTED")  return { label, bg: "#e6f9f0", color: "#0a6640", border: "#b7ebd4" };
-  if (val === "APPROVED")   return { label, bg: "#e8f0fe", color: "#1a4fa0", border: "#b3caf5" };
-  if (val === "REJECTED")   return { label, bg: "#fdecea", color: "#a01a1a", border: "#f5b3b3" };
-  if (val === "SENT BACK")  return { label, bg: "#f3e8fe", color: "#6b21a8", border: "#d9b3f5" };
+  if (isDraft) return { label, bg: "#fff4e5", color: "#92400e", border: "#fcd38a" };
+  if (val === "SUBMITTED") return { label, bg: "#e6f9f0", color: "#0a6640", border: "#79c3a2" };
+  if (val === "APPROVED") return { label, bg: "#e8f0fe", color: "#1a4fa0", border: "#b3caf5" };
+  if (val === "REJECTED") return { label, bg: "#fdecea", color: "#a01a1a", border: "#f5b3b3" };
+  if (val === "SENT BACK") return { label, bg: "#f3e8fe", color: "#6b21a8", border: "#d9b3f5" };
   return { label, bg: "#f4f4f5", color: "#52525b", border: "#d4d4d8" };
 }
 
@@ -105,10 +114,10 @@ function computeFinalRating(
 }
 
 const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
-  const navigate    = useNavigate();
-  const { user }    = useAuth();
-  const { toast }   = useToast();
-  const loginid     = user?.loginid || user?.username || "";
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const loginid = user?.loginid || user?.username || "";
   const companyCode = user?.company_code || "";
   const isHRApprover = HR_APPROVERS.includes(loginid);
 
@@ -117,36 +126,36 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     [loginid, companyCode]
   );
 
-  const [activeTab,    setActiveTab]    = useState(initialTab);
-  const [rows,         setRows]         = useState<Row[]>(
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const [rows, setRows] = useState<Row[]>(
     () => taskPageCache.get(`${loginid}-${companyCode}-${TAB_STATUS[initialTab]}`) ?? []
   );
-  const [loading,      setLoading]      = useState(
+  const [loading, setLoading] = useState(
     () => !taskPageCache.has(`${loginid}-${companyCode}-${TAB_STATUS[initialTab]}`)
   );
-  const [notice,       setNotice]       = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
+  const [notice, setNotice] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
-  const [query,        setQuery]        = useState("");
+  const [query, setQuery] = useState("");
   const [activeWeightage, setActiveWeightage] = useState<ActiveWeightage | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [viewMode,   setViewMode]   = useState(false);
-  const [editMode,   setEditMode]   = useState(false);
+  const [viewMode, setViewMode] = useState(false);
+  const [editMode, setEditMode] = useState(false);
   const [currentRow, setCurrentRow] = useState<Row | null>(null);
-  const [formData,   setFormData]   = useState<FormData>({
+  const [formData, setFormData] = useState<FormData>({
     APPRAISAL_DOC_NO: "", APPRAISAL_DOC_DATE: "",
-    EMPLOYEE_CODE: "",    EMPLOYEE_NAME: "",
-    PERIOD_NUMBER: "",    APPRAISAL_FROM: "",
-    APPRAISAL_TO: "",     COMPANY_CODE: companyCode,
+    EMPLOYEE_CODE: "", EMPLOYEE_NAME: "",
+    PERIOD_NUMBER: "", APPRAISAL_FROM: "",
+    APPRAISAL_TO: "", COMPANY_CODE: companyCode,
   });
-  const [saving,    setSaving]    = useState(false);
-  const [periods,   setPeriods]   = useState<Row[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [periods, setPeriods] = useState<Row[]>([]);
   const [employees, setEmployees] = useState<Row[]>([]);
-  const fetchRequestId  = useRef(0);
-  const prevUserKeyRef  = useRef(`${loginid}-${companyCode}`);
+  const fetchRequestId = useRef(0);
+  const prevUserKeyRef = useRef(`${loginid}-${companyCode}`);
   const statusFilter = TAB_STATUS[activeTab];
 
   const [hodBatches, setHodBatches] = useState<HodBatch[]>([]);
-  const [notifying, setNotifying]   = useState<string | null>(null);
+  const [notifying, setNotifying] = useState<string | null>(null);
 
   const loadHodBatches = useCallback(async () => {
     try {
@@ -183,8 +192,8 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     const loadLookups = async () => {
       try {
         const [periodsData, employeesData] = await Promise.all([
-          pamsSelect({ parameter: "period",              loginid, code1: companyCode }),
-          pamsSelect({ parameter: "employee_hierarchy",  loginid, code1: companyCode }),
+          pamsSelect({ parameter: "period", loginid, code1: companyCode }),
+          pamsSelect({ parameter: "employee_hierarchy", loginid, code1: companyCode }),
         ]);
         setPeriods(periodsData.map(normalizeRow));
         setEmployees(employeesData.map(normalizeRow));
@@ -198,7 +207,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
 
   const fetchData = useCallback(async (tabIndex: number, isBackground = false) => {
     const myRequestId = ++fetchRequestId.current;
-    const tabStatus   = TAB_STATUS[tabIndex];
+    const tabStatus = TAB_STATUS[tabIndex];
 
     if (!isBackground) setLoading(true);
     setNotice(null);
@@ -268,11 +277,11 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   }, [activeTab, cacheKey]);
 
   const openAppraisalTabsPage = (row: Row, mode: "view" | "edit" = "view") => {
-    const docNo        = text(row.APPRAISAL_DOC_NO);
+    const docNo = text(row.APPRAISAL_DOC_NO);
     const employeeCode = text(row.EMPLOYEE_CODE);
     const employeeName = encodeURIComponent(text(row.EMPLOYEE_NAME));
-    const designation  = encodeURIComponent(text(row.DESG_NAME));
-    const department   = encodeURIComponent(text(row.DEPT_NAME));
+    const designation = encodeURIComponent(text(row.DESG_NAME));
+    const department = encodeURIComponent(text(row.DEPT_NAME));
     navigate(
       `/workspace/pams/appraisal/view/${docNo}?employee_code=${employeeCode}&employee_name=${employeeName}&designation=${designation}&department=${department}&mode=${mode}`,
       { state: { prefetchedRow: row } }
@@ -287,14 +296,14 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
   }
 
   const buildFormData = (row: Row): FormData => ({
-    APPRAISAL_DOC_NO:   text(row.APPRAISAL_DOC_NO),
+    APPRAISAL_DOC_NO: text(row.APPRAISAL_DOC_NO),
     APPRAISAL_DOC_DATE: dateToString(row.APPRAISAL_DOC_DATE),
-    EMPLOYEE_CODE:      text(row.EMPLOYEE_CODE),
-    EMPLOYEE_NAME:      text(row.EMPLOYEE_NAME),
-    PERIOD_NUMBER:      text(row.PERIOD_NUMBER),
-    APPRAISAL_FROM:     dateToString(row.APPRAISAL_FROM),
-    APPRAISAL_TO:       dateToString(row.APPRAISAL_TO),
-    COMPANY_CODE:       text(row.COMPANY_CODE) || companyCode,
+    EMPLOYEE_CODE: text(row.EMPLOYEE_CODE),
+    EMPLOYEE_NAME: text(row.EMPLOYEE_NAME),
+    PERIOD_NUMBER: text(row.PERIOD_NUMBER),
+    APPRAISAL_FROM: dateToString(row.APPRAISAL_FROM),
+    APPRAISAL_TO: dateToString(row.APPRAISAL_TO),
+    COMPANY_CODE: text(row.COMPANY_CODE) || companyCode,
   });
 
   const openViewDialog = (row: Row) => {
@@ -311,9 +320,11 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
 
   const closeDialog = () => {
     setDialogOpen(false); setViewMode(false); setEditMode(false); setCurrentRow(null);
-    setFormData({ APPRAISAL_DOC_NO: "", APPRAISAL_DOC_DATE: "", EMPLOYEE_CODE: "",
+    setFormData({
+      APPRAISAL_DOC_NO: "", APPRAISAL_DOC_DATE: "", EMPLOYEE_CODE: "",
       EMPLOYEE_NAME: "", PERIOD_NUMBER: "", APPRAISAL_FROM: "", APPRAISAL_TO: "",
-      COMPANY_CODE: companyCode });
+      COMPANY_CODE: companyCode
+    });
   };
 
   const updateFormField = (key: string, value: unknown) =>
@@ -324,7 +335,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     updateFormField("PERIOD_NUMBER", periodNumber);
     if (period) {
       updateFormField("APPRAISAL_FROM", dateToString(period.PERIOD_FROM_DATE));
-      updateFormField("APPRAISAL_TO",   dateToString(period.PERIOD_TO_DATE));
+      updateFormField("APPRAISAL_TO", dateToString(period.PERIOD_TO_DATE));
     }
   };
 
@@ -343,11 +354,11 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     try {
       await pamsSave({
         parameter: "Trn_ems_appraisal_hdr", loginid,
-        val1s1: formData.COMPANY_CODE,   val1s4: formData.EMPLOYEE_CODE,
+        val1s1: formData.COMPANY_CODE, val1s4: formData.EMPLOYEE_CODE,
         val1s5: formData.APPRAISAL_DOC_NO, val1s6: formData.APPRAISAL_DOC_DATE,
-        val1s7: formData.APPRAISAL_FROM,  val1s8: formData.APPRAISAL_TO,
+        val1s7: formData.APPRAISAL_FROM, val1s8: formData.APPRAISAL_TO,
         val1s9: formData.PERIOD_NUMBER,
-        wval1s1: formData.COMPANY_CODE,  wval1s5: formData.APPRAISAL_DOC_NO,
+        wval1s1: formData.COMPANY_CODE, wval1s5: formData.APPRAISAL_DOC_NO,
       });
       setNotice({ type: "success", message: "Appraisal updated successfully" });
       closeDialog();
@@ -449,9 +460,11 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
               if ((e.target as HTMLElement).tagName !== "INPUT")
                 openAppraisalTabsPage(row.original, "view");
             }}
-            style={{ display: "flex", alignItems: "center", gap: "8px",
+            style={{
+              display: "flex", alignItems: "center", gap: "8px",
               cursor: "pointer", whiteSpace: "nowrap",
-              overflow: "hidden", textOverflow: "ellipsis" }}
+              overflow: "hidden", textOverflow: "ellipsis"
+            }}
           >
             {isHRApprover && (
               <input
@@ -462,8 +475,10 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
               />
             )}
             <span
-              style={{ color: "#082A89", fontWeight: 600, fontSize: "0.82rem",
-                cursor: "pointer", display: "inline-block", minWidth: 80 }}
+              style={{
+                color: "#082A89", fontWeight: 600, fontSize: "0.82rem",
+                cursor: "pointer", display: "inline-block", minWidth: 80
+              }}
               onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
               onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
             >
@@ -482,11 +497,15 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     });
 
     cols.push({
-      accessorKey: "PERIOD_NUMBER",
-      header: "Period No",
-      size: 100,
-      cell: ({ row }) => text(row.original.PERIOD_NUMBER) || "—",
-    });
+  accessorKey: "PERIOD_NUMBER",
+  header: "Period No",
+  size: 100,
+  cell: ({ row }) =>
+    formatPeriodQuarter({
+      PERIOD_FROM_DATE: row.original.APPRAISAL_FROM,
+      PERIOD_NUMBER: row.original.PERIOD_NUMBER,
+    }) || "—",
+});
 
     cols.push({
       accessorKey: "EMPLOYEE_CODE",
@@ -504,8 +523,8 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       header: "Designation",
       size: 200,
       cell: ({ row }) => {
-        const desgCode  = text(row.original.DESG_CODE);
-        const desgName  = text(row.original.DESG_NAME);
+        const desgCode = text(row.original.DESG_CODE);
+        const desgName = text(row.original.DESG_NAME);
         const desgLabel = desgCode && desgName ? `${desgCode} - ${desgName}` : desgCode || desgName || "—";
         return <span style={{ whiteSpace: "nowrap" }}>{desgLabel}</span>;
       },
@@ -516,14 +535,44 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       header: "Period Range",
       size: 210,
       cell: ({ row }) => {
-        const from = fmtDate(row.original.APPRAISAL_FROM);
-        const to   = fmtDate(row.original.APPRAISAL_TO);
-        if (from === "NA" && to === "NA") return <span style={{ color: "#9ca3af" }}>—</span>;
+        const fromDate = row.original.APPRAISAL_FROM;
+        const toDate = row.original.APPRAISAL_TO;
+
+
+        const formatDateRange = (dateVal: unknown) => {
+          if (!dateVal) return null;
+
+
+          let dateStr = String(dateVal);
+
+          if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+            return dateStr;
+          }
+
+          const d = new Date(dateStr);
+          if (isNaN(d.getTime())) return null;
+
+          const day = String(d.getDate()).padStart(2, "0");
+          const month = String(d.getMonth() + 1).padStart(2, "0");
+          const year = d.getFullYear();
+          return `${day} ${getMonthAbbreviation(d.getMonth())} ${year}`;
+        };
+
+        const getMonthAbbreviation = (monthIndex: number) => {
+          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          return months[monthIndex];
+        };
+
+        const from = formatDateRange(fromDate);
+        const to = formatDateRange(toDate);
+
+        if (!from && !to) return <span style={{ color: "#9ca3af" }}>—</span>;
+
         return (
           <span style={{ whiteSpace: "nowrap", fontSize: "0.8rem" }}>
-            <span style={{ color: "#374151" }}>{from}</span>
+            <span style={{ color: "#0c0e11" }}>{from || "—"}</span>
             <span style={{ color: "#9ca3af", margin: "0 4px" }}>→</span>
-            <span style={{ color: "#374151" }}>{to}</span>
+            <span style={{ color: "#0a0d11" }}>{to || "—"}</span>
           </span>
         );
       },
@@ -543,15 +592,17 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         if (!avg) return <span style={{ color: "#9ca3af" }}>—</span>;
 
         let bg = "#f3f4f6", color = "#374151", border = "#d1d5db";
-        if (avg >= 5)      { bg = "#e8f0fe"; color = "#0a6640"; border = "#b3caf5"; }
-        else if (avg >= 4) { bg = "#e6f9f0"; color = "#0e0ed1"; border = "#b7ebd4"; }
+        if (avg >= 5) { bg = "#f6fefe"; color = "#35a074"; border = "#6bff15"; }
+        else if (avg >= 4) { bg = "#e6f9f0"; color = "#4d4dc1"; border = "#b7ebd4"; }
         else if (avg >= 3) { bg = "#f3e8fe"; color = "#6b21a8"; border = "#d9b3f5"; }
         else if (avg >= 2) { bg = "#fff4e5"; color = "#0e9289"; border = "#fcd38a"; }
         else if (avg >= 1) { bg = "#fdecea"; color = "#d80a0a"; border = "#f5b3b3"; }
 
         return (
-          <span style={{ display: "inline-block", padding: "2px 12px", borderRadius: "999px",
-            fontSize: "0.75rem", fontWeight: 700, background: bg, color, border: `1px solid ${border}` }}>
+          <span style={{
+            display: "inline-block", padding: "2px 12px", borderRadius: "999px",
+            fontSize: "0.75rem", fontWeight: 700, background: bg, color, border: `1px solid ${border}`
+          }}>
             {avg}
           </span>
         );
@@ -576,12 +627,14 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       size: 230,
       cell: ({ row }) => {
         const reason = text(row.original.SENT_BACK_REASON);
-        const by     = text(row.original.SENT_BACK_BY);
+        const by = text(row.original.SENT_BACK_BY);
         if (!reason) return <span style={{ color: "#9ca3af" }}>—</span>;
         return (
           <div style={{ lineHeight: 1.4 }}>
-            <div title={reason} style={{ maxWidth: "210px", overflow: "hidden",
-              textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "0.8rem", fontWeight: 500 }}>
+            <div title={reason} style={{
+              maxWidth: "210px", overflow: "hidden",
+              textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "0.8rem", fontWeight: 500
+            }}>
               {reason}
             </div>
             {by && <div style={{ fontSize: "0.7rem", color: "#9ca3af", marginTop: "2px" }}>by {by}</div>}
@@ -601,9 +654,11 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
           text(row.original.STATUS)
         );
         return (
-          <span style={{ display: "inline-block", padding: "2px 10px", borderRadius: "999px",
+          <span style={{
+            display: "inline-block", padding: "2px 10px", borderRadius: "999px",
             fontSize: "0.7rem", fontWeight: 700, whiteSpace: "nowrap",
-            background: status.bg, color: status.color, border: `1px solid ${status.border}` }}>
+            background: status.bg, color: status.color, border: `1px solid ${status.border}`
+          }}>
             {status.label || "—"}
           </span>
         );
@@ -765,7 +820,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
             <CardContent className="grid max-w-full grid-cols-1 gap-3 pt-4 lg:grid-cols-2">
               <div className="field">
                 <span>Appraisal Doc No</span>
-                <Input disabled value={formData.APPRAISAL_DOC_NO || "Auto generated"} onChange={() => {}} />
+                <Input disabled value={formData.APPRAISAL_DOC_NO || "Auto generated"} onChange={() => { }} />
               </div>
               <div className="field">
                 <span>Appraisal Doc Date</span>
@@ -785,10 +840,10 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
                       : formData.EMPLOYEE_CODE}
                     placeholder="Search employee"
                     columns={[
-                      { field: "EMPLOYEE_ID",   header: "Employee ID" },
+                      { field: "EMPLOYEE_ID", header: "Employee ID" },
                       { field: "EMPLOYEE_CODE", header: "Employee Code" },
-                      { field: "RPT_NAME",      header: "Employee Name" },
-                      { field: "EMP_NAME",      header: "Employee Name" },
+                      { field: "RPT_NAME", header: "Employee Name" },
+                      { field: "EMP_NAME", header: "Employee Name" },
                     ]}
                     valueField="EMPLOYEE_CODE"
                     displayFields={["EMPLOYEE_CODE", "RPT_NAME", "EMP_NAME"]}
@@ -815,11 +870,11 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
               </div>
               <div className="field">
                 <span>Appraisal From</span>
-                <Input disabled type="date" value={formData.APPRAISAL_FROM} onChange={() => {}} />
+                <Input disabled type="date" value={formData.APPRAISAL_FROM} onChange={() => { }} />
               </div>
               <div className="field">
                 <span>Appraisal To</span>
-                <Input disabled type="date" value={formData.APPRAISAL_TO} onChange={() => {}} />
+                <Input disabled type="date" value={formData.APPRAISAL_TO} onChange={() => { }} />
               </div>
             </CardContent>
           </Card>
