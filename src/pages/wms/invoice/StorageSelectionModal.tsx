@@ -43,31 +43,34 @@ export function StorageSelectionModal({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!user?.loginid || !user?.company_code || !prinCode) return;
-    (async () => {
-      setLoading(true);
-      try {
-        const response = await getStorageSelection({
-          loginid: user.loginid ?? "",
-          company_code: user.company_code ?? "",
-          prin_code: prinCode,
-          consolidated_invno: consolidatedInvNo,
-          from_date: toDDMMYYYY(fromDate),
-          to_date: toDDMMYYYY(toDate),
-        });
-        const normalized = Array.isArray(response)
-          ? response.map((r) => normalizeStorageRow(r, consolidatedInvNo))
-          : [];
-        setRows(normalized);
-      } catch {
-        setRows([]);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [prinCode, consolidatedInvNo, user?.loginid, user?.company_code]);
-
+useEffect(() => {
+  if (!user?.loginid || !user?.company_code || !prinCode) {
+    setLoading(false); // ← stop the spinner even when we can't fetch
+    setRows([]);
+    return;
+  }
+  setLoading(true);
+  (async () => {
+    try {
+      const response = await getStorageSelection({
+        loginid: user.loginid ?? "",
+        company_code: user.company_code ?? "",
+        prin_code: prinCode,
+        consolidated_invno: consolidatedInvNo,
+        from_date: toDDMMYYYY(fromDate),
+        to_date: toDDMMYYYY(toDate),
+      });
+      const normalized = Array.isArray(response)
+        ? response.map((r) => normalizeStorageRow(r, consolidatedInvNo))
+        : [];
+      setRows(normalized);
+    } catch {
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  })();
+}, [prinCode, consolidatedInvNo, user?.loginid, user?.company_code]);
   const toggleRow = (index: number) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -95,26 +98,34 @@ export function StorageSelectionModal({
               <TableHead className="w-10">
                 <input type="checkbox" checked={rows.length > 0 && selected.size === rows.length} onChange={toggleAll} />
               </TableHead>
-              <TableHead>Principal Code</TableHead>
+              <TableHead>Serial No</TableHead>
+              <TableHead>Reporting Date</TableHead>
               <TableHead>Txn Date</TableHead>
               <TableHead className="text-right">Qty</TableHead>
               <TableHead className="text-right">Amount</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={5} className="py-6 text-center text-muted-foreground">
-                  Loading...
-                </TableCell>
-              </TableRow>
-            ) : rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="py-6 text-center text-muted-foreground">
-                  No storage records found
-                </TableCell>
-              </TableRow>
-            ) : (
+{loading ? (
+  <TableRow>
+    <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
+      Loading...
+    </TableCell>
+  </TableRow>
+) : !prinCode ? (
+  <TableRow>
+    <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
+      Select a Principal Code first.
+    </TableCell>
+  </TableRow>
+) : rows.length === 0 ? (
+  <TableRow>
+    <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
+      No storage records found
+    </TableCell>
+  </TableRow>
+) : (
+
               rows.map((row, index) => {
                 const isSelected = selected.has(index);
                 return (
@@ -126,7 +137,8 @@ export function StorageSelectionModal({
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <input type="checkbox" checked={isSelected} onChange={() => toggleRow(index)} />
                     </TableCell>
-                    <TableCell>{row.PRIN_CODE}</TableCell>
+                    <TableCell>{row.SEQ_NUMBER}</TableCell>
+                    <TableCell>{formatDate(row.RCPT_DATE)}</TableCell>
                     <TableCell>{formatDate(row.TXN_DATE)}</TableCell>
                     <TableCell className="text-right">{row.QTY}</TableCell>
                     <TableCell className="text-right">{row.AMOUNT}</TableCell>

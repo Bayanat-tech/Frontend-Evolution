@@ -100,7 +100,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
   const { user } = useAuth();
 
   /* ================= STATE ================= */
-  const [tab, setTab] = useState<0 | 1 | 2>(0);
+  const [tab, setTab] = useState<0 | 1>(0);
   const [invoice, setInvoice] = useState<any>(existingData ?? {});
   const [lines, setLines] = useState<any[]>([]);
   const [jobSelectionRows, setJobSelectionRows] = useState<any[]>([]);
@@ -116,7 +116,6 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
   const fromDate = getValue(invoice, "from_date");
   const toDate = getValue(invoice, "to_date");
   const hasExistingData = !!existingData && Object.keys(existingData).length > 0;
-  // consolidated invoice number — assumption: reuse invoice_no until you confirm the real field
   const consolidatedInvNo = getValue(invoice, "consolidated_invno") || invoiceNo;
 
   /* ================= EFFECTS ================= */
@@ -159,14 +158,22 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
     }));
   }, [lines]);
 
+  // Storage rows ALWAYS collapse into ONE summary row — total qty, total amount
+  const aggregatedStorage = useMemo(() => {
+    if (storageLines.length === 0) return null;
+    const totalQty = storageLines.reduce((sum, r) => sum + Number(r.QTY || 0), 0);
+    const totalAmount = storageLines.reduce((sum, r) => sum + Number(r.AMOUNT || 0), 0);
+    return { count: storageLines.length, totalQty, totalAmount };
+  }, [storageLines]);
+
   const handleDeleteLine = (activity: string) => {
     if (!window.confirm("Remove this line item?")) return;
     setLines((prev) => prev.filter((r) => r.activity !== activity));
   };
 
-  const handleDeleteStorageLine = (index: number) => {
-    if (!window.confirm("Remove this storage line?")) return;
-    setStorageLines((prev) => prev.filter((_, i) => i !== index));
+  const handleClearStorageLines = () => {
+    if (!window.confirm("Remove all storage lines?")) return;
+    setStorageLines([]);
   };
 
   const handleJobSelect = (selectedJobs: any[]) => {
@@ -241,11 +248,10 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
         };
       });
 
-      // Only rows actually picked this session — never falls back to stale `lines`.
       const jobSelection = [
         ...jobSelectionRows.map((row) => ({
           job_no: row.job_no,
-          act_code: row.act_code, // taken straight from the row itself — never blank
+          act_code: row.act_code,
           activity: row.activity,
           invoice_no: invoiceNo,
           prin_code: prinCode,
@@ -255,7 +261,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
         })),
         ...storageLines.map((row) => ({
           job_no: row.STORAGE_NO,
-          act_code: "9001", // hardcoded — storage always uses this act code
+          act_code: "9001",
           activity: row.ACTIVITY,
           invoice_no: invoiceNo,
           prin_code: row.PRIN_CODE,
@@ -313,11 +319,11 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
       }
     >
       <div className="mb-3 flex gap-1 border-b">
-        {["Invoice Details", "Additional Data", "Storage"].map((label, index) => (
+        {["Invoice Details", "Billing Details"].map((label, index) => (
           <button
             key={label}
             type="button"
-            onClick={() => setTab(index as 0 | 1 | 2)}
+            onClick={() => setTab(index as 0 | 1)}
             className={
               tab === index
                 ? "border-b-2 border-primary px-3 py-1.5 text-sm font-semibold text-primary"
@@ -396,111 +402,101 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
         </div>
       )}
 
-      {/* ── TAB 2: Additional Data (line items) ── */}
+      {/* ── TAB 2: Billing Details (Job + Storage) ── */}
       {tab === 1 && (
-        <div className="grid gap-3">
-          <div className="max-h-[380px] overflow-auto rounded-md border">
-            <Table>
-              <TableHeader className="sticky top-0 z-10 bg-secondary/70">
-                <TableRow>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Sr</TableHead>
-                  <TableHead>Activity</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
-                  <TableHead className="text-right">Cost Rate</TableHead>
-                  <TableHead className="text-right">Cost Amt</TableHead>
-                  <TableHead className="text-right">Bill Rate</TableHead>
-                  <TableHead className="text-right">Bill Amt</TableHead>
-                  <TableHead>Other</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {groupedLines.length === 0 ? (
+        <div className="grid gap-4">
+          {/* Job Details */}
+          <div className="grid gap-2">
+            <p className="m-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Job Details</p>
+            <div className="max-h-[280px] overflow-auto rounded-md border">
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-secondary/70">
                   <TableRow>
-                    <TableCell colSpan={9} className="py-6 text-center text-muted-foreground">
-                      No data found
-                    </TableCell>
+                    <TableHead>Action</TableHead>
+                    <TableHead>Sr</TableHead>
+                    <TableHead>Activity</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
+                    <TableHead className="text-right">Cost Rate</TableHead>
+                    <TableHead className="text-right">Cost Amt</TableHead>
+                    <TableHead className="text-right">Bill Rate</TableHead>
+                    <TableHead className="text-right">Bill Amt</TableHead>
+                    <TableHead>Other</TableHead>
                   </TableRow>
-                ) : (
-                  groupedLines.map((row) => (
-                    <TableRow key={row.srno}>
+                </TableHeader>
+                <TableBody>
+                  {groupedLines.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={9} className="py-6 text-center text-muted-foreground">
+                        No data found
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    groupedLines.map((row) => (
+                      <TableRow key={row.srno}>
+                        <TableCell>
+                          <Button size="icon" variant="ghost" onClick={() => handleDeleteLine(row.activity)} disabled={viewMode}>
+                            <Trash2 size={14} className="text-destructive" />
+                          </Button>
+                        </TableCell>
+                        <TableCell>{row.srno}</TableCell>
+                        <TableCell>{row.activity}</TableCell>
+                        <TableCell className="text-right">{row.quantity}</TableCell>
+                        <TableCell className="text-right">{row.cost_rate}</TableCell>
+                        <TableCell className="text-right">{row.cost_amount}</TableCell>
+                        <TableCell className="text-right">{row.bill_rate}</TableCell>
+                        <TableCell className="text-right">{row.bill_amount}</TableCell>
+                        <TableCell>{row.other_services}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+
+          {/* Storage Details — ALWAYS ONE aggregated row, never multiple */}
+          <div className="grid gap-2">
+            <p className="m-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Storage Details</p>
+            <div className="max-h-[280px] overflow-auto rounded-md border">
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-secondary/70">
+                  <TableRow>
+                    <TableHead>Action</TableHead>
+                    <TableHead>Records</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {!aggregatedStorage ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="py-6 text-center text-muted-foreground">
+                        No storage lines added
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    <TableRow>
                       <TableCell>
-                        <Button size="icon" variant="ghost" onClick={() => handleDeleteLine(row.activity)} disabled={viewMode}>
+                        <Button size="icon" variant="ghost" onClick={handleClearStorageLines} disabled={viewMode}>
                           <Trash2 size={14} className="text-destructive" />
                         </Button>
                       </TableCell>
-                      <TableCell>{row.srno}</TableCell>
-                      <TableCell>{row.activity}</TableCell>
-                      <TableCell className="text-right">{row.quantity}</TableCell>
-                      <TableCell className="text-right">{row.cost_rate}</TableCell>
-                      <TableCell className="text-right">{row.cost_amount}</TableCell>
-                      <TableCell className="text-right">{row.bill_rate}</TableCell>
-                      <TableCell className="text-right">{row.bill_amount}</TableCell>
-                      <TableCell>{row.other_services}</TableCell>
+                      <TableCell>{aggregatedStorage.count} record{aggregatedStorage.count > 1 ? "s" : ""}</TableCell>
+                      <TableCell className="text-right">{aggregatedStorage.totalQty}</TableCell>
+                      <TableCell className="text-right">{aggregatedStorage.totalAmount.toFixed(3)}</TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </div>
 
-          <div className="flex">
+          {/* Select Job / Select Storage — side by side, left aligned */}
+          <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setJobModalOpen(true)} disabled={viewMode || !prinCode}>
               Select Job
             </Button>
-          </div>
-        </div>
-      )}
-
-      {/* ── TAB 3: Storage ── */}
-      {tab === 2 && (
-        <div className="grid gap-3">
-          <div className="max-h-[380px] overflow-auto rounded-md border">
-            <Table>
-              <TableHeader className="sticky top-0 z-10 bg-secondary/70">
-                <TableRow>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Principal Code</TableHead>
-                  <TableHead>Txn Date</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {storageLines.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="py-6 text-center text-muted-foreground">
-                      No storage lines added
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  storageLines.map((row, index) => (
-                    <TableRow key={index}>
-                      <TableCell>
-                        <Button size="icon" variant="ghost" onClick={() => handleDeleteStorageLine(index)} disabled={viewMode}>
-                          <Trash2 size={14} className="text-destructive" />
-                        </Button>
-                      </TableCell>
-                      <TableCell>{row.PRIN_CODE}</TableCell>
-                      <TableCell>
-                        {(() => {
-                          const d = row.TXN_DATE;
-                          if (!d) return "";
-                          const date = new Date(d);
-                          return Number.isNaN(date.getTime()) ? String(d) : date.toLocaleDateString("en-GB");
-                        })()}
-                      </TableCell>
-                      <TableCell className="text-right">{row.QTY}</TableCell>
-                      <TableCell className="text-right">{row.AMOUNT}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-
-          <div className="flex">
-            <Button variant="outline" onClick={() => setStorageModalOpen(true)} disabled={viewMode}>
+            <Button variant="outline" onClick={() => setStorageModalOpen(true)} disabled={viewMode || !prinCode}>
               <Package size={14} /> Select Storage
             </Button>
           </div>

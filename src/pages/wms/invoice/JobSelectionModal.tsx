@@ -16,7 +16,7 @@ type JobSelectionModalProps = {
 
 const normalizeRow = (row: any) => ({
   job_no: row.job_no ?? row.JOB_NO ?? "",
-  quantity: row.quantity ?? "",
+  quantity: row.quantity ?? row.QUANTITY ?? "",
   activity: row.activity ?? row.ACTIVITY ?? "",
   act_code: row.act_code ?? row.ACT_CODE ?? "",
   bill: Number(row.bill ?? row.BILL ?? 0),
@@ -24,6 +24,7 @@ const normalizeRow = (row: any) => ({
   bill_rate: Number(row.bill_rate ?? row.BILL_RATE ?? 0),
   cost_rate: Number(row.cost_rate ?? row.COST_RATE ?? 0),
   job_date: row.job_date ?? row.JOB_DATE ?? null,
+  selected: (row.selected ?? row.SELECTED) === "Y",
 });
 
 const toDDMMYYYY = (d?: string | Date | null) => {
@@ -35,25 +36,39 @@ const toDDMMYYYY = (d?: string | Date | null) => {
   return `${dd}/${mm}/${dt.getFullYear()}`;
 };
 
-export function JobSelectionModal({ prinCode, invoiceNo, fromDate, toDate, onClose, onSelect }: JobSelectionModalProps) {
+export function JobSelectionModal({
+  prinCode,
+  invoiceNo,
+  fromDate,
+  toDate,
+  onClose,
+  onSelect,
+}: JobSelectionModalProps) {
   const { user } = useAuth();
   const [jobs, setJobs] = useState<ReturnType<typeof normalizeRow>[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user?.loginid || !user?.company_code || !prinCode) return;
+    if (!user?.loginid || !user?.company_code || !prinCode) {
+      setLoading(false);
+      setJobs([]);
+      return;
+    }
+    setLoading(true);
     (async () => {
-      setLoading(true);
       try {
         const response = await getInvoiceJobSelection({
-          loginid: user.loginid!,
-          company_code: user.company_code!,
+          loginid: user.loginid ?? "",
+          company_code: user.company_code ?? "",
           prin_code: prinCode,
           from_date: toDDMMYYYY(fromDate),
           to_date: toDDMMYYYY(toDate),
         });
-        setJobs(Array.isArray(response) ? response.map(normalizeRow) : []);
+        const normalized = Array.isArray(response) ? response.map(normalizeRow) : [];
+        setJobs(normalized);
+        // Pre-check rows already flagged SELECTED = 'Y' by the backend view
+        setSelected(new Set(normalized.filter((r) => r.selected).map(rowKeyOf)));
       } catch {
         setJobs([]);
       } finally {
@@ -62,7 +77,9 @@ export function JobSelectionModal({ prinCode, invoiceNo, fromDate, toDate, onClo
     })();
   }, [prinCode, invoiceNo, user?.loginid, user?.company_code]);
 
-  const rowKey = (row: ReturnType<typeof normalizeRow>) => `${row.job_no}||${row.act_code}`;
+  function rowKeyOf(row: ReturnType<typeof normalizeRow>) {
+    return `${row.job_no}||${row.act_code}`;
+  }
 
   const toggleRow = (key: string) => {
     setSelected((prev) => {
@@ -74,11 +91,11 @@ export function JobSelectionModal({ prinCode, invoiceNo, fromDate, toDate, onClo
 
   const toggleAll = () => {
     if (selected.size === jobs.length) setSelected(new Set());
-    else setSelected(new Set(jobs.map(rowKey)));
+    else setSelected(new Set(jobs.map(rowKeyOf)));
   };
 
   const handleSelect = () => {
-    onSelect(jobs.filter((row) => selected.has(rowKey(row))));
+    onSelect(jobs.filter((row) => selected.has(rowKeyOf(row))));
     onClose();
   };
 
@@ -113,7 +130,7 @@ export function JobSelectionModal({ prinCode, invoiceNo, fromDate, toDate, onClo
               </TableRow>
             ) : (
               jobs.map((row) => {
-                const key = rowKey(row);
+                const key = rowKeyOf(row);
                 const isSelected = selected.has(key);
                 return (
                   <TableRow
