@@ -23,8 +23,8 @@ const excludedUtilitySignals = [
 export function buildWorkspaceApps(menuTree: MenuNode[]): MenuNode[] {
   const mastersApp = buildBtMastersApp(menuTree);
   if (!mastersApp) return menuTree;
-  const hasMasters = menuTree.some((item) => isUtilitiesApp(item));
-  return hasMasters ? menuTree : [...menuTree, mastersApp];
+  const hasBtMasters = menuTree.some((item) => isBtMastersApp(item));
+  return hasBtMasters ? menuTree : [...menuTree, mastersApp];
 }
 
 export function cleanAppCode(value: string) {
@@ -34,6 +34,10 @@ export function cleanAppCode(value: string) {
 export function isUtilitiesApp(node?: MenuNode | null) {
   const title = normalizeTitle(node?.title || "");
   return title === "bt masters" || title === "utilities";
+}
+
+export function isBtMastersApp(node?: MenuNode | null) {
+  return normalizeTitle(node?.title || "") === "bt masters";
 }
 
 export function buildBtMastersApp(menuTree: MenuNode[]): MenuNode | null {

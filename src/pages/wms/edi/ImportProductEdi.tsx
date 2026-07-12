@@ -7,7 +7,7 @@ import { useAuth } from '../../../state/AuthContext';
 import { executeCommonProcedure, getDynamicLookup } from '../../../api/lookups';
 import { useToast } from '../../../components/ui/AlertToast';
 import { Button } from '../../../components/ui/Button';
-import productEdiServiceInstance from './api/product_edi';
+import { clearProductEDI, getProductEDI, uploadProductEDI } from '../../../api/edi';
 
 interface ImportProductProps {
   onClose: () => void;
@@ -78,48 +78,44 @@ const ImportProductEdi: React.FC<ImportProductProps> = ({ onClose, onSuccess }) 
   // ===============================
   // Upload to EDI Table
   // ===============================
+
   const handleUploadToEDI = async () => {
     try {
       setIsLoading(true);
 
       const mappedProducts = excelData.map((row: any) => ({
-        company_code: user?.company_code || '',
-        prin_code: row.PRIN_CODE?.toString() || '',
-        prod_code: row.PROD_CODE?.toString() || '',
-        prod_name: row.PROD_NAME?.toString() || '',
-        group_code: row.GROUP_CODE?.toString() || '',
-        brand_code: row.BRAND_CODE?.toString() || '',
-        p_uom: row.P_UOM?.toString() || '',
-        l_uom: row.L_UOM?.toString(),
-        length: row.LENGTH ? parseFloat(row.LENGTH) : undefined,
-        breadth: row.BREADTH ? parseFloat(row.BREADTH) : undefined,
-        height: row.HEIGHT ? parseFloat(row.HEIGHT) : undefined,
-        volume: row.VOLUME ? parseFloat(row.VOLUME) : undefined,
-        gross_wt: row.GROSS_WT ? parseFloat(row.GROSS_WT) : undefined,
-        net_wt: row.NET_WT ? parseFloat(row.NET_WT) : undefined,
-        uom_count: row.UOM_COUNT ? parseFloat(row.UOM_COUNT) : 1,
-        upp: row.UPP ? parseFloat(row.UPP) : undefined,
-        uppp: row.UPPP ? parseFloat(row.UPPP) : undefined,
-        site_ind: row.SITE_IND?.toString(),
-        prod_status: 'O',
-        model_number: row.MODEL_NUMBER?.toString()
+              prin_code: row.PRIN_CODE?.toString() || '',
+              prod_code: row.PROD_CODE?.toString() || '',
+              prod_name: row.PROD_NAME?.toString() || '',
+              group_code: row.GROUP_CODE?.toString() || '',
+              brand_code: row.BRAND_CODE?.toString() || '',
+              p_uom: row.P_UOM?.toString() || '',
+              l_uom: row.L_UOM?.toString(),
+              length: row.LENGTH ? parseFloat(row.LENGTH) : undefined,
+              breadth: row.BREADTH ? parseFloat(row.BREADTH) : undefined,
+              height: row.HEIGHT ? parseFloat(row.HEIGHT) : undefined,
+              volume: row.VOLUME ? parseFloat(row.VOLUME) : undefined,
+              gross_wt: row.GROSS_WT ? parseFloat(row.GROSS_WT) : undefined,
+              net_wt: row.NET_WT ? parseFloat(row.NET_WT) : undefined,
+              uom_count: row.UOM_COUNT ? parseFloat(row.UOM_COUNT) : 1,
+              upp: row.UPP ? parseFloat(row.UPP) : undefined,
+              uppp: row.UPPP ? parseFloat(row.UPPP) : undefined,
+              site_ind: row.SITE_IND?.toString(),
+              prod_status: 'O',
+              model_number: row.MODEL_NUMBER?.toString(),
       }));
 
-      const result = await productEdiServiceInstance.insUpdMsProductEdiBlkApi({
-        loginid: user?.loginid,
-        products: mappedProducts
-      });
+      const result = await uploadProductEDI(
+        mappedProducts
+      );
 
-      if (result?.success) {
+      if (result) {
         await fetchEDIData();
         setEdiUploaded(true);
-        toast.success(result.message || 'Products uploaded to EDI');
-      } else {
-        toast.error(result?.message || 'Failed to upload products to EDI');
-        handleReset();
       }
+
     } catch (err: any) {
-      toast.error(err.message || 'Something went wrong while uploading');
+      toast.error(err.message || 'Failed to upload products to EDI');
     } finally {
       setIsLoading(false);
     }
@@ -130,20 +126,15 @@ const ImportProductEdi: React.FC<ImportProductProps> = ({ onClose, onSuccess }) 
   // ===============================
   const fetchEDIData = async () => {
     try {
-      const response: any = await getDynamicLookup({
-        parameter: 'MWMS_get_Product_Edi',
-        loginid: user?.loginid ?? '',
-        code1: user?.company_code ?? ''
-      });
-
-      if (Array.isArray(response)) {
-        setEdiRows([...response]);
+      const response = await getProductEDI();
+      if (response?.success) {
+        setEdiRows(response.data);
       }
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to fetch EDI data');
+    } catch (err) {
+      console.error(err);
     }
   };
-
+  
   useEffect(() => {
     console.log('EDI Rows:', ediRows);
   }, [ediRows]);
@@ -178,16 +169,16 @@ const ImportProductEdi: React.FC<ImportProductProps> = ({ onClose, onSuccess }) 
   // Reset Dialog
   // ===============================
   const handleReset = async () => {
-    // try {
-    //   await productEdiServiceInstance.clearProductEdi();
-    // } catch (err) {
-    //   console.error(err);
-    // }
+    try {
+      await clearProductEDI();
+    } catch (err) {
+      console.error(err);
+    }
 
     setExcelData([]);
     setEdiRows([]);
     setEdiUploaded(false);
-    setFileSelected(false);
+    setFileSelected(false); 
 
     if (fileInputRef.current) {
       fileInputRef.current.value = '';

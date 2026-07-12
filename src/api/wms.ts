@@ -657,3 +657,152 @@ export async function getAllStockTransReports() {
     "getAllStockTransReports"
   );
 }
+// ─── Common Dynamic SQL Procedures (ported from commonservices.ts) ───────────
+
+export type DynamicSqlCommonParams = {
+  parameter: string;
+  loginid?: string;
+  code1?: string;
+  code2?: string;
+  code3?: string;
+  code4?: string;
+  code5?: string;
+  code6?: string;
+  code7?: string;
+  code8?: string;
+  code9?: string;
+  code10?: string;
+  number1?: number;
+  number2?: number;
+  number3?: number;
+  number4?: number;
+  date1?: string | null;
+  date2?: string | null;
+  date3?: string | null;
+  date4?: string | null;
+};
+
+/** GET-style dynamic SELECT via stored proc (code1-10, number1-4, date1-4) */
+export async function procBuildDynamicSqlCommon(params: DynamicSqlCommonParams) {
+  const response = await api.post<ApiResponse<LookupRow[]>>(
+    "/api/wms/common/proc_build_dynamic_sql_common20",
+    params
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load data");
+  return response.data.data || [];
+}
+
+export type DynamicInsUpdCommonParams = {
+  parameter: string;
+  loginid: string;
+
+  // INSERT / UPDATE VALUES
+  val1s1?: string;
+  val1s2?: string;
+  val1s3?: string;
+  val1s4?: string;
+  val1s5?: string;
+  val1s6?: string;
+  val1s7?: string;
+  val1s8?: string;
+  val1s9?: string;
+  val1s10?: string;
+
+  val1n1?: number;
+  val1n2?: number;
+  val1n3?: number;
+  val1n4?: number;
+  val1n5?: number;
+  val1n6?: number;
+  val1n7?: number;
+
+  val1d1?: string | null;
+  val1d2?: string | null;
+  val1d3?: string | null;
+  val1d4?: string | null;
+  val1d5?: string | null;
+
+  // WHERE VALUES
+  wval1s1?: string;
+  wval1s2?: string;
+  wval1s3?: string;
+  wval1s4?: string;
+  wval1s5?: string;
+
+  wval1n1?: number;
+  wval1n2?: number;
+  wval1n3?: number;
+  wval1n4?: number;
+  wval1n5?: number;
+
+  wval1d1?: string | null;
+  wval1d2?: string | null;
+  wval1d3?: string | null;
+  wval1d4?: string | null;
+  wval1d5?: string | null;
+};
+
+/** POST — generic dynamic INSERT/UPDATE via stored proc */
+export async function procBuildDynamicInsUpdCommon(params: DynamicInsUpdCommonParams) {
+  if (!params?.parameter) throw new Error("No values provided");
+  const response = await api.post<ApiResponse<unknown>>(
+    "/api/wms/common/proc_build_dynamic_ins_upd_common",
+    params
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Insert / Update failed");
+  return response.data;
+}
+
+export type DynamicDelCommonParams = {
+  parameter: string;
+  loginid: string;
+  code1?: string;
+  code2?: string;
+  code3?: string;
+  code4?: string;
+  code5?: string;
+  number1?: number;
+  number2?: number;
+  number3?: number;
+  number4?: number;
+  date1?: string | null;
+  date2?: string | null;
+  date3?: string | null;
+  date4?: string | null;
+};
+
+/** POST — generic dynamic DELETE via stored proc */
+export async function procBuildDynamicDelCommon(params: DynamicDelCommonParams) {
+  if (!params?.parameter) throw new Error("No values provided");
+  const response = await api.post<ApiResponse<unknown>>(
+    "/api/wms/common/proc_build_dynamic_del_common",
+    params
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Delete failed");
+  return response.data;
+}
+
+/** GET-style dynamic SELECT via stored proc — base variant (code1-4, number1-4, date1-4) */
+export async function procBuildDynamicSqlCommonBase(params: {
+  parameter: string;
+  loginid?: string;
+  code1?: string;
+  code2?: string;
+  code3?: string;
+  code4?: string;
+  number1?: number;
+  number2?: number;
+  number3?: number;
+  number4?: number;
+  date1?: string | null;
+  date2?: string | null;
+  date3?: string | null;
+  date4?: string | null;
+}) {
+  const response = await api.post<ApiResponse<LookupRow[]>>(
+    "/api/wms/common/proc_build_dynamic_sql_common", // ← no "20" — matches old commonservices.ts
+    params
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load data");
+  return response.data.data || [];
+}

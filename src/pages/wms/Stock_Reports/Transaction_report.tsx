@@ -17,8 +17,7 @@ import { exportTransactionProductExcel, TransationReport } from "../../../api/tr
 const fieldLabelStyle: React.CSSProperties = {
     fontSize: 11,
     fontWeight: 500,
-    //  color: "#6b7280",
-    color: "#01060f",
+    color: "#6b7280",
     marginBottom: 2,
     textTransform: "uppercase",
     letterSpacing: "0.05em",
@@ -270,7 +269,7 @@ export default function TransactionReportPage() {
     const row3: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 };
 
     const BG = "#EEF5FD"; // shared light blue for all field-rows
-    //   const BG ="#BFDBFE";
+
     return (
         <div style={{ background: "#f3f4f6", padding: "6px 10px", fontFamily: "system-ui, sans-serif" }}>
             <style>{`
@@ -311,8 +310,21 @@ export default function TransactionReportPage() {
                                         loadOptions={() =>
                                             getDynamicLookupaccount({
                                                 parameter: "WMS_Stock_principal",
-                                                code1: user?.company_code || "",
                                                 loginid: user?.loginid || user?.username || "ADMIN",
+                                                code1: user?.company_code || "",
+                                                code2: principal[0]?.prin_code || "",   // PRIN_CODE filter
+                                                code3: productFrom || "",               // PROD_CODE filter
+                                                code4: siteFrom || "",                  // SITE_CODE filter
+                                                code5: locationFrom || "",              // LOCATION_CODE filter
+                                                code6: customerFrom || "",              // CUST_CODE filter
+                                                code7: jobNo || "",                     // JOB_NO filter
+                                                code8: txnType || "",                   // TXN_TYPE filter
+                                                code9: docRefFrom || "",                // DOC_REF filter
+                                                code10: lotNoFrom || "",                // LOT_NO filter
+                                                date1: dateFrom ? formatDateOracle(dateFrom) : "",       // TXN_DATE >=
+                                                date2: dateTo ? formatDateOracle(dateTo) : "",           // TXN_DATE <=
+                                                date3: expDateFrom ? formatDateOracle(expDateFrom) : "", // EXP_DATE >=
+                                                date4: expDateTo ? formatDateOracle(expDateTo) : "",     // EXP_DATE <=
                                             })
                                         }
                                         onChange={(val) => setPrincipal([{ prin_code: val, prin_name: "" }])}
@@ -465,7 +477,7 @@ export default function TransactionReportPage() {
                                         <Field label="To Date">
                                             <DateInput value={dateTo} onChange={setDateTo} />
                                         </Field>
-                                    </div> 
+                                    </div>
                                 </fieldset>
 
                                 <fieldset style={{ border: "0.5px solid #BFDBFE", borderRadius: 6, padding: "6px 12px 10px", margin: 0, background: "transparent" }}>
