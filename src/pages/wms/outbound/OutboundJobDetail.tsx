@@ -1,5 +1,5 @@
-import { ArrowLeft, FileSpreadsheet, Printer, RefreshCw } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, FileSpreadsheet, Printer, RefreshCw, Save } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { executeWmsInboundSql, getDnReport, downloadDnReportExcel, getOubPickReport, downloadOubPickReportExcel } from "../../../api/wms";
 import { Button } from "../../../components/ui/Button";
@@ -18,6 +18,7 @@ import { jobClassLabels } from "./Outboundtypes";
 import { outboundJobTabPath } from "./OutboundHelpers";
 import { OutboundOperationalTab } from "./OutboundOperationalTab";
 import { Dialog } from "../../../components/ui/Dialog";
+import { OutboundAcitivityBilling } from "./OutboundAcitivityBilling";
 
 type TReport = {
   id:           number;
@@ -25,6 +26,7 @@ type TReport = {
   apiFn:        (prinCode: string, jobNo: string) => Promise<string>;
   excelFn?:     (prinCode: string, jobNo: string) => Promise<void>;
 };
+
 
 const REPORTS: TReport[] = [
   {
@@ -238,21 +240,21 @@ export function OutboundJobDetail({
 
       {/* ── Tab Strip ── */}
       <div className="flex gap-2 overflow-x-auto rounded-md border bg-card p-2">
-        {detailTabs.map((item) => (
-          <Link
-            className={
-              item.value === activeTab
-                ? "ui-button ui-button-default ui-button-sm"
-                : "ui-button ui-button-outline ui-button-sm"
-            }
-            key={item.value}
-            to={outboundJobTabPath(jobNo, item.value, job || { prin_code: principalCode } as WmsRow)}
-          >
-            {item.label}
-          </Link>
-        ))}
+        {detailTabs.map((item) =>
+            <Link
+              className={
+                item.value === activeTab
+                  ? "ui-button ui-button-default ui-button-sm"
+                  : "ui-button ui-button-outline ui-button-sm"
+              }
+              key={item.value}
+              to={outboundJobTabPath(jobNo, item.value, job || { prin_code: principalCode } as WmsRow)}
+            >
+              {item.label}
+            </Link>
+          // )
+        )}
       </div>
-
       <OutboundOperationalTab
         job={job}
         jobNo={jobNo}
@@ -260,7 +262,6 @@ export function OutboundJobDetail({
         loadingJob={loading}
         principalCode={principalCode}
       />
-
       {/* ── Dialog 1: Report list ── */}
       <Dialog
         open={listOpen}
@@ -341,3 +342,4 @@ export function OutboundJobDetail({
     </section>
   );
 }
+
