@@ -32,6 +32,7 @@ interface Params {
     age3: string;
     age4: string;
     age5: string;
+    group_by: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -178,6 +179,7 @@ const AgeRangeField: React.FC<{ label: string; value: string; onChange: (v: stri
 const DEFAULT_PARAMS: Params = {
     prin_code: ["All"], dept_code_from: "", prod_code_from: "", prod_code_to: "",
     age1: "30", age2: "60", age3: "90", age4: "120", age5: "150",
+    group_by: "product_group",
 };
 
 export default function StockAgeingQuantityReport() {
@@ -222,7 +224,7 @@ export default function StockAgeingQuantityReport() {
 
         const sql = {
             prin: `select distinct prin_code, prin_name from VW_BOWM_STKLED_FOREXPAGEING ${whereExcept("prin")}`,
-            prod: `select distinct prod_code, prod_name from VW_BOWM_STKLED_FOREXPAGEING ${whereExcept()}`,
+            prod: `select distinct prod_code, prod_name from VW_BOWM_STKLED_FOREXPAGEING`,
             dept: `select distinct dept_code from VW_BOWM_STKLED_FOREXPAGEING ${whereExcept("dept")}`,
         };
 
@@ -307,6 +309,7 @@ export default function StockAgeingQuantityReport() {
         age3: Number(p.age3) || 90,
         age4: Number(p.age4) || 120,
         age5: Number(p.age5) || 150,
+        group_by: p.group_by || "product_group",
     });
 
     // ── Fetch the report HTML from the API and open it in a new browser tab
@@ -396,6 +399,12 @@ export default function StockAgeingQuantityReport() {
         setError("");
         setLastGeneratedAt(null);
     };
+
+    const groupByOptions: Option[] = [
+        { value: "product_group", label: "Stock Ageing (Quantity) Detail" },
+        { value: "product", label: "Product Summary" },
+        { value: "principal", label: "Principal Summary" },
+    ];
 
     const row2: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 };
     const BG = "#EFF6FF";
@@ -509,7 +518,7 @@ export default function StockAgeingQuantityReport() {
                                 </FloatLabel>
                             </div>
 
-                            {/* Department */}
+                            {/* Department + Group By */}
                             <div className="field-row" style={row2}>
                                 <FloatLabel label="Department Code From" bgColor={BG}>
                                     <SelectField
@@ -521,7 +530,15 @@ export default function StockAgeingQuantityReport() {
                                         loading={optLoading}
                                     />
                                 </FloatLabel>
-                                <div />
+                                <FloatLabel label="Group By" bgColor={BG}>
+                                    <SelectField
+                                        label=""
+                                        options={groupByOptions}
+                                        value={params.group_by}
+                                        onChange={(v) => setParam("group_by", v || "product_group")}
+                                        placeholder="Select grouping"
+                                    />
+                                </FloatLabel>
                             </div>
 
                             {/* Age Bucket Boundaries */}
