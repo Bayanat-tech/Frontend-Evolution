@@ -2,7 +2,7 @@ import {
   CheckCircle2, Plus, RefreshCw, Save, Settings2, Truck, X,
   Package, MapPin, Hash, FileText, CalendarDays, Barcode,
 } from "lucide-react";
-import { type FormEvent, forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { type FormEvent, forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { api } from "../../../api/client";
 import { executeWmsInboundSql, patchWmsInbound, postWmsInbound } from "../../../api/wms";
 import { Button } from "../../../components/ui/Button";
@@ -65,7 +65,103 @@ const [ediDragActive, setEdiDragActive] = useState(false);
     const isManualPutaway = tab === "putway_manual";
     const isTallyDetails  = tab === "tally_details";
     const isPackingDetails = tab === "packing_details";
+    const isActivityBilling = tab === "activity_billing";
+    // ── activity billing state ──────────────────────────────────────────────
+const [activityRows,    setActivityRows]    = useState<WmsRow[]>([]);
+const [activityLoading, setActivityLoading] = useState(false);
+const [activityEdited,  setActivityEdited]  = useState<Record<string, WmsRow>>({});
+const [activitySaving,  setActivitySaving]  = useState(false);
 
+const loadActivityBilling = useCallback(async () => {
+  if (!isActivityBilling || !jobNo || !prinCode) return;
+  setActivityLoading(true);
+  try {
+    const sql = `
+      SELECT
+        tid.PRIN_CODE,
+        tid.JOB_NO,
+        tid.ACT_CODE,
+        tid.ACT_CODE || '-' || ma.ACTIVITY AS ACTIVITY,
+        tid.QUANTITY,
+        tid.BILL_RATE,
+        tid.BILL,
+        tid.COST_RATE,
+        tid.COST,
+        tid.OTHER_SERVICES
+      FROM TN_INVOICE_DET tid
+      JOIN MS_ACTIVITY ma
+        ON tid.ACT_CODE = ma.ACTIVITY_CODE
+      WHERE tid.PRIN_CODE = '${sqlEscape(prinCode)}'
+        AND tid.JOB_NO    = '${sqlEscape(jobNo)}'`;
+    const data = await executeWmsInboundSql(sql);
+    setActivityRows(data.map(normalizeRow));
+    setActivityEdited({});
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : "Unable to load activity billing");
+  } finally {
+    setActivityLoading(false);
+  }
+}, [isActivityBilling, jobNo, prinCode]);
+
+useEffect(() => {
+  if (isActivityBilling && !loadingJob) void loadActivityBilling();
+}, [isActivityBilling, loadingJob, jobNo, prinCode]);
+
+const activityTotals = useMemo(() => {
+  const totalBill = activityRows.reduce((sum, r) => sum + Number(value(r, "bill") ?? 0), 0);
+  const totalCost = activityRows.reduce((sum, r) => sum + Number(value(r, "cost") ?? 0), 0);
+  return { totalBill, totalCost };
+}, [activityRows]);
+
+// recompute BILL/COST locally as rates are edited, and track which rows changed
+const handleActivityRateChange = (row: WmsRow, field: "bill_rate" | "cost_rate", raw: string) => {
+  const num = raw === "" ? 0 : Number(raw);
+  const actCode = String(value(row, "act_code") ?? "");
+  setActivityRows((prev) =>
+    prev.map((r) => {
+      if (String(value(r, "act_code") ?? "") !== actCode) return r;
+      const updated: WmsRow = { ...r, [field]: num };
+      const qty = Number(value(updated, "quantity") ?? 0);
+      updated.bill = qty * Number(value(updated, "bill_rate") ?? 0);
+      updated.cost = qty * Number(value(updated, "cost_rate") ?? 0);
+      setActivityEdited((prevEdited) => ({ ...prevEdited, [actCode]: updated }));
+      return updated;
+    })
+  );
+};
+
+const handleActivityBillingSubmit = async () => {
+  const editedList = Object.values(activityEdited);
+  if (!editedList.length) { toast.error("No changes to update"); return; }
+  setActivitySaving(true);
+  try {
+    for (const row of editedList) {
+      const qty      = Number(value(row, "quantity") ?? 0);
+      const billRate = Number(value(row, "bill_rate") ?? 0);
+      const costRate = Number(value(row, "cost_rate") ?? 0);
+      const actCode  = String(value(row, "act_code") ?? "");
+      const updateSql = `
+        UPDATE TN_INVOICE_DET
+        SET
+          QUANTITY  = ${qty},
+          BILL_RATE = ${billRate},
+          COST_RATE = ${costRate},
+          BILL      = ${qty} * ${billRate},
+          COST      = ${qty} * ${costRate}
+        WHERE PRIN_CODE = '${sqlEscape(prinCode)}'
+          AND JOB_NO    = '${sqlEscape(jobNo)}'
+          AND ACT_CODE  = '${sqlEscape(actCode)}'`;
+      await executeWmsInboundSql(updateSql);
+    }
+    toast.success("Activity billing updated successfully");
+    setActivityEdited({});
+    await loadActivityBilling();
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : "Failed to update activity billing");
+  } finally {
+    setActivitySaving(false);
+  }
+};
     // ── HHT putaway state ────────────────────────────────────────────────────
     const [hhtPalletId,          setHhtPalletId]          = useState("");
     const [hhtLocation,          setHhtLocation]          = useState("");
@@ -262,22 +358,21 @@ const [putawayForm, setPutawayForm] = useState({ site_from: "", site_to: "", loc
               });
               return Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
             },
-            onChange: (val: string, row: Record<string, unknown> | null) => {
-              const uppp     = Number(row?.["UPPP"]      ?? row?.["uppp"]      ?? 1);
-              const upp      = Number(row?.["UPP"]       ?? row?.["upp"]       ?? 0);
-              const uomCount = Number(row?.["UOM_COUNT"] ?? row?.["uom_count"] ?? 1);
-              const pUom     = String(row?.["P_UOM"]     ?? row?.["p_uom"]     ?? "");
-              const lUom     = String(row?.["L_UOM"]     ?? row?.["l_uom"]     ?? "");
-              const prodName = String(row?.["PROD_NAME"] ?? row?.["prod_name"] ?? "");
-              const rawPo    = row?.["PO_NO"] ?? row?.["po_no"];
-              const poNo     = rawPo == null || rawPo === "null" || rawPo === "" ? null : String(rawPo);
-              setFormData((cur: any) => {
-                const qtyPuom = Number(cur.qty_puom ?? 0);
-                const qtyLuom = uomCount <= 1 ? 0 : Number(cur.qty_luom ?? 0);
-                const quantity = uomCount <= 1 ? qtyPuom + qtyLuom : qtyPuom * uppp + qtyLuom;
-                return { ...cur, prod_code: val, prod_name: prodName, p_uom: pUom, l_uom: lUom, uppp, upp, uom_count: uomCount, qty_luom: uomCount <= 1 ? 0 : cur.qty_luom, quantity, po_no: poNo, container_no: val };
-              });
-            },
+onChange: (val: string, row: Record<string, unknown> | null) => {
+  const uppp     = Number(row?.["UPPP"]      ?? row?.["uppp"]      ?? 1);
+  const upp      = Number(row?.["UPP"]       ?? row?.["upp"]       ?? 0);
+  const uomCount = Number(row?.["UOM_COUNT"] ?? row?.["uom_count"] ?? 1);
+  const pUom     = String(row?.["P_UOM"]     ?? row?.["p_uom"]     ?? "");
+  const lUom     = String(row?.["L_UOM"]     ?? row?.["l_uom"]     ?? "");
+  const prodName = String(row?.["PROD_NAME"] ?? row?.["prod_name"] ?? "");
+  setFormData((cur: any) => {
+    const qtyPuom = Number(cur.qty_puom ?? 0);
+    const qtyLuom = uomCount <= 1 ? 0 : Number(cur.qty_luom ?? 0);
+    const quantity = uomCount <= 1 ? qtyPuom + qtyLuom : qtyPuom * uppp + qtyLuom;
+    // po_no and container_no are owned by the Container lookup — don't touch them here.
+    return { ...cur, prod_code: val, prod_name: prodName, p_uom: pUom, l_uom: lUom, uppp, upp, uom_count: uomCount, qty_luom: uomCount <= 1 ? 0 : cur.qty_luom, quantity };
+  });
+},
           };
 
         case "site":
@@ -330,40 +425,36 @@ const [putawayForm, setPutawayForm] = useState({ site_from: "", site_to: "", loc
               })),
           };
 
-        case "container": {
-          const cacheKey = `wms_containers_${jobNo}_v2`;
-          return {
-            valueField:    "CONTAINER_NO",
-            displayFields: ["CONTAINER_NO"],
-            columns: [
-              { field: "CONTAINER_NO", header: "Container No" },
-              { field: "VEHICLE_NO",   header: "Vehicle No" },
-              { field: "VESSEL_NAME",  header: "Vessel Name" },
-              { field: "SEAL_NO",      header: "Seal No" },
-              { field: "PO_NO",        header: "PO No" },
-            ],
-            loadOptions: async () => {
-              const cached = sessionStorage.getItem(cacheKey);
-              if (cached) { try { return JSON.parse(cached); } catch { /* fall through */ } }
-              const res = await api.post("/api/wms/inbound/executeRawSql", {
-                raw_sql: `SELECT CONTAINER_NO, VEHICLE_NO, VESSEL_NAME, SEAL_NO, PO_NO
-                          FROM TI_CONTAINER
-                          WHERE JOB_NO    = '${sqlEscape(jobNo)}'
-                            AND PRIN_CODE = '${sqlEscape(prinCode)}' AND COMPANY_CODE = '${sqlEscape(companyCode)}'
-                          ORDER BY CONTAINER_NO`,
-              });
-              const data = Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
-              sessionStorage.setItem(cacheKey, JSON.stringify(data));
-              return data;
-            },
-            onChange: (val: string, row: Record<string, unknown> | null) =>
-              setFormData((cur: any) => ({
-                ...cur,
-                container_no: val,
-                po_no: row?.["PO_NO"] ?? row?.["po_no"] ?? null,
-              })),
-          };
-        }
+case "container": {
+  return {
+    valueField:    "CONTAINER_NO",
+    displayFields: ["CONTAINER_NO"],
+    columns: [
+      { field: "CONTAINER_NO", header: "Container No" },
+      { field: "VEHICLE_NO",   header: "Vehicle No" },
+      { field: "VESSEL_NAME",  header: "Vessel Name" },
+      { field: "SEAL_NO",      header: "Seal No" },
+      { field: "PO_NO",        header: "PO No" },
+    ],
+    loadOptions: async () => {
+      const res = await api.post("/api/wms/inbound/executeRawSql", {
+        raw_sql: `SELECT CONTAINER_NO, VEHICLE_NO, VESSEL_NAME, SEAL_NO, PO_NO, BL_NO
+                  FROM TI_CONTAINER
+                  WHERE JOB_NO    = '${sqlEscape(jobNo)}'
+                    AND PRIN_CODE = '${sqlEscape(prinCode)}' AND COMPANY_CODE = '${sqlEscape(companyCode)}'
+                  ORDER BY CONTAINER_NO`,
+      });
+      return Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
+    },
+    onChange: (val: string, row: Record<string, unknown> | null) =>
+      setFormData((cur: any) => ({
+        ...cur,
+        container_no: val,
+        po_no: row?.["PO_NO"] ?? row?.["po_no"] ?? null,
+        bl_no: row?.["BL_NO"] ?? row?.["bl_no"] ?? null,
+      })),
+  };
+}
 
         case "tally_container":
           return {
@@ -375,6 +466,7 @@ const [putawayForm, setPutawayForm] = useState({ site_from: "", site_to: "", loc
               { field: "VESSEL_NAME",  header: "Vessel Name" },
               { field: "SEAL_NO",      header: "Seal No" },
               { field: "PO_NO",        header: "PO No" },
+              {field:"BL_NO", header:"BL No"},
             ],
             loadOptions: async () => {
               const res = await api.post("/api/wms/inbound/executeRawSql", {
@@ -719,10 +811,143 @@ const openEdiImportModal = () => {
       } finally { setEditSaving(false); }
     };
 
-    if (!config) return (
-      <Card><CardContent className="p-6 text-sm text-muted-foreground">This tab is not configured yet.</CardContent></Card>
-    );
+if (isActivityBilling) {
+  return (
+    <section className="grid gap-3">
+      {/* ── Toolbar (matches DataTable's toolbar row) ── */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-card px-4 py-3 shadow-sm">
+        <div>
+          <div className="text-sm font-semibold text-foreground">
+            {activityLoading ? "Loading" : `${activityRows.length} Rows`}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Activity Billing — adjust bill / cost rates per activity, then submit to update.
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="outline" onClick={loadActivityBilling}>
+            <RefreshCw size={14} /> Refresh
+          </Button>
+          <Button size="sm" onClick={handleActivityBillingSubmit} disabled={activitySaving}>
+            <Save size={14} /> {activitySaving ? "Saving..." : "Submit"}
+          </Button>
+        </div>
+      </div>
 
+      {/* ── Table card (matches DataTable's bordered/sticky-header look) ── */}
+      <div
+        className="overflow-auto rounded-md border bg-card shadow-sm"
+        style={{ maxHeight: "calc(100vh - 365px)" }}
+      >
+        <table className="min-w-full divide-y divide-border text-sm">
+          <thead className="sticky top-0 z-10 bg-muted/50">
+            <tr>
+              <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Activity
+              </th>
+              <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Quantity
+              </th>
+              <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Bill Rate
+              </th>
+              <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Bill
+              </th>
+              <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Cost Rate
+              </th>
+              <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Cost
+              </th>
+              <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Other Services
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {activityLoading ? (
+              <tr>
+                <td colSpan={7} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  Loading...
+                </td>
+              </tr>
+            ) : activityRows.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  No records found
+                </td>
+              </tr>
+            ) : (
+              activityRows.map((row, i) => (
+                <tr key={`${String(value(row, "act_code") ?? "")}_${i}`} className="hover:bg-muted/30">
+                  <td className="px-3 py-2.5 text-foreground">{String(value(row, "activity") || "")}</td>
+                  <td className="px-3 py-2.5 text-right font-medium text-foreground">
+                    {Number(value(row, "quantity") ?? 0)}
+                  </td>
+                  <td className="px-3 py-1.5 text-right">
+                    <input
+                      type="number" min="0" step="0.01"
+                      className="h-8 w-24 rounded-md border border-input bg-background px-2 text-right text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/40"
+                      value={String(value(row, "bill_rate") ?? 0)}
+                      onChange={(e) => handleActivityRateChange(row, "bill_rate", e.target.value)}
+                    />
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-medium text-foreground">
+                    {Number(value(row, "bill") ?? 0).toFixed(2)}
+                  </td>
+                  <td className="px-3 py-1.5 text-right">
+                    <input
+                      type="number" min="0" step="0.01"
+                      className="h-8 w-24 rounded-md border border-input bg-background px-2 text-right text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/40"
+                      value={String(value(row, "cost_rate") ?? 0)}
+                      onChange={(e) => handleActivityRateChange(row, "cost_rate", e.target.value)}
+                    />
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-medium text-foreground">
+                    {Number(value(row, "cost") ?? 0).toFixed(2)}
+                  </td>
+                  <td className="px-3 py-2.5 text-muted-foreground">
+                    {String(value(row, "other_services") || "")}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+          {activityRows.length > 0 && (
+            <tfoot className="sticky bottom-0 border-t bg-primary/5">
+              <tr>
+                <td className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-primary">Total</td>
+                <td className="px-3 py-2.5" />
+                <td className="px-3 py-2.5" />
+                <td className="px-3 py-2.5 text-right text-sm font-semibold text-primary">
+                  {activityTotals.totalBill.toFixed(2)}
+                </td>
+                <td className="px-3 py-2.5" />
+                <td className="px-3 py-2.5 text-right text-sm font-semibold text-primary">
+                  {activityTotals.totalCost.toFixed(2)}
+                </td>
+                <td className="px-3 py-2.5" />
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+
+      {/* ── Footer bar (matches DataTable's "Showing X-Y of Z" footer) ── */}
+      <div className="flex items-center justify-between px-1 text-xs text-muted-foreground">
+        <span>Showing {activityRows.length === 0 ? 0 : 1}-{activityRows.length} of {activityRows.length}</span>
+        {Object.keys(activityEdited).length > 0 && (
+          <span className="font-medium text-primary">{Object.keys(activityEdited).length} unsaved change(s)</span>
+        )}
+      </div>
+    </section>
+  );
+}
+
+if (!config) return (
+  <Card><CardContent className="p-6 text-sm text-muted-foreground">This tab is not configured yet.</CardContent></Card>
+);
     // ── action button ────────────────────────────────────────────────────────
     const getActionButton = () => {
       switch (tab) {
