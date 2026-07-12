@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "../../state/AuthContext";
 import { pamsSelect, pamsSave, pamsDelete } from "../../api/pams";
-import { DataTable } from "../../components/ui/DataTable";
+import { DataTable } from "../../components/ui/PamsDataTable";
 import { LookupField } from "../../components/ui/LookupField";
 import { ColumnDef } from "@tanstack/react-table";
 import { Trash2 } from "lucide-react";
