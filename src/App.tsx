@@ -13,11 +13,12 @@ import { WmsBootScreen } from "./components/BootScreen";
 export function App() {
   const { isBooting } = useAuth();
   const location = useLocation();
-  const [authDark, setAuthDark] = useState(() => localStorage.getItem("bayanat_auth_theme") !== "light");
+  const [authDark, setAuthDark] = useState(() => sessionStorage.getItem("bayanat_auth_theme") !== "light");
   const [workspaceDark, setWorkspaceDark] = useState(() => localStorage.getItem("bayanat_workspace_theme") === "dark");
 
   useEffect(() => {
-    localStorage.setItem("bayanat_auth_theme", authDark ? "dark" : "light");
+    localStorage.removeItem("bayanat_auth_theme");
+    sessionStorage.setItem("bayanat_auth_theme", authDark ? "dark" : "light");
   }, [authDark]);
 
   useEffect(() => {
