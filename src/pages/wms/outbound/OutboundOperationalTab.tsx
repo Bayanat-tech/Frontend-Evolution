@@ -110,7 +110,7 @@ export function OutboundOperationalTab({
   const config = getOutboundTabConfig(tab);
 
   const loadRows = async (clearNotice = true) => {
-    if (!config || loadingJob) return;
+    if (!config || loadingJob || tab === "activity_billing") return;
     setLoading(true);
     if (clearNotice) setNotice(null);
     setSelection({});
@@ -135,9 +135,13 @@ export function OutboundOperationalTab({
   };
 
   useEffect(() => {
-    if (!prinCode) return;
+    if (!prinCode || tab === "activity_billing") return;
     void loadRows();
   }, [tab, jobNo, prinCode, loadingJob]);
+
+  if (tab === "activity_billing") {
+    return <OutboundAcitivityBilling company_code={company_code} prin_code={principalCode} job_no={jobNo}  />
+  }
 
   if (!config)
     return (
@@ -477,9 +481,7 @@ export function OutboundOperationalTab({
       </Button>
     </div>
   );
-  if (tab === "activity_billing") {
-    return <OutboundAcitivityBilling company_code={company_code} prin_code={principalCode} job_no={jobNo}  />
-  }
+
 
   return (
     <section className="grid gap-3">
