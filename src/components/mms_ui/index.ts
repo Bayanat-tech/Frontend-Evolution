@@ -6,4 +6,7 @@ export { Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Paper
 export { default as CircularProgress } from './CircularProgress';
 export { default as Checkbox } from './Checkbox';
 export { default as Menu, MenuItem } from './Menu';
+export { default as Autocomplete } from './Autocomplete';
+export type { AutocompleteOption } from './Autocomplete';
+export { RadioGroup, RadioOption, FieldLabel, CheckboxOption } from './Radio';
 export { cn } from './cn';

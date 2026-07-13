@@ -26,7 +26,7 @@ import {
   TableHead,
   TableRow,
   TextField
-} from './components/ui';
+} from '../../../components/mms_ui';
 import { InspectionReportPreview, InspectionReportPreviewData } from './components';
 import { InspectionReportMainRow } from './types/InspectionReportMainPage.types';
 import { useAuth } from '../../../state/AuthContext';
