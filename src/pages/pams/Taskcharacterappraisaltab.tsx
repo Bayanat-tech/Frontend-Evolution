@@ -108,7 +108,7 @@ const TaskCharacterAppraisalTab: React.FC<Props> = ({
         sum += Number(rating); count++;
       }
     });
-    return count > 0 ? Math.round(sum / 4) : 0;
+    return count > 0 ? Math.round(sum / count) : 0
   }, [rows, rowStates]);
 
   useEffect(() => {
