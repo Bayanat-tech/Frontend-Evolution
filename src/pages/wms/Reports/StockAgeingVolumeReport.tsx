@@ -209,8 +209,8 @@ export default function StockAgeingVolumeReport() {
         setOptLoading(true);
         setOptError("");
 
-        const prinFilter = inClause("PRIN_CODE", p.prin_code);
-        const deptFilter = inClause("DEPT_CODE", p.dept_code);
+        const prinFilter = inClause("prin_code", p.prin_code);
+        const deptFilter = inClause("dept_code", p.dept_code);
 
         const whereExcept = (...exclude: string[]): string => {
             const all = { prin: prinFilter, dept: deptFilter };

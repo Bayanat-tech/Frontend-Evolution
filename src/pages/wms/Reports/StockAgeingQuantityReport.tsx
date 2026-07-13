@@ -209,8 +209,8 @@ export default function StockAgeingQuantityReport() {
         setOptLoading(true);
         setOptError("");
 
-        const prinFilter = inClause("PRIN_CODE", p.prin_code);
-        const deptFilter = inClause("DEPT_CODE", p.dept_code);
+        const prinFilter = inClause("prin_code", p.prin_code);
+        const deptFilter = inClause("dept_code", p.dept_code);
 
         const whereExcept = (...exclude: string[]): string => {
             const all = { prin: prinFilter, dept: deptFilter };
@@ -222,9 +222,9 @@ export default function StockAgeingQuantityReport() {
         };
 
         const sql = {
-            prin: `select distinct prin_code, prin_name from VW_BOWM_STKLED_FOREXPAGEING`,
+            prin: `select distinct prin_code, prin_name from VW_BOWM_STKLED_FOREXPAGEING ${whereExcept("prin")}`,
             prod: `select distinct prod_code, prod_name from VW_BOWM_STKLED_FOREXPAGEING`,
-            dept: `select distinct dept_code from VW_BOWM_STKLED_FOREXPAGEING`,
+            dept: `select distinct dept_code from VW_BOWM_STKLED_FOREXPAGEING ${whereExcept("dept")}`,
         };
 
         try {
