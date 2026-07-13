@@ -24,9 +24,8 @@ interface LookupRow {
 
 interface Params {
     prin_code: string[];
-    dept_code_from: string;
-    prod_code_from: string;
-    prod_code_to: string;
+    dept_code: string[];
+    prod_code: string[];
     age1: string;
     age2: string;
     age3: string;
@@ -177,7 +176,7 @@ const AgeRangeField: React.FC<{ label: string; value: string; onChange: (v: stri
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const DEFAULT_PARAMS: Params = {
-    prin_code: ["All"], dept_code_from: "", prod_code_from: "", prod_code_to: "",
+    prin_code: ["All"], dept_code: ["All"], prod_code: ["All"],
     age1: "30", age2: "60", age3: "90", age4: "120", age5: "150",
     group_by: "product_group",
 };
@@ -211,7 +210,7 @@ export default function StockAgeingVolumeReport() {
         setOptError("");
 
         const prinFilter = inClause("PRIN_CODE", p.prin_code);
-        const deptFilter = p.dept_code_from ? `DEPT_CODE = '${sqlEscape(p.dept_code_from)}'` : "";
+        const deptFilter = inClause("DEPT_CODE", p.dept_code);
 
         const whereExcept = (...exclude: string[]): string => {
             const all = { prin: prinFilter, dept: deptFilter };
@@ -256,22 +255,11 @@ export default function StockAgeingVolumeReport() {
                     return stillValid.length ? stillValid : ["All"];
                 };
 
-                const validProd = new Set(nextProd.map((o) => o.value));
-                const nextProdFrom = prev.prod_code_from && !validProd.has(prev.prod_code_from)
-                    ? "" : prev.prod_code_from;
-                const nextProdTo = prev.prod_code_to && !validProd.has(prev.prod_code_to)
-                    ? "" : prev.prod_code_to;
-
-                const validDept = new Set(nextDept.map((o) => o.value));
-                const nextDeptFrom = prev.dept_code_from && !validDept.has(prev.dept_code_from)
-                    ? "" : prev.dept_code_from;
-
                 return {
                     ...prev,
                     prin_code: reset(prev.prin_code, nextPrin),
-                    prod_code_from: nextProdFrom,
-                    prod_code_to: nextProdTo,
-                    dept_code_from: nextDeptFrom,
+                    prod_code: reset(prev.prod_code, nextProd),
+                    dept_code: reset(prev.dept_code, nextDept),
                 };
             });
         } catch (e: any) {
@@ -290,7 +278,7 @@ export default function StockAgeingVolumeReport() {
     }, []);
 
     // ── Re-run the cascade live when Principal/Department change
-    const cascadeKey = JSON.stringify([params.prin_code, params.dept_code_from]);
+    const cascadeKey = JSON.stringify([params.prin_code, params.dept_code]);
     const prevCascadeKeyRef = useRef(cascadeKey);
     useEffect(() => {
         if (prevCascadeKeyRef.current === cascadeKey) return;
@@ -301,9 +289,8 @@ export default function StockAgeingVolumeReport() {
 
     const buildPayload = (p: Params) => ({
         prin_code: p.prin_code.includes("All") ? ["All"] : p.prin_code,
-        dept_code_from: p.dept_code_from || null,
-        prod_code_from: p.prod_code_from || null,
-        prod_code_to: p.prod_code_to || null,
+        dept_code: p.dept_code.includes("All") ? ["All"] : p.dept_code,
+        prod_code: p.prod_code.includes("All") ? ["All"] : p.prod_code,
         age1: Number(p.age1) || 30,
         age2: Number(p.age2) || 60,
         age3: Number(p.age3) || 90,
@@ -484,7 +471,7 @@ export default function StockAgeingVolumeReport() {
                         {/* ── Left: form fields ── */}
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
 
-                            {/* Principal + Product From + Product To */}
+                            {/* Principal + Product Code + Department Code */}
                             <div className="field-row" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 6, width: "100%" }}>
                                 <FloatLabel label="Principal" bgColor={BG}>
                                     <MultiSelectField
@@ -495,40 +482,28 @@ export default function StockAgeingVolumeReport() {
                                         loading={optLoading}
                                     />
                                 </FloatLabel>
-                                <FloatLabel label="Product Code From" bgColor={BG}>
-                                    <SelectField
+                                <FloatLabel label="Product Code" bgColor={BG}>
+                                    <MultiSelectField
                                         label=""
                                         options={prodOptions}
-                                        value={params.prod_code_from}
-                                        onChange={(v) => setParam("prod_code_from", v)}
-                                        placeholder="Select start product"
+                                        value={params.prod_code}
+                                        onChange={(v: string[]) => setParam("prod_code", v)}
                                         loading={optLoading}
                                     />
                                 </FloatLabel>
-                                <FloatLabel label="Product Code To" bgColor={BG}>
-                                    <SelectField
+                                <FloatLabel label="Department Code" bgColor={BG}>
+                                    <MultiSelectField
                                         label=""
-                                        options={prodOptions}
-                                        value={params.prod_code_to}
-                                        onChange={(v) => setParam("prod_code_to", v)}
-                                        placeholder="Select end product"
+                                        options={deptOptions}
+                                        value={params.dept_code}
+                                        onChange={(v: string[]) => setParam("dept_code", v)}
                                         loading={optLoading}
                                     />
                                 </FloatLabel>
                             </div>
 
-                            {/* Department + Group By */}
+                            {/* Group By */}
                             <div className="field-row" style={row2}>
-                                <FloatLabel label="Department Code From" bgColor={BG}>
-                                    <SelectField
-                                        label=""
-                                        options={deptOptions}
-                                        value={params.dept_code_from}
-                                        onChange={(v) => setParam("dept_code_from", v)}
-                                        placeholder="Select department"
-                                        loading={optLoading}
-                                    />
-                                </FloatLabel>
                                 <FloatLabel label="Group By" bgColor={BG}>
                                     <SelectField
                                         label=""
