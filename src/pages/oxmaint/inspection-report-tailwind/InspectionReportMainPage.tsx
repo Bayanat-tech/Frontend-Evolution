@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
-import { FaCaretDown, FaFilePdf, FaPlus } from 'react-icons/fa';
+import { FaCaretDown, FaFilePdf, FaPlus, FaPrint } from 'react-icons/fa';
 import AddInspectionReportPage from './AddInspectionReportPage';
 import { deleteInspectionReport } from './api/inspectionReportApi';
 import {
@@ -18,6 +18,8 @@ import { InspectionReportMainRow } from './types/InspectionReportMainPage.types'
 import { useAuth } from '../../../state/AuthContext';
 import { getDynamicLookup } from '../../../api/lookups';
 import { DataTable } from '../../../components/ui/DataTable';
+import { getInspectionReportExcelBlob, getInspectionReportHtml } from './api/report';
+import ReportDialogPage from '../../../components/ReportDialogPage';
 
 type InspectionReportApiRow = {
   id?: number | string;
@@ -42,6 +44,37 @@ type InspectionReportApiRow = {
   created_at?: string;
 };
 
+function IframeReportRenderer({ required_values }: { required_values: { html: string } }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+    const win = iframe.contentWindow as any;
+    let originalPrint: (() => void) | undefined;
+    if (win) {
+      originalPrint = win.print;
+      win.print = () => {};
+    }
+    doc.open();
+    doc.write(required_values.html);
+    doc.close();
+    const restorePrint = () => { if (win && originalPrint) win.print = originalPrint; };
+    if (doc.readyState === 'complete') restorePrint();
+    else iframe.addEventListener('load', restorePrint, { once: true });
+  }, [required_values.html]);
+
+  return <iframe ref={iframeRef} title="report" style={{ width: '100%', minHeight: '70vh', border: 'none' }} />;
+}
+
+function getLoadingHtml(): string {
+  return `<!doctype html><html><body style="display:flex;align-items:center;justify-content:center;height:60vh;font-family:Arial,sans-serif;color:#1a5f4a;font-size:14px">
+  <div style="text-align:center">Loading report…</div>
+</body></html>`;
+}
+
 const InspectionReportMainPage = () => {
   const { user } = useAuth();
   const [searchText, setSearchText] = useState('');
@@ -52,6 +85,56 @@ const InspectionReportMainPage = () => {
   const [actionAnchorRect, setActionAnchorRect] = useState<DOMRect | null>(null);
   const [selectedActionRow, setSelectedActionRow] = useState<InspectionReportMainRow | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportGenerating, setReportGenerating] = useState(false);
+  const [activeReportRow, setActiveReportRow] = useState<InspectionReportMainRow | null>(null);
+
+  const handleOpenReport = async (row: InspectionReportMainRow) => {
+    const reportId = Number(row.id);
+    if (!Number.isFinite(reportId) || reportId <= 0) return;
+
+    setActiveReportRow(row);
+    setReportHtml(null);
+    setReportGenerating(true);
+    handleCloseActionMenu();
+
+    try {
+      const html = await getInspectionReportHtml(reportId);
+      setReportHtml(html);
+    } catch (error) {
+      console.error('Failed to load inspection report:', error);
+      setReportHtml(null);
+      setActiveReportRow(null);
+    } finally {
+      setReportGenerating(false);
+    }
+  };
+
+  const handleExcelDownload = async () => {
+    if (!activeReportRow) return;
+    const reportId = Number(activeReportRow.id);
+    try {
+      const blob = await getInspectionReportExcelBlob(reportId);
+      const fileBlob = new Blob([blob], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = window.URL.createObjectURL(fileBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `inspection-report-${activeReportRow.reportNumber || reportId}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download inspection report Excel:', error);
+    }
+  };
+
+  const closeReportDialog = () => {
+    setReportHtml(null);
+    setActiveReportRow(null);
+  };
 
   const loadReports = async () => {
     setLoadingReports(true);
@@ -357,7 +440,20 @@ const InspectionReportMainPage = () => {
         <InspectionReportPreview open={Boolean(previewReport)} onClose={() => setPreviewReport(null)} report={previewReport} />
       )}
 
+      {(reportHtml !== null || reportGenerating) && activeReportRow && (
+        <ReportDialogPage
+          title={`Inspection Report ${activeReportRow.reportNumber}`}
+          Report={IframeReportRenderer}
+          required_values={{ html: reportGenerating ? getLoadingHtml() : reportHtml! }}
+          excel={handleExcelDownload}
+          onClose={closeReportDialog}
+        />
+      )}
+
       <Menu open={Boolean(actionAnchorRect)} anchorRect={actionAnchorRect} onClose={handleCloseActionMenu}>
+        <MenuItem onClick={() => selectedActionRow && handleOpenReport(selectedActionRow)}>
+          <FaPrint className="mr-1.5 inline" /> Report
+        </MenuItem>
         <MenuItem onClick={handleOpenDeleteConfirm}>Delete</MenuItem>
       </Menu>
 
