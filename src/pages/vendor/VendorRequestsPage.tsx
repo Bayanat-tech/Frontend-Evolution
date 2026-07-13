@@ -39,10 +39,13 @@ export function VendorRequestsPage() {
   useEffect(() => {
     void loadRows();
   }, [loadRows]);
-
+    
   const openExisting = async (row: VendorTableRow) => {
-    const docNo = String(row.DOC_NO || "");
-    if (!docNo) return;
+    const rawDocNo = String(row.DOC_NO || "");
+    const loginid = user?.loginid || user?.username || "";
+    if (!rawDocNo || !loginid) return;
+
+    const docNo = `${rawDocNo}$$$${loginid}`;
     try {
       setEditor(await getVendorRequest(docNo));
     } catch (err) {
@@ -101,9 +104,9 @@ export function VendorRequestsPage() {
           open
           request={editor}
           onClose={() => setEditor(undefined)}
-          onSaved={async () => {
-            setEditor(undefined);
-            setNotice({ type: "success", message: "Vendor request saved" });
+          onSaved={async (action) => {
+            if (action === "SUBMITTED") setEditor(undefined);
+            setNotice({ type: "success", message: action === "SAVEASDRAFT" ? "Vendor draft saved" : "Vendor request submitted" });
             await loadRows();
           }}
         />

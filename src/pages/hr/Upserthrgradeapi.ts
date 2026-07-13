@@ -1,10 +1,3 @@
-// src/pages/hr/upsertHrGradeApi.ts
-//
-// Thin service wrapper around the dedicated insUpdHrGrade backend endpoint,
-// mirroring the upsertHrIntEvalFormApi pattern used by Addinterviewevalform.
-// Adjust ENDPOINT below to whatever path your insUpdHrGrade controller is
-// actually mounted at.
-
 import { api } from "../../api/client";
 
 export type TGradeComponentPayload = {
