@@ -96,6 +96,8 @@ export type TPRItem = {
 
   // === SUPPLIER ===
   SUPPLIER: string;
+  SUPPLIER_CODE: string;
+  SUPPLIER_NAME: string;
 
   // === QUANTITY & PRICING ===
   REQUEST_QUANTITY: number;
@@ -120,6 +122,7 @@ export type TPRItem = {
   TX_COMPNT_PERC_1: number;
   TX_COMPNT_AMT_1: number;
   TX_COMPNT_LCURAMT_1: number;
+  CAPEX_OPEX_NON_OPEX: string;
 
   // === TAX TYPE ===
   TAX_TYPE: string;

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Plus, Edit2, Save, Send, X, CheckCircle,
@@ -15,6 +15,7 @@ import { Badge } from "../../components/ui/Badge";
 import { CardHeader } from "../../components/ui/Card";
 import { useAuth } from "../../state/AuthContext";
 import { LookupField } from "../../components/ui/LookupField";
+import { Select } from "../../components/ui/Select";
 
 import type { TPRHeader, TPRItem } from "./PurchaseSummary-types";
 import { almsSave, almsCommonSelect } from "../../api/alms";
@@ -63,8 +64,11 @@ function blankItem(srNo: number, requestNumber: string, companyCode: string, hdr
     TAX_TYPE: "Std.",
     TX_COMPNTCAT_CODE: "",
     TX_COMPNTCAT_NAME: "",
+    CAPEX_OPEX_NON_OPEX: "",
     USER_DT: null,
     USER_ID: "",
+    SUPPLIER_CODE: "",
+    SUPPLIER_NAME: "",
   };
 }
 
@@ -80,9 +84,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const [header, setHeader] = useState<Partial<TPRHeader>>({});
   const [items, setItems] = useState<TPRItem[]>([]);
 
-  const [itemModal, setItemModal] = useState<{ open: boolean; mode: "add" | "edit"; data: TPRItem | null; index: number | null }>({
-    open: false, mode: "add", data: null, index: null,
-  });
   const [attachOpen, setAttachOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -91,6 +92,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
 
   const disabled = isViewMode || saving;
 
+  // ─── Lookup Queries ───────────────────────────────────────────────
   const { data: itemCodes = [] } = useQuery<LookupItem[]>({
     queryKey: ["pr-items-lookup", companyCode],
     queryFn: () => almsCommonSelect({ parameter: "Amlspf_MsPsItemMasterPage", loginid, code1: companyCode }),
@@ -106,7 +108,18 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     queryFn: () => almsCommonSelect({ parameter: "Amlspf_MsPsTaxCategory", loginid, code1: companyCode }),
     enabled: !!companyCode,
   });
+  const { data: supplierList = [] } = useQuery<LookupItem[]>({
+    queryKey: ["pr-supplier-lookup", companyCode],
+    queryFn: () => almsCommonSelect({ parameter: "Amlspf_MsPsSupplierMaster", loginid, code1: companyCode }),
+    enabled: !!companyCode,
+  });
+  const { data: compntCatCode = [] } = useQuery<LookupItem[]>({
+    queryKey: ["pr-tax-component-lookup", companyCode],
+    queryFn: () => almsCommonSelect({ parameter: "Amlspf_MsPsTaxCode", loginid, code1: companyCode }),
+    enabled: !!companyCode,
+  });
 
+  // ─── Header & Items Queries ──────────────────────────────────────
   const { data: hdrList = [] } = useQuery<TPRHeader[]>({
     queryKey: ["pr-header", requestNumber, companyCode],
     queryFn: () => almsCommonSelect<TPRHeader>({ parameter: "Amlspf_TabPRHeader", loginid, code1: companyCode, code2: requestNumber }),
@@ -127,12 +140,13 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     const enriched = itemList.map((row, index) => ({
       ...row,
       id: (row as any).id || newId(),
-      item_srno: row.ITEM_SRNO || index + 1,
-      item_desp: row.ITEM_DESP || itemCodes.find((i) => i.item_code === row.ITEM_CODE)?.item_desp || "",
-      cost_name: row.COST_NAME || costCodes.find((c) => c.cost_code === row.COST_CODE)?.cost_name || "",
-      base_amount: num(row.AMOUNT) * num(row.CURRENCY_RATE || header.CURRENCY_RATE || 1),
+      ITEM_DESP: row.ITEM_DESP || itemCodes.find((i) => i.item_code === row.ITEM_CODE)?.item_desp || "",
+      COST_NAME: row.COST_NAME || costCodes.find((c) => c.cost_code === row.COST_CODE)?.cost_name || "",
+      BASE_AMOUNT: num(row.AMOUNT) * num(row.CURRENCY_RATE || header.CURRENCY_RATE || 1),
     }));
-    setItems(enriched);
+    // Reassign SRNO based on array position
+    const renumbered = enriched.map((item, idx) => ({ ...item, ITEM_SRNO: idx + 1 }));
+    setItems(renumbered);
     setLoading(false);
   }, [itemList, itemCodes, costCodes, header.CURRENCY_RATE]);
 
@@ -142,6 +156,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const totalTax = items.reduce((s, r) => s + num(r.TX_COMPNT_AMT_1), 0);
   const totalBase = items.reduce((s, r) => s + num(r.BASE_AMOUNT), 0);
 
+  // ─── Save Functions ───────────────────────────────────────────────
   const saveHeader = async (status: string) => almsSave({
     parameter: "Amlspf_IU_PURCHASE_REQUEST_HEADER",
     loginid,
@@ -251,96 +266,98 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     } finally { setSaving(false); }
   };
 
-  const openAddItem = () => setItemModal({ open: true, mode: "add", data: blankItem(items.length + 1, requestNumber ?? "", companyCode, header), index: null });
-  const openEditItem = (index: number) => setItemModal({ open: true, mode: "edit", data: { ...items[index] }, index });
-  const closeItemModal = () => setItemModal({ open: false, mode: "add", data: null, index: null });
+  // ─── Inline Item Functions ────────────────────────────────────────
+  const addItemLine = () => {
+    const srNo = items.length + 1;
+    const blank = blankItem(srNo, requestNumber ?? "", companyCode, header);
+    (blank as any).id = newId();
+    setItems([...items, blank]);
+  };
 
-  const setItemField = (field: keyof TPRItem, value: unknown) => {
-    setItemModal((prev) => {
-      if (!prev.data) return prev;
-      const next = { ...prev.data, [field]: value } as TPRItem;
+  const removeItem = (id: string) => {
+    const updated = items.filter((item) => (item as any).id !== id);
+    // Reassign SRNO
+    const renumbered = updated.map((item, idx) => ({ ...item, ITEM_SRNO: idx + 1 }));
+    setItems(renumbered);
+  };
+
+  const updateItemField = (id: string, field: keyof TPRItem, value: unknown) => {
+    setItems((prev) => {
+      const index = prev.findIndex((item) => (item as any).id === id);
+      if (index === -1) return prev;
+      const updated = [...prev];
+      const item = { ...updated[index], [field]: value };
+
+      // Recalculate based on changes
       if (field === "ITEM_RATE" || field === "DISCOUNT_AMOUNT") {
-        next.FINAL_RATE = num(field === "ITEM_RATE" ? value : next.ITEM_RATE) - num(field === "DISCOUNT_AMOUNT" ? value : next.DISCOUNT_AMOUNT);
-        next.AMOUNT = next.FINAL_RATE * num(next.ALLOCATED_APPROVED_QUANTITY);
-        next.BASE_AMOUNT = next.AMOUNT * num(next.CURRENCY_RATE);
-        next.TX_COMPNT_AMT_1 = (next.AMOUNT * num(next.TX_COMPNT_PERC_1)) / 100;
+        const rate = field === "ITEM_RATE" ? num(value) : num(item.ITEM_RATE);
+        const discount = field === "DISCOUNT_AMOUNT" ? num(value) : num(item.DISCOUNT_AMOUNT);
+        item.FINAL_RATE = rate - discount;
+        const qty = num(item.ALLOCATED_APPROVED_QUANTITY);
+        item.AMOUNT = item.FINAL_RATE * qty;
+        item.BASE_AMOUNT = item.AMOUNT * num(item.CURRENCY_RATE);
+        item.TX_COMPNT_AMT_1 = (item.AMOUNT * num(item.TX_COMPNT_PERC_1)) / 100;
       }
       if (field === "ALLOCATED_APPROVED_QUANTITY") {
-        next.AMOUNT = num(next.FINAL_RATE) * num(value);
-        next.BASE_AMOUNT = next.AMOUNT * num(next.CURRENCY_RATE);
-        next.TX_COMPNT_AMT_1 = (next.AMOUNT * num(next.TX_COMPNT_PERC_1)) / 100;
+        const qty = num(value);
+        item.AMOUNT = num(item.FINAL_RATE) * qty;
+        item.BASE_AMOUNT = item.AMOUNT * num(item.CURRENCY_RATE);
+        item.TX_COMPNT_AMT_1 = (item.AMOUNT * num(item.TX_COMPNT_PERC_1)) / 100;
       }
-      if (field === "CURRENCY_RATE") next.BASE_AMOUNT = num(next.AMOUNT) * num(value);
-      if (field === "TX_COMPNT_PERC_1") next.TX_COMPNT_AMT_1 = (num(next.AMOUNT) * num(value)) / 100;
-      return { ...prev, data: next };
+      if (field === "CURRENCY_RATE") {
+        item.BASE_AMOUNT = num(item.AMOUNT) * num(value);
+      }
+      if (field === "TX_COMPNT_PERC_1") {
+        item.TX_COMPNT_AMT_1 = (num(item.AMOUNT) * num(value)) / 100;
+      }
+      if (field === "TX_CAT_CODE" && typeof value === 'string') {
+        const found = taxCodes.find((t) => t.tx_cat_code === value);
+        if (found) {
+          item.TX_COMPNTCAT_CODE_1 = found.tx_compntcat_code_1 || "";
+          item.TX_COMPNT_PERC_1 = found.tx_compnt_perc_1 || 0;
+        }
+      }
+
+      updated[index] = item;
+      return updated;
     });
   };
 
-  const saveItemModal = () => {
-    if (!itemModal.data) return;
-    const enriched: TPRItem = {
-      ...itemModal.data,
-      ITEM_DESP : itemModal.data.ITEM_DESP || itemCodes.find((i) => i.item_code === itemModal.data?.ITEM_CODE)?.item_desp || "",
-      COST_NAME: itemModal.data.COST_NAME || costCodes.find((c) => c.cost_code === itemModal.data?.COST_CODE)?.cost_name || "",
-      BASE_AMOUNT: num(itemModal.data.AMOUNT) * num(itemModal.data.CURRENCY_RATE),
-    };
-    let next: TPRItem[];
-    if (itemModal.mode === "add") next = [...items, enriched];
-    else { next = [...items]; next[itemModal.index!] = enriched; }
-    next = next.map((it, i) => ({ ...it, item_srno: i + 1 }));
-    setItems(next);
-    closeItemModal();
-  };
-
-  const removeItem = (index: number) => setItems(items.filter((_, i) => i !== index).map((it, i) => ({ ...it, item_srno: i + 1 })));
-
-  // Lookup field configurations
+  // ─── Lookup Column Definitions ───────────────────────────────────
+  const currencyColumns = [
+    { field: "CURR_CODE", header: "Code" },
+    { field: "CURR_NAME", header: "Name" },
+  ];
   const taxCategoryColumns = [
     { field: "TX_CAT_CODE", header: "Code" },
     { field: "TX_CAT_NAME", header: "Name" },
     { field: "TX_COMPNTCAT_CODE_1", header: "Tax Code" },
     { field: "TX_COMPNT_PERC_1", header: "Tax %" },
   ];
-
+  const taxComponentColumns = [
+    { field: "tx_compntcat_code", header: "Code" },
+    { field: "tx_compntcat_name", header: "Name" },
+  ];
+  const itemCodeColumns = [
+    { field: "item_code", header: "Code" },
+    { field: "item_desp", header: "Description" },
+  ];
+  const costCodeColumns = [
+    { field: "cost_code", header: "Code" },
+    { field: "cost_name", header: "Name" },
+  ];
+  const supplierColumns = [
+    { field: "supplier_code", header: "Code" },
+    { field: "supplier_name", header: "Name" },
+  ];
   const taxTypeColumns = [
     { field: "TX_TYPE_CODE", header: "Code" },
     { field: "TX_TYPE_NAME", header: "Name" },
     { field: "TX_TYPE_DESC", header: "Description" },
   ];
+  const capexOptions = ["CAPEX", "OPEX", "NON-OPEX"];
 
-  const currencyColumns = [
-    { field: "CURR_CODE", header: "Code" },
-    { field: "CURR_NAME", header: "Name" },
-    { field: "CURR_SYMBOL", header: "Symbol" },
-  ];
-
-  const itemColumns = useMemo<ColumnDef<TPRItem>[]>(() => [
-    { accessorKey: "item_srno", header: "No", size: 50, cell: ({ row }) => <span className="text-xs">{row.original.ITEM_SRNO}</span> },
-    { accessorKey: "item_code", header: "Item", cell: ({ row }) => {
-      const c = row.original.ITEM_CODE || "", d = row.original.ITEM_DESP || "";
-      return <span className="font-medium">{c ? (d ? `${c} — ${d}` : c) : "—"}</span>;
-    }},
-    { accessorKey: "cost_code", header: "Cost Code", cell: ({ row }) => {
-      const c = row.original.COST_CODE || "", n = row.original.COST_NAME || "";
-      return <span>{c ? (n ? `${c} — ${n}` : c) : "—"}</span>;
-    }},
-    { accessorKey: "request_quantity", header: "Req Qty" },
-    { accessorKey: "allocated_approved_quantity", header: "Appr Qty" },
-    { accessorKey: "item_rate", header: "Rate", cell: ({ getValue }) => fmt3(num(getValue())) },
-    { accessorKey: "amount", header: "Amount", cell: ({ getValue }) => <strong>{fmt3(num(getValue()))}</strong> },
-    { accessorKey: "tx_compnt_amt_1", header: "Tax Amt", cell: ({ getValue }) => fmt3(num(getValue())) },
-    { accessorKey: "base_amount", header: "Base Amount", cell: ({ row }) => fmt3(num(row.original.AMOUNT) * num(row.original.CURRENCY_RATE)) },
-    ...(!isViewMode ? [{
-      id: "actions" as const, header: "Action",
-      cell: ({ row }: any) => (
-        <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" type="button" onClick={() => openEditItem(row.index)} title="Edit"><Edit2 size={14} /></Button>
-          <Button size="icon" variant="ghost" type="button" onClick={() => removeItem(row.index)} title="Remove"><X size={14} /></Button>
-        </div>
-      ),
-    }] as ColumnDef<TPRItem>[] : []),
-  ], [isViewMode, items]);
-
+  // ─── Render ───────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 bg-background">
       <section className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]">
@@ -387,14 +404,14 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
             <div className="grid gap-3">
               <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
+              {/* ─── Header Section ─── */}
               <div className="rounded-md border bg-card">
                 <div className="border-b bg-secondary/40 px-3 py-1.5">
                   <p className="eyebrow m-0">Header</p>
                   <h3 className="m-0 text-sm font-semibold leading-tight">Request Information</h3>
                 </div>
-                <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                  
-                   <label className="field">
+                <div className="payment-header-grid grid grid-cols-6 gap-2.5 p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
+                  <label className="field">
                     <span>Request Date</span>
                     <Input disabled={disabled} type="date" value={header.REQUEST_DATE ? String(header.REQUEST_DATE).slice(0, 10) : ""} onChange={(e) => setHdr("REQUEST_DATE", e.target.value)} />
                   </label>
@@ -404,11 +421,11 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                   </label>
                   <label className="field">
                     <span>Creator</span>
-                    <Input disabled={disabled} value={String(header.CREATE_USER|| "")} onChange={(e) => setHdr("CREATE_USER", e.target.value)} placeholder="Creator" />
+                    <Input disabled={disabled} value={String(header.CREATE_USER || "")} onChange={(e) => setHdr("CREATE_USER", e.target.value)} placeholder="Creator" />
                   </label>
                   <label className="field">
                     <span>Creation Date</span>
-                    <Input disabled={disabled} type="date" value={header.CREATE_DATE? String(header.CREATE_DATE).slice(0, 10) : ""} onChange={(e) => setHdr("CREATE_DATE", e.target.value)} />
+                    <Input disabled={disabled} type="date" value={header.CREATE_DATE ? String(header.CREATE_DATE).slice(0, 10) : ""} onChange={(e) => setHdr("CREATE_DATE", e.target.value)} />
                   </label>
                   <label className="field">
                     <span>Currency *</span>
@@ -426,10 +443,10 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                     <span>Tax Code</span>
                     <Input disabled={disabled} value={String(header.TX_COMPNTCAT_CODE_1 || "")} onChange={(e) => setHdr("TX_COMPNTCAT_CODE_1", e.target.value)} />
                   </label>
-                   <LookupField
+                  <LookupField
                     label="Tax Type"
                     value={String(header.TAX_TYPE || "")}
-                    // displayValue={header.TAX_TYPE}
+                    displayValue={header.TAX_TYPE || ""}
                     columns={taxTypeColumns}
                     valueField="TX_TYPE_CODE"
                     displayFields={["TX_TYPE_CODE", "TX_TYPE_NAME"]}
@@ -437,7 +454,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                     onChange={(val) => setHdr("TAX_TYPE", val)}
                     disabled={disabled}
                   />
-                  
+
                   <label className="field col-span-3 max-lg:col-span-2 max-md:col-span-1">
                     <span>Description / Reason</span>
                     <Input disabled={disabled} value={String(header.DESCRIPTION || "")} onChange={(e) => setHdr("DESCRIPTION", e.target.value)} />
@@ -449,42 +466,365 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                 </div>
               </div>
 
-              <div className="commercial-lines-card rounded-md border bg-card">
+              {/* ─── Items Section ─── */}
+              <div className="rounded-md border bg-card overflow-hidden">
                 <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
                   <div>
                     <p className="eyebrow m-0">Details</p>
                     <h3 className="m-0 text-sm font-semibold leading-tight">Line Items</h3>
                   </div>
                   {!isViewMode && (
-                    <Button disabled={disabled} size="sm" type="button" variant="outline" onClick={openAddItem}><Plus size={14} /> Add Line</Button>
+                    <Button disabled={disabled} size="sm" type="button" variant="outline" onClick={addItemLine}>
+                      <Plus size={14} /> Add Line
+                    </Button>
                   )}
                 </div>
-                <DataTable
-                  columns={itemColumns}
-                  data={items}
-                  title={`${items.length} Items`}
-                  loading={false}
-                  height={360}
-                  density="grid"
-                  enablePagination={false}
-                  getRowId={(row) => row.ID || String(row.ITEM_SRNO)}
-                />
+
+                {/* ─── Detail Table ─── */}
+                <div className="commercial-lines-scroll max-h-[43vh] overflow-auto">
+                  <div className="relative">
+                    <table className="finance-lines-table w-full min-w-[2000px] text-sm">
+                      <thead className="sticky top-0 z-10 bg-primary text-xs text-primary-foreground">
+                        <tr>
+                          {/* Fixed columns - No and Item */}
+                          <th className="sticky left-0 z-20 bg-primary px-2 py-2 text-center w-[45px] min-w-[45px] max-w-[45px]">
+                            No
+                          </th>
+                          <th className="sticky left-[45px] z-20 bg-primary px-2 py-2 text-left w-[350px] min-w-[350px] max-w-[350px]">
+                            Item
+                          </th>
+
+                          {/* Scrollable columns */}
+                          <th className="px-2 py-2 text-left w-[280px] min-w-[280px] max-w-[280px]">
+                            Cost Code
+                          </th>
+                          <th className="px-2 py-2 text-center w-[80px] min-w-[80px] max-w-[80px]">
+                            Req Qty
+                          </th>
+                          <th className="px-2 py-2 text-center w-[80px] min-w-[80px] max-w-[80px]">
+                            Appr Qty
+                          </th>
+                          <th className="px-2 py-2 text-right w-[90px] min-w-[90px] max-w-[90px]">
+                            Rate
+                          </th>
+                          <th className="px-2 py-2 text-center w-[75px] min-w-[75px] max-w-[75px]">
+                            Currency
+                          </th>
+                          <th className="px-2 py-2 text-right w-[80px] min-w-[80px] max-w-[80px]">
+                            Ex Rate
+                          </th>
+                          <th className="px-2 py-2 text-left w-[250px] min-w-[250px] max-w-[250px]">
+                            Supplier
+                          </th>
+                          <th className="finance-amount-cell px-2 py-2 text-right w-[100px] min-w-[100px] max-w-[100px]">
+                            Amount
+                          </th>
+                          <th className="finance-amount-cell px-2 py-2 text-right w-[100px] min-w-[100px] max-w-[100px]">
+                            Base Amt
+                          </th>
+                          <th className="px-2 py-2 text-center w-[100px] min-w-[100px] max-w-[100px]">
+                            Tax Code
+                          </th>
+                          <th className="px-2 py-2 text-left w-[280px] min-w-[280px] max-w-[280px]">
+                            Tax Category
+                          </th>
+                          <th className="px-2 py-2 text-right w-[65px] min-w-[65px] max-w-[65px]">
+                            Tax %
+                          </th>
+                          <th className="finance-amount-cell px-2 py-2 text-right w-[90px] min-w-[90px] max-w-[90px]">
+                            Tax Amt
+                          </th>
+                          <th className="px-2 py-2 text-center w-[90px] min-w-[90px] max-w-[90px]">
+                            Tax Type
+                          </th>
+                          <th className="px-2 py-2 text-right w-[90px] min-w-[90px] max-w-[90px]">
+                            Discount
+                          </th>
+                          <th className="px-2 py-2 text-right w-[90px] min-w-[90px] max-w-[90px]">
+                            Final Rate
+                          </th>
+                          <th className="px-2 py-2 text-center w-[95px] min-w-[95px] max-w-[95px]">
+                            Capex
+                          </th>
+                          <th className="px-2 py-2 text-center w-[55px] min-w-[55px] max-w-[55px]">
+                            Action
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {items.length === 0 ? (
+                          <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={20}>No items yet. Click "Add Line" to add items.</td></tr>
+                        ) : items.map((item, index) => {
+                          const itemId = (item as any).id || String(item.ITEM_SRNO);
+                          
+                          // ─── Proper display values with Code - Description ───
+                          const itemDisplay = item.ITEM_CODE && item.ITEM_DESP 
+                            ? `${item.ITEM_CODE} - ${item.ITEM_DESP}` 
+                            : (item.ITEM_CODE || "");
+                            
+                          const costDisplay = item.COST_CODE && item.COST_NAME 
+                            ? `${item.COST_CODE} - ${item.COST_NAME}` 
+                            : (item.COST_CODE || "");
+                            
+                          const supplierDisplay = item.SUPPLIER || "";
+                          const taxCategoryDisplay = item.TX_CAT_CODE || "";
+                          
+                          return (
+                            <tr className="border-t odd:bg-muted/20 hover:bg-muted/40" key={itemId}>
+                              {/* Fixed columns */}
+                              <td className="sticky left-0 z-10 bg-background px-2 py-1 text-xs text-center w-[45px] min-w-[45px] max-w-[45px]">
+                                {item.ITEM_SRNO}
+                              </td>
+                              <td className="sticky left-[45px] z-10 bg-background px-2 py-1 w-[350px] min-w-[350px] max-w-[350px]">
+                                <LookupField
+                                  label=""
+                                  compact
+                                  placeholder="Search Item"
+                                  value={item.ITEM_CODE || ""}
+                                  displayValue={itemDisplay}
+                                  columns={itemCodeColumns}
+                                  valueField="item_code"
+                                  displayFields={["item_code", "item_desp"]}
+                                  loadOptions={() => almsCommonSelect({ parameter: "Amlspf_MsPsItemMasterPage", loginid, code1: companyCode })}
+                                  onChange={(val, row) => {
+                                    updateItemField(itemId, "ITEM_CODE", val);
+                                    if (row) {
+                                      updateItemField(itemId, "ITEM_DESP", row.ITEM_DESP || "");
+                                    }
+                                  }}
+                                  disabled={disabled}
+                                />
+                              </td>
+
+                              {/* Scrollable columns */}
+                              <td className="px-2 py-1 w-[280px] min-w-[280px] max-w-[280px]">
+                                <LookupField
+                                  label=""
+                                  compact
+                                  placeholder="Cost Code"
+                                  value={item.COST_CODE || ""}
+                                  displayValue={costDisplay}
+                                  columns={costCodeColumns}
+                                  valueField="cost_code"
+                                  displayFields={["cost_code", "cost_name"]}
+                                  loadOptions={() => almsCommonSelect({ parameter: "Amlspf_MsPsCostMaster", loginid, code1: companyCode })}
+                                  onChange={(val, row) => {
+                                    updateItemField(itemId, "COST_CODE", val);
+                                    if (row) {
+                                      updateItemField(itemId, "COST_NAME", row.COST_NAME || "");
+                                    }
+                                  }}
+                                  disabled={disabled}
+                                />
+                              </td>
+                              <td className="px-2 py-1 w-[80px] min-w-[80px] max-w-[80px]">
+                                <Input
+                                  type="number"
+                                  step="0.001"
+                                  value={item.REQUEST_QUANTITY || ""}
+                                  onChange={(e) => updateItemField(itemId, "REQUEST_QUANTITY", Number(e.target.value) || 0)}
+                                  disabled={disabled}
+                                  className="h-9 text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  placeholder="0"
+                                />
+                              </td>
+                              <td className="px-2 py-1 w-[80px] min-w-[80px] max-w-[80px]">
+                                <Input
+                                  type="number"
+                                  step="0.001"
+                                  value={item.ALLOCATED_APPROVED_QUANTITY || ""}
+                                  onChange={(e) => updateItemField(itemId, "ALLOCATED_APPROVED_QUANTITY", Number(e.target.value) || 0)}
+                                  disabled={disabled}
+                                  className="h-9 text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  placeholder="0"
+                                />
+                              </td>
+                              <td className="px-2 py-1 w-[90px] min-w-[90px] max-w-[90px]">
+                                <Input
+                                  type="number"
+                                  step="0.001"
+                                  value={item.ITEM_RATE || ""}
+                                  onChange={(e) => updateItemField(itemId, "ITEM_RATE", Number(e.target.value) || 0)}
+                                  disabled={disabled}
+                                  className="h-9 text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  placeholder="0"
+                                />
+                              </td>
+                              <td className="px-2 py-1 w-[75px] min-w-[75px] max-w-[75px]">
+                                <Input
+                                  value={item.CURR_CODE || header.CURR_CODE || "AED"}
+                                  onChange={(e) => updateItemField(itemId, "CURR_CODE", e.target.value)}
+                                  disabled={disabled}
+                                  className="h-9 text-center text-sm"
+                                />
+                              </td>
+                              <td className="px-2 py-1 w-[80px] min-w-[80px] max-w-[80px]">
+                                <Input
+                                  type="number"
+                                  step="0.0001"
+                                  value={item.CURRENCY_RATE || ""}
+                                  onChange={(e) => updateItemField(itemId, "CURRENCY_RATE", Number(e.target.value) || 1)}
+                                  disabled={disabled}
+                                  className="h-9 text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  placeholder="1"
+                                />
+                              </td>
+                              <td className="px-2 py-1 w-[250px] min-w-[250px] max-w-[250px]">
+                                <LookupField
+                                  label=""
+                                  compact
+                                  placeholder="Supplier"
+                                  value={item.SUPPLIER || ""}
+                                  displayValue={supplierDisplay}
+                                  columns={supplierColumns}
+                                  valueField="supplier_code"
+                                  displayFields={["supplier_code", "supplier_name"]}
+                                  loadOptions={() => almsCommonSelect({ parameter: "Amlspf_MsPsSupplierMaster", loginid, code1: companyCode })}
+                                  onChange={(val, row) => {
+                                    updateItemField(itemId, "SUPPLIER_CODE", val);
+                                    if (row) {
+                                      updateItemField(itemId, "SUPPLIER_NAME", row.SUPPLIER_NAME || "");
+                                    }
+                                  }}
+                                  disabled={disabled}
+                                />
+                              </td>
+                              <td className="finance-amount-cell px-2 py-1 text-right font-semibold w-[100px] min-w-[100px] max-w-[100px]">
+                                {fmt3(item.AMOUNT)}
+                              </td>
+                              <td className="finance-amount-cell px-2 py-1 text-right w-[100px] min-w-[100px] max-w-[100px]">
+                                {fmt3(item.BASE_AMOUNT)}
+                              </td>
+                              <td className="px-2 py-1 w-[100px] min-w-[100px] max-w-[100px]">
+                                <Input
+                                  value={item.TX_COMPNTCAT_CODE_1 || ""}
+                                  onChange={(e) => updateItemField(itemId, "TX_COMPNTCAT_CODE_1", e.target.value)}
+                                  disabled={disabled}
+                                  className="h-9 text-center text-sm"
+                                />
+                              </td>
+                              <td className="px-2 py-1 w-[280px] min-w-[280px] max-w-[280px]">
+                                <LookupField
+                                  label=""
+                                  compact
+                                  placeholder="Tax Category"
+                                  value={item.TX_CAT_CODE || ""}
+                                  displayValue={taxCategoryDisplay}
+                                  columns={taxCategoryColumns}
+                                  valueField="TX_CAT_CODE"
+                                  displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]}
+                                  loadOptions={() => almsCommonSelect({ parameter: "Amlspf_MsPsTaxCategory", loginid, code1: companyCode })}
+                                  onChange={(val, row) => {
+                                    updateItemField(itemId, "TX_CAT_CODE", val);
+                                    if (row) {
+                                      updateItemField(itemId, "TX_COMPNTCAT_CODE_1", row.TX_COMPNTCAT_CODE_1 || "");
+                                      updateItemField(itemId, "TX_COMPNT_PERC_1", row.TX_COMPNT_PERC_1 || 0);
+                                    }
+                                  }}
+                                  disabled={disabled}
+                                />
+                              </td>
+                              <td className="px-2 py-1 w-[65px] min-w-[65px] max-w-[65px]">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  value={item.TX_COMPNT_PERC_1 || ""}
+                                  onChange={(e) => updateItemField(itemId, "TX_COMPNT_PERC_1", Number(e.target.value) || 0)}
+                                  disabled={disabled}
+                                  className="h-9 text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  placeholder="0"
+                                />
+                              </td>
+                              <td className="finance-amount-cell px-2 py-1 text-right w-[90px] min-w-[90px] max-w-[90px]">
+                                {fmt3(item.TX_COMPNT_AMT_1)}
+                              </td>
+                              <td className="px-2 py-1 w-[90px] min-w-[90px] max-w-[90px]">
+                                <LookupField
+                                  label=""
+                                  compact
+                                  placeholder="Tax Type"
+                                  value={item.TAX_TYPE || "Std."}
+                                  displayValue={item.TAX_TYPE || "Std."}
+                                  columns={taxTypeColumns}
+                                  valueField="TX_TYPE_CODE"
+                                  displayFields={["TX_TYPE_CODE", "TX_TYPE_NAME"]}
+                                  loadOptions={() => almsCommonSelect({ parameter: "Amlspf_MsTaxType", loginid, code1: companyCode })}
+                                  onChange={(val) => updateItemField(itemId, "TAX_TYPE", val)}
+                                  disabled={disabled}
+                                />
+                              </td>
+                              <td className="px-2 py-1 w-[90px] min-w-[90px] max-w-[90px]">
+                                <Input
+                                  type="number"
+                                  step="0.001"
+                                  value={item.DISCOUNT_AMOUNT || ""}
+                                  onChange={(e) => updateItemField(itemId, "DISCOUNT_AMOUNT", Number(e.target.value) || 0)}
+                                  disabled={disabled}
+                                  className="h-9 text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  placeholder="0"
+                                />
+                              </td>
+                              <td className="px-2 py-1 text-right w-[90px] min-w-[90px] max-w-[90px]">
+                                {fmt3(item.FINAL_RATE)}
+                              </td>
+                              <td className="px-2 py-1 w-[95px] min-w-[95px] max-w-[95px]">
+                                <Select
+                                  className="h-9 text-sm"
+                                  value={item.CAPEX_OPEX_NON_OPEX || ""}
+                                  onChange={(e) => updateItemField(itemId, "CAPEX_OPEX_NON_OPEX" as any, e.target.value)}
+                                  disabled={disabled}
+                                >
+                                  <option value="">—</option>
+                                  {capexOptions.map((opt) => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                  ))}
+                                </Select>
+                              </td>
+                              <td className="px-2 py-1 text-center w-[55px] min-w-[55px] max-w-[55px]">
+                                {!isViewMode && (
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    type="button"
+                                    onClick={() => removeItem(itemId)}
+                                    title="Remove"
+                                    className="h-8 w-8 text-destructive hover:text-destructive"
+                                  >
+                                    <X size={14} />
+                                  </Button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* ─── Summary ─── */}
                 <div className="flex items-center justify-end gap-8 border-t px-3 py-1.5 text-sm">
-                  <span className="text-muted-foreground">Amount</span><strong className="text-primary">{fmt3(totalAmount)}</strong>
+                  <span className="text-muted-foreground">Amount</span>
+                  <strong className="text-primary">{fmt3(totalAmount)}</strong>
                 </div>
                 <div className="flex items-center justify-end gap-8 px-3 py-1.5 text-sm">
-                  <span className="text-muted-foreground">Tax</span><strong className="text-primary">{fmt3(totalTax)}</strong>
+                  <span className="text-muted-foreground">Tax</span>
+                  <strong className="text-primary">{fmt3(totalTax)}</strong>
                 </div>
                 <div className="flex items-center justify-end gap-8 border-t px-3 py-1.5 text-sm">
-                  <span className="text-muted-foreground">Base Amount</span><strong className="text-primary">{fmt3(totalBase)}</strong>
+                  <span className="text-muted-foreground">Base Amount</span>
+                  <strong className="text-primary">{fmt3(totalBase)}</strong>
                 </div>
               </div>
             </div>
           )}
         </div>
 
+        {/* ─── Footer ─── */}
         <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
-          <div className="text-sm text-muted-foreground">Total Amount <strong className="text-primary">{fmt3(totalAmount)}</strong></div>
+          <div className="text-sm text-muted-foreground">
+            Total Amount <strong className="text-primary">{fmt3(totalAmount)}</strong>
+          </div>
           {!isViewMode && (
             <div className="flex items-center gap-2">
               <Button disabled={saving} type="button" variant="outline" onClick={() => onClose()}>Close</Button>
@@ -499,136 +839,27 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
         </div>
       </section>
 
-      {itemModal.open && itemModal.data && (
-        <Dialog
-          open
-          wide
-          title={itemModal.mode === "add" ? "Add Item" : "Edit Item"}
-          description="Fill in item details. Amount and tax are calculated automatically."
-          onClose={closeItemModal}
-          footer={<>
-            <Button variant="outline" onClick={closeItemModal}><X size={14} /> Cancel</Button>
-            <Button onClick={saveItemModal} variant="default"><Save size={14} /> {itemModal.mode === "add" ? "Add Item" : "Save Changes"}</Button>
-          </>}
-        >
-          <div className="grid grid-cols-4 gap-3 max-lg:grid-cols-3 max-md:grid-cols-2 max-sm:grid-cols-1">
-            <label className="field col-span-2 max-md:col-span-1">
-              <span>Item Code</span>
-              <select className="flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm" value={itemModal.data.ITEM_CODE || ""}
-                onChange={(e) => {
-                  const found = itemCodes.find((i) => i.item_code === e.target.value);
-                  setItemField("ITEM_CODE", e.target.value);
-                  if (found) setItemField("ITEM_DESP", found.item_desp || "");
-                }}>
-                <option value="">— Select —</option>
-                {itemCodes.map((i) => <option key={i.item_code} value={i.item_code}>{i.item_code} — {i.item_desp}</option>)}
-              </select>
-            </label>
-            <label className="field col-span-2 max-md:col-span-1">
-              <span>Cost Code</span>
-              <select className="flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm" value={itemModal.data.COST_CODE || ""}
-                onChange={(e) => {
-                  const found = costCodes.find((c) => c.cost_code === e.target.value);
-                  setItemField("COST_CODE", e.target.value);
-                  if (found) setItemField("COST_NAME", found.cost_name || "");
-                }}>
-                <option value="">— Select —</option>
-                {costCodes.map((c) => <option key={c.cost_code} value={c.cost_code}>{c.cost_code} — {c.cost_name}</option>)}
-              </select>
-            </label>
-            
-            <LookupField
-              label="Currency"
-              value={String(itemModal.data.CURR_CODE || header.CURR_CODE || "")}
-              columns={currencyColumns}
-              valueField="CURR_CODE"
-              displayFields={["CURR_CODE", "CURR_NAME"]}
-              loadOptions={() => almsCommonSelect({ parameter: "Amlspf_MsCurrency", loginid, code1: companyCode })}
-              onChange={(val) => setItemField("CURR_CODE", val)}
-              disabled={disabled}
-              compact
-            />
-            
-            <label className="field"><span>Request Qty</span>
-              <Input type="number" step="0.001" value={itemModal.data.REQUEST_QUANTITY ?? ""} 
-                onChange={(e) => setItemField("REQUEST_QUANTITY", Number(e.target.value))} />
-            </label>
-            <label className="field"><span>Approved Qty</span>
-              <Input type="number" step="0.001" value={itemModal.data.ALLOCATED_APPROVED_QUANTITY ?? ""} 
-                onChange={(e) => setItemField("ALLOCATED_APPROVED_QUANTITY", Number(e.target.value))} />
-            </label>
-            <label className="field"><span>Item Rate</span>
-              <Input type="number" step="0.001" value={itemModal.data.ITEM_RATE ?? ""} 
-                onChange={(e) => setItemField("ITEM_RATE", Number(e.target.value))} />
-            </label>
-            <label className="field"><span>Discount</span>
-              <Input type="number" step="0.001" value={itemModal.data.DISCOUNT_AMOUNT ?? ""} 
-                onChange={(e) => setItemField("DISCOUNT_AMOUNT", Number(e.target.value))} />
-            </label>
-            <label className="field"><span>Exchange Rate</span>
-              <Input type="number" step="0.0001" value={itemModal.data.CURRENCY_RATE ?? header.CURRENCY_RATE ?? 1} 
-                onChange={(e) => setItemField("CURRENCY_RATE", Number(e.target.value))} />
-            </label>
-            <label className="field"><span>Final Rate</span>
-              <Input disabled value={String(itemModal.data.FINAL_RATE ?? 0)} />
-            </label>
-            <label className="field"><span>Amount</span>
-              <Input disabled value={String(itemModal.data.AMOUNT ?? 0)} />
-            </label>
-            <label className="field"><span>Base Amount</span>
-              <Input disabled value={String((num(itemModal.data.AMOUNT) * num(itemModal.data.CURRENCY_RATE)).toFixed(3))} />
-            </label>
-            
-            <label className="field col-span-2 max-md:col-span-1">
-              <span>Tax Category</span>
-              <select className="flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm" value={itemModal.data.TX_CAT_CODE || ""}
-                onChange={(e) => {
-                  const found = taxCodes.find((t) => t.TX_CAT_CODE === e.target.value);
-                  setItemField("TX_CAT_CODE", e.target.value);
-                  if (found) { 
-                    setItemField("TX_COMPNTCAT_CODE_1", found.TX_COMPNTCAT_CODE_1 || ""); 
-                    setItemField("TX_COMPNT_PERC_1", found.TX_COMPNT_PERC_1 || 0); 
-                  }
-                }}>
-                <option value="">— Select —</option>
-                {taxCodes.map((t) => <option key={t.TX_CAT_CODE} value={t.TX_CAT_CODE}>{t.TX_CAT_CODE} — {t.TX_CAT_NAME}</option>)}
-              </select>
-            </label>
-            <label className="field"><span>Tax Code</span>
-              <Input value={itemModal.data.TX_COMPNTCAT_CODE_1 || ""} 
-                onChange={(e) => setItemField("TX_COMPNTCAT_CODE_1", e.target.value)} />
-            </label>
-            
-            <LookupField
-              label="Tax Type"
-              value={String(itemModal.data.TAX_TYPE || "Std.")}
-              columns={taxTypeColumns}
-              valueField="TX_TYPE_CODE"
-              displayFields={["TX_TYPE_CODE", "TX_TYPE_NAME"]}
-              loadOptions={() => almsCommonSelect({ parameter: "Amlspf_MsTaxType", loginid, code1: companyCode })}
-              onChange={(val) => setItemField("TAX_TYPE", val)}
-              disabled={disabled}
-              compact
-            />
-            
-            <label className="field"><span>Tax %</span>
-              <Input type="number" step="0.01" value={itemModal.data.TX_COMPNT_PERC_1 ?? ""} 
-                onChange={(e) => setItemField("TX_COMPNT_PERC_1", Number(e.target.value))} />
-            </label>
-            <label className="field"><span>Tax Amount</span>
-              <Input disabled value={String(itemModal.data.TX_COMPNT_AMT_1 ?? 0)} />
-            </label>
-          </div>
-        </Dialog>
-      )}
-
+      {/* ─── Reject Dialog ─── */}
       <Dialog open={rejectOpen} title="Reject Request" description="Enter the reason for rejection." onClose={() => setRejectOpen(false)}
-        footer={<><Button variant="outline" onClick={() => setRejectOpen(false)}>Cancel</Button><Button variant="destructive" disabled={saving} onClick={handleRejectConfirm}>Confirm Reject</Button></>}>
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setRejectOpen(false)}>Cancel</Button>
+            <Button variant="destructive" disabled={saving} onClick={handleRejectConfirm}>Confirm Reject</Button>
+          </>
+        }
+      >
         <textarea rows={4} value={remarkText} onChange={(e) => setRemarkText(e.target.value)} placeholder="Enter reject remark..." className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
       </Dialog>
 
+      {/* ─── Send Back Dialog ─── */}
       <Dialog open={sendBackOpen} title="Send Back Request" description="Enter the reason for sending back." onClose={() => setSendBackOpen(false)}
-        footer={<><Button variant="outline" onClick={() => setSendBackOpen(false)}>Cancel</Button><Button disabled={saving} onClick={handleSendBackConfirm} variant="default">Confirm Send Back</Button></>}>
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setSendBackOpen(false)}>Cancel</Button>
+            <Button disabled={saving} onClick={handleSendBackConfirm} variant="default">Confirm Send Back</Button>
+          </>
+        }
+      >
         <textarea rows={4} value={remarkText} onChange={(e) => setRemarkText(e.target.value)} placeholder="Enter send back reason..." className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
       </Dialog>
     </div>
