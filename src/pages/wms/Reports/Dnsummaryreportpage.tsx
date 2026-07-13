@@ -27,6 +27,12 @@ interface Params {
 
 const ALL_PARAMS: Params = { prin_code: "All", from_date: "All", to_date: "All" };
 
+// ★ Sentinel used inside the `selected` array to represent "All selected".
+//   We never join this into the API param directly — the parent translates
+//   it (or an empty array) into the literal string "All" that the backend
+//   proc already understands and skips the filter for.
+const ALL_SENTINEL = "__ALL__";
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Format a date input value (YYYY-MM-DD) → DD/MM/YYYY string for the API, or "All" if empty */
@@ -34,6 +40,18 @@ const toApiDateString = (isoDate: string): string => {
     if (!isoDate) return "All";
     const [y, m, d] = isoDate.split("-");
     return `${d}/${m}/${y}`;
+};
+
+/**
+ * Turns the dropdown's `selected` array into the value the API expects.
+ * - []                -> "All"        (nothing picked = no filter)
+ * - [ALL_SENTINEL]     -> "All"        (user explicitly picked "All")
+ * - ["P001","P002"]    -> "P001,P002"  (specific codes)
+ */
+const toApiCodeString = (selected: string[]): string => {
+    if (selected.length === 0) return "All";
+    if (selected.includes(ALL_SENTINEL)) return "All";
+    return selected.join(",");
 };
 
 // ─── Shared styles ─────────────────────────────────────────────────────────────
@@ -185,29 +203,41 @@ function MultiSelectDropdown({
         : rows;
 
     const allValues = rows.map((r) => String(getLookupValue(r, valueField) ?? "")).filter(Boolean);
-    const isAllSelected = allValues.length > 0 && allValues.every((v) => selected.includes(v));
 
+    // ★ FIX: "All selected" is now determined by the explicit sentinel OR by
+    //   every individual value happening to be checked — not by expanding
+    //   into the full list of codes on selection.
+    const isAllSelected =
+        selected.includes(ALL_SENTINEL) ||
+        (allValues.length > 0 && allValues.every((v) => selected.includes(v)));
+
+    // ★ FIX: clicking "All" now stores the ALL_SENTINEL instead of every
+    //   individual code. This is what lets the parent translate the
+    //   selection back into the literal "All" the API expects.
     const toggleAll = () => {
         if (isAllSelected) onChange([]);
-        else onChange(allValues);
+        else onChange([ALL_SENTINEL]);
     };
 
+    // ★ FIX: if the sentinel is currently active and the user unchecks one
+    //   specific item, expand to "all except that one" first, so partial
+    //   deselection still works as expected.
     const toggleOne = (val: string) => {
-        if (selected.includes(val)) onChange(selected.filter((v) => v !== val));
-        else onChange([...selected, val]);
+        const base = selected.includes(ALL_SENTINEL) ? allValues : selected;
+        if (base.includes(val)) onChange(base.filter((v) => v !== val));
+        else onChange([...base, val]);
     };
 
-    const displayText =
-        isAllSelected && allValues.length > 0
-            ? "All"
-            : selected.length === 0
-            ? placeholder
-            : selected.length === 1
-            ? (() => {
-                  const row = rows.find((r) => String(getLookupValue(r, valueField) ?? "") === selected[0]);
-                  return row ? getLookupText(row, displayFields.length ? displayFields : [valueField]) : selected[0];
-              })()
-            : `${selected.length} selected`;
+    const displayText = isAllSelected
+        ? "All"
+        : selected.length === 0
+        ? placeholder
+        : selected.length === 1
+        ? (() => {
+              const row = rows.find((r) => String(getLookupValue(r, valueField) ?? "") === selected[0]);
+              return row ? getLookupText(row, displayFields.length ? displayFields : [valueField]) : selected[0];
+          })()
+        : `${selected.length} selected`;
 
     return (
         <div ref={wrapRef} style={{ position: "relative" }}>
@@ -302,7 +332,8 @@ function MultiSelectDropdown({
                                 </label>
                                 {filteredRows.map((row, idx) => {
                                     const val = String(getLookupValue(row, valueField) ?? "");
-                                    const checked = selected.includes(val);
+                                    // ★ FIX: when the sentinel is active, every row should render as checked
+                                    const checked = isAllSelected || selected.includes(val);
                                     const text = getLookupText(row, displayFields.length ? displayFields : [valueField]);
                                     return (
                                         <label
@@ -362,7 +393,7 @@ export default function DNSummaryReportPage() {
     const reportWindowRef = useRef<Window | null>(null);
 
     // ── Filter values
-    const [principalCodes, setPrincipalCodes] = useState<string[]>([]); // ★ CHANGED — multi-select, was single `principal: string`
+    const [principalCodes, setPrincipalCodes] = useState<string[]>([]); // multi-select
     const [fromDateIso, setFromDateIso] = useState<string>("");   // "" = All
     const [toDateIso,   setToDateIso]   = useState<string>("");   // "" = All
 
@@ -419,7 +450,10 @@ export default function DNSummaryReportPage() {
     const handleGenerateReport = () => {
         if (!dateRangeValid) return;
         const params: Params = {
-            prin_code: principalCodes.length > 0 ? principalCodes.join(",") : "All", // ★ CHANGED — join multi-select
+            // ★ FIX: use the sentinel-aware converter instead of blindly
+            //   joining principalCodes — this is what makes "All" send the
+            //   literal "All" string to the API instead of every code.
+            prin_code: toApiCodeString(principalCodes),
             from_date: toApiDateString(fromDateIso),
             to_date:   toApiDateString(toDateIso),
         };
@@ -427,7 +461,7 @@ export default function DNSummaryReportPage() {
     };
 
     const handleReset = () => {
-        setPrincipalCodes([]); // ★ CHANGED
+        setPrincipalCodes([]);
         setFromDateIso("");
         setToDateIso("");
         setError("");
@@ -537,7 +571,6 @@ export default function DNSummaryReportPage() {
 
                     {/* ── Form fields ── */}
                     <div className="field-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 6, width: "100%" }}>
-                        {/* ★ CHANGED — Principal is now a multi-select checkbox dropdown */}
                         <MultiSelectDropdown
                             label="Principal"
                             bgColor={BG}
