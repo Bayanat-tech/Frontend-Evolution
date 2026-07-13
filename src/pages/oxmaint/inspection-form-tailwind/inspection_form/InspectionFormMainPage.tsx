@@ -1,13 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
-import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
+import { ColumnDef } from '@tanstack/react-table';
 import { useState } from 'react';
 import { FaPlus, FaSearch } from 'react-icons/fa';
-import { Button, CircularProgress, Dialog, DialogActions, DialogContent } from '../../../../components/mms_ui';
+import { Button, Dialog, DialogActions, DialogContent } from '../../../../components/mms_ui';
 import AddUpdInspectionFormPage from './AddUpdInspectionFormPage';
 import SectionInspectionForm from './section/SectionInspectionForm';
 import { delInspectionForm } from './api/section_api_call';
 import { getDynamicLookup } from '../../../../api/lookups';
 import { useAuth } from '../../../../state/AuthContext';
+import { DataTable } from '../../../../components/ui/DataTable';
+import { MdModeEdit } from "react-icons/md";
+import { MdDelete } from "react-icons/md";
+
+
 
 type InspectionFormRow = {
     inspection_form_code: number;
@@ -19,6 +24,7 @@ type InspectionFormRow = {
 const InspectionFormPage = () => {
     const { user } = useAuth();
     const [selectedRowData, setSelectedRowData] = useState<any>(null);
+    const [searchText, setSearchText] = useState('');
 
     const [dialogStatus, setDialogStatus] = useState({
         open: false,
@@ -52,25 +58,26 @@ const InspectionFormPage = () => {
     const columnDefs: ColumnDef<InspectionFormRow>[] = [
         {
             id: 'inspection_form_name',
-            header: 'Form Name',
+            header: '',
             size: 600,
+            enableSorting: false,
             cell: ({ row }) => {
                 const data = row.original;
 
                 return (
                     <div
-                        className="flex items-center w-full h-full py-2.5 px-3 border-b border-[#e5e7eb] transition-colors group-hover:bg-[#f8fafc] cursor-pointer"
+                        className="flex items-center w-full h-full py-1 px-3 border-b border-[#e5e7eb] transition-colors group-hover:bg-[#f8fafc] cursor-pointer"
 
                     >
 
-                    <div className=" border-1 rounded-md p-2 flex items-center gap-2.5 w-[85%] h-full"
+                    <div className=" border-1 rounded-md py-0.5 px-2 flex items-center gap-2 w-[85%] h-full"
                         onClick={() => {
                             setSelectedRowData(data);
                             setSectionDialogStatus({ open: true });
                         }}
                     >    
-                        <div className="text-base mr-2.5 text-[#6b7280]">📄</div>
-                        <div className="flex-1 flex flex-col gap-0.5">
+                        <div className="text-sm mr-1.5 text-[#6b7280]">📄</div>
+                        <div className="flex-1 flex flex-col gap-0">
                             <div className="text-[13px] text-[#111827] leading-tight">{data.inspection_form_name}</div>
                             <div className="text-[11px] text-[#6b7280] leading-tight">{data.description ?? '-'}</div>
                         </div>
@@ -84,7 +91,7 @@ const InspectionFormPage = () => {
                                 setDialogStatus({ open: true, type: 'edit' });
                             }}
                         >
-                            Edit
+                            <MdModeEdit size={16} />
                         </span>
                         <span
                             className="cursor-pointer text-[#dc2626] text-[16px] px-3"
@@ -93,7 +100,7 @@ const InspectionFormPage = () => {
                                 setDeleteDialogOpen(true);
                             }}
                         >
-                            Delete
+                            <MdDelete size={16} />
                         </span>
                     </div>
 
@@ -102,12 +109,6 @@ const InspectionFormPage = () => {
             }
         },
     ];
-
-    const table = useReactTable({
-        data: (gridData || []) as InspectionFormRow[],
-        columns: columnDefs,
-        getCoreRowModel: getCoreRowModel()
-    });
 
     // Single Delete Function
     const handleSingleDelete = async (rowData: any) => {
@@ -151,6 +152,8 @@ const InspectionFormPage = () => {
                     <div className="flex items-center px-3 py-1 h-8 rounded-md border border-blue-500 overflow-hidden w-72">
                         <input
                             type="text"
+                            value={searchText}
+                            onChange={(e) => setSearchText(e.target.value)}
                             placeholder="Search Something..."
                             className="w-full outline-none bg-transparent text-gray-600 text-sm h-6"
                         />
@@ -167,34 +170,16 @@ const InspectionFormPage = () => {
                 <div className="p-10 w-full">
                     <div className="text-lg font-bold">Inspection Forms</div>
                     <hr className="mb-2.5 border-t border-[#e5e7eb]" />
-                    <div className="relative w-full">
-                        <table className="w-full border-collapse">
-                            <tbody>
-                                {table.getRowModel().rows.map((row) => (
-                                    <tr key={row.id} className="group">
-                                        {row.getVisibleCells().map((cell) => (
-                                            <td
-                                                key={cell.id}
-                                                style={{ width: cell.column.getSize() }}
-                                                className="align-middle p-0"
-                                            >
-                                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                            </td>
-                                        ))}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-
-                        {isFetching && (
-                            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-md bg-white/60 backdrop-blur-[1px]">
-                                <div className="flex items-center gap-2 rounded-md bg-white px-3 py-2 shadow-sm">
-                                    <CircularProgress size={16} className="border-[#2aa160]/30 border-t-[#2aa160]" />
-                                    <span className="text-xs font-medium text-[#374151]">Loading inspection forms...</span>
-                                </div>
-                            </div>
-                        )}
-                    </div>
+                    <DataTable
+                        columns={columnDefs}
+                        data={(gridData || []) as InspectionFormRow[]}
+                        loading={isFetching}
+                        searchValue={searchText}
+                        emptyText="No inspection forms found"
+                        enableColumnFilters={false}
+                        rowClassName={() => 'group'}
+                        density="grid"
+                    />
                 </div>
             </div>
 
