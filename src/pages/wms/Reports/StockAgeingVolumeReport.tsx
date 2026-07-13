@@ -222,9 +222,9 @@ export default function StockAgeingVolumeReport() {
         };
 
         const sql = {
-            prin: `select distinct prin_code, prin_name from VW_BOWM_STKLED_FOREXPAGEING ${whereExcept("prin")}`,
+            prin: `select distinct prin_code, prin_name from VW_BOWM_STKLED_FOREXPAGEING ${whereExcept()}`,
             prod: `select distinct prod_code, prod_name from VW_BOWM_STKLED_FOREXPAGEING ${whereExcept()}`,
-            dept: `select distinct dept_code from VW_BOWM_STKLED_FOREXPAGEING ${whereExcept("dept")}`,
+            dept: `select distinct dept_code from VW_BOWM_STKLED_FOREXPAGEING ${whereExcept()}`,
         };
 
         try {
