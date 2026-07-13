@@ -26,8 +26,7 @@ interface Params {
     prin_code: string[];
     prod_code: string[];
     site_code: string[];
-    location_code_from: string;
-    location_code_to: string;
+    location_code: string[];
     group_by: string;
 }
 
@@ -169,8 +168,7 @@ export default function StockSummaryReport() {
         prin_code: ["All"],
         prod_code: ["All"],
         site_code: ["All"],
-        location_code_from: "",
-        location_code_to: "",
+        location_code: ["All"],
         group_by: "",
     });
 
@@ -233,19 +231,23 @@ export default function StockSummaryReport() {
                     return stillValid.length ? stillValid : ["All"];
                 };
 
-                const validLocations = new Set(nextLocation.map((o) => o.value));
-                const nextFrom = prev.location_code_from && !validLocations.has(prev.location_code_from)
-                    ? "" : prev.location_code_from;
-                const nextTo = prev.location_code_to && !validLocations.has(prev.location_code_to)
-                    ? "" : prev.location_code_to;
+                const siteIsSpecific = prev.site_code.length > 0 && !prev.site_code.includes("All");
+
+                let nextLocationCode = reset(prev.location_code, nextLocation);
+
+                if (siteIsSpecific && nextLocation.length > 0 && nextLocationCode.includes("All")) {
+                    // Auto-fill the location code once a specific site is selected
+                    nextLocationCode = [nextLocation[0].value];
+                } else if (!siteIsSpecific) {
+                    nextLocationCode = ["All"];
+                }
 
                 return {
                     ...prev,
                     prin_code: reset(prev.prin_code, nextPrin),
                     prod_code: reset(prev.prod_code, nextProd),
                     site_code: reset(prev.site_code, nextSite),
-                    location_code_from: nextFrom,
-                    location_code_to: nextTo,
+                    location_code: nextLocationCode,
                 };
             });
         } catch (e: any) {
@@ -295,8 +297,7 @@ export default function StockSummaryReport() {
                     prin_code: p.prin_code.includes("All") ? ["All"] : p.prin_code,
                     prod_code: p.prod_code.includes("All") ? ["All"] : p.prod_code,
                     site_code: p.site_code.includes("All") ? ["All"] : p.site_code,
-                    location_code_from: p.location_code_from || null,
-                    location_code_to: p.location_code_to || null,
+                    location_code: p.location_code.includes("All") ? ["All"] : p.location_code,
                     group_by: p.group_by || null,
                 },
                 { responseType: "text" },
@@ -341,8 +342,7 @@ export default function StockSummaryReport() {
                     prin_code: params.prin_code.includes("All") ? ["All"] : params.prin_code,
                     prod_code: params.prod_code.includes("All") ? ["All"] : params.prod_code,
                     site_code: params.site_code.includes("All") ? ["All"] : params.site_code,
-                    location_code_from: params.location_code_from || null,
-                    location_code_to: params.location_code_to || null,
+                    location_code: params.location_code.includes("All") ? ["All"] : params.location_code,
                     group_by: params.group_by || null,
                 },
                 { responseType: "blob" },
@@ -361,11 +361,10 @@ export default function StockSummaryReport() {
     };
 
     // ── Generate report
+    // NOTE: Principal is now a multi-select with an "All" default (same as
+    // Product/Site), so it's always populated and no longer needs a
+    // "must pick one" guard before generating.
     const handleGenerateReport = () => {
-        if (!params.prin_code.length || params.prin_code[0] === "") {
-            setError("Please select a Principal before generating.");
-            return;
-        }
         fetchReport(params);
     };
 
@@ -377,8 +376,7 @@ export default function StockSummaryReport() {
             prin_code: ["All"],
             prod_code: ["All"],
             site_code: ["All"],
-            location_code_from: "",
-            location_code_to: "",
+            location_code: ["All"],
             group_by: "",
         });
         setHasGeneratedReport(false);
@@ -471,15 +469,14 @@ export default function StockSummaryReport() {
                         {/* ── Left: form fields ── */}
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
 
-                            {/* Principal + Product + Site */}
-                            <div className="field-row" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 6, width: "100%" }}>
-                                <FloatLabel label="Principal" required bgColor={BG}>
-                                    <SelectField
+                            {/* Principal + Product */}
+                            <div className="field-row" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginTop: 6, width: "100%" }}>
+                                <FloatLabel label="Principal" bgColor={BG}>
+                                    <MultiSelectField
                                         label=""
                                         options={prinOptions}
-                                        value={params.prin_code[0] === "All" ? "" : params.prin_code[0] || ""}
-                                        onChange={(v) => setParam("prin_code", v ? [v] : ["All"])}
-                                        placeholder="Select Principal"
+                                        value={params.prin_code}
+                                        onChange={(v: string[]) => setParam("prin_code", v)}
                                         loading={optLoading}
                                     />
                                 </FloatLabel>
@@ -492,6 +489,10 @@ export default function StockSummaryReport() {
                                         loading={optLoading}
                                     />
                                 </FloatLabel>
+                            </div>
+
+                            {/* Site + Location Code (side by side; location auto-fills once a site is chosen) */}
+                            <div className="field-row" style={row2}>
                                 <FloatLabel label="Site" bgColor={BG}>
                                     <MultiSelectField
                                         label=""
@@ -501,33 +502,15 @@ export default function StockSummaryReport() {
                                         loading={optLoading}
                                     />
                                 </FloatLabel>
-                            </div>
-
-                            {/* Location Code Range */}
-                            <div className="field-row">
-                                <fieldset style={{ border: "0.5px solid #BFDBFE", borderRadius: 6, padding: "6px 12px 10px", margin: 0, background: "transparent" }}>
-                                    <legend style={{ fontSize: 10, color: "#6b7280", padding: "0 4px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>
-                                        Location Code Range
-                                    </legend>
-                                    <div style={row2}>
-                                        <SelectField
-                                            label="From"
-                                            options={locationOptions}
-                                            value={params.location_code_from}
-                                            onChange={(v) => setParam("location_code_from", v)}
-                                            placeholder="Select start location"
-                                            loading={optLoading}
-                                        />
-                                        <SelectField
-                                            label="To"
-                                            options={locationOptions}
-                                            value={params.location_code_to}
-                                            onChange={(v) => setParam("location_code_to", v)}
-                                            placeholder="Select end location"
-                                            loading={optLoading}
-                                        />
-                                    </div>
-                                </fieldset>
+                                <FloatLabel label="Location Code" bgColor={BG}>
+                                    <MultiSelectField
+                                        label=""
+                                        options={locationOptions}
+                                        value={params.location_code}
+                                        onChange={(v: string[]) => setParam("location_code", v)}
+                                        loading={optLoading}
+                                    />
+                                </FloatLabel>
                             </div>
 
                             {/* Group By */}

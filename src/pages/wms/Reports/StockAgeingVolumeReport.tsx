@@ -402,8 +402,7 @@ export default function StockAgeingVolumeReport() {
 
     const groupByOptions: Option[] = [
         { value: "product_group", label: "Stock Ageing (Volume) Detail" },
-        { value: "product", label: "Product Summary" },
-        { value: "principal", label: "Principal Summary" },
+        { value: "principal", label: "Stock Ageing (Volume) Summary" },
     ];
 
     const row2: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 };
