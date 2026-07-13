@@ -11,8 +11,9 @@ import type { ColumnDef } from "@tanstack/react-table";
 import type { TPurchaseSummaryTxn } from "./PurchaseSummary-types";
 import AddPRRequestPage from "./Addprrequestpage";
 import { almsCommonSelect } from "../../api/alms";
+import AddCRRequestPage from "./AddCRRequestPage";
+import AddCPRequestPage from "./AddCPRequestPage";
 
-// import AddCRRequestForm from "./AddCRRequestForm";
 // import AddCPRequestPage from "./AddCPRequestPage";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -288,10 +289,10 @@ const MytaskalmsPage = ({ initialTab = 0 }: MytaskalmsPageProps) => {
           <Button onClick={() => openAddPopup("PR")} style={{ background: "#082A89" }}>
             <Plus size={15} /> Add PR
           </Button>
-          {/* <Button onClick={() => openAddPopup("CR")} style={{ background: "#0a6640" }}>
+        <Button onClick={() => openAddPopup("CR")} style={{ background: "#0a6640" }}>
             <Plus size={15} /> Add CR
           </Button>
-          <Button onClick={() => openAddPopup("CP")} style={{ background: "#6b21a8" }}>
+             {/*<Button onClick={() => openAddPopup("CP")} style={{ background: "#6b21a8" }}>
             <Plus size={15} /> Add CP
           </Button> */}
         </div>
@@ -335,11 +336,29 @@ const MytaskalmsPage = ({ initialTab = 0 }: MytaskalmsPageProps) => {
   />
 )}
         {taskPopup.open && taskPopup.data.type === "CR" && (
-  <div>CR Form Coming Soon</div>
+  <AddCRRequestPage
+    isEditMode={taskPopup.data.isEditMode}
+    isViewMode={taskPopup.data.isViewMode}
+    existingData={
+      taskPopup.data.existingData
+        ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }
+        : undefined
+    }
+    onClose={closePopup}
+  />
 )}
 
 {taskPopup.open && taskPopup.data.type === "CP" && (
-  <div>CP Form Coming Soon</div>
+ <AddCPRequestPage
+     isEditMode={taskPopup.data.isEditMode}
+     isViewMode={taskPopup.data.isViewMode}
+     existingData={
+       taskPopup.data.existingData
+         ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }
+         : undefined
+     }
+     onClose={closePopup}
+   />
 )}
       </Dialog>
     </div>
