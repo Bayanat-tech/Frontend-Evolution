@@ -1,6 +1,6 @@
 import { FormikProps } from 'formik';
 import { FaSearch } from 'react-icons/fa';
-import { Button, Paper, TextField } from './ui';
+import { Button, Paper, TextField } from '../../../../components/mms_ui';
 
 export type InspectionInfoFormValues = {
   report_no: string;

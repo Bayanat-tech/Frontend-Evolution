@@ -9,15 +9,30 @@ import { NoticeToast } from "../../components/ui/NoticeToast";
 import { useAuth } from "../../state/AuthContext";
 import { AddHrJoiningForm } from "./AddHrJoiningForm";
 
+type PayComponentRow = {
+  _rowId: string;
+  pay_comp_id: string;
+  pay_comp_desc: string;
+  pay_comp_amt: number;
+};
+
 type JoiningRow = {
   doc_no: string | number;
+  doc_type?: string;
   doc_date?: string;
   doc_ref_no?: string;
+  cand_no?: string | number;
   cand_name?: string;
   division?: string;
   desig?: string;
   join_date?: string;
+  bank?: string;
+  branch?: string;
+  bank_acct_number?: string;
+  sign_1?: string;
+  date_1?: string;
   created_at?: string;
+  payComponents?: PayComponentRow[];
   [key: string]: unknown;
 };
 
@@ -95,6 +110,17 @@ const sortByCreatedAtDesc = (rows: JoiningRow[]): JoiningRow[] =>
     (a, b) => createdAtSortValue(b.created_at) - createdAtSortValue(a.created_at),
   );
 
+// Case-insensitive, multi-key lookup helper. Oracle/lookup layers can return
+// column names in either UPPERCASE or lowercase depending on the query path,
+// so every normalized field below is read through this instead of a plain
+// dot/bracket access, to avoid silently-blank fields.
+const pick = (obj: Record<string, unknown>, ...keys: string[]): unknown => {
+  for (const k of keys) {
+    if (obj[k] !== undefined && obj[k] !== null && obj[k] !== "") return obj[k];
+  }
+  return undefined;
+};
+
 export function HrJoiningPage() {
   const { user } = useAuth();
   const loginid = user?.loginid ?? "";
@@ -143,10 +169,26 @@ export function HrJoiningPage() {
   useEffect(() => { void loadRows(); }, [loadRows]);
 
   // ── Fetch row detail (header + pay components) ───────────────────────────
+  //
+  // IMPORTANT: these are two INDEPENDENT queries on the backend, keyed on
+  // different columns — they must be fetched as two separate dynamic-lookup
+  // calls, not one:
+  //
+  //   1) HEADER   -> HR_JOIN_RPT, filtered by (company_code, doc_no)
+  //   2) PAY COMPS -> HR_EMP_COMPONENTS join MS_HR_PAY_COMPONENTS,
+  //                   filtered by (company_code, employee_id) where
+  //                   employee_id === header.cand_no
+  //
+  // The previous version assumed a single "HR_CAM_JOIN_RPT_DETAIL" call
+  // returned header as detail[0] and pay components as detail.slice(1).
+  // Since the pay-components query isn't even keyed on doc_no, that never
+  // actually returned pay component rows — hence "edit/view shows header
+  // but no pay components" bug.
   const fetchRowDetail = useCallback(async (row: JoiningRow): Promise<JoiningRow> => {
     try {
-      const detail = await getDynamicLookup({
-        parameter: "HR_CAM_JOIN_RPT_DETAIL",
+      // 1️⃣ Header — filtered by doc_no
+      const headerResp = await getDynamicLookup({
+        parameter: "HR_CAM_JOIN_RPT_DETAIL", // header-only lookup (doc_no keyed)
         loginid,
         code1: companyCode,
         code2: String(row.doc_no),
@@ -155,21 +197,74 @@ export function HrJoiningPage() {
         number1: 0, number2: 0, number3: 0, number4: 0,
         date1: null, date2: null, date3: null, date4: null,
       });
-      if (Array.isArray(detail) && detail.length > 0) {
-        const header = detail[0] as Record<string, unknown>;
-        const payComponents = detail
-          .slice(1)
-          .filter((d: LookupRow) => d.PAY_COMP_ID || d.pay_comp_id)
-          .map((d: LookupRow, i: number) => ({
+
+      // TEMP DEBUG — check the browser console once, then remove this line.
+      console.log("HR_CAM_JOIN_RPT_DETAIL raw response:", headerResp);
+
+      const headerArr = Array.isArray(headerResp) ? (headerResp as Record<string, unknown>[]) : [];
+      const header = (headerArr[0] ?? {}) as Record<string, unknown>;
+
+      // ★ Normalize header fields regardless of UPPERCASE/lowercase key casing.
+      const normalizedHeader: Partial<JoiningRow> = {
+        doc_no: (pick(header, "DOC_NO", "doc_no") ?? row.doc_no) as string | number,
+        doc_type: String(pick(header, "DOC_TYPE", "doc_type") ?? row.doc_type ?? "MRF"),
+        doc_date: String(pick(header, "DOC_DATE", "doc_date") ?? row.doc_date ?? ""),
+        doc_ref_no: String(pick(header, "DOC_REF_NO", "doc_ref_no") ?? row.doc_ref_no ?? ""),
+        cand_no: (pick(header, "CAND_NO", "cand_no") ?? row.cand_no ?? "") as string | number,
+        cand_name: String(pick(header, "CAND_NAME", "cand_name") ?? row.cand_name ?? ""),
+        division: String(pick(header, "DIVISION", "division") ?? row.division ?? ""),
+        desig: String(pick(header, "DESIG", "desig") ?? row.desig ?? ""),
+        join_date: String(pick(header, "JOIN_DATE", "join_date") ?? row.join_date ?? ""),
+        bank: String(pick(header, "BANK", "bank") ?? ""),
+        branch: String(pick(header, "BRANCH", "branch") ?? ""),
+        bank_acct_number: String(pick(header, "BANK_ACCT_NUMBER", "bank_acct_number") ?? ""),
+        sign_1: String(pick(header, "SIGN_1", "sign_1") ?? ""),
+        date_1: String(pick(header, "DATE_1", "date_1") ?? ""),
+      };
+
+      // Employee/candidate no. to key the pay-components lookup on.
+      const candNo = String(normalizedHeader.cand_no ?? row.cand_no ?? "").trim();
+
+      // 2️⃣ Pay components — filtered by employee_id (cand_no) + company_code
+      //    ⚠️ CONFIRM/REPLACE "HR_CAM_JOIN_PAY_COMPONENTS" below with the
+      //    actual dynamic-lookup `parameter` name your backend/TenantManager
+      //    exposes for the HR_EMP_COMPONENTS ⨝ MS_HR_PAY_COMPONENTS query
+      //    (PAY_COMP_TYPE='F', PAY_COMP_AMT>0, keyed on EMPLOYEE_ID + COMPANY_CODE).
+      let payComponents: PayComponentRow[] = [];
+      if (candNo) {
+        const compResp = await getDynamicLookup({
+          parameter: "HR_CAM_JOIN_RPT_DETAIL", // ← confirm/replace with real param name
+          loginid,
+          code1: companyCode,
+          code2: candNo,
+          code3: "",
+          code4: "",
+          number1: 0, number2: 0, number3: 0, number4: 0,
+          date1: null, date2: null, date3: null, date4: null,
+        });
+
+        // TEMP DEBUG — check the browser console once, then remove this line.
+        console.log("HR_CAM_JOIN_RPT_DETAIL raw response:", compResp);
+
+        const compArr = Array.isArray(compResp) ? (compResp as Record<string, unknown>[]) : [];
+        payComponents = compArr
+          .map((rec) => ({
+            pay_comp_id: pick(rec, "PAY_COMP_ID", "pay_comp_id"),
+            pay_comp_desc: pick(rec, "PAY_COMP_DESC", "pay_comp_desc"),
+            pay_comp_amt: pick(rec, "PAY_COMP_AMT", "pay_comp_amt"),
+          }))
+          .filter((d) => d.pay_comp_id)
+          .map((d, i) => ({
             _rowId: `existing_${i}`,
-            pay_comp_id: String(d.PAY_COMP_ID ?? d.pay_comp_id ?? ""),
-            pay_comp_desc: String(d.PAY_COMP_DESC ?? d.pay_comp_desc ?? ""),
-            pay_comp_amt: Number(d.PAY_COMP_AMT ?? d.pay_comp_amt ?? 0),
+            pay_comp_id: String(d.pay_comp_id ?? ""),
+            pay_comp_desc: String(d.pay_comp_desc ?? ""),
+            pay_comp_amt: Number(d.pay_comp_amt ?? 0),
           }));
-        return { ...row, ...header, payComponents };
       }
-      return row;
-    } catch {
+
+      return { ...row, ...normalizedHeader, payComponents };
+    } catch (error) {
+      console.error("fetchRowDetail failed:", error);
       return row;
     }
   }, [loginid, companyCode]);
@@ -326,9 +421,9 @@ export function HrJoiningPage() {
             mode={popup.mode}
             existingData={popup.data}
             onClose={(shouldRefetch?: boolean) => {
-  setPopup((p) => ({ ...p, open: false }));
-  if (shouldRefetch) void loadRows();
-}}
+              setPopup((p) => ({ ...p, open: false }));
+              if (shouldRefetch) void loadRows();
+            }}
           />
         </Dialog>
       )}

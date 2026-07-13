@@ -1,5 +1,5 @@
 import { FaPrint, FaTimes } from 'react-icons/fa';
-import { Button, Dialog, DialogContent, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from './ui';
+import { Button, Dialog, DialogContent, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '../../../../components/mms_ui';
 import { InspectionSummaryValues } from './InspectionSummary';
 
 export type InspectionReportPreviewItem = {

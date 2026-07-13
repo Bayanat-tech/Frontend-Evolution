@@ -95,12 +95,21 @@ export async function saveVendorRequest(payload: VendorRequestPayload) {
 
 export async function updateVendorLpoStatus(payload: {
   doc_no: string;
+  company_code: string;
+  flow_level: string | number;
+  remarks: string;
   action: string;
-  remarks?: string;
-  company_code?: string;
-  flow_level?: number | string;
+  DOC_NO?: string;
+  LAST_ACTION?: string;
+  REMARKS?: string;
+  COMPANY_CODE?: string;
+  FLOW_LEVEL?: number | string;
 }) {
-  const { data } = await api.post<ApiResponse<unknown>>("/api/vendor/gm/updateLpoStatus", payload);
+  const normalizedPayload = {
+    ...payload,
+    flow_level: Number(payload.flow_level),
+  };
+  const { data } = await api.post<ApiResponse<unknown>>("/api/vendor/gm/updateLpoStatus", normalizedPayload);
   assertSuccess(data, "Unable to update vendor status");
   return data;
 }
@@ -133,9 +142,35 @@ export async function saveVendorFiles(requestNumber: string, files: VendorRow[])
   return data;
 }
 
+export async function uploadVendorAttachment(requestNumber: string, file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("doc_no", requestNumber);
+  formData.append("request_number", requestNumber);
+
+  const { data } = await api.post<ApiResponse<string>>("/api/files/uploadVendorAttachment", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  assertSuccess(data, "Unable to upload vendor attachment");
+  return String(data.data || "");
+}
+
+export async function deleteVendorAttachment(requestNumber: string, srNo: number, attachmentSrNo?: number) {
+  const url = attachmentSrNo !== undefined
+    ? `/api/files/deleteVendorAttachment/${encodeURIComponent(requestNumber)}/${encodeURIComponent(String(srNo))}/${encodeURIComponent(String(attachmentSrNo))}`
+    : `/api/files/deleteVendorAttachment/${encodeURIComponent(requestNumber)}/${encodeURIComponent(String(srNo))}`;
+  const { data } = await api.delete<ApiResponse<unknown>>(url);
+  assertSuccess(data, "Unable to delete vendor attachment");
+  return data;
+}
+
 export async function getAllVendorFiles(requestNumber: string) {
   const { data } = await api.get<ApiResponse<VendorRow[]> | VendorRow[]>(`/api/files/getAllVendorFiles/${encodeURIComponent(requestNumber)}`);
   assertSuccess(data as ApiResponse<VendorRow[]>, "Unable to load vendor files");
+  const payload = (data as ApiResponse<unknown>).data ?? data;
+  if (payload && typeof payload === "object" && Array.isArray((payload as any).allFiles)) {
+    return (payload as any).allFiles as VendorRow[];
+  }
   return unwrapRows(data);
 }
 

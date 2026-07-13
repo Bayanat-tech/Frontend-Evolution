@@ -12,6 +12,7 @@ export const detailTabs = [
   { label: "Picking Details", value: "picking_details" },
   { label: "Cancel Picking", value: "cancel_picking" },
   { label: "Job Confirmation", value: "job_confirmation" },
+  { label: "Activity Billing", value: "activity_billing" },
 ];
 
 export const outboundJobsPath = "/workspace/wms/wms/transactions/outbound/jobs_oub";

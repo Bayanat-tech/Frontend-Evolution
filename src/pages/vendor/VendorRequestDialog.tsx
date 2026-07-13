@@ -1,9 +1,10 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Download, Paperclip, Plus, RotateCcw, Save, Send, Trash2, X } from "lucide-react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { CheckCircle2, Download, Eye, Paperclip, Plus, RotateCcw, Save, Send, Trash2, X, XCircle, UploadCloud } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
+import { NoticeToast } from "../../components/ui/NoticeToast";
 import {
   executeVendorSql,
   getAllVendorFiles,
@@ -12,6 +13,8 @@ import {
   getVendorAccounts,
   saveVendorFiles,
   saveVendorRequest,
+  uploadVendorAttachment,
+  deleteVendorAttachment,
   type VendorRequestPayload,
   type VendorRow,
 } from "../../api/vendor";
@@ -43,16 +46,27 @@ const emptyRequest = (companyCode = ""): VendorRequestPayload => ({
   items: [],
 });
 
+type VendorRequestSaveAction = "SAVEASDRAFT" | "SUBMITTED" | "APPROVED";
+type VendorApprovalAction = "SENTBACK" | "REJECTED";
+
 export function VendorRequestDialog({
   open,
   request,
+  readOnly = false,
+  approvalMode = false,
+  approvalFlowLevel,
+  onApprovalAction,
   onClose,
   onSaved,
 }: {
   open: boolean;
   request?: VendorRequestPayload | null;
+  readOnly?: boolean;
+  approvalMode?: boolean;
+  approvalFlowLevel?: string | number;
+  onApprovalAction?: (action: VendorApprovalAction, flowLevel?: string | number) => void;
   onClose: () => void;
-  onSaved: () => Promise<void>;
+  onSaved?: (action: VendorRequestSaveAction) => Promise<void>;
 }) {
   const { user } = useAuth();
   const companyCode = user?.company_code || "";
@@ -69,11 +83,16 @@ export function VendorRequestDialog({
   const [saving, setSaving] = useState(false);
   const [loadingRef, setLoadingRef] = useState(false);
   const [error, setError] = useState("");
+  const [previewFile, setPreviewFile] = useState<VendorRow | null>(null);
   const [savedDocNo, setSavedDocNo] = useState("");
 
   useEffect(() => {
     if (!open) return;
-    const next = { ...emptyRequest(companyCode), ...(request || {}) };
+    const next = { ...emptyRequest(companyCode), ...(request || {}),
+    AC_NAME: (request as any)?.PARTY_NAME || "",
+    ADDRESS: (request as any)?.PARTY_ADDRESS || "",
+    PHONE: (request as any)?.PARTY_PHONE || "",
+    FAX: (request as any)?.PARTY_FAX || "",};
     setForm(next);
     setItems(normalizeItems(Array.isArray(request?.items) ? request.items : []));
     setSavedDocNo(String(next.DOC_NO || ""));
@@ -101,6 +120,13 @@ export function VendorRequestDialog({
   }, [companyCode, loginid, open, request]);
 
   const selectedRef = useMemo(() => refDocs.find((item) => String(item.DOC_NO || "") === String(form.REF_DOC_NO || "")), [form.REF_DOC_NO, refDocs]);
+  const refDocOptions = useMemo(() => {
+  const currentRef = String(form.REF_DOC_NO || "");
+  if (currentRef && !refDocs.some((item) => String(item.DOC_NO || "") === currentRef)) {
+    return [{ DOC_NO: currentRef } as RefDoc, ...refDocs];
+  }
+  return refDocs;
+ }, [refDocs, form.REF_DOC_NO]);
   const account = accounts[0] || {};
   const totals = useMemo(() => calculateTotals(items), [items]);
 
@@ -133,14 +159,14 @@ export function VendorRequestDialog({
     }
   };
 
-  const save = async (event: FormEvent | undefined, action: "SAVEASDRAFT" | "SUBMITTED") => {
+  const save = async (event: FormEvent | undefined, action: VendorRequestSaveAction) => {
     event?.preventDefault();
     setError("");
     const totalQty = items.reduce((sum, item) => sum + Number(item.QTY || 0), 0);
     if (!form.REF_DOC_NO && !isEdit) return setError("Ref Doc No is required.");
     if (!form.INVOICE_NUMBER) return setError("Invoice No is required.");
     if (!form.INVOICE_DATE) return setError("Invoice Date is required.");
-    if (action === "SUBMITTED" && totalQty <= 0) return setError("Total quantity cannot be 0.");
+    if (action !== "SAVEASDRAFT" && totalQty <= 0) return setError("Total quantity cannot be 0.");
 
     const filteredItems = action === "SAVEASDRAFT" ? items : items.filter((item) => Number(item.QTY || 0) > 0);
     try {
@@ -160,10 +186,12 @@ export function VendorRequestDialog({
         PDO_TYPE: String(selectedRef?.PDO_TYPE || form.PDO_TYPE || ""),
         CURR_CODE: String(selectedRef?.CURR_CODE || form.CURR_CODE || ""),
         EX_RATE: selectedRef?.EX_RATE ?? form.EX_RATE,
+        DOC_DATE: toBackendDate(form.DOC_DATE),
+        INVOICE_DATE: toBackendDate(form.INVOICE_DATE),
         items: filteredItems.map((item) => ({
           ...item,
           QTY: Number(item.QTY || 0),
-          DOC_DATE: form.DOC_DATE,
+          DOC_DATE: toBackendDate(item.DOC_DATE || form.DOC_DATE),
           AC_CODE: String(item.AC_CODE || account.AC_CODE || form.AC_CODE || ""),
           ORIGINAL_QTY: Number(item.ORIGINAL_QTY ?? item.QTY ?? 0),
         })),
@@ -174,7 +202,7 @@ export function VendorRequestDialog({
         setSavedDocNo(generated);
         setForm((prev) => ({ ...prev, DOC_NO: generated }));
       }
-      if (action === "SUBMITTED") await onSaved();
+      await onSaved?.(action);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save purchase invoice");
     } finally {
@@ -186,23 +214,35 @@ export function VendorRequestDialog({
     <Dialog
       open={open}
       wide
-      contentClassName="vendor-invoice-dialog"
-      title={isEdit ? "Edit Purchase Invoices" : "Add Purchase Invoices"}
+        contentClassName={cn(
+    "vendor-invoice-dialog",
+    activeTab === "details" && "vendor-invoice-dialog-details"
+  )}
+      // contentClassName="vendor-invoice-dialog"
+      title={readOnly ? "View Purchase Invoices" : isEdit ? "Edit Purchase Invoices" : "Add Purchase Invoices"}
       onClose={onClose}
       footer={
         <div className="flex w-full items-center justify-between gap-2">
+          {approvalMode && !readOnly ? (
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" disabled={saving} onClick={() => onApprovalAction?.("SENTBACK", approvalFlowLevel)}><RotateCcw size={15} /> Send Back</Button>
+              <Button type="button" variant="destructive" disabled={saving} onClick={() => onApprovalAction?.("REJECTED", approvalFlowLevel)}><XCircle size={15} /> Reject</Button>
+              <Button type="button" disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, "APPROVED")}><CheckCircle2 size={15} /> Approve</Button>
+            </div>
+          ) : !readOnly ? (
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, "SAVEASDRAFT")}><Save size={15} /> Save As Draft</Button>
+              <Button type="button" disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, "SUBMITTED")}><Send size={15} /> Submit</Button>
+            </div>
+          ) : <span />}
           <div className="flex gap-2">
-            <Button variant="outline" disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, "SAVEASDRAFT")}><Save size={15} /> Save As Draft</Button>
-            <Button disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, "SUBMITTED")}><Send size={15} /> Submit</Button>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" disabled={!savedDocNo} onClick={() => setFilesOpen({ title: "All Attachments" })}><Paperclip size={15} /></Button>
-            <Button variant="outline" onClick={onClose}><X size={15} /></Button>
+            <Button type="button" variant="outline" disabled={!savedDocNo} onClick={() => setFilesOpen({ title: "Global Attachments" })}><Paperclip size={15} /></Button>
+            <Button type="button" variant="outline" onClick={onClose}><X size={15} /></Button>
           </div>
         </div>
       }
     >
-      <form className="grid gap-3" onSubmit={(event) => void save(event, "SAVEASDRAFT")}>
+      <form className="grid gap-3 self-start h-fit" onSubmit={(event) => void save(event, "SAVEASDRAFT")}>
         {error && <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{error}</div>}
 
         <div className="flex border-b">
@@ -211,30 +251,41 @@ export function VendorRequestDialog({
         </div>
 
         {activeTab === "info" ? (
-          <div className="grid gap-3 rounded-md border bg-white p-4 md:grid-cols-4">
-            <FormInput label="Doc No" value={savedDocNo || String(form.DOC_NO || "")} readOnly />
-            <FormInput label="Doc Date" value={toInputDate(form.DOC_DATE)} type="date" onChange={(value) => setField("DOC_DATE", value)} />
-            <label className="grid gap-1 text-sm md:col-span-1">
-              <span className="font-medium text-muted-foreground">Ref Doc No</span>
-              <Select value={String(form.REF_DOC_NO || "")} onChange={(event) => void loadRefDetails(event.target.value)} disabled={loadingRef || isEdit}>
-                <option value="">Select Ref Doc</option>
-                {refDocs.map((item) => <option key={String(item.DOC_NO)} value={String(item.DOC_NO)}>{String(item.DOC_NO)}</option>)}
-              </Select>
-            </label>
-            <FormInput label="Well Id" value={String(form.REF_DOC1 || "")} onChange={(value) => setField("REF_DOC1", value)} />
-            <FormInput label="RIG No" value={String(form.REF_DOC2 || "")} onChange={(value) => setField("REF_DOC2", value)} />
-            <FormInput label="Truck No" value={String(form.REF_DOC3 || "")} onChange={(value) => setField("REF_DOC3", value)} />
-            <FormInput label="Invoice No" value={String(form.INVOICE_NUMBER || "")} onChange={(value) => setField("INVOICE_NUMBER", value)} required />
-            <FormInput label="Invoice Date" value={toInputDate(form.INVOICE_DATE)} type="date" onChange={(value) => setField("INVOICE_DATE", value)} required />
-            <FormInput label="Account Number" value={String(account.AC_CODE || form.AC_CODE || "")} readOnly />
-            <FormInput label="Account Name" value={String(account.AC_NAME || form.AC_NAME || "")} readOnly className="md:col-span-4" />
-            <FormInput label="Phone" value={String(account.PHONE || form.PHONE || "")} readOnly />
-            <FormInput label="Address" value={String(account.ADDRESS || form.ADDRESS || "")} readOnly className="md:col-span-3" />
-            <FormInput label="Fax" value={String(account.FAX || form.FAX || "")} readOnly />
-            <FormInput label="Division Code" value={String(form.DIV_CODE || "")} readOnly />
-            <FormInput label="Division Name" value={String(form.DIV_NAME || "")} readOnly className="md:col-span-2" />
-            <FormInput label="Remarks" value={String(form.REMARKS || "")} onChange={(value) => setField("REMARKS", value)} className="md:col-span-4" />
-          </div>
+
+          <div className="grid-cols-1 grid-gap-2 rounded-md border bg-white p-1">
+  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+    <FormInput label="Doc No" value={savedDocNo || String(form.DOC_NO || "")} readOnly />
+    <FormInput label="Doc Date" value={toInputDate(form.DOC_DATE)} type="date" onChange={(value) => setField("DOC_DATE", value)} readOnly={readOnly} />
+    <label className="grid gap-1 text-sm">
+      <span className="font-medium text-muted-foreground">Ref Doc No</span>
+      <Select value={String(form.REF_DOC_NO || "")} onChange={(event) => void loadRefDetails(event.target.value)} disabled={readOnly || loadingRef || isEdit}>
+        <option value="">Select Ref Doc</option>
+        {/* {refDocs.map((item) => <option key={String(item.DOC_NO)} value={String(item.DOC_NO)}>{String(item.DOC_NO)}</option>)} */}
+        {refDocOptions.map((item) => <option key={String(item.DOC_NO)} value={String(item.DOC_NO)}>{String(item.DOC_NO)}</option>)}
+      </Select>
+    </label>
+    <FormInput label="Well Id" value={String(form.REF_DOC1 || "")} onChange={(value) => setField("REF_DOC1", value)} readOnly={readOnly} />
+
+    <FormInput label="RIG No" value={String(form.REF_DOC2 || "")} onChange={(value) => setField("REF_DOC2", value)} readOnly={readOnly} />
+    <FormInput label="Truck No" value={String(form.REF_DOC3 || "")} onChange={(value) => setField("REF_DOC3", value)} readOnly={readOnly} />
+    <FormInput label="Invoice No" value={String(form.INVOICE_NUMBER || "")} onChange={(value) => setField("INVOICE_NUMBER", value)} required readOnly={readOnly} />
+    <FormInput label="Invoice Date" value={toInputDate(form.INVOICE_DATE)} type="date" onChange={(value) => setField("INVOICE_DATE", value)} required readOnly={readOnly} />
+  </div>
+
+  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+    <FormInput label="Account Number" value={String(account.AC_CODE || form.AC_CODE || "")} readOnly />
+    <FormInput label="Account Name" value={String(account.AC_NAME || form.AC_NAME || "")} readOnly className="sm:col-span-2 md:col-span-2" />
+
+    <FormInput label="Phone" value={String(account.PHONE || form.PHONE || "")} readOnly />
+    <FormInput label="Fax" value={String(account.FAX || form.FAX || "")} readOnly />
+    <FormInput label="Division Code" value={String(form.DIV_CODE || "")} readOnly />
+
+    <FormInput label="Division Name" value={String(form.DIV_NAME || "")} readOnly />
+    <FormInput label="Address" value={String(account.ADDRESS || form.ADDRESS || "")} readOnly className="sm:col-span-2 md:col-span-2" />
+
+    <FormInput label="Remarks" value={String(form.REMARKS || "")} onChange={(value) => setField("REMARKS", value)} className="sm:col-span-2 md:col-span-3" readOnly={readOnly} />
+  </div>
+ </div>
         ) : (
           <InvoiceDetailsTab
             items={items}
@@ -244,11 +295,12 @@ export function VendorRequestDialog({
             onItemsChange={setItems}
             onAddPending={() => setPendingOpen(true)}
             onOpenAttachment={(srNo) => setFilesOpen({ srNo, title: `Attachments for Serial No: ${srNo}` })}
+            readOnly={readOnly}
           />
         )}
       </form>
 
-      {pendingOpen && (
+      {pendingOpen && !readOnly && (
         <PendingItemsDialog
           refDocNo={String(form.REF_DOC_NO || "")}
           headerAcCode={String(items[0]?.HEADER_AC_CODE || account.AC_CODE || form.AC_CODE || "")}
@@ -281,6 +333,7 @@ function InvoiceDetailsTab({
   onItemsChange,
   onAddPending,
   onOpenAttachment,
+  readOnly,
 }: {
   items: VendorRow[];
   loading: boolean;
@@ -289,6 +342,7 @@ function InvoiceDetailsTab({
   onItemsChange: (rows: VendorRow[]) => void;
   onAddPending: () => void;
   onOpenAttachment: (srNo: number) => void;
+  readOnly?: boolean;
 }) {
   const setItem = (index: number, field: string, value: string) => onItemsChange(items.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: field === "QTY" ? Number(value) : value } : item));
   const reset = () => onItemsChange(items.map((item) => ({ ...item, QTY: 0 })));
@@ -299,18 +353,33 @@ function InvoiceDetailsTab({
         <div className="text-xs font-semibold text-muted-foreground">
           {items.length} lines loaded
         </div>
-        <div className="flex justify-end gap-2">
-          <Button type="button" size="sm" variant="outline" onClick={onAddPending}><Plus size={14} /> Add Pending Items</Button>
-          <Button type="button" size="sm" variant="outline" onClick={reset}><RotateCcw size={14} /> Reset</Button>
-        </div>
+        {!readOnly && (
+          <div className="flex justify-end gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={onAddPending}><Plus size={14} /> Add Pending Items</Button>
+            <Button type="button" size="sm" variant="outline" onClick={reset}><RotateCcw size={14} /> Reset</Button>
+          </div>
+        )}
       </div>
       <div className="vendor-detail-scroll overflow-auto rounded-md border">
         <table className="vendor-detail-table w-full min-w-[1360px] text-xs">
           <thead className="sticky top-0 z-10 bg-slate-50 text-left text-muted-foreground">
             <tr>
-              {["Sr No", "Description", "Qty", "Org Qty", "Rate", "Amount", "Currency", "Ex Rate", "Base Amt", "Attach", "Tax Code", "Tax %", "Tax Local Amt", "Final Amt", "Item Remark", ""].map((head) => (
-                <th key={head} className="border-b px-1.5 py-1 font-semibold">{head}</th>
-              ))}
+              <th className="border-b px-1.5 py-1 font-semibold w-12">Sr No</th>
+              <th className="border-b px-1.5 py-1 font-semibold min-w-[240px] max-w-[340px]">Description</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[72px]">Qty</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[90px]">Org Qty</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[100px]">Rate</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[110px]">Amount</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[78px]">Currency</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[84px]">Ex Rate</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[110px]">Base Amt</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[56px]">Attach</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[90px]">Tax Code</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[74px]">Tax %</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[110px]">Tax Local Amt</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[110px]">Final Amt</th>
+              <th className="border-b px-1.5 py-1 font-semibold min-w-[220px] max-w-[280px]">Item Remark</th>
+              <th className="border-b px-1.5 py-1 font-semibold w-[48px]" />
             </tr>
           </thead>
           <tbody>
@@ -327,9 +396,9 @@ function InvoiceDetailsTab({
               return (
                 <tr key={`${item.SERIAL_NO || index}`} className="h-6 border-b">
                   <td className="px-1.5 py-0.5 text-muted-foreground">{String(item.SERIAL_NO || index + 1)}</td>
-                  <td className="min-w-[280px] max-w-[360px] truncate px-1.5 py-0.5 text-muted-foreground" title={String(item.REMARKS || item.ITEM_DESC || "")}>{String(item.REMARKS || item.ITEM_DESC || "")}</td>
-                  <td className="px-1.5 py-0.5"><Input className="vendor-line-input text-right" type="number" value={String(item.QTY ?? 0)} onChange={(event) => setItem(index, "QTY", event.target.value)} /></td>
-                  <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(item.ORIGINAL_QTY)}</td>
+                  <td className="min-w-[240px] max-w-[340px] truncate px-1.5 py-0.5 text-muted-foreground" title={String(item.REMARKS || item.ITEM_DESC || "")}>{String(item.REMARKS || item.ITEM_DESC || "")}</td>
+                  <td className="w-[72px] px-1.5 py-0.5"><Input className="vendor-line-input text-right w-full" type="number" value={String(item.QTY ?? 0)} readOnly={readOnly} onChange={(event) => setItem(index, "QTY", event.target.value)} /></td>
+                  <td className="w-[90px] px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(item.ORIGINAL_QTY)}</td>
                   <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(price)}</td>
                   <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(amount)}</td>
                   <td className="px-1.5 py-0.5 text-muted-foreground">{String(item.CURR_CODE || "")}</td>
@@ -342,8 +411,8 @@ function InvoiceDetailsTab({
                   <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(taxPerc)}</td>
                   <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(taxLocal)}</td>
                   <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(baseAmt + taxLocal)}</td>
-                  <td className="px-1.5 py-0.5"><Input className="vendor-line-input" value={String(item.ITEM_REMARK || "")} onChange={(event) => setItem(index, "ITEM_REMARK", event.target.value)} /></td>
-                  <td className="px-1.5 py-0.5"><Button className="vendor-line-icon" type="button" size="icon" variant="ghost" onClick={() => onItemsChange(items.filter((_, rowIndex) => rowIndex !== index))}><Trash2 size={12} /></Button></td>
+                  <td className="px-1.5 py-0.5"><Input className="vendor-line-input" value={String(item.ITEM_REMARK || "")} readOnly={readOnly} onChange={(event) => setItem(index, "ITEM_REMARK", event.target.value)} /></td>
+                  <td className="px-1.5 py-0.5">{!readOnly && <Button className="vendor-line-icon" type="button" size="icon" variant="ghost" onClick={() => onItemsChange(items.filter((_, rowIndex) => rowIndex !== index))}><Trash2 size={12} /></Button>}</td>
                 </tr>
               );
             }) : (
@@ -388,12 +457,13 @@ function PendingItemsDialog({
 
   useEffect(() => {
     if (!refDocNo || !headerAcCode) return;
+    const safeHeader = escapeSql(headerAcCode);
     const existingSerials = existingItems.map((item) => Number(item.SERIAL_NO || 0)).filter(Boolean).join(",") || "0";
     const sql = `
       SELECT *
       FROM VW_VM_LPO_DTL_PENDING_AWARE
       WHERE DOC_NO = '${escapeSql(refDocNo)}'
-        AND HEADER_AC_CODE = '${escapeSql(headerAcCode)}'
+        AND HEADER_AC_CODE = '${safeHeader}'
         AND SERIAL_NO NOT IN (${existingSerials})
       ORDER BY SERIAL_NO
     `;
@@ -428,64 +498,316 @@ function PendingItemsDialog({
 
 function VendorFilesDialog({ requestNumber, srNo, title, onClose }: { requestNumber: string; srNo?: number; title: string; onClose: () => void }) {
   const { user } = useAuth();
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const [files, setFiles] = useState<VendorRow[]>([]);
   const [picked, setPicked] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<import("../../components/ui/NoticeToast").ToastNotice>(null);
+  const [previewFile, setPreviewFile] = useState<VendorRow | null>(null);
+
+  const fileCount = files.length;
+  const selectedCount = picked.length;
+  const totalFileLabel = `${fileCount} file${fileCount === 1 ? "" : "s"}`;
+  const selectedLabel = selectedCount ? `${selectedCount} file${selectedCount === 1 ? "" : "s"} selected` : "Select files to upload";
+  const attachmentScopeLabel = srNo ? `Detail row ${srNo}` : "Global document";
+  const filterByScope = (rows: VendorRow[]) => srNo ? rows.filter((row) => getFileSrNo(row) === srNo) : rows.filter((row) => getFileSrNo(row) === 0);
 
   useEffect(() => {
     if (!requestNumber) return;
+    setLoading(true);
     void getAllVendorFiles(requestNumber).then((rows) => {
-      setFiles(srNo ? rows.filter((row) => Number(row.SR_NO ?? row.sr_no ?? 0) === srNo) : rows);
-    }).catch(() => setFiles([]));
+      setFiles(filterByScope(rows));
+      setError(null);
+    }).catch(() => {
+      setFiles([]);
+      setError({ type: "error", message: "Unable to load attachments." });
+    }).finally(() => setLoading(false));
   }, [requestNumber, srNo]);
+
+  const handleFileInput = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setPicked(Array.from(event.target.files || []));
+    event.target.value = "";
+    setError(null);
+  };
+
+  const openPreview = (file: VendorRow) => {
+    if (!getFileUrl(file)) {
+      setError({ type: "error", message: "No preview URL available for this attachment." });
+      return;
+    }
+    setPreviewFile(file);
+  };
+
+  const closePreview = () => setPreviewFile(null);
+
+  const getPreviewType = (file: VendorRow) => {
+    const fileType = String(file.type || file.TYPE || "").toLowerCase();
+    const fileUrl = getFileUrl(file);
+    if (fileType.includes("pdf")) return "pdf";
+    if (fileType.includes("image") || /\.(png|jpe?g|gif|bmp|svg)$/i.test(fileUrl)) return "image";
+    return "other";
+  };
+
+  const deleteAttachment = async (file: VendorRow) => {
+    const srNoValue = getFileSrNo(file);
+    const attachmentSrNoValue = getFileAttachmentSrNo(file);
+
+    if (!requestNumber) return;
+    if (attachmentSrNoValue === undefined) {
+      setError({ type: "error", message: "Attachment serial number is missing." });
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      await deleteVendorAttachment(requestNumber, srNoValue, attachmentSrNoValue);
+      setFiles((current) => current.filter((item) => {
+        const itemSrNo = getFileSrNo(item);
+        const itemAttachmentSrNo = getFileAttachmentSrNo(item);
+        return itemSrNo !== srNoValue || itemAttachmentSrNo !== attachmentSrNoValue;
+      }));
+      setError({ type: "success", message: "Attachment deleted successfully." });
+    } catch (err) {
+      setError({ type: "error", message: err instanceof Error ? err.message : "Unable to delete attachment" });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const save = async () => {
     if (!requestNumber || picked.length === 0) return;
     setSaving(true);
-    setError("");
+    setError(null);
     try {
-      await saveVendorFiles(requestNumber, picked.map((file) => ({
-        company_code: user?.company_code || "",
-        request_number: requestNumber,
-        sr_no: srNo || 0,
-        file_name: file.name,
-        org_file_name: file.name,
-        user_file_name: file.name,
-        extensions: file.name.split(".").pop() || "",
-        modules: "Vendor",
-        type: file.type,
-        file_transfer: "N",
-        created_by: user?.loginid || user?.username || "",
-        updated_by: user?.loginid || user?.username || "",
-      })));
+      const uploadedFiles = await Promise.all(picked.map(async (file) => {
+        const fileUrl = await uploadVendorAttachment(requestNumber, file);
+        return {
+          company_code: user?.company_code || "",
+          request_number: requestNumber,
+          sr_no: srNo ?? 0,
+          file_name: file.name,
+          org_file_name: file.name,
+          user_file_name: file.name,
+          aws_file_locn: fileUrl,
+          extensions: file.name.split(".").pop() || "",
+          modules: "Vendor",
+          type: file.type,
+          file_transfer: "N",
+          created_by: user?.loginid || user?.username || "",
+          updated_by: user?.loginid || user?.username || "",
+        };
+      }));
+      await saveVendorFiles(requestNumber, uploadedFiles);
       setPicked([]);
-      setFiles(await getAllVendorFiles(requestNumber));
+      setFiles(filterByScope(await getAllVendorFiles(requestNumber)));
+      setError({ type: "success", message: "Attachments saved successfully." });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to save attachment metadata");
+      setError({ type: "error", message: err instanceof Error ? err.message : "Unable to save attachment metadata" });
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Dialog open wide title={title} onClose={onClose} footer={<><Button variant="outline" onClick={onClose}>Close</Button><Button disabled={!picked.length || saving} onClick={() => void save()}><Download size={15} /> Save Files</Button></>}>
-      <div className="grid gap-3">
-        {error && <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{error}</div>}
-        <Input type="file" multiple onChange={(event) => setPicked(Array.from(event.target.files || []))} disabled={!requestNumber} />
-        <div className="rounded-md border">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-muted-foreground"><tr><th className="p-2">File</th><th className="p-2">Sr No</th><th className="p-2">Type</th></tr></thead>
-            <tbody>
-              {files.length ? files.map((file, index) => (
-                <tr key={index} className="border-t"><td className="p-2">{String(file.ORG_FILE_NAME || file.org_file_name || file.FILE_NAME || file.file_name || "")}</td><td className="p-2">{String(file.SR_NO || file.sr_no || "")}</td><td className="p-2">{String(file.TYPE || file.type || "")}</td></tr>
-              )) : <tr><td colSpan={3} className="p-6 text-center text-muted-foreground">No attachments found.</td></tr>}
-            </tbody>
-          </table>
+    <>
+      <Dialog open wide title={title} onClose={onClose} footer={(
+        <>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+          <Button disabled={!picked.length || saving} onClick={() => void save()}>
+            <UploadCloud size={15} /> Save Files
+          </Button>
+        </>
+      )}>
+      <div className="grid gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-secondary/30 p-3">
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 place-items-center rounded-md bg-primary/10 text-primary">
+              <Paperclip size={18} />
+            </span>
+            <div>
+              <h3 className="m-0 text-sm font-semibold">Document Files</h3>
+              <p className="m-0 text-xs text-muted-foreground">{requestNumber ? `${attachmentScopeLabel} - ${totalFileLabel}` : "No document number available yet"}</p>
+            </div>
+          </div>
+          <input ref={inputRef} className="hidden" multiple type="file" onChange={handleFileInput} disabled={!requestNumber} />
+          <Button disabled={!requestNumber || saving} type="button" onClick={() => inputRef.current?.click()}>
+            <UploadCloud size={15} /> {requestNumber ? selectedLabel : "Upload Files"}
+          </Button>
         </div>
+
+        <NoticeToast notice={error} onClose={() => setError(null)} />
+
+        {!requestNumber ? (
+          <div className="grid min-h-[260px] place-items-center rounded-md border border-dashed bg-secondary/20 p-8 text-center">
+            <div>
+              <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-md bg-primary/10 text-primary">
+                <Paperclip size={20} />
+              </div>
+              <h3 className="m-0 text-base font-semibold">Save Required</h3>
+              <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">Attachments need a saved document or account code before upload.</p>
+            </div>
+          </div>
+        ) : loading ? (
+          <div className="grid min-h-[260px] place-items-center text-sm text-muted-foreground">Loading attachments...</div>
+        ) : files.length === 0 ? (
+          <div className="grid min-h-[260px] place-items-center rounded-md border border-dashed bg-secondary/20 p-8 text-center">
+            <div>
+              <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-md bg-primary/10 text-primary">
+                <Paperclip size={20} />
+              </div>
+              <h3 className="m-0 text-base font-semibold">No Attachments</h3>
+              <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">Upload supporting documents, invoices, approvals, or scanned files.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="max-h-[430px] overflow-auto rounded-md border">
+            <table className="w-full min-w-[760px] text-sm">
+              <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 text-left">SR. No</th>
+                  <th className="px-3 py-2 text-left">Line</th>
+                  <th className="px-3 py-2 text-left">File Name</th>
+                  <th className="px-3 py-2 text-left">File Type</th>
+                  <th className="px-3 py-2 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {files.map((file, index) => {
+                  const srNoValue = getFileSrNo(file);
+                  const attachmentSrNoValue = getFileAttachmentSrNo(file);
+                  const fileName = getFileName(file);
+                  const fileType = getFileType(file);
+                  const fileUrl = getFileUrl(file);
+                  const previewAvailable = Boolean(fileUrl);
+                  return (
+                    <tr className="border-t" key={index}>
+                      <td className="px-3 py-2">{String(attachmentSrNoValue ?? "")}</td>
+                      <td className="px-3 py-2">{srNoValue ? `Detail ${srNoValue}` : "Global"}</td>
+                      <td className="px-3 py-2">{fileName}</td>
+                      <td className="px-3 py-2">{fileType}</td>
+                      <td className="px-3 py-2 text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            type="button"
+                            onClick={() => openPreview(file)}
+                            disabled={!previewAvailable}
+                            title={previewAvailable ? "Preview file" : "Preview unavailable"}
+                          >
+                            <Eye size={16} />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            type="button"
+                            disabled={!fileUrl}
+                            title={fileUrl ? "Download file" : "Download unavailable"}
+                            onClick={() => {
+                              if (fileUrl) window.open(fileUrl, "_blank", "noopener,noreferrer");
+                            }}
+                          >
+                            <Download size={16} />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            type="button"
+                            onClick={() => void deleteAttachment(file)}
+                            disabled={saving}
+                            title="Delete"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </Dialog>
+
+      <Dialog
+        open={Boolean(previewFile)}
+        title={previewFile ? getFileName(previewFile) : "Attachment Preview"}
+        description={previewFile ? getFileType(previewFile) : undefined}
+        contentClassName="vendor-attachment-preview-dialog"
+        onClose={closePreview}
+        footer={(
+          <>
+            {previewFile && getFileUrl(previewFile) ? (
+              <Button type="button" onClick={() => window.open(getFileUrl(previewFile), "_blank", "noopener,noreferrer")}>
+                <Download size={15} /> Download
+              </Button>
+            ) : null}
+            <Button variant="outline" onClick={closePreview}>Close</Button>
+          </>
+        )}
+      >
+        {previewFile ? (
+          <div className="min-h-[520px] max-h-[78vh] overflow-hidden rounded-md border bg-background text-sm">
+            {getPreviewType(previewFile) === "pdf" ? (
+              <iframe
+                title="attachment-preview"
+                src={getFileUrl(previewFile)}
+                className="h-[78vh] w-full"
+              />
+            ) : getPreviewType(previewFile) === "image" ? (
+              <img
+                src={getFileUrl(previewFile)}
+                alt={getFileName(previewFile)}
+                className="h-[78vh] w-full object-contain"
+              />
+            ) : (
+              <div className="grid min-h-[260px] place-items-center p-6 text-center text-sm text-muted-foreground">
+                <p>No preview available for this file type.</p>
+                <a href={getFileUrl(previewFile)} target="_blank" rel="noreferrer" className="mt-4 inline-flex rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground">
+                  Open in new tab
+                </a>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </Dialog>
+    </>
   );
+}
+
+function getFileField(file: VendorRow, keys: string[]) {
+  for (const key of keys) {
+    const value = file[key];
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+  const lowerKeys = keys.map((key) => key.toLowerCase());
+  const matchedKey = Object.keys(file).find((key) => lowerKeys.includes(key.toLowerCase()));
+  return matchedKey ? file[matchedKey] : undefined;
+}
+
+function getFileSrNo(file: VendorRow) {
+  return Number(getFileField(file, ["srNo", "SR_NO", "sr_no"]) ?? 0);
+}
+
+function getFileAttachmentSrNo(file: VendorRow) {
+  const value = getFileField(file, ["attachmentSrNo", "ATTACHMENT_SR_NO", "attachment_sr_no"]);
+  return value === undefined ? undefined : Number(value);
+}
+
+function getFileUrl(file: VendorRow) {
+  return String(getFileField(file, ["awsFileLocn", "AWS_FILE_LOCN", "aws_file_locn", "awsFileLocation", "AWS_FILE_LOCATION"]) || "");
+}
+
+function getFileName(file: VendorRow) {
+  return String(getFileField(file, ["orgFileName", "ORG_FILE_NAME", "org_file_name", "fileName", "FILE_NAME", "file_name", "userFileName", "USER_FILE_NAME"]) || "Attachment");
+}
+
+function getFileType(file: VendorRow) {
+  return String(getFileField(file, ["type", "TYPE", "extensions", "EXTENSIONS"]) || "");
 }
 
 function TabButton({ active, children, onClick }: { active: boolean; children: string; onClick: () => void }) {
@@ -535,6 +857,13 @@ function toInputDate(value: unknown) {
   if (match) return `${match[3]}-${match[2]}-${match[1]}`;
   const parsed = new Date(raw);
   return Number.isNaN(parsed.getTime()) ? raw : parsed.toISOString().slice(0, 10);
+}
+
+function toBackendDate(value: unknown) {
+  const inputDate = toInputDate(value);
+  const match = inputDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return String(value || "");
+  return `${match[3]}-${match[2]}-${match[1]}`;
 }
 
 function escapeSql(value: string) {

@@ -16,6 +16,8 @@ type JobSelectionModalProps = {
 
 const normalizeRow = (row: any) => ({
   job_no: row.job_no ?? row.JOB_NO ?? "",
+  invoice_no: row.invoice_no ?? row.INVOICE_NO ?? "",
+  prin_code: row.prin_code ?? row.PRIN_CODE ?? "",
   quantity: row.quantity ?? row.QUANTITY ?? "",
   activity: row.activity ?? row.ACTIVITY ?? "",
   act_code: row.act_code ?? row.ACT_CODE ?? "",
@@ -61,12 +63,16 @@ export function JobSelectionModal({
         const response = await getInvoiceJobSelection({
           loginid: user.loginid ?? "",
           company_code: user.company_code ?? "",
-          prin_code: prinCode,
+           prin_code: prinCode,
+             invoice_no: invoiceNo,
           from_date: toDDMMYYYY(fromDate),
           to_date: toDDMMYYYY(toDate),
         });
-        const normalized = Array.isArray(response) ? response.map(normalizeRow) : [];
-        setJobs(normalized);
+const normalized = Array.isArray(response)
+  ? response.map(normalizeRow).filter(
+      (row, index, arr) => arr.findIndex((r) => rowKeyOf(r) === rowKeyOf(row)) === index,
+    )
+  : [];        setJobs(normalized);
         // Pre-check rows already flagged SELECTED = 'Y' by the backend view
         setSelected(new Set(normalized.filter((r) => r.selected).map(rowKeyOf)));
       } catch {

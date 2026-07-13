@@ -123,12 +123,13 @@ export async function getInvoiceJobSelection(params: {
   prin_code: string;
   from_date?: string;
   to_date?: string;
+  invoice_no?: string;
 }) {
   return fetchDynamicSql({
     parameter: "TBILL_invoice_job_selection",
     loginid: params.loginid,
     code1: params.company_code,
-    code2: params.prin_code,
+    code2: `${params.prin_code}$$$$${params.invoice_no ?? ""}`,
     code3: params.from_date || "",
     code4: params.to_date || "",
     number1: 0,
@@ -217,7 +218,7 @@ export async function getStorageSelection(params: {
 export function normalizeStorageRow(row: any, consolidatedInvNo: string): StorageSelectionRow {
   const get = (key: string) => row[key] ?? row[key.toUpperCase()] ?? row[key.toLowerCase()];
   return {
-    SELECTED: "Y",
+    SELECTED: String(get("selected") ?? "N"),
     STORAGE_NO: String(get("storage_no") ?? ""),
     PRIN_CODE: String(get("prin_code") ?? ""),
     SITE_IND: String(get("site_ind") ?? ""),

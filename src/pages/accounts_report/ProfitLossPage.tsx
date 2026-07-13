@@ -44,9 +44,11 @@ const getToday = (): string => {
 const REPORT_WINDOW_NAME = "pnl_report_window";
 
 // ─── Popup window shell ────────────────────────────────────────────────────────
-// The popup gets its own tiny toolbar (Back / Download Excel / Close) since the
-// React overlay controls that used to sit on top of the in-page dialog aren't
-// available inside a separate browser window.
+// The popup gets its own tiny toolbar (Back / Print / Download Excel / Close).
+// CRITICAL: it also relays PNL_DRILL_DOWN postMessages coming from the inner
+// report iframe up to window.opener (the main app tab). Without this relay,
+// drill-down clicks never reach the React app because the iframe's
+// `window.parent` is this popup, not the app tab that opened it.
 
 function buildShellHtml(title: string): string {
   return `<!doctype html>
@@ -99,16 +101,32 @@ function buildShellHtml(title: string): string {
     border: none;
     display: block;
   }
+  @media print {
+    #toolbar { display: none !important; }
+    #reportFrame { height: 100vh; }
+  }
 </style>
 </head>
 <body>
   <div id="toolbar">
     <button id="btnBack" style="display:none;">&larr; Back</button>
     <span class="title" id="titleSpan">${title.replace(/</g, "&lt;")}</span>
+    <button id="btnPrint">&#128438; Print</button>
     <button id="btnExcel">Download Excel</button>
     <button id="btnClose">Close</button>
   </div>
   <iframe id="reportFrame"></iframe>
+  <script>
+    // Relay drill-down messages from the inner report iframe to the app tab
+    // that opened this popup. Without this, the iframe's postMessage to
+    // window.parent only ever reaches this popup window, never the opener.
+    window.addEventListener("message", function (e) {
+      var data = e.data;
+      if (data && data.type === "PNL_DRILL_DOWN" && window.opener) {
+        window.opener.postMessage(data, "*");
+      }
+    });
+  </script>
 </body>
 </html>`;
 }
@@ -135,7 +153,7 @@ function writeReportContent(win: Window, html: string) {
 
   const frameWin = frame.contentWindow as any;
   if (frameWin) {
-    // Suppress the report's own print() call, same as before.
+    // Suppress the report's own print() call while (re)writing content.
     const originalPrint = frameWin.print;
     frameWin.print = () => {};
     const restore = () => {
@@ -166,6 +184,16 @@ function updateShellChrome(win: Window, title: string, showBack: boolean) {
   if (backBtn) backBtn.style.display = showBack ? "inline-flex" : "none";
 }
 
+/** Triggers the browser print dialog for just the report iframe's content
+ *  (not the popup toolbar around it). */
+function printReportFrame(win: Window) {
+  const frame = win.document.getElementById("reportFrame") as HTMLIFrameElement | null;
+  const frameWin = frame?.contentWindow;
+  if (!frameWin) return;
+  frameWin.focus();
+  frameWin.print();
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ProfitLossPage() {
@@ -191,7 +219,6 @@ export default function ProfitLossPage() {
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
 
-  // Drill-down stack: each entry is a level pushed on top
   const [drillStack, setDrillStack] = useState<DrillState[]>([]);
   const [drillLoading, setDrillLoading] = useState(false);
 
@@ -201,6 +228,7 @@ export default function ProfitLossPage() {
 
   const onBackRef = useRef<() => void>(() => {});
   const onExcelRef = useRef<() => void>(() => {});
+  const onPrintRef = useRef<() => void>(() => {});
   const onCloseRef = useRef<() => void>(() => {});
 
   // ── Derived ──────────────────────────────────────────────────────────────
@@ -234,7 +262,7 @@ export default function ProfitLossPage() {
     fetchDivisions();
   }, [companyCode, loginId]);
 
-  // ── postMessage listener for drill-down clicks inside the report HTML ────
+  // ── postMessage listener for drill-down clicks (relayed from the popup) ──
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
       const data = event.data;
@@ -369,14 +397,23 @@ export default function ProfitLossPage() {
     }
   }, [currentDrill, buildPayload]);
 
-  // Keep refs pointing at the latest handlers so the popup's toolbar buttons
-  // (wired up once, outside React) always call current logic.
+  /** Prints whatever is currently shown in the popup's report iframe
+   *  (base report or the current drill-down level), not the toolbar. */
+  const handlePrint = useCallback(() => {
+    const win = reportWinRef.current;
+    if (!win || win.closed) return;
+    printReportFrame(win);
+  }, []);
+
   useEffect(() => {
     onBackRef.current = handleDrillBack;
   }, [handleDrillBack]);
   useEffect(() => {
     onExcelRef.current = handleExcel;
   }, [handleExcel]);
+  useEffect(() => {
+    onPrintRef.current = handlePrint;
+  }, [handlePrint]);
   useEffect(() => {
     onCloseRef.current = handleCloseReport;
   }, [handleCloseReport]);
@@ -385,9 +422,8 @@ export default function ProfitLossPage() {
   const ensureReportWindow = (title: string): Window | null => {
     let win = reportWinRef.current;
     if (!win || win.closed) {
-      // No size/feature string => browsers open this as a normal new tab
-      // (with the usual address bar, back/forward, etc.) instead of a
-      // stripped-down popup window.
+      // No size/feature string => opens as a normal tab with address bar,
+      // back/forward, etc. instead of a stripped-down popup window.
       win = window.open("", REPORT_WINDOW_NAME);
       reportWinRef.current = win;
     }
@@ -404,12 +440,13 @@ export default function ProfitLossPage() {
 
     const btnBack = win.document.getElementById("btnBack");
     const btnExcel = win.document.getElementById("btnExcel");
+    const btnPrint = win.document.getElementById("btnPrint");
     const btnClose = win.document.getElementById("btnClose");
     if (btnBack) btnBack.onclick = () => onBackRef.current();
     if (btnExcel) btnExcel.onclick = () => onExcelRef.current();
+    if (btnPrint) btnPrint.onclick = () => onPrintRef.current();
     if (btnClose) btnClose.onclick = () => onCloseRef.current();
 
-    // Detect the user closing the popup manually and reset our state to match.
     stopPolling();
     pollRef.current = window.setInterval(() => {
       if (win && win.closed) {

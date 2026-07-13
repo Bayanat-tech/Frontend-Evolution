@@ -60,6 +60,7 @@ import { cleanPath, flattenLeaves, titleCase } from "../utils/menu";
 import { buildWorkspaceApps, cleanAppCode } from "../utils/workspaceApps";
 import { resolveWorkspaceRoute } from "../routes/workspaceRoutes";
 import { cn } from "../lib/utils";
+import { getModuleMeta } from "./AppSelectionPage";
 
 export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => void }) {
   const { appCode } = useParams();
@@ -77,6 +78,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   }, [appCode, workspaceApps]);
 
   const activeMenuPath = useMemo(() => findActiveMenuPath(activeApp?.children || [], location.pathname), [activeApp, location.pathname]);
+  const activeMenu = activeMenuPath[activeMenuPath.length - 1];
   const appRouteTarget = getMenuNodeTarget(activeApp, appCode || "");
 
   const handleLogout = () => {
@@ -108,13 +110,20 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
     return () => document.body.classList.remove("mobile-menu-lock");
   }, [isMobile, mobileMenuOpen]);
 
-  const workspaceRoute = resolveWorkspaceRoute({ pathname: location.pathname, activeApp });
+  const workspaceRoute = resolveWorkspaceRoute({ pathname: location.pathname, activeApp, activeMenu });
   const displayCollapsed = isMobile ? false : collapsed;
   const userDisplayName = user?.username || user?.loginid || "User";
   const companyName = user?.company_name || user?.company_code || "Company";
 
+  // useEffect(() => {
+  //   setExpanded(collectExpandedPath(activeMenuPath));
+  // }, [activeApp?.id, activeApp?.title, location.pathname]);
+
   useEffect(() => {
-    setExpanded(collectExpandedPath(activeMenuPath));
+    setExpanded({
+      ...collectDefaultExpanded(activeApp?.children || [], 1),
+      ...collectExpandedPath(activeMenuPath),
+    });
   }, [activeApp?.id, activeApp?.title, location.pathname]);
 
   const toggleSidebar = () => {
@@ -125,7 +134,11 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
     setCollapsed((value) => {
       const nextCollapsed = !value;
       if (!nextCollapsed) {
-        setExpanded(collectExpandedPath(activeMenuPath));
+        // setExpanded(collectExpandedPath(activeMenuPath));
+         setExpanded({
+          ...collectDefaultExpanded(activeApp?.children || [], 1),
+          ...collectExpandedPath(activeMenuPath),
+        });
       }
       return nextCollapsed;
     });
@@ -164,7 +177,11 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
           </button>
         </div>
 
-        {!displayCollapsed && <p className="sidebar-label">{titleCase(activeApp?.title || "Workspace")}</p>}
+         {!displayCollapsed && (
+            <p className="sidebar-label" title={activeApp ? getModuleMeta(activeApp, 0).fullForm : "Workspace"}>
+             {activeApp ? getModuleMeta(activeApp, 0).fullForm : "Workspace"}
+            </p>
+         )}
 
         <nav className="sidebar-nav">
           {(activeApp?.children || []).map((item) => (
@@ -266,6 +283,17 @@ function collectExpandedPath(nodes: MenuNode[]): Record<string, boolean> {
   nodes.slice(0, -1).forEach((node) => {
     if (node.children?.length) {
       expanded[node.id || node.title] = true;
+    }
+  });
+  return expanded;
+}
+
+function collectDefaultExpanded(nodes: MenuNode[], maxLevel: number, level = 1): Record<string, boolean> {
+  const expanded: Record<string, boolean> = {};
+  nodes.forEach((node) => {
+    if (node.children?.length && level <= maxLevel) {
+      expanded[node.id || node.title] = true;
+      Object.assign(expanded, collectDefaultExpanded(node.children, maxLevel, level + 1));
     }
   });
   return expanded;
