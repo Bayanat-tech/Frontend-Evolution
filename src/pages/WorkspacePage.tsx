@@ -60,6 +60,7 @@ import { cleanPath, flattenLeaves, titleCase } from "../utils/menu";
 import { buildWorkspaceApps, cleanAppCode } from "../utils/workspaceApps";
 import { resolveWorkspaceRoute } from "../routes/workspaceRoutes";
 import { cn } from "../lib/utils";
+import { getModuleMeta } from "./AppSelectionPage";
 
 export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => void }) {
   const { appCode } = useParams();
@@ -176,7 +177,11 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
           </button>
         </div>
 
-        {!displayCollapsed && <p className="sidebar-label">{titleCase(activeApp?.title || "Workspace")}</p>}
+         {!displayCollapsed && (
+            <p className="sidebar-label" title={activeApp ? getModuleMeta(activeApp, 0).fullForm : "Workspace"}>
+             {activeApp ? getModuleMeta(activeApp, 0).fullForm : "Workspace"}
+            </p>
+         )}
 
         <nav className="sidebar-nav">
           {(activeApp?.children || []).map((item) => (
