@@ -26,7 +26,7 @@ import {
   ScanFace,
 } from "lucide-react";
 import type { CSSProperties, ElementType } from "react";
-import { Fragment, useMemo } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { HeaderProfile } from "../components/HeaderProfile";
 import { useAuth } from "../state/AuthContext";
@@ -252,6 +252,30 @@ function isSecurityModule(app: MenuNode) {
 //
 const trailingCodes = ["EMS","HCM","AMS"];
 
+const appLaunchGroups = [
+  {
+    key: "operations",
+    title: "Operations Suite",
+    subtitle: "Warehouse, freight, transport and maintenance operations",
+    codes: ["WMS", "FMS", "TMS", "MMS"],
+    tone: "operations",
+  },
+  {
+    key: "business",
+    title: "Business Suite",
+    subtitle: "Finance, vendor and customer management workflows",
+    codes: ["FINANCE", "VMS", "CMS"],
+    tone: "business",
+  },
+  {
+    key: "people",
+    title: "Workforce Suite",
+    subtitle: "Employee, HR and attendance applications",
+    codes: ["EMS", "HCM", "AMS"],
+    tone: "people",
+  },
+];
+
 function getSortWeight(code: string, catalogOrder: string[]) {
   if (trailingCodes.includes(code)) {
     return catalogOrder.length - 0.5;
@@ -311,14 +335,23 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
     );
   }, [displayCoreApps]);
 
-  const catalogOrderCodes = useMemo(() => moduleCatalog.map((entry) => entry.meta.code), []);
-
-  const trailingBreakIndex = useMemo(() => {
-    return displayCards.findIndex((card) => {
-      const weight = getSortWeight(card.meta.code, catalogOrderCodes);
-      return weight >= catalogOrderCodes.length - 0.5;
+  const groupedDisplayCards = useMemo(() => {
+    const groups = appLaunchGroups.map((group) => ({ ...group, cards: [] as typeof displayCards }));
+    const otherGroup = {
+      key: "other",
+      title: "Additional Apps",
+      subtitle: "Other permitted applications",
+      codes: [] as string[],
+      tone: "other",
+      cards: [] as typeof displayCards,
+    };
+    displayCards.forEach((card) => {
+      const code = card.meta.code.toUpperCase();
+      const group = groups.find((item) => item.codes.includes(code)) || otherGroup;
+      group.cards.push(card);
     });
-  }, [displayCards, catalogOrderCodes]);
+    return [...groups, otherGroup].filter((group) => group.cards.length > 0);
+  }, [displayCards]);
 
 //   const trailingBreakIndex = useMemo(() => {
 //   return displayCoreApps.findIndex((app) => {
@@ -365,27 +398,28 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
                 <span>Core Apps</span>
               </div>
 
-              <div className="module-grid app-launch-grid">
-
-                {displayCards.map((card, index) => (
-                   <Fragment key={card.key}>
-                     {index === trailingBreakIndex && trailingBreakIndex > 0 ? (
-                       <div className="app-launch-row-break" aria-hidden="true" />
-                     ) : null}
-                     <ModuleCard
-                       childCount={card.kind === "app" ? (card.app.children?.length || 0) : 0}
-                       screenCount={card.kind === "app" ? flattenLeaves(card.app.children || []).length : 0}
-                       meta={card.meta}
-                       isExternal={card.kind === "external"}
-                       onClick={() =>
-                         card.kind === "external"
-                           ? window.open(card.url, "_blank", "noopener,noreferrer")
-                           : openApp(card.app)
-                       }
-                     />
-                   </Fragment>
-                 ))}
-             </div>
+              <div className="app-core-groups">
+                {groupedDisplayCards.map((group) => (
+                  <div className={`app-core-group app-core-group--${group.tone}`} key={group.key}>
+                    <div className="module-grid app-launch-grid app-core-group-grid">
+                      {group.cards.map((card) => (
+                        <ModuleCard
+                          key={card.key}
+                          childCount={card.kind === "app" ? (card.app.children?.length || 0) : 0}
+                          screenCount={card.kind === "app" ? flattenLeaves(card.app.children || []).length : 0}
+                          meta={card.meta}
+                          isExternal={card.kind === "external"}
+                          onClick={() =>
+                            card.kind === "external"
+                              ? window.open(card.url, "_blank", "noopener,noreferrer")
+                              : openApp(card.app)
+                          }
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </section>
 
             {hasUtilityCards ? (
@@ -499,7 +533,6 @@ function BtMastersCard({ app, onClick }: { app: MenuNode; onClick: () => void })
       <div className="utility-card__copy">
         <h2><span>B<sup>T</sup>-</span>Masters</h2>
         <em>(General Masters)</em>
-        <p>General Masters related to all permitted apps, including WMS, HR, Finance and Security.</p>
       </div>
       <div className="bt-masters-card__modules">
         {preview.map((module) => (
