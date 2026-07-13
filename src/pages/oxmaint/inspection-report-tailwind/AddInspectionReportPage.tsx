@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { FaChevronLeft, FaClipboardCheck, FaInfoCircle, FaSearch } from 'react-icons/fa';
 import { useFormik } from 'formik';
-import { IconButton } from './components/ui';
+import { IconButton } from '../../../components/mms_ui';
 import {
   getInspectionReportAssetInventoryDropdown,
   getInspectionReportInspectionFormDropdown,
