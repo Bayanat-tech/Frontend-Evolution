@@ -259,22 +259,15 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
           bill: row.bill,
           job_date: row.job_date,
         })),
-        ...storageLines.map((row) => ({
-          job_no: row.STORAGE_NO,
-          act_code: "9001",
-          activity: row.ACTIVITY,
-          invoice_no: invoiceNo,
-          prin_code: row.PRIN_CODE,
-          quantity: row.QTY,
-          bill: row.AMOUNT,
-          job_date: row.TXN_DATE,
-        })),
       ];
-
+const storageSelection = storageLines.map((row) => ({
+  ...row,
+  act_code: "9001",             
+}));
       const result = await updateBillingApi({
         invoiceHeader,
         invoiceDetails,
-        storageSelection: storageLines,
+        storageSelection: storageSelection,
         jobSelection,
       });
       if (result.success) onClose(true);

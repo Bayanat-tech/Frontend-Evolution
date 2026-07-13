@@ -297,7 +297,7 @@ export default function AC_StatementPage() {
           : "All",
         code5: formatDateOracle(dateFrom),
         code6: formatDateOracle(dateTo),
-        code20: "ROWSQL"
+        code20: "RAWSQL"
       };
       await openAcStatementReport(params);
     } catch (err: any) {
@@ -330,7 +330,7 @@ const handleExportExcel = async () => {
                 : "All",
             code5: formatDateOracle(dateFrom),
             code6: formatDateOracle(dateTo),
-            code20: "ROWSQL",
+            code20: "RAWSQL",
         };
         await exportAcStatementExcel(params);
     } catch (err: any) {
