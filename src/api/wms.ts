@@ -391,7 +391,7 @@ export async function downloadGrnReportExcel(
   const url  = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href     = url;
-  link.download = `Job_${jobNo}_Details.xlsx`;
+  link.download = `Grn_report_job_no_${jobNo}.xlsx`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -428,6 +428,36 @@ export async function downloadTallyReportExcel(
   URL.revokeObjectURL(url);
 }
 
+export async function getInbServiceActivityReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/inb-serviceactivity/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+ 
+export async function downloadInbServiceActivityReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/inb-serviceactivity/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Inbound_activity_service_report_jobno_${jobNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export async function getDnReport(prinCode: string, jobNo: string): Promise<string> {
   const response = await api.get(
     `/api/wms/outbound/reports/Dn-report/${jobNo}?prin_code=${prinCode}`,
@@ -451,7 +481,7 @@ export async function downloadDnReportExcel(
   const url  = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href     = url;
-  link.download = `Tally_Details_report_jobno_${jobNo}.xlsx`;
+  link.download = `DN_report_jobno_${jobNo}.xlsx`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -481,7 +511,37 @@ export async function downloadOubPickReportExcel(
   const url  = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href     = url;
-  link.download = `Tally_Details_report_jobno_${jobNo}.xlsx`;
+  link.download = `Outbound_Picking_report_jobno_${jobNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export async function getOubServiceActivityReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/Oub-serviceactivity/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+ 
+export async function downloadOubServiceActivityReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/Oub-serviceactivity/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Outbound_activity_service_report_jobno_${jobNo}.xlsx`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

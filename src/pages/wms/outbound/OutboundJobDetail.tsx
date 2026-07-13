@@ -1,7 +1,7 @@
 import { ArrowLeft, FileSpreadsheet, Printer, RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { executeWmsInboundSql, getDnReport, downloadDnReportExcel, getOubPickReport, downloadOubPickReportExcel, downloadOubJobDetReportExcel, getOubJobDetReport } from "../../../api/wms";
+import { executeWmsInboundSql, getDnReport, downloadDnReportExcel, getOubPickReport, downloadOubPickReportExcel, downloadOubJobDetReportExcel, getOubJobDetReport, getOubServiceActivityReport, downloadOubServiceActivityReportExcel } from "../../../api/wms";
 import { Button } from "../../../components/ui/Button";
 import { useAuth } from "../../../state/AuthContext";
 import type { WmsRow } from "./Outboundtypes";
@@ -44,6 +44,12 @@ const REPORTS: TReport[] = [
     reportTitle: "Delivery Note Report",
     apiFn:       getDnReport,
     excelFn:     downloadDnReportExcel,
+  },
+  {
+    id:          4,
+    reportTitle: "Activity Services Report",
+    apiFn:       getOubServiceActivityReport,
+    excelFn:     downloadOubServiceActivityReportExcel,
   },
 ];
 
