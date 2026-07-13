@@ -44,7 +44,7 @@ const getToday = (): string => {
 const REPORT_WINDOW_NAME = "pnl_report_window";
 
 // ─── Popup window shell ────────────────────────────────────────────────────────
-// The popup gets its own tiny toolbar (Back / Download Excel / Close).
+// The popup gets its own tiny toolbar (Back / Print / Download Excel / Close).
 // CRITICAL: it also relays PNL_DRILL_DOWN postMessages coming from the inner
 // report iframe up to window.opener (the main app tab). Without this relay,
 // drill-down clicks never reach the React app because the iframe's
@@ -101,12 +101,17 @@ function buildShellHtml(title: string): string {
     border: none;
     display: block;
   }
+  @media print {
+    #toolbar { display: none !important; }
+    #reportFrame { height: 100vh; }
+  }
 </style>
 </head>
 <body>
   <div id="toolbar">
     <button id="btnBack" style="display:none;">&larr; Back</button>
     <span class="title" id="titleSpan">${title.replace(/</g, "&lt;")}</span>
+    <button id="btnPrint">&#128438; Print</button>
     <button id="btnExcel">Download Excel</button>
     <button id="btnClose">Close</button>
   </div>
@@ -148,7 +153,7 @@ function writeReportContent(win: Window, html: string) {
 
   const frameWin = frame.contentWindow as any;
   if (frameWin) {
-    // Suppress the report's own print() call.
+    // Suppress the report's own print() call while (re)writing content.
     const originalPrint = frameWin.print;
     frameWin.print = () => {};
     const restore = () => {
@@ -177,6 +182,16 @@ function updateShellChrome(win: Window, title: string, showBack: boolean) {
   if (titleSpan) titleSpan.textContent = title;
   const backBtn = doc.getElementById("btnBack") as HTMLButtonElement | null;
   if (backBtn) backBtn.style.display = showBack ? "inline-flex" : "none";
+}
+
+/** Triggers the browser print dialog for just the report iframe's content
+ *  (not the popup toolbar around it). */
+function printReportFrame(win: Window) {
+  const frame = win.document.getElementById("reportFrame") as HTMLIFrameElement | null;
+  const frameWin = frame?.contentWindow;
+  if (!frameWin) return;
+  frameWin.focus();
+  frameWin.print();
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -213,6 +228,7 @@ export default function ProfitLossPage() {
 
   const onBackRef = useRef<() => void>(() => {});
   const onExcelRef = useRef<() => void>(() => {});
+  const onPrintRef = useRef<() => void>(() => {});
   const onCloseRef = useRef<() => void>(() => {});
 
   // ── Derived ──────────────────────────────────────────────────────────────
@@ -381,12 +397,23 @@ export default function ProfitLossPage() {
     }
   }, [currentDrill, buildPayload]);
 
+  /** Prints whatever is currently shown in the popup's report iframe
+   *  (base report or the current drill-down level), not the toolbar. */
+  const handlePrint = useCallback(() => {
+    const win = reportWinRef.current;
+    if (!win || win.closed) return;
+    printReportFrame(win);
+  }, []);
+
   useEffect(() => {
     onBackRef.current = handleDrillBack;
   }, [handleDrillBack]);
   useEffect(() => {
     onExcelRef.current = handleExcel;
   }, [handleExcel]);
+  useEffect(() => {
+    onPrintRef.current = handlePrint;
+  }, [handlePrint]);
   useEffect(() => {
     onCloseRef.current = handleCloseReport;
   }, [handleCloseReport]);
@@ -413,9 +440,11 @@ export default function ProfitLossPage() {
 
     const btnBack = win.document.getElementById("btnBack");
     const btnExcel = win.document.getElementById("btnExcel");
+    const btnPrint = win.document.getElementById("btnPrint");
     const btnClose = win.document.getElementById("btnClose");
     if (btnBack) btnBack.onclick = () => onBackRef.current();
     if (btnExcel) btnExcel.onclick = () => onExcelRef.current();
+    if (btnPrint) btnPrint.onclick = () => onPrintRef.current();
     if (btnClose) btnClose.onclick = () => onCloseRef.current();
 
     stopPolling();
