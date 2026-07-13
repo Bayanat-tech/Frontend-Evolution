@@ -7,7 +7,7 @@ import {
   DialogContent,
   DialogTitle,
   TextField
-} from './ui';
+} from '../../../../components/mms_ui';
 import { SelectionDialogProps, SelectionOption } from '../types/SelectionDialog.types';
 
 const SelectionDialog = <T extends SelectionOption>({

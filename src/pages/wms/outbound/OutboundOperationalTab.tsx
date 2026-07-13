@@ -54,6 +54,7 @@ import {
   AvailableQuantityCard,
   ConfirmToolbar,
 } from "./OutboundFormFields";
+import { OutboundAcitivityBilling } from "./OutboundAcitivityBilling";
 
 // ── OutboundOperationalTab ─────────────────────────────────────────────────────
 export function OutboundOperationalTab({
@@ -67,7 +68,7 @@ export function OutboundOperationalTab({
   jobNo: string;
   tab: string;
   loadingJob: boolean;
-  principalCode?: string;
+  principalCode: string;
 }) {
   const [pickModalOpen, setPickModalOpen] = useState(false);
   const [pickPreference, setPickPreference] = useState("job_no");
@@ -75,6 +76,7 @@ export function OutboundOperationalTab({
   const [leastQty, setLeastQty] = useState(false);
   const [ignoreMinExp, setIgnoreMinExp] = useState(false);
   const { user } = useAuth();
+  const company_code = user?.company_code || "";
   const prinCode = value(job || {}, "prin_code") || principalCode || "";
   const [rows, setRows] = useState<WmsRow[]>([]);
   const [query, setQuery] = useState("");
@@ -108,7 +110,7 @@ export function OutboundOperationalTab({
   const config = getOutboundTabConfig(tab);
 
   const loadRows = async (clearNotice = true) => {
-    if (!config || loadingJob) return;
+    if (!config || loadingJob || tab === "activity_billing") return;
     setLoading(true);
     if (clearNotice) setNotice(null);
     setSelection({});
@@ -133,9 +135,13 @@ export function OutboundOperationalTab({
   };
 
   useEffect(() => {
-    if (!prinCode) return;
+    if (!prinCode || tab === "activity_billing") return;
     void loadRows();
   }, [tab, jobNo, prinCode, loadingJob]);
+
+  if (tab === "activity_billing") {
+    return <OutboundAcitivityBilling company_code={company_code} prin_code={principalCode} job_no={jobNo}  />
+  }
 
   if (!config)
     return (
@@ -475,6 +481,7 @@ export function OutboundOperationalTab({
       </Button>
     </div>
   );
+
 
   return (
     <section className="grid gap-3">

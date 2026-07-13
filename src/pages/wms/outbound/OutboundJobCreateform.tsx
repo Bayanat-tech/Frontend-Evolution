@@ -299,7 +299,8 @@ export function OutboundJobCreateForm({
         <div className="grid gap-2.5 p-3 md:grid-cols-4">
           <label className="field md:col-span-2">
             <span>Description</span>
-            <Input
+            <textarea
+            className="ui-textarea min-h-[58px] rounded-md"
               value={String(form.description1 || "")}
               onChange={(event) => setValue("description1", event.target.value)}
               placeholder="Short job description"

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FaCheck } from 'react-icons/fa';
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Paper, TextField } from './ui';
+import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Paper, TextField } from '../../../../components/mms_ui';
 import { InspectionItemResponse } from '../types/AddInspectionReportPage.types';
 import { InspectionReportStructureRow } from '../types/inspectionReportApi.types';
 import { useAuth } from '../../../../state/AuthContext';

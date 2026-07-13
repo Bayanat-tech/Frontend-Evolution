@@ -1,13 +1,6 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
-import {
-  ColumnDef,
-  flexRender,
-  getCoreRowModel,
-  getSortedRowModel,
-  SortingState,
-  useReactTable
-} from '@tanstack/react-table';
-import { FaCaretDown, FaFilePdf, FaPlus, FaSearch } from 'react-icons/fa';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ColumnDef } from '@tanstack/react-table';
+import { FaCaretDown, FaFilePdf, FaPlus, FaPrint } from 'react-icons/fa';
 import AddInspectionReportPage from './AddInspectionReportPage';
 import { deleteInspectionReport } from './api/inspectionReportApi';
 import {
@@ -18,19 +11,15 @@ import {
   DialogContentText,
   DialogTitle,
   Menu,
-  MenuItem,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField
-} from './components/ui';
+  MenuItem
+} from '../../../components/mms_ui';
 import { InspectionReportPreview, InspectionReportPreviewData } from './components';
 import { InspectionReportMainRow } from './types/InspectionReportMainPage.types';
 import { useAuth } from '../../../state/AuthContext';
 import { getDynamicLookup } from '../../../api/lookups';
+import { DataTable } from '../../../components/ui/DataTable';
+import { getInspectionReportExcelBlob, getInspectionReportHtml } from './api/report';
+import ReportDialogPage from '../../../components/ReportDialogPage';
 
 type InspectionReportApiRow = {
   id?: number | string;
@@ -55,18 +44,100 @@ type InspectionReportApiRow = {
   created_at?: string;
 };
 
+function IframeReportRenderer({ required_values }: { required_values: { html: string } }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+    const win = iframe.contentWindow as any;
+    let originalPrint: (() => void) | undefined;
+    if (win) {
+      originalPrint = win.print;
+      win.print = () => {};
+    }
+    doc.open();
+    doc.write(required_values.html);
+    doc.close();
+    const restorePrint = () => { if (win && originalPrint) win.print = originalPrint; };
+    if (doc.readyState === 'complete') restorePrint();
+    else iframe.addEventListener('load', restorePrint, { once: true });
+  }, [required_values.html]);
+
+  return <iframe ref={iframeRef} title="report" style={{ width: '100%', minHeight: '70vh', border: 'none' }} />;
+}
+
+function getLoadingHtml(): string {
+  return `<!doctype html><html><body style="display:flex;align-items:center;justify-content:center;height:60vh;font-family:Arial,sans-serif;color:#1a5f4a;font-size:14px">
+  <div style="text-align:center">Loading report…</div>
+</body></html>`;
+}
+
 const InspectionReportMainPage = () => {
   const { user } = useAuth();
   const [searchText, setSearchText] = useState('');
   const [showAddInspection, setShowAddInspection] = useState(false);
   const [reportRows, setReportRows] = useState<InspectionReportMainRow[]>([]);
+  const [loadingReports, setLoadingReports] = useState(false);
   const [previewReport, setPreviewReport] = useState<InspectionReportPreviewData | null>(null);
   const [actionAnchorRect, setActionAnchorRect] = useState<DOMRect | null>(null);
   const [selectedActionRow, setSelectedActionRow] = useState<InspectionReportMainRow | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportGenerating, setReportGenerating] = useState(false);
+  const [activeReportRow, setActiveReportRow] = useState<InspectionReportMainRow | null>(null);
+
+  const handleOpenReport = async (row: InspectionReportMainRow) => {
+    const reportId = Number(row.id);
+    if (!Number.isFinite(reportId) || reportId <= 0) return;
+
+    setActiveReportRow(row);
+    setReportHtml(null);
+    setReportGenerating(true);
+    handleCloseActionMenu();
+
+    try {
+      const html = await getInspectionReportHtml(reportId);
+      setReportHtml(html);
+    } catch (error) {
+      console.error('Failed to load inspection report:', error);
+      setReportHtml(null);
+      setActiveReportRow(null);
+    } finally {
+      setReportGenerating(false);
+    }
+  };
+
+  const handleExcelDownload = async () => {
+    if (!activeReportRow) return;
+    const reportId = Number(activeReportRow.id);
+    try {
+      const blob = await getInspectionReportExcelBlob(reportId);
+      const fileBlob = new Blob([blob], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = window.URL.createObjectURL(fileBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `inspection-report-${activeReportRow.reportNumber || reportId}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download inspection report Excel:', error);
+    }
+  };
+
+  const closeReportDialog = () => {
+    setReportHtml(null);
+    setActiveReportRow(null);
+  };
 
   const loadReports = async () => {
+    setLoadingReports(true);
     try {
       const response = await getDynamicLookup({
         parameter: 'OX_INSPECTION_REPORT_GRID',
@@ -111,6 +182,8 @@ const InspectionReportMainPage = () => {
     } catch (error) {
       console.error('Failed to load inspection reports:', error);
       setReportRows([]);
+    } finally {
+      setLoadingReports(false);
     }
   };
 
@@ -119,38 +192,6 @@ const InspectionReportMainPage = () => {
       void loadReports();
     }
   }, [showAddInspection]);
-
-  const filteredMainRows = useMemo(() => {
-    const q = searchText.trim().toLowerCase();
-    if (!q) return reportRows;
-
-    return reportRows.filter((row) =>
-      [
-        row.reportNumber,
-        row.date,
-        row.time,
-        row.assetNumber,
-        row.assetName,
-        row.location,
-        row.inspector,
-        row.inventory,
-        String(row.runningHours),
-        row.runningHoursUnit,
-        String(row.inspectionFormId),
-        row.overallCondition,
-        row.assetSafeToUse,
-        row.maintenanceRequired,
-        row.assetStatus,
-        row.additionalNote,
-        row.createdBy,
-        row.updateBy,
-        row.createdAt
-      ]
-        .join(' ')
-        .toLowerCase()
-        .includes(q)
-    );
-  }, [reportRows, searchText]);
 
   const handleOpenPreview = async (row: InspectionReportMainRow) => {
     const reportId = Number(row.id);
@@ -249,26 +290,24 @@ const InspectionReportMainPage = () => {
   const columns = useMemo<ColumnDef<InspectionReportMainRow>[]>(
     () => [
       {
-        id: 'action',
-        header: 'Action',
-        enableSorting: false,
-        size: 150,
-        cell: ({ row }) => (
-          <Button
-            size="small"
-            endIcon={<FaCaretDown size={12} />}
-            onClick={(event) => handleOpenActionMenu(event, row.original)}
-            className="bg-[#0a6ed1] text-white normal-case"
-          >
-            Action
-          </Button>
-        )
-      },
-      {
         id: 'reportNumber',
         header: 'Report Number',
         accessorKey: 'reportNumber',
-        size: 190
+        size: 190,
+        cell: ({ row }) => (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              void handleOpenPreview(row.original);
+            }}
+            className="inline-flex items-center gap-1.5 border-none bg-transparent p-0 cursor-pointer text-[#0a6ed1] text-[12px] font-bold hover:underline"
+            title="Open report"
+          >
+            <FaFilePdf />
+            {row.original.reportNumber}
+          </button>
+        )
       },
       {
         id: 'date',
@@ -299,6 +338,12 @@ const InspectionReportMainPage = () => {
         header: 'Inspector',
         accessorKey: 'inspector',
         size: 180
+      },
+      {
+        id: 'inspectionFormId',
+        header: 'Inspection Form',
+        accessorKey: 'inspectionFormId',
+        size: 150
       },
       {
         id: 'overallCondition',
@@ -334,19 +379,26 @@ const InspectionReportMainPage = () => {
         header: 'Additional Note',
         accessorKey: 'additionalNote',
         size: 240
+      },
+      {
+        id: 'action',
+        header: 'Action',
+        enableSorting: false,
+        size: 150,
+        cell: ({ row }) => (
+          <Button
+            size="small"
+            endIcon={<FaCaretDown size={12} />}
+            onClick={(event) => handleOpenActionMenu(event, row.original)}
+            className="bg-[#0a6ed1] text-white normal-case"
+          >
+            Action
+          </Button>
+        )
       }
     ],
     []
   );
-
-  const table = useReactTable({
-    data: filteredMainRows,
-    columns,
-    state: { sorting },
-    onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel()
-  });
 
   if (showAddInspection) {
     return <AddInspectionReportPage onBack={() => setShowAddInspection(false)} />;
@@ -369,89 +421,39 @@ const InspectionReportMainPage = () => {
         >
           Start New Inspection
         </Button>
-
-        <TextField
-          size="small"
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          placeholder="Search"
-          className="w-[220px] max-w-full"
-          endAdornment={<FaSearch size={13} className="text-[#475569]" />}
-        />
       </div>
 
-      <div className="w-full border border-[#d8dee6] text-[12px] text-[#516b89]">
-        <TableContainer>
-          <Table>
-            <TableHead>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id} className="border-b border-[#dbe3ed]">
-                  {headerGroup.headers.map((header) => (
-                    <TableCell
-                      key={header.id}
-                      head
-                      onClick={header.column.getToggleSortingHandler()}
-                      className={`bg-[#f4f7fb] text-[12px] font-bold text-[#223246] ${
-                        header.column.getCanSort() ? 'cursor-pointer select-none' : ''
-                      }`}
-                      style={{ width: header.getSize() }}
-                    >
-                      <span className="inline-flex items-center gap-1">
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                        {{
-                          asc: '▲',
-                          desc: '▼'
-                        }[header.column.getIsSorted() as string] ?? null}
-                      </span>
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHead>
-            <TableBody>
-              {table.getRowModel().rows.map((row) => (
-                <Fragment key={row.id}>
-                  <TableRow>
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className="text-[12px] text-[#516b89]" style={{ width: cell.column.getSize() }}>
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                  <TableRow key={`${row.id}-detail`} className="border-b border-[#e2e8f0]">
-                    <TableCell colSpan={columns.length} className="py-1 px-3">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2 text-[#243447] text-[12px]">
-                          <span className="font-bold text-[#516b89]">Inspection Form:</span>
-                          <span className="font-medium">{String(row.original.inspectionFormId)}</span>
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1 border-none bg-transparent cursor-pointer text-[#243447] text-[12px] font-bold hover:text-[#0a6ed1]"
-                            onClick={() => handleOpenPreview(row.original)}
-                          >
-                            <FaFilePdf />
-                            PDF
-                          </button>
-                        </div>
-                        <div className="flex items-center gap-2 text-[#243447] text-[12px]">
-                          <span className="font-bold text-[#516b89]">Note:</span>
-                          <span className="font-medium">{row.original.additionalNote || '-'}</span>
-                        </div>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                </Fragment>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+      <div className="px-3 pb-3">
+        <DataTable
+          columns={columns}
+          data={reportRows}
+          loading={loadingReports}
+          searchValue={searchText}
+          onSearchChange={setSearchText}
+          searchPlaceholder="Search"
+          emptyText="No inspection reports found"
+          density="compact"
+        />
       </div>
 
       {previewReport && (
         <InspectionReportPreview open={Boolean(previewReport)} onClose={() => setPreviewReport(null)} report={previewReport} />
       )}
 
+      {(reportHtml !== null || reportGenerating) && activeReportRow && (
+        <ReportDialogPage
+          title={`Inspection Report ${activeReportRow.reportNumber}`}
+          Report={IframeReportRenderer}
+          required_values={{ html: reportGenerating ? getLoadingHtml() : reportHtml! }}
+          excel={handleExcelDownload}
+          onClose={closeReportDialog}
+        />
+      )}
+
       <Menu open={Boolean(actionAnchorRect)} anchorRect={actionAnchorRect} onClose={handleCloseActionMenu}>
+        <MenuItem onClick={() => selectedActionRow && handleOpenReport(selectedActionRow)}>
+          <FaPrint className="mr-1.5 inline" /> Report
+        </MenuItem>
         <MenuItem onClick={handleOpenDeleteConfirm}>Delete</MenuItem>
       </Menu>
 
