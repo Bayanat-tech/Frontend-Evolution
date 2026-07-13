@@ -343,7 +343,7 @@ export function AdminSupportCenterPage() {
               <span>{onlineUsers.length} online</span>
             </div>
             <div className="support-center-mini-users">
-              {activeUsers.slice(0, 6).map((item) => {
+              {onlineUsers.slice(0, 6).map((item) => {
                 const online = isSupportUserOnline(item);
                 const name = item.USERNAME || item.LOGINID || "User";
                 return (
@@ -356,7 +356,7 @@ export function AdminSupportCenterPage() {
                   </button>
                 );
               })}
-              {!activeUsers.length && <p>No active users found.</p>}
+              {!onlineUsers.length && <p>No users are online right now.</p>}
             </div>
           </div>
 
@@ -395,20 +395,23 @@ export function AdminSupportCenterPage() {
         <div className="support-center-users-page">
           <div className="support-center-presence-summary">
             <div>
+              <UserRoundCheck size={15} />
               <strong>{activeUsers.length}</strong>
               <span>Total users</span>
             </div>
             <div className="online">
+              <CheckCircle2 size={15} />
               <strong>{onlineUsers.length}</strong>
               <span>Online now</span>
             </div>
             <div>
+              <Clock3 size={15} />
               <strong>{awayUsers.length}</strong>
               <span>Away</span>
             </div>
           </div>
 
-          <div className="support-center-card support-center-presence-board">
+          <div className="support-center-card support-center-presence-board online-board">
             <div className="support-center-card-head">
               <h3>Online now</h3>
               <span>{onlineUsers.length} active</span>
@@ -422,7 +425,7 @@ export function AdminSupportCenterPage() {
             </div>
           </div>
 
-          <div className="support-center-card support-center-presence-board">
+          <div className="support-center-card support-center-presence-board away-board">
             <div className="support-center-card-head">
               <h3>Away users</h3>
               <span>{awayUsers.length} away</span>
@@ -615,6 +618,49 @@ export function AdminSupportCenterPage() {
               <input ref={fileInputRef} className="hidden" type="file" accept="image/*,.pdf,.txt,.doc,.docx,.xls,.xlsx" multiple onChange={onFiles} />
             </footer>
           </main>
+
+          <aside className="support-center-context">
+            <div className="support-context-profile">
+              <span className="support-center-avatar">
+                {String(selectedTicket?.REQUESTER_NAME || selectedTicket?.REQUESTER_LOGINID || "ST").slice(0, 2).toUpperCase()}
+                <i className={selectedTicket?.REQUESTER_IS_ONLINE === "Y" ? "online" : ""} />
+              </span>
+              <div>
+                <h3>{selectedTicket?.REQUESTER_NAME || selectedTicket?.REQUESTER_LOGINID || "Ticket details"}</h3>
+                <span>{selectedTicket?.REQUESTER_IS_ONLINE === "Y" ? "Online" : "Support customer"}</span>
+              </div>
+            </div>
+            <div className="support-context-fields">
+              <div>
+                <span>Ticket</span>
+                <strong>{selectedTicket ? `#${selectedTicket.TICKET_ID}` : "-"}</strong>
+              </div>
+              <div>
+                <span>Status</span>
+                <strong>{selectedTicket?.STATUS || "-"}</strong>
+              </div>
+              <div>
+                <span>Priority</span>
+                <strong>{selectedTicket?.PRIORITY || "-"}</strong>
+              </div>
+              <div>
+                <span>Assigned developer</span>
+                <strong>{selectedTicket?.DEVELOPER_NAME || selectedTicket?.DEVELOPER_LOGINID || "Not assigned"}</strong>
+              </div>
+              <div>
+                <span>Developer status</span>
+                <strong>{selectedTicket?.DEV_STATUS || "UNASSIGNED"}</strong>
+              </div>
+              <div>
+                <span>Module</span>
+                <strong>{selectedTicket?.MODULE_NAME || "-"}</strong>
+              </div>
+            </div>
+            <div className="support-context-note">
+              <h3>Latest summary</h3>
+              <p>{selectedTicket?.LAST_MESSAGE || "Select a ticket to view the latest customer message and assignment state."}</p>
+            </div>
+          </aside>
         </div>
       )}
       {previewAttachment && (
@@ -638,7 +684,7 @@ function TicketStatusChart({ open, closed, total }: { open: number; closed: numb
   const openPercent = Math.round((open / total) * 100);
   return (
     <div className="support-center-status-chart">
-      <div className="support-center-donut" style={{ background: `conic-gradient(#0b76db 0 ${openPercent}%, #22c55e ${openPercent}% 100%)` }}>
+      <div className="support-center-donut" style={{ background: `conic-gradient(#4f83cc 0 ${openPercent}%, #79c999 ${openPercent}% 100%)` }}>
         <span>{total}</span>
         <small>Total</small>
       </div>
