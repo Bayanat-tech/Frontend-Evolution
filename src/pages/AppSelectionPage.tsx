@@ -59,7 +59,7 @@ const defaultAccents: ModuleAccent[] = [
   { gradient: "linear-gradient(135deg, #f59e0b 0%, #0f766e 100%)", light: "#fff7df", border: "#f6d68a", icon: "#b45309", text: "#6b3b08", glow: "rgba(245, 158, 11, 0.18)" },
 ];
 
-const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta; external?: { url: string } }> = [
+export const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta; external?: { url: string } }> = [
   {
     keys: ["bt support", "support"],
     meta: {
@@ -271,19 +271,6 @@ function sortAppsByDisplayOrder(apps: MenuNode[]) {
   });
 }
 
-// function sortAppsByDisplayOrder(apps: MenuNode[]) {
-//   const catalogOrder = moduleCatalog.map((entry) => entry.meta.code);
-//   return [...apps].sort((first, second) => {
-//     const firstCode = getModuleMeta(first, 0).code;
-//     const secondCode = getModuleMeta(second, 0).code;
-//     const firstIndex = catalogOrder.indexOf(firstCode,);
-//     const secondIndex = catalogOrder.indexOf(secondCode);
-//     const normalizedFirst = firstIndex === -1 ? catalogOrder.length : firstIndex;
-//     const normalizedSecond = secondIndex === -1 ? catalogOrder.length : secondIndex;
-//     return normalizedFirst - normalizedSecond || first.title.localeCompare(second.title);
-//   });
-// }
-
 export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => void }) {
   const { user, menuTree, logout } = useAuth();
   const navigate = useNavigate();
@@ -398,24 +385,6 @@ export function AppSelectionPage({ dark, onToggleTheme }: { dark: boolean; onTog
                      />
                    </Fragment>
                  ))}
-                 {/* {displayCoreApps.map((app, index) => {
-                   const meta = getModuleMeta(app, index);
-                   const childCount = app.children?.length || 0;
-                   const screenCount = flattenLeaves(app.children || []).length;
-                  return (
-                    <Fragment key={app.id || app.title}>
-                    {index === trailingBreakIndex && trailingBreakIndex > 0 ? (
-                      <div className="app-launch-row-break" aria-hidden="true" />
-                        ) : null}
-                       <ModuleCard
-                       childCount={childCount}
-                       screenCount={screenCount}
-                       meta={meta}
-                       onClick={() => openApp(app)}
-                      />
-                    </Fragment>
-                 );
-                })} */}
              </div>
             </section>
 
@@ -582,7 +551,7 @@ function UtilityAppCard({ app, meta, onClick }: { app: MenuNode; meta: ModuleMet
   );
 }
 
-function getModuleMeta(app: MenuNode, index: number): ModuleMeta {
+export function getModuleMeta(app: MenuNode, index: number): ModuleMeta {
   const text = `${app.title} ${app.id || ""}`.toLowerCase();
   const matched = moduleCatalog.find(({ keys }) => keys.some((key) => text.includes(key)));
   if (matched) return matched.meta;

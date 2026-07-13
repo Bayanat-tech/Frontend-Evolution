@@ -1,4 +1,5 @@
-import { executeDynamicDelete, executeDynamicMutation } from '../../../../api/lookups';
+import { executeDynamicDelete, executeDynamicMutation } from '../../../../../api/lookups';
+
 
 export const inUpdHeaderSection = async (
     inspectionFormId: number,
@@ -6,13 +7,14 @@ export const inUpdHeaderSection = async (
     loginid: string,
     headerSectionId?: number | null
 ) => {
-    const response =await executeDynamicMutation({
+    const response = await executeDynamicMutation({
         parameter: 'OX_IN_UPD_HEADER_SECTION',
         loginid,
         val1s1: sectionTitle,
         val1n1: inspectionFormId,
         val1n2: headerSectionId ?? undefined,
     });
+
     return Array.isArray(response) ? response : [];
 };
 
@@ -37,6 +39,7 @@ export const inUpdUnderSection = async (
         val1s3: required,
         val1s4: instruction,
     });
+
     return Array.isArray(response) ? response : [];
 };
 
@@ -51,6 +54,7 @@ export const delUnderSection = async (
         number1: underSectionId,
         number2: headerSectionId,
     });
+
     return response;
 };
 
@@ -67,6 +71,7 @@ export const inUpdInspectionForm = async (
         val1s2: description,
         val1n1: inspectionFormCode ?? undefined
     });
+
     return response;
 };
 
@@ -79,5 +84,6 @@ export const delInspectionForm = async (
         loginid,
         number1: inspectionFormCode,
     });
+
     return response;
 };

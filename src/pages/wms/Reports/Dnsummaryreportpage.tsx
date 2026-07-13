@@ -1,15 +1,17 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
     Printer,
     RotateCcw,
     FileText,
     Download,
     Eye,
+    ChevronDown,
+    ChevronUp,
 } from "lucide-react";
 import { useAuth } from "../../../state/AuthContext";
-import { getDynamicLookupaccount } from "../../../api/lookups";
+import { getDynamicLookupaccount, getLookupText, getLookupValue, LookupRow } from "../../../api/lookups";
 import {
     getDnSummaryReportHtml,
     getDnSummaryReportExcelDownload,
@@ -17,52 +19,39 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface Option {
-    value: string;
-    label: string;
-}
-
-interface LookupRow {
-    [key: string]: any;
-}
-
 interface Params {
-    prin_code: string;   // "All" or a specific PRIN_CODE
+    prin_code: string;   // "All" or comma-joined PRIN_CODEs
     from_date: string;   // "All" or "DD/MM/YYYY"
     to_date:   string;   // "All" or "DD/MM/YYYY"
 }
 
 const ALL_PARAMS: Params = { prin_code: "All", from_date: "All", to_date: "All" };
 
+// ★ Sentinel used inside the `selected` array to represent "All selected".
+//   We never join this into the API param directly — the parent translates
+//   it (or an empty array) into the literal string "All" that the backend
+//   proc already understands and skips the filter for.
+const ALL_SENTINEL = "__ALL__";
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const getField = (row: LookupRow, ...keys: string[]): string => {
-    for (const k of keys) {
-        if (row[k] !== undefined && row[k] !== null) return String(row[k]);
-        const upper = k.toUpperCase();
-        if (row[upper] !== undefined && row[upper] !== null) return String(row[upper]);
-        const lower = k.toLowerCase();
-        if (row[lower] !== undefined && row[lower] !== null) return String(row[lower]);
-    }
-    return "";
-};
-
-const mapCodeNameOptions = (rows: LookupRow[], codeKey: string, nameKey: string): Option[] =>
-    rows
-        .map((r) => {
-            const code = getField(r, codeKey);
-            const name = getField(r, nameKey);
-            if (!code) return null;
-            return { value: code, label: name ? `${code} - ${name}` : code };
-        })
-        .filter((o): o is Option => !!o)
-        .sort((a, b) => a.value.localeCompare(b.value));
 
 /** Format a date input value (YYYY-MM-DD) → DD/MM/YYYY string for the API, or "All" if empty */
 const toApiDateString = (isoDate: string): string => {
     if (!isoDate) return "All";
     const [y, m, d] = isoDate.split("-");
     return `${d}/${m}/${y}`;
+};
+
+/**
+ * Turns the dropdown's `selected` array into the value the API expects.
+ * - []                -> "All"        (nothing picked = no filter)
+ * - [ALL_SENTINEL]     -> "All"        (user explicitly picked "All")
+ * - ["P001","P002"]    -> "P001,P002"  (specific codes)
+ */
+const toApiCodeString = (selected: string[]): string => {
+    if (selected.length === 0) return "All";
+    if (selected.includes(ALL_SENTINEL)) return "All";
+    return selected.join(",");
 };
 
 // ─── Shared styles ─────────────────────────────────────────────────────────────
@@ -74,6 +63,18 @@ const fieldLabelStyle: React.CSSProperties = {
     marginBottom: 2,
     textTransform: "uppercase",
     letterSpacing: "0.05em",
+};
+
+const inputStyle: React.CSSProperties = {
+    width: "100%",
+    fontSize: 12,
+    padding: "8px 10px",
+    border: "1px solid #d1d5db",
+    borderRadius: 7,
+    background: "#fff",
+    color: "#111827",
+    boxSizing: "border-box",
+    outline: "none",
 };
 
 // ─── Reusable components ──────────────────────────────────────────────────────
@@ -106,46 +107,6 @@ function FloatLabel({ label, required, children, bgColor = "#fff" }: {
     );
 }
 
-const selectStyle: React.CSSProperties = {
-    width: "100%",
-    fontSize: 12,
-    padding: "8px 10px",
-    border: "1px solid #d1d5db",
-    borderRadius: 7,
-    background: "#fff",
-    color: "#111827",
-    boxSizing: "border-box",
-    outline: "none",
-};
-
-const SelectField: React.FC<{
-    label: string;
-    options: Option[];
-    value: string;
-    onChange: (v: string) => void;
-    placeholder?: string;
-    loading?: boolean;
-}> = ({ label, options, value, onChange, placeholder, loading }) => (
-    <div style={{ marginBottom: 0 }}>
-        {label && <label style={fieldLabelStyle}>{label}</label>}
-        <select
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            disabled={loading}
-            style={{
-                ...selectStyle,
-                background: loading ? "#f9fafb" : "#fff",
-                cursor: loading ? "not-allowed" : "pointer",
-            }}
-        >
-            <option value="All">{loading ? "Loading…" : (placeholder ?? "All")}</option>
-            {options.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-        </select>
-    </div>
-);
-
 const DateField: React.FC<{
     label: string;
     value: string;        // YYYY-MM-DD (native date input format), "" = All
@@ -162,13 +123,258 @@ const DateField: React.FC<{
             min={min}
             max={max}
             style={{
-                ...selectStyle,
+                ...inputStyle,
                 color: value ? "#111827" : "#9ca3af",
                 cursor: "pointer",
             }}
         />
     </div>
 );
+
+// ─── Multi-select checkbox dropdown (same pattern as Transaction Report) ──────
+
+type MultiSelectDropdownProps = {
+    label: string;
+    required?: boolean;
+    selected: string[];
+    onChange: (values: string[]) => void;
+    loadOptions: () => Promise<LookupRow[]>;
+    valueField: string;
+    displayFields: string[];
+    placeholder?: string;
+    bgColor?: string;
+};
+
+function MultiSelectDropdown({
+    label,
+    required,
+    selected,
+    onChange,
+    loadOptions,
+    valueField,
+    displayFields,
+    placeholder = "All",
+    bgColor = "#fff",
+}: MultiSelectDropdownProps) {
+    const [open, setOpen] = useState(false);
+    const [rows, setRows] = useState<LookupRow[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [search, setSearch] = useState("");
+    const wrapRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (!open) return;
+        const handleClick = (e: MouseEvent) => {
+            if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+                setOpen(false);
+                setSearch("");
+            }
+        };
+        const handleKey = (e: KeyboardEvent) => {
+            if (e.key === "Escape") {
+                setOpen(false);
+                setSearch("");
+            }
+        };
+        document.addEventListener("mousedown", handleClick);
+        document.addEventListener("keydown", handleKey);
+        return () => {
+            document.removeEventListener("mousedown", handleClick);
+            document.removeEventListener("keydown", handleKey);
+        };
+    }, [open]);
+
+    const openDropdown = async () => {
+        const next = !open;
+        setOpen(next);
+        if (next && rows.length === 0 && !loading) {
+            setLoading(true);
+            try {
+                setRows(await loadOptions());
+            } finally {
+                setLoading(false);
+            }
+        }
+    };
+
+    const term = search.trim().toLowerCase();
+    const filteredRows = term
+        ? rows.filter((row) => Object.values(row).some((v) => String(v ?? "").toLowerCase().includes(term)))
+        : rows;
+
+    const allValues = rows.map((r) => String(getLookupValue(r, valueField) ?? "")).filter(Boolean);
+
+    // ★ FIX: "All selected" is now determined by the explicit sentinel OR by
+    //   every individual value happening to be checked — not by expanding
+    //   into the full list of codes on selection.
+    const isAllSelected =
+        selected.includes(ALL_SENTINEL) ||
+        (allValues.length > 0 && allValues.every((v) => selected.includes(v)));
+
+    // ★ FIX: clicking "All" now stores the ALL_SENTINEL instead of every
+    //   individual code. This is what lets the parent translate the
+    //   selection back into the literal "All" the API expects.
+    const toggleAll = () => {
+        if (isAllSelected) onChange([]);
+        else onChange([ALL_SENTINEL]);
+    };
+
+    // ★ FIX: if the sentinel is currently active and the user unchecks one
+    //   specific item, expand to "all except that one" first, so partial
+    //   deselection still works as expected.
+    const toggleOne = (val: string) => {
+        const base = selected.includes(ALL_SENTINEL) ? allValues : selected;
+        if (base.includes(val)) onChange(base.filter((v) => v !== val));
+        else onChange([...base, val]);
+    };
+
+    const displayText = isAllSelected
+        ? "All"
+        : selected.length === 0
+        ? placeholder
+        : selected.length === 1
+        ? (() => {
+              const row = rows.find((r) => String(getLookupValue(r, valueField) ?? "") === selected[0]);
+              return row ? getLookupText(row, displayFields.length ? displayFields : [valueField]) : selected[0];
+          })()
+        : `${selected.length} selected`;
+
+    return (
+        <div ref={wrapRef} style={{ position: "relative" }}>
+            <FloatLabel label={label} required={required} bgColor={bgColor}>
+                <button
+                    type="button"
+                    onClick={openDropdown}
+                    style={{
+                        ...inputStyle,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        cursor: "pointer",
+                        textAlign: "left",
+                    }}
+                >
+                    <span
+                        style={{
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            color: selected.length ? "#111827" : "#9ca3af",
+                        }}
+                    >
+                        {displayText}
+                    </span>
+                    {open ? (
+                        <ChevronUp size={14} color="#6b7280" style={{ flexShrink: 0, marginLeft: 6 }} />
+                    ) : (
+                        <ChevronDown size={14} color="#6b7280" style={{ flexShrink: 0, marginLeft: 6 }} />
+                    )}
+                </button>
+            </FloatLabel>
+
+            {open && (
+                <div
+                    style={{
+                        position: "absolute",
+                        top: "100%",
+                        left: 0,
+                        right: 0,
+                        marginTop: 4,
+                        background: "#fff",
+                        border: "0.5px solid #d1d5db",
+                        borderRadius: 6,
+                        boxShadow: "0 6px 16px rgba(0,0,0,0.1)",
+                        zIndex: 50,
+                        maxHeight: 260,
+                        display: "flex",
+                        flexDirection: "column",
+                        overflow: "hidden",
+                    }}
+                >
+                    <div style={{ padding: "6px 8px", borderBottom: "0.5px solid #e5e7eb", flexShrink: 0 }}>
+                        <input
+                            type="text"
+                            autoFocus
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Search..."
+                            style={{ ...inputStyle, fontSize: 11, padding: "4px 8px" }}
+                        />
+                    </div>
+                    <div style={{ overflowY: "auto", flex: 1 }}>
+                        {loading ? (
+                            <div style={{ padding: 12, fontSize: 12, color: "#6b7280", textAlign: "center" }}>Loading...</div>
+                        ) : filteredRows.length === 0 ? (
+                            <div style={{ padding: 12, fontSize: 12, color: "#6b7280", textAlign: "center" }}>No records found</div>
+                        ) : (
+                            <>
+                                <label
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 8,
+                                        padding: "7px 10px",
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        cursor: "pointer",
+                                        background: isAllSelected ? "#EFF6FF" : "transparent",
+                                        color: isAllSelected ? "#185FA5" : "#111827",
+                                        borderBottom: "0.5px solid #f3f4f6",
+                                    }}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={isAllSelected}
+                                        onChange={toggleAll}
+                                        style={{ accentColor: "#185FA5", width: 14, height: 14 }}
+                                    />
+                                    All
+                                </label>
+                                {filteredRows.map((row, idx) => {
+                                    const val = String(getLookupValue(row, valueField) ?? "");
+                                    // ★ FIX: when the sentinel is active, every row should render as checked
+                                    const checked = isAllSelected || selected.includes(val);
+                                    const text = getLookupText(row, displayFields.length ? displayFields : [valueField]);
+                                    return (
+                                        <label
+                                            key={val || idx}
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 8,
+                                                padding: "6px 10px",
+                                                fontSize: 12,
+                                                cursor: "pointer",
+                                                background: checked ? "#F5F9FF" : "transparent",
+                                            }}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={checked}
+                                                onChange={() => toggleOne(val)}
+                                                style={{ accentColor: "#185FA5", width: 14, height: 14 }}
+                                            />
+                                            <span
+                                                style={{
+                                                    overflow: "hidden",
+                                                    textOverflow: "ellipsis",
+                                                    whiteSpace: "nowrap",
+                                                    color: "#374151",
+                                                }}
+                                            >
+                                                {text}
+                                            </span>
+                                        </label>
+                                    );
+                                })}
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -186,39 +392,14 @@ export default function DNSummaryReportPage() {
 
     const reportWindowRef = useRef<Window | null>(null);
 
-    // ── Filter options
-    const [principalOptions, setPrincipalOptions] = useState<Option[]>([]);
-    const [optLoading, setOptLoading] = useState(false);
-
-    // ── Filter values — native date-input strings for the UI; "All" sentinel for params
-    const [principal, setPrincipal] = useState<string>("All");
+    // ── Filter values
+    const [principalCodes, setPrincipalCodes] = useState<string[]>([]); // multi-select
     const [fromDateIso, setFromDateIso] = useState<string>("");   // "" = All
     const [toDateIso,   setToDateIso]   = useState<string>("");   // "" = All
 
     const lastParamsRef = useRef<Params>(ALL_PARAMS);
 
     const dateRangeValid = !fromDateIso || !toDateIso || fromDateIso <= toDateIso;
-
-    // ── Load principal options (independent of report filters)
-    useEffect(() => {
-        (async () => {
-            setOptLoading(true);
-            try {
-                const res = await getDynamicLookupaccount({
-                    parameter: "WMS_Stock_principal", loginid: loginId,
-                    code1: companyCode, code2: "", code3: "", code4: "",
-                    number1: 0, number2: 0, number3: 0, number4: 0,
-                    date1: null, date2: null, date3: null, date4: null,
-                });
-                const rows = Array.isArray(res) ? res : [];
-                setPrincipalOptions(mapCodeNameOptions(rows, "prin_code", "prin_name"));
-            } catch (err) {
-                console.error("[WMS_Stock_principal] Fetch error:", err);
-            } finally {
-                setOptLoading(false);
-            }
-        })();
-    }, [companyCode, loginId]);
 
     // ── Fetch the report HTML from the API and open it in a new browser tab
     const fetchReport = useCallback(async (p: Params) => {
@@ -265,15 +446,14 @@ export default function DNSummaryReportPage() {
         }
     }, [loginId, companyCode]);
 
-    // ── Auto-load on mount with "All" defaults — full dataset, no filters
-    // NOTE: most browsers block auto-opened tabs that aren't triggered by a user
-    // gesture, so we don't auto-fetch on mount anymore — the user clicks "View Report".
-
     // ── Apply current filter selections
     const handleGenerateReport = () => {
         if (!dateRangeValid) return;
         const params: Params = {
-            prin_code: principal || "All",
+            // ★ FIX: use the sentinel-aware converter instead of blindly
+            //   joining principalCodes — this is what makes "All" send the
+            //   literal "All" string to the API instead of every code.
+            prin_code: toApiCodeString(principalCodes),
             from_date: toApiDateString(fromDateIso),
             to_date:   toApiDateString(toDateIso),
         };
@@ -281,7 +461,7 @@ export default function DNSummaryReportPage() {
     };
 
     const handleReset = () => {
-        setPrincipal("All");
+        setPrincipalCodes([]);
         setFromDateIso("");
         setToDateIso("");
         setError("");
@@ -391,16 +571,25 @@ export default function DNSummaryReportPage() {
 
                     {/* ── Form fields ── */}
                     <div className="field-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 6, width: "100%" }}>
-                        <FloatLabel label="Principal" bgColor={BG}>
-                            <SelectField
-                                label=""
-                                options={principalOptions}
-                                value={principal}
-                                onChange={setPrincipal}
-                                placeholder="All"
-                                loading={optLoading}
-                            />
-                        </FloatLabel>
+                        <MultiSelectDropdown
+                            label="Principal"
+                            bgColor={BG}
+                            selected={principalCodes}
+                            onChange={setPrincipalCodes}
+                            valueField="prin_code"
+                            displayFields={["prin_code", "prin_name"]}
+                            placeholder="All"
+                            loadOptions={() =>
+                                getDynamicLookupaccount({
+                                    parameter: "WMS_Stock_principal",
+                                    loginid: loginId,
+                                    code1: companyCode,
+                                    code2: "", code3: "", code4: "",
+                                    number1: 0, number2: 0, number3: 0, number4: 0,
+                                    date1: null, date2: null, date3: null, date4: null,
+                                })
+                            }
+                        />
                         <FloatLabel label="From Date" bgColor={BG}>
                             <DateField
                                 label=""

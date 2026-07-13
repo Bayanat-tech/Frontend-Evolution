@@ -52,7 +52,7 @@ import { SalaryAdvancePage } from "../pages/hr/SalaryAdvancePage";
 import { TrainingFeedbackPage } from "../pages/hr/Trainingfeedbackpage";
 import { Leaf } from "lucide-react";
 import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics";
-import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
+import { WmsBillingActPage } from "../pages/wms/Masters/WmsBillingActivityPage";
 // import ProfitLossPage from "../pages/accounts_report/ProfitLossPage";
 import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
 import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseReport";
@@ -60,7 +60,6 @@ import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseRe
 import AC_StatementPage from "../pages/accounts_report/detailed_reports/AC_StatementReportPage";
 import OutstandingStatementPage from "../pages/accounts_report/detailed_reports/OutstandingStatementPage";
 import BalanceSheetReportFilter from "../pages/accounts_report/detailed_reports/BalanceSheetReportFilter";
-import InspectionFormPage from "../pages/oxmaint/inspection_form/InspectionFormMainPage";
 import AssignUserDiv from "../pages/finance/AssignUserDiv";
 import TrialBalancePage from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
 import StockTransferPage from "../pages/wms/stock transfer/StockTransferPage";
@@ -100,10 +99,12 @@ import { HrJoiningPage } from "../pages/hr/HrJoiningPage";
 
 import { HrEmpEducationPage } from "../pages/hr/HrEmpEducationPage";  
 import GradeSalaryIncrement from "../pages/hr/GradeSalaryIncrement.";
+import EmployeeMasterPage from "../pages/hr/Employee Master/EmployeeMasterPage";
 import SalaryAdditionDeductionMainPage from "../pages/hr/addition_deduction/SalaryAdditionDeductionMainPage";
 import AbsentMemoMainPage from "../pages/hr/absent_memo/AbsentMemoMainPage";
 
 import { HrManpowerPage } from "../pages/hr/HrManpower";
+import { ProductWmsPage } from "../pages/wms/Masters/Product_Master/WmsProductPage";
 import {
   EmployeePayslipPage,
   EmployeePayslipViewPage,
@@ -127,6 +128,7 @@ import InvoicePage from "../pages/wms/invoice/InvoicePage";
 import { AdminSupportCenterPage } from "../pages/support/AdminSupportCenterPage";
 import { SupportDeveloperAssignmentPage } from "../pages/support/SupportDeveloperAssignmentPage";
 import { SupportDeveloperWorkbenchPage } from "../pages/support/SupportDeveloperWorkbenchPage";
+import InspectionFormPage from "../pages/oxmaint/inspection-form-tailwind/inspection_form/InspectionFormMainPage";
 
 
 
@@ -270,6 +272,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "HR Leave Encashmen",
     match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/leave_encashment"),
     element: () => <LeaveEncashmentPage />
+  },
+  {
+    name: "Employee Master",
+    match: ({pathname})=> pathname.toLocaleLowerCase().includes("/hr/hr/employee/employee_master"),
+    element: () => <EmployeeMasterPage />
   },
   {
     name: "Vendor System",
@@ -502,6 +509,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "WMS Billing Activity Master",
     match: ({ pathname }) => isWmsBillingActRoute(pathname),
     element: () => <WmsBillingActPage />,
+  },
+  {
+    name: "Product Master",
+    match: ({pathname})=> pathname.toLocaleLowerCase().includes("/wms/wms/masters/gm/product"),
+    element: () => <ProductWmsPage />
   },
   {
     name: "WMS Stock Summary Report",
