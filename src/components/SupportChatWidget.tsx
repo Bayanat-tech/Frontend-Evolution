@@ -693,8 +693,9 @@ function isSupportUserOnline(item: SupportUser) {
 
 function isLikelySupportAdmin(user: unknown) {
   const record = (user || {}) as Record<string, unknown>;
-  const values = [record.loginid, record.username, record.role, record.user_role, record.USER_ROLE, record.isAdmin]
+  const supportAdminLoginIds = new Set(["ADMIN", "2012020136"]);
+  const values = [record.loginid, record.LOGINID, record.username, record.USERNAME, record.role, record.user_role, record.USER_ROLE, record.isAdmin]
     .filter((value) => value !== undefined && value !== null)
     .map((value) => String(value).trim().toUpperCase());
-  return values.some((value) => value === "ADMIN" || value === "Y" || value === "TRUE" || value.includes("ADMIN"));
+  return values.some((value) => supportAdminLoginIds.has(value) || value === "Y" || value === "TRUE" || value.includes("ADMIN"));
 }

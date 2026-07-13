@@ -123,6 +123,7 @@ export function SupportDeveloperWorkbenchPage() {
                 <span>{selectedTicket.REQUESTER_NAME || selectedTicket.REQUESTER_LOGINID}</span>
                 <p>{selectedTicket.LAST_MESSAGE || "No message summary available."}</p>
                 <small>Assigned by {selectedTicket.ASSIGNED_BY || "Support"} {selectedTicket.ASSIGNED_AT ? `on ${selectedTicket.ASSIGNED_AT}` : ""}</small>
+                <small>{selectedTicket.DUE_AT ? `Due by ${selectedTicket.DUE_AT}` : "No SLA timer set"}</small>
               </div>
               <div className="support-dev-status-actions">
                 {DEV_STATUSES.map((status) => (
@@ -141,8 +142,17 @@ export function SupportDeveloperWorkbenchPage() {
           ) : (
             <div className="support-center-empty-state">
               <Wrench size={28} />
-              <strong>No ticket selected</strong>
-              <span>Your assigned support work will appear here.</span>
+              <strong>{tickets.length ? "Select a ticket" : "No assigned tickets yet"}</strong>
+              <span>
+                {tickets.length
+                  ? "Choose a ticket from the left list to review the customer issue and update progress."
+                  : "When support assigns a ticket to you, it will appear here with customer details and progress actions."}
+              </span>
+              <div className="support-dev-empty-grid">
+                <div><strong>1</strong><span>Review the customer message and attachments.</span></div>
+                <div><strong>2</strong><span>Move status to In Progress while working.</span></div>
+                <div><strong>3</strong><span>Mark Done after the fix is delivered.</span></div>
+              </div>
             </div>
           )}
         </main>

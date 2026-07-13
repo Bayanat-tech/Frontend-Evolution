@@ -7742,18 +7742,18 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 
 .support-message-bubble,
 .support-center-message > div {
-  max-width: min(620px, 78%);
-  padding: 12px 14px;
-  border-radius: 18px;
+  max-width: min(520px, 70%);
+  padding: 10px 12px;
+  border-radius: 14px;
   color: #1f2433;
   background: #fff;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.055);
 }
 
 .support-message.mine .support-message-bubble,
 .support-center-message.mine > div {
   color: #fff;
-  background: linear-gradient(135deg, #0869d0, #0b8edf);
+  background: linear-gradient(135deg, #2f72c7, #398fd2);
 }
 
 .support-message.system,
@@ -7778,9 +7778,17 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .support-center-message header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 6px;
-  font-size: 12px;
+  gap: 8px;
+  margin-bottom: 5px;
+  font-size: 11px;
+}
+
+.support-center-message header strong {
+  font-weight: 650;
+}
+
+.support-center-message header span {
+  opacity: 0.82;
 }
 
 .support-message-meta button,
@@ -7807,6 +7815,8 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .support-attachments,
@@ -8172,7 +8182,7 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 }
 
 .support-center-hero h1 {
-  color: #0b0f19;
+  color: #172033 !important;
   font-size: 19px;
   font-weight: 800;
   line-height: 1.2;
@@ -8311,10 +8321,34 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 
 .support-center-status-chart {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
+  grid-template-columns: 150px minmax(0, 1fr);
   align-items: center;
-  gap: 16px;
+  gap: 18px;
   height: calc(100% - 32px);
+}
+
+.support-status-hero {
+  min-height: 118px;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  padding: 16px;
+  border: 1px solid #dce8f5;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.98), rgba(244, 251, 248, 0.98));
+}
+
+.support-status-hero span,
+.support-status-hero small {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.support-status-hero strong {
+  color: #172033;
+  font-size: 30px;
+  line-height: 1;
 }
 
 .support-center-donut {
@@ -8402,6 +8436,29 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 
 .support-center-status-lines strong {
   margin-left: auto;
+}
+
+.support-center-status-lines > div {
+  display: grid;
+  grid-template-columns: 10px minmax(105px, auto) minmax(0, 1fr) auto;
+}
+
+.support-center-status-lines em {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e4ebf4;
+}
+
+.support-center-status-lines em b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #4f83cc;
+}
+
+.support-center-status-lines > div:has(.closed) em b {
+  background: #79c999;
 }
 
 .support-center-insight-bar div {
@@ -9429,7 +9486,7 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 }
 
 .support-assignment-page .support-desk-board {
-  grid-template-columns: 220px 310px minmax(380px, 1fr) 300px;
+  grid-template-columns: 210px 300px minmax(420px, 1fr) 280px;
   border-radius: 12px;
   box-shadow: none;
 }
@@ -9504,9 +9561,9 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 }
 
 .support-assignment-page .support-desk-ticket-list button {
-  min-height: 66px;
+  min-height: 60px;
   margin-top: 6px;
-  padding: 9px;
+  padding: 8px;
   border-radius: 10px;
 }
 
@@ -9526,6 +9583,7 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 
 .support-assignment-page .support-desk-profile {
   padding: 14px 12px;
+  background: #fbfdff;
 }
 
 .support-assignment-page .support-desk-profile h3,
@@ -9544,6 +9602,285 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .support-assignment-page .support-field select,
 .support-assignment-page .support-field textarea {
   font-size: var(--app-control-font-size);
+}
+
+.support-assignment-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.support-assignment-page .support-desk-directory {
+  display: none;
+}
+
+.support-assignment-page .support-desk-notes {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #e3eaf3;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.support-assignment-page .support-desk-notes + .support-desk-notes {
+  border-top: 1px solid #e3eaf3;
+}
+
+.support-assignment-page .support-desk-notes p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.support-assignment-page .support-desk-message-preview p,
+.support-assignment-page .support-desk-ticket-list em,
+.support-assignment-page .support-desk-ticket-list small {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.support-dev-workbench-page .support-page-titlebar,
+.support-assignment-page .support-page-titlebar {
+  background: linear-gradient(135deg, #f7fbff 0%, #ffffff 55%, #f4fbf8 100%);
+}
+
+.support-dev-workbench-page .support-page-titlebar h1,
+.support-assignment-page .support-page-titlebar h1 {
+  color: #172033;
+}
+
+.support-dev-workbench-page .support-page-titlebar span,
+.support-assignment-page .support-page-titlebar span {
+  color: #64748b;
+}
+
+.support-dev-workbench-page .support-dev-summary {
+  gap: 10px;
+}
+
+.support-dev-workbench-page .support-dev-summary div {
+  min-height: 58px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.support-dev-workbench-page .support-dev-summary svg {
+  width: 30px;
+  height: 30px;
+  padding: 7px;
+  border-radius: 9px;
+  color: #2f72c7;
+  background: #eff6ff;
+}
+
+.support-dev-workbench-page .support-dev-summary strong {
+  font-size: 20px;
+}
+
+.support-dev-workbench-page .support-dev-summary span {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.support-dev-workbench-page .support-dev-workbench-grid {
+  grid-template-columns: 330px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.support-dev-workbench-page .support-dev-ticket-list,
+.support-dev-workbench-page .support-dev-detail {
+  min-height: 0;
+  height: 100%;
+}
+
+.support-dev-workbench-page .support-dev-detail {
+  display: flex;
+  flex-direction: column;
+}
+
+.support-dev-workbench-page .support-assign-list button {
+  min-height: 64px;
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+
+.support-dev-workbench-page .support-assign-list strong,
+.support-dev-workbench-page .support-ticket-brief strong {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.support-dev-workbench-page .support-assign-list span,
+.support-dev-workbench-page .support-assign-list em,
+.support-dev-workbench-page .support-ticket-brief span,
+.support-dev-workbench-page .support-ticket-brief small {
+  font-size: 12px;
+}
+
+.support-dev-workbench-page .support-center-empty-state {
+  min-height: 100%;
+  place-content: center;
+  padding: 28px;
+}
+
+.support-dev-empty-grid {
+  width: min(720px, 100%);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.support-dev-empty-grid div {
+  min-height: 90px;
+  padding: 12px;
+  border: 1px solid #e3eaf3;
+  border-radius: 12px;
+  background: #fbfdff;
+  text-align: left;
+}
+
+.support-dev-empty-grid strong {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-bottom: 10px;
+  border-radius: 9px;
+  color: #2f72c7;
+  background: #eff6ff;
+}
+
+.support-dev-empty-grid span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.app.dark .support-center-page,
+.app.dark .support-assignment-page,
+.app.dark .support-dev-workbench-page {
+  color: #e5edf7;
+}
+
+.app.dark .support-center-hero,
+.app.dark .support-page-titlebar,
+.app.dark .support-dev-workbench-page .support-page-titlebar,
+.app.dark .support-assignment-page .support-page-titlebar {
+  border-color: rgba(148, 163, 184, 0.28);
+  background: linear-gradient(135deg, rgba(24, 35, 56, 0.98) 0%, rgba(17, 24, 39, 0.98) 58%, rgba(19, 48, 55, 0.9) 100%);
+  box-shadow: none;
+}
+
+.app.dark .support-center-hero h1,
+.app.dark .support-page-titlebar h1,
+.app.dark .support-dev-workbench-page .support-page-titlebar h1,
+.app.dark .support-assignment-page .support-page-titlebar h1,
+.app.dark .support-center-card-head h3,
+.app.dark .support-center-metric strong,
+.app.dark .support-desk-list h2,
+.app.dark .support-desk-thread h2,
+.app.dark .support-desk-profile h3,
+.app.dark .support-dev-summary strong,
+.app.dark .support-status-hero strong {
+  color: #f8fafc !important;
+}
+
+.app.dark .support-center-hero span,
+.app.dark .support-center-hero .eyebrow,
+.app.dark .support-page-titlebar span,
+.app.dark .support-page-titlebar .eyebrow,
+.app.dark .support-center-card-head span,
+.app.dark .support-center-metric small,
+.app.dark .support-desk-list header span,
+.app.dark .support-desk-thread header span,
+.app.dark .support-dev-summary span,
+.app.dark .support-status-hero span,
+.app.dark .support-status-hero small {
+  color: #a8b5c7 !important;
+}
+
+.app.dark .support-center-metric,
+.app.dark .support-center-card,
+.app.dark .support-status-hero,
+.app.dark .support-desk-board,
+.app.dark .support-desk-list,
+.app.dark .support-desk-thread,
+.app.dark .support-desk-profile,
+.app.dark .support-desk-assignment-card,
+.app.dark .support-desk-message-preview,
+.app.dark .support-dev-summary div,
+.app.dark .support-dev-ticket-list,
+.app.dark .support-dev-detail,
+.app.dark .support-ticket-brief,
+.app.dark .support-dev-empty-grid div {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: #111827;
+  box-shadow: none;
+}
+
+.app.dark .support-desk-filter,
+.app.dark .support-center-queue,
+.app.dark .support-center-context,
+.app.dark .support-desk-profile {
+  background: #0f172a;
+}
+
+.app.dark .support-center-status-lines > div,
+.app.dark .support-center-mini-list button,
+.app.dark .support-center-attention-list button,
+.app.dark .support-center-mini-users button,
+.app.dark .support-desk-ticket-list button,
+.app.dark .support-desk-section button.active,
+.app.dark .support-desk-section button:hover,
+.app.dark .support-desk-notes,
+.app.dark .support-dev-create,
+.app.dark .support-dev-create.modern,
+.app.dark .support-assign-list button,
+.app.dark .support-dev-status-actions button {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: #162033;
+  color: #e5edf7;
+}
+
+.app.dark .support-desk-search,
+.app.dark .support-center-search,
+.app.dark .support-dev-create input,
+.app.dark .support-field select,
+.app.dark .support-field textarea,
+.app.dark .support-center-composer textarea {
+  border-color: rgba(148, 163, 184, 0.28);
+  background: #0b1220;
+  color: #e5edf7;
+}
+
+.app.dark .support-center-messages,
+.app.dark .support-messages {
+  background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+}
+
+.app.dark .support-center-message > div {
+  color: #e5edf7;
+  background: #1f2937;
+}
+
+.app.dark .support-center-message.mine > div {
+  background: linear-gradient(135deg, #2563eb, #0f766e);
+}
+
+.app.dark .support-center-status-lines em,
+.app.dark .support-center-insight-bar > i {
+  background: #263244;
+}
+
+.app.dark .support-center-empty,
+.app.dark .support-center-muted,
+.app.dark .support-desk-notes p,
+.app.dark .support-ticket-brief p,
+.app.dark .support-dev-empty-grid span {
+  color: #a8b5c7;
 }
 
 @media (max-width: 1100px) {

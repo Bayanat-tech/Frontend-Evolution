@@ -36,6 +36,8 @@ export type SupportTicket = {
   DEV_STATUS?: string;
   ASSIGNED_BY?: string;
   ASSIGNED_AT?: string;
+  SLA_MINUTES?: number;
+  DUE_AT?: string;
 };
 
 export type SupportMessage = {

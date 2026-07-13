@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Circle, Filter, Mail, MessageSquare, MoreHorizontal, RefreshCw, Search, UserPlus, Users } from "lucide-react";
+import { CheckCircle2, Circle, Filter, Mail, MessageSquare, MoreHorizontal, RefreshCw, Search, UserPlus } from "lucide-react";
 import {
   SupportDeveloper,
   SupportTicket,
@@ -11,11 +11,28 @@ import {
 import { Button } from "../../components/ui/Button";
 import { cn } from "../../lib/utils";
 
+const PRIORITY_OPTIONS = [
+  { value: "LOW", label: "Low" },
+  { value: "MEDIUM", label: "Medium" },
+  { value: "HIGH", label: "High" },
+  { value: "CRITICAL", label: "Critical" },
+];
+
+const SLA_OPTIONS = [
+  { value: "60", label: "1 hour" },
+  { value: "240", label: "4 hours" },
+  { value: "480", label: "8 hours" },
+  { value: "1440", label: "1 day" },
+  { value: "2880", label: "2 days" },
+];
+
 export function SupportDeveloperAssignmentPage() {
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [developers, setDevelopers] = useState<SupportDeveloper[]>([]);
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
   const [selectedDeveloper, setSelectedDeveloper] = useState("");
+  const [priority, setPriority] = useState("MEDIUM");
+  const [slaMinutes, setSlaMinutes] = useState("480");
   const [developerForm, setDeveloperForm] = useState({ loginid: "", username: "", email_id: "", skill_tags: "" });
   const [note, setNote] = useState("");
   const [query, setQuery] = useState("");
@@ -62,7 +79,12 @@ export function SupportDeveloperAssignmentPage() {
     if (!selectedTicket || !selectedDeveloper) return;
     setLoading(true);
     try {
-      await assignSupportDeveloper(Number(selectedTicket.TICKET_ID), { developer_loginid: selectedDeveloper, note });
+      await assignSupportDeveloper(Number(selectedTicket.TICKET_ID), {
+        developer_loginid: selectedDeveloper,
+        priority,
+        sla_minutes: Number(slaMinutes),
+        note,
+      });
       setNote("");
       setNotice("Developer assigned and email notification sent.");
       await loadData();
@@ -156,6 +178,8 @@ export function SupportDeveloperAssignmentPage() {
                 onClick={() => {
                   setSelectedTicketId(Number(ticket.TICKET_ID));
                   setSelectedDeveloper(ticket.DEVELOPER_LOGINID || "");
+                  setPriority(ticket.PRIORITY || "MEDIUM");
+                  setSlaMinutes(ticket.SLA_MINUTES ? String(ticket.SLA_MINUTES) : "480");
                 }}
               >
                 <span className="support-mini-avatar">{String(ticket.REQUESTER_NAME || ticket.REQUESTER_LOGINID || "U").slice(0, 2).toUpperCase()}</span>
@@ -208,6 +232,24 @@ export function SupportDeveloperAssignmentPage() {
                     ))}
                   </select>
                 </label>
+                <div className="support-assignment-options">
+                  <label className="support-field">
+                    <span>Priority</span>
+                    <select value={priority} onChange={(event) => setPriority(event.target.value)}>
+                      {PRIORITY_OPTIONS.map((item) => (
+                        <option key={item.value} value={item.value}>{item.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="support-field">
+                    <span>SLA timer</span>
+                    <select value={slaMinutes} onChange={(event) => setSlaMinutes(event.target.value)}>
+                      {SLA_OPTIONS.map((item) => (
+                        <option key={item.value} value={item.value}>{item.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
                 <label className="support-field">
                   <span>Assignment note</span>
                   <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Add context for the developer..." />
@@ -230,8 +272,8 @@ export function SupportDeveloperAssignmentPage() {
           <header>
             <div className="support-mini-avatar large">{String(selectedDeveloperProfile?.USERNAME || selectedDeveloperProfile?.LOGINID || "DV").slice(0, 2).toUpperCase()}</div>
             <div>
-              <h3>{selectedDeveloperProfile?.USERNAME || "Developer Directory"}</h3>
-              <span>{selectedDeveloperProfile ? selectedDeveloperProfile.LOGINID : `${developers.length} team members`}</span>
+              <h3>{selectedDeveloperProfile?.USERNAME || "Add developer"}</h3>
+              <span>{selectedDeveloperProfile ? selectedDeveloperProfile.LOGINID : "Create or update developer profile"}</span>
             </div>
           </header>
           <div className="support-dev-create modern">
@@ -243,24 +285,12 @@ export function SupportDeveloperAssignmentPage() {
               <UserPlus size={14} /> Add Developer
             </Button>
           </div>
-          <div className="support-desk-directory">
-            <div><Users size={15} /><strong>Team Members</strong><em>{developers.length}</em></div>
-            {developers.slice(0, 10).map((developer) => {
-              const count = developerLoads.get(String(developer.LOGINID).toUpperCase()) || 0;
-              return (
-                <button key={developer.LOGINID} onClick={() => setSelectedDeveloper(developer.LOGINID)}>
-                  <span className="support-mini-avatar">{String(developer.USERNAME || developer.LOGINID).slice(0, 2).toUpperCase()}</span>
-                  <span>
-                    <strong>{developer.USERNAME || developer.LOGINID}</strong>
-                    <small>{developer.SKILL_TAGS || developer.EMAIL_ID || "Support developer"}</small>
-                  </span>
-                  <em>{count}</em>
-                </button>
-              );
-            })}
+          <div className="support-desk-notes">
+            <h3>Assignment guide</h3>
+            <p>Select a ticket, choose an active developer, add a short note, then assign. The developer receives an email with ticket context and attachment links.</p>
           </div>
           <div className="support-desk-notes">
-            <h3>Assigned tickets</h3>
+            <h3>Recent assigned</h3>
             {assignedTickets.slice(0, 5).map((ticket) => (
               <button key={ticket.TICKET_ID} onClick={() => setSelectedTicketId(Number(ticket.TICKET_ID))}>
                 <CheckCircle2 size={14} />
