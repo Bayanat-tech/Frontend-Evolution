@@ -21,4 +21,4 @@ export type Notice = {
   message: string;
 };
 
-export type VendorStatusKey = "draft" | "submitted" | "pending" | "inProgress" | "sentBack" | "rejected" | "closed";
+export type VendorStatusKey = "draft" | "submitted" | "pending" | "inProgress" | "sentBack" | "rejected" | "closed" | "canceled";

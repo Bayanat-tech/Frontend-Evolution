@@ -431,7 +431,7 @@ export async function upsertBulkAccountBudgetEntryApi(
     company_code: string;
     loginid: string;
   },
-  action: "SAVEASDRAFT" | "SUBMITTED" | "REJECTED" | "SENTBACK"
+  action: "SAVEASDRAFT" | "SUBMITTED" | "REJECTED" | "SENTBACK" | "CLOSED" | "CANCELED"
 ) {
   const response = await api.post<ApiResponse<unknown>>(
     "/api/finance/insUpdBudgetRequestBulk",

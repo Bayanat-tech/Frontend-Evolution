@@ -10,6 +10,7 @@ import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 import { BudgetEditorState, BudgetRequestEditor } from "./BudgetRequestEditor";
 import {  getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
+import { TabStrip } from "../../vendor/components";
 
 
 // TODO: replace with the real budget-request row shape once the backend contract is confirmed.
@@ -23,22 +24,28 @@ export interface BudgetRequestRow {
   description?: string;
   status?: string;
   canceled?: string;
+  flow_level_running?: number;
+  flow_level?: number;
 }
 
 // TODO: swap for a real API call, e.g. cancelBudgetRequest(budgetNo)
 async function cancelBudgetRequestApi(_budgetNo: string): Promise<void> {
   return;
 }
-
+type RequestTab = "PENDING" | "INPROGRESS"| "CLOSED" | "CANCELED" | "REJECTED" | "SENDBACK";
 export function BudgetRequestPage({ onClose }: { onClose?: () => void } = {}) {
   const { user } = useAuth();
   const [rows, setRows] = useState<BudgetRequestRow[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<RequestTab>("PENDING");
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(100);
   const [totalRows, setTotalRows] = useState(0);
+  const [approvalLevel, setApprovalLevel] = useState<number>(0);
+  const isPendingTab = tab === "PENDING";
+  const canViewCanceledTab = approvalLevel === 1;
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<BudgetEditorState>(null);
   const [cancelTarget, setCancelTarget] = useState<BudgetRequestRow | null>(null);
@@ -64,26 +71,57 @@ export function BudgetRequestPage({ onClose }: { onClose?: () => void } = {}) {
     }
   };
 
-  const fetchBudgetRequests = async () => {
-    const response = await getDynamicLookup({
-      parameter: "Account_Budget_PAGE",
-      code1: user?.company_code,
-      loginid: user?.loginid || user?.username || "ADMIN",
-    });
-    return response as unknown as BudgetRequestRow[];
-  };
+  // const fetchBudgetRequests = async () => {
+  //   const response = await getDynamicLookup({
+  //     parameter: "Account_Budget_PAGE",
+  //     code1: user?.company_code,
+  //     loginid: user?.loginid || user?.username || "ADMIN",
+  //   });
+  //   return response as unknown as BudgetRequestRow[];
+  // };
+const fetchBudgetRequests = async () => {
+  const response = await getDynamicLookup({
+    parameter: "MS_BUDGET_ACCOUNT_TAB__List",
+    code1: user?.company_code,
+    code2: user?.loginid || user?.username || "ADMIN",
+    code3: tab,
+    loginid: user?.loginid || user?.username || "ADMIN",
+  });
 
+  return response as unknown as BudgetRequestRow[];
+};
   useEffect(() => {
-    
     void loadLookups().catch((error) => {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load lookups" });
       setLoading(false);
     });
-  }, []);
 
-  useEffect(() => {
-    void loadRows();
-  }, [query, pageIndex, pageSize, columnFilters]);
+    let mounted = true;
+    (async () => {
+      try {
+        const rows = await getDynamicLookup({
+          parameter: "MS_BUDGET_FUN_CHECK_BUDGET_APPR_LEVEL",
+          code1: user?.company_code,
+          code2: user?.loginid || user?.username || "ADMIN",
+          loginid: user?.loginid || user?.username || "ADMIN",
+        });
+        if (!mounted) return;
+        const first = (rows || [])[0] as Record<string, unknown> | undefined;
+        const level = first ? Number(first.level ?? first.flow_level ?? first.flow_level_running ?? Object.values(first)[0]) : 0;
+        setApprovalLevel(Number.isFinite(level) ? level : 0);
+      } catch {
+        if (mounted) setApprovalLevel(0);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user?.company_code, user?.loginid, user?.username]);
+
+useEffect(() => {
+  void loadRows();
+}, [tab, query, pageIndex, pageSize, columnFilters]);
 
   const columns = useMemo<ColumnDef<BudgetRequestRow>[]>(() => [
     {
@@ -144,6 +182,18 @@ export function BudgetRequestPage({ onClose }: { onClose?: () => void } = {}) {
       </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
+        <TabStrip
+        value={tab}
+        onChange={(value) => setTab(value as RequestTab)}
+        tabs={[
+          { label: "Pending", value: "PENDING", icon: "pending" },
+          { label: "In Progress", value: "INPROGRESS", icon: "inProgress" },
+          { label: "Closed", value: "CLOSED", icon: "closed" },
+          ...(canViewCanceledTab ? [{ label: "Canceled", value: "CANCELED", icon: "canceled" as const }] : []),
+          { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
+          { label: "Send Back", value: "SENDBACK", icon: "sentBack" as const },
+        ]}
+      />
 
       <div className="min-h-[650px]">
         <DataTable
@@ -189,6 +239,7 @@ export function BudgetRequestPage({ onClose }: { onClose?: () => void } = {}) {
           <BudgetRequestEditor
             key={editor?.mode === "edit" ? editor.row.request_number : editor?.mode || "create"}
             editor={editor}
+            isPendingTab={isPendingTab}
             onClose={() => setEditor(null)}
             onSaved={async (message) => {
               setEditor(null);

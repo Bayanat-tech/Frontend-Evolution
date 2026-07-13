@@ -45,6 +45,7 @@ interface BudgetRequestForm {
   description: string;
   remarks: string;
   canceled?: string;
+  flow_level_running?: number;
 }
 
 const MONTHS = [
@@ -85,6 +86,12 @@ function emptyForm(editor: BudgetEditorState): BudgetRequestForm {
     request_date: editor?.mode === "edit" ? editor.row.request_date || "" : new Date().toISOString().slice(0, 10),
     remarks: "",
     canceled: editor?.mode === "edit" ? editor.row.canceled : "N",
+    flow_level_running:
+      editor?.mode === "edit"
+        ? Number(
+            editor.row.flow_level_running ?? editor.row.flow_level ?? 0,
+          )
+        : 0,
   };
 }
 
@@ -115,7 +122,7 @@ function numberOrZero(value: unknown) {
  //Loads the header via Account_Budget_HEADER_PAGE. Returns the first matching row, lower-cased.
 async function fetchBudgetHeader(budgetNo: string, companyCode?: string, loginid?: string): Promise<Record<string, unknown>> {
   const rows = await getDynamicLookup({
-    parameter: "Account_Budget_Header_PAGE",
+    parameter: "MS_BUDGET_ACCOUNT_HEADER_PAGE",
     code1: companyCode,
     code2: budgetNo,
     loginid: loginid || "ADMIN",
@@ -127,7 +134,7 @@ async function fetchBudgetHeader(budgetNo: string, companyCode?: string, loginid
 // Loads the allocation lines via Account_Budget_Detail_PAGE.
 async function fetchBudgetDetail(budgetNo: string, companyCode?: string, loginid?: string): Promise<BudgetAllocationRow[]> {
   const rows = await getDynamicLookup({
-    parameter: "Account_Budget_Detail_PAGE",
+    parameter: "MS_BUDGET_ACCOUNT_DETAIL_PAGE",
     code1: companyCode,
     code2: budgetNo,
     loginid: loginid || "ADMIN",
@@ -189,7 +196,7 @@ async function saveBudgetRequestDraft(
 ) {
   return upsertBulkAccountBudgetEntryApi(
     {
-      header: buildHeaderPayload(form, companyCode),
+      header: buildHeaderPayload(form, companyCode, loginid),
       details: buildDetailsPayload(rows),
       company_code: companyCode || "",
       loginid: loginid || "ADMIN",
@@ -206,7 +213,7 @@ async function submitBudgetRequest(
 ) {
   return upsertBulkAccountBudgetEntryApi(
     {
-      header: buildHeaderPayload(form, companyCode,loginid),
+      header: buildHeaderPayload(form, companyCode, loginid),
       details: buildDetailsPayload(rows),
       company_code: companyCode || "",
       loginid: loginid || "ADMIN",
@@ -223,7 +230,7 @@ async function rejectBudgetRequest(
 ) {
   return upsertBulkAccountBudgetEntryApi(
     {
-      header: buildHeaderPayload(form, companyCode),
+      header: buildHeaderPayload(form, companyCode, loginid),
       details: buildDetailsPayload(rows),
       company_code: companyCode || "",
       loginid: loginid || "ADMIN",
@@ -232,6 +239,41 @@ async function rejectBudgetRequest(
   );
 }
 
+
+async function closeBudgetRequest(
+  form: BudgetRequestForm,
+  rows: BudgetAllocationRow[],
+  companyCode?: string,
+  loginid?: string
+) {
+  return upsertBulkAccountBudgetEntryApi(
+    {
+      header: buildHeaderPayload(form, companyCode, loginid),
+      details: buildDetailsPayload(rows),
+      company_code: companyCode || "",
+      loginid: loginid || "ADMIN",
+    },
+    "CLOSED"
+  );
+}
+
+
+async function cancelBudgetRequest(
+  form: BudgetRequestForm,
+  rows: BudgetAllocationRow[],
+  companyCode?: string,
+  loginid?: string
+) {
+  return upsertBulkAccountBudgetEntryApi(
+    {
+      header: buildHeaderPayload(form, companyCode, loginid),
+      details: buildDetailsPayload(rows),
+      company_code: companyCode || "",
+      loginid: loginid || "ADMIN",
+    },
+    "CANCELED"
+  );
+}
 async function sendBackBudgetRequest(
   form: BudgetRequestForm,
   rows: BudgetAllocationRow[],
@@ -240,7 +282,7 @@ async function sendBackBudgetRequest(
 ) {
   return upsertBulkAccountBudgetEntryApi(
     {
-      header: buildHeaderPayload(form, companyCode),
+      header: buildHeaderPayload(form, companyCode, loginid),
       details: buildDetailsPayload(rows),
       company_code: companyCode || "",
       loginid: loginid || "ADMIN",
@@ -251,10 +293,12 @@ async function sendBackBudgetRequest(
 
 export function BudgetRequestEditor({
   editor,
+  isPendingTab,
   onClose,
   onSaved,
 }: {
   editor: BudgetEditorState;
+  isPendingTab: boolean;
   onClose: () => void;
   onSaved: (message: string) => Promise<void>;
 }) {
@@ -265,6 +309,7 @@ export function BudgetRequestEditor({
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [flowLevelRunning, setFlowLevelRunning] = useState<number>(0);
 
   useEffect(() => {
     if (!editor) return;
@@ -289,6 +334,7 @@ export function BudgetRequestEditor({
           fetchBudgetDetail(requestNumber, user?.company_code, user?.loginid || user?.username),
         ]);
         if (!mounted) return;
+
         setForm((current) => ({
           ...current,
           request_number: text(headerRaw.request_number || requestNumber),
@@ -301,7 +347,7 @@ export function BudgetRequestEditor({
           description: text(headerRaw.description || current.description),
           remarks: text(headerRaw.remarks || current.remarks),
           request_date: toDateInputValue(headerRaw.request_date) || current.request_date,
-
+          flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
         }));
         setRows(detailRows.length ? detailRows : [emptyAllocationRow(text(headerRaw.budget_year) || defaultBudgetYear())]);
@@ -320,6 +366,13 @@ export function BudgetRequestEditor({
   }, [editMode, editor?.mode === "edit" ? editor.row.request_number : undefined, user?.company_code, user?.loginid || user?.username]);
 
   const disabled = form.canceled === "Y" || saving || loading;
+  const actionDisabled = disabled || !isPendingTab;
+  const effectiveFlowLevel = Number.isFinite(flowLevelRunning) ? flowLevelRunning : 0;
+
+  const isLevelOne = editMode && effectiveFlowLevel === 1;
+  const isLevelGreaterThanOne = editMode && effectiveFlowLevel > 1;
+  const headerAndLineDisabled = disabled || isLevelGreaterThanOne;
+  const approvedAmountDisabled = disabled || isLevelOne;
   const isCancelled = form.canceled === "Y";
 
   const totalRequested = rows.reduce((sum, row) => sum + (Number(row.requested_amt) || 0), 0);
@@ -355,6 +408,26 @@ export function BudgetRequestEditor({
     }
   };
 
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const rows = await getDynamicLookup({
+          parameter: "MS_BUDGET_FUN_CHECK_BUDGET_APPR_LEVEL",
+          code1: user?.company_code,
+          code2: user?.loginid || user?.username || "ADMIN",
+        });
+        if (!mounted) return;
+        const first = (rows || [])[0] as Record<string, unknown> | undefined;
+        const val = first ? Number(first.level ?? first.flow_level ?? first.flow_level_running ?? Object.values(first)[0]) : 0;
+        setFlowLevelRunning(Number.isFinite(val) ? val : 0);
+      } catch {
+        if (mounted) setFlowLevelRunning(0);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [user?.company_code, user?.loginid, user?.username]);
+
   const handleSaveAsDraft = () =>
     runAction(async () => {
       await saveBudgetRequestDraft(form, rows, user?.company_code, user?.loginid || user?.username);
@@ -374,11 +447,21 @@ export function BudgetRequestEditor({
       await rejectBudgetRequest(form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Budget request rejected");
 
+      const handleCancel = () =>
+    runAction(async () => {
+      await cancelBudgetRequest(form, rows, user?.company_code, user?.loginid || user?.username);
+    }, "Budget request cancelled");
+
+      const handleClose = () =>
+    runAction(async () => {
+      await closeBudgetRequest(form, rows, user?.company_code, user?.loginid || user?.username);
+    }, "Budget request closed");
+
   const handleSendBack = () =>
     runAction(async () => {
       await sendBackBudgetRequest(form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Budget request sent back");
-
+console.log(flowLevelRunning, "flowLevelRunning")
   return (
     <form
       className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
@@ -467,7 +550,7 @@ export function BudgetRequestEditor({
                     code1: user?.company_code,
                     loginid: user?.loginid || user?.username || "ADMIN",
                   })}
-                  disabled={disabled}
+                  disabled={headerAndLineDisabled}
                   onChange={(value, row) => setForm((current) => ({
                     ...current,
                     div_code: value,
@@ -487,7 +570,7 @@ export function BudgetRequestEditor({
                     code1: user?.company_code,
                     loginid: user?.loginid || user?.username || "ADMIN",
                   })}
-                  disabled={disabled}
+                  disabled={headerAndLineDisabled}
                   onChange={(value, row) => setForm((current) => ({
                     ...current,
                     curr_code: value,
@@ -497,11 +580,11 @@ export function BudgetRequestEditor({
                 />
 
                 <Field label="Request Date *">
-                  <Input type="date" disabled={disabled} required value={form.request_date} onChange={(event) => updateField("request_date", event.target.value)} />
+                  <Input type="date" disabled={headerAndLineDisabled} required value={form.request_date} onChange={(event) => updateField("request_date", event.target.value)} />
                 </Field>
 
                 <Field label="Budget Year *">
-                  <Select className="max-w-[120px]" disabled={disabled} required value={form.budget_year} onChange={(event) => updateYear(event.target.value)}>
+                  <Select className="max-w-[120px]" disabled={headerAndLineDisabled} required value={form.budget_year} onChange={(event) => updateYear(event.target.value)}>
                     {BUDGET_YEARS.map((year) => (
                       <option key={year} value={year}>{year}</option>
                     ))}
@@ -510,12 +593,12 @@ export function BudgetRequestEditor({
 
                 <label className="field col-span-1 max-md:col-span-1">
                   <span>Description</span>
-                  <Input disabled={disabled} value={form.description} onChange={(event) => updateField("description", event.target.value)} />
+                  <Input disabled={headerAndLineDisabled} value={form.description} onChange={(event) => updateField("description", event.target.value)} />
                 </label>
 
                 <label className="field col-span-2 max-md:col-span-1">
                   <span>Remarks</span>
-                  <Input disabled={disabled} value={form.remarks} onChange={(event) => updateField("remarks", event.target.value)} />
+                  <Input disabled={headerAndLineDisabled} value={form.remarks} onChange={(event) => updateField("remarks", event.target.value)} />
                 </label>
               </div>
             </div>
@@ -526,7 +609,7 @@ export function BudgetRequestEditor({
                   <p className="eyebrow m-0">Allocation</p>
                   <h3 className="m-0 text-sm font-semibold leading-tight">Budget Allocation Lines</h3>
                 </div>
-                <Button disabled={disabled} size="sm" type="button" variant="outline" onClick={addRow}>
+                <Button disabled={headerAndLineDisabled} size="sm" type="button" variant="outline" onClick={addRow}>
                   <Plus size={14} /> Add Line
                 </Button>
               </div>
@@ -559,11 +642,11 @@ export function BudgetRequestEditor({
                             valueField="cost_code"
                             displayFields={["cost_code", "cost_name"]}
                             loadOptions={() => getDynamicLookup({
-                              parameter: "Account_COST",
+                              parameter: "MS_BUDGET_ACCOUNT_COST",
                               code1: user?.company_code,
                               loginid: user?.loginid || user?.username || "ADMIN",
                             })}
-                            disabled={disabled}
+                            disabled={headerAndLineDisabled}
                             onChange={(value, selectedRow) => updateRow(row.id, {
                               cost_code: value,
                               cost_name: text(getLookupValue(selectedRow || {}, "cost_name")),
@@ -571,7 +654,7 @@ export function BudgetRequestEditor({
                           />
                         </td>
                         <td className="w-36 px-2 py-1">
-                          <Select disabled={disabled} value={row.month_budget} onChange={(event) => updateRow(row.id, { month_budget: event.target.value })}>
+                          <Select disabled={headerAndLineDisabled} value={row.month_budget} onChange={(event) => updateRow(row.id, { month_budget: event.target.value })}>
                             <option value="">Select</option>
                             {MONTHS.map((month) => (
                               <option key={month} value={month}>{month}</option>
@@ -580,7 +663,7 @@ export function BudgetRequestEditor({
                         </td>
                         <td className="w-28 px-2 py-1">
                           {/* Auto-filled from the header Year; still editable per-line if a row genuinely needs a different year. */}
-                          <Select disabled={disabled} value={row.budget_year} onChange={(event) => updateRow(row.id, { budget_year: event.target.value })}>
+                          <Select disabled={headerAndLineDisabled} value={row.budget_year} onChange={(event) => updateRow(row.id, { budget_year: event.target.value })}>
                             {BUDGET_YEARS.map((year) => (
                               <option key={year} value={year}>{year}</option>
                             ))}
@@ -589,7 +672,7 @@ export function BudgetRequestEditor({
                         <td className="finance-amount-cell w-40 px-2 py-1">
                           <Input
                             className="finance-money-input"
-                            disabled={disabled}
+                            disabled={headerAndLineDisabled}
                             type="number"
                             style={{ textAlign: "right" }}
                             step="0.001"
@@ -600,7 +683,8 @@ export function BudgetRequestEditor({
                         <td className="finance-amount-cell w-40 px-2 py-1">
                           <Input
                             className="finance-money-input"
-                            disabled={disabled}
+                            disabled={approvedAmountDisabled}
+                            readOnly={flowLevelRunning === 1}
                             type="number"
                             style={{ textAlign: "right" }}
                             step="0.001"
@@ -608,7 +692,7 @@ export function BudgetRequestEditor({
                             onChange={(event) => updateRow(row.id, { approved_amt: Number(event.target.value || 0) })}
                           />
                         </td>
-                        <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeRow(row.id)}><X size={14} /></Button></td>
+                        <td className="px-2 py-1"><Button disabled={headerAndLineDisabled} size="icon" type="button" variant="ghost" onClick={() => removeRow(row.id)}><X size={14} /></Button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -618,10 +702,10 @@ export function BudgetRequestEditor({
                 <span className="text-muted-foreground">Total Requested</span>
                 <strong className="text-emerald-600">{formatAmount(totalRequested)}</strong>
               </div>
-              <div className="flex items-center justify-end gap-8 px-3 py-1.5 text-sm">
+            {  <div className="flex items-center justify-end gap-8 px-3 py-1.5 text-sm">
                 <span className="text-muted-foreground">Total Approved</span>
                 <strong className="text-emerald-600">{formatAmount(totalApproved)}</strong>
-              </div>
+              </div>}
             </div>
           </div>
         )}
@@ -629,24 +713,35 @@ export function BudgetRequestEditor({
 
       <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
         <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" disabled={disabled} onClick={() => void handleSaveAsDraft()}>
+          <Button type="button" variant="outline" disabled={actionDisabled} onClick={() => void handleSaveAsDraft()}>
             <Save size={14} /> Save As Draft
           </Button>
-          <Button type="submit" disabled={disabled}>
+          <Button type="submit" disabled={actionDisabled}>
             <Send size={14} /> Submit
           </Button>
-          <Button type="button" variant="destructive" disabled={disabled} onClick={() => void handleReject()}>
+          <Button type="button" variant="destructive" disabled={actionDisabled} onClick={() => void handleReject()}>
             <XCircle size={14} /> Reject
           </Button>
-          <Button type="button" variant="outline" disabled={disabled} onClick={() => void handleSendBack()}>
+
+            <Button type="button" variant="destructive" disabled={actionDisabled} onClick={() => void handleCancel()}>
+            <XCircle size={14} /> Cancel
+          </Button>
+
+            <Button type="button" variant="destructive" disabled={actionDisabled} onClick={() => void handleClose()}>
+            <XCircle size={14} /> Close
+          </Button>
+            <Button type="button" variant="destructive" disabled={actionDisabled} onClick={() => void handleReject()}>
+            <XCircle size={14} /> Reject
+          </Button>
+          <Button type="button" variant="outline" disabled={actionDisabled} onClick={() => void handleSendBack()}>
             <Undo2 size={14} /> Send Back
           </Button>
         </div>
         <div className="flex items-center gap-2">
-          <Button aria-label="Print" type="button" variant="outline" size="icon"><Printer size={15} /></Button>
-          <Button aria-label="Upload" type="button" variant="outline" size="icon"><Upload size={15} /></Button>
-          <Button aria-label="Attachment" type="button" variant="outline" size="icon"><Paperclip size={15} /></Button>
-          <Button aria-label="Download" type="button" variant="outline" size="icon"><Download size={15} /></Button>
+          <Button aria-label="Print" type="button" variant="outline" size="icon" disabled={actionDisabled}><Printer size={15} /></Button>
+          <Button aria-label="Upload" type="button" variant="outline" size="icon" disabled={actionDisabled}><Upload size={15} /></Button>
+          <Button aria-label="Attachment" type="button" variant="outline" size="icon" disabled={actionDisabled}><Paperclip size={15} /></Button>
+          <Button aria-label="Download" type="button" variant="outline" size="icon" disabled={actionDisabled}><Download size={15} /></Button>
           <Button type="button" variant="outline" onClick={onClose}>Close</Button>
         </div>
       </div>
