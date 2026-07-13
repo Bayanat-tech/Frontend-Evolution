@@ -11,7 +11,9 @@ import {
   getGrnReport,
   downloadGrnReportExcel,
   getTallyReport,
-  downloadTallyReportExcel
+  downloadTallyReportExcel,
+  getInbServiceActivityReport,
+  downloadInbServiceActivityReportExcel
 } from "../../../api/wms";
 import { Button } from "../../../components/ui/Button";
 import { useAuth } from "../../../state/AuthContext";
@@ -59,6 +61,12 @@ const REPORTS: TReport[] = [
     apiFn:       getGrnReport,
     excelFn:     downloadGrnReportExcel,
   },
+  {
+    id:          5,
+    reportTitle: "Activity Services Report",
+    apiFn:       getInbServiceActivityReport,
+    excelFn:     downloadInbServiceActivityReportExcel,
+  },
 ];
 
 export function InboundJobDetail({ jobNo, tab }: Props) {
@@ -79,11 +87,8 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
   const [reportError,    setReportError]    = useState<string>("");
   const [excelLoading,   setExcelLoading]   = useState(false);
 
-  // Ref to the iframe — used to fire window.print() inside it via postMessage
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Ref to the active operational tab — lets us block switching tabs when
-  // something's unfinished there (e.g. unfilled receiving quantities).
   const tabRef = useRef<InboundOperationalTabHandle>(null);
 
   // ── Fetch HTML when a report is selected ──────────────────────────────────

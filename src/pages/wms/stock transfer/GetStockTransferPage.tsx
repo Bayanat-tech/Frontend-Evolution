@@ -35,6 +35,7 @@ import {
 } from "../../../api/wms";
 import { api } from "../../../api/client";
 import ReportDialogPage from "../../../components/ReportDialogPage";
+import { ImportStockTransEdi } from "./Importstocktransedi";
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -819,6 +820,9 @@ export function StockTransferViewPage() {
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  const [importOpen, setImportOpen] = useState(false);
+
+
   // ── Report dialog state (NEW) ──
   const [reportHtml, setReportHtml] = useState<string | null>(null);
   const [reportDialogTitle, setReportDialogTitle] = useState<string>("Report");
@@ -1207,7 +1211,7 @@ export function StockTransferViewPage() {
               <Button size="sm" variant="outline" disabled={isAnyConfirmed} title={isAnyConfirmed ? "Cannot add — a confirmed transfer already exists" : ""} onClick={() => setCreateOpen(true)}>
                 <Plus size={14} /> Create Detail
               </Button>
-              <Button size="sm" variant="outline">
+              <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}> 
                 <CloudUpload size={14} /> Import
               </Button>
             </>
@@ -1342,6 +1346,23 @@ export function StockTransferViewPage() {
           Product: <strong className="text-foreground">{deleteTarget ? val(deleteTarget, "prod_code") : ""}</strong>
           {" · "}Key: <strong className="text-foreground">{deleteTarget ? String(deleteTarget._id || "") : ""}</strong>
         </div>
+      </Dialog>
+
+      {/* ── Import Dialog ── */}
+      <Dialog
+        open={importOpen}
+        title="Import Stock Transfer from Excel"
+        onClose={() => setImportOpen(false)}
+        wide
+      >
+        <ImportStockTransEdi
+          stn_no={stn_no || 0}
+          onClose={() => setImportOpen(false)}
+          onSuccess={() => {
+            setImportOpen(false);
+            void loadData(false);
+          }}
+        />
       </Dialog>
 
       {/* ── Print / report picker dialog ── */}

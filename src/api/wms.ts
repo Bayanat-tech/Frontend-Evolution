@@ -1,3 +1,5 @@
+import { TProduct } from "../pages/wms/Masters/Product_Master/product-wms.types";
+import { TTsStnDetailEdi } from "../pages/wms/stock transfer/StockediType";
 import { api } from "./client";
 import type { DynamicQueryParams, LookupRow } from "./lookups";
 
@@ -72,6 +74,12 @@ export type DeleteAdjDetailPayload = {
 export type StockAdjustmentListResponse = {
   headers: LookupRow[];
   details: LookupRow[];
+};
+
+type BulkApiResponse = {
+  success: boolean;
+  message?: string;
+  details?: string[];
 };
 
 /** GET — backend always returns ALL headers + ALL details, filter client-side */
@@ -167,6 +175,32 @@ export async function deleteWmsGmRaw(endpoint: string, payload: unknown, method:
       ? await api.delete<ApiResponse<unknown>>(`/api/wms/gm/${endpoint}`, { data: payload })
       : await api.post<ApiResponse<unknown>>(`/api/wms/gm/${endpoint}`, payload);
   if (!response.data.success) throw new Error(response.data.message || `Unable to delete ${endpoint}`);
+  return response.data;
+}
+
+export async function addProduct (values: TProduct){
+  const response = await api.post<ApiResponse<null>>('api/wms/gm/product', values);
+  if (!response.data.success) throw new Error(response.data.message || "Unable add Product");
+  return response.data.data || [];
+}
+
+export async function editProduct (values: TProduct){
+  const response = await api.put<ApiResponse<null>>('api/wms/gm/product', values);
+  if (!response.data.success) throw new Error(response.data.message || "Unable edit Product");
+  return response.data.data || [];
+}
+
+export async function insUpdTsStnDetailEdiBlkApi (  params: {rows: TTsStnDetailEdi[];loginid?: string;}){
+  const response = await api.post<BulkApiResponse>('/api/wms/inbound/insUpdTsStnDetailEdiBulk',{rows: params.rows,loginid: params.loginid});
+  if (!response.data.success) throw new Error(response.data.message || "Failed to Process");
+  return response.data || [];
+}
+
+export async function deleteProduct(product: { prod_code: string;prin_code: string;group_code: string;brand_code: string;company_code?: string;}) {
+  const response = await api.delete<ApiResponse<unknown>>("api/wms/gm/delproduct",{data: product,});
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Unable to delete Product");
+  }
   return response.data;
 }
 
@@ -357,7 +391,7 @@ export async function downloadGrnReportExcel(
   const url  = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href     = url;
-  link.download = `Job_${jobNo}_Details.xlsx`;
+  link.download = `Grn_report_job_no_${jobNo}.xlsx`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -394,6 +428,36 @@ export async function downloadTallyReportExcel(
   URL.revokeObjectURL(url);
 }
 
+export async function getInbServiceActivityReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/inb-serviceactivity/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+ 
+export async function downloadInbServiceActivityReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/inb-serviceactivity/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Inbound_activity_service_report_jobno_${jobNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export async function getDnReport(prinCode: string, jobNo: string): Promise<string> {
   const response = await api.get(
     `/api/wms/outbound/reports/Dn-report/${jobNo}?prin_code=${prinCode}`,
@@ -417,7 +481,7 @@ export async function downloadDnReportExcel(
   const url  = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href     = url;
-  link.download = `Tally_Details_report_jobno_${jobNo}.xlsx`;
+  link.download = `DN_report_jobno_${jobNo}.xlsx`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -447,7 +511,67 @@ export async function downloadOubPickReportExcel(
   const url  = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href     = url;
-  link.download = `Tally_Details_report_jobno_${jobNo}.xlsx`;
+  link.download = `Outbound_Picking_report_jobno_${jobNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export async function getOubServiceActivityReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/Oub-serviceactivity/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+ 
+export async function downloadOubServiceActivityReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/Oub-serviceactivity/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Outbound_activity_service_report_jobno_${jobNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export async function getOubJobDetReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/Oub_jobDet-report/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+
+export async function downloadOubJobDetReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/Oub_jobDet-report/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Outbound_Job_Details_report_jobno_${jobNo}.xlsx`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
