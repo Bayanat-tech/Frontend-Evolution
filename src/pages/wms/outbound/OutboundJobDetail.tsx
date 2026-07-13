@@ -1,7 +1,7 @@
 import { ArrowLeft, FileSpreadsheet, Printer, RefreshCw, Save } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { executeWmsInboundSql, getDnReport, downloadDnReportExcel, getOubPickReport, downloadOubPickReportExcel } from "../../../api/wms";
+import { executeWmsInboundSql, getDnReport, downloadDnReportExcel, getOubPickReport, downloadOubPickReportExcel, downloadOubJobDetReportExcel, getOubJobDetReport, getOubServiceActivityReport, downloadOubServiceActivityReportExcel } from "../../../api/wms";
 import { Button } from "../../../components/ui/Button";
 import { useAuth } from "../../../state/AuthContext";
 import type { WmsRow } from "./Outboundtypes";
@@ -31,15 +31,27 @@ type TReport = {
 const REPORTS: TReport[] = [
   {
     id:          1,
-    reportTitle: "Delivery Note Report",
-    apiFn:       getDnReport,
-    excelFn:     downloadDnReportExcel,
+    reportTitle: "Job Details Report",
+    apiFn:       getOubJobDetReport,
+    excelFn:     downloadOubJobDetReportExcel,
   },
-    {
+  {
     id:          2,
     reportTitle: "Pick List Report",
     apiFn:       getOubPickReport,
     excelFn:     downloadOubPickReportExcel,
+  },
+  {
+    id:          3,
+    reportTitle: "Delivery Note Report",
+    apiFn:       getDnReport,
+    excelFn:     downloadDnReportExcel,
+  },
+  {
+    id:          4,
+    reportTitle: "Activity Services Report",
+    apiFn:       getOubServiceActivityReport,
+    excelFn:     downloadOubServiceActivityReportExcel,
   },
 ];
 
