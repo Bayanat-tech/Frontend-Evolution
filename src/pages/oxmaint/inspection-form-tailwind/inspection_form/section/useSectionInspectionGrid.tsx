@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ColumnDef } from '@tanstack/react-table';
-import { useAuth } from '../../../../state/AuthContext';
-import { getDynamicLookup } from '../../../../api/lookups';
+import { getDynamicLookup } from '../../../../../api/lookups';
+import { useAuth } from '../../../../../state/AuthContext';
 
 type ApiSectionRow = {
     inspection_form_id: number;
@@ -37,11 +37,6 @@ export type GridRow =
           instruction: string | null;
       };
 
-type ValidApiSectionRow = Omit<ApiSectionRow, 'under_section_id' | 'under_section_title'> & {
-    under_section_id: number;
-    under_section_title: string;
-};
-
 type UseSectionInspectionGridReturn = {
     columnDefs: ColumnDef<GridRow>[];
     rowData: GridRow[];
@@ -52,22 +47,27 @@ type UseSectionInspectionGridReturn = {
     refetch: () => void;
 };
 
-/* ─── colour / label helpers ─── */
+type ValidApiSectionRow = Omit<ApiSectionRow, 'under_section_id' | 'under_section_title'> & {
+    under_section_id: number;
+    under_section_title: string;
+};
+
 const getOptionColorClass = (option: string) => {
     const key = option.trim().toUpperCase();
     const colorMap: Record<string, string> = {
-        YES: 'type-opt-yes',
-        NO: 'type-opt-no',
-        NA: 'type-opt-na',
-        PASS: 'type-opt-pass',
-        FAIL: 'type-opt-fail',
-        OK: 'type-opt-ok',
-        FAULTY: 'type-opt-faulty',
-        GOOD: 'type-opt-good',
-        REPAIR: 'type-opt-repair',
-        REPLACE: 'type-opt-replace',
+        YES: 'bg-[#10b981]',
+        NO: 'bg-[#ef4444]',
+        NA: 'bg-[#6b7280]',
+        PASS: 'bg-[#10b981]',
+        FAIL: 'bg-[#ef4444]',
+        OK: 'bg-[#10b981]',
+        FAULTY: 'bg-[#ef4444]',
+        GOOD: 'bg-[#10b981]',
+        REPAIR: 'bg-[#f59e0b]',
+        REPLACE: 'bg-[#6366f1]'
     };
-    return colorMap[key] ?? 'type-opt-default';
+
+    return colorMap[key] ?? 'bg-[#0ea5e9]';
 };
 
 const getOptionAbbr = (option: string) => {
@@ -82,20 +82,23 @@ const getOptionAbbr = (option: string) => {
         FAULTY: 'F',
         GOOD: 'G',
         REPAIR: 'R',
-        REPLACE: 'RP',
+        REPLACE: 'RP'
     };
+
     return labelMap[key] ?? key.slice(0, 2);
 };
 
-const isValidUnderSectionRow = (row: ApiSectionRow): row is ValidApiSectionRow =>
-    row.under_section_id !== null &&
-    row.under_section_id !== undefined &&
-    String(row.under_section_title ?? '').trim().length > 0;
+const isValidUnderSectionRow = (row: ApiSectionRow): row is ValidApiSectionRow => {
+    return (
+        row.under_section_id !== null &&
+        row.under_section_id !== undefined &&
+        String(row.under_section_title ?? '').trim().length > 0
+    );
+};
 
-/* ─── hook ─── */
 export const useSectionInspectionGrid = (
-    inspectionFormId: number | undefined,
-    onActionChange?: (action: 'update' | 'delete', rowData: GridRow) => void
+    inspectionFormId: Number | undefined,
+    onActionChange?: (action: 'update' | 'delete', rowData: any) => void
 ): UseSectionInspectionGridReturn => {
     const { user } = useAuth();
     const [collapsedSectionIds, setCollapsedSectionIds] = useState<number[]>([]);
@@ -108,24 +111,30 @@ export const useSectionInspectionGrid = (
             const response = await getDynamicLookup({
                 parameter: 'OX_INSPECTION_FORM_UNDER_SECTION_DATA',
                 loginid: user?.loginid ?? '',
-                number1: inspectionFormId ? Number(inspectionFormId) : undefined,
+                number1: inspectionFormId ? Number(inspectionFormId) : undefined
             });
+
             if (Array.isArray(response)) return response;
-            if (response && typeof response === 'object' && Array.isArray((response as any).data))
+            if (response && typeof response === 'object' && Array.isArray((response as any).data)) {
                 return (response as any).data;
+            }
+
             return [];
-        },
+        }
     });
 
-    /* group by header section */
     const groupedSections = useMemo(() => {
         const rows = (gridData || []) as ApiSectionRow[];
         const grouped = new Map<number, { title: string; items: ValidApiSectionRow[] }>();
 
         rows.forEach((row) => {
             if (!grouped.has(row.header_section_id)) {
-                grouped.set(row.header_section_id, { title: row.header_section_title, items: [] });
+                grouped.set(row.header_section_id, {
+                    title: row.header_section_title,
+                    items: []
+                });
             }
+
             if (isValidUnderSectionRow(row)) {
                 grouped.get(row.header_section_id)?.items.push(row);
             }
@@ -134,11 +143,10 @@ export const useSectionInspectionGrid = (
         return Array.from(grouped.entries()).map(([headerId, group]) => ({
             headerId,
             title: group.title,
-            items: [...group.items].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
+            items: [...group.items].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
         }));
     }, [gridData]);
 
-    /* reset collapse state when form changes */
     useEffect(() => {
         setCollapsedSectionIds([]);
         setHasInitializedCollapse(false);
@@ -146,24 +154,25 @@ export const useSectionInspectionGrid = (
 
     useEffect(() => {
         if (!hasInitializedCollapse && groupedSections.length > 0) {
-            setCollapsedSectionIds(groupedSections.map((s) => s.headerId));
+            setCollapsedSectionIds(groupedSections.map((section) => section.headerId));
             setHasInitializedCollapse(true);
         }
     }, [groupedSections, hasInitializedCollapse]);
 
-    /* build flat row list respecting collapse */
-    const transformedRows = useMemo<GridRow[]>(() => {
-        const flat: GridRow[] = [];
+    const transformedRows = useMemo(() => {
+        const flatRows: GridRow[] = [];
+
         groupedSections.forEach((section) => {
-            flat.push({
+            flatRows.push({
                 id: `section-${section.headerId}`,
                 rowType: 'section',
                 header_section_id: section.headerId,
-                header_section_title: section.title,
+                header_section_title: section.title
             });
+
             if (!collapsedSectionIds.includes(section.headerId)) {
                 section.items.forEach((item) => {
-                    flat.push({
+                    flatRows.push({
                         id: `item-${item.header_section_id}-${item.under_section_id}`,
                         rowType: 'item',
                         inspection_form_id: item.inspection_form_id,
@@ -174,82 +183,70 @@ export const useSectionInspectionGrid = (
                         type: item.type,
                         required: item.required,
                         sort_order: item.sort_order,
-                        instruction: item.instruction,
+                        instruction: item.instruction
                     });
                 });
             }
         });
-        return flat;
+
+        return flatRows;
     }, [groupedSections, collapsedSectionIds]);
 
-    const toggleSection = (sectionId: number) =>
+    const toggleSection = (sectionId: number) => {
         setCollapsedSectionIds((prev) =>
             prev.includes(sectionId) ? prev.filter((id) => id !== sectionId) : [...prev, sectionId]
         );
+    };
 
-    /* ── TanStack Table ColumnDef array ── */
     const columnDefs = useMemo<ColumnDef<GridRow>[]>(
         () => [
             {
                 id: 'sort_order',
                 header: 'Sort',
-                size: 60,
-                enableColumnFilter: false,
-                enableSorting: false,
-                cell: ({ row }) =>
-                    row.original.rowType === 'section' ? null : (
-                        <span style={{ fontVariantNumeric: 'tabular-nums', color: '#6b7280', fontSize: 12 }}>
-                            {(row.original as any).sort_order ?? ''}
-                        </span>
-                    ),
+                size: 70,
+                cell: ({ row }) => (row.original.rowType === 'section' ? '' : row.original.sort_order ?? '')
             },
             {
-                id: 'section_question',
+                id: 'under_section_title',
                 header: 'Section / Question',
-                enableColumnFilter: false,
-                enableSorting: false,
+                size: 260,
                 cell: ({ row }) => {
                     const data = row.original;
+
                     if (data.rowType === 'section') {
                         const isCollapsed = collapsedSectionIds.includes(data.header_section_id);
+
                         return (
-                            <div
-                                className="inspection-section-header"
-                                style={{ cursor: 'pointer' }}
-                                onClick={() => toggleSection(data.header_section_id)}
-                            >
-                                <span className="section-accordion-icon">{isCollapsed ? '▶' : '▼'}</span>
+                            <div className="flex items-center gap-2 text-[13px] font-semibold text-[#111827]">
+                                <span className="text-[11px] text-[#4b5563] w-3">{isCollapsed ? '▶' : '▼'}</span>
                                 <span>{data.header_section_title}</span>
                             </div>
                         );
                     }
+
                     return (
-                        <div className="inspection-item-wrap">
-                            <div className="inspection-item-title">{data.under_section_title}</div>
-                            {data.instruction ? (
-                                <div className="inspection-item-instruction">{data.instruction}</div>
-                            ) : null}
+                        <div className="flex flex-col gap-0.5 pl-3.5">
+                            <div className="text-xs text-[#111827] leading-snug">{data.under_section_title}</div>
                         </div>
                     );
-                },
+                }
             },
             {
                 id: 'type',
                 header: 'Type',
-                size: 160,
-                enableColumnFilter: false,
-                enableSorting: false,
+                size: 150,
                 cell: ({ row }) => {
                     const data = row.original;
-                    if (data.rowType === 'section') return null;
+
+                    if (!data || data.rowType === 'section') return '';
 
                     const currentType = (data.type || '').trim();
                     const upperType = currentType.toUpperCase();
 
                     if (upperType === 'TEXT FIELD' || upperType === 'NUMBER') {
                         return (
-                            <div className="type-input-preview">
-                                <span className="type-input-placeholder">
+                            <div className="h-6 w-full border border-[#d1d5db] rounded bg-white flex items-center px-2">
+                                <span className="text-[11px] text-[#9ca3af]">
                                     {upperType === 'NUMBER' ? '123...' : 'Enter text...'}
                                 </span>
                             </div>
@@ -258,72 +255,57 @@ export const useSectionInspectionGrid = (
 
                     const options = currentType
                         .split('-')
-                        .map((o: string) => o.trim())
+                        .map((opt: string) => opt.trim())
                         .filter(Boolean);
 
                     return (
-                        <div className="type-options-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap py-0.5">
                             {options.map((option: string) => (
                                 <div
                                     key={option}
-                                    className={`type-option-box ${getOptionColorClass(option)}`}
                                     title={option}
+                                    className={`w-[22px] h-[22px] rounded text-white text-[9px] font-bold flex items-center justify-center border border-black/[0.08] select-none ${getOptionColorClass(option)}`}
                                 >
                                     {getOptionAbbr(option)}
                                 </div>
                             ))}
                         </div>
                     );
-                },
+                }
             },
             {
                 id: 'required',
                 header: 'Required',
                 size: 90,
-                enableColumnFilter: false,
-                enableSorting: false,
                 cell: ({ row }) => {
-                    const data = row.original;
-                    if (data.rowType === 'section') return null;
-                    const isRequired = data.required === 'Y';
-                    return (
-                        <span
-                            style={{
-                                display: 'inline-block',
-                                borderRadius: 999,
-                                padding: '2px 8px',
-                                fontSize: 11,
-                                fontWeight: 700,
-                                background: isRequired ? '#dcfce7' : '#f3f4f6',
-                                color: isRequired ? '#16a34a' : '#6b7280',
-                            }}
-                        >
-                            {isRequired ? 'Yes' : 'No'}
-                        </span>
-                    );
-                },
+                    if (row.original.rowType === 'section') return '';
+                    return row.original.required === 'Y' ? 'Yes' : 'No';
+                }
             },
             {
                 id: 'action',
                 header: 'Action',
-                size: 110,
-                enableColumnFilter: false,
-                enableSorting: false,
+                size: 120,
                 cell: ({ row }) => {
                     const data = row.original;
-                    if (data.rowType === 'section') return null;
+
+                    if (!data || data.rowType === 'section') return '';
+
                     return (
                         <div
-                            className="inspection-action-wrap"
-                            onClick={(e) => e.stopPropagation()}
+                            className="w-full flex justify-start items-center"
+                            onClick={(event) => event.stopPropagation()}
+                            onMouseDown={(event) => event.stopPropagation()}
                         >
                             <select
-                                className="inspection-action-select"
+                                className="w-full max-w-[120px] h-7 border border-[#d1d5db] rounded-md bg-white text-[#111827] text-xs px-2 outline-none cursor-pointer focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]/20"
                                 defaultValue=""
-                                onChange={(e) => {
-                                    const action = e.target.value as 'update' | 'delete';
-                                    if (action && onActionChange) onActionChange(action, data);
-                                    e.target.value = '';
+                                onChange={(event) => {
+                                    const selectedAction = event.target.value as 'update' | 'delete';
+                                    if (selectedAction && onActionChange) {
+                                        onActionChange(selectedAction, data);
+                                    }
+                                    event.target.value = '';
                                 }}
                             >
                                 <option value="" disabled>
@@ -334,10 +316,10 @@ export const useSectionInspectionGrid = (
                             </select>
                         </div>
                     );
-                },
-            },
+                }
+            }
         ],
-        [collapsedSectionIds, onActionChange]
+        [collapsedSectionIds]
     );
 
     return {
@@ -347,6 +329,6 @@ export const useSectionInspectionGrid = (
         isError,
         gridData: gridData as ApiSectionRow[],
         toggleSection,
-        refetch,
+        refetch
     };
 };

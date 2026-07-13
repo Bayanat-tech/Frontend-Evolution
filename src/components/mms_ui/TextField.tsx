@@ -98,7 +98,6 @@ const TextField = ({
             baseInputClasses,
             sizePadding[size],
             readOnly && 'bg-[#fbfbfc] cursor-pointer',
-            // endAdornment && 'pr-8',
             inputClassName
           )}
           {...inputRest}

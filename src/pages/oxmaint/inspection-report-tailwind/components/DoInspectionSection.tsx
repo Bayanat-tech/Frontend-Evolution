@@ -7,7 +7,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Paper,
   Table,
   TableBody,
   TableCell,
@@ -15,7 +14,7 @@ import {
   TableHead,
   TableRow,
   TextField
-} from './ui';
+} from '../../../../components/mms_ui';
 import { InspectionReportStructureRow } from '../types/inspectionReportApi.types';
 import { InspectionItemResponse, InspectionItemValue } from '../types/AddInspectionReportPage.types';
 

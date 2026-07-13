@@ -1,7 +1,7 @@
-import { ArrowLeft, FileSpreadsheet, Printer, RefreshCw } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, FileSpreadsheet, Printer, RefreshCw, Save } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { executeWmsInboundSql, getDnReport, downloadDnReportExcel, getOubPickReport, downloadOubPickReportExcel } from "../../../api/wms";
+import { executeWmsInboundSql, getDnReport, downloadDnReportExcel, getOubPickReport, downloadOubPickReportExcel, downloadOubJobDetReportExcel, getOubJobDetReport, getOubServiceActivityReport, downloadOubServiceActivityReportExcel } from "../../../api/wms";
 import { Button } from "../../../components/ui/Button";
 import { useAuth } from "../../../state/AuthContext";
 import type { WmsRow } from "./Outboundtypes";
@@ -18,6 +18,7 @@ import { jobClassLabels } from "./Outboundtypes";
 import { outboundJobTabPath } from "./OutboundHelpers";
 import { OutboundOperationalTab } from "./OutboundOperationalTab";
 import { Dialog } from "../../../components/ui/Dialog";
+import { OutboundAcitivityBilling } from "./OutboundAcitivityBilling";
 
 type TReport = {
   id:           number;
@@ -26,18 +27,31 @@ type TReport = {
   excelFn?:     (prinCode: string, jobNo: string) => Promise<void>;
 };
 
+
 const REPORTS: TReport[] = [
   {
     id:          1,
-    reportTitle: "Delivery Note Report",
-    apiFn:       getDnReport,
-    excelFn:     downloadDnReportExcel,
+    reportTitle: "Job Details Report",
+    apiFn:       getOubJobDetReport,
+    excelFn:     downloadOubJobDetReportExcel,
   },
-    {
+  {
     id:          2,
     reportTitle: "Pick List Report",
     apiFn:       getOubPickReport,
     excelFn:     downloadOubPickReportExcel,
+  },
+  {
+    id:          3,
+    reportTitle: "Delivery Note Report",
+    apiFn:       getDnReport,
+    excelFn:     downloadDnReportExcel,
+  },
+  {
+    id:          4,
+    reportTitle: "Activity Services Report",
+    apiFn:       getOubServiceActivityReport,
+    excelFn:     downloadOubServiceActivityReportExcel,
   },
 ];
 
@@ -238,21 +252,21 @@ export function OutboundJobDetail({
 
       {/* ── Tab Strip ── */}
       <div className="flex gap-2 overflow-x-auto rounded-md border bg-card p-2">
-        {detailTabs.map((item) => (
-          <Link
-            className={
-              item.value === activeTab
-                ? "ui-button ui-button-default ui-button-sm"
-                : "ui-button ui-button-outline ui-button-sm"
-            }
-            key={item.value}
-            to={outboundJobTabPath(jobNo, item.value, job || { prin_code: principalCode } as WmsRow)}
-          >
-            {item.label}
-          </Link>
-        ))}
+        {detailTabs.map((item) =>
+            <Link
+              className={
+                item.value === activeTab
+                  ? "ui-button ui-button-default ui-button-sm"
+                  : "ui-button ui-button-outline ui-button-sm"
+              }
+              key={item.value}
+              to={outboundJobTabPath(jobNo, item.value, job || { prin_code: principalCode } as WmsRow)}
+            >
+              {item.label}
+            </Link>
+          // )
+        )}
       </div>
-
       <OutboundOperationalTab
         job={job}
         jobNo={jobNo}
@@ -260,7 +274,6 @@ export function OutboundJobDetail({
         loadingJob={loading}
         principalCode={principalCode}
       />
-
       {/* ── Dialog 1: Report list ── */}
       <Dialog
         open={listOpen}
@@ -341,3 +354,4 @@ export function OutboundJobDetail({
     </section>
   );
 }
+
