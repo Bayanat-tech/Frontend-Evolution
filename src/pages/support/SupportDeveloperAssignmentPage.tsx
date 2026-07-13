@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Mail, RefreshCw, Search, UserPlus } from "lucide-react";
+import { CheckCircle2, Circle, Filter, Mail, MessageSquare, MoreHorizontal, RefreshCw, Search, UserPlus, Users } from "lucide-react";
 import {
   SupportDeveloper,
   SupportTicket,
@@ -37,6 +37,7 @@ export function SupportDeveloperAssignmentPage() {
     });
     return counts;
   }, [assignedTickets]);
+  const selectedDeveloperProfile = developers.find((developer) => developer.LOGINID === selectedDeveloper) || null;
 
   useEffect(() => {
     void loadData();
@@ -105,17 +106,49 @@ export function SupportDeveloperAssignmentPage() {
 
       {notice && <div className="support-center-notice">{notice}</div>}
 
-      <div className="support-assignment-grid">
-        <div className="support-center-card support-assignment-queue">
-          <div className="support-center-card-head">
-            <h3>Open queue</h3>
-            <span>{openTickets.length} open</span>
-          </div>
-          <label className="support-center-search">
+      <div className="support-desk-board support-assignment-board">
+        <aside className="support-desk-filter">
+          <label className="support-desk-search">
             <Search size={15} />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search ticket, user, developer..." />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search tickets" />
           </label>
-          <div className="support-assign-list">
+          <div className="support-desk-section">
+            <span>Inbox</span>
+            <button className="active"><strong>Open queue</strong><em>{openTickets.length}</em></button>
+            <button><strong>Assigned</strong><em>{assignedTickets.length}</em></button>
+            <button><strong>Unassigned</strong><em>{openTickets.length - assignedTickets.filter((ticket) => ticket.STATUS !== "CLOSED").length}</em></button>
+          </div>
+          <div className="support-desk-section">
+            <span>Status</span>
+            <button><Circle size={8} fill="#2f80d8" color="#2f80d8" /><strong>Assigned</strong><em>{assignedTickets.length}</em></button>
+            <button><Circle size={8} fill="#27c46a" color="#27c46a" /><strong>Done</strong><em>{tickets.filter((ticket) => ticket.DEV_STATUS === "DONE").length}</em></button>
+            <button><Circle size={8} fill="#e3a326" color="#e3a326" /><strong>Waiting</strong><em>{tickets.filter((ticket) => ticket.DEV_STATUS === "WAITING_INFO").length}</em></button>
+          </div>
+          <div className="support-desk-section">
+            <span>Developers</span>
+            {developers.slice(0, 5).map((developer) => (
+              <button key={developer.LOGINID}>
+                <span className="support-mini-avatar">{String(developer.USERNAME || developer.LOGINID).slice(0, 2).toUpperCase()}</span>
+                <strong>{developer.USERNAME || developer.LOGINID}</strong>
+                <em>{developerLoads.get(String(developer.LOGINID).toUpperCase()) || 0}</em>
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        <aside className="support-desk-list">
+          <header>
+            <div>
+              <h2>Tickets</h2>
+              <span>{filteredTickets.length} visible</span>
+            </div>
+            <button type="button" title="Filter"><Filter size={16} /></button>
+          </header>
+          <div className="support-desk-chips">
+            <span>Open</span>
+            <span>Newest</span>
+          </div>
+          <div className="support-desk-ticket-list">
             {filteredTickets.map((ticket) => (
               <button
                 key={ticket.TICKET_ID}
@@ -125,61 +158,83 @@ export function SupportDeveloperAssignmentPage() {
                   setSelectedDeveloper(ticket.DEVELOPER_LOGINID || "");
                 }}
               >
-                <strong>{ticket.SUBJECT || `Ticket ${ticket.TICKET_ID}`}</strong>
-                <span>{ticket.REQUESTER_NAME || ticket.REQUESTER_LOGINID} - {ticket.PRIORITY || "NORMAL"}</span>
-                <em>{ticket.DEVELOPER_NAME ? `Assigned to ${ticket.DEVELOPER_NAME}` : "Unassigned"}</em>
+                <span className="support-mini-avatar">{String(ticket.REQUESTER_NAME || ticket.REQUESTER_LOGINID || "U").slice(0, 2).toUpperCase()}</span>
+                <span>
+                  <strong>{ticket.SUBJECT || `Ticket ${ticket.TICKET_ID}`}</strong>
+                  <small>{ticket.REQUESTER_NAME || ticket.REQUESTER_LOGINID} - {ticket.PRIORITY || "NORMAL"}</small>
+                  <em>{ticket.LAST_MESSAGE || "No latest message available"}</em>
+                </span>
+                <b>{ticket.DEVELOPER_NAME ? "Assigned" : "New"}</b>
+                <MoreHorizontal size={16} />
               </button>
             ))}
             {!filteredTickets.length && <p>No open tickets found.</p>}
           </div>
-        </div>
+        </aside>
 
-        <div className="support-center-card support-assignment-form">
-          <div className="support-center-card-head">
-            <h3>Assignment</h3>
-            <span>{selectedTicket ? `#${selectedTicket.TICKET_ID}` : "Select ticket"}</span>
-          </div>
+        <main className="support-desk-thread">
+          <header>
+            <div>
+              <h2>{selectedTicket ? selectedTicket.SUBJECT || `Ticket ${selectedTicket.TICKET_ID}` : "Select a ticket"}</h2>
+              <span>{selectedTicket ? `${selectedTicket.REQUESTER_NAME || selectedTicket.REQUESTER_LOGINID} - ${selectedTicket.STATUS}` : "Ticket assignment workspace"}</span>
+            </div>
+            <Button variant="outline" onClick={() => void loadData()} disabled={loading}>
+              <RefreshCw size={15} /> Refresh
+            </Button>
+          </header>
           {selectedTicket ? (
             <>
-              <div className="support-ticket-brief">
-                <strong>{selectedTicket.SUBJECT || `Ticket ${selectedTicket.TICKET_ID}`}</strong>
-                <span>{selectedTicket.REQUESTER_NAME || selectedTicket.REQUESTER_LOGINID}</span>
-                <p>{selectedTicket.LAST_MESSAGE || "No latest message available."}</p>
+              <div className="support-desk-message-preview">
+                <span className="support-mini-avatar large">{String(selectedTicket.REQUESTER_NAME || selectedTicket.REQUESTER_LOGINID || "U").slice(0, 2).toUpperCase()}</span>
+                <div>
+                  <strong>{selectedTicket.REQUESTER_NAME || selectedTicket.REQUESTER_LOGINID}</strong>
+                  <p>{selectedTicket.LAST_MESSAGE || "No latest message available."}</p>
+                  <small>{selectedTicket.LAST_MESSAGE_AT || selectedTicket.CREATED_AT || "Latest update"}</small>
+                </div>
               </div>
-              <label className="support-field">
-                <span>Developer</span>
-                <select value={selectedDeveloper} onChange={(event) => setSelectedDeveloper(event.target.value)}>
-                  <option value="">Select developer</option>
-                  {developers.map((developer) => (
-                    <option key={developer.LOGINID} value={developer.LOGINID}>
-                      {developer.USERNAME || developer.LOGINID} ({developer.LOGINID}) - {developerLoads.get(String(developer.LOGINID).toUpperCase()) || 0} assigned
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="support-field">
-                <span>Assignment note</span>
-                <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Add context for the developer..." />
-              </label>
-              <Button onClick={() => void assign()} disabled={!selectedDeveloper || loading}>
-                <UserPlus size={15} /> Assign and email developer
-              </Button>
+              <div className="support-desk-assignment-card">
+                <div className="support-center-card-head">
+                  <h3>Assign developer</h3>
+                  <span>{selectedTicket.DEV_STATUS || "UNASSIGNED"}</span>
+                </div>
+                <label className="support-field">
+                  <span>Developer</span>
+                  <select value={selectedDeveloper} onChange={(event) => setSelectedDeveloper(event.target.value)}>
+                    <option value="">Select developer</option>
+                    {developers.map((developer) => (
+                      <option key={developer.LOGINID} value={developer.LOGINID}>
+                        {developer.USERNAME || developer.LOGINID} ({developer.LOGINID}) - {developerLoads.get(String(developer.LOGINID).toUpperCase()) || 0} assigned
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="support-field">
+                  <span>Assignment note</span>
+                  <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Add context for the developer..." />
+                </label>
+                <Button onClick={() => void assign()} disabled={!selectedDeveloper || loading}>
+                  <UserPlus size={15} /> Assign and email developer
+                </Button>
+              </div>
             </>
           ) : (
             <div className="support-center-empty-state">
-              <UserPlus size={28} />
+              <MessageSquare size={28} />
               <strong>Select an open ticket</strong>
-              <span>Developer assignment details will appear here.</span>
+              <span>Ticket details and assignment controls will appear here.</span>
             </div>
           )}
-        </div>
+        </main>
 
-        <div className="support-center-card support-developer-loads">
-          <div className="support-center-card-head">
-            <h3>Developer workload</h3>
-            <span>{assignedTickets.length} assigned</span>
-          </div>
-          <div className="support-dev-create">
+        <aside className="support-desk-profile">
+          <header>
+            <div className="support-mini-avatar large">{String(selectedDeveloperProfile?.USERNAME || selectedDeveloperProfile?.LOGINID || "DV").slice(0, 2).toUpperCase()}</div>
+            <div>
+              <h3>{selectedDeveloperProfile?.USERNAME || "Developer Directory"}</h3>
+              <span>{selectedDeveloperProfile ? selectedDeveloperProfile.LOGINID : `${developers.length} team members`}</span>
+            </div>
+          </header>
+          <div className="support-dev-create modern">
             <input value={developerForm.loginid} onChange={(event) => setDeveloperForm((current) => ({ ...current, loginid: event.target.value }))} placeholder="Login ID" />
             <input value={developerForm.username} onChange={(event) => setDeveloperForm((current) => ({ ...current, username: event.target.value }))} placeholder="Developer name" />
             <input value={developerForm.email_id} onChange={(event) => setDeveloperForm((current) => ({ ...current, email_id: event.target.value }))} placeholder="Email for assignment" />
@@ -188,38 +243,34 @@ export function SupportDeveloperAssignmentPage() {
               <UserPlus size={14} /> Add Developer
             </Button>
           </div>
-          <div className="support-dev-list">
-            {developers.slice(0, 12).map((developer) => {
+          <div className="support-desk-directory">
+            <div><Users size={15} /><strong>Team Members</strong><em>{developers.length}</em></div>
+            {developers.slice(0, 10).map((developer) => {
               const count = developerLoads.get(String(developer.LOGINID).toUpperCase()) || 0;
               return (
-                <div key={developer.LOGINID}>
-                  <span className="support-center-avatar">{String(developer.USERNAME || developer.LOGINID).slice(0, 2).toUpperCase()}</span>
-                  <strong>{developer.USERNAME || developer.LOGINID}</strong>
-                  <em>{count} ticket{count === 1 ? "" : "s"}</em>
-                  {developer.EMAIL_ID && <Mail size={14} />}
-                </div>
+                <button key={developer.LOGINID} onClick={() => setSelectedDeveloper(developer.LOGINID)}>
+                  <span className="support-mini-avatar">{String(developer.USERNAME || developer.LOGINID).slice(0, 2).toUpperCase()}</span>
+                  <span>
+                    <strong>{developer.USERNAME || developer.LOGINID}</strong>
+                    <small>{developer.SKILL_TAGS || developer.EMAIL_ID || "Support developer"}</small>
+                  </span>
+                  <em>{count}</em>
+                </button>
               );
             })}
           </div>
-        </div>
-
-        <div className="support-center-card support-assignment-history">
-          <div className="support-center-card-head">
+          <div className="support-desk-notes">
             <h3>Assigned tickets</h3>
-            <span>{assignedTickets.length} total</span>
-          </div>
-          <div className="support-assigned-table">
-            {assignedTickets.slice(0, 10).map((ticket) => (
-              <div key={ticket.TICKET_ID}>
-                <CheckCircle2 size={15} />
-                <strong>{ticket.SUBJECT || `Ticket ${ticket.TICKET_ID}`}</strong>
-                <span>{ticket.DEVELOPER_NAME || ticket.DEVELOPER_LOGINID}</span>
+            {assignedTickets.slice(0, 5).map((ticket) => (
+              <button key={ticket.TICKET_ID} onClick={() => setSelectedTicketId(Number(ticket.TICKET_ID))}>
+                <CheckCircle2 size={14} />
+                <span>{ticket.SUBJECT || `Ticket ${ticket.TICKET_ID}`}</span>
                 <em>{ticket.DEV_STATUS || "ASSIGNED"}</em>
-              </div>
+              </button>
             ))}
             {!assignedTickets.length && <p>No assigned tickets yet.</p>}
           </div>
-        </div>
+        </aside>
       </div>
     </section>
   );

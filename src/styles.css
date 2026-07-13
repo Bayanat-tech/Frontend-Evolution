@@ -8853,6 +8853,499 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   color: #fff;
 }
 
+.support-desk-board {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: 250px 340px minmax(430px, 1fr) 330px;
+  overflow: hidden;
+  border: 1px solid #e3e8ef;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.07);
+}
+
+.support-desk-filter,
+.support-desk-list,
+.support-desk-thread,
+.support-desk-profile {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid #eef2f6;
+  background: #fff;
+}
+
+.support-desk-profile {
+  border-right: 0;
+}
+
+.support-desk-filter {
+  padding: 20px 18px;
+  background: #fbfcfe;
+}
+
+.support-desk-search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid #e1e7ef;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.support-desk-search input {
+  width: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+
+.support-desk-section {
+  display: grid;
+  gap: 4px;
+  margin-top: 24px;
+}
+
+.support-desk-section > span {
+  margin-bottom: 8px;
+  color: #71717f;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.support-desk-section button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.support-desk-section button.active,
+.support-desk-section button:hover {
+  background: #f0f4f9;
+}
+
+.support-desk-section strong,
+.support-desk-section em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: normal;
+}
+
+.support-desk-section em {
+  color: #71717f;
+}
+
+.support-mini-avatar {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border: 1px solid #cfe2ff;
+  border-radius: 50%;
+  background: #edf6ff;
+  color: #075fc0;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.support-mini-avatar.large {
+  width: 46px;
+  height: 46px;
+  font-size: 14px;
+}
+
+.support-desk-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.support-desk-list > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 78px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #eef2f6;
+}
+
+.support-desk-list h2,
+.support-desk-thread h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 22px;
+  letter-spacing: 0;
+}
+
+.support-desk-list header span,
+.support-desk-thread header span {
+  color: var(--muted);
+}
+
+.support-desk-list header button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #e1e7ef;
+  border-radius: 10px;
+  background: #fff;
+  color: #64748b;
+}
+
+.support-desk-chips {
+  display: flex;
+  gap: 8px;
+  padding: 16px 20px 10px;
+}
+
+.support-desk-chips span {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid #b7dbff;
+  border-radius: 9px;
+  background: #eff7ff;
+  color: #075fc0;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.support-desk-ticket-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 14px 18px;
+}
+
+.support-desk-ticket-list button {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 82px;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.support-desk-ticket-list button.active {
+  border-color: #badcff;
+  background: #edf6ff;
+  box-shadow: inset 3px 0 0 #1884dc;
+}
+
+.support-desk-ticket-list strong,
+.support-desk-ticket-list small,
+.support-desk-ticket-list em {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.support-desk-ticket-list small,
+.support-desk-ticket-list em {
+  color: var(--muted);
+  font-style: normal;
+}
+
+.support-desk-ticket-list b {
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #e8f2ff;
+  color: #075fc0;
+  font-size: 11px;
+}
+
+.support-desk-thread {
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #ffffff 0%, #f4f9ff 100%);
+}
+
+.support-desk-thread > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 78px;
+  padding: 18px 22px;
+  border-bottom: 1px solid #eef2f6;
+  background: #fff;
+}
+
+.support-desk-message-preview {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  margin: 24px;
+  padding: 18px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+}
+
+.support-desk-message-preview p {
+  margin: 7px 0 6px;
+  color: #334155;
+}
+
+.support-desk-message-preview small {
+  color: var(--muted);
+}
+
+.support-desk-assignment-card {
+  margin: 0 24px 24px;
+  padding: 18px;
+  border: 1px solid #dbe7f5;
+  border-radius: 18px;
+  background: #fff;
+}
+
+.support-desk-profile {
+  padding: 22px 20px;
+  overflow-y: auto;
+}
+
+.support-desk-profile > header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.support-desk-profile h3 {
+  margin: 0;
+  color: var(--text);
+}
+
+.support-desk-profile header span {
+  color: var(--muted);
+}
+
+.support-dev-create.modern {
+  margin: 0 0 20px;
+}
+
+.support-desk-directory,
+.support-desk-notes {
+  display: grid;
+  gap: 8px;
+  padding-top: 18px;
+  border-top: 1px solid #eef2f6;
+}
+
+.support-desk-notes {
+  margin-top: 18px;
+}
+
+.support-desk-directory > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.support-desk-directory button,
+.support-desk-notes button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  padding: 8px;
+  border: 0;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.support-desk-directory button:hover,
+.support-desk-notes button:hover {
+  background: #f5f8fc;
+}
+
+.support-desk-directory small,
+.support-desk-directory em,
+.support-desk-notes em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-style: normal;
+}
+
+.support-desk-notes h3 {
+  font-size: 15px;
+}
+
+.support-desk-notes p {
+  color: var(--muted);
+}
+
+.support-assignment-page .support-page-titlebar {
+  padding: 12px 16px;
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.support-assignment-page .support-page-titlebar h1 {
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.support-assignment-page .support-page-titlebar span,
+.support-assignment-page .support-page-titlebar .eyebrow {
+  font-size: var(--app-label-font-size);
+}
+
+.support-assignment-page .support-desk-board {
+  grid-template-columns: 220px 310px minmax(380px, 1fr) 300px;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.support-assignment-page .support-desk-filter {
+  padding: 14px 12px;
+}
+
+.support-assignment-page .support-desk-list > header,
+.support-assignment-page .support-desk-thread > header {
+  min-height: 58px;
+  padding: 12px 14px;
+}
+
+.support-assignment-page .support-desk-list h2,
+.support-assignment-page .support-desk-thread h2 {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.support-assignment-page .support-desk-section {
+  margin-top: 16px;
+}
+
+.support-assignment-page .support-desk-section > span {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.support-assignment-page .support-desk-section button,
+.support-assignment-page .support-desk-ticket-list button,
+.support-assignment-page .support-desk-directory button,
+.support-assignment-page .support-desk-notes button {
+  font-size: var(--app-control-font-size);
+}
+
+.support-assignment-page .support-desk-section strong,
+.support-assignment-page .support-desk-ticket-list strong,
+.support-assignment-page .support-desk-directory strong,
+.support-assignment-page .support-desk-notes strong {
+  font-weight: 650;
+}
+
+.support-assignment-page .support-mini-avatar {
+  width: 30px;
+  height: 30px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.support-assignment-page .support-mini-avatar.large {
+  width: 38px;
+  height: 38px;
+  font-size: 12px;
+}
+
+.support-assignment-page .support-desk-chips {
+  padding: 10px 14px 6px;
+}
+
+.support-assignment-page .support-desk-chips span,
+.support-assignment-page .support-desk-ticket-list b {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 10.5px;
+  font-weight: 650;
+}
+
+.support-assignment-page .support-desk-ticket-list {
+  padding: 0 10px 12px;
+}
+
+.support-assignment-page .support-desk-ticket-list button {
+  min-height: 66px;
+  margin-top: 6px;
+  padding: 9px;
+  border-radius: 10px;
+}
+
+.support-assignment-page .support-desk-message-preview {
+  margin: 14px;
+  padding: 12px;
+  border: 1px solid #e3e8ef;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.support-assignment-page .support-desk-assignment-card {
+  margin: 0 14px 14px;
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.support-assignment-page .support-desk-profile {
+  padding: 14px 12px;
+}
+
+.support-assignment-page .support-desk-profile h3,
+.support-assignment-page .support-desk-notes h3,
+.support-assignment-page .support-center-card-head h3 {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.support-assignment-page .support-dev-create {
+  border-radius: 10px;
+  background: #fbfdff;
+}
+
+.support-assignment-page .support-dev-create input,
+.support-assignment-page .support-field select,
+.support-assignment-page .support-field textarea {
+  font-size: var(--app-control-font-size);
+}
+
 @media (max-width: 1100px) {
   .support-body,
   .support-center-workbench {
