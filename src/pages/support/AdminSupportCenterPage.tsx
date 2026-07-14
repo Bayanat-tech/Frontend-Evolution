@@ -1,5 +1,5 @@
 import { ChangeEvent, ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, Bell, BellOff, CheckCircle2, Clock3, Eye, ImagePlus, Inbox, MessageSquarePlus, Paperclip, RefreshCw, Search, Send, ShieldCheck, Trash2, UserRoundCheck, X } from "lucide-react";
+import { Activity, AlertTriangle, BarChart3, Bell, BellOff, CheckCircle2, Clock3, Eye, FileText, ImagePlus, Inbox, MessageSquarePlus, Paperclip, RefreshCw, Search, Send, ShieldCheck, TimerReset, Trash2, UserRoundCheck, X } from "lucide-react";
 import { io, Socket } from "socket.io-client";
 import {
   SupportAttachment,
@@ -21,7 +21,7 @@ import { Button } from "../../components/ui/Button";
 import { cn } from "../../lib/utils";
 import { isSupportRingMuted, setSupportRingMuted } from "../../utils/supportNotification";
 
-type AdminSupportTab = "dashboard" | "tickets" | "users";
+type AdminSupportTab = "dashboard" | "tickets" | "report" | "users";
 const SUPPORT_QUICK_EMOJIS = ["\u{1F44D}", "\u{1F64F}", "\u2705", "\u{1F60A}", "\u{1F44C}", "\u{1F680}"];
 const QUICK_REPLIES = ["We are checking this now.", "Please share a screenshot.", "This is resolved. Please confirm.", "Thank you, we will update shortly."];
 
@@ -53,8 +53,15 @@ export function AdminSupportCenterPage() {
   const currentUser = user?.loginid || user?.username || "";
   const openTickets = tickets.filter((ticket) => ticket.STATUS !== "CLOSED");
   const closedTickets = tickets.filter((ticket) => ticket.STATUS === "CLOSED");
+  const assignedTickets = tickets.filter((ticket) => ticket.DEVELOPER_LOGINID);
+  const unassignedOpenTickets = openTickets.filter((ticket) => !ticket.DEVELOPER_LOGINID);
+  const overdueTickets = openTickets.filter(isTicketOverdue);
   const onlineUsers = activeUsers.filter(isSupportUserOnline);
   const awayUsers = activeUsers.filter((item) => !isSupportUserOnline(item));
+  const prioritySummary = useMemo(() => buildPrioritySummary(tickets), [tickets]);
+  const developerSummary = useMemo(() => buildDeveloperSummary(tickets), [tickets]);
+  const reportHealth = tickets.length ? Math.round((closedTickets.length / tickets.length) * 100) : 0;
+  const assignmentHealth = openTickets.length ? Math.round((assignedTickets.filter((ticket) => ticket.STATUS !== "CLOSED").length / openTickets.length) * 100) : 100;
   const filteredTickets = tickets.filter((ticket) => {
     const text = [
       ticket.SUBJECT,
@@ -301,6 +308,9 @@ export function AdminSupportCenterPage() {
         <button className={cn(activeTab === "tickets" && "active")} onClick={() => setActiveTab("tickets")}>
           <Inbox size={16} /> Support Reply
         </button>
+        <button className={cn(activeTab === "report" && "active")} onClick={() => setActiveTab("report")}>
+          <FileText size={16} /> Report
+        </button>
         <button className={cn(activeTab === "users" && "active")} onClick={() => setActiveTab("users")}>
           <UserRoundCheck size={16} /> Online Users
         </button>
@@ -386,6 +396,122 @@ export function AdminSupportCenterPage() {
                 </button>
               ))}
               {!openTickets.length && <p>All open requests are cleared.</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "report" && (
+        <div className="support-report-page">
+          <div className="support-report-banner">
+            <div>
+              <p className="eyebrow m-0">Phase 1 report</p>
+              <h2>Support performance overview</h2>
+              <span>Live ticket health, SLA attention, priority spread and developer workload in one review screen.</span>
+            </div>
+            <div className="support-report-score">
+              <strong>{reportHealth}%</strong>
+              <span>Closure health</span>
+            </div>
+          </div>
+
+          <div className="support-report-kpis">
+            <ReportKpi title="Open tickets" value={openTickets.length} subtitle={`${unassignedOpenTickets.length} unassigned`} icon={<Inbox size={17} />} />
+            <ReportKpi title="SLA risk" value={overdueTickets.length} subtitle={overdueTickets.length ? "Needs attention" : "On track"} tone={overdueTickets.length ? "amber" : "green"} icon={<TimerReset size={17} />} />
+            <ReportKpi title="Assigned" value={assignedTickets.length} subtitle={`${assignmentHealth}% open coverage`} tone="blue" icon={<UserRoundCheck size={17} />} />
+            <ReportKpi title="Online users" value={onlineUsers.length} subtitle={`${activeUsers.length} tracked`} tone="teal" icon={<Activity size={17} />} />
+          </div>
+
+          <div className="support-report-grid">
+            <div className="support-report-card support-report-wide">
+              <div className="support-center-card-head">
+                <h3>Ticket health</h3>
+                <span>{tickets.length} total</span>
+              </div>
+              <div className="support-report-health">
+                <div className="support-report-meter">
+                  <i style={{ width: `${Math.max(reportHealth, tickets.length ? 6 : 0)}%` }} />
+                </div>
+                <div className="support-report-health-legend">
+                  <span><b className="blue-dot" /> Open queue <strong>{openTickets.length}</strong></span>
+                  <span><b className="green-dot" /> Closed tickets <strong>{closedTickets.length}</strong></span>
+                  <span><b className="amber-dot" /> Overdue SLA <strong>{overdueTickets.length}</strong></span>
+                </div>
+              </div>
+            </div>
+
+            <div className="support-report-card">
+              <div className="support-center-card-head">
+                <h3>Priority spread</h3>
+                <span>{prioritySummary.length} levels</span>
+              </div>
+              <div className="support-report-priority">
+                {prioritySummary.map((item) => (
+                  <div key={item.label}>
+                    <span className={`support-priority-dot ${item.tone}`} />
+                    <strong>{item.label}</strong>
+                    <em>{item.count}</em>
+                    <i><b style={{ width: `${item.percent}%` }} /></i>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="support-report-card">
+              <div className="support-center-card-head">
+                <h3>Developer workload</h3>
+                <span>{developerSummary.length} assigned</span>
+              </div>
+              <div className="support-report-devs">
+                {developerSummary.slice(0, 6).map((item) => (
+                  <div key={item.name}>
+                    <span>{item.name.slice(0, 2).toUpperCase()}</span>
+                    <strong>{item.name}</strong>
+                    <em>{item.count} ticket{item.count === 1 ? "" : "s"}</em>
+                  </div>
+                ))}
+                {!developerSummary.length && <p>No developer assignments yet.</p>}
+              </div>
+            </div>
+
+            <div className="support-report-card support-report-wide">
+              <div className="support-center-card-head">
+                <h3>Attention report</h3>
+                <span>{overdueTickets.length + unassignedOpenTickets.length} action items</span>
+              </div>
+              <div className="support-report-attention">
+                {[...overdueTickets, ...unassignedOpenTickets]
+                  .filter((ticket, index, array) => array.findIndex((item) => item.TICKET_ID === ticket.TICKET_ID) === index)
+                  .slice(0, 6)
+                  .map((ticket) => (
+                    <button key={ticket.TICKET_ID} onClick={() => { setSelectedId(Number(ticket.TICKET_ID)); setActiveTab("tickets"); }}>
+                      <AlertTriangle size={15} />
+                      <span>
+                        <strong>{ticket.SUBJECT || `Ticket ${ticket.TICKET_ID}`}</strong>
+                        <em>{ticket.REQUESTER_NAME || ticket.REQUESTER_LOGINID} - {ticket.DEVELOPER_LOGINID ? formatDueLabel(ticket) : "No developer assigned"}</em>
+                      </span>
+                      <b>{ticket.PRIORITY || "NORMAL"}</b>
+                    </button>
+                  ))}
+                {!overdueTickets.length && !unassignedOpenTickets.length && <p>All open tickets have developer coverage and no SLA risk.</p>}
+              </div>
+            </div>
+
+            <div className="support-report-card">
+              <div className="support-center-card-head">
+                <h3>Recent activity</h3>
+                <span>Latest 5</span>
+              </div>
+              <div className="support-report-activity">
+                {tickets.slice(0, 5).map((ticket) => (
+                  <button key={ticket.TICKET_ID} onClick={() => { setSelectedId(Number(ticket.TICKET_ID)); setActiveTab("tickets"); }}>
+                    <strong>{ticket.SUBJECT || `Ticket ${ticket.TICKET_ID}`}</strong>
+                    <span>{ticket.LAST_MESSAGE || "No latest message"}</span>
+                    <em>{ticket.LAST_MESSAGE_AT || ticket.CREATED_AT || "-"}</em>
+                  </button>
+                ))}
+                {!tickets.length && <p>No ticket activity available.</p>}
+              </div>
             </div>
           </div>
         </div>
@@ -670,6 +796,19 @@ export function AdminSupportCenterPage() {
   );
 }
 
+function ReportKpi({ title, value, subtitle, icon, tone }: { title: string; value: number; subtitle: string; icon: React.ReactNode; tone?: "blue" | "green" | "teal" | "amber" }) {
+  return (
+    <div className={cn("support-report-kpi", tone)}>
+      <span>{icon}</span>
+      <div>
+        <strong>{value}</strong>
+        <em>{title}</em>
+        <small>{subtitle}</small>
+      </div>
+    </div>
+  );
+}
+
 function MetricCard({ label, value, icon, tone }: { label: string; value: number; icon: React.ReactNode; tone?: string }) {
   return (
     <div className={cn("support-center-metric", tone)}>
@@ -678,6 +817,73 @@ function MetricCard({ label, value, icon, tone }: { label: string; value: number
       <small>{label}</small>
     </div>
   );
+}
+
+function buildPrioritySummary(tickets: SupportTicket[]) {
+  const order = ["CRITICAL", "HIGH", "MEDIUM", "NORMAL", "LOW"];
+  const counts = new Map<string, number>();
+  tickets.forEach((ticket) => {
+    const key = String(ticket.PRIORITY || "NORMAL").toUpperCase();
+    counts.set(key, (counts.get(key) || 0) + 1);
+  });
+  const total = Math.max(tickets.length, 1);
+  return order
+    .filter((label) => counts.has(label) || label === "NORMAL")
+    .map((label) => ({
+      label,
+      count: counts.get(label) || 0,
+      percent: Math.max(counts.get(label) ? 8 : 2, Math.round(((counts.get(label) || 0) / total) * 100)),
+      tone: priorityTone(label),
+    }));
+}
+
+function buildDeveloperSummary(tickets: SupportTicket[]) {
+  const counts = new Map<string, number>();
+  tickets.forEach((ticket) => {
+    const name = ticket.DEVELOPER_NAME || ticket.DEVELOPER_LOGINID;
+    if (!name) return;
+    counts.set(name, (counts.get(name) || 0) + 1);
+  });
+  return Array.from(counts.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((first, second) => second.count - first.count || first.name.localeCompare(second.name));
+}
+
+function isTicketOverdue(ticket: SupportTicket) {
+  if (ticket.STATUS === "CLOSED" || !ticket.DUE_AT) return false;
+  const due = parseSupportDate(ticket.DUE_AT);
+  return Boolean(due && due.getTime() < Date.now());
+}
+
+function formatDueLabel(ticket: SupportTicket) {
+  if (!ticket.DUE_AT) return "No SLA timer";
+  const due = parseSupportDate(ticket.DUE_AT);
+  if (!due) return "SLA date unavailable";
+  const diffMinutes = Math.round((due.getTime() - Date.now()) / 60000);
+  if (diffMinutes < 0) return `Overdue by ${formatMinutes(Math.abs(diffMinutes))}`;
+  return `Due in ${formatMinutes(diffMinutes)}`;
+}
+
+function formatMinutes(minutes: number) {
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const remaining = minutes % 60;
+  if (hours < 24) return remaining ? `${hours}h ${remaining}m` : `${hours}h`;
+  const days = Math.floor(hours / 24);
+  const dayHours = hours % 24;
+  return dayHours ? `${days}d ${dayHours}h` : `${days}d`;
+}
+
+function parseSupportDate(value: string) {
+  const parsed = new Date(String(value).replace(" ", "T"));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function priorityTone(priority: string) {
+  const key = priority.toUpperCase();
+  if (key === "CRITICAL" || key === "HIGH") return "danger";
+  if (key === "MEDIUM" || key === "NORMAL") return "blue";
+  return "muted";
 }
 
 function TicketStatusChart({ open, closed, total }: { open: number; closed: number; total: number }) {
