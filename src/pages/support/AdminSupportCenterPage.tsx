@@ -3,11 +3,13 @@ import { Activity, AlertTriangle, BarChart3, Bell, BellOff, CheckCircle2, Clock3
 import { io, Socket } from "socket.io-client";
 import {
   SupportAttachment,
+  SupportAssistantSuggestion,
   SupportMessage,
   SupportTicket,
   SupportUser,
   deleteSupportMessage,
   getSupportActiveUsers,
+  getSupportAssistantSuggestion,
   getSupportMessages,
   getSupportTickets,
   markSupportRead,
@@ -36,6 +38,7 @@ export function AdminSupportCenterPage() {
   const [compose, setCompose] = useState("");
   const [attachments, setAttachments] = useState<SupportAttachment[]>([]);
   const [previewAttachment, setPreviewAttachment] = useState<SupportAttachment | null>(null);
+  const [assistantSuggestion, setAssistantSuggestion] = useState<SupportAssistantSuggestion | null>(null);
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
   const [typingByTicket, setTypingByTicket] = useState<Record<number, string>>({});
   const [ringMuted, setRingMuted] = useState(() => isSupportRingMuted());
@@ -170,6 +173,23 @@ export function AdminSupportCenterPage() {
   useEffect(() => {
     scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight });
   }, [messages.length]);
+
+  useEffect(() => {
+    if (!selectedTicket) {
+      setAssistantSuggestion(null);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void getSupportAssistantSuggestion({
+        subject: selectedTicket.SUBJECT,
+        message: selectedTicket.LAST_MESSAGE,
+        module: selectedTicket.MODULE_NAME,
+      })
+        .then(setAssistantSuggestion)
+        .catch(() => setAssistantSuggestion(null));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [selectedTicket?.TICKET_ID, selectedTicket?.LAST_MESSAGE, selectedTicket?.MODULE_NAME, selectedTicket?.SUBJECT]);
 
   const loadAll = async (showLoading = true) => {
     if (loadAllInFlightRef.current) return;
@@ -709,12 +729,25 @@ export function AdminSupportCenterPage() {
                 ))}
               </div>
               <div className="support-quick-replies" aria-label="Quick replies">
-                {QUICK_REPLIES.map((reply) => (
+                {[
+                  ...(assistantSuggestion?.suggestedReply ? [assistantSuggestion.suggestedReply] : []),
+                  ...QUICK_REPLIES,
+                ].filter((reply, index, items) => items.indexOf(reply) === index).map((reply) => (
                   <button type="button" key={reply} disabled={!selectedTicket} onClick={() => setCompose(reply)}>
                     {reply}
                   </button>
                 ))}
               </div>
+              {selectedTicket && assistantSuggestion && (
+                <div className="support-ai-suggestion admin">
+                  <span>{assistantSuggestion.category}</span>
+                  <strong>{assistantSuggestion.priority}</strong>
+                  <em>{assistantSuggestion.developerGroup}</em>
+                  <button type="button" onClick={() => setCompose(assistantSuggestion.suggestedReply)}>
+                    Use suggestion
+                  </button>
+                </div>
+              )}
               <div>
                 <button className="icon-button" onClick={() => fileInputRef.current?.click()} title="Attach screenshot or file">
                   <ImagePlus size={17} />

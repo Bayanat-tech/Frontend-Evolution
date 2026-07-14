@@ -8089,6 +8089,53 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   font-size: 12px;
 }
 
+.support-ai-suggestion {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 9px;
+  padding: 8px 10px;
+  border: 1px solid #d6e4f4;
+  border-radius: 12px;
+  color: #1f2937;
+  background: linear-gradient(135deg, #f8fbff 0%, #eef7ff 100%);
+  font-size: 12px;
+}
+
+.support-ai-suggestion span,
+.support-ai-suggestion strong,
+.support-ai-suggestion em {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #d9e5f2;
+  font-style: normal;
+  line-height: 1;
+}
+
+.support-ai-suggestion strong {
+  color: #0f766e;
+}
+
+.support-ai-suggestion button {
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid #b9d6f4;
+  border-radius: 999px;
+  color: #075ca8;
+  background: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.support-ai-suggestion.admin {
+  margin-top: 0;
+}
+
 .support-compose-row,
 .support-center-composer > div:last-of-type {
   position: relative;

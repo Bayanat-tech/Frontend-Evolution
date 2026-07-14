@@ -75,6 +75,19 @@ export type SupportDeveloper = {
   ACTIVE_FLAG?: string;
 };
 
+export type SupportAssistantSuggestion = {
+  category: string;
+  priority: "LOW" | "NORMAL" | "MEDIUM" | "HIGH" | "CRITICAL";
+  developerGroup: string;
+  slaMinutes: number;
+  confidence: number;
+  matchedKeywords: string[];
+  suggestedReply: string;
+  quickReplies: string[];
+  source: string;
+  cost: string;
+};
+
 function unwrap<T>(response: { data: { success?: boolean; data?: T; message?: string } }) {
   if (!response.data?.success) throw new Error(response.data?.message || "Support request failed");
   return response.data.data as T;
@@ -136,4 +149,8 @@ export async function getDeveloperSupportTickets() {
 
 export async function updateDeveloperSupportStatus(ticketId: number, devStatus: string) {
   return unwrap(await api.patch(`/api/support/tickets/${ticketId}/developer-status`, { dev_status: devStatus }));
+}
+
+export async function getSupportAssistantSuggestion(payload: Record<string, unknown>) {
+  return unwrap<SupportAssistantSuggestion>(await api.post("/api/support/assist/suggest", payload));
 }

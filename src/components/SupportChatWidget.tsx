@@ -5,12 +5,14 @@ import { CheckCircle2, Eye, Headphones, ImagePlus, MessageSquarePlus, Paperclip,
 import { io, Socket } from "socket.io-client";
 import {
   SupportAttachment,
+  SupportAssistantSuggestion,
   SupportMessage,
   SupportTicket,
   SupportUser,
   createSupportTicket,
   deleteSupportMessage,
   getSupportActiveUsers,
+  getSupportAssistantSuggestion,
   getSupportMessages,
   getSupportTickets,
   markSupportRead,
@@ -45,6 +47,7 @@ export function SupportChatWidget() {
   const [subject, setSubject] = useState("");
   const [attachments, setAttachments] = useState<SupportAttachment[]>([]);
   const [previewAttachment, setPreviewAttachment] = useState<SupportAttachment | null>(null);
+  const [assistantSuggestion, setAssistantSuggestion] = useState<SupportAssistantSuggestion | null>(null);
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
   const [typingByTicket, setTypingByTicket] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(false);
@@ -71,6 +74,7 @@ export function SupportChatWidget() {
   const visibleActiveUsers = [...activeUsers]
     .sort((first, second) => Number(isSupportUserOnline(second)) - Number(isSupportUserOnline(first)))
     .slice(0, 8);
+  const assistantText = `${subject} ${compose}`.trim();
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -230,6 +234,23 @@ export function SupportChatWidget() {
     scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight });
   }, [messages.length]);
 
+  useEffect(() => {
+    if (canUseAdmin || selectedId || assistantText.length < 8) {
+      setAssistantSuggestion(null);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void getSupportAssistantSuggestion({
+        subject,
+        message: compose,
+        module: location.pathname.split("/")[2] || appCode || "Workspace",
+      })
+        .then(setAssistantSuggestion)
+        .catch(() => setAssistantSuggestion(null));
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [assistantText, appCode, canUseAdmin, compose, location.pathname, selectedId, subject]);
+
   const loadAll = async (showLoading = true) => {
     if (loadAllInFlightRef.current) return;
     loadAllInFlightRef.current = true;
@@ -288,7 +309,7 @@ export function SupportChatWidget() {
           message,
           module: location.pathname.split("/")[2] || "Workspace",
           page_url: location.pathname,
-          priority: "NORMAL",
+          priority: assistantSuggestion?.priority || "NORMAL",
           attachments,
         });
         setSelectedId(Number(created.ticketId));
@@ -601,6 +622,15 @@ export function SupportChatWidget() {
                       </button>
                     ))}
                   </div>
+                  {!selectedId && assistantSuggestion && (
+                    <div className="support-ai-suggestion">
+                      <span>{assistantSuggestion.category}</span>
+                      <strong>{assistantSuggestion.priority}</strong>
+                      <button type="button" onClick={() => setCompose(assistantSuggestion.suggestedReply)}>
+                        Use suggested wording
+                      </button>
+                    </div>
+                  )}
                   <div className="support-compose-row">
                     <button className="icon-button" onClick={() => fileInputRef.current?.click()} title="Attach screenshot or file">
                       <ImagePlus size={17} />
