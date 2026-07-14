@@ -132,12 +132,10 @@ export function CreditDebiteNotePage({ docType }: { docType: TransactionType }) 
       cell: ({ row }) => <span className="font-semibold">{row.original.doc_no}</span>,
     },
     { accessorKey: "doc_date", header: "Date", cell: ({ getValue }) => formatDate(getValue()) },
-    { accessorKey: "ac_name", header: "Account Name" },
+    { accessorKey: "ac_name", header: "Account Name", size: 320 },
     ...(docType === "CN" ? [{ accessorKey: "ac_payee", header: "Account Payee" } as ColumnDef<TransactionDocumentRow>] : []),
     { accessorKey: "remarks", header: "Description" },
-    ...((docType === "CN" || docType === "DN") ? [{ accessorKey: "cheque_no", header: "Cheque No" } as ColumnDef<TransactionDocumentRow>] : []),
-    ...(docType === "DN" ? [{ accessorKey: "cheque_bank", header: "Cheque Bank" } as ColumnDef<TransactionDocumentRow>] : []),
-    { accessorKey: "div_code", header: "Div" },
+    { accessorKey: "div_code", header: "Div", size: 70 },
     {
       accessorKey: "canceled",
       header: "Status",
@@ -421,6 +419,19 @@ function PaymentDocumentEditor({
 
   const totalTax = form.detail.reduce((sum, row) => sum + (Number(row.tx_compnt_amt_1) || 0) * row.sign_ind, 0);
   const isCancelled = form.canceled === "Y";
+  const hasInvoiceExceedError = form.detail.some((detail) => {
+    if (detail.child_table !== "invoice") return false;
+    const childRows = (form.children[detail.id] || []) as TransactionChildRow[];
+    if (childRows.length === 0) return false;
+
+    const effectiveCeiling = childRows.reduce((sum, row) => {
+      const outstanding = Number(row.c_bal_amt_org) || 0;
+      const allocated = Number(row.amount) || 0;
+      return sum + Math.max(outstanding, allocated);
+    }, 0);
+
+    return Number(detail.amount || 0) > effectiveCeiling + 0.001;
+  });
 
   const cancelCurrentDocument = async () => {
     if (!form.doc_no || form.doc_no === "0" || form.canceled === "Y") return;
@@ -1086,18 +1097,22 @@ function PaymentDocumentEditor({
                                 }
                               }}
                             />
-                            {(() => {
+                              {(() => {
                               const childRows = (form.children[detail.id] || []) as TransactionChildRow[];
                               if (detail.child_table !== "invoice" || childRows.length === 0) return null;
 
-                              const totalOutstanding = childRows.reduce(
-                                (sum, r) => sum + (Number(r.c_bal_amt_org) || 0), 0
-                              );
+                              const effectiveCeiling = childRows.reduce((sum, r) => {
+                                const outstanding = Number(r.c_bal_amt_org) || 0;
+                                const allocated = Number(r.amount) || 0;
+                                return sum + Math.max(outstanding, allocated);
+                              }, 0);
+                              
 
                               // ✅ Compare user's typed detail amount against total outstanding
-                              return Number(detail.amount || 0) > totalOutstanding ? (
+                         
+                              return Number(detail.amount || 0) > effectiveCeiling + 0.001 ? (
                                 <span className="text-xs text-red-500">
-                                  Amount exceeds total outstanding ({totalOutstanding.toFixed(3)})
+                                  Amount exceeds total outstanding ({effectiveCeiling.toFixed(3)})
                                 </span>
                               ) : null;
                             })()}
@@ -1222,7 +1237,11 @@ function PaymentDocumentEditor({
         </div>
         <div className="flex items-center gap-2">
           <Button disabled={saving} type="button" variant="outline" onClick={onClose}>Close</Button>
-          <Button disabled={disabled || loading || form.detail.length === 0} type="submit">
+          <Button
+            disabled={disabled || loading || form.detail.length === 0 || hasInvoiceExceedError}
+            title={hasInvoiceExceedError ? "Amount is greater than outstanding" : undefined}
+            type="submit"
+          >
             <Save size={15} /> {saving ? "Saving..." : "Save"}
           </Button>
         </div>
