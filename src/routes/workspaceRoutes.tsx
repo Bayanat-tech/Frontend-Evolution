@@ -228,16 +228,8 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <SalaryAdditionDeductionMainPage />,
   },
 
-//Grade master page route hcm/hr/transactions/memo_and_forms/absent_memo
-//  {
-//   name: "HR Grade Master",
-//   match: ({ pathname }) =>
-//     pathname.toLowerCase().includes("/workspace/bt-masters/hcm/general%20master/grade%202master"),
-//   element: () => <GradeMasterPage />,
-// },
-
-
-{
+//Grade master page route 
+  {
   name: "HR Grade Master",
   match: ({ pathname }) =>
     pathname
@@ -245,6 +237,9 @@ export const workspaceRoutes: WorkspaceRoute[] = [
       .includes("/workspace/hcm/hcm/general%20master/grade%20master"),
   element: () => <GradeMasterPage />,
 },
+
+
+
 
 
   {
