@@ -605,6 +605,33 @@ export async function downloadAdjConfirmReportExcel(prin_code: string, adj_no: s
   URL.revokeObjectURL(url);
 }
 
+export async function getInvocieDetailReport(prin_code: string, invoice_no: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/invoice-detail/html?${prin_code}&invoice_no=${invoice_no}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+
+export async function downloadInvocieDetailReportExcel(prin_code: string, invoice_no: string): Promise<void> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/invoice-detail/excel?${prin_code}&invoice_no=${invoice_no}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Invoice_Detail_report_InvocieNo_${invoice_no}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 
 export async function getAllStockTransfers() {
   const response = await api.get<ApiResponse<unknown[]>>("/api/wms/stocktransfer/getAllStockTransfers");
