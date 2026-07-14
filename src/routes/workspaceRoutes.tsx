@@ -147,6 +147,23 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+
+  {
+    name: 'mms inspection report',
+    match: ({pathname}) => pathname.toLowerCase().includes("/mms/mms/inspection/inspection-report"),
+    element: () => <InspectionReportMainPage />,
+  },
+  {
+    name: 'mms inspection form',
+    match: ({pathname}) => pathname.toLowerCase().includes("/mms/mms/inspection/inspection-form"),
+    element: () => <InspectionFormPage />
+  },
+  {
+    name: 'mms asset inventory',
+    match: ({pathname}) => pathname.toLowerCase().includes("/mms/mms/oxmaint/asset_inventory"),
+    element: () => <OxAssetInventoryPage />
+  },
+
   {
     name: "SMS Dashboard",
     match: (context) => isSmsRoute(context) && getGenericMatchText(context).includes("dashboard"),
@@ -211,11 +228,6 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "HR Employee Profile",
     match: (context) => isHrRoute(context) && isHrEmployeeProfileRoute(context),
     element: () => <EmployeeProfilePage />,
-  },
-  {
-    name: "MMS inspection Report",
-    match: ({ pathname }) => pathname.toLowerCase().includes("/mms/masters/gm/inspection_report"),
-    element: () => <InspectionReportMainPage />,
   },
   {
     name: "HR Absent Memo",
@@ -1380,22 +1392,18 @@ function isOxMaintRoute(context: WorkspaceRouteContext) {
     matchText.includes("/oxmaint") ||
     compact.includes("oxmaint") ||
     compact.includes("assetinventory") ||
-    compact.includes("inspectionform") ||
-    compact.includes("inspectionreport") ||
     compact.includes("assettype") ||
-    compact.includes("siteproject")
+    compact.includes("siteproject") ||
+    compact.includes("status")
   );
 }
 
 function getOxMaintElement(context: WorkspaceRouteContext) {
   const matchText = getGenericMatchText(context);
   const compact = matchText.replace(/[^a-z0-9]/g, "");
-  if (compact.includes("assetinventory")) return <OxAssetInventoryPage />;
-  if (compact.includes("inspectionreport")) return <OxInspectionReportPage />;
-  if (compact.includes("inspectionform")) return <InspectionFormPage />;
   if (compact.includes("assettype")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.assetType} />;
   if (compact.includes("siteproject")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.siteProject} />;
-  if (compact.includes("status") || matchText.includes("/status")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.status} />;
+  if (compact.includes("status")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.status} />;
   return <OxMaintDashboard />;
 }
 
