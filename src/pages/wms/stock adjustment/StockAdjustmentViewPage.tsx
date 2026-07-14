@@ -1,16 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import {
-  ArrowLeft,
-  CheckCircle2,
-  Pencil,
-  Plus,
-  Printer,
-  RefreshCw,
-  Save,
-  Trash2,
-  X,
-} from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, CheckCircle2, FileSpreadsheet, Pencil, Plus, Printer, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
@@ -28,6 +18,8 @@ import {
   confirmStockAdjustment,
   getAllStockAdjReports,
   getStockAdjustmentData,
+  getAdjConfirmReport,
+  downloadAdjConfirmReportExcel,
 } from "../../../api/wms";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -117,6 +109,22 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+type TReport = {
+  id:           number;
+  reportTitle:  string;
+  apiFn:        (prin_code: string, adj_no: string) => Promise<string>;
+  excelFn?:     (prin_code: string, adj_no: string) => Promise<void>;
+};
+
+const REPORTS: TReport[] = [
+  {
+    id:          1,
+    reportTitle: "Adjustment Confirm Report",
+    apiFn:       getAdjConfirmReport,
+    excelFn:     downloadAdjConfirmReportExcel,
+  },
+];
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export function StockAdjViewPage() {
   const { user } = useAuth();
@@ -142,13 +150,22 @@ export function StockAdjViewPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<WmsRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WmsRow | null>(null);
-  const [printOpen, setPrintOpen] = useState(false);
-  const [reports, setReports] = useState<{ reportid: string; reportname: string }[]>([]);
-  const [reportsLoading, setReportsLoading] = useState(false);
+  // const [printOpen, setPrintOpen] = useState(false);
 
   const [processing, setProcessing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+    // ── Report dialog state ───────────────────────────────────────────────────
+    const [listOpen,       setListOpen]       = useState(false);
+    const [reportOpen,     setReportOpen]     = useState(false);
+    const [selectedReport, setSelectedReport] = useState<TReport | null>(null);
+    const [reportHtml,     setReportHtml]     = useState<string>("");
+    const [reportLoading,  setReportLoading]  = useState(false);
+    const [reportError,    setReportError]    = useState<string>("");
+    const [excelLoading,   setExcelLoading]   = useState(false);
+  
+    const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // ── Load detail data ──
   const loadData = async (clearNotice = true) => {
@@ -179,6 +196,29 @@ export function StockAdjViewPage() {
       setLoading(false);
     }
   };
+
+
+  useEffect(() => {
+    if (!selectedReport) return;
+    if (!prin_code) {
+      setReportError("Principal code is not available for this adjustment.");
+      return;
+    }
+
+    setReportHtml("");
+    setReportError("");
+    setReportLoading(true);
+
+    selectedReport
+      .apiFn(prin_code, adj_no)
+      .then((html) => setReportHtml(html))
+      .catch((err) => {
+        console.error("Report API error:", err);
+        setReportError("Failed to load report. Please try again.");
+      })
+      .finally(() => setReportLoading(false));
+  }, [selectedReport]);
+
 
   useEffect(() => { void loadData(); }, [adj_no, prin_code]);
   useEffect(() => { setSelectedRows([]); }, [selectedTab]);
@@ -280,18 +320,42 @@ export function StockAdjViewPage() {
   };
 
   // ── Print ──
-  const openPrint = async () => {
-    setPrintOpen(true);
-    setReportsLoading(true);
+    // ── Toolbar handlers ──────────────────────────────────────────────────────
+  const handlePrint = () => {
+    iframeRef.current?.contentWindow?.postMessage("print", "*");
+  };
+
+  const handleExcel = async () => {
+    if (!selectedReport?.excelFn || !prin_code) return;
+    setExcelLoading(true);
     try {
-      const data = await getAllStockAdjReports();
-      setReports(Array.isArray(data) ? data : []);
-    } catch {
-      setReports([]);
+      await selectedReport.excelFn(prin_code, adj_no);
+    } catch (err) {
+      console.error("Excel export error:", err);
     } finally {
-      setReportsLoading(false);
+      setExcelLoading(false);
     }
   };
+
+  // ── Dialog helpers ────────────────────────────────────────────────────────
+  const openListDialog = () => setListOpen(true);
+
+  const selectReport = (rp: TReport) => {
+    setListOpen(false);
+    setSelectedReport(rp);
+    setReportOpen(true);
+  };
+
+  const closeReportDialog = () => {
+    setReportOpen(false);
+    setSelectedReport(null);
+    setReportHtml("");
+    setReportError("");
+  };
+
+  const reportReady   = !reportLoading && !reportError && !!reportHtml;
+  const hasExcelExport = !!selectedReport?.excelFn;
+
 
   // ── Checkbox column (shared between process & confirm tabs) ──
   const selectColumn = (tab: string): ColumnDef<WmsRow> => ({
@@ -485,7 +549,7 @@ export function StockAdjViewPage() {
                 <CheckCircle2 size={14} />
                 {confirming ? "Confirming..." : `Confirm Adjustment (${selectedRows.length})`}
               </Button>
-              <Button size="sm" variant="outline" onClick={openPrint}>
+              <Button size="sm" variant="outline" onClick={openListDialog}>
                 <Printer size={14} /> Print
               </Button>
             </>
@@ -596,40 +660,75 @@ export function StockAdjViewPage() {
         </div>
       </Dialog>
 
-      {/* ── Print dialog ── */}
+{/* ── Dialog 1: Report list ── */}
       <Dialog
-        open={printOpen}
+        open={listOpen}
         title="Select Report"
-        onClose={() => setPrintOpen(false)}
-        footer={
-          <Button variant="outline" onClick={() => setPrintOpen(false)}>
-            Close
-          </Button>
-        }
+        compact
+        onClose={() => setListOpen(false)}
       >
-        {reportsLoading ? (
-          <div className="space-y-2 p-2">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-10 animate-pulse rounded-md bg-muted" />
-            ))}
-          </div>
-        ) : reports.length === 0 ? (
-          <p className="p-4 text-sm text-muted-foreground">No reports available.</p>
-        ) : (
-          <ul className="divide-y">
-            {reports.map((r) => (
-              <li key={r.reportid}>
-                <button
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-accent"
-                  onClick={() => setPrintOpen(false)}
-                >
-                  <Printer size={13} className="shrink-0 text-muted-foreground" />
-                  {r.reportname}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <div className="flex flex-col gap-1 p-2">
+          {REPORTS.map((rp) => (
+            <button
+              key={rp.id}
+              onClick={() => selectReport(rp)}
+              className="flex items-center gap-2 rounded-md border border-border px-3 py-2.5 text-left text-sm font-medium hover:bg-muted transition-colors"
+            >
+              <Printer size={14} className="text-muted-foreground shrink-0" />
+              {rp.reportTitle}
+            </button>
+          ))}
+        </div>
+      </Dialog>
+
+      {/* ── Dialog 2: Report viewer ── */}
+      <Dialog
+        open={reportOpen}
+        title={selectedReport?.reportTitle ?? "Report"}
+        wide
+        onClose={closeReportDialog}
+      >
+        <div className="flex flex-col" style={{ height: "75vh" }}>
+          {reportReady && (
+            <div className="flex shrink-0 items-center gap-2 border-b bg-muted/40 px-3 py-2">
+              <Button size="sm" variant="outline" onClick={handlePrint}>
+                <Printer size={13} /> Print / Save as PDF
+              </Button>
+
+              {hasExcelExport && (
+                <Button size="sm" variant="outline" onClick={handleExcel} disabled={excelLoading}>
+                  {excelLoading
+                    ? <RefreshCw size={13} className="animate-spin" />
+                    : <FileSpreadsheet size={13} />}
+                  {excelLoading ? "Exporting…" : "Export Excel"}
+                </Button>
+              )}
+            </div>
+          )}
+
+          {reportLoading && (
+            <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
+              <RefreshCw size={14} className="animate-spin" />
+              Loading report…
+            </div>
+          )}
+
+          {!reportLoading && reportError && (
+            <div className="flex flex-1 items-center justify-center text-sm text-red-600">
+              {reportError}
+            </div>
+          )}
+
+          {reportReady && (
+            <iframe
+              ref={iframeRef}
+              srcDoc={reportHtml}
+              title={selectedReport?.reportTitle}
+              className="flex-1 w-full rounded border-0"
+              style={{ minHeight: 0 }}
+            />
+          )}
+        </div>
       </Dialog>
     </section>
   );

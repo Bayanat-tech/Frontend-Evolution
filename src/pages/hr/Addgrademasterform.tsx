@@ -1,24 +1,3 @@
-// src/pages/hr/AddGradeMasterForm.tsx
-//
-// Add / Edit / View form for a single Grade record. Structured the same
-// way as Addinterviewevalform.tsx (Card/CardContent sections, field()
-// helper, useAuth, save via a dedicated service instance) but laid out to
-// match the legacy "HR General Masters - Grades" screen:
-//   Company | Grade Code (+ search) | Name | Short Name | OT Eligibility | Grade Status
-//   Airfare Entitlement (Self/Spouse/Dependent)
-//   Medical Entitlement (Self/Spouse/Dependent)
-//   Remarks | Status
-//   Grade Components grid: SlNo, Pay Unit, Min Pay Amount, Max Pay Amount, Approved Date
-//
-// Grade Components grid is driven purely off the *live* grade_code value
-// (form.grade_code), debounced — so it refetches whenever the code changes,
-// whether that's from an existing row (edit/view) or from typing / picking
-// a code via the new search icon while adding a brand new grade. Picking an
-// existing code in Add mode is a "template copy": Name / Short Name are
-// auto-filled from the picked row, and the Components grid loads from that
-// code — other header fields are left exactly as the user typed them (see
-// selectGradeFromLookup below).
-
 import { Save, Search, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { getDynamicLookup } from "../../api/lookups";

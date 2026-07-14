@@ -139,7 +139,7 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
     { accessorKey: "remarks", header: "Description" },
     ...(docType !== "CR" ? [{ accessorKey: "cheque_no", header: "Cheque No" } as ColumnDef<TransactionDocumentRow>] : []),
     ...(docType === "BR" ? [{ accessorKey: "cheque_bank", header: "Cheque Bank" } as ColumnDef<TransactionDocumentRow>] : []),
-    { accessorKey: "div_code", header: "Div" },
+    { accessorKey: "div_code", header: "Div"  ,size : 30},
     {
       accessorKey: "canceled",
       header: "Status",
@@ -1358,7 +1358,8 @@ function ChildAllocationTable({
                         }
                       />
 
-                      {Number(row.c_bal_amt_org || 0) > 0 &&
+                      {!row.isEditMode &&
+                        Number(row.c_bal_amt_org || 0) > 0 &&
                         Number(row.amount || 0) > Number(row.c_bal_amt_org || 0) + 0.001 && (
                           <span className="text-xs text-red-500">
                             Amount exceeds available balance
