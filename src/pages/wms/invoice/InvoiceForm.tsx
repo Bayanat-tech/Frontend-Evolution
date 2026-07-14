@@ -225,59 +225,85 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
     setStorageLines((prev) => [...prev, ...selectedRows]);
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    setWarning("");
-    try {
-      const invoiceHeader: TInvoice[] = [{ ...invoice, USER_ID: user?.loginid, COMPANY_CODE: user?.company_code }];
-      const invoiceDetails: TInvoiceDetail[] = lines.map((row, index) => {
-        const quantity = Number(row.quantity || 0);
-        const billRate = Number(row.bill_rate || 0);
-        const costRate = Number(row.cost_rate || 0);
-        return {
-          ...row,
-          srno: index + 1,
-          invoice_no: invoiceNo,
-          prin_code: prinCode,
-          job_no: row.job_no ?? "",
-          quantity,
-          bill_rate: billRate,
-          cost_rate: costRate,
-          bill_amount: quantity * billRate,
-          cost_amount: quantity * costRate,
-        };
-      });
+const handleSave = async () => {
+  setSaving(true);
+  setWarning("");
+  try {
+    const invoiceHeader: TInvoice[] = [{ ...invoice, USER_ID: user?.loginid, COMPANY_CODE: user?.company_code }];
 
-      const jobSelection = [
-        ...jobSelectionRows.map((row) => ({
-          job_no: row.job_no,
-          act_code: row.act_code,
-          activity: row.activity,
-          invoice_no: invoiceNo,
-          prin_code: prinCode,
-          quantity: row.quantity,
-          bill: row.bill,
-          job_date: row.job_date,
-        })),
-      ];
-const storageSelection = storageLines.map((row) => ({
-  ...row,
-  act_code: "9001",             
-}));
-      const result = await updateBillingApi({
-        invoiceHeader,
-        invoiceDetails,
-        storageSelection: storageSelection,
-        jobSelection,
-      });
-      if (result.success) onClose(true);
-      else setWarning(result.message);
-    } catch (err) {
-      setWarning(err instanceof Error ? err.message : "Error while saving invoice.");
-    } finally {
-      setSaving(false);
-    }
-  };
+    const jobLineRows: TInvoiceDetail[] = lines.map((row, index) => {
+      const quantity = Number(row.quantity || 0);
+      const billRate = Number(row.bill_rate || 0);
+      const costRate = Number(row.cost_rate || 0);
+      return {
+        ...row,
+        srno: index + 1,
+        invoice_no: invoiceNo,
+        prin_code: prinCode,
+        job_no: row.job_no ?? "",
+        quantity,
+        bill_rate: billRate,
+        cost_rate: costRate,
+        bill_amount: quantity * billRate,
+        cost_amount: quantity * costRate,
+      };
+    });
+
+    const jobSelection = jobSelectionRows.map((row) => ({
+      job_no: row.job_no,
+      act_code: row.act_code,
+      activity: row.activity,
+      invoice_no: row.invoice_no,
+      prin_code: prinCode,
+      quantity: row.quantity,
+      bill: row.bill,
+      job_date: row.job_date,
+      srno: row.srno,
+      selected: "Y",
+    }));
+
+    const storageSelection = storageLines.map((row) => ({
+      ...row,
+      act_code: "9001",
+        SELECTED: "Y",
+    }));
+
+    const storageDetailRows: TInvoiceDetail[] = storageLines.map((row: any) => ({
+      invoice_no: invoiceNo,
+      prin_code: prinCode,
+      act_code: "9001",
+      activity: row.ACTIVITY,
+      bill: row.AMOUNT,
+      cost: 0,
+      quantity: row.QTY,
+      bill_rate: row.QTY ? row.AMOUNT / row.QTY : 0,
+      cost_rate: 0,
+      job_no: "",
+    }));
+
+    const invoiceDetails: TInvoiceDetail[] = [
+      ...jobLineRows,
+      ...jobSelection,
+      ...storageDetailRows,
+    ].map((row, index) => ({
+      ...row,
+      srno: index + 1,
+    }));
+
+    const result = await updateBillingApi({
+      invoiceHeader,
+      invoiceDetails,
+      storageSelection,
+      jobSelection,
+    });
+    if (result.success) onClose(true);
+    else setWarning(result.message);
+  } catch (err) {
+    setWarning(err instanceof Error ? err.message : "Error while saving invoice.");
+  } finally {
+    setSaving(false);
+  }
+};
 
   const handlePrint = () => {
     console.log("Print invoice", { company_code: user?.company_code, prin_code: prinCode, invoice_no: invoiceNo });

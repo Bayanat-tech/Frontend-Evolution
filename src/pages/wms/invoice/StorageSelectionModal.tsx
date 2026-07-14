@@ -64,6 +64,13 @@ useEffect(() => {
         ? response.map((r) => normalizeStorageRow(r, consolidatedInvNo))
         : [];
       setRows(normalized);
+      // Pre-check rows already flagged SELECTED = 'Y' by the backend view
+      setSelected(new Set(
+        normalized.reduce<number[]>((acc, row, i) => {
+          if (row.SELECTED === "Y") acc.push(i);
+          return acc;
+        }, []),
+      ));
     } catch {
       setRows([]);
     } finally {

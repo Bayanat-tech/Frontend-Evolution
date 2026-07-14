@@ -2311,9 +2311,9 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .sidebar-label {
   margin: 16px 18px 8px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
