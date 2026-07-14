@@ -532,7 +532,7 @@ const AppraisalViewTabsPage: React.FC = () => {
         if (appraiseeCommentRef.current.trim())
           await pamsSelect({ parameter: "update_appraisee_comments", loginid, code1: docNo, code2: employeeCode, code3: appraiseeCommentRef.current.trim() });
       }
-      const ratingToSend = (action === "S" || action === "A") ? finalRating : 0;
+      const ratingToSend = (action === "S" || action === "A" || action === "D") ? finalRating : 0;
 
       await pamsSelect({
         parameter: "update_appraisal_status",
