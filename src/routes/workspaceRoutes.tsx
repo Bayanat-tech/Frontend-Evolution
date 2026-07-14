@@ -126,6 +126,7 @@ import InspectionReportMainPage from "../pages/oxmaint/inspection-report-tailwin
 import { GradeMasterPage } from "../pages/hr/Grademasterpage";
 import InvoicePage from "../pages/wms/invoice/InvoicePage";
 import InspectionFormPage from "../pages/oxmaint/inspection-form-tailwind/inspection_form/InspectionFormMainPage";
+import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/AssetInventoryMainPage";
 
 
 
@@ -161,7 +162,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: 'mms asset inventory',
     match: ({pathname}) => pathname.toLowerCase().includes("/mms/mms/oxmaint/asset_inventory"),
-    element: () => <OxAssetInventoryPage />
+    element: () => <AssetInventoryMainPage />
   },
 
   {
