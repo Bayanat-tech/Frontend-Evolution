@@ -622,15 +622,6 @@ export function SupportChatWidget() {
                       </button>
                     ))}
                   </div>
-                  {!selectedId && assistantSuggestion && (
-                    <div className="support-ai-suggestion">
-                      <span>{assistantSuggestion.category}</span>
-                      <strong>{assistantSuggestion.priority}</strong>
-                      <button type="button" onClick={() => setCompose(assistantSuggestion.suggestedReply)}>
-                        Use suggested wording
-                      </button>
-                    </div>
-                  )}
                   <div className="support-compose-row">
                     <button className="icon-button" onClick={() => fileInputRef.current?.click()} title="Attach screenshot or file">
                       <ImagePlus size={17} />
