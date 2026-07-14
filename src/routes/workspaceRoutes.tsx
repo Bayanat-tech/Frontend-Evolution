@@ -238,8 +238,14 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   element: () => <GradeMasterPage />,
 },
 
-
-
+{
+  name: "HR Grade Master",
+  match: ({ pathname }) =>
+    pathname
+      .toLowerCase()
+      .includes("/workspace/bt-masters/hcm/general%20master/grade%20maste"),
+  element: () => <GradeMasterPage />,
+},
 
 
   {
