@@ -50,17 +50,41 @@ const getField = (row: LookupRow, ...keys: string[]): string => {
     return "";
 };
 
-// Rows with a code + name pair → { value: code, label: "code - name" }
-const mapCodeNameOptions = (rows: LookupRow[], codeKey: string, nameKey: string): Option[] =>
-    rows
-        .map((r) => {
-            const code = getField(r, codeKey);
-            const name = getField(r, nameKey);
-            if (!code) return null;
-            return { value: code, label: name ? `${code} - ${name}` : code };
-        })
-        .filter((o): o is Option => !!o)
-        .sort((a, b) => a.value.localeCompare(b.value));
+// Rows with a code + name pair → { value: "code::name", label: "code - name" }
+// The option value is a unique composite of code+name (not just the code),
+// because the same code can legitimately appear on multiple distinct rows
+// with different names (e.g. same PROD_CODE reused across different
+// products in the source data). If two options shared the same `value`,
+// the multi-select would visually tick both when only one was clicked.
+// Use codeFromOptionValue/codesFromSelection below to recover the actual
+// code(s) whenever building a SQL filter or the API payload.
+const mapCodeNameOptions = (rows: LookupRow[], codeKey: string, nameKey: string): Option[] => {
+    const seen = new Set<string>();
+    const options: Option[] = [];
+    rows.forEach((r) => {
+        const code = getField(r, codeKey);
+        const name = getField(r, nameKey);
+        if (!code) return;
+        const value = `${code}::${name}`;
+        if (seen.has(value)) return; // skip exact duplicate rows only
+        seen.add(value);
+        options.push({ value, label: name ? `${code} - ${name}` : code });
+    });
+    return options.sort((a, b) => a.label.localeCompare(b.label));
+};
+
+// Recovers the underlying code from a composite "code::name" option value.
+const codeFromOptionValue = (v: string): string => v.split("::")[0];
+
+// Converts a selection array (which may hold composite option values, or
+// the special "All" sentinel) into a deduped list of real codes for use in
+// SQL IN-clauses and API payloads.
+const codesFromSelection = (values: string[]): string[] => {
+    if (!values.length || values.includes("All")) return ["All"];
+    const codes = new Set<string>();
+    values.forEach((v) => codes.add(codeFromOptionValue(v)));
+    return Array.from(codes);
+};
 
 // Rows with only a single code column → { value: code, label: code }
 const mapSingleColumnOptions = (rows: LookupRow[], codeKey: string): Option[] =>
@@ -250,7 +274,7 @@ export default function StockAgeingQuantityReport() {
         setOptLoading(true);
         setOptError("");
 
-        const prinFilter = inClause("prin_code", p.prin_code);
+        const prinFilter = inClause("prin_code", codesFromSelection(p.prin_code));
         const deptFilter = inClause("dept_code", p.dept_code);
 
         const whereExcept = (...exclude: string[]): string => {
@@ -329,9 +353,9 @@ export default function StockAgeingQuantityReport() {
     }, [cascadeKey]);
 
     const buildPayload = (p: Params) => ({
-        prin_code: p.prin_code.includes("All") ? ["All"] : p.prin_code,
+        prin_code: codesFromSelection(p.prin_code),
         dept_code: p.dept_code.includes("All") ? ["All"] : p.dept_code,
-        prod_code: p.prod_code.includes("All") ? ["All"] : p.prod_code,
+        prod_code: codesFromSelection(p.prod_code),
         age1: Number(p.age1) || 30,
         age2: Number(p.age2) || 60,
         age3: Number(p.age3) || 90,
