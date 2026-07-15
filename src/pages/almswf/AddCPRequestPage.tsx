@@ -89,10 +89,8 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   // CP pages only ever open against an existing request (edit/view) — never "add"
   const requestNumber = existingData?.request_number;
 
-  const [activeSubTab, setActiveSubTab] = useState<"header" | "details">("header");
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [header, setHeader] = useState<Partial<TCPHeader>>({});
   const [attachOpen, setAttachOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
@@ -103,7 +101,7 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const disabled = isViewMode || saving;
 
   // ── Fetch header ───────────────────────────────────────────────────────────
-  const { data: hdrList = [] } = useQuery<TCPHeader[]>({
+  const { data: hdrList = [], isLoading: hdrLoading } = useQuery<TCPHeader[]>({
     queryKey: ["cp-header", requestNumber, companyCode],
     queryFn: () =>
       almsCommonSelect<TCPHeader>({
@@ -118,9 +116,12 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   useEffect(() => {
     if (hdrList.length > 0) {
       setHeader(hdrList[0]);
-      setLoading(false);
     }
   }, [hdrList]);
+
+  // Derived loading flag — resolves as soon as the header query settles,
+  // even if it comes back empty, instead of relying on manual state.
+  const loading = !!requestNumber && hdrLoading;
 
   // ── Fetch details (read-only, sourced from PR line items) ─────────────────
   const { data: items = [], isLoading: itemsLoading } = useQuery<TCPItem[]>({
@@ -238,7 +239,7 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
 
   return (
     <div className="fixed inset-0 z-50 bg-background">
-      <section className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_auto_minmax(0,1fr)_auto]">
+      <section className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]">
         {/* ── Command header (same format as AddPRRequestPage) ───────────────── */}
         <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
           <div className="flex min-h-10 items-center justify-between gap-3">
@@ -276,26 +277,6 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
           </div>
         </CardHeader>
 
-        {/* Sub tabs: Header / Details */}
-        <div className="flex items-center gap-1 border-b bg-secondary/20 px-3">
-          <button
-            onClick={() => setActiveSubTab("header")}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
-              activeSubTab === "header" ? "border-primary text-primary" : "border-transparent text-muted-foreground"
-            }`}
-          >
-            Header
-          </button>
-          <button
-            onClick={() => setActiveSubTab("details")}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
-              activeSubTab === "details" ? "border-primary text-primary" : "border-transparent text-muted-foreground"
-            }`}
-          >
-            Details
-          </button>
-        </div>
-
         <div className="min-h-0 overflow-auto p-3">
           {loading ? (
             <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
@@ -303,17 +284,16 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
             <div className="grid gap-3">
               <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
-              {activeSubTab === "header" && (
-                <div className="rounded-md border bg-card">
+              <div className="rounded-md border bg-card">
                   <div className="border-b bg-secondary/40 px-3 py-1.5">
                     <p className="eyebrow m-0">Header</p>
                     <h3 className="m-0 text-sm font-semibold leading-tight">Request Information</h3>
                   </div>
                   <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                    <label className="field">
+                    {/* <label className="field">
                       <span>Request Number</span>
                       <Input disabled value={header.REQUEST_NUMBER || ""} />
-                    </label>
+                    </label> */}
                     <label className="field">
                       <span>Request Date</span>
                       <Input disabled type="date" value={header.REQUEST_DATE ? String(header.REQUEST_DATE).slice(0, 10) : ""} />
@@ -365,32 +345,30 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                       </select>
                     </label>
 
-                    <label className="field col-span-3 max-lg:col-span-2 max-md:col-span-1">
+                    <label className="field col-span-2 max-lg:col-span-2 max-md:col-span-1">
                       <span>Description</span>
                       <textarea
                         disabled={disabled}
                         rows={4}
                         value={header.DESCRIPTION || ""}
                         onChange={(e) => setHdr("DESCRIPTION", e.target.value)}
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                        className="w-full rounded-md border bg-background px-2 py-1 text-sm"
                       />
                     </label>
-                    <label className="field col-span-3 max-lg:col-span-2 max-md:col-span-1">
+                    <label className="field col-span-2 max-lg:col-span-2 max-md:col-span-1">
                       <span>Remarks</span>
                       <textarea
                         disabled={disabled}
                         rows={4}
                         value={header.REMARKS || ""}
                         onChange={(e) => setHdr("REMARKS", e.target.value)}
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                        className="w-full rounded-md border bg-background px-2 py-1 text-sm"
                       />
                     </label>
                   </div>
                 </div>
-              )}
 
-              {activeSubTab === "details" && (
-                <div className="commercial-lines-card rounded-md border bg-card">
+              <div className="commercial-lines-card rounded-md border bg-card">
                   <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
                     <div>
                       <p className="eyebrow m-0">Details</p>
@@ -414,7 +392,6 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                     <span className="text-muted-foreground">Tax</span><strong className="text-primary">{fmt3(totalTax)}</strong>
                   </div>
                 </div>
-              )}
             </div>
           )}
         </div>
