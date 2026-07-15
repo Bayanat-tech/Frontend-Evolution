@@ -25,6 +25,10 @@ export function rowNumberColumn(): ColumnDef<WmsRow> {
   };
 }
 
+function getSelectionId(row: WmsRow, selectionKey: string) {
+  return value(row, selectionKey) || value(row, "serial_no") || value(row, "key_number");
+}
+
 export function selectionColumn(
   selection: Record<string, boolean>,
   setSelection: (
@@ -36,15 +40,36 @@ export function selectionColumn(
 ): ColumnDef<WmsRow> {
   return {
     id: "select",
-    header: "Select",
+    header: ({ table }) => {
+      const rows = table.getRowModel().rows;
+      const ids = rows.map((r) => getSelectionId(r.original, selectionKey) || r.id);
+      const allSelected = ids.length > 0 && ids.every((id) => selection[id]);
+      const someSelected = !allSelected && ids.some((id) => selection[id]);
+      return (
+        <input
+          type="checkbox"
+          className="h-4 w-4 accent-primary"
+          checked={allSelected}
+          ref={(el) => {
+            if (el) el.indeterminate = someSelected;
+          }}
+          onChange={(event) => {
+            const checked = event.target.checked;
+            setSelection((current) => {
+              const next = { ...current };
+              ids.forEach((id) => {
+                next[id] = checked;
+              });
+              return next;
+            });
+          }}
+        />
+      );
+    },
     size: 70,
     enableColumnFilter: false,
     cell: ({ row }) => {
-      const id =
-        value(row.original, selectionKey) ||
-        value(row.original, "serial_no") ||
-        value(row.original, "key_number") ||
-        row.id;
+      const id = getSelectionId(row.original, selectionKey) || row.id;
       return (
         <input
           type="checkbox"
