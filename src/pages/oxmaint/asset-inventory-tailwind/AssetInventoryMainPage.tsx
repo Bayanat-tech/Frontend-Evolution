@@ -1,7 +1,6 @@
 import StatusComponent from './common_component/StatusComponent';
 import { useAssetInventoryGrid } from './hooks/useAssetInventoryGrid';
-import { flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
-import { CSSProperties, useState } from 'react';
+import { CSSProperties, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button, Dialog, DialogActions, DialogContent, Menu, MenuItem } from '../../../components/mms_ui'
 import AddAssetInventoryPage, { AssetInventoryFormValues } from './AddAssetInventoryPage';
@@ -9,6 +8,7 @@ import { useFormik } from 'formik';
 import { delAssetInventory, inUpdAssetInventory } from './api/asset_inventory';
 import { assetInventorySizeConfig, assetInventorySizeCssVars } from './config/assetInventorySizeConfig';
 import { useAuth } from '../../../state/AuthContext';
+import { DataTable } from '../../../components/ui/DataTable';
 
 export default function AssetInventoryMainPage() {
     const { user } = useAuth();
@@ -130,8 +130,14 @@ export default function AssetInventoryMainPage() {
         };
     };
 
+    // FIX: memoize so this object is only rebuilt when selectedRow actually
+    // changes, instead of on every single render (which was feeding Formik
+    // a brand-new object each time and could cascade into extra re-renders
+    // whenever any state on the page changed, e.g. clicking a status card).
+    const initialFormValues = useMemo(() => getInitialValues(), [selectedRow]);
+
     const formik = useFormik<AssetInventoryFormValues>({
-        initialValues: getInitialValues(),
+        initialValues: initialFormValues,
         enableReinitialize: true,
         onSubmit: async (values, helpers) => {
             const payload = {
@@ -164,12 +170,6 @@ export default function AssetInventoryMainPage() {
         actionMenuContext,
         setActionMenuContext
     } = useAssetInventoryGrid();
-
-    const table = useReactTable({
-        data: filteredRows,
-        columns: columnDefs,
-        getCoreRowModel: getCoreRowModel()
-    });
 
     const handleMenuClose = () => {
         setActionMenuContext(null);
@@ -267,61 +267,25 @@ export default function AssetInventoryMainPage() {
                             >
                                 + Add New Asset
                             </button>
-                            <button className="h-8 rounded-[10px] px-3 font-bold text-[13px] border border-transparent bg-transparent text-[#1f2f43]">
-                                ◈ Bulk Upload
-                            </button>
-                            <button className="h-8 rounded-[10px] px-3 font-bold text-[13px] border border-transparent bg-[#1473e6] text-white">
-                                🗺 Map View
-                            </button>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <div className="h-8 min-w-[250px] border border-gray-300 rounded-lg flex items-center justify-between px-2.5 bg-[#f8fafc]">
-                                <input
-                                    value={searchText}
-                                    onChange={(e) => setSearchText(e.target.value)}
-                                    placeholder="Search"
-                                    className="border-none outline-none bg-transparent w-full text-[13px] text-[#3d526a]"
-                                />
-                                <span className="text-[#3d526a]">⌕</span>
-                            </div>
-                            <button className="border-none bg-transparent text-[#1f2f43] text-lg">⇵</button>
-                            <button className="border-none bg-transparent text-[#1f2f43] text-lg">☰</button>
                         </div>
                     </div>
 
-                    <div className="mt-4 w-full border border-[#d5dbe3] rounded-lg overflow-hidden">
-                        <table className="w-full border-collapse">
-                            <thead>
-                                {table.getHeaderGroups().map((headerGroup) => (
-                                    <tr key={headerGroup.id} className="bg-[#f5f7fa] border-b border-[#d5dbe3]">
-                                        {headerGroup.headers.map((header) => (
-                                            <th
-                                                key={header.id}
-                                                style={{ width: header.getSize(), height: assetInventorySizeConfig.grid.headerHeight }}
-                                                className="text-left text-[13px] font-bold text-[#1f2f43] px-3"
-                                            >
-                                                {flexRender(header.column.columnDef.header, header.getContext())}
-                                            </th>
-                                        ))}
-                                    </tr>
-                                ))}
-                            </thead>
-                            <tbody>
-                                {table.getRowModel().rows.map((row) => (
-                                    <tr key={row.id} className="border-b border-[#e1e7ef]">
-                                        {row.getVisibleCells().map((cell) => (
-                                            <td
-                                                key={cell.id}
-                                                style={{ width: cell.column.getSize(), height: assetInventorySizeConfig.grid.rowHeight }}
-                                                className="px-3 text-[13px] text-[#4f6782] align-middle"
-                                            >
-                                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                            </td>
-                                        ))}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                    {/* DataTable owns its own search box, column filters, sorting and
+                        pagination, so the previous hand-rolled search input/table/
+                        sort-icon/hamburger controls are replaced by these props. */}
+                    <div className="mt-4">
+                        <DataTable
+                            columns={columnDefs}
+                            data={filteredRows}
+                            loading={isLoading}
+                            searchValue={searchText}
+                            onSearchChange={setSearchText}
+                            searchPlaceholder="Search"
+                            emptyText="No assets found"
+                            // height={assetInventorySizeConfig.grid.tableHeight ?? 590}
+                            enablePagination
+                            pageSize={100}
+                        />
                     </div>
 
                     <Menu open={Boolean(actionMenuContext)} anchorRect={actionMenuAnchorRect} onClose={handleMenuClose}>

@@ -31,15 +31,16 @@ export type ActionMenuContext = {
   x: number;
   y: number;
 };
+const EMPTY_ROWS: AssetInventoryGridRow[] = []; // module-level so it's the SAME reference every render
 
 export const useAssetInventoryGrid = () => {
   const [statusSelected, setStatusSelected] = useState<string | null>(null);
+  console.log('statusSelected', statusSelected);
   const [searchText, setSearchText] = useState('');
   const [actionMenuContext, setActionMenuContext] = useState<ActionMenuContext | null>(null);
-
   const { data: statusData, isLoading: isStatusLoading } = useStatusBasedTotalCount();
-  const { data: assetInventoryRowData = [], isLoading: isGridLoading } = useAssetInventoryRows(statusSelected);
-
+  const { data: assetInventoryRowData = EMPTY_ROWS, isLoading: isGridLoading } =
+    useAssetInventoryRows(statusSelected);
   const filteredRows = useMemo(() => {
     const rows = assetInventoryRowData as AssetInventoryGridRow[];
 
