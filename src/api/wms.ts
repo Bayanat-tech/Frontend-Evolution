@@ -605,12 +605,21 @@ export async function downloadAdjConfirmReportExcel(prin_code: string, adj_no: s
   URL.revokeObjectURL(url);
 }
 
+// export async function getInvocieDetailReport(prin_code: string, invoice_no: string): Promise<string> {
+//   const response = await api.get(
+//     `/api/wms/inbound/reports/invoice-detail/html?${prin_code}&invoice_no=${invoice_no}`,
+//     { responseType: "text" }
+//   );
+//   if (!response.data) throw new Error("Unable to fetch Job Details Report");
+//   return response.data;
+// }
+
 export async function getInvocieDetailReport(prin_code: string, invoice_no: string): Promise<string> {
   const response = await api.get(
-    `/api/wms/inbound/reports/invoice-detail/html?${prin_code}&invoice_no=${invoice_no}`,
+    `/api/wms/inbound/reports/invoice-detail/html?prin_code=${prin_code}&invoice_no=${invoice_no}`,
     { responseType: "text" }
   );
-  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  if (!response.data) throw new Error("Unable to fetch Invoice Detail Report");
   return response.data;
 }
 
