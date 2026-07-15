@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { FileText, LoaderCircle, Package, Printer, Receipt, Save, Trash2, X } from "lucide-react";
 import { Dialog } from "../../../components/ui/Dialog";
 import { Button } from "../../../components/ui/Button";
@@ -16,6 +16,7 @@ import {
 } from "../../../api/billing";
 import JobSelectionModal from "./JobSelectionModal";
 import StorageSelectionModal from "./StorageSelectionModal";
+import { getInvocieDetailReport } from "../../../api/wms";
 
 type InvoiceFormProps = {
   existingData?: Record<string, unknown>;
@@ -109,7 +110,13 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
   const [storageModalOpen, setStorageModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [warning, setWarning] = useState("");
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState("");
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
+  const reportReady = !reportLoading && !reportError && !!reportHtml;
   /* ================= DERIVED VALUES ================= */
   const prinCode = getValue(invoice, "prin_code") || "";
   const invoiceNo = getValue(invoice, "invoice_no") || "";
@@ -305,9 +312,32 @@ const handleSave = async () => {
   }
 };
 
-  const handlePrint = () => {
-    console.log("Print invoice", { company_code: user?.company_code, prin_code: prinCode, invoice_no: invoiceNo });
-  };
+const handlePrint = async () => {
+  if (!prinCode || !invoiceNo) return;
+  setReportOpen(true);
+  setReportHtml("");
+  setReportError("");
+  setReportLoading(true);
+  try {
+    const html = await getInvocieDetailReport(String(prinCode), String(invoiceNo));
+    setReportHtml(html);
+  } catch (err) {
+    console.error("Invoice report error:", err);
+    setReportError("Failed to load report. Please try again.");
+  } finally {
+    setReportLoading(false);
+  }
+};
+
+const handleIframePrint = () => {
+  iframeRef.current?.contentWindow?.postMessage("print", "*");
+};
+
+const closeReportDialog = () => {
+  setReportOpen(false);
+  setReportHtml("");
+  setReportError("");
+};
 
   /* ================= RENDER ================= */
   return (
@@ -543,6 +573,48 @@ const handleSave = async () => {
           onSelect={handleStorageSelect}
         />
       )}
+      {reportOpen && (
+  <Dialog
+    open={reportOpen}
+    title="Invoice Detail Report"
+    wide
+    onClose={closeReportDialog}
+  >
+    <div className="flex flex-col" style={{ height: "75vh" }}>
+
+      {reportReady && (
+        <div className="flex shrink-0 items-center gap-2 border-b bg-muted/40 px-3 py-2">
+          <Button size="sm" variant="outline" onClick={handleIframePrint}>
+            <Printer size={13} /> Print / Save as PDF
+          </Button>
+        </div>
+      )}
+
+      {reportLoading && (
+        <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
+          <LoaderCircle size={14} className="animate-spin" />
+          Loading report…
+        </div>
+      )}
+
+      {!reportLoading && reportError && (
+        <div className="flex flex-1 items-center justify-center text-sm text-red-600">
+          {reportError}
+        </div>
+      )}
+
+      {reportReady && (
+        <iframe
+          ref={iframeRef}
+          srcDoc={reportHtml}
+          title="Invoice Detail Report"
+          className="flex-1 w-full rounded border-0"
+          style={{ minHeight: 0 }}
+        />
+      )}
+    </div>
+  </Dialog>
+)}
     </Dialog>
   );
 }
