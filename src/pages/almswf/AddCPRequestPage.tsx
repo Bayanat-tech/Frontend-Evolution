@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Save, Send, X, ChevronLeft, Paperclip, FileText } from "lucide-react";
+import { X, Paperclip, FileText, Printer, FileSpreadsheet } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { Button } from "../../components/ui/Button";
@@ -12,6 +12,7 @@ import { Badge } from "../../components/ui/Badge";
 import { CardHeader } from "../../components/ui/Card";
 import { useAuth } from "../../state/AuthContext";
 import { almsSave, almsCommonSelect } from "../../api/alms";
+import { openCapexApprovalReport } from "../../api/transactions";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 // TODO: move into CapexRequest-types.ts if you keep a shared types file
@@ -94,9 +95,6 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const [header, setHeader] = useState<Partial<TCPHeader>>({});
   const [attachOpen, setAttachOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
-  const [rejectOpen, setRejectOpen] = useState(false);
-  const [sendBackOpen, setSendBackOpen] = useState(false);
-  const [remarkText, setRemarkText] = useState("");
 
   const disabled = isViewMode || saving;
 
@@ -142,82 +140,43 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const totalAmount = items.reduce((s, r) => s + num(r.AMOUNT), 0);
   const totalTax = items.reduce((s, r) => s + num(r.TX_COMPNT_AMT_1), 0);
 
-  // ── Save header (Description / Remarks / Budgeted / Board Approval) ───────
-  // TODO: confirm the actual save procedure name + its val1s/val1n parameter order.
-  const saveHeader = async (status: string) =>
-    almsSave({
-      parameter: "Amlspf_IU_CAPEX_HEADER", // TODO: confirm actual save SP / wrapper "parameter" name
+  // ── Print ──────────────────────────────────────────────────────────────────
+  // ── Print ──────────────────────────────────────────────────────────────────
+const handlePrint = async () => {
+  if (!requestNumber) return;
+  setSaving(true);
+  setNotice(null);
+  try {
+    await openCapexApprovalReport({
+      parameter: "CapexApprovalReport",
       loginid,
-      val1s1: requestNumber || "",   // REQUEST_NUMBER
-      val1s2: companyCode,            // COMPANY_CODE
-      val1s3: header.DESCRIPTION || "",
-      val1s4: header.REMARKS || "",
-      val1s5: header.BUDGETED || "N",
-      val1s6: header.BOARD_APPROVAL || "N",
-      val1s7: status,                 // LAST_ACTION ("DRAFT" / "SUBMITTED")
-      val1s8: loginid,                // USER_ID / LAST_UPDATED
+      code1: companyCode,
+      code2: requestNumber,
     });
+  } catch (err) {
+    setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to open report" });
+  } finally {
+    setSaving(false);
+  }
+};
 
-  const runAction = async (status: string, successMsg: string) => {
-    setSaving(true);
-    setNotice(null);
-    try {
-      const result = await saveHeader(status);
-      if (result.success) {
-        setNotice({ type: "success", message: successMsg });
-        onClose(true);
-      }
-    } catch (err) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Action failed" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSaveDraft = () => runAction("DRAFT", "Draft saved successfully!");
-  const handleSubmit = () => runAction("SUBMITTED", "CP submitted successfully!");
-
-  const handleRejectConfirm = async () => {
-    if (!remarkText.trim()) return setNotice({ type: "error", message: "Please enter a reject remark" });
+  // ── Generate Excel ──────────────────────────────────────────────────────────
+  // TODO: wire this to your actual export endpoint/util. Left as a clear stub
+  // so it's easy to plug in (e.g. an XLSX export util, or a backend endpoint
+  // that streams a file back).
+  const handleGenerateExcel = async () => {
     setSaving(true);
     setNotice(null);
     try {
       await almsSave({
-        parameter: "Amlspf_RejectCP", // TODO: confirm actual SP name
+        parameter: "Amlspf_GenerateCPExcel", // TODO: confirm actual SP / export endpoint name
         loginid,
         code1: companyCode,
         code2: requestNumber,
-        code3: remarkText,
       });
-      setNotice({ type: "success", message: "CP rejected successfully!" });
-      setRejectOpen(false);
-      setRemarkText("");
-      onClose(true);
+      setNotice({ type: "success", message: "Excel generated successfully!" });
     } catch (err) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to reject" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSendBackConfirm = async () => {
-    if (!remarkText.trim()) return setNotice({ type: "error", message: "Please enter a send back reason" });
-    setSaving(true);
-    setNotice(null);
-    try {
-      await almsSave({
-        parameter: "Amlspf_SendBackCP", // TODO: confirm actual SP name
-        loginid,
-        code1: companyCode,
-        code2: requestNumber,
-        code3: remarkText,
-      });
-      setNotice({ type: "success", message: "CP sent back successfully!" });
-      setSendBackOpen(false);
-      setRemarkText("");
-      onClose(true);
-    } catch (err) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to send back" });
+      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to generate Excel" });
     } finally {
       setSaving(false);
     }
@@ -345,24 +304,24 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                       </select>
                     </label>
 
-                    <label className="field col-span-2 max-lg:col-span-2 max-md:col-span-1">
+                    <label className="field col-span-2 max-lg:col-span-1 max-md:col-span-1">
                       <span>Description</span>
                       <textarea
                         disabled={disabled}
-                        rows={4}
+                        rows={3}
                         value={header.DESCRIPTION || ""}
                         onChange={(e) => setHdr("DESCRIPTION", e.target.value)}
-                        className="w-full rounded-md border bg-background px-2 py-1 text-sm"
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                       />
                     </label>
-                    <label className="field col-span-2 max-lg:col-span-2 max-md:col-span-1">
+                    <label className="field col-span-2 max-lg:col-span-1 max-md:col-span-1">
                       <span>Remarks</span>
                       <textarea
                         disabled={disabled}
-                        rows={4}
+                        rows={3}
                         value={header.REMARKS || ""}
                         onChange={(e) => setHdr("REMARKS", e.target.value)}
-                        className="w-full rounded-md border bg-background px-2 py-1 text-sm"
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                       />
                     </label>
                   </div>
@@ -398,67 +357,18 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
 
         <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
           <div className="text-sm text-muted-foreground">Total Amount <strong className="text-primary">{fmt3(totalAmount)}</strong></div>
-          {!isViewMode && (
-            <div className="flex items-center gap-2">
-              <Button disabled={saving} type="button" variant="outline" onClick={() => onClose()}>Close</Button>
-              <Button disabled={saving} type="button" variant="outline" onClick={handleSaveDraft}>
-                <Save size={15} /> {saving ? "Saving..." : "Save As Draft"}
-              </Button>
-              <Button disabled={saving} type="button" variant="default" onClick={handleSubmit}>
-                <Send size={15} /> Submit
-              </Button>
-              <Button
-                disabled={saving}
-                type="button"
-                variant="outline"
-                onClick={() => { setRemarkText(""); setRejectOpen(true); }}
-                className="border-destructive/30 text-destructive hover:bg-destructive/10"
-              >
-                <X size={15} /> Reject
-              </Button>
-              <Button
-                disabled={saving}
-                type="button"
-                variant="outline"
-                onClick={() => { setRemarkText(""); setSendBackOpen(true); }}
-                className="border-purple-300 text-purple-700 hover:bg-purple-50"
-              >
-                <ChevronLeft size={15} /> Send Back
-              </Button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <Button disabled={saving} type="button" variant="outline" onClick={() => onClose()}>Close</Button>
+            <Button disabled={saving} type="button" variant="outline" onClick={handlePrint}>
+              <Printer size={15} /> Print
+            </Button>
+            <Button disabled={saving} type="button" variant="default" onClick={handleGenerateExcel}>
+              <FileSpreadsheet size={15} /> {saving ? "Generating..." : "Generate Excel"}
+            </Button>
+          </div>
         </div>
       </section>
 
-      <Dialog
-        open={rejectOpen}
-        title="Reject Request"
-        description="Enter the reason for rejection."
-        onClose={() => setRejectOpen(false)}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setRejectOpen(false)}>Cancel</Button>
-            <Button variant="destructive" disabled={saving} onClick={handleRejectConfirm}>Confirm Reject</Button>
-          </>
-        }
-      >
-        <textarea rows={4} value={remarkText} onChange={(e) => setRemarkText(e.target.value)} placeholder="Enter reject remark..." className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
-      </Dialog>
-
-      <Dialog
-        open={sendBackOpen}
-        title="Send Back Request"
-        description="Enter the reason for sending back."
-        onClose={() => setSendBackOpen(false)}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setSendBackOpen(false)}>Cancel</Button>
-            <Button disabled={saving} onClick={handleSendBackConfirm} variant="default">Confirm Send Back</Button>
-          </>
-        }
-      >
-        <textarea rows={4} value={remarkText} onChange={(e) => setRemarkText(e.target.value)} placeholder="Enter send back reason..." className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
-      </Dialog>
     </div>
   );
 };

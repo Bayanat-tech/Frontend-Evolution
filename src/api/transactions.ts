@@ -614,6 +614,17 @@ export async function openAcStatementReport(params: ReportParams) {
 }
 
 
+export async function openCapexApprovalReport(params: ReportParams) {
+  await openReportInTab(
+    "/api/finance/transactions/reports/CapexApprovalReport/html", 
+    params
+  );
+}
+
+
+
+
+
 
 export async function taxOutInSummaryReport(params: ReportParams) {
   await openReportInTab(
