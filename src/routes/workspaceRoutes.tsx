@@ -127,7 +127,7 @@ import { GradeMasterPage } from "../pages/hr/Grademasterpage";
 import InvoicePage from "../pages/wms/invoice/InvoicePage";
 import InspectionFormPage from "../pages/oxmaint/inspection-form-tailwind/inspection_form/InspectionFormMainPage";
 
-
+import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -808,6 +808,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   name: "HR Employee Education",
   match: (context) => isHrRoute(context) && isHrEmpEducationRoute(context),
   element: () => <HrEmpEducationPage />,
+},
+
+{
+  name: "Employee Information",
+  match: (context) => isHrRoute(context) && isHrEmployeeInformationRoute(context),
+  element: () => <KpiEmployeeInformationPage />,
 },
 
 {
@@ -1647,5 +1653,17 @@ function isStockAgeingVolumeRoute(pathname: string) {
     normalized.includes("/wms/reports/stock%20report/stock_ageing_volume") ||
     normalized.includes("/wms/reports/stock_report/stock_ageing_volume") ||
     normalized.includes("/wms/reports/stock-report/stock_ageing_volume")
+  );
+}
+
+
+function isHrEmployeeInformationRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+
+  return (
+    compact.includes("employeeinformation") ||
+    normalized.includes("employee_information") ||
+    normalized.includes("employee-information")
   );
 }
