@@ -11,6 +11,8 @@ import { getDynamicLookup, getLookupValue, LookupRow } from "../../../api/lookup
 import { useAuth } from "../../../state/AuthContext";
 import { BudgetRequestRow } from "./BudgetRequestPage";
 import { upsertBulkAccountBudgetEntryApi } from "../../../api/transactions";
+import { Dialog } from "../../../components/ui/Dialog";
+import ImportBudgetEdi from "./ExportToExcel";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
 // Year range this org is currently budgeting for. Bump the upper bound when a new year opens up.
@@ -310,6 +312,7 @@ export function BudgetRequestEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [flowLevelRunning, setFlowLevelRunning] = useState<number>(0);
+  const [importOpen, setImportOpen] = useState(false);
 
   useEffect(() => {
     if (!editor) return;
@@ -463,13 +466,14 @@ export function BudgetRequestEditor({
     }, "Budget request sent back");
 console.log(flowLevelRunning, "flowLevelRunning")
   return (
-    <form
-      className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
-      onSubmit={(event) => {
-        event.preventDefault();
-        void handleSubmit();
-      }}
-    >
+    <>
+      <form
+        className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void handleSubmit();
+        }}
+      >
       <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
         <div className="flex min-h-10 items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
@@ -604,14 +608,19 @@ console.log(flowLevelRunning, "flowLevelRunning")
             </div>
 
             <div className="commercial-lines-card rounded-md border bg-card">
-              <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
+              <div className="flex items-center justify-between  border-b bg-secondary/40 px-3 py-1.5">
                 <div>
                   <p className="eyebrow m-0">Allocation</p>
                   <h3 className="m-0 text-sm font-semibold leading-tight">Budget Allocation Lines</h3>
                 </div>
+                <div className="flex items-center gap-2">
                 <Button disabled={headerAndLineDisabled} size="sm" type="button" variant="outline" onClick={addRow}>
                   <Plus size={14} /> Add Line
                 </Button>
+                <Button disabled={headerAndLineDisabled} size="sm" type="button" variant="outline" onClick={() => setImportOpen(true)}>
+                  <Upload size={14} /> Import from Excel
+                </Button>
+                </div>
               </div>
               <div className="commercial-lines-scroll max-h-[45vh] overflow-auto">
                 <table className="finance-lines-table w-full min-w-[1200px] text-sm">
@@ -730,9 +739,7 @@ console.log(flowLevelRunning, "flowLevelRunning")
             <Button type="button" variant="destructive" disabled={actionDisabled} onClick={() => void handleClose()}>
             <XCircle size={14} /> Close
           </Button>
-            <Button type="button" variant="destructive" disabled={actionDisabled} onClick={() => void handleReject()}>
-            <XCircle size={14} /> Reject
-          </Button>
+           
           <Button type="button" variant="outline" disabled={actionDisabled} onClick={() => void handleSendBack()}>
             <Undo2 size={14} /> Send Back
           </Button>
@@ -746,6 +753,17 @@ console.log(flowLevelRunning, "flowLevelRunning")
         </div>
       </div>
     </form>
+      <Dialog
+        open={importOpen}
+        title="Import Budget Excel"
+        description="Upload budget data from an Excel file and stage it for import."
+        wide
+        onClose={() => setImportOpen(false)}
+        footer={<Button variant="outline" onClick={() => setImportOpen(false)}>Close</Button>}
+      >
+        <ImportBudgetEdi requestNumber={form.request_number} onClose={() => setImportOpen(false)} onSuccess={() => setImportOpen(false)} />
+      </Dialog>
+    </>
   );
 }
 

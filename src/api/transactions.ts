@@ -451,6 +451,28 @@ export async function upsertBulkAccountBudgetEntryApi(
   return response.data;
 }
 
+export async function upsertBulkExcelBudgetEntryApi(
+  payload: {
+     details: Record<string, unknown>[];
+   
+  },
+  ) {
+  const response = await api.post<ApiResponse<unknown>>(
+    "/api/finance/insLoadBudgetData",
+    {
+      ...payload,
+      details: payload.details,
+      
+    }
+  );
+
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Unable to perform budget request ");
+  }
+
+  return response.data;
+}
+
 export async function cancelTransactionDocument(docNo: string, docType: TransactionType) {
   const response = await api.put<ApiResponse<null>>("/api/finance/transactions/cancel_cheque", {}, {
     params: { doc_no: docNo, doc_type: docType },
