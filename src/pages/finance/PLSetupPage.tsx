@@ -279,7 +279,7 @@ const PLSetupPage: React.FC = () => {
         .add-row-btn:hover { background: #f0f7ff !important; border-color: #185FA5 !important; }
       `}</style>
 
-      <div style={{ maxWidth: 760, margin: "0 auto", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ margin: "0 auto", display: "flex", flexDirection: "column", gap: 10 }}>
         <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "10px 10px" }}>
 
           {/* Header */}
