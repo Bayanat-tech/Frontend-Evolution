@@ -335,7 +335,7 @@ export default function VisaExpiryListingPage() {
                 @keyframes spin            { to { transform: rotate(360deg); } }
             `}</style>
 
-            <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
 
                 {/* ══ Card — Filters + Action bar ════════════════════════════════════ */}
                 <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
