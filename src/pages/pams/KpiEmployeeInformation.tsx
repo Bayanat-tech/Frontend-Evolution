@@ -1,12 +1,13 @@
 import { Building2, CalendarDays, BriefcaseBusiness, Mail, MapPin, Phone, RefreshCcw, ShieldCheck, UserRound } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { pamsSelect } from "../../api/pams";
 import type { PamsProcedureParams } from "../../api/pams";
+import type { LookupRow } from "../../api/lookups";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
+import { LookupField } from "../../components/ui/LookupField";
 import { NoticeToast } from "../../components/ui/NoticeToast";
-import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
 
 type Row = Record<string, unknown>;
@@ -60,6 +61,23 @@ function pick(row: Row, keys: string[]): string {
   return "";
 }
 
+// ★ Normalizes an employee row so the display name never has the
+// EMPLOYEE_CODE baked into it twice. `get_employees_by_division` returns
+// EMP_NAME as "CODE - NAME" already; employee_hierarchy returns RPT_NAME
+// as a plain name. Both are reduced here to one clean name field.
+function normalizeEmployeeRow(row: Row): Row {
+  const normalized = normalizeRow(row);
+  const code = pick(normalized, ["EMPLOYEE_CODE", "employee_code"]);
+  const rawName = pick(normalized, ["EMP_NAME", "RPT_NAME", "employee_name", "EMPLOYEE_NAME"]);
+  const cleanName = code && rawName.startsWith(`${code} - `) ? rawName.slice(code.length + 3) : rawName;
+
+  return {
+    ...normalized,
+    EMPLOYEE_CODE: code,
+    EMPLOYEE_DISPLAY_NAME: cleanName,
+  };
+}
+
 function getEmployeeInfo(row: Row): EmployeeInfo {
   const normalized = normalizeRow(row);
   return {
@@ -102,100 +120,72 @@ export function KpiEmployeeInformationPage() {
   const loginid = user?.loginid ?? "";
   const companyCode = user?.company_code ?? "";
 
-  const [divisions, setDivisions] = useState<Row[]>([]);
-  const [employees, setEmployees] = useState<Row[]>([]);
   const [selectedDivision, setSelectedDivision] = useState("");
+  const [selectedDivisionRow, setSelectedDivisionRow] = useState<LookupRow | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState("");
+  const [selectedEmployeeRow, setSelectedEmployeeRow] = useState<LookupRow | null>(null);
   const [employee, setEmployee] = useState<EmployeeInfo | null>(null);
-  const [loadingDivisions, setLoadingDivisions] = useState(false);
-  const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
+  const [resetKey, setResetKey] = useState(0);
 
-  useEffect(() => {
-    if (!companyCode) return;
+  // ── Lookup loaders ──────────────────────────────────────────────────────
 
-    const loadDivisions = async () => {
-      setLoadingDivisions(true);
-      try {
-        const data = await pamsProc({
-          parameter: "get_divisions",
-          loginid,
-          code1: companyCode,
-          code2: "NULL",
-          code3: "NULL",
-        });
-        setDivisions(data.map(normalizeRow));
-      } catch (error) {
-        setNotice({
-          type: "error",
-          message: error instanceof Error ? error.message : "Unable to load divisions",
-        });
-      } finally {
-        setLoadingDivisions(false);
-      }
-    };
-
-    void loadDivisions();
-  }, [companyCode, loginid]);
-
-  const divisionOptions = useMemo(
-    () =>
-      divisions.map((division, index) => {
-        const code = text(division.DIV_CODE ?? division.div_code ?? division.CODE ?? `DIV-${index}`);
-        const name = text(division.DIV_NAME ?? division.div_name ?? division.NAME ?? "");
-        return { value: code, label: code && name ? `${code} - ${name}` : code || name || `Division ${index + 1}` };
-      }),
-    [divisions]
-  );
-
-  const employeeOptions = useMemo(
-    () =>
-      employees.map((emp, index) => {
-        const employeeCode = text(emp.EMPLOYEE_CODE ?? emp.employee_code ?? "");
-        const employeeName = text(emp.EMP_NAME ?? emp.RPT_NAME ?? emp.employee_name ?? "");
-        return {
-          value: employeeCode,
-          label: employeeCode && employeeName ? `${employeeCode} - ${employeeName}` : employeeCode || employeeName || `Employee ${index + 1}`,
-        };
-      }),
-    [employees]
-  );
-
-  const loadEmployeesByDivision = async (divisionCode: string) => {
-    if (!companyCode || !divisionCode) {
-      setEmployees([]);
-      setSelectedEmployee("");
-      setEmployee(null);
-      return;
-    }
-
-    setLoadingEmployees(true);
-    setNotice(null);
+  const loadDivisionOptions = useCallback(async (): Promise<LookupRow[]> => {
+    if (!companyCode) return [];
     try {
       const data = await pamsProc({
-        parameter: "get_employees_by_division",
+        parameter: "get_divisions",
         loginid,
         code1: companyCode,
-        code2: divisionCode,
+        code2: "NULL",
         code3: "NULL",
       });
-      setEmployees(data.map(normalizeRow));
-      setSelectedEmployee("");
-      setEmployee(null);
+      return data.map(normalizeRow) as LookupRow[];
     } catch (error) {
-      setEmployees([]);
       setNotice({
         type: "error",
-        message: error instanceof Error ? error.message : "Unable to load employees for selected division",
+        message: error instanceof Error ? error.message : "Unable to load divisions",
       });
-    } finally {
-      setLoadingEmployees(false);
+      return [];
     }
-  };
+  }, [companyCode, loginid]);
+
+  // ★ Re-created whenever selectedDivision changes, and paired with
+  // key={selectedDivision} on the LookupField below so it actually refetches
+  // instead of serving stale cached rows for a different division.
+  const loadEmployeeOptions = useCallback(async (): Promise<LookupRow[]> => {
+    if (!companyCode) return [];
+    try {
+      const data = selectedDivision
+        ? await pamsProc({
+            parameter: "get_employees_by_division",
+            loginid,
+            code1: companyCode,
+            code2: selectedDivision,
+            code3: "NULL",
+          })
+        : await pamsProc({
+            parameter: "get_all_employees", // ★ was "employee_hierarchy" — that returned only the logged-in user's subordinates, not all employees
+            loginid,
+            code1: companyCode,
+            code2: "NULL",
+            code3: "NULL",
+          });
+      return data.map(normalizeEmployeeRow) as LookupRow[];
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to load employees",
+      });
+      return [];
+    }
+  }, [companyCode, loginid, selectedDivision]);
+
+  // ── Employee details ─────────────────────────────────────────────────────
 
   const loadEmployeeDetails = async (employeeCode: string) => {
-    if (!companyCode || !selectedDivision || !employeeCode) {
+    if (!companyCode || !employeeCode) {
       setEmployee(null);
       return;
     }
@@ -207,7 +197,7 @@ export function KpiEmployeeInformationPage() {
         parameter: "get_employee_details",
         loginid,
         code1: companyCode,
-        code2: selectedDivision,
+        code2: selectedDivision || "NULL",
         code3: employeeCode,
       });
 
@@ -259,10 +249,11 @@ export function KpiEmployeeInformationPage() {
             variant="outline"
             onClick={() => {
               setSelectedDivision("");
+              setSelectedDivisionRow(null);
               setSelectedEmployee("");
-              setEmployees([]);
+              setSelectedEmployeeRow(null);
               setEmployee(null);
-              void loadEmployeesByDivision("");
+              setResetKey((key) => key + 1);
             }}
           >
             <RefreshCcw size={15} /> Reset
@@ -289,42 +280,60 @@ export function KpiEmployeeInformationPage() {
 
           <div className="rounded-2xl bg-background/70 p-4 shadow-sm">
             <div className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Division</div>
-            <Select
+            <LookupField
+              key={`division-${resetKey}`}
+              compact
               value={selectedDivision}
-              disabled={loadingDivisions}
-              onChange={(event) => {
-                const value = event.target.value;
+              displayValue={
+                selectedDivisionRow
+                  ? `${text(selectedDivisionRow["DIV_CODE"])} - ${text(selectedDivisionRow["DIV_NAME"])}`
+                  : undefined
+              }
+              placeholder="Choose division"
+              columns={[
+                { field: "DIV_CODE", header: "Code" },
+                { field: "DIV_NAME", header: "Division Name" },
+              ]}
+              valueField="DIV_CODE"
+              displayFields={["DIV_CODE", "DIV_NAME"]}
+              loadOptions={loadDivisionOptions}
+              onChange={(value, row) => {
                 setSelectedDivision(value);
-                void loadEmployeesByDivision(value);
+                setSelectedDivisionRow(row);
+                // Division changed — clear the dependent employee selection
+                setSelectedEmployee("");
+                setSelectedEmployeeRow(null);
+                setEmployee(null);
+                setResetKey((key) => key + 1);
               }}
-            >
-              <option value="">{loadingDivisions ? "Loading divisions..." : "Choose division"}</option>
-              {divisionOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
+            />
           </div>
 
           <div className="rounded-2xl bg-background/70 p-4 shadow-sm">
             <div className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Employee</div>
-            <Select
+            <LookupField
+              key={`employee-${selectedDivision}-${resetKey}`}
+              compact
               value={selectedEmployee}
-              disabled={!selectedDivision || loadingEmployees}
-              onChange={(event) => {
-                const value = event.target.value;
+              displayValue={
+                selectedEmployeeRow
+                  ? `${text(selectedEmployeeRow["EMPLOYEE_CODE"])} - ${text(selectedEmployeeRow["EMPLOYEE_DISPLAY_NAME"])}`
+                  : undefined
+              }
+              placeholder="Choose employee"
+              columns={[
+                { field: "EMPLOYEE_CODE", header: "Code" },
+                { field: "EMPLOYEE_DISPLAY_NAME", header: "Employee Name" },
+              ]}
+              valueField="EMPLOYEE_CODE"
+              displayFields={["EMPLOYEE_CODE", "EMPLOYEE_DISPLAY_NAME"]}
+              loadOptions={loadEmployeeOptions}
+              onChange={(value, row) => {
                 setSelectedEmployee(value);
+                setSelectedEmployeeRow(row);
                 void loadEmployeeDetails(value);
               }}
-            >
-              <option value="">{loadingEmployees ? "Loading employees..." : "Choose employee"}</option>
-              {employeeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
+            />
           </div>
         </CardContent>
       </Card>
