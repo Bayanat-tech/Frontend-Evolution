@@ -82,6 +82,23 @@ type BulkApiResponse = {
   details?: string[];
 };
 
+interface ReportParams {
+  parameter: string;
+  loginid: string;
+  code1?: string;
+  code2?: string;
+  code3?: string;
+  code4?: string;
+  code5?: string;
+  code6?: string;
+  code7?: string | number;
+  code8?: string | number;
+  code9?: string;
+  code10?: string;
+  code20?: string;
+  [key: string]: any;
+}
+
 /** GET — backend always returns ALL headers + ALL details, filter client-side */
 export async function getStockAdjustmentData() {
   const response = await getWmsStockAdjustment<StockAdjustmentListResponse>();
@@ -605,14 +622,33 @@ export async function downloadAdjConfirmReportExcel(prin_code: string, adj_no: s
   URL.revokeObjectURL(url);
 }
 
-// export async function getInvocieDetailReport(prin_code: string, invoice_no: string): Promise<string> {
-//   const response = await api.get(
-//     `/api/wms/inbound/reports/invoice-detail/html?${prin_code}&invoice_no=${invoice_no}`,
-//     { responseType: "text" }
-//   );
-//   if (!response.data) throw new Error("Unable to fetch Job Details Report");
-//   return response.data;
-// }
+export async function getGrnSummaryReportHtml(params: ReportParams): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/GrnSummaryReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getGrnSummaryReportExcelDownload(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/GrnSummaryReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "Grn_Summary.xlsx";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
 
 export async function getInvocieDetailReport(prin_code: string, invoice_no: string): Promise<string> {
   const response = await api.get(

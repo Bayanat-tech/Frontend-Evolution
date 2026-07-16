@@ -126,6 +126,7 @@ import InspectionReportMainPage from "../pages/oxmaint/inspection-report-tailwin
 import { GradeMasterPage } from "../pages/hr/Grademasterpage";
 import InvoicePage from "../pages/wms/invoice/InvoicePage";
 import InspectionFormPage from "../pages/oxmaint/inspection-form-tailwind/inspection_form/InspectionFormMainPage";
+import GrnSummaryReportPage from "../pages/wms/Reports/Grnsummaryreport";
 
 
 
@@ -489,13 +490,18 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({pathname}) => isVisaExpiryListingRoute(pathname),
     element: () => <VisaExpiryListingPage/>
   },
-{
+
+  {
     name : "DN Summary Report",
     match: ({pathname}) => isDnRoute(pathname),
     element: () => <Dnsummaryreportpage/>
   },
 
-  
+  {
+    name : "Grn Summary Report",
+    match: ({pathname}) => isGrnRoute(pathname),
+    element: () => <GrnSummaryReportPage/>
+  },
 
   {
     name: "WMS Inbound",
@@ -1156,8 +1162,11 @@ function isDnRoute(pathname:string) {
    || normalized.includes("/wms/wms/reports/summary_report/dn_summary");
 }
 
-
-
+function isGrnRoute(pathname:string) {  
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/wms/wms/reports/summary%20report/grn_summary")
+   || normalized.includes("/wms/wms/reports/summary_report/grn_summary");
+}
 
 function isVisaExpiryListingRoute(pathname:string) {
   const normalized = pathname.toLowerCase();
