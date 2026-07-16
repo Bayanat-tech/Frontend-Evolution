@@ -338,6 +338,8 @@ function AddStorageModal({
   const [chargeType, setChargeType] = useState("");
   const [siteInd, setSiteInd] = useState("");
   const [chargeTime, setChargeTime] = useState("");
+  const [freeStorage, setFreeStorage] = useState("");
+  const [inbJobwiseBill, setInbJobwiseBill] = useState("");
 
   // ── Load charge master + detail when principal changes ──
   const handlePrinChange = async (code: string, name: string) => {
@@ -349,6 +351,8 @@ function AddStorageModal({
     setChargeType("");
     setSiteInd("");
     setChargeTime("");
+    setFreeStorage("");
+    setInbJobwiseBill("");
 
     if (!code) return;
 
@@ -426,6 +430,25 @@ function AddStorageModal({
     } finally {
       setDetailLoading(false);
     }
+
+    try {
+      // Principal Master (free storage / job-wise bill flag)
+      const prinMasterRaw = await executeWmsInboundSql(`
+        SELECT FREE_STORAGE, INB_JOBWISE_BILL
+        FROM MS_PRINCIPAL
+        WHERE COMPANY_CODE = '${companyCode}'
+          AND PRIN_CODE = '${code}'
+      `);
+      const prinMasterArr = Array.isArray(prinMasterRaw) ? prinMasterRaw : [];
+      if (prinMasterArr.length > 0) {
+        const p = normalizeRow(prinMasterArr[0] as WmsRow);
+        setFreeStorage(val(p, "free_storage"));
+        setInbJobwiseBill(val(p, "inb_jobwise_bill"));
+      }
+    } catch {
+      setFreeStorage("");
+      setInbJobwiseBill("");
+    }
   };
 
   // ── Reset ──
@@ -440,7 +463,10 @@ function AddStorageModal({
     setDetailRows([]);
     setChargeType("");
     setSiteInd("");
-    setChargeTime("");
+    setChargeTime("")
+        setFreeStorage("");
+    setInbJobwiseBill("");
+
   };
 
   // ── Validation ──
@@ -465,10 +491,11 @@ function AddStorageModal({
         val1s3: monthNum,
         val1s4: toDdMmYyyy(invStartDate),
         val1s5: toDdMmYyyy(invEndDate),
-        val1s6: String(noDays),
+        val1s6: noDays,
         val1s7: chargeType,
         val1s8: siteInd,
         val1s9: chargeTime,
+        vals10: 'N',
       });
 
       const data = res.data;

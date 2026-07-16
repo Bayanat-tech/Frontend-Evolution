@@ -126,8 +126,9 @@ import InspectionReportMainPage from "../pages/oxmaint/inspection-report-tailwin
 import { GradeMasterPage } from "../pages/hr/Grademasterpage";
 import InvoicePage from "../pages/wms/invoice/InvoicePage";
 import InspectionFormPage from "../pages/oxmaint/inspection-form-tailwind/inspection_form/InspectionFormMainPage";
+import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/AssetInventoryMainPage";
 
-
+import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -147,6 +148,23 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+
+  {
+    name: 'mms inspection report',
+    match: ({pathname}) => pathname.toLowerCase().includes("/mms/mms/inspection/inspection-report"),
+    element: () => <InspectionReportMainPage />,
+  },
+  {
+    name: 'mms inspection form',
+    match: ({pathname}) => pathname.toLowerCase().includes("/mms/mms/inspection/inspection-form"),
+    element: () => <InspectionFormPage />
+  },
+  {
+    name: 'mms asset inventory',
+    match: ({pathname}) => pathname.toLowerCase().includes("/mms/mms/oxmaint/asset_inventory"),
+    element: () => <AssetInventoryMainPage />
+  },
+
   {
     name: "SMS Dashboard",
     match: (context) => isSmsRoute(context) && getGenericMatchText(context).includes("dashboard"),
@@ -213,11 +231,6 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <EmployeeProfilePage />,
   },
   {
-    name: "MMS inspection Report",
-    match: ({ pathname }) => pathname.toLowerCase().includes("/mms/masters/gm/inspection_report"),
-    element: () => <InspectionReportMainPage />,
-  },
-  {
     name: "HR Absent Memo",
     match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/memo_and_forms/absent_memo"),
     element: () => <AbsentMemoMainPage />,
@@ -228,16 +241,24 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <SalaryAdditionDeductionMainPage />,
   },
 
-//Grade master page route hcm/hr/transactions/memo_and_forms/absent_memo
- {
+//Grade master page route 
+  {
   name: "HR Grade Master",
   match: ({ pathname }) =>
-    pathname.toLowerCase().includes("/workspace/bt-masters/hcm/general%20master/grade%20master"),
+    pathname
+      .toLowerCase()
+      .includes("/workspace/hcm/hcm/general%20master/grade%20master"),
   element: () => <GradeMasterPage />,
 },
 
-
-
+{
+  name: "HR Grade Master",
+  match: ({ pathname }) =>
+    pathname
+      .toLowerCase()
+      .includes("/workspace/bt-masters/hcm/general%20master/grade%20maste"),
+  element: () => <GradeMasterPage />,
+},
 
 
   {
@@ -811,6 +832,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
 },
 
 {
+  name: "Employee Information",
+  match: (context) => isHrRoute(context) && isHrEmployeeInformationRoute(context),
+  element: () => <KpiEmployeeInformationPage />,
+},
+
+{
     name: "HR Payroll Account Setup",
     match: (context) => isHrRoute(context) && isHrPayrollAccountSetupRoute(context),
     element: () => <HrPayrollAccountSetupPage />,
@@ -1380,22 +1407,18 @@ function isOxMaintRoute(context: WorkspaceRouteContext) {
     matchText.includes("/oxmaint") ||
     compact.includes("oxmaint") ||
     compact.includes("assetinventory") ||
-    compact.includes("inspectionform") ||
-    compact.includes("inspectionreport") ||
     compact.includes("assettype") ||
-    compact.includes("siteproject")
+    compact.includes("siteproject") ||
+    compact.includes("status")
   );
 }
 
 function getOxMaintElement(context: WorkspaceRouteContext) {
   const matchText = getGenericMatchText(context);
   const compact = matchText.replace(/[^a-z0-9]/g, "");
-  if (compact.includes("assetinventory")) return <OxAssetInventoryPage />;
-  if (compact.includes("inspectionreport")) return <OxInspectionReportPage />;
-  if (compact.includes("inspectionform")) return <InspectionFormPage />;
   if (compact.includes("assettype")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.assetType} />;
   if (compact.includes("siteproject")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.siteProject} />;
-  if (compact.includes("status") || matchText.includes("/status")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.status} />;
+  if (compact.includes("status")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.status} />;
   return <OxMaintDashboard />;
 }
 
@@ -1647,5 +1670,17 @@ function isStockAgeingVolumeRoute(pathname: string) {
     normalized.includes("/wms/reports/stock%20report/stock_ageing_volume") ||
     normalized.includes("/wms/reports/stock_report/stock_ageing_volume") ||
     normalized.includes("/wms/reports/stock-report/stock_ageing_volume")
+  );
+}
+
+
+function isHrEmployeeInformationRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+
+  return (
+    compact.includes("employeeinformation") ||
+    normalized.includes("employee_information") ||
+    normalized.includes("employee-information")
   );
 }

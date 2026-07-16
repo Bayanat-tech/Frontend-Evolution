@@ -51,12 +51,14 @@ export function formatLookupDisplay(row: WmsRow, keys: string[]): string {
 
 export function formatCellValue(row: WmsRow, key: string): string {
   const cell = value(row, key);
+  const isLocationField = key.includes("loc_code") || key === "location_code";
   if (
-    key.includes("date") ||
-    key.includes("_from") ||
-    key.includes("_to") ||
-    key.endsWith("_start") ||
-    key.endsWith("_end")
+    !isLocationField &&
+    (key.includes("date") ||
+      key.includes("_from") ||
+      key.includes("_to") ||
+      key.endsWith("_start") ||
+      key.endsWith("_end"))
   )
     return formatDate(cell);
   return cell;

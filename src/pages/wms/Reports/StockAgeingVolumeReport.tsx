@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
     Printer,
     RotateCcw,
@@ -34,6 +34,8 @@ interface Params {
     group_by: string;
 }
 
+type AgeKey = "age1" | "age2" | "age3" | "age4" | "age5";
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 // Case-insensitive key lookup
@@ -48,17 +50,41 @@ const getField = (row: LookupRow, ...keys: string[]): string => {
     return "";
 };
 
-// Rows with a code + name pair → { value: code, label: "code - name" }
-const mapCodeNameOptions = (rows: LookupRow[], codeKey: string, nameKey: string): Option[] =>
-    rows
-        .map((r) => {
-            const code = getField(r, codeKey);
-            const name = getField(r, nameKey);
-            if (!code) return null;
-            return { value: code, label: name ? `${code} - ${name}` : code };
-        })
-        .filter((o): o is Option => !!o)
-        .sort((a, b) => a.value.localeCompare(b.value));
+// Rows with a code + name pair → { value: "code::name", label: "code - name" }
+// The option value is a unique composite of code+name (not just the code),
+// because the same code can legitimately appear on multiple distinct rows
+// with different names (e.g. same PROD_CODE reused across different
+// products in the source data). If two options shared the same `value`,
+// the multi-select would visually tick both when only one was clicked.
+// Use codeFromOptionValue/codesFromSelection below to recover the actual
+// code(s) whenever building a SQL filter or the API payload.
+const mapCodeNameOptions = (rows: LookupRow[], codeKey: string, nameKey: string): Option[] => {
+    const seen = new Set<string>();
+    const options: Option[] = [];
+    rows.forEach((r) => {
+        const code = getField(r, codeKey);
+        const name = getField(r, nameKey);
+        if (!code) return;
+        const value = `${code}::${name}`;
+        if (seen.has(value)) return; // skip exact duplicate rows only
+        seen.add(value);
+        options.push({ value, label: name ? `${code} - ${name}` : code });
+    });
+    return options.sort((a, b) => a.label.localeCompare(b.label));
+};
+
+// Recovers the underlying code from a composite "code::name" option value.
+const codeFromOptionValue = (v: string): string => v.split("::")[0];
+
+// Converts a selection array (which may hold composite option values, or
+// the special "All" sentinel) into a deduped list of real codes for use in
+// SQL IN-clauses and API payloads.
+const codesFromSelection = (values: string[]): string[] => {
+    if (!values.length || values.includes("All")) return ["All"];
+    const codes = new Set<string>();
+    values.forEach((v) => codes.add(codeFromOptionValue(v)));
+    return Array.from(codes);
+};
 
 // Rows with only a single code column → { value: code, label: code }
 const mapSingleColumnOptions = (rows: LookupRow[], codeKey: string): Option[] =>
@@ -76,6 +102,27 @@ const inClause = (col: string, values: string[]): string => {
     if (!values.length || values.includes("All")) return "";
     const list = values.map((v) => `'${sqlEscape(v)}'`).join(",");
     return `${col} IN (${list})`;
+};
+
+// Validates that each age bucket cutoff is a positive number and strictly
+// greater than the previous bucket's cutoff. Returns a map of field -> error message.
+const AGE_KEYS: AgeKey[] = ["age1", "age2", "age3", "age4", "age5"];
+
+const validateAgeBuckets = (p: Params): Partial<Record<AgeKey, string>> => {
+    const errors: Partial<Record<AgeKey, string>> = {};
+    const values = AGE_KEYS.map((k) => Number(p[k]));
+
+    values.forEach((val, i) => {
+        if (p[AGE_KEYS[i]].trim() === "" || !Number.isFinite(val) || val <= 0) {
+            errors[AGE_KEYS[i]] = "Enter a positive number";
+            return;
+        }
+        if (i > 0 && Number.isFinite(values[i - 1]) && val <= values[i - 1]) {
+            errors[AGE_KEYS[i]] = `Must be greater than Bucket ${i} Cutoff (${values[i - 1]})`;
+        }
+    });
+
+    return errors;
 };
 
 // ─── Shared styles ─────────────────────────────────────────────────────────────
@@ -158,18 +205,30 @@ const SelectField: React.FC<{
 
 // ─── AgeRangeField ────────────────────────────────────────────────────────────
 
-const AgeRangeField: React.FC<{ label: string; value: string; onChange: (v: string) => void }> = ({
-    label, value, onChange,
-}) => (
+const AgeRangeField: React.FC<{
+    label: string;
+    value: string;
+    onChange: (v: string) => void;
+    error?: string;
+}> = ({ label, value, onChange, error }) => (
     <div style={{ marginBottom: 10 }}>
         <label style={fieldLabelStyle}>{label}</label>
         <input
             type="number"
             min={1}
-            style={numberInputStyle}
+            style={{
+                ...numberInputStyle,
+                borderColor: error ? "#dc2626" : "#d1d5db",
+                outline: error ? "1px solid #fca5a5" : "none",
+            }}
             value={value}
             onChange={(e) => onChange(e.target.value)}
         />
+        {error && (
+            <div style={{ fontSize: 10, color: "#dc2626", marginTop: 2, lineHeight: 1.3 }}>
+                {error}
+            </div>
+        )}
     </div>
 );
 
@@ -203,14 +262,20 @@ export default function StockAgeingVolumeReport() {
 
     const optionsRequestRef = useRef(0);
 
+    // ── Age bucket validation ────────────────────────────────────────────────
+    const ageErrors = useMemo(() => validateAgeBuckets(params), [
+        params.age1, params.age2, params.age3, params.age4, params.age5,
+    ]);
+    const hasAgeErrors = Object.keys(ageErrors).length > 0;
+
     // ── Cross-filtered option loader ─────────────────────────────────────────
     const loadCascadedOptions = useCallback(async (p: Params) => {
         const requestId = ++optionsRequestRef.current;
         setOptLoading(true);
         setOptError("");
 
-        const prinFilter = inClause("PRIN_CODE", p.prin_code);
-        const deptFilter = inClause("DEPT_CODE", p.dept_code);
+        const prinFilter = inClause("prin_code", codesFromSelection(p.prin_code));
+        const deptFilter = inClause("dept_code", p.dept_code);
 
         const whereExcept = (...exclude: string[]): string => {
             const all = { prin: prinFilter, dept: deptFilter };
@@ -222,9 +287,9 @@ export default function StockAgeingVolumeReport() {
         };
 
         const sql = {
-            prin: `select distinct prin_code, prin_name from VW_BOWM_STKLED_FOREXPAGEING ${whereExcept("prin")}`,
+            prin: `select distinct prin_code, prin_name from VW_BOWM_STKLED_FOREXPAGEING ${whereExcept()}`,
             prod: `select distinct prod_code, prod_name from VW_BOWM_STKLED_FOREXPAGEING ${whereExcept()}`,
-            dept: `select distinct dept_code from VW_BOWM_STKLED_FOREXPAGEING ${whereExcept("dept")}`,
+            dept: `select distinct dept_code from VW_BOWM_STKLED_FOREXPAGEING ${whereExcept()}`,
         };
 
         try {
@@ -288,9 +353,9 @@ export default function StockAgeingVolumeReport() {
     }, [cascadeKey]);
 
     const buildPayload = (p: Params) => ({
-        prin_code: p.prin_code.includes("All") ? ["All"] : p.prin_code,
+        prin_code: codesFromSelection(p.prin_code),
         dept_code: p.dept_code.includes("All") ? ["All"] : p.dept_code,
-        prod_code: p.prod_code.includes("All") ? ["All"] : p.prod_code,
+        prod_code: codesFromSelection(p.prod_code),
         age1: Number(p.age1) || 30,
         age2: Number(p.age2) || 60,
         age3: Number(p.age3) || 90,
@@ -374,6 +439,10 @@ export default function StockAgeingVolumeReport() {
 
     // ── Generate report
     const handleGenerateReport = () => {
+        if (hasAgeErrors) {
+            setError("Please fix the age bucket cutoffs before generating the report.");
+            return;
+        }
         fetchReport(params);
     };
 
@@ -522,14 +591,16 @@ export default function StockAgeingVolumeReport() {
                                         Age Bucket Boundaries (days)
                                     </legend>
                                     <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0 10px" }}>
-                                        <AgeRangeField label="Bucket 1 Cutoff" value={params.age1} onChange={(v) => setParam("age1", v)} />
-                                        <AgeRangeField label="Bucket 2 Cutoff" value={params.age2} onChange={(v) => setParam("age2", v)} />
-                                        <AgeRangeField label="Bucket 3 Cutoff" value={params.age3} onChange={(v) => setParam("age3", v)} />
-                                        <AgeRangeField label="Bucket 4 Cutoff" value={params.age4} onChange={(v) => setParam("age4", v)} />
-                                        <AgeRangeField label="Bucket 5 Cutoff" value={params.age5} onChange={(v) => setParam("age5", v)} />
+                                        <AgeRangeField label="Bucket 1 Cutoff" value={params.age1} onChange={(v) => setParam("age1", v)} error={ageErrors.age1} />
+                                        <AgeRangeField label="Bucket 2 Cutoff" value={params.age2} onChange={(v) => setParam("age2", v)} error={ageErrors.age2} />
+                                        <AgeRangeField label="Bucket 3 Cutoff" value={params.age3} onChange={(v) => setParam("age3", v)} error={ageErrors.age3} />
+                                        <AgeRangeField label="Bucket 4 Cutoff" value={params.age4} onChange={(v) => setParam("age4", v)} error={ageErrors.age4} />
+                                        <AgeRangeField label="Bucket 5 Cutoff" value={params.age5} onChange={(v) => setParam("age5", v)} error={ageErrors.age5} />
                                     </div>
-                                    <div style={{ fontSize: 10, color: "#6b7280", marginTop: 2 }}>
-                                        Produces buckets: Below {params.age1 || 30}, {params.age1 || 30}-{params.age2 || 60}, {params.age2 || 60}-{params.age3 || 90}, {params.age3 || 90}-{params.age4 || 120}, {params.age4 || 120}-{params.age5 || 150}, Above {params.age5 || 150}
+                                    <div style={{ fontSize: 10, color: hasAgeErrors ? "#dc2626" : "#6b7280", marginTop: 2 }}>
+                                        {hasAgeErrors
+                                            ? "Each bucket cutoff must be a positive number greater than the previous bucket's cutoff."
+                                            : `Produces buckets: Below ${params.age1 || 30}, ${params.age1 || 30}-${params.age2 || 60}, ${params.age2 || 60}-${params.age3 || 90}, ${params.age3 || 90}-${params.age4 || 120}, ${params.age4 || 120}-${params.age5 || 150}, Above ${params.age5 || 150}`}
                                     </div>
                                 </fieldset>
                             </div>
@@ -649,12 +720,13 @@ export default function StockAgeingVolumeReport() {
                         <button
                             className="action-btn-primary"
                             onClick={handleGenerateReport}
-                            disabled={loading}
+                            disabled={loading || hasAgeErrors}
+                            title={hasAgeErrors ? "Fix age bucket cutoffs before generating the report" : undefined}
                             style={{
                                 padding: "7px 16px",
                                 border: `0.5px solid ${THEME}`,
-                                background: loading ? "#94a3b8" : THEME,
-                                cursor: loading ? "not-allowed" : "pointer",
+                                background: (loading || hasAgeErrors) ? "#94a3b8" : THEME,
+                                cursor: (loading || hasAgeErrors) ? "not-allowed" : "pointer",
                                 display: "flex",
                                 alignItems: "center",
                                 gap: 6,
@@ -664,10 +736,10 @@ export default function StockAgeingVolumeReport() {
                                 transition: "background 0.2s",
                             }}
                             onMouseEnter={(e) => {
-                                if (!loading) e.currentTarget.style.background = "#115e59";
+                                if (!loading && !hasAgeErrors) e.currentTarget.style.background = "#115e59";
                             }}
                             onMouseLeave={(e) => {
-                                if (!loading) e.currentTarget.style.background = THEME;
+                                if (!loading && !hasAgeErrors) e.currentTarget.style.background = THEME;
                             }}
                         >
                             {loading ? (

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { FileText, LoaderCircle, Package, Printer, Receipt, Save, Trash2, X } from "lucide-react";
 import { Dialog } from "../../../components/ui/Dialog";
 import { Button } from "../../../components/ui/Button";
@@ -16,6 +16,7 @@ import {
 } from "../../../api/billing";
 import JobSelectionModal from "./JobSelectionModal";
 import StorageSelectionModal from "./StorageSelectionModal";
+import { getInvocieDetailReport } from "../../../api/wms";
 
 type InvoiceFormProps = {
   existingData?: Record<string, unknown>;
@@ -109,7 +110,13 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
   const [storageModalOpen, setStorageModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [warning, setWarning] = useState("");
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportHtml, setReportHtml] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState("");
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
+  const reportReady = !reportLoading && !reportError && !!reportHtml;
   /* ================= DERIVED VALUES ================= */
   const prinCode = getValue(invoice, "prin_code") || "";
   const invoiceNo = getValue(invoice, "invoice_no") || "";
@@ -225,63 +232,112 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
     setStorageLines((prev) => [...prev, ...selectedRows]);
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    setWarning("");
-    try {
-      const invoiceHeader: TInvoice[] = [{ ...invoice, USER_ID: user?.loginid, COMPANY_CODE: user?.company_code }];
-      const invoiceDetails: TInvoiceDetail[] = lines.map((row, index) => {
-        const quantity = Number(row.quantity || 0);
-        const billRate = Number(row.bill_rate || 0);
-        const costRate = Number(row.cost_rate || 0);
-        return {
-          ...row,
-          srno: index + 1,
-          invoice_no: invoiceNo,
-          prin_code: prinCode,
-          job_no: row.job_no ?? "",
-          quantity,
-          bill_rate: billRate,
-          cost_rate: costRate,
-          bill_amount: quantity * billRate,
-          cost_amount: quantity * costRate,
-        };
-      });
+const handleSave = async () => {
+  setSaving(true);
+  setWarning("");
+  try {
+    const invoiceHeader: TInvoice[] = [{ ...invoice, USER_ID: user?.loginid, COMPANY_CODE: user?.company_code }];
 
-      const jobSelection = [
-        ...jobSelectionRows.map((row) => ({
-          job_no: row.job_no,
-          act_code: row.act_code,
-          activity: row.activity,
-          invoice_no: invoiceNo,
-          prin_code: prinCode,
-          quantity: row.quantity,
-          bill: row.bill,
-          job_date: row.job_date,
-        })),
-      ];
-const storageSelection = storageLines.map((row) => ({
-  ...row,
-  act_code: "9001",             
-}));
-      const result = await updateBillingApi({
-        invoiceHeader,
-        invoiceDetails,
-        storageSelection: storageSelection,
-        jobSelection,
-      });
-      if (result.success) onClose(true);
-      else setWarning(result.message);
-    } catch (err) {
-      setWarning(err instanceof Error ? err.message : "Error while saving invoice.");
-    } finally {
-      setSaving(false);
-    }
-  };
+    const jobLineRows: TInvoiceDetail[] = lines.map((row, index) => {
+      const quantity = Number(row.quantity || 0);
+      const billRate = Number(row.bill_rate || 0);
+      const costRate = Number(row.cost_rate || 0);
+      return {
+        ...row,
+        srno: index + 1,
+        invoice_no: invoiceNo,
+        prin_code: prinCode,
+        job_no: row.job_no ?? "",
+        quantity,
+        bill_rate: billRate,
+        cost_rate: costRate,
+        bill_amount: quantity * billRate,
+        cost_amount: quantity * costRate,
+      };
+    });
 
-  const handlePrint = () => {
-    console.log("Print invoice", { company_code: user?.company_code, prin_code: prinCode, invoice_no: invoiceNo });
-  };
+    const jobSelection = jobSelectionRows.map((row) => ({
+      job_no: row.job_no,
+      act_code: row.act_code,
+      activity: row.activity,
+      invoice_no: row.invoice_no,
+      prin_code: prinCode,
+      quantity: row.quantity,
+      bill: row.bill,
+      job_date: row.job_date,
+      srno: row.srno,
+      selected: "Y",
+    }));
+
+    const storageSelection = storageLines.map((row) => ({
+      ...row,
+      act_code: "9001",
+        SELECTED: "Y",
+    }));
+
+    const storageDetailRows: TInvoiceDetail[] = storageLines.map((row: any) => ({
+      invoice_no: invoiceNo,
+      prin_code: prinCode,
+      act_code: "9001",
+      activity: row.ACTIVITY,
+      bill: row.AMOUNT,
+      cost: 0,
+      quantity: row.QTY,
+      bill_rate: row.QTY ? row.AMOUNT / row.QTY : 0,
+      cost_rate: 0,
+      job_no: "",
+    }));
+
+    const invoiceDetails: TInvoiceDetail[] = [
+      ...jobLineRows,
+      ...jobSelection,
+      ...storageDetailRows,
+    ].map((row, index) => ({
+      ...row,
+      srno: index + 1,
+    }));
+
+    const result = await updateBillingApi({
+      invoiceHeader,
+      invoiceDetails,
+      storageSelection,
+      jobSelection,
+    });
+    if (result.success) onClose(true);
+    else setWarning(result.message);
+  } catch (err) {
+    setWarning(err instanceof Error ? err.message : "Error while saving invoice.");
+  } finally {
+    setSaving(false);
+  }
+};
+
+const handlePrint = async () => {
+  if (!prinCode || !invoiceNo) return;
+  setReportOpen(true);
+  setReportHtml("");
+  setReportError("");
+  setReportLoading(true);
+  try {
+    const html = await getInvocieDetailReport(String(prinCode), String(invoiceNo));
+    setReportHtml(html);
+  } catch (err) {
+    console.error("Invoice report error:", err);
+    setReportError("Failed to load report. Please try again.");
+  } finally {
+    setReportLoading(false);
+  }
+};
+
+const handleIframePrint = () => {
+  iframeRef.current?.contentWindow?.postMessage("print", "*");
+};
+
+const closeReportDialog = () => {
+  setReportOpen(false);
+  setReportHtml("");
+  setReportError("");
+};
 
   /* ================= RENDER ================= */
   return (
@@ -517,6 +573,48 @@ const storageSelection = storageLines.map((row) => ({
           onSelect={handleStorageSelect}
         />
       )}
+      {reportOpen && (
+  <Dialog
+    open={reportOpen}
+    title="Invoice Detail Report"
+    wide
+    onClose={closeReportDialog}
+  >
+    <div className="flex flex-col" style={{ height: "75vh" }}>
+
+      {reportReady && (
+        <div className="flex shrink-0 items-center gap-2 border-b bg-muted/40 px-3 py-2">
+          <Button size="sm" variant="outline" onClick={handleIframePrint}>
+            <Printer size={13} /> Print / Save as PDF
+          </Button>
+        </div>
+      )}
+
+      {reportLoading && (
+        <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
+          <LoaderCircle size={14} className="animate-spin" />
+          Loading report…
+        </div>
+      )}
+
+      {!reportLoading && reportError && (
+        <div className="flex flex-1 items-center justify-center text-sm text-red-600">
+          {reportError}
+        </div>
+      )}
+
+      {reportReady && (
+        <iframe
+          ref={iframeRef}
+          srcDoc={reportHtml}
+          title="Invoice Detail Report"
+          className="flex-1 w-full rounded border-0"
+          style={{ minHeight: 0 }}
+        />
+      )}
+    </div>
+  </Dialog>
+)}
     </Dialog>
   );
 }
