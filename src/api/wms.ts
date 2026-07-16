@@ -991,3 +991,110 @@ export async function procBuildDynamicSqlCommonBase(params: {
   if (!response.data.success) throw new Error(response.data.message || "Unable to load data");
   return response.data.data || [];
 }
+
+// ─── Stock Count ──────────────────────────────────────────────────────────
+
+export type TStockCountHeader = {
+  prin_code: string;
+  master_count_no?: string;
+  parent_count_no?: string;
+  company_code: string;
+  count_no: string;
+  count_type?: string;
+  counted_by?: string;
+  remarks?: string;
+  prod_group_from?: string;
+  prod_group_to?: string;
+  prod_brand_from?: string;
+  prod_brand_to?: string;
+  prod_code_from?: string;
+  prod_code_to?: string;
+  site_code_from?: string;
+  site_code_to?: string;
+  from_location?: string;
+  to_location?: string;
+  aisle_from?: string | null;
+  aisle_to?: string | null;
+  col_from?: string | null;
+  col_to?: string | null;
+  height_from?: string | null;
+  height_to?: string | null;
+  user_id?: string;
+  count_date?: string;
+  amls_rep?: string;
+  amls_des?: string;
+  client_rep?: string;
+  client_des?: string;
+};
+
+export type TStockCountPrinDetail = {
+  company_code: string;
+  count_no: string;
+  prin_code: string;
+  user_id?: string;
+  user_dt?: string;
+};
+
+export type SaveStockCountPayload = {
+  headers: TStockCountHeader[];
+  details: TStockCountPrinDetail[];
+  loginid: string;
+};
+
+/** GET/POST base helpers, same pattern as getWmsStockAdjustment/postWmsStockAdjustment.
+ *  Adjust the "/api/wms/stock-count" prefix if your backend route differs. */
+export async function getWmsStockCount<T = unknown>(params: Record<string, unknown> = {}) {
+  const response = await api.get<ApiResponse<T>>("/api/wms/stock-count", { params });
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load stock count data");
+  return response.data.data as T;
+}
+
+export async function postWmsStockCount<TPayload extends Record<string, unknown>>(endpoint: string, payload: TPayload) {
+  const response = await api.post<ApiResponse<unknown>>(`/api/wms/inbound/${endpoint}`, payload);
+  if (!response.data.success) throw new Error(response.data.message || `Unable to save ${endpoint}`);
+  return response.data;
+}
+
+/**
+ * GET — principal detail rows for a given count_no (edit mode).
+ * Ported 1:1 from the old page's `STOCKCOUNT_prin_page` call via
+ * common.proc_build_dynamic_sql_common — which is the *non-"20"* variant,
+ * already exposed here as procBuildDynamicSqlCommonBase.
+ */
+export async function getStockCountPrincipals(companyCode: string, countNo: string) {
+  if (!companyCode || !countNo) return [];
+  const data = await procBuildDynamicSqlCommonBase({
+    parameter: "STOCKCOUNT_prin_page",
+    code1: companyCode,
+    code2: countNo,
+  });
+  return data || [];
+}
+
+/**
+ * POST — save stock count header + principal details.
+ * Ported from the old insUpdTcStockCountApi. On a fresh "add" (empty count_no
+ * in the header payload), the old page did a follow-up raw SQL
+ * `SELECT MAX(COUNT_NO)...` to grab the newly generated count number — that
+ * behavior is preserved here so the caller can just read `result.count_no`.
+ */
+export async function saveStockCount(payload: SaveStockCountPayload) {
+  const header = payload.headers?.[0];
+  const result = await postWmsStockCount("insUpdTcStockCountBulk", payload as unknown as Record<string, unknown>);
+
+  const isFreshAdd = !header?.count_no;
+  if (isFreshAdd && header?.company_code && payload.loginid) {
+    try {
+      const rows = await executeWmsInboundSql(
+        `SELECT MAX(COUNT_NO) as COUNT_NO FROM TC_STOCKCOUNT WHERE COMPANY_CODE = '${header.company_code.replace(/'/g, "''")}' AND USER_ID = '${payload.loginid.replace(/'/g, "''")}'`
+      );
+      const fetchedCountNo = (rows?.[0] as any)?.COUNT_NO ?? (rows?.[0] as any)?.count_no ?? "";
+      return { ...result, count_no: fetchedCountNo };
+    } catch (error) {
+      console.error("Error fetching generated count_no:", error);
+      return result;
+    }
+  }
+
+  return result;
+}
