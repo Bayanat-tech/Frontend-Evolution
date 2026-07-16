@@ -12,7 +12,7 @@ import { Badge } from "../../components/ui/Badge";
 import { CardHeader } from "../../components/ui/Card";
 import { useAuth } from "../../state/AuthContext";
 import { almsSave, almsCommonSelect } from "../../api/alms";
-import { openCapexApprovalReport } from "../../api/transactions";
+import { exportCapexApprovalExcel, openCapexApprovalReport } from "../../api/transactions";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 // TODO: move into CapexRequest-types.ts if you keep a shared types file
@@ -165,23 +165,23 @@ const handlePrint = async () => {
   // so it's easy to plug in (e.g. an XLSX export util, or a backend endpoint
   // that streams a file back).
   const handleGenerateExcel = async () => {
-    setSaving(true);
-    setNotice(null);
-    try {
-      await almsSave({
-        parameter: "Amlspf_GenerateCPExcel", // TODO: confirm actual SP / export endpoint name
-        loginid,
-        code1: companyCode,
-        code2: requestNumber,
-      });
-      setNotice({ type: "success", message: "Excel generated successfully!" });
-    } catch (err) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to generate Excel" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
+  if (!requestNumber) return;
+  setSaving(true);
+  setNotice(null);
+  try {
+    await exportCapexApprovalExcel({
+      parameter: "CapexApprovalReport",
+      loginid,
+      code1: companyCode,
+      code2: requestNumber,
+    });
+    setNotice({ type: "success", message: "Excel generated successfully!" });
+  } catch (err) {
+    setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to generate Excel" });
+  } finally {
+    setSaving(false);
+  }
+};
   // ── Details grid columns (read-only) ───────────────────────────────────────
   const itemColumns = useMemo<ColumnDef<TCPItem>[]>(
     () => [

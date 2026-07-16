@@ -613,12 +613,31 @@ export async function openAcStatementReport(params: ReportParams) {
   );
 }
 
-
+// Capex Approval Report and Excel route
 export async function openCapexApprovalReport(params: ReportParams) {
   await openReportInTab(
     "/api/finance/transactions/reports/CapexApprovalReport/html", 
     params
   );
+}
+
+export async function exportCapexApprovalExcel(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/CapexApprovalReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `CapexApproval_${params.code2 || "Report"}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 
