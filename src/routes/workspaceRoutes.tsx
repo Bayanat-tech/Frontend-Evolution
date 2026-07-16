@@ -129,8 +129,9 @@ import { AdminSupportCenterPage } from "../pages/support/AdminSupportCenterPage"
 import { SupportDeveloperAssignmentPage } from "../pages/support/SupportDeveloperAssignmentPage";
 import { SupportDeveloperWorkbenchPage } from "../pages/support/SupportDeveloperWorkbenchPage";
 import InspectionFormPage from "../pages/oxmaint/inspection-form-tailwind/inspection_form/InspectionFormMainPage";
+import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/AssetInventoryMainPage";
 
-
+import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -164,7 +165,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: 'mms asset inventory',
     match: ({pathname}) => pathname.toLowerCase().includes("/mms/mms/oxmaint/asset_inventory"),
-    element: () => <OxAssetInventoryPage />
+    element: () => <AssetInventoryMainPage />
   },
 
   {
@@ -268,8 +269,14 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   element: () => <GradeMasterPage />,
 },
 
-
-
+{
+  name: "HR Grade Master",
+  match: ({ pathname }) =>
+    pathname
+      .toLowerCase()
+      .includes("/workspace/bt-masters/hcm/general%20master/grade%20maste"),
+  element: () => <GradeMasterPage />,
+},
 
 
   {
@@ -840,6 +847,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   name: "HR Employee Education",
   match: (context) => isHrRoute(context) && isHrEmpEducationRoute(context),
   element: () => <HrEmpEducationPage />,
+},
+
+{
+  name: "Employee Information",
+  match: (context) => isHrRoute(context) && isHrEmployeeInformationRoute(context),
+  element: () => <KpiEmployeeInformationPage />,
 },
 
 {
@@ -1675,5 +1688,17 @@ function isStockAgeingVolumeRoute(pathname: string) {
     normalized.includes("/wms/reports/stock%20report/stock_ageing_volume") ||
     normalized.includes("/wms/reports/stock_report/stock_ageing_volume") ||
     normalized.includes("/wms/reports/stock-report/stock_ageing_volume")
+  );
+}
+
+
+function isHrEmployeeInformationRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+
+  return (
+    compact.includes("employeeinformation") ||
+    normalized.includes("employee_information") ||
+    normalized.includes("employee-information")
   );
 }
