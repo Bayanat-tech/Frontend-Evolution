@@ -670,6 +670,7 @@ setPutawayForm({ site_from: "", site_to: "", location_from: "", location_code: "
         if (!addForm.prod_code) { setModalNotice("Product / SKU is required."); return; }
         if (tallySubTab === "pallet") {
           if (!addForm.pallet_id)    { setModalNotice("Pallet ID is required."); return; }
+              if (String(addForm.pallet_id).length > 10) { setModalNotice("Pallet ID must be 10 characters or fewer."); return; }
           if (!addForm.container_no) { setModalNotice("Container No. is required."); return; }
         }
         if (tallySubTab === "serial" && !addForm.serial_no) { setModalNotice("Serial No. is required."); return; }
@@ -1103,7 +1104,7 @@ if (!config) return (
               <SectionHeader icon={Package} label="Pallet Information" caption="Pallet, container and product" />
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <label className="field"><span className="text-xs font-medium text-muted-foreground">Pallet ID <strong className="text-destructive">*</strong></span>
-                  <Input autoFocus value={String(addForm.pallet_id || "")} onChange={(e) => setAddForm((c) => ({ ...c, pallet_id: e.target.value }))} /></label>
+                  <Input autoFocus maxLength={10} value={String(addForm.pallet_id || "")} onChange={(e) => setAddForm((c) => ({ ...c, pallet_id: e.target.value }))} /></label>
                 <label className="field"><span className="text-xs font-medium text-muted-foreground">Container No. <strong className="text-destructive">*</strong></span>
                   <LookupField label="Container No." compact value={String(addForm.container_no || "")} displayValue={String(addForm.container_no || "")}
                     valueField={tallyContainerLp.valueField} displayFields={tallyContainerLp.displayFields}
@@ -1297,7 +1298,7 @@ if (!config) return (
               <label className="field"><span className="text-xs font-medium text-muted-foreground">Product Name</span>
                 <Input disabled value={String(addForm.prod_name || "")} className="bg-muted text-muted-foreground" /></label>
               <label className="field"><span className="text-xs font-medium text-muted-foreground">Pallet ID</span>
-                <Input value={String(addForm.pallet_id || "")} onChange={(e) => setAddForm((c) => ({ ...c, pallet_id: e.target.value }))} /></label>
+                <Input   maxLength={10} value={String(addForm.pallet_id || "")} onChange={(e) => setAddForm((c) => ({ ...c, pallet_id: e.target.value }))} /></label>
             </div>
           </div>
           <div className="grid gap-3">
@@ -2107,7 +2108,7 @@ setPutawayForm({ site_from: "", site_to: "", location_from: "", location_code: "
                   try {
                     await api.put(
                       `/api/wms/inbound/job_confirmation/${encodeURIComponent(jobNo)}?prin_code=${encodeURIComponent(prinCode)}`,
-                      { packdet_no: selectedRows.map((r) => value(r, "packdet_no")) }
+                      { packdet_no: selectedRows.map((r) => Number(value(r, "packdet_no"))) }
                     );
                     setSelectedRows([]);
                     setProcessOpen(false);

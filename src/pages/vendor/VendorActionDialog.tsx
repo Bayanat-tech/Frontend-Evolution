@@ -46,6 +46,7 @@ export function VendorActionDialog({
         CASE
           WHEN '${escapeSql(approver)}' IN (SELECT EMP_ID_LEVEL1 FROM MS_VENDOR_APPROVER) THEN 1
           WHEN '${escapeSql(approver)}' IN (SELECT EMP_ID_LEVEL2 FROM MS_VENDOR_APPROVER) THEN 2
+          WHEN '${escapeSql(approver)}' IN (SELECT EMP_ID_LEVEL3 FROM MS_VENDOR_APPROVER) THEN 3
           ELSE 0
         END
       )

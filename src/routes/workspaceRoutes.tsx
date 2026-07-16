@@ -127,9 +127,10 @@ import { GradeMasterPage } from "../pages/hr/Grademasterpage";
 import InvoicePage from "../pages/wms/invoice/InvoicePage";
 import InspectionFormPage from "../pages/oxmaint/inspection-form-tailwind/inspection_form/InspectionFormMainPage";
 import GrnSummaryReportPage from "../pages/wms/Reports/Grnsummaryreport";
+import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/AssetInventoryMainPage";
 
-
-
+import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation";
+import StockCountPage from "../pages/wms/stock count/StockCountPage";
 type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -162,7 +163,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: 'mms asset inventory',
     match: ({pathname}) => pathname.toLowerCase().includes("/mms/mms/oxmaint/asset_inventory"),
-    element: () => <OxAssetInventoryPage />
+    element: () => <AssetInventoryMainPage />
   },
 
   {
@@ -378,6 +379,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isStockTransferViewRoute(pathname),
     element: () => <StockTransferViewPage />,   
   },
+  {
+  name: "Stock Count",
+  match: ({ pathname }) => isStockCountRoute(pathname),
+  element: () => <StockCountPage />,
+},
     {
     name: "Stock Transfer",
     match: ({ pathname }) => isStockTransferRoute(pathname),
@@ -837,6 +843,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
 },
 
 {
+  name: "Employee Information",
+  match: (context) => isHrRoute(context) && isHrEmployeeInformationRoute(context),
+  element: () => <KpiEmployeeInformationPage />,
+},
+
+{
     name: "HR Payroll Account Setup",
     match: (context) => isHrRoute(context) && isHrPayrollAccountSetupRoute(context),
     element: () => <HrPayrollAccountSetupPage />,
@@ -1101,7 +1113,10 @@ function isTransactionReportRoute(pathname: string) {
   return normalized.includes("/wms/reports/stock%20report/transaction_report") ||
          normalized.includes("/wms/reports/stock%20report/transaction-report");
 }
-
+function isStockCountRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("wms/activity/stock_count") && !normalized.includes("/view/");
+}
 function isStockTransferViewRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return (
@@ -1672,5 +1687,17 @@ function isStockAgeingVolumeRoute(pathname: string) {
     normalized.includes("/wms/reports/stock%20report/stock_ageing_volume") ||
     normalized.includes("/wms/reports/stock_report/stock_ageing_volume") ||
     normalized.includes("/wms/reports/stock-report/stock_ageing_volume")
+  );
+}
+
+
+function isHrEmployeeInformationRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+
+  return (
+    compact.includes("employeeinformation") ||
+    normalized.includes("employee_information") ||
+    normalized.includes("employee-information")
   );
 }
