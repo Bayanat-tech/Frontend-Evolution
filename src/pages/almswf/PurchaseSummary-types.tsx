@@ -64,6 +64,7 @@ export interface TPRHeader {
   CREATE_DATE: string | null;
   LAST_UPDATED: string | null;
   LAST_ACTION: string | null;
+ 
 
   PO_AMOUNT: number | null;
   DOC_DATE: string | null;
@@ -77,6 +78,9 @@ export interface TPRHeader {
 
   PDO_TYPE: string | null;
   TAX_TYPE: string | null;
+  CURR_NAME: string | null;
+  TX_CAT_NAME : string | null;
+  TX_COMPNT_PERC_1: number | null;
 }
 
 export type TPRItem = {
@@ -111,13 +115,16 @@ export type TPRItem = {
 
   // === DERIVED AMOUNTS ===
   BASE_AMOUNT: number;
+  FINAL_AMOUNT: number;
 
   // === CURRENCY ===
   CURR_CODE: string;
+  CURR_NAME: string;
   CURRENCY_RATE: number;
 
   // === TAX ===
   TX_CAT_CODE: string;
+  TX_CAT_NAME: string;
   TX_COMPNTCAT_CODE_1: string;
   TX_COMPNT_PERC_1: number;
   TX_COMPNT_AMT_1: number;

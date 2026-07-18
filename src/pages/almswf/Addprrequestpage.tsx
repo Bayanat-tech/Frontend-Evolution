@@ -1,14 +1,11 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Plus, Edit2, Save, Send, X, CheckCircle,
   ChevronLeft, Paperclip, FileText, Trash2,
 } from "lucide-react";
-import type { ColumnDef } from "@tanstack/react-table";
-
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
-import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { Badge } from "../../components/ui/Badge";
@@ -54,9 +51,12 @@ function blankItem(srNo: number, requestNumber: string, companyCode: string, hdr
     AMOUNT: 0,
     LCURR_AMT: 0,
     BASE_AMOUNT: 0,
+    FINAL_AMOUNT: 0,
     CURR_CODE: hdr.CURR_CODE ?? "",
+    CURR_NAME: hdr.CURR_NAME ?? "",
     CURRENCY_RATE: hdr.CURRENCY_RATE ?? 0,
     TX_CAT_CODE: hdr.TX_CAT_CODE ?? "",
+    TX_CAT_NAME: hdr.TX_CAT_NAME ?? "",
     TX_COMPNTCAT_CODE_1: hdr.TX_COMPNTCAT_CODE_1 ?? "",
     TX_COMPNT_PERC_1: 0,
     TX_COMPNT_AMT_1: 0,
@@ -92,6 +92,19 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
 
   const disabled = isViewMode || saving;
 
+  // PDO Type mapping - Display values based on backend data
+  const PDO_TYPE_MAP: Record<string, string> = {
+    'P': 'PDO-OTO',
+    'Q': 'PDO-NON-OTO',
+    'N': 'NON-PDO'
+  };
+
+  // Helper function to get display value from data value
+  const getPdoDisplayValue = (dataValue: string | undefined | null): string => {
+    if (!dataValue) return '';
+    return PDO_TYPE_MAP[dataValue] || dataValue;
+  };
+
   // ─── Lookup Queries ───────────────────────────────────────────────
   const { data: itemCodes = [] } = useQuery<LookupItem[]>({
     queryKey: ["pr-items-lookup", companyCode],
@@ -118,6 +131,12 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     queryFn: () => almsCommonSelect({ parameter: "Amlspf_MsPsTaxCode", loginid, code1: companyCode }),
     enabled: !!companyCode,
   });
+  // NEW: currency lookup, used to correctly resolve CURR_NAME for each item by its own CURR_CODE
+  const { data: currencyList = [] } = useQuery<LookupItem[]>({
+    queryKey: ["pr-currency-lookup", companyCode],
+    queryFn: () => almsCommonSelect({ parameter: "Amlspf_MsPsCurrencyMaster", loginid, code1: companyCode }),
+    enabled: !!companyCode,
+  });
 
   // ─── Header & Items Queries ──────────────────────────────────────
   const { data: hdrList = [] } = useQuery<TPRHeader[]>({
@@ -126,7 +145,11 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     enabled: isEditMode && !!requestNumber,
   });
   useEffect(() => {
-    if (hdrList.length > 0) { setHeader(hdrList[0]); setLoading(false); }
+    if (hdrList.length > 0) {
+      const hdr = hdrList[0];
+      setHeader(hdr);
+      setLoading(false);
+    }
     else if (!isEditMode) setLoading(false);
   }, [hdrList, isEditMode]);
 
@@ -137,24 +160,34 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   });
   useEffect(() => {
     if (itemList.length === 0 || itemCodes.length === 0) return;
-    const enriched = itemList.map((row, index) => ({
+    const enriched = itemList.map((row) => ({
       ...row,
       id: (row as any).id || newId(),
-      ITEM_DESP: row.ITEM_DESP || itemCodes.find((i) => i.item_code === row.ITEM_CODE)?.item_desp || "",
-      COST_NAME: row.COST_NAME || costCodes.find((c) => c.cost_code === row.COST_CODE)?.cost_name || "",
+      ITEM_DESP: row.ITEM_DESP || itemCodes.find((i) => i.ITEM_CODE === row.ITEM_CODE)?.ITEM_DESP || "",
+      COST_NAME: row.COST_NAME || costCodes.find((c) => c.COST_CODE === row.COST_CODE)?.COST_NAME || "",
+      SUPPLIER_NAME: (row as any).SUPPLIER_NAME || supplierList.find((s) => s.SUPPLIER_CODE === row.SUPPLIER)?.SUPPLIER_NAME || "",
+      TX_CAT_NAME: (row as any).TX_CAT_NAME || taxCodes.find((t) => t.TX_CAT_CODE === row.TX_CAT_CODE)?.TX_CAT_NAME || "",
+      // FIX: resolve CURR_NAME from the item's OWN CURR_CODE via currencyList,
+      // instead of blindly falling back to header.CURR_NAME (was causing
+      // "OMR - UAE DIRHAM" style mismatches).
+      CURR_NAME: (row as any).CURR_NAME || currencyList.find((c) => c.CURR_CODE === row.CURR_CODE)?.CURR_NAME || "",
       BASE_AMOUNT: num(row.AMOUNT) * num(row.CURRENCY_RATE || header.CURRENCY_RATE || 1),
+      FINAL_AMOUNT: (num(row.AMOUNT) * num(row.CURRENCY_RATE || header.CURRENCY_RATE || 1)) + num(row.TX_COMPNT_AMT_1),
     }));
-    // Reassign SRNO based on array position
     const renumbered = enriched.map((item, idx) => ({ ...item, ITEM_SRNO: idx + 1 }));
     setItems(renumbered);
     setLoading(false);
-  }, [itemList, itemCodes, costCodes, header.CURRENCY_RATE]);
+    // NOTE: header.CURR_NAME removed from deps on purpose — CURR_NAME is now
+    // resolved from the item's own CURR_CODE via currencyList, not copied from header.
+  }, [itemList, itemCodes, costCodes, supplierList, taxCodes, currencyList, header.CURRENCY_RATE]);
 
   const setHdr = (field: keyof TPRHeader, value: unknown) => setHeader((prev) => ({ ...prev, [field]: value }));
 
   const totalAmount = items.reduce((s, r) => s + num(r.AMOUNT), 0);
   const totalTax = items.reduce((s, r) => s + num(r.TX_COMPNT_AMT_1), 0);
   const totalBase = items.reduce((s, r) => s + num(r.BASE_AMOUNT), 0);
+  const totalFinalAmount = items.reduce((s, r) => s + num(r.FINAL_AMOUNT), 0);
+  const [headerExpanded, setHeaderExpanded] = useState(true);
 
   // ─── Save Functions ───────────────────────────────────────────────
   const saveHeader = async (status: string) => almsSave({
@@ -266,21 +299,53 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     } finally { setSaving(false); }
   };
 
+  // ─── Update all items with header values ──────────────────────
+  // FIX: accepts optional overrides so callers can pass freshly-selected
+  // values immediately (avoids stale-closure bug where `header` state hasn't
+  // updated yet right after setHdr() calls in the same event handler).
+  const updateAllItemsWithHeader = (overrides: Partial<TPRHeader> = {}) => {
+    const hdr = { ...header, ...overrides };
+    setItems((prev) =>
+      prev.map((item) => ({
+        ...item,
+        CURR_CODE: hdr.CURR_CODE || item.CURR_CODE || "",
+        CURR_NAME: hdr.CURR_NAME || item.CURR_NAME || "",
+        CURRENCY_RATE: hdr.CURRENCY_RATE || item.CURRENCY_RATE || 1,
+        TX_CAT_CODE: hdr.TX_CAT_CODE || item.TX_CAT_CODE || "",
+        TX_CAT_NAME: hdr.TX_CAT_NAME || item.TX_CAT_NAME || "",
+        TX_COMPNTCAT_CODE_1: hdr.TX_COMPNTCAT_CODE_1 || item.TX_COMPNTCAT_CODE_1 || "",
+        TX_COMPNT_PERC_1: hdr.TX_COMPNT_PERC_1 || item.TX_COMPNT_PERC_1 || 0,
+        BASE_AMOUNT: num(item.AMOUNT) * num(hdr.CURRENCY_RATE || item.CURRENCY_RATE || 1),
+        TX_COMPNT_AMT_1: (num(item.AMOUNT) * num(hdr.TX_COMPNT_PERC_1 || item.TX_COMPNT_PERC_1 || 0)) / 100,
+        FINAL_AMOUNT: (num(item.AMOUNT) * num(hdr.CURRENCY_RATE || item.CURRENCY_RATE || 1)) +
+                     ((num(item.AMOUNT) * num(hdr.TX_COMPNT_PERC_1 || item.TX_COMPNT_PERC_1 || 0)) / 100),
+      }))
+    );
+  };
+
   // ─── Inline Item Functions ────────────────────────────────────────
   const addItemLine = () => {
     const srNo = items.length + 1;
     const blank = blankItem(srNo, requestNumber ?? "", companyCode, header);
+    // Override with header values
+    blank.CURR_CODE = header.CURR_CODE || "";
+    blank.CURR_NAME = header.CURR_NAME || "";
+    blank.CURRENCY_RATE = header.CURRENCY_RATE || 1;
+    blank.TX_CAT_CODE = header.TX_CAT_CODE || "";
+    blank.TX_CAT_NAME = header.TX_CAT_NAME || "";
+    blank.TX_COMPNTCAT_CODE_1 = header.TX_COMPNTCAT_CODE_1 || "";
+    blank.TX_COMPNT_PERC_1 = header.TX_COMPNT_PERC_1 || 0;
     (blank as any).id = newId();
     setItems([...items, blank]);
   };
 
   const removeItem = (id: string) => {
     const updated = items.filter((item) => (item as any).id !== id);
-    // Reassign SRNO
     const renumbered = updated.map((item, idx) => ({ ...item, ITEM_SRNO: idx + 1 }));
     setItems(renumbered);
   };
 
+  // Update item field with recalculations
   const updateItemField = (id: string, field: keyof TPRItem, value: unknown) => {
     setItems((prev) => {
       const index = prev.findIndex((item) => (item as any).id === id);
@@ -297,24 +362,37 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
         item.AMOUNT = item.FINAL_RATE * qty;
         item.BASE_AMOUNT = item.AMOUNT * num(item.CURRENCY_RATE);
         item.TX_COMPNT_AMT_1 = (item.AMOUNT * num(item.TX_COMPNT_PERC_1)) / 100;
+        item.FINAL_AMOUNT = item.BASE_AMOUNT + item.TX_COMPNT_AMT_1;
       }
       if (field === "ALLOCATED_APPROVED_QUANTITY") {
         const qty = num(value);
         item.AMOUNT = num(item.FINAL_RATE) * qty;
         item.BASE_AMOUNT = item.AMOUNT * num(item.CURRENCY_RATE);
         item.TX_COMPNT_AMT_1 = (item.AMOUNT * num(item.TX_COMPNT_PERC_1)) / 100;
+        item.FINAL_AMOUNT = item.BASE_AMOUNT + item.TX_COMPNT_AMT_1;
       }
       if (field === "CURRENCY_RATE") {
-        item.BASE_AMOUNT = num(item.AMOUNT) * num(value);
+        const rate = num(value);
+        item.CURRENCY_RATE = rate;
+        item.BASE_AMOUNT = num(item.AMOUNT) * rate;
+        item.TX_COMPNT_AMT_1 = (num(item.AMOUNT) * num(item.TX_COMPNT_PERC_1)) / 100;
+        item.FINAL_AMOUNT = item.BASE_AMOUNT + item.TX_COMPNT_AMT_1;
       }
       if (field === "TX_COMPNT_PERC_1") {
-        item.TX_COMPNT_AMT_1 = (num(item.AMOUNT) * num(value)) / 100;
+        const perc = num(value);
+        item.TX_COMPNT_PERC_1 = perc;
+        item.TX_COMPNT_AMT_1 = (num(item.AMOUNT) * perc) / 100;
+        item.FINAL_AMOUNT = item.BASE_AMOUNT + item.TX_COMPNT_AMT_1;
       }
       if (field === "TX_CAT_CODE" && typeof value === 'string') {
         const found = taxCodes.find((t) => t.tx_cat_code === value);
         if (found) {
+          item.TX_CAT_CODE = value;
+          item.TX_CAT_NAME = found.tx_cat_name || "";
           item.TX_COMPNTCAT_CODE_1 = found.tx_compntcat_code_1 || "";
           item.TX_COMPNT_PERC_1 = found.tx_compnt_perc_1 || 0;
+          item.TX_COMPNT_AMT_1 = (num(item.AMOUNT) * num(item.TX_COMPNT_PERC_1)) / 100;
+          item.FINAL_AMOUNT = item.BASE_AMOUNT + item.TX_COMPNT_AMT_1;
         }
       }
 
@@ -339,16 +417,16 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     { field: "tx_compntcat_name", header: "Name" },
   ];
   const itemCodeColumns = [
-    { field: "item_code", header: "Code" },
-    { field: "item_desp", header: "Description" },
+    { field: "ITEM_CODE", header: "Code" },
+    { field: "ITEM_DESP", header: "Description" },
   ];
   const costCodeColumns = [
-    { field: "cost_code", header: "Code" },
-    { field: "cost_name", header: "Name" },
+    { field: "COST_CODE", header: "Code" },
+    { field: "COST_NAME", header: "Name" },
   ];
   const supplierColumns = [
-    { field: "supplier_code", header: "Code" },
-    { field: "supplier_name", header: "Name" },
+    { field: "SUPPLIER_CODE", header: "Code" },
+    { field: "SUPPLIER_NAME", header: "Name" },
   ];
   const taxTypeColumns = [
     { field: "TX_TYPE_CODE", header: "Code" },
@@ -405,65 +483,301 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
               <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
               {/* ─── Header Section ─── */}
-              <div className="rounded-md border bg-card">
-                <div className="border-b bg-secondary/40 px-3 py-1.5">
-                  <p className="eyebrow m-0">Header</p>
-                  <h3 className="m-0 text-sm font-semibold leading-tight">Request Information</h3>
+              <div className="rounded-md border bg-card overflow-hidden">
+                <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
+                  <div>
+                    <p className="eyebrow m-0">Header</p>
+                    <h3 className="m-0 text-sm font-semibold leading-tight">Request Information</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setHeaderExpanded((v) => !v)}
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    {headerExpanded ? "Compact header" : "Full header"}
+                  </button>
                 </div>
-                <div className="payment-header-grid grid grid-cols-6 gap-2.5 p-3 max-2xl:grid-cols-4 max-xl:grid-cols-3 max-lg:grid-cols-2 max-md:grid-cols-1">
-                  <label className="field">
-                    <span>Request Date</span>
-                    <Input disabled={disabled} type="date" value={header.REQUEST_DATE ? String(header.REQUEST_DATE).slice(0, 10) : ""} onChange={(e) => setHdr("REQUEST_DATE", e.target.value)} />
-                  </label>
-                  <label className="field">
-                    <span>POD Type *</span>
-                    <Input disabled={disabled} value={String(header.PDO_TYPE || "")} onChange={(e) => setHdr("PDO_TYPE", e.target.value)} placeholder="POD type" />
-                  </label>
-                  <label className="field">
-                    <span>Creator</span>
-                    <Input disabled={disabled} value={String(header.CREATE_USER || "")} onChange={(e) => setHdr("CREATE_USER", e.target.value)} placeholder="Creator" />
-                  </label>
-                  <label className="field">
-                    <span>Creation Date</span>
-                    <Input disabled={disabled} type="date" value={header.CREATE_DATE ? String(header.CREATE_DATE).slice(0, 10) : ""} onChange={(e) => setHdr("CREATE_DATE", e.target.value)} />
-                  </label>
-                  <label className="field">
-                    <span>Currency *</span>
-                    <Input disabled={disabled} value={String(header.CURR_CODE || "")} onChange={(e) => setHdr("CURR_CODE", e.target.value)} placeholder="e.g. AED" />
-                  </label>
-                  <label className="field">
-                    <span>Exchange Rate</span>
-                    <Input disabled={disabled} type="number" step="0.0001" value={header.CURRENCY_RATE ?? ""} onChange={(e) => setHdr("CURRENCY_RATE", Number(e.target.value))} />
-                  </label>
-                  <label className="field">
-                    <span>Tax Category</span>
-                    <Input disabled={disabled} value={String(header.TX_CAT_CODE || "")} onChange={(e) => setHdr("TX_CAT_CODE", e.target.value)} />
-                  </label>
-                  <label className="field">
-                    <span>Tax Code</span>
-                    <Input disabled={disabled} value={String(header.TX_COMPNTCAT_CODE_1 || "")} onChange={(e) => setHdr("TX_COMPNTCAT_CODE_1", e.target.value)} />
-                  </label>
-                  <LookupField
-                    label="Tax Type"
-                    value={String(header.TAX_TYPE || "")}
-                    displayValue={header.TAX_TYPE || ""}
-                    columns={taxTypeColumns}
-                    valueField="TX_TYPE_CODE"
-                    displayFields={["TX_TYPE_CODE", "TX_TYPE_NAME"]}
-                    loadOptions={() => almsCommonSelect({ parameter: "Amlspf_MsTaxType", loginid, code1: companyCode })}
-                    onChange={(val) => setHdr("TAX_TYPE", val)}
-                    disabled={disabled}
-                  />
 
-                  <label className="field col-span-3 max-lg:col-span-2 max-md:col-span-1">
-                    <span>Description / Reason</span>
-                    <Input disabled={disabled} value={String(header.DESCRIPTION || "")} onChange={(e) => setHdr("DESCRIPTION", e.target.value)} />
-                  </label>
-                  <label className="field col-span-3 max-lg:col-span-2 max-md:col-span-1">
-                    <span>Remarks *</span>
-                    <Input disabled={disabled} value={String(header.REMARKS || "")} onChange={(e) => setHdr("REMARKS", e.target.value)} />
-                  </label>
-                </div>
+                {headerExpanded ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 p-3 items-start">
+                    {/* ── DOCUMENT box ── */}
+                    <div className="rounded-md border">
+                      <div className="border-b bg-muted/40 px-3 py-1.5">
+                        <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Document</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 p-3">
+                        <div className="col-span-1">
+                          <label className="field">
+                            <span>Doc No</span>
+                            <Input disabled value={requestNumber || "New"} className="bg-muted/30 w-full" />
+                          </label>
+                        </div>
+                        <div className="col-span-1">
+                          <label className="field">
+                            <span>Creator</span>
+                            <Input
+                              disabled={disabled}
+                              value={String(header.CREATE_USER || "")}
+                              onChange={(e) => setHdr("CREATE_USER", e.target.value)}
+                              placeholder="Creator"
+                              className="w-full"
+                            />
+                          </label>
+                        </div>
+                        <div className="col-span-1">
+                          <label className="field">
+                            <span>POD Type *</span>
+                            <Input
+                              disabled={true}
+                              value={getPdoDisplayValue(header.PDO_TYPE)}
+                              placeholder="POD type"
+                              className="w-full bg-muted/50"
+                            />
+                          </label>
+                        </div>
+                        <div className="col-span-1">
+                          <label className="field">
+                            <span>Request Date</span>
+                            <Input
+                              disabled={disabled}
+                              type="date"
+                              value={header.REQUEST_DATE ? String(header.REQUEST_DATE).slice(0, 10) : ""}
+                              onChange={(e) => setHdr("REQUEST_DATE", e.target.value)}
+                              className="w-full"
+                            />
+                          </label>
+                        </div>
+                        <div className="col-span-1">
+                          <label className="field">
+                            <span>Creation Date</span>
+                            <Input
+                              disabled={disabled}
+                              type="date"
+                              value={header.CREATE_DATE ? String(header.CREATE_DATE).slice(0, 10) : ""}
+                              onChange={(e) => setHdr("CREATE_DATE", e.target.value)}
+                              className="w-full"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ── CURRENCY & TAX box ── */}
+                    <div className="rounded-md border">
+                      <div className="border-b bg-muted/40 px-3 py-1.5">
+                        <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Currency &amp; Tax</p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3 p-3">
+                        <div className="col-span-2">
+                          <label className="field">
+                            <span>Currency *</span>
+                            <div className="w-full">
+                              <LookupField
+                                label=""
+                                compact
+                                placeholder="Search Currency"
+                                value={header.CURR_CODE || ""}
+                                displayValue={
+                                  header.CURR_CODE && header.CURR_NAME
+                                    ? `${header.CURR_CODE} - ${header.CURR_NAME}`
+                                    : header.CURR_CODE || ""
+                                }
+                                columns={[
+                                  { field: "CURR_CODE", header: "Code" },
+                                  { field: "CURR_NAME", header: "Name" },
+                                  { field: "EX_RATE", header: "Ex Rate" }
+                                ]}
+                                valueField="CURR_CODE"
+                                displayFields={["CURR_CODE", "CURR_NAME", "EX_RATE"]}
+                                loadOptions={() => almsCommonSelect({
+                                  parameter: "Amlspf_MsPsCurrencyMaster",
+                                  loginid,
+                                  code1: companyCode
+                                })}
+                                onChange={(value, row) => {
+                                  const currName = String(row?.CURR_NAME || row?.curr_name || "");
+                                  const exRate = Number(row?.EX_RATE || row?.ex_rate || header.CURRENCY_RATE || 1);
+
+                                  setHdr("CURR_CODE", value);
+                                  setHdr("CURR_NAME", currName);
+                                  setHdr("CURRENCY_RATE", exRate);
+
+                                  // FIX: pass fresh values directly instead of relying on
+                                  // `header` state, which hasn't updated yet at this point
+                                  // (stale closure was causing old currency to show in items).
+                                  updateAllItemsWithHeader({
+                                    CURR_CODE: value,
+                                    CURR_NAME: currName,
+                                    CURRENCY_RATE: exRate,
+                                  });
+                                }}
+                                disabled={disabled}
+                              />
+                            </div>
+                          </label>
+                        </div>
+                        <div className="col-span-1">
+                          <label className="field">
+                            <span>Exchange Rate</span>
+                            <Input
+                              disabled={disabled}
+                              type="number"
+                              step="0.0001"
+                              value={header.CURRENCY_RATE ?? ""}
+                              onChange={(e) => {
+                                const rate = Number(e.target.value);
+                                setHdr("CURRENCY_RATE", rate);
+                                // Update all items with new rate
+                                setItems((prev) =>
+                                  prev.map((item) => ({
+                                    ...item,
+                                    CURRENCY_RATE: rate,
+                                    BASE_AMOUNT: num(item.AMOUNT) * rate,
+                                    FINAL_AMOUNT: (num(item.AMOUNT) * rate) + num(item.TX_COMPNT_AMT_1),
+                                  }))
+                                );
+                              }}
+                              className="w-full"
+                            />
+                          </label>
+                        </div>
+
+                        <div className="col-span-2">
+                          <label className="field">
+                            <span>Tax Category</span>
+                            <div className="w-full">
+                              <LookupField
+                                label=""
+                                compact
+                                placeholder="Search Tax Category"
+                                value={header.TX_CAT_CODE || ""}
+                                displayValue={
+                                  header.TX_CAT_CODE && header.TX_CAT_NAME
+                                    ? `${header.TX_CAT_CODE} - ${header.TX_CAT_NAME}`
+                                    : header.TX_CAT_CODE || ""
+                                }
+                                columns={[
+                                  { field: "TX_CAT_CODE", header: "Code" },
+                                  { field: "TX_CAT_NAME", header: "Name" },
+                                  { field: "TX_COMPNTCAT_CODE_1", header: "Tax Code" },
+                                  { field: "TX_COMPNT_PERC_1", header: "Tax %" }
+                                ]}
+                                valueField="TX_CAT_CODE"
+                                displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]}
+                                loadOptions={() => almsCommonSelect({
+                                  parameter: "Amlspf_MsPsTaxCategory",
+                                  loginid,
+                                  code1: companyCode
+                                })}
+                                onChange={(val, row) => {
+                                  if (row) {
+                                    const taxCode = String(row.TX_COMPNTCAT_CODE_1 || "");
+                                    const taxPercent = Number(row.TX_COMPNT_PERC_1) || 0;
+                                    const taxName = String(row.TX_CAT_NAME || "");
+
+                                    setHdr("TX_CAT_CODE", val);
+                                    setHdr("TX_CAT_NAME", taxName);
+                                    setHdr("TX_COMPNTCAT_CODE_1", taxCode);
+                                    setHdr("TX_COMPNT_PERC_1", taxPercent);
+
+                                    // FIX: same stale-closure fix — pass fresh values directly.
+                                    updateAllItemsWithHeader({
+                                      TX_CAT_CODE: val,
+                                      TX_CAT_NAME: taxName,
+                                      TX_COMPNTCAT_CODE_1: taxCode,
+                                      TX_COMPNT_PERC_1: taxPercent,
+                                    });
+                                  }
+                                }}
+                                disabled={disabled}
+                              />
+                            </div>
+                          </label>
+                        </div>
+                        <div className="col-span-1">
+                          <label className="field">
+                            <span>Tax Code</span>
+                            <Input
+                              disabled={disabled}
+                              value={String(header.TX_COMPNTCAT_CODE_1 || "")}
+                              onChange={(e) => setHdr("TX_COMPNTCAT_CODE_1", e.target.value)}
+                              className="w-full"
+                            />
+                          </label>
+                        </div>
+                        <div className="col-span-1">
+                          <label className="field">
+                            <span>Tax Type</span>
+                            <Select
+                              value={String(header.TAX_TYPE || "N")}
+                              disabled={disabled}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                const perc = v === "S" ? 5 : 0;
+                                setHdr("TAX_TYPE", v);
+                                setItems((prev) =>
+                                  prev.map((item) => ({
+                                    ...item,
+                                    TAX_TYPE: v,
+                                    TX_COMPNT_PERC_1: perc,
+                                    TX_COMPNT_AMT_1: (num(item.AMOUNT) * perc) / 100,
+                                    FINAL_AMOUNT: num(item.BASE_AMOUNT) + ((num(item.AMOUNT) * perc) / 100),
+                                  }))
+                                );
+                              }}
+                              className="w-full"
+                            >
+                              <option value="S">YES</option>
+                              <option value="N">No</option>
+                            </Select>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ── REMARKS box ── */}
+                    <div className="rounded-md border w-full lg:col-span-2">
+                      <div className="border-b bg-muted/40 px-3 py-1.5">
+                        <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Description &amp; Remarks</p>
+                      </div>
+                      <div className="flex flex-col gap-2.5 p-3">
+                        <label className="field">
+                          <span>Description / Reason</span>
+                          <Input
+                            disabled={disabled}
+                            value={String(header.DESCRIPTION || "")}
+                            onChange={(e) => setHdr("DESCRIPTION", e.target.value)}
+                          />
+                        </label>
+                        <label className="field">
+                          <span>Remarks *</span>
+                          <Input
+                            disabled={disabled}
+                            value={String(header.REMARKS || "")}
+                            onChange={(e) => setHdr("REMARKS", e.target.value)}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-3 py-2 text-sm text-muted-foreground">
+                    <span>
+                      <strong className="text-foreground">Doc No:</strong> {requestNumber || "New"}
+                    </span>
+                    <span>
+                      <strong className="text-foreground">Currency:</strong> {header.CURR_CODE || "—"}
+                    </span>
+                    {(header as any).purch_status && (
+                      <span>
+                        <strong className="text-foreground">Status:</strong> {(header as any).purch_status}
+                      </span>
+                    )}
+                    <span>
+                      <strong className="text-foreground">Remarks:</strong> {header.REMARKS || "—"}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* ─── Items Section ─── */}
@@ -481,97 +795,69 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                 </div>
 
                 {/* ─── Detail Table ─── */}
-                <div className="commercial-lines-scroll max-h-[43vh] overflow-auto">
+                <div
+                  className="commercial-lines-scroll overflow-x-auto overflow-y-auto"
+                  style={{
+                    minHeight: 0,
+                    height: "fit-content",
+                    maxHeight: "calc(100vh - 360px)"
+                  }}
+                >
                   <div className="relative">
-                    <table className="finance-lines-table w-full min-w-[2000px] text-sm">
+                    <table className="finance-lines-table w-full min-w-[2400px] text-[12px]">
                       <thead className="sticky top-0 z-10 bg-primary text-xs text-primary-foreground">
                         <tr>
-                          {/* Fixed columns - No and Item */}
-                          <th className="sticky left-0 z-20 bg-primary px-2 py-2 text-center w-[45px] min-w-[45px] max-w-[45px]">
-                            No
-                          </th>
-                          <th className="sticky left-[45px] z-20 bg-primary px-2 py-2 text-left w-[350px] min-w-[350px] max-w-[350px]">
-                            Item
-                          </th>
-
-                          {/* Scrollable columns */}
-                          <th className="px-2 py-2 text-left w-[280px] min-w-[280px] max-w-[280px]">
-                            Cost Code
-                          </th>
-                          <th className="px-2 py-2 text-center w-[80px] min-w-[80px] max-w-[80px]">
-                            Req Qty
-                          </th>
-                          <th className="px-2 py-2 text-center w-[80px] min-w-[80px] max-w-[80px]">
-                            Appr Qty
-                          </th>
-                          <th className="px-2 py-2 text-right w-[90px] min-w-[90px] max-w-[90px]">
-                            Rate
-                          </th>
-                          <th className="px-2 py-2 text-center w-[75px] min-w-[75px] max-w-[75px]">
-                            Currency
-                          </th>
-                          <th className="px-2 py-2 text-right w-[80px] min-w-[80px] max-w-[80px]">
-                            Ex Rate
-                          </th>
-                          <th className="px-2 py-2 text-left w-[250px] min-w-[250px] max-w-[250px]">
-                            Supplier
-                          </th>
-                          <th className="finance-amount-cell px-2 py-2 text-right w-[100px] min-w-[100px] max-w-[100px]">
-                            Amount
-                          </th>
-                          <th className="finance-amount-cell px-2 py-2 text-right w-[100px] min-w-[100px] max-w-[100px]">
-                            Base Amt
-                          </th>
-                          <th className="px-2 py-2 text-center w-[100px] min-w-[100px] max-w-[100px]">
-                            Tax Code
-                          </th>
-                          <th className="px-2 py-2 text-left w-[280px] min-w-[280px] max-w-[280px]">
-                            Tax Category
-                          </th>
-                          <th className="px-2 py-2 text-right w-[65px] min-w-[65px] max-w-[65px]">
-                            Tax %
-                          </th>
-                          <th className="finance-amount-cell px-2 py-2 text-right w-[90px] min-w-[90px] max-w-[90px]">
-                            Tax Amt
-                          </th>
-                          <th className="px-2 py-2 text-center w-[90px] min-w-[90px] max-w-[90px]">
-                            Tax Type
-                          </th>
-                          <th className="px-2 py-2 text-right w-[90px] min-w-[90px] max-w-[90px]">
-                            Discount
-                          </th>
-                          <th className="px-2 py-2 text-right w-[90px] min-w-[90px] max-w-[90px]">
-                            Final Rate
-                          </th>
-                          <th className="px-2 py-2 text-center w-[95px] min-w-[95px] max-w-[95px]">
-                            Capex
-                          </th>
-                          <th className="px-2 py-2 text-center w-[55px] min-w-[55px] max-w-[55px]">
-                            Action
-                          </th>
+                          <th className="sticky left-0 z-20 bg-primary px-2 py-2 text-center w-[45px] min-w-[45px] max-w-[45px]">No</th>
+                          <th className="sticky left-[45px] z-20 bg-primary px-2 py-2 text-left w-[350px] min-w-[630px] max-w-[350px]">Item</th>
+                          <th className="px-2 py-2 text-left w-[280px] min-w-[300px] max-w-[280px]">Cost Code</th>
+                          <th className="px-2 py-2 text-center w-[80px] min-w-[120px] max-w-[80px]">Req Qty</th>
+                          <th className="px-2 py-2 text-center w-[80px] min-w-[120px] max-w-[80px]">Appr Qty</th>
+                          <th className="px-2 py-2 text-right w-[90px] min-w-[120px] max-w-[90px]">Rate</th>
+                          <th className="px-2 py-2 text-center w-[75px] min-w-[150px] max-w-[75px]">Currency</th>
+                          <th className="px-2 py-2 text-right w-[80px] min-w-[100px] max-w-[80px]">Ex Rate</th>
+                          <th className="px-2 py-2 text-left w-[250px] min-w-[480px] max-w-[250px]">Supplier</th>
+                          <th className="finance-amount-cell px-2 py-2 text-right w-[100px] min-w-[100px] max-w-[100px]">Amount</th>
+                          <th className="finance-amount-cell px-2 py-2 text-right w-[100px] min-w-[100px] max-w-[100px]">Base Amt</th>
+                          <th className="px-2 py-2 text-center w-[100px] min-w-[100px] max-w-[100px]">Tax Code</th>
+                          <th className="px-2 py-2 text-left w-[280px] min-w-[280px] max-w-[280px]">Tax Category</th>
+                          <th className="px-2 py-2 text-right w-[65px] min-w-[95px] max-w-[65px]">Tax %</th>
+                          <th className="finance-amount-cell px-2 py-2 text-right w-[90px] min-w-[90px] max-w-[90px]">Tax Amt</th>
+                          <th className="px-2 py-2 text-center w-[90px] min-w-[150px] max-w-[90px]">Tax Type</th>
+                          <th className="px-2 py-2 text-right w-[90px] min-w-[120px] max-w-[90px]">Discount</th>
+                          <th className="px-2 py-2 text-right w-[90px] min-w-[90px] max-w-[90px]">Final Rate</th>
+                          <th className="finance-amount-cell px-2 py-2 text-right w-[100px] min-w-[100px] max-w-[100px] font-bold bg-primary text-primary-foreground">Final Amt</th>
+                          <th className="px-2 py-2 text-center w-[95px] min-w-[95px] max-w-[95px]">Capex</th>
+                          <th className="px-2 py-2 text-center w-[55px] min-w-[55px] max-w-[55px]">Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {items.length === 0 ? (
-                          <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={20}>No items yet. Click "Add Line" to add items.</td></tr>
-                        ) : items.map((item, index) => {
+                          <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={21}>No items yet. Click "Add Line" to add items.</td></tr>
+                        ) : items.map((item) => {
                           const itemId = (item as any).id || String(item.ITEM_SRNO);
-                          
-                          // ─── Proper display values with Code - Description ───
-                          const itemDisplay = item.ITEM_CODE && item.ITEM_DESP 
-                            ? `${item.ITEM_CODE} - ${item.ITEM_DESP}` 
+
+                          const itemDisplay = item.ITEM_CODE && item.ITEM_DESP
+                            ? `${item.ITEM_CODE} - ${item.ITEM_DESP}`
                             : (item.ITEM_CODE || "");
-                            
-                          const costDisplay = item.COST_CODE && item.COST_NAME 
-                            ? `${item.COST_CODE} - ${item.COST_NAME}` 
+
+                          const costDisplay = item.COST_CODE && item.COST_NAME
+                            ? `${item.COST_CODE} - ${item.COST_NAME}`
                             : (item.COST_CODE || "");
-                            
-                          const supplierDisplay = item.SUPPLIER || "";
-                          const taxCategoryDisplay = item.TX_CAT_CODE || "";
-                          
+
+                          const supplierDisplay = item.SUPPLIER && item.SUPPLIER_NAME
+                            ? `${item.SUPPLIER} - ${item.SUPPLIER_NAME}`
+                            : (item.SUPPLIER || "");
+
+                          const taxCategoryDisplay = item.TX_CAT_CODE && (item as any).TX_CAT_NAME
+                            ? `${item.TX_CAT_CODE} - ${(item as any).TX_CAT_NAME}`
+                            : (item.TX_CAT_CODE || "");
+
+                          const currencyDisplay = item.CURR_CODE && (item as any).CURR_NAME
+                            ? `${item.CURR_CODE} - ${(item as any).CURR_NAME}`
+                            : (item.CURR_CODE || "");
+
                           return (
                             <tr className="border-t odd:bg-muted/20 hover:bg-muted/40" key={itemId}>
-                              {/* Fixed columns */}
                               <td className="sticky left-0 z-10 bg-background px-2 py-1 text-xs text-center w-[45px] min-w-[45px] max-w-[45px]">
                                 {item.ITEM_SRNO}
                               </td>
@@ -589,14 +875,12 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                                   onChange={(val, row) => {
                                     updateItemField(itemId, "ITEM_CODE", val);
                                     if (row) {
-                                      updateItemField(itemId, "ITEM_DESP", row.ITEM_DESP || "");
+                                      updateItemField(itemId, "ITEM_DESP", row.item_desp ?? row.ITEM_DESP ?? "");
                                     }
                                   }}
                                   disabled={disabled}
                                 />
                               </td>
-
-                              {/* Scrollable columns */}
                               <td className="px-2 py-1 w-[280px] min-w-[280px] max-w-[280px]">
                                 <LookupField
                                   label=""
@@ -611,7 +895,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                                   onChange={(val, row) => {
                                     updateItemField(itemId, "COST_CODE", val);
                                     if (row) {
-                                      updateItemField(itemId, "COST_NAME", row.COST_NAME || "");
+                                      updateItemField(itemId, "COST_NAME", row.cost_name ?? row.COST_NAME ?? "");
                                     }
                                   }}
                                   disabled={disabled}
@@ -652,8 +936,16 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                               </td>
                               <td className="px-2 py-1 w-[75px] min-w-[75px] max-w-[75px]">
                                 <Input
-                                  value={item.CURR_CODE || header.CURR_CODE || "AED"}
-                                  onChange={(e) => updateItemField(itemId, "CURR_CODE", e.target.value)}
+                                  value={currencyDisplay}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    const code = val.split(" - ")[0] || val;
+                                    updateItemField(itemId, "CURR_CODE", code);
+                                    const name = val.split(" - ")[1] || "";
+                                    if (name) {
+                                      updateItemField(itemId, "CURR_NAME", name);
+                                    }
+                                  }}
                                   disabled={disabled}
                                   className="h-9 text-center text-sm"
                                 />
@@ -681,9 +973,10 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                                   displayFields={["supplier_code", "supplier_name"]}
                                   loadOptions={() => almsCommonSelect({ parameter: "Amlspf_MsPsSupplierMaster", loginid, code1: companyCode })}
                                   onChange={(val, row) => {
-                                    updateItemField(itemId, "SUPPLIER_CODE", val);
+                                    updateItemField(itemId, "SUPPLIER", val);
                                     if (row) {
-                                      updateItemField(itemId, "SUPPLIER_NAME", row.SUPPLIER_NAME || "");
+                                      updateItemField(itemId, "SUPPLIER_NAME", row.supplier_name ?? row.SUPPLIER_NAME ?? "");
+                                      updateItemField(itemId, "SUPPLIER_CODE", row.supplier_code ?? val);
                                     }
                                   }}
                                   disabled={disabled}
@@ -717,6 +1010,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                                   onChange={(val, row) => {
                                     updateItemField(itemId, "TX_CAT_CODE", val);
                                     if (row) {
+                                      updateItemField(itemId, "TX_CAT_NAME", row.TX_CAT_NAME || "");
                                       updateItemField(itemId, "TX_COMPNTCAT_CODE_1", row.TX_COMPNTCAT_CODE_1 || "");
                                       updateItemField(itemId, "TX_COMPNT_PERC_1", row.TX_COMPNT_PERC_1 || 0);
                                     }
@@ -767,6 +1061,9 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                               <td className="px-2 py-1 text-right w-[90px] min-w-[90px] max-w-[90px]">
                                 {fmt3(item.FINAL_RATE)}
                               </td>
+                              <td className="finance-amount-cell px-2 py-1 text-right font-bold w-[100px] min-w-[100px] max-w-[100px] bg-green-50">
+                                {fmt3(item.FINAL_AMOUNT || 0)}
+                              </td>
                               <td className="px-2 py-1 w-[95px] min-w-[95px] max-w-[95px]">
                                 <Select
                                   className="h-9 text-sm"
@@ -804,16 +1101,16 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
 
                 {/* ─── Summary ─── */}
                 <div className="flex items-center justify-end gap-8 border-t px-3 py-1.5 text-sm">
-                  <span className="text-muted-foreground">Amount</span>
-                  <strong className="text-primary">{fmt3(totalAmount)}</strong>
+                  <span className="text-muted-foreground">Base Amount</span>
+                  <strong className="text-primary">{fmt3(totalBase)}</strong>
                 </div>
                 <div className="flex items-center justify-end gap-8 px-3 py-1.5 text-sm">
                   <span className="text-muted-foreground">Tax</span>
                   <strong className="text-primary">{fmt3(totalTax)}</strong>
                 </div>
-                <div className="flex items-center justify-end gap-8 border-t px-3 py-1.5 text-sm">
-                  <span className="text-muted-foreground">Base Amount</span>
-                  <strong className="text-primary">{fmt3(totalBase)}</strong>
+                <div className="flex items-center justify-end gap-8 border-t px-3 py-1.5 text-sm font-bold">
+                  <span className="text-muted-foreground">Net Amount</span>
+                  <strong className="text-primary text-base">{fmt3(totalFinalAmount)}</strong>
                 </div>
               </div>
             </div>
@@ -823,7 +1120,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
         {/* ─── Footer ─── */}
         <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
           <div className="text-sm text-muted-foreground">
-            Total Amount <strong className="text-primary">{fmt3(totalAmount)}</strong>
+            Net Amount <strong className="text-primary">{fmt3(totalFinalAmount)}</strong>
           </div>
           {!isViewMode && (
             <div className="flex items-center gap-2">
