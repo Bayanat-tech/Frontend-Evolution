@@ -102,8 +102,10 @@ import GradeSalaryIncrement from "../pages/hr/GradeSalaryIncrement.";
 import EmployeeMasterPage from "../pages/hr/Employee Master/EmployeeMasterPage";
 import SalaryAdditionDeductionMainPage from "../pages/hr/addition_deduction/SalaryAdditionDeductionMainPage";
 import AbsentMemoMainPage from "../pages/hr/absent_memo/AbsentMemoMainPage";
+import { BudgetRequestEditor } from "../pages/finance/budget/BudgetRequestEditor";
 
 import { HrManpowerPage } from "../pages/hr/HrManpower";
+import { BudgetRequestPage } from "../pages/finance/budget/BudgetRequestPage";
 import { ProductWmsPage } from "../pages/wms/Masters/Product_Master/WmsProductPage";
 import {
   EmployeePayslipPage,
@@ -386,6 +388,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Finance Document Setup",
     match: ({ pathname }) => isDocumentSetupRoute(pathname),
     element: () => <DocumentSetupPage />,
+  },
+    {
+    name: "Budget Allocation Setup",
+    match: ({ pathname }) => isBudgetSetupRoute(pathname),
+    element: () => <BudgetRequestPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
   },
   {
     name: "Finance Budget Version",
@@ -921,6 +930,12 @@ function isDocumentSetupRoute(pathname: string) {
     normalized.includes("/finance/utilities/document_setup") ||
     normalized.includes("/finance/utilities/document-setup") ||
     normalized.includes("/finance/utilities/documentsetup")
+  );
+}
+function isBudgetSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.includes("/finance/budget/budget_allocation")
   );
 }
 
