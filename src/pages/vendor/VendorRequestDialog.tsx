@@ -72,6 +72,7 @@ export function VendorRequestDialog({
   const companyCode = user?.company_code || "";
   const loginid = user?.loginid || user?.username || "";
   const isEdit = Boolean(request?.DOC_NO);
+  const attachmentsLocked = approvalMode && Number(approvalFlowLevel) > 1;
 
   const [activeTab, setActiveTab] = useState<"info" | "details">("info");
   const [form, setForm] = useState<VendorRequestPayload>(() => emptyRequest(companyCode));
@@ -223,7 +224,7 @@ export function VendorRequestDialog({
       onClose={onClose}
       footer={
         <div className="flex w-full items-center justify-between gap-2">
-          {approvalMode && !readOnly ? (
+          {approvalMode ? (
             <div className="flex gap-2">
               <Button type="button" variant="outline" disabled={saving} onClick={() => onApprovalAction?.("SENTBACK", approvalFlowLevel)}><RotateCcw size={15} /> Send Back</Button>
               <Button type="button" variant="destructive" disabled={saving} onClick={() => onApprovalAction?.("REJECTED", approvalFlowLevel)}><XCircle size={15} /> Reject</Button>
@@ -235,8 +236,8 @@ export function VendorRequestDialog({
               <Button type="button" disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, "SUBMITTED")}><Send size={15} /> Submit</Button>
             </div>
           ) : <span />}
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" disabled={!savedDocNo} onClick={() => setFilesOpen({ title: "Global Attachments" })}><Paperclip size={15} /></Button>
+          <div className="flex gap-2"><Button type="button" variant="outline" disabled={!savedDocNo} onClick={() => setFilesOpen({ title: "Global Attachments" })}><Paperclip size={15} /></Button>
+            
             <Button type="button" variant="outline" onClick={onClose}><X size={15} /></Button>
           </div>
         </div>
@@ -296,6 +297,7 @@ export function VendorRequestDialog({
             onAddPending={() => setPendingOpen(true)}
             onOpenAttachment={(srNo) => setFilesOpen({ srNo, title: `Attachments for Serial No: ${srNo}` })}
             readOnly={readOnly}
+            attachmentsLocked={attachmentsLocked}
           />
         )}
       </form>
@@ -319,6 +321,7 @@ export function VendorRequestDialog({
           srNo={filesOpen.srNo}
           title={filesOpen.title}
           onClose={() => setFilesOpen(null)}
+          readOnly={readOnly || attachmentsLocked}
         />
       )}
     </Dialog>
@@ -334,6 +337,7 @@ function InvoiceDetailsTab({
   onAddPending,
   onOpenAttachment,
   readOnly,
+  attachmentsLocked,
 }: {
   items: VendorRow[];
   loading: boolean;
@@ -343,6 +347,7 @@ function InvoiceDetailsTab({
   onAddPending: () => void;
   onOpenAttachment: (srNo: number) => void;
   readOnly?: boolean;
+  attachmentsLocked?: boolean;
 }) {
   const setItem = (index: number, field: string, value: string) => onItemsChange(items.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: field === "QTY" ? Number(value) : value } : item));
   const reset = () => onItemsChange(items.map((item) => ({ ...item, QTY: 0 })));
@@ -404,7 +409,7 @@ function InvoiceDetailsTab({
                   <td className="px-1.5 py-0.5 text-muted-foreground">{String(item.CURR_CODE || "")}</td>
                   <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(exRate)}</td>
                   <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(baseAmt)}</td>
-                  <td className="px-1.5 py-0.5">
+                  <td className="px-1.5 py-0.5">7
                     <Button className="vendor-line-icon" type="button" size="icon" variant="ghost" disabled={!requestNumber} onClick={() => onOpenAttachment(Number(item.SERIAL_NO || index + 1))}><Paperclip size={12} /></Button>
                   </td>
                   <td className="px-1.5 py-0.5 text-muted-foreground">{String(item.TX_CAT_CODE || "")}</td>
@@ -496,7 +501,7 @@ function PendingItemsDialog({
   );
 }
 
-function VendorFilesDialog({ requestNumber, srNo, title, onClose }: { requestNumber: string; srNo?: number; title: string; onClose: () => void }) {
+function VendorFilesDialog({ requestNumber, srNo, title, onClose, readOnly }: { requestNumber: string; srNo?: number; title: string; onClose: () => void; readOnly?: boolean }) {
   const { user } = useAuth();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [files, setFiles] = useState<VendorRow[]>([]);
@@ -615,7 +620,7 @@ function VendorFilesDialog({ requestNumber, srNo, title, onClose }: { requestNum
       <Dialog open wide title={title} onClose={onClose} footer={(
         <>
           <Button variant="outline" onClick={onClose}>Close</Button>
-          <Button disabled={!picked.length || saving} onClick={() => void save()}>
+          <Button disabled={!picked.length || saving || readOnly} onClick={() => void save()}>
             <UploadCloud size={15} /> Save Files
           </Button>
         </>
@@ -632,7 +637,7 @@ function VendorFilesDialog({ requestNumber, srNo, title, onClose }: { requestNum
             </div>
           </div>
           <input ref={inputRef} className="hidden" multiple type="file" onChange={handleFileInput} disabled={!requestNumber} />
-          <Button disabled={!requestNumber || saving} type="button" onClick={() => inputRef.current?.click()}>
+          <Button disabled={!requestNumber || saving || readOnly} type="button" onClick={() => inputRef.current?.click()}>
             <UploadCloud size={15} /> {requestNumber ? selectedLabel : "Upload Files"}
           </Button>
         </div>
@@ -716,7 +721,7 @@ function VendorFilesDialog({ requestNumber, srNo, title, onClose }: { requestNum
                             variant="ghost"
                             type="button"
                             onClick={() => void deleteAttachment(file)}
-                            disabled={saving}
+                            disabled={saving || readOnly}
                             title="Delete"
                           >
                             <Trash2 size={16} />

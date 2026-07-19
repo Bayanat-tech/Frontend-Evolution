@@ -161,6 +161,7 @@ export function VendorApprovalsPage() {
         <VendorRequestDialog
           open
           approvalMode
+          readOnly
           request={editor.request}
           approvalFlowLevel={editor.flowLevel}
           onApprovalAction={(nextAction, flowLevel) => {
