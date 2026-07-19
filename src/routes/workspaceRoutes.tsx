@@ -129,10 +129,11 @@ import { AdminSupportCenterPage } from "../pages/support/AdminSupportCenterPage"
 import { SupportDeveloperAssignmentPage } from "../pages/support/SupportDeveloperAssignmentPage";
 import { SupportDeveloperWorkbenchPage } from "../pages/support/SupportDeveloperWorkbenchPage";
 import InspectionFormPage from "../pages/oxmaint/inspection-form-tailwind/inspection_form/InspectionFormMainPage";
+import GrnSummaryReportPage from "../pages/wms/Reports/Grnsummaryreport";
 import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/AssetInventoryMainPage";
 
 import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation";
-
+import StockCountPage from "../pages/wms/stock count/StockCountPage";
 type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -396,6 +397,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isStockTransferViewRoute(pathname),
     element: () => <StockTransferViewPage />,   
   },
+  {
+  name: "Stock Count",
+  match: ({ pathname }) => isStockCountRoute(pathname),
+  element: () => <StockCountPage />,
+},
     {
     name: "Stock Transfer",
     match: ({ pathname }) => isStockTransferRoute(pathname),
@@ -508,13 +514,18 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({pathname}) => isVisaExpiryListingRoute(pathname),
     element: () => <VisaExpiryListingPage/>
   },
-{
+
+  {
     name : "DN Summary Report",
     match: ({pathname}) => isDnRoute(pathname),
     element: () => <Dnsummaryreportpage/>
   },
 
-  
+  {
+    name : "Grn Summary Report",
+    match: ({pathname}) => isGrnRoute(pathname),
+    element: () => <GrnSummaryReportPage/>
+  },
 
   {
     name: "WMS Inbound",
@@ -1120,7 +1131,10 @@ function isTransactionReportRoute(pathname: string) {
   return normalized.includes("/wms/reports/stock%20report/transaction_report") ||
          normalized.includes("/wms/reports/stock%20report/transaction-report");
 }
-
+function isStockCountRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("wms/activity/stock_count") && !normalized.includes("/view/");
+}
 function isStockTransferViewRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return (
@@ -1181,8 +1195,11 @@ function isDnRoute(pathname:string) {
    || normalized.includes("/wms/wms/reports/summary_report/dn_summary");
 }
 
-
-
+function isGrnRoute(pathname:string) {  
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/wms/wms/reports/summary%20report/grn_summary")
+   || normalized.includes("/wms/wms/reports/summary_report/grn_summary");
+}
 
 function isVisaExpiryListingRoute(pathname:string) {
   const normalized = pathname.toLowerCase();
