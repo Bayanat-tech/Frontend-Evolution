@@ -133,6 +133,12 @@ import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/As
 
 import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation";
 import StockCountPage from "../pages/wms/stock count/StockCountPage";
+
+import {ProductTypePage} from "../Purchase_Sales/PS_ProductTypePage";
+
+import { ProductCategoryPage } from "../Purchase_Sales/PS_ProductCategory";
+
+
 type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -857,6 +863,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   element: () => <KpiEmployeeInformationPage />,
 },
 
+
 {
     name: "HR Payroll Account Setup",
     match: (context) => isHrRoute(context) && isHrPayrollAccountSetupRoute(context),
@@ -867,6 +874,21 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => Boolean(getHrMasterConfig(context)),
     element: (context) => <HrMasterPage config={getHrMasterConfig(context)!} />,
   },
+
+  {
+  name: "Purchase Sales Product Type",
+  match: ({ pathname }) => isProductTypeRoute(pathname),
+  element: () => <ProductTypePage />,
+  },
+
+
+  {
+  name: "Purchase Sales Product Category",
+  match: ({ pathname }) => isProductCategoryRoute(pathname),
+  element: () => <ProductCategoryPage />,
+  },
+
+
 ];
 
 function isStorageComputationRoute(pathname: string) {
@@ -1714,5 +1736,27 @@ function isHrEmployeeInformationRoute(context: WorkspaceRouteContext) {
     compact.includes("employeeinformation") ||
     normalized.includes("employee_information") ||
     normalized.includes("employee-information")
+  );
+}
+
+
+function isProductTypeRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+    normalized.includes("/purchase_sales/purchase_sales/masters/product%20type") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/product_type") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/product-type")
+  );
+}
+
+
+function isProductCategoryRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+    normalized.includes("/purchase_sales/purchase_sales/masters/product%20category") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/product_category") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/product-category")
   );
 }
