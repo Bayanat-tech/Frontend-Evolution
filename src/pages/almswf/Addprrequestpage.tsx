@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Plus, Edit2, Save, Send, X, CheckCircle,
   ChevronLeft, Paperclip, FileText, Trash2,
+  Printer,
 } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 
@@ -215,6 +216,9 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
 
   const handleSaveDraft = () => runAction("DRAFT", "Draft saved successfully!");
   const handleSubmit = () => runAction("SUBMITTED", "PR submitted successfully!");
+  const handlePrint = () => {
+    window.print();
+  };
 
   const handleApprove = async () => {
     if (!requestNumber) return setNotice({ type: "error", message: "No PR to approve" });
@@ -829,6 +833,9 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
             <div className="flex items-center gap-2">
               <Button disabled={saving} type="button" variant="outline" onClick={() => onClose()}>Close</Button>
               <Button disabled={saving} type="button" variant="outline" onClick={handleSaveDraft}><Save size={15} /> {saving ? "Saving..." : "Save Draft"}</Button>
+              <Button disabled={saving} type="button" variant="outline" onClick={handlePrint}>
+              <Printer size={15} /> Print
+            </Button>
               <Button disabled={saving} type="button" variant="default" onClick={handleSubmit}><Send size={15} /> Submit</Button>
               <Button disabled={saving} type="button" variant="default" onClick={handleApprove} className="bg-emerald-600 hover:bg-emerald-700"><CheckCircle size={15} /> Approve</Button>
               <Button disabled={saving} type="button" variant="outline" onClick={() => { setRemarkText(""); setRejectOpen(true); }} className="border-destructive/30 text-destructive hover:bg-destructive/10"><X size={15} /> Reject</Button>
