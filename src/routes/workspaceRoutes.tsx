@@ -134,6 +134,7 @@ import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/As
 import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation";
 import StockCountPage from "../pages/wms/stock count/StockCountPage";
 import{ExpenseMasterPage} from "../pages/purchase_sales/Expensemasterpage";
+import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -875,6 +876,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({pathname}) => isExpenseMasterRoute(pathname),
     element: () => <ExpenseMasterPage/>
   },
+  {
+    name : "Product Brand",
+    match: ({pathname}) => isProductBrandRoute(pathname),
+    element: () => <ProductBrandPage/>
+  },
 
 ];
 
@@ -884,7 +890,7 @@ function isStorageComputationRoute(pathname: string) {
 
 
 
-//--------ExpenseMasterPage-------
+//--------PURCHASE SALE-------
 function isExpenseMasterRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes(
@@ -892,6 +898,12 @@ function isExpenseMasterRoute(pathname: string) {
   );
 }
 
+function isProductBrandRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/masters/product_brand"
+  );
+}
 
 
 function isStockAdjViewRoute(pathname: string) {
