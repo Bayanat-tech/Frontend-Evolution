@@ -321,7 +321,7 @@ export function VendorRequestDialog({
           srNo={filesOpen.srNo}
           title={filesOpen.title}
           onClose={() => setFilesOpen(null)}
-          readOnly={readOnly || attachmentsLocked}
+          readOnly={attachmentsLocked}
         />
       )}
     </Dialog>
@@ -409,7 +409,7 @@ function InvoiceDetailsTab({
                   <td className="px-1.5 py-0.5 text-muted-foreground">{String(item.CURR_CODE || "")}</td>
                   <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(exRate)}</td>
                   <td className="px-1.5 py-0.5 text-right text-muted-foreground">{formatAmount(baseAmt)}</td>
-                  <td className="px-1.5 py-0.5">7
+                  <td className="px-1.5 py-0.5">
                     <Button className="vendor-line-icon" type="button" size="icon" variant="ghost" disabled={!requestNumber} onClick={() => onOpenAttachment(Number(item.SERIAL_NO || index + 1))}><Paperclip size={12} /></Button>
                   </td>
                   <td className="px-1.5 py-0.5 text-muted-foreground">{String(item.TX_CAT_CODE || "")}</td>
