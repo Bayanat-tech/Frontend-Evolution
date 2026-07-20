@@ -23,6 +23,10 @@ import { WmsInboundPage } from "../pages/wms/inbound/WmsInboundPage";
 import { WmsOutboundPage } from "../pages/wms/outbound/WmsOutboundPage";
 import { WmsSimpleMasterPage } from "../pages/wms/WmsSimpleMasterPage";
 import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
+import { FreightMasterPage } from "../pages/freight/FreightMasterPage";
+import { freightMasterConfigs } from "../pages/freight/freightMasterConfigs";
+import { FreightEnquiryMainPage } from "../pages/freight/FreightEnquiryMainPage";
+import { FreightWorkspacePage } from "../pages/freight/FreightWorkspacePage";
 import { SecurityAssignmentPage, securityAssignmentConfigs } from "../pages/security/SecurityAssignmentPage";
 import { SecurityMasterPage, securityMasterConfigs } from "../pages/security/SecurityMasterPage";
 import { SecurityOperationAccessPage } from "../pages/security/SecurityOperationAccessPage";
@@ -563,6 +567,21 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "WMS Simple Master",
     match: ({ pathname }) => Boolean(getWmsSimpleMasterConfig(pathname)),
     element: ({ pathname }) => <WmsSimpleMasterPage config={getWmsSimpleMasterConfig(pathname)!} />,
+  },
+  {
+    name: "Freight Enquiry",
+    match: (context) => isFreightEnquiryRoute(context),
+    element: (context) => <FreightEnquiryMainPage target={getFreightWorkspaceTarget(context)} />,
+  },
+  {
+    name: "Freight Master",
+    match: (context) => Boolean(getFreightMasterConfig(context)),
+    element: (context) => <FreightMasterPage config={getFreightMasterConfig(context)!} />,
+  },
+  {
+    name: "Freight Workspace",
+    match: (context) => isFreightWorkspaceRoute(context),
+    element: (context) => <FreightWorkspacePage target={getFreightWorkspaceTarget(context)} />,
   },
     {
     name: "ALMS Simple Master",
@@ -1249,6 +1268,81 @@ function getWmsSimpleMasterConfig(pathname: string) {
     .flatMap((config) => (config.routeKeys || [config.master]).map((key) => ({ config, key: key.toLowerCase() })))
     .sort((a, b) => b.key.length - a.key.length);
   return matches.find(({ key }) => normalized.includes(`/${key}`) || normalized.includes(`/${key.replace(/_/g, "-")}`))?.config || null;
+}
+
+function getFreightMasterConfig(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  const isFreight =
+    matchText.includes("/freight") ||
+    compact.includes("freight") ||
+    compact.includes("frieght");
+
+  if (!isFreight) return null;
+
+  const matches = Object.values(freightMasterConfigs)
+    .flatMap((config) => (config.routeKeys || [config.master]).map((key) => ({ config, key: key.toLowerCase() })))
+    .sort((a, b) => b.key.length - a.key.length);
+
+  return matches.find(({ key }) => {
+    const hyphenKey = key.replace(/_/g, "-");
+    const keyCompact = key.replace(/[^a-z0-9]/g, "");
+    return matchText.includes(`/${key}`) || matchText.includes(`/${hyphenKey}`) || matchText.includes(key) || compact.includes(keyCompact);
+  })?.config || null;
+}
+
+function isFreightWorkspaceRoute(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return (
+    matchText.includes("/freight") ||
+    compact.includes("freight") ||
+    compact.includes("frieght") ||
+    compact.includes("freightenquirymainpage")
+  );
+}
+
+function isFreightEnquiryRoute(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  if (compact.includes("enquiryactivities") || compact.includes("enquirylist")) return false;
+  return (
+    compact.includes("freightenquirymainpage") ||
+    compact.includes("freightfreightenquiryenquiry") ||
+    compact.includes("freightfreightenquiryenquir") ||
+    (compact.includes("freightenquiry") && !compact.includes("requestquote") && !compact.includes("quotation"))
+  );
+}
+
+function getFreightWorkspaceTarget(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return {
+    process: compact.includes("rfq") || compact.includes("requestquote") || compact.includes("requestforquote")
+      ? "rfq" as const
+      : compact.includes("quotation") || compact.includes("freightquotation") || compact.includes("airlinetarriff")
+        ? "quotation" as const
+        : "enquiry" as const,
+    direction: compact.includes("reexport") || compact.includes("importforreexport")
+      ? "reexport" as const
+      : compact.includes("export")
+        ? "export" as const
+        : "import" as const,
+    mode: compact.includes("sea")
+      ? "sea" as const
+      : compact.includes("road") || compact.includes("land")
+        ? "land" as const
+        : "air" as const,
+    action: compact.includes("freightreports") || compact.includes("enquirylist") || compact.includes("rfqlist") || compact.includes("quotationlist")
+      ? "reports"
+      : compact.includes("costsheet")
+      ? "cost-sheet"
+      : compact.includes("jobsheet")
+        ? "job-sheet"
+        : compact.includes("document")
+          ? "documents"
+          : "job",
+  };
 }
 
 function getAlmsSimpleMasterConfig(pathname: string) {
