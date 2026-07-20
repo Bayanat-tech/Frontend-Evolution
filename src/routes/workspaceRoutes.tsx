@@ -102,8 +102,10 @@ import GradeSalaryIncrement from "../pages/hr/GradeSalaryIncrement.";
 import EmployeeMasterPage from "../pages/hr/Employee Master/EmployeeMasterPage";
 import SalaryAdditionDeductionMainPage from "../pages/hr/addition_deduction/SalaryAdditionDeductionMainPage";
 import AbsentMemoMainPage from "../pages/hr/absent_memo/AbsentMemoMainPage";
+import { BudgetRequestEditor } from "../pages/finance/budget/BudgetRequestEditor";
 
 import { HrManpowerPage } from "../pages/hr/HrManpower";
+import { BudgetRequestPage } from "../pages/finance/budget/BudgetRequestPage";
 import { ProductWmsPage } from "../pages/wms/Masters/Product_Master/WmsProductPage";
 import {
   EmployeePayslipPage,
@@ -126,10 +128,11 @@ import InspectionReportMainPage from "../pages/oxmaint/inspection-report-tailwin
 import { GradeMasterPage } from "../pages/hr/Grademasterpage";
 import InvoicePage from "../pages/wms/invoice/InvoicePage";
 import InspectionFormPage from "../pages/oxmaint/inspection-form-tailwind/inspection_form/InspectionFormMainPage";
+import GrnSummaryReportPage from "../pages/wms/Reports/Grnsummaryreport";
 import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/AssetInventoryMainPage";
 
 import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation";
-
+import StockCountPage from "../pages/wms/stock count/StockCountPage";
 type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -368,6 +371,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isDocumentSetupRoute(pathname),
     element: () => <DocumentSetupPage />,
   },
+    {
+    name: "Budget Allocation Setup",
+    match: ({ pathname }) => isBudgetSetupRoute(pathname),
+    element: () => <BudgetRequestPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
   {
     name: "Finance Budget Version",
     match: ({ pathname }) => isBudgetVersionRoute(pathname),
@@ -378,6 +388,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isStockTransferViewRoute(pathname),
     element: () => <StockTransferViewPage />,   
   },
+  {
+  name: "Stock Count",
+  match: ({ pathname }) => isStockCountRoute(pathname),
+  element: () => <StockCountPage />,
+},
     {
     name: "Stock Transfer",
     match: ({ pathname }) => isStockTransferRoute(pathname),
@@ -490,13 +505,18 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({pathname}) => isVisaExpiryListingRoute(pathname),
     element: () => <VisaExpiryListingPage/>
   },
-{
+
+  {
     name : "DN Summary Report",
     match: ({pathname}) => isDnRoute(pathname),
     element: () => <Dnsummaryreportpage/>
   },
 
-  
+  {
+    name : "Grn Summary Report",
+    match: ({pathname}) => isGrnRoute(pathname),
+    element: () => <GrnSummaryReportPage/>
+  },
 
   {
     name: "WMS Inbound",
@@ -894,6 +914,12 @@ function isDocumentSetupRoute(pathname: string) {
     normalized.includes("/finance/utilities/documentsetup")
   );
 }
+function isBudgetSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.includes("/finance/budget/budget_allocation")
+  );
+}
 
 function isExpenseTypeRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -1102,7 +1128,10 @@ function isTransactionReportRoute(pathname: string) {
   return normalized.includes("/wms/reports/stock%20report/transaction_report") ||
          normalized.includes("/wms/reports/stock%20report/transaction-report");
 }
-
+function isStockCountRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("wms/activity/stock_count") && !normalized.includes("/view/");
+}
 function isStockTransferViewRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return (
@@ -1163,8 +1192,11 @@ function isDnRoute(pathname:string) {
    || normalized.includes("/wms/wms/reports/summary_report/dn_summary");
 }
 
-
-
+function isGrnRoute(pathname:string) {  
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/wms/wms/reports/summary%20report/grn_summary")
+   || normalized.includes("/wms/wms/reports/summary_report/grn_summary");
+}
 
 function isVisaExpiryListingRoute(pathname:string) {
   const normalized = pathname.toLowerCase();

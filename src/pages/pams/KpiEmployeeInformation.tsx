@@ -92,7 +92,7 @@ function getEmployeeInfo(row: Row): EmployeeInfo {
     status: pick(normalized, ["EMP_STATUS", "emp_status"]),
     phone: pick(normalized, ["PHONE_NO", "phone_no", "PHONE"]),
     mobile: pick(normalized, ["MOBILE_NO", "mobile_no", "MOB_NO"]),
-    email: pick(normalized, ["EMAIL_ID", "email_id", "EMAIL"]),
+    email: pick(normalized, ["LOGIN_EMAIL", "login_email", "EMAIL_ID", "email_id", "EMAIL"]),
     joinDate: formatValue(pick(normalized, ["JOIN_DATE", "join_date"])),
     birthDate: formatValue(pick(normalized, ["DOB", "birth_date", "BIRTH_DATE"])),
     nationality: pick(normalized, ["NATIONALITY", "nationality"]),
