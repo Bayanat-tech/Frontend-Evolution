@@ -133,6 +133,8 @@ import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/As
 
 import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation";
 import StockCountPage from "../pages/wms/stock count/StockCountPage";
+import{ExpenseMasterPage} from "../pages/purchase_sales/Expensemasterpage";
+
 type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -867,11 +869,30 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => Boolean(getHrMasterConfig(context)),
     element: (context) => <HrMasterPage config={getHrMasterConfig(context)!} />,
   },
+
+  {
+    name : "Expense Master",
+    match: ({pathname}) => isExpenseMasterRoute(pathname),
+    element: () => <ExpenseMasterPage/>
+  },
+
 ];
 
 function isStorageComputationRoute(pathname: string) {
   return pathname.toLowerCase().includes("wms/activity/request/storage_computation");
 }
+
+
+
+//--------ExpenseMasterPage-------
+function isExpenseMasterRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/masters/expense_master"
+  );
+}
+
+
 
 function isStockAdjViewRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
