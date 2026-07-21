@@ -1,28 +1,29 @@
 import { Save, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { executeDynamicMutation, getDynamicLookupaccount } from "../api/lookups";
-import { Button } from "../components/ui/Button";
-import { Input } from "../components/ui/Input";
-import { useAuth } from "../state/AuthContext";
+import { executeDynamicMutation, getDynamicLookupaccount } from "../../api/lookups";
+import { Button } from "../../components/ui/Button";
+import { Input } from "../../components/ui/Input";
+import { useAuth } from "../../state/AuthContext";
 
-// ─── Old field set — kept exactly as in the old dw_erp_prodcat DataWindow.
-// Only two real fields exist on this master: code and name. ────────────────
-export type TProductCategory = {
-  prodcat_code?: string;
-  prodcat_name?: string;
+// ─── Old field set — kept exactly as in the old dw_erp_zone DataWindow /
+// MSE_ZONE table. Only code + name are user-entered; COMPANY_CODE, USER_ID,
+// USER_DT are stamped server-side. ──────────────────────────────────────────
+export type TZoneMaster = {
+  zone_code?: string;
+  zone_name?: string;
 };
 
 type FormMode = "add" | "edit" | "view";
 
 type Props = {
   mode: FormMode;
-  existingData?: Partial<TProductCategory>;
+  existingData?: Partial<TZoneMaster>;
   onClose: (shouldRefetch?: boolean) => void;
 };
 
-const EMPTY: TProductCategory = {
-  prodcat_code: "",
-  prodcat_name: "",
+const EMPTY: TZoneMaster = {
+  zone_code: "",
+  zone_name: "",
 };
 
 const MODE_BADGE: Record<FormMode, { label: string; className: string }> = {
@@ -31,16 +32,16 @@ const MODE_BADGE: Record<FormMode, { label: string; className: string }> = {
   view: { label: "Read Only", className: "bg-slate-100 text-slate-600" },
 };
 
-export function AddProductCategoryForm({ mode, existingData, onClose }: Props) {
+export function AddZoneMasterForm({ mode, existingData, onClose }: Props) {
   const { user } = useAuth();
   const readonly = mode === "view";
   const isEdit = mode === "edit";
-  // Prod Category Code is the primary key — only editable while adding a new
-  // record (mirrors the old DataWindow's isRowNew() gated editability).
+  // Zone Code is the primary key — only editable while adding a new record
+  // (mirrors the old DataWindow's isRowNew() gated editability).
   const codeEditable = mode === "add";
 
-  const [form, setForm] = useState<TProductCategory>({ ...EMPTY });
-  const [errors, setErrors] = useState<Partial<Record<keyof TProductCategory, string>>>({});
+  const [form, setForm] = useState<TZoneMaster>({ ...EMPTY });
+  const [errors, setErrors] = useState<Partial<Record<keyof TZoneMaster, string>>>({});
   const [saving, setSaving] = useState(false);
   const [apiError, setApiError] = useState("");
 
@@ -48,77 +49,73 @@ export function AddProductCategoryForm({ mode, existingData, onClose }: Props) {
   const [duplicateWarning, setDuplicateWarning] = useState("");
 
   // ── Load existing record into form ─────────────────────────────────────
-  // existingData now comes pre-normalized from the parent page's normalizeRow
-  // (prodcat_code / prodcat_name), but we keep the extra fallbacks here too
-  // in case this form is ever opened from a caller that hasn't normalized
-  // (e.g. a future "quick add" entry point) — the API's real field names are
-  // category_code / category_name, confirmed via Network tab.
+  // existingData comes pre-normalized from the parent page's normalizeRow
+  // (zone_code / zone_name), but we keep the extra fallbacks here too in
+  // case this form is ever opened from a caller that hasn't normalized.
   useEffect(() => {
     if ((isEdit || readonly) && existingData) {
       const raw = existingData as any;
       setForm({
         ...EMPTY,
-        prodcat_code:
-          raw.prodcat_code ?? raw.PRODCAT_CODE ?? raw.category_code ?? raw.CATEGORY_CODE ?? "",
-        prodcat_name:
-          raw.prodcat_name ?? raw.PRODCAT_NAME ?? raw.category_name ?? raw.CATEGORY_NAME ?? "",
+        zone_code: raw.zone_code ?? raw.ZONE_CODE ?? "",
+        zone_name: raw.zone_name ?? raw.ZONE_NAME ?? "",
       });
     }
   }, [isEdit, readonly, existingData]);
 
-  const set = (field: keyof TProductCategory, value: unknown) =>
+  const set = (field: keyof TZoneMaster, value: unknown) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
-    // ── Duplicate check — parameter "PURCHASE_SALE_MSE_PRODCAT" filtered by code ─
-    const checkDuplicate = async () => {
-      if (!form.prodcat_code?.trim() || !user?.company_code) return;
-      setChecking(true);
-      setDuplicateWarning("");
-      try {
-        const response = await getDynamicLookupaccount({
-          parameter: "PURCHASE_SALE_MSE_PRODCAT",
-          loginid: user?.loginid ?? "",
-          code1: user?.company_code ?? "",
-          code2: form.prodcat_code.trim(),
-          code3: "NULL",
-          code4: "NULL",
-          number1: 0,
-          number2: 0,
-          number3: 0,
-          number4: 0,
-          date1: null,
-          date2: null,
-          date3: null,
-          date4: null,
-        });
-        const list = Array.isArray(response) ? response : [];
-        const exists = list.some((r: any) => {
-          const code = r.prodcat_code ?? r.PRODCAT_CODE ?? r.category_code ?? r.CATEGORY_CODE ?? "";
-          return String(code) === form.prodcat_code;
-        });
-        setDuplicateWarning(exists ? "This Prod Category Code already exists." : "Code is available.");
-      } catch (error) {
-        console.error("Failed to check product category code:", error);
-      } finally {
-        setChecking(false);
-      }
-    };
+  // ── Duplicate check — parameter "PURCHASE_SALE_MSE_ZONE" filtered by code ─
+  const checkDuplicate = async () => {
+    if (!form.zone_code?.trim() || !user?.company_code) return;
+    setChecking(true);
+    setDuplicateWarning("");
+    try {
+      const response = await getDynamicLookupaccount({
+        parameter: "PURCHASE_SALE_MSE_ZONE",
+        loginid: user?.loginid ?? "",
+        code1: user?.company_code ?? "",
+        code2: form.zone_code.trim(),
+        code3: "NULL",
+        code4: "NULL",
+        number1: 0,
+        number2: 0,
+        number3: 0,
+        number4: 0,
+        date1: null,
+        date2: null,
+        date3: null,
+        date4: null,
+      });
+      const list = Array.isArray(response) ? response : [];
+      const exists = list.some((r: any) => {
+        const code = r.zone_code ?? r.ZONE_CODE ?? "";
+        return String(code) === form.zone_code;
+      });
+      setDuplicateWarning(exists ? "This Zone Code already exists." : "Code is available.");
+    } catch (error) {
+      console.error("Failed to check zone code:", error);
+    } finally {
+      setChecking(false);
+    }
+  };
 
   // ── Validation ────────────────────────────────────────────────────────
   const validate = (): boolean => {
-    const next: Partial<Record<keyof TProductCategory, string>> = {};
-    if (!form.prodcat_code?.trim()) next.prodcat_code = "Prod Category Code is required";
-    if (!form.prodcat_name?.trim()) next.prodcat_name = "Prod Category Name is required";
+    const next: Partial<Record<keyof TZoneMaster, string>> = {};
+    if (!form.zone_code?.trim()) next.zone_code = "Zone Code is required";
+    if (!form.zone_name?.trim()) next.zone_name = "Zone Name is required";
     setErrors(next);
     return Object.keys(next).length === 0;
   };
 
-  // ── Save — parameter "PURCHASE_SALE_MSE_PRODCATEGORY". Slot mapping must
-  // stay in lockstep with the corresponding WHEN branch in
+  // ── Save — parameter "PURCHASE_SALE_MSE_ZONE". Slot mapping must stay in
+  // lockstep with the corresponding WHEN branch in
   // PROC_BUILD_DYNAMIC_INS_UPD_COMMON:
-  //   val1s1 = CATEGORY_CODE (empty = auto-generate)
+  //   val1s1 = ZONE_CODE (empty = auto-generate)
   //   val1s2 = COMPANY_CODE
-  //   val1s3 = CATEGORY_NAME
+  //   val1s3 = ZONE_NAME
   //   val1s4 = USER_ID
   // ────────────────────────────────────────────────────────────────────
   const handleSave = async () => {
@@ -127,17 +124,17 @@ export function AddProductCategoryForm({ mode, existingData, onClose }: Props) {
     setApiError("");
     try {
       await executeDynamicMutation({
-        parameter: "PURCHASE_SALE_MSE_PRODCATEGORY",
+        parameter: "PURCHASE_SALE_MSE_ZONE",
         loginid: user?.loginid ?? "",
 
-        val1s1: form.prodcat_code ?? "",
+        val1s1: form.zone_code ?? "",
         val1s2: user?.company_code ?? "",
-        val1s3: form.prodcat_name ?? "",
+        val1s3: form.zone_name ?? "",
         val1s4: user?.loginid ?? "",
       });
       onClose(true);
     } catch (error) {
-      setApiError(error instanceof Error ? error.message : "Unable to save product category");
+      setApiError(error instanceof Error ? error.message : "Unable to save zone");
     } finally {
       setSaving(false);
     }
@@ -150,9 +147,9 @@ export function AddProductCategoryForm({ mode, existingData, onClose }: Props) {
       {/* ── Header strip ─────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-2 border-b pb-2">
         <div className="min-w-0">
-          <h2 className="m-0 text-base font-semibold">Product Category</h2>
+          <h2 className="m-0 text-base font-semibold">Zone</h2>
           <p className="m-0 text-sm font-semibold text-primary truncate">
-            {form.prodcat_code || "Prod Category Code"}
+            {form.zone_code || "Zone Code"}
           </p>
         </div>
         <span
@@ -164,17 +161,17 @@ export function AddProductCategoryForm({ mode, existingData, onClose }: Props) {
 
       {/* ── Fields ───────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-x-4 gap-y-3 min-w-0 sm:grid-cols-2">
-        <label className="field min-w-0" key="prodcat_code">
+        <label className="field min-w-0" key="zone_code">
           <span>
-            Prod Category Code <strong className="text-destructive"> *</strong>
+            Zone Code <strong className="text-destructive"> *</strong>
           </span>
           <div className="flex items-center gap-1 min-w-0">
             <div className="min-w-0 flex-1">
               <Input
                 disabled={!codeEditable}
-                value={form.prodcat_code ?? ""}
+                value={form.zone_code ?? ""}
                 onChange={(e) => {
-                  set("prodcat_code", e.target.value);
+                  set("zone_code", e.target.value);
                   setDuplicateWarning("");
                 }}
               />
@@ -184,17 +181,17 @@ export function AddProductCategoryForm({ mode, existingData, onClose }: Props) {
                 size="icon"
                 variant="outline"
                 title="Check code availability"
-                disabled={checking || !form.prodcat_code?.trim()}
+                disabled={checking || !form.zone_code?.trim()}
                 onClick={checkDuplicate}
               >
                 <Search size={14} />
               </Button>
             )}
           </div>
-          {errors.prodcat_code && (
-            <span className="text-destructive text-xs mt-0.5">{errors.prodcat_code}</span>
+          {errors.zone_code && (
+            <span className="text-destructive text-xs mt-0.5">{errors.zone_code}</span>
           )}
-          {!errors.prodcat_code && duplicateWarning && (
+          {!errors.zone_code && duplicateWarning && (
             <span
               className={`text-xs mt-0.5 ${
                 duplicateWarning.includes("already exists")
@@ -207,17 +204,17 @@ export function AddProductCategoryForm({ mode, existingData, onClose }: Props) {
           )}
         </label>
 
-        <label className="field min-w-0" key="prodcat_name">
+        <label className="field min-w-0" key="zone_name">
           <span>
-            Prod Category Name <strong className="text-destructive"> *</strong>
+            Zone Name <strong className="text-destructive"> *</strong>
           </span>
           <Input
             disabled={readonly}
-            value={form.prodcat_name ?? ""}
-            onChange={(e) => set("prodcat_name", e.target.value)}
+            value={form.zone_name ?? ""}
+            onChange={(e) => set("zone_name", e.target.value)}
           />
-          {errors.prodcat_name && (
-            <span className="text-destructive text-xs mt-0.5">{errors.prodcat_name}</span>
+          {errors.zone_name && (
+            <span className="text-destructive text-xs mt-0.5">{errors.zone_name}</span>
           )}
         </label>
       </div>

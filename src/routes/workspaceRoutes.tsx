@@ -137,11 +137,11 @@ import{ExpenseMasterPage} from "../pages/purchase_sales/Expensemasterpage";
 import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
 
 
-import {ProductTypePage} from "../Purchase_Sales_G/PS_ProductTypePage";
+import {ProductTypePage} from "../pages/purchase_sales/PS_ProductTypePage";
 
-import { ProductCategoryPage } from "../Purchase_Sales_G/PS_ProductCategory";
+import { ProductCategoryPage } from "../pages/purchase_sales/PS_ProductCategory";
 
-import { ZoneMasterPage } from "../Purchase_Sales_G/PS_ZoneMasterPage";
+import { ZoneMasterPage } from "../pages/purchase_sales/PS_ZoneMasterPage";
 
 
 type WorkspaceRouteContext = {

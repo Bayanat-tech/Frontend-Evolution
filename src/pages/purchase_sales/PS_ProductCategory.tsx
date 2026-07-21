@@ -1,34 +1,34 @@
-import type { ColumnDef } from "@tanstack/react-table"; 
+import type { ColumnDef } from "@tanstack/react-table";
 import { Edit2, Eye, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { executeDynamicDelete, getDynamicLookupaccount } from "../api/lookups";
-import { Button } from "../components/ui/Button";
-import { DataTable } from "../components/ui/DataTable";
-import { Dialog } from "../components/ui/Dialog";
-import { useAuth } from "../state/AuthContext";
-import { AddProductTypeForm } from "./PS_AddproductTypeform";
+import { executeDynamicDelete, getDynamicLookupaccount } from "../../api/lookups";
+import { Button } from "../../components/ui/Button";
+import { DataTable } from "../../components/ui/DataTable";
+import { Dialog } from "../../components/ui/Dialog";
+import { useAuth } from "../../state/AuthContext";
+import { AddProductCategoryForm } from "./PS_AddProductCategory";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
-// Field set matches the OLD dw_erp_prodtype DataWindow exactly — no invented
+// Field set matches the OLD dw_erp_prodcat DataWindow exactly — no invented
 // columns, since the old grid only ever exposed code + name.
-type ProductTypeRow = {
-  prodtype_code: string;
-  prodtype_name: string;
+type ProductCategoryRow = {
+  prodcat_code: string;
+  prodcat_name: string;
   [key: string]: unknown;
 };
 
 type PopupState = {
   open: boolean;
   mode: "add" | "edit" | "view";
-  data: Partial<ProductTypeRow>;
+  data: Partial<ProductCategoryRow>;
 };
 
 // ─── Lookup / delete params — VERIFY against the actual DB proc names ──────
 // Placeholder parameter names below — swap for the real
 // PROC_BUILD_DYNAMIC_LOOKUP / PROC_BUILD_DYNAMIC_DELETE entries for
-// MSE_PRODTYPE if these differ.
+// MSE_PRODCAT if these differ.
 const baseParams = (loginid: string, companyCode: string) => ({
-  parameter: "PURCHASE_SALE_MSE_PRODTYPE",
+  parameter: "PURCHASE_SALE_MSE_PRODCATEGORY",
   loginid,
   code1: companyCode,
   code2: "NULL",
@@ -44,33 +44,46 @@ const baseParams = (loginid: string, companyCode: string) => ({
   date4: null,
 });
 
-export function ProductTypePage() {
+// ─── Normalizer ─────────────────────────────────────────────────────────────
+// The API actually returns { category_code, category_name } (confirmed via
+// Network tab response), NOT prodcat_code / prodcat_name / PRODCAT_CODE /
+// PRODCAT_NAME. Every consumer downstream (columns, form, delete, getRowId)
+// expects prodcat_code / prodcat_name, so we map field names once here at the
+// fetch boundary instead of touching every consumer. This is the fix for the
+// grid rendering fully blank while the network response clearly has data.
+const normalizeRow = (r: any): ProductCategoryRow => ({
+  ...r,
+  prodcat_code: r.prodcat_code ?? r.PRODCAT_CODE ?? r.category_code ?? r.CATEGORY_CODE ?? "",
+  prodcat_name: r.prodcat_name ?? r.PRODCAT_NAME ?? r.category_name ?? r.CATEGORY_NAME ?? "",
+});
+
+export function ProductCategoryPage() {
   const { user } = useAuth();
   const loginid = user?.loginid ?? "";
   const companyCode = user?.company_code ?? "";
 
-  const [rows, setRows] = useState<ProductTypeRow[]>([]);
+  const [rows, setRows] = useState<ProductCategoryRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(
     null,
   );
   const [popup, setPopup] = useState<PopupState>({ open: false, mode: "add", data: {} });
-  const [deleteTarget, setDeleteTarget] = useState<ProductTypeRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ProductCategoryRow | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // ─── FETCH: Main grid data — parameter "PUR_PRODTYPE" ─────────────────────
+  // ─── FETCH: Main grid data ──────────────────────────────────────────────
   const loadRows = useCallback(async () => {
     if (!companyCode) return;
     setLoading(true);
     setNotice(null);
     try {
       const data = await getDynamicLookupaccount(baseParams(loginid, companyCode));
-      const list = Array.isArray(data) ? (data as ProductTypeRow[]) : [];
-      setRows(list);
+      const list = Array.isArray(data) ? data : [];
+      setRows(list.map(normalizeRow));
     } catch (error) {
       setNotice({
         type: "error",
-        message: error instanceof Error ? error.message : "Unable to load product type records",
+        message: error instanceof Error ? error.message : "Unable to load product category records",
       });
       setRows([]);
     } finally {
@@ -82,13 +95,13 @@ export function ProductTypePage() {
     void loadRows();
   }, [loadRows]);
 
-  // ─── DELETE — parameter "PUR_PRODTYPE_DELETE" ──────────────────────────────
+  // ─── DELETE ─────────────────────────────────────────────────────────────
   const confirmDelete = async () => {
     if (!deleteTarget) return;
-    const prodtypeCode = deleteTarget.prodtype_code ?? (deleteTarget as any).PRODTYPE_CODE ?? "";
+    const prodcatCode = deleteTarget.prodcat_code ?? (deleteTarget as any).PRODCAT_CODE ?? "";
 
-    if (!prodtypeCode) {
-      console.error("Missing prodtype_code for delete:", deleteTarget);
+    if (!prodcatCode) {
+      console.error("Missing prodcat_code for delete:", deleteTarget);
       setDeleteTarget(null);
       return;
     }
@@ -97,29 +110,29 @@ export function ProductTypePage() {
     setNotice(null);
     try {
       await executeDynamicDelete({
-        parameter: "PURCHASE_SALE_MSE_PRODTYPE_DELETE",
+        parameter: "PURCHASE_SALE_MSE_PRODCATEGORY_DELETE",
         loginid,
         code1: companyCode,
-        code2: String(prodtypeCode),
+        code2: String(prodcatCode),
       });
       setDeleteTarget(null);
-      setNotice({ type: "success", message: `Product type ${prodtypeCode} deleted successfully.` });
+      setNotice({ type: "success", message: `Product category ${prodcatCode} deleted successfully.` });
       await loadRows();
     } catch (error) {
       setNotice({
         type: "error",
-        message: error instanceof Error ? error.message : "Unable to delete product type",
+        message: error instanceof Error ? error.message : "Unable to delete product category",
       });
     } finally {
       setDeleting(false);
     }
   };
 
-  // ─── COLUMNS — same columns as the old page (Prod Type Code, Prod Type Name) ──
-  const columns = useMemo<ColumnDef<ProductTypeRow>[]>(
+  // ─── COLUMNS — same columns as the old page (Prod Category Code, Prod Category Name) ──
+  const columns = useMemo<ColumnDef<ProductCategoryRow>[]>(
     () => [
-      { accessorKey: "prodtype_code", header: "Prod Type Code", size: 160 },
-      { accessorKey: "prodtype_name", header: "Prod Type Name", size: 260 },
+      { accessorKey: "prodcat_code", header: "Prod Category Code", size: 160 },
+      { accessorKey: "prodcat_name", header: "Prod Category Name", size: 260 },
       {
         id: "actions",
         header: "Actions",
@@ -162,9 +175,9 @@ export function ProductTypePage() {
     <section className="grid gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">Product Type</h1>
+          <h1 className="m-0 text-2xl font-semibold text-foreground">Product Category</h1>
           <p className="m-0 mt-1 text-sm text-muted-foreground">
-            Manage product type master records.
+            Manage product category master records.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -172,7 +185,7 @@ export function ProductTypePage() {
             <RefreshCw size={15} /> Refresh
           </Button>
           <Button onClick={() => setPopup({ open: true, mode: "add", data: {} })}>
-            <Plus size={15} /> Create Product Type
+            <Plus size={15} /> Create Product Category
           </Button>
         </div>
       </div>
@@ -187,7 +200,7 @@ export function ProductTypePage() {
         columns={columns}
         data={rows}
         title={`${rows.length.toLocaleString()} Records`}
-        subtitle="Product Type List"
+        subtitle="Product Category List"
         searchPlaceholder="Search code, name..."
         loading={loading}
         height={560}
@@ -196,8 +209,8 @@ export function ProductTypePage() {
         enablePagination
         pageSize={100}
         getRowId={(row) => {
-          const prodtypeCode = row.prodtype_code ?? (row as any).PRODTYPE_CODE ?? "";
-          return String(prodtypeCode);
+          const prodcatCode = row.prodcat_code ?? (row as any).PRODCAT_CODE ?? "";
+          return String(prodcatCode);
         }}
       />
 
@@ -206,14 +219,14 @@ export function ProductTypePage() {
           open
           title={
             popup.mode === "add"
-              ? "Add Product Type"
+              ? "Add Product Category"
               : popup.mode === "edit"
-                ? "Edit Product Type"
-                : "View Product Type"
+                ? "Edit Product Category"
+                : "View Product Category"
           }
           onClose={() => setPopup((p) => ({ ...p, open: false }))}
         >
-          <AddProductTypeForm
+          <AddProductCategoryForm
             mode={popup.mode}
             existingData={popup.data}
             onClose={(shouldRefetch?: boolean) => {
@@ -226,7 +239,7 @@ export function ProductTypePage() {
 
       <Dialog
         open={Boolean(deleteTarget)}
-        title="Delete Product Type"
+        title="Delete Product Category"
         description="This action cannot be undone."
         compact
         tone="danger"
@@ -243,7 +256,7 @@ export function ProductTypePage() {
         }
       >
         <p className="text-sm text-muted-foreground">
-          Confirm delete for product type <strong>{deleteTarget?.prodtype_code}</strong>?
+          Confirm delete for product category <strong>{deleteTarget?.prodcat_code}</strong>?
         </p>
       </Dialog>
     </section>

@@ -1,10 +1,10 @@
 import { Save, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { executeDynamicMutation, getDynamicLookup } from "../api/lookups";
-import { Button } from "../components/ui/Button";
-import { Dialog } from "../components/ui/Dialog";
-import { Input } from "../components/ui/Input";
-import { useAuth } from "../state/AuthContext";
+import { executeDynamicMutation, getDynamicLookup } from "../../api/lookups";
+import { Button } from "../../components/ui/Button";
+import { Dialog } from "../../components/ui/Dialog";
+import { Input } from "../../components/ui/Input";
+import { useAuth } from "../../state/AuthContext";
 
 // ─── Old field set — kept exactly as in the old dw_erp_prodtype DataWindow.
 // Only two real fields exist on this master: code and name. ────────────────
