@@ -898,6 +898,19 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   match: ({ pathname }) => isZoneMasterRoute(pathname),
   element: () => <ZoneMasterPage />,
   },
+
+  {
+    name : "Product Brand",
+    match: ({pathname}) => isProductBrandRoute(pathname),
+    element: () => <ProductBrandPage/>
+  },
+
+  {
+    name : "Expense Master",
+    match: ({pathname}) => isExpenseMasterRoute(pathname),
+    element: () => <ExpenseMasterPage/>
+  },
+  
 ];
 
 function isStorageComputationRoute(pathname: string) {
