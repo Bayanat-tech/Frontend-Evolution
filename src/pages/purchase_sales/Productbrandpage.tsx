@@ -24,10 +24,9 @@ type PopupState = {
   data: Partial<ProductBrandRow>;
 };
 
-// Adjust these to match the actual dynamic-lookup / dispatcher parameter
-// names configured on the backend for this master.
+
 const PURCHASE_SALE_MSE_PRODBRAND = "PURCHASE_SALE_MSE_PRODBRAND";
-const DELETE_PARAMETER = "ERP_CAM_PRODBRAND_MASTER_DELETE";
+const PURCHASE_SALE_MSE_PRODBRAND_DELETE = "PURCHASE_SALE_MSE_PRODBRAND_DELETE";
 
 const baseParams = (loginid: string, companyCode: string) => ({
   parameter: PURCHASE_SALE_MSE_PRODBRAND,
@@ -46,12 +45,6 @@ const baseParams = (loginid: string, companyCode: string) => ({
   date4: null,
 });
 
-// BRAND_CODE is the natural/business key for this master, so — like
-// EXPENSE_CODE in the Expense Master — it's safe to sort on directly.
-const sortByBrandCode = (rows: ProductBrandRow[]): ProductBrandRow[] =>
-  [...rows].sort((a, b) =>
-    String(a.brand_code ?? "").localeCompare(String(b.brand_code ?? "")),
-  );
 
 export function ProductBrandPage() {
   const { user } = useAuth();
@@ -80,7 +73,7 @@ export function ProductBrandPage() {
         user_id: String(r.user_id ?? r.USER_ID ?? ""),
         user_dt: String(r.user_dt ?? r.USER_DT ?? ""),
       }));
-      setRows(sortByBrandCode(list));
+     setRows(list);
     } catch (error) {
       setNotice({
         type: "error",
@@ -101,7 +94,7 @@ export function ProductBrandPage() {
     setNotice(null);
     try {
       await executeDynamicDelete({
-        parameter: DELETE_PARAMETER,
+        parameter: PURCHASE_SALE_MSE_PRODBRAND_DELETE,
         loginid,
         code1: companyCode,
         code2: deleteTarget.brand_code,

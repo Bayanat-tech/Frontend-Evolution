@@ -100,7 +100,7 @@ export function AddExpenseMasterForm({ mode, existingData, onClose }: Props) {
         val1s3: form.expense_name?.trim() ?? "",
         val1s4: form.ac_code ?? "",
         val1s5: user?.loginid ?? "ADMIN",
-        val1d1: new Date().toISOString(),
+        // val1d1: new Date().toISOString(),
       });
 
       onClose(true);
