@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Plus, Edit2, Save, Send, X, CheckCircle,
   ChevronLeft, Paperclip, FileText, Trash2,
-  Printer,
 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
@@ -17,7 +16,6 @@ import { Select } from "../../components/ui/Select";
 
 import type { TPRHeader, TPRItem } from "./PurchaseSummary-types";
 import { almsSave, almsCommonSelect } from "../../api/alms";
-import { openPRPurchaseReport } from "../../api/transactions";
 
 type AddPRRequestPageProps = {
   isEditMode: boolean;
@@ -91,6 +89,9 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const [rejectOpen, setRejectOpen] = useState(false);
   const [sendBackOpen, setSendBackOpen] = useState(false);
   const [remarkText, setRemarkText] = useState("");
+
+  // ─── Supplier Terms state ─────────────────────────────────────────
+  const [terms, setTerms] = useState<any[]>([]);
 
   const disabled = isViewMode || saving;
 
@@ -183,6 +184,29 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     // resolved from the item's own CURR_CODE via currencyList, not copied from header.
   }, [itemList, itemCodes, costCodes, supplierList, taxCodes, currencyList, header.CURRENCY_RATE]);
 
+  // ─── Supplier Terms Query ──────────────────────────────────────────
+  const { data: termsList = [] } = useQuery<any[]>({
+    queryKey: ["pr-terms", requestNumber, companyCode],
+    queryFn: () => almsCommonSelect({
+      parameter: "Amlspf_TabPRTerms",
+      loginid,
+      code1: companyCode,
+      code2: requestNumber,
+      code3: "NULL",
+      code4: "NULL",
+      number1: 0,
+      number2: 0,
+      number3: 0,
+      number4: 0,
+    }),
+    enabled: isEditMode && !!requestNumber,
+  });
+  useEffect(() => {
+    if (termsList.length === 0) return;
+    const enriched = termsList.map((row: any) => ({ ...row, id: row.id || newId() }));
+    setTerms(enriched);
+  }, [termsList]);
+
   const setHdr = (field: keyof TPRHeader, value: unknown) => setHeader((prev) => ({ ...prev, [field]: value }));
 
   const totalAmount = items.reduce((s, r) => s + num(r.AMOUNT), 0);
@@ -192,44 +216,76 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const [headerExpanded, setHeaderExpanded] = useState(true);
 
   // ─── Save Functions ───────────────────────────────────────────────
-  const saveHeader = async (status: string) => almsSave({
-    parameter: "Amlspf_IU_PURCHASE_REQUEST_HEADER",
+ const saveHeader = async (status: string) => almsSave({
+    parameter: "purchase_request_header_ins_upd",
     loginid,
     val1s1: requestNumber || "",
     val1s2: companyCode,
-    val1s3: header.FLOW_CODE || "ITPURCHASEFLOW",
-    val1s5: header.DESCRIPTION || "",
-    val1s6: header.REMARKS || "",
-    val1s7: header.CURR_CODE || "AED",
+    val1s3: header.REQUEST_DATE ? String(header.REQUEST_DATE).slice(0, 10) : "",
+    val1s4: header.DESCRIPTION || "",
+    val1s5: header.REMARKS || "",
+    val1s6: (header as any).DEPARTMENT_CODE || "",
+    val1s7: "101", 
     val1s8: status,
-    val1s9: new Date().toISOString(),
+    val1s9: header.CURR_CODE || "",
     val1s10: header.TX_CAT_CODE || "",
+    val1s11: header.TX_COMPNTCAT_CODE_1 || "",
+    val1s12: (header as any).SUPPLIER || "",
+    val1s13: (header as any).COST_CODE || "",
+    val1s14: (header as any).WARRANTY || "",
+    val1s15: header.PDO_TYPE || "N",
     val1n1: header.FLOW_LEVEL_INITIAL || 1,
     val1n2: header.FLOW_LEVEL_RUNNING || 1,
     val1n3: header.FLOW_LEVEL_FINAL || 3,
     val1n4: totalAmount || 0,
     val1n5: header.CURRENCY_RATE || 1,
-    val1d1: header.REQUEST_DATE ? new Date(header.REQUEST_DATE) : null,
   });
 
   const saveItems = async () => {
     for (const item of items) {
       await almsSave({
-        parameter: "Amlspf_IU_PURCHASE_REQUEST_DETAILS",
+        parameter: "purchase_request_details_ins_upd",
         loginid,
         val1s1: requestNumber || "",
         val1s2: companyCode,
         val1s3: item.ITEM_CODE || "",
         val1s4: item.COST_CODE || "",
         val1s5: item.SUPPLIER || "",
-        val1s6: item.CURR_CODE || "AED",
+        val1s6: item.CURR_CODE || "",
         val1s7: item.TX_CAT_CODE || "",
         val1s8: item.TX_COMPNTCAT_CODE_1 || "",
+        val1s9: "SAVE",
+        val1s10: item.CAPEX_OPEX_NON_OPEX || "",
         val1n1: item.ITEM_SRNO || 0,
         val1n2: item.REQUEST_QUANTITY || 0,
         val1n3: item.ALLOCATED_APPROVED_QUANTITY || 0,
         val1n4: item.ITEM_RATE || 0,
         val1n5: item.DISCOUNT_AMOUNT || 0,
+        val1n6: item.FINAL_RATE || 0,
+        val1n7: item.AMOUNT || 0,
+        val1n8: item.CURRENCY_RATE || 1,
+        val1n9: item.TX_COMPNT_PERC_1 || 0,
+        val1n10: item.TX_COMPNT_AMT_1 || 0,
+      });
+    }
+  };
+
+  // NOTE: Parameter name "Amlspf_IU_PURCHASE_REQUEST_TERMS" is assumed to
+  // follow the same naming pattern as the header/details save procedures.
+  // Confirm the actual save/insert-update parameter name with backend (Prem
+  // Sir / Sandeep Sir) and update below if different.
+  const saveTerms = async () => {
+    for (const term of terms) {
+      await almsSave({
+        parameter: "Amlspf_IU_PURCHASE_REQUEST_TERMS",
+        loginid,
+        val1s1: requestNumber || "",
+        val1s2: companyCode,
+        val1s3: term.supplier || "",
+        val1s4: term.dlvr_term || "",
+        val1s5: term.payment_terms || "",
+        val1s6: term.warranty || "",
+        val1s7: term.remarks || "",
       });
     }
   };
@@ -240,6 +296,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       const result = await saveHeader(status);
       if (result.success) {
         await saveItems();
+        await saveTerms();
         setNotice({ type: "success", message: successMsg });
         onClose(true);
       }
@@ -250,20 +307,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
 
   const handleSaveDraft = () => runAction("DRAFT", "Draft saved successfully!");
   const handleSubmit = () => runAction("SUBMITTED", "PR submitted successfully!");
-
-
-  const handlePrint = () => {
-  if (!requestNumber) {
-    setNotice({ type: "error", message: "Please save the request before printing." });
-    return;
-  }
-  openPRPurchaseReport({
-    parameter: "Amlspf_PRReport", 
-    loginid,
-    code1: companyCode,
-    code2: requestNumber,
-  });
-};
 
   const handleApprove = async () => {
     if (!requestNumber) return setNotice({ type: "error", message: "No PR to approve" });
@@ -417,6 +460,28 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     });
   };
 
+  // ─── Supplier Terms Inline Functions ───────────────────────────────
+  const blankTerm = () => ({
+    id: newId(),
+    request_number: requestNumber || "",
+    company_code: companyCode,
+    supplier: "",
+    dlvr_term: "",
+    payment_terms: "",
+    warranty: "",
+    remarks: "",
+    user_id: "",
+    user_dt: null,
+  });
+
+  const addTermLine = () => setTerms((prev) => [...prev, blankTerm()]);
+
+  const removeTerm = (id: string) => setTerms((prev) => prev.filter((t) => t.id !== id));
+
+  const updateTermField = (id: string, field: string, value: unknown) => {
+    setTerms((prev) => prev.map((t) => (t.id === id ? { ...t, [field]: value } : t)));
+  };
+
   // ─── Lookup Column Definitions ───────────────────────────────────
   const currencyColumns = [
     { field: "CURR_CODE", header: "Code" },
@@ -450,6 +515,34 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     { field: "TX_TYPE_DESC", header: "Description" },
   ];
   const capexOptions = ["CAPEX", "OPEX", "NON-OPEX"];
+
+  function formatDateToDDMMYYYY(USER_DT: any): string {
+    if (USER_DT == null) return "";
+    if (Array.isArray(USER_DT)) {
+      return USER_DT.length > 0 ? String(USER_DT[0]) : "";
+    }
+
+    const raw = String(USER_DT).trim();
+    if (!raw) return "";
+
+    // Already formatted
+    if (/^\d{2}-\d{2}-\d{4}$/.test(raw)) return raw;
+
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) {
+      // Try parsing YYYYMMDD or YYYY-MM-DD variants manually
+      const ymd = raw.match(/^(\d{4})[-/]?(\d{2})[-/]?(\d{2})$/);
+      if (ymd) {
+        return `${ymd[3]}-${ymd[2]}-${ymd[1]}`;
+      }
+      return "";
+    }
+
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = String(date.getFullYear());
+    return `${day}-${month}-${year}`;
+  }
 
   // ─── Render ───────────────────────────────────────────────────────
   return (
@@ -555,12 +648,13 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                           <label className="field">
                             <span>Request Date</span>
                             <Input
-                              disabled={disabled}
-                              type="date"
-                              value={header.REQUEST_DATE ? String(header.REQUEST_DATE).slice(0, 10) : ""}
-                              onChange={(e) => setHdr("REQUEST_DATE", e.target.value)}
-                              className="w-full"
-                            />
+  disabled={disabled}
+  type="date"
+  min={new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}
+  value={header.REQUEST_DATE ? String(header.REQUEST_DATE).slice(0, 10) : ""}
+  onChange={(e) => setHdr("REQUEST_DATE", e.target.value)}
+  className="w-full"
+/>
                           </label>
                         </div>
                         <div className="col-span-1">
@@ -1129,27 +1223,165 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                   <strong className="text-primary text-base">{fmt3(totalFinalAmount)}</strong>
                 </div>
               </div>
+
+              {/* ─── Supplier Terms Section ─── */}
+              <div className="rounded-md border bg-card overflow-hidden">
+                <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
+                  <div>
+                    <p className="eyebrow m-0">Terms and Conditions</p>
+                    <h3 className="m-0 text-sm font-semibold leading-tight">Supplier Terms</h3>
+                  </div>
+                  {!isViewMode && (
+                    <Button disabled={disabled} size="sm" type="button" variant="outline" onClick={addTermLine}>
+                      <Plus size={14} /> Add Line
+                    </Button>
+                  )}
+                </div>
+
+                <div
+                  className="commercial-lines-scroll overflow-x-auto overflow-y-auto"
+                  style={{ minHeight: 0, height: "fit-content", maxHeight: "320px" }}
+                >
+                  <div className="relative">
+                    <table className="finance-lines-table w-full min-w-[1200px] text-[12px]">
+                      <thead className="sticky top-0 z-10 bg-primary text-xs text-primary-foreground">
+                        <tr>
+                          <th className="px-2 py-2 text-left w-[200px] min-w-[200px]">Request Number</th>
+                          <th className="px-2 py-2 text-left w-[200px] min-w-[200px]">Supplier</th>
+                          <th className="px-2 py-2 text-left w-[180px] min-w-[180px]">Delivery Term</th>
+                          <th className="px-2 py-2 text-left w-[220px] min-w-[220px]">Payment Terms</th>
+                          <th className="px-2 py-2 text-left w-[160px] min-w-[160px]">Warranty</th>
+                          <th className="px-2 py-2 text-left w-[260px] min-w-[660px]">Remarks</th>
+                          <th className="px-2 py-2 text-left w-[110px] min-w-[110px]">User ID</th>
+                          <th className="px-2 py-2 text-left w-[120px] min-w-[120px]">User Date</th>
+                          <th className="px-2 py-2 text-center w-[55px] min-w-[55px]">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {terms.length === 0 ? (
+                          <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={8}>No terms yet. Click "Add Line" to add supplier terms.</td></tr>
+                        ) : terms.map((term) => (
+                          <tr className="border-t odd:bg-muted/20 hover:bg-muted/40" key={term.id}>
+                            <td className="px-2 py-1 w-[200px] min-w-[200px]">
+                              <Input
+                                value={term.REQUEST_NUMBER || ""}
+                                onChange={(e) => updateTermField(term.id, "request_number", e.target.value)}
+                                disabled={disabled}
+                                className="h-9 text-sm"
+                                placeholder="Request Number"
+                              />
+                            </td>
+                            <td className="px-2 py-1 w-[200px] min-w-[200px]">
+                              <Input
+                                value={term.SUPPLIER || ""}
+                                onChange={(e) => updateTermField(term.id, "supplier", e.target.value)}
+                                disabled={disabled}
+                                className="h-9 text-sm"
+                                placeholder="Supplier"
+                              />
+                            </td>
+                            <td className="px-2 py-1 w-[180px] min-w-[180px]">
+                              <Input
+                                value={term.DLVR_TERM || ""}
+                                onChange={(e) => updateTermField(term.id, "dlvr_term", e.target.value)}
+                                disabled={disabled}
+                                className="h-9 text-sm"
+                                placeholder="Delivery Term"
+                              />
+                            </td>
+                            <td className="px-2 py-1 w-[220px] min-w-[220px]">
+                              <Input
+                                value={term.PAYMENT_TERMS || ""}
+                                onChange={(e) => updateTermField(term.id, "payment_terms", e.target.value)}
+                                disabled={disabled}
+                                className="h-9 text-sm"
+                                placeholder="Payment Terms"
+                              />
+                            </td>
+                            <td className="px-2 py-1 w-[160px] min-w-[160px]">
+                              <Input
+                                value={term.WARRANTY || ""}
+                                onChange={(e) => updateTermField(term.id, "warranty", e.target.value)}
+                                disabled={disabled}
+                                className="h-9 text-sm"
+                                placeholder="Warranty"
+                              />
+                            </td>
+                            <td className="px-2 py-1 w-[260px] min-w-[260px]">
+                              <Input
+                                value={term.REMARKS || ""}
+                                onChange={(e) => updateTermField(term.id, "remarks", e.target.value)}
+                                disabled={disabled}
+                                className="h-9 text-sm"
+                                placeholder="Remarks"
+                              />
+                            </td>
+                            <td className="px-2 py-1 w-[220px] min-w-[220px]">
+                              <Input
+                                value={term.USER_ID || ""}
+                                onChange={(e) => updateTermField(term.id, "user_id", e.target.value)}
+                                disabled={disabled}
+                                className="h-9 text-sm"
+                                placeholder="User ID"
+                              />
+                            </td>
+                            <td className="px-2 py-1 w-[220px] min-w-[220px]">
+  <Input
+    value={term.USER_DT ? formatDateToDDMMYYYY(term.USER_DT) : ""}
+    onChange={(e) => {
+      // Parse dd-mm-yyyy back to ISO format for storage
+      const formattedDate = e.target.value;
+      if (formattedDate) {
+        const [day, month, year] = formattedDate.split('-');
+        const isoDate = `${year}-${month}-${day}T00:00:00.000Z`;
+        updateTermField(term.id, "user_dt", isoDate);
+      } else {
+        updateTermField(term.id, "user_dt", "");
+      }
+    }}
+    disabled={disabled}
+    className="h-9 text-sm"
+    placeholder="DD-MM-YYYY"
+  />
+</td>
+                            <td className="px-2 py-1 text-center w-[55px] min-w-[55px]">
+                              {!isViewMode && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  type="button"
+                                  onClick={() => removeTerm(term.id)}
+                                  title="Remove"
+                                  className="h-8 w-8 text-destructive hover:text-destructive"
+                                >
+                                  <X size={14} />
+                                </Button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
 
         {/* ─── Footer ─── */}
-        <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
+       <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
           <div className="text-sm text-muted-foreground">
             Net Amount <strong className="text-primary">{fmt3(totalFinalAmount)}</strong>
           </div>
           {!isViewMode && (
             <div className="flex items-center gap-2">
-              <Button disabled={saving} type="button" variant="outline" onClick={() => onClose()}>Close</Button>
-              <Button disabled={saving} type="button" variant="outline" onClick={handleSaveDraft}><Save size={15} /> {saving ? "Saving..." : "Save Draft"}</Button>
-              <Button disabled={saving} type="button" variant="outline" onClick={handlePrint}>
-              <Printer size={15} /> Print
-            </Button>
-              <Button disabled={saving} type="button" variant="default" onClick={handleSubmit}><Send size={15} /> Submit</Button>
-              <Button disabled={saving} type="button" variant="default" onClick={handleApprove} className="bg-emerald-600 hover:bg-emerald-700"><CheckCircle size={15} /> Approve</Button>
-              <Button disabled={saving} type="button" variant="outline" onClick={() => { setRemarkText(""); setRejectOpen(true); }} className="border-destructive/30 text-destructive hover:bg-destructive/10"><X size={15} /> Reject</Button>
-              <Button disabled={saving} type="button" variant="outline" onClick={() => { setRemarkText(""); setSendBackOpen(true); }} className="border-purple-300 text-purple-700 hover:bg-purple-50"><ChevronLeft size={15} /> Send Back</Button>
-              <Button disabled={saving || !requestNumber} type="button" variant="default" onClick={handleGeneratePO} className="bg-indigo-600 hover:bg-indigo-700">Generate PO</Button>
+              <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-slate-600 hover:bg-slate-700" onClick={handleSaveDraft}><Save size={15} /> {saving ? "Saving..." : "Save Draft"}</Button>
+              <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-blue-600 hover:bg-blue-700" onClick={handleSubmit}><Send size={15} /> Submit</Button>
+              <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-emerald-600 hover:bg-emerald-700" onClick={handleApprove}><CheckCircle size={15} /> Approve</Button>
+              <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-destructive hover:bg-destructive/90" onClick={() => { setRemarkText(""); setRejectOpen(true); }}><X size={15} /> Reject</Button>
+              <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-purple-600 hover:bg-purple-700" onClick={() => { setRemarkText(""); setSendBackOpen(true); }}><ChevronLeft size={15} /> Send Back</Button>
+              <Button disabled={saving || !requestNumber} type="button" variant="default" className="min-w-[110px] justify-center bg-indigo-600 hover:bg-indigo-700" onClick={handleGeneratePO}>Generate PO</Button>
             </div>
           )}
         </div>
