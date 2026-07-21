@@ -25,6 +25,7 @@ import { WmsSimpleMasterPage } from "../pages/wms/WmsSimpleMasterPage";
 import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
 import { FreightMasterPage } from "../pages/freight/FreightMasterPage";
 import { freightMasterConfigs } from "../pages/freight/freightMasterConfigs";
+import { FreightEnquiryActivitiesPage } from "../pages/freight/FreightEnquiryActivitiesPage";
 import { FreightEnquiryMainPage } from "../pages/freight/FreightEnquiryMainPage";
 import { FreightWorkspacePage } from "../pages/freight/FreightWorkspacePage";
 import { SecurityAssignmentPage, securityAssignmentConfigs } from "../pages/security/SecurityAssignmentPage";
@@ -567,6 +568,16 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "WMS Simple Master",
     match: ({ pathname }) => Boolean(getWmsSimpleMasterConfig(pathname)),
     element: ({ pathname }) => <WmsSimpleMasterPage config={getWmsSimpleMasterConfig(pathname)!} />,
+  },
+  {
+    name: "Freight RFQ",
+    match: (context) => isFreightRfqRoute(context),
+    element: (context) => <FreightEnquiryMainPage target={getFreightWorkspaceTarget(context)} screenType="rfq" />,
+  },
+  {
+    name: "Freight Enquiry Activities",
+    match: (context) => isFreightEnquiryActivitiesRoute(context),
+    element: () => <FreightEnquiryActivitiesPage />,
   },
   {
     name: "Freight Enquiry",
@@ -1312,6 +1323,19 @@ function isFreightEnquiryRoute(context: WorkspaceRouteContext) {
     compact.includes("freightfreightenquiryenquir") ||
     (compact.includes("freightenquiry") && !compact.includes("requestquote") && !compact.includes("quotation"))
   );
+}
+
+function isFreightEnquiryActivitiesRoute(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return compact.includes("freightfreightenquiryenquiryactivities") || compact.includes("freightenquiryactivities");
+}
+
+function isFreightRfqRoute(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  if (compact.includes("rfqactivities") || compact.includes("rfqlist")) return false;
+  return compact.includes("freightrequestquoterfq") || compact.includes("requestquoterfq") || compact.includes("rfqtest");
 }
 
 function getFreightWorkspaceTarget(context: WorkspaceRouteContext) {

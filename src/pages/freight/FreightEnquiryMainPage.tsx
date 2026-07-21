@@ -1,5 +1,5 @@
 import { FormEvent, useMemo, useState } from "react";
-import { Plus, RotateCcw, Save, Search, Trash2 } from "lucide-react";
+import { Activity, CreditCard, MapPinned, PackageCheck, Plus, RotateCcw, Save, Search, ShipWheel, Trash2 } from "lucide-react";
 import { api } from "../../api/client";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
@@ -114,18 +114,24 @@ const tosOptions = ["ORIGIN", "DESTINATION"];
 const memberTypes = ["", "IFLN", "AFFAL", "None"];
 const saleTypes = ["Normal", "FreeIn"];
 const jobCategories = ["International", "Combined services", "Clearance", "Others"];
-const enquiryTabs: { key: EnquiryTab; label: string }[] = [
-  { key: "cargo", label: "Cargo" },
-  { key: "journey", label: "Journey" },
-  { key: "carrier", label: "Carrier" },
-  { key: "payment", label: "Payment" },
-  { key: "activities", label: "Activities" },
+const enquiryTabs: { key: EnquiryTab; label: string; icon: typeof PackageCheck }[] = [
+  { key: "cargo", label: "Cargo", icon: PackageCheck },
+  { key: "journey", label: "Journey", icon: MapPinned },
+  { key: "carrier", label: "Carrier", icon: ShipWheel },
+  { key: "payment", label: "Payment", icon: CreditCard },
+  { key: "activities", label: "Activities", icon: Activity },
 ];
 
-export function FreightEnquiryMainPage({ target }: { target?: FreightWorkspaceTarget }) {
+type FreightEnquiryMainPageProps = {
+  target?: FreightWorkspaceTarget;
+  screenType?: "enquiry" | "rfq";
+};
+
+export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: FreightEnquiryMainPageProps) {
   const { user } = useAuth();
   const userInfo = user as Record<string, unknown> | null;
-  const initialHeader = useMemo(() => buildInitialHeader(userInfo, target), [target, userInfo]);
+  const isRfq = screenType === "rfq";
+  const initialHeader = useMemo(() => buildInitialHeader(userInfo, target, screenType), [screenType, target, userInfo]);
   const [header, setHeader] = useState<EnquiryHeader>(initialHeader);
   const [details, setDetails] = useState<EnquiryDetail[]>([buildInitialDetail(initialHeader, 1)]);
   const [saving, setSaving] = useState(false);
@@ -143,7 +149,7 @@ export function FreightEnquiryMainPage({ target }: { target?: FreightWorkspaceTa
   };
 
   const resetForm = () => {
-    const freshHeader = buildInitialHeader(userInfo, target);
+    const freshHeader = buildInitialHeader(userInfo, target, screenType);
     setHeader(freshHeader);
     setDetails([buildInitialDetail(freshHeader, 1)]);
     setNotice(null);
@@ -171,7 +177,7 @@ export function FreightEnquiryMainPage({ target }: { target?: FreightWorkspaceTa
           userid: loginid,
           user_date: new Date().toISOString(),
         },
-        details: details.map((row, index) => ({
+        details: details.filter((row) => row.act_code.trim()).map((row, index) => ({
           ...row,
           srno: index + 1,
           sr_no: index + 1,
@@ -189,9 +195,15 @@ export function FreightEnquiryMainPage({ target }: { target?: FreightWorkspaceTa
         })),
       };
 
-      const response = await api.post<{ success?: boolean; message?: string }>("/api/freight/insUpdTfEnquiryBulk", payload);
+      const response = await api.post<{ success?: boolean; message?: string; data?: { enquiry_nr?: string } }>(
+        isRfq ? "/api/freight/rfq/save" : "/api/freight/enquiry/save",
+        payload
+      );
       if (response.data?.success === false) {
         throw new Error(response.data.message || "Unable to save enquiry");
+      }
+      if (response.data?.data?.enquiry_nr) {
+        setHeaderField("enquiry_nr", response.data.data.enquiry_nr);
       }
       setNotice({ type: "success", text: response.data?.message || "Enquiry saved" });
     } catch (error) {
@@ -203,35 +215,46 @@ export function FreightEnquiryMainPage({ target }: { target?: FreightWorkspaceTa
 
   return (
     <form className="grid gap-4" onSubmit={saveEnquiry}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">Freight Enquiry</h1>
-          <p className="m-0 text-sm text-muted-foreground">
-            {header.job_type === "IMP" ? "Import" : "Export"} / {modeLabel(header.transport_mode)}
-          </p>
+      <div className="rounded-lg border border-slate-200 bg-gradient-to-r from-slate-950 via-slate-900 to-cyan-950 p-4 text-white shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="mb-2 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-wide">
+              <span className="rounded-full bg-white/12 px-3 py-1 text-cyan-100">{modeLabel(header.transport_mode)}</span>
+              <span className="rounded-full bg-white/12 px-3 py-1 text-emerald-100">{header.job_type === "IMP" ? "Import" : "Export"}</span>
+              <span className="rounded-full bg-white/12 px-3 py-1 text-amber-100">{header.indstatus === "A" ? "Approved" : "Not Approved"}</span>
+            </div>
+            <h1 className="m-0 text-2xl font-semibold tracking-tight">{isRfq ? "Request For Quote" : "Freight Enquiry"}</h1>
+            <p className="m-0 text-sm text-slate-300">{header.enquiry_nr || (isRfq ? "New RFQ" : "New enquiry")} / {header.prin_code || "Principal pending"}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {notice && (
+              <span
+                className={`rounded-md px-3 py-2 text-sm font-medium ${
+                  notice.type === "success" ? "bg-emerald-400/15 text-emerald-100" : "bg-red-400/15 text-red-100"
+                }`}
+              >
+                {notice.text}
+              </span>
+            )}
+            <Button type="button" variant="outline" className="border-white/25 bg-white/10 text-white hover:bg-white/20" onClick={resetForm}>
+              <RotateCcw size={15} />
+              Reset
+            </Button>
+            <Button type="submit" className="bg-cyan-500 text-slate-950 hover:bg-cyan-400" disabled={saving}>
+              <Save size={15} />
+              {saving ? "Saving" : "Save"}
+            </Button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {notice && (
-            <span
-              className={`rounded-md px-3 py-2 text-sm font-medium ${
-                notice.type === "success" ? "bg-emerald-50 text-emerald-800" : "bg-destructive/10 text-destructive"
-              }`}
-            >
-              {notice.text}
-            </span>
-          )}
-          <Button type="button" variant="outline" onClick={resetForm}>
-            <RotateCcw size={15} />
-            Reset
-          </Button>
-          <Button type="submit" disabled={saving}>
-            <Save size={15} />
-            {saving ? "Saving" : "Save"}
-          </Button>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <SummaryTile label="Route" value={`${header.origin_port || "-"} -> ${header.destination_port || "-"}`} />
+          <SummaryTile label="Currency" value={`${header.curr_code || "-"} / ${header.ex_rate || "1"}`} />
+          <SummaryTile label="Cargo" value={header.commodity || "-"} />
+          <SummaryTile label="Activity Lines" value={String(details.length)} />
         </div>
       </div>
 
-      <section className="rounded-lg border bg-card p-4 shadow-sm">
+      <section className="rounded-lg border border-slate-200 bg-card p-4 shadow-sm">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
           <FormInput label="Company" value={header.company_code} onChange={(value) => setHeaderField("company_code", value)} required />
           <FormInput label="Enquiry No" value={header.enquiry_nr} onChange={(value) => setHeaderField("enquiry_nr", value)} placeholder="Auto" />
@@ -248,28 +271,17 @@ export function FreightEnquiryMainPage({ target }: { target?: FreightWorkspaceTa
         </div>
       </section>
 
-      <div className="rounded-lg border bg-card shadow-sm">
-        <div className="flex gap-1 overflow-x-auto border-b bg-muted/30 px-3 pt-3">
+      <div className="rounded-lg border border-slate-200 bg-card shadow-sm">
+        <div className="flex gap-1 overflow-x-auto border-b bg-slate-50 px-3 pt-3">
           {enquiryTabs.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={`h-9 rounded-t-md px-4 text-sm font-semibold transition ${
-                activeTab === tab.key
-                  ? "border border-b-transparent bg-card text-foreground"
-                  : "text-muted-foreground hover:bg-background hover:text-foreground"
-              }`}
-            >
-              {tab.label}
-            </button>
+            <TabButton key={tab.key} tab={tab} active={activeTab === tab.key} onClick={() => setActiveTab(tab.key)} />
           ))}
         </div>
 
         <div className="p-4">
           {activeTab === "cargo" && (
             <section>
-              <h2 className="m-0 mb-3 text-sm font-semibold uppercase text-muted-foreground">Cargo And Parties</h2>
+              <SectionHeading title="Cargo And Parties" description="Commodity, measurement, shipper and consignee details" />
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <FormInput label="Commodity" value={header.commodity} onChange={(value) => setHeaderField("commodity", value)} />
                 <FormInput label="Weight" type="number" value={header.weight} onChange={(value) => setHeaderField("weight", value)} />
@@ -292,7 +304,6 @@ export function FreightEnquiryMainPage({ target }: { target?: FreightWorkspaceTa
               </div>
             </section>
           )}
-
           {activeTab === "journey" && (
             <section>
               <h2 className="m-0 mb-3 text-sm font-semibold uppercase text-muted-foreground">Journey</h2>
@@ -399,7 +410,51 @@ export function FreightEnquiryMainPage({ target }: { target?: FreightWorkspaceTa
   );
 }
 
-function buildInitialHeader(user: Record<string, unknown> | null, target?: FreightWorkspaceTarget): EnquiryHeader {
+function TabButton({
+  tab,
+  active,
+  onClick,
+}: {
+  tab: { key: EnquiryTab; label: string; icon: typeof PackageCheck };
+  active: boolean;
+  onClick: () => void;
+}) {
+  const Icon = tab.icon;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex h-10 items-center gap-2 rounded-t-md border px-4 text-sm font-semibold transition ${
+        active
+          ? "border-slate-200 border-b-card bg-card text-slate-950"
+          : "border-transparent text-slate-500 hover:bg-white hover:text-slate-900"
+      }`}
+    >
+      <Icon size={15} />
+      {tab.label}
+    </button>
+  );
+}
+
+function SectionHeading({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="mb-3">
+      <h2 className="m-0 text-sm font-semibold uppercase text-slate-700">{title}</h2>
+      <p className="m-0 text-xs text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
+function SummaryTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-white/15 bg-white/10 px-3 py-2">
+      <div className="text-xs font-semibold uppercase text-slate-300">{label}</div>
+      <div className="mt-1 truncate text-sm font-semibold text-white">{value}</div>
+    </div>
+  );
+}
+
+function buildInitialHeader(user: Record<string, unknown> | null, target?: FreightWorkspaceTarget, screenType: "enquiry" | "rfq" = "enquiry"): EnquiryHeader {
   const company = String(user?.company_code || user?.COMPANY_CODE || "");
   const mode = target?.mode === "sea" ? "S" : target?.mode === "land" ? "R" : "A";
   const jobType = target?.direction === "import" ? "IMP" : "EXP";
@@ -432,7 +487,7 @@ function buildInitialHeader(user: Record<string, unknown> | null, target?: Freig
     country_origin: "",
     country_destination: "",
     indstatus: "N",
-    enquiry_type: "ENQ",
+    enquiry_type: screenType === "rfq" ? "RFQ" : "EQI",
     offer_validity: "",
     spl_instructions: "",
     walkin_prin_code: "",
