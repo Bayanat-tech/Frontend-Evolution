@@ -133,6 +133,9 @@ import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/As
 
 import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation";
 import StockCountPage from "../pages/wms/stock count/StockCountPage";
+import{ExpenseMasterPage} from "../pages/purchase_sales/Expensemasterpage";
+import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
+
 
 import {ProductTypePage} from "../Purchase_Sales_G/PS_ProductTypePage";
 
@@ -876,33 +879,29 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => Boolean(getHrMasterConfig(context)),
     element: (context) => <HrMasterPage config={getHrMasterConfig(context)!} />,
   },
-
-  {
-  name: "Purchase Sales Product Type",
-  match: ({ pathname }) => isProductTypeRoute(pathname),
-  element: () => <ProductTypePage />,
-  },
-
-
-  {
-  name: "Purchase Sales Product Category",
-  match: ({ pathname }) => isProductCategoryRoute(pathname),
-  element: () => <ProductCategoryPage />,
-  },
-
-
-  {
-  name: "Purchase Sales Zone Master",
-  match: ({ pathname }) => isZoneMasterRoute(pathname),
-  element: () => <ZoneMasterPage />,
-  },
-
-
 ];
 
 function isStorageComputationRoute(pathname: string) {
   return pathname.toLowerCase().includes("wms/activity/request/storage_computation");
 }
+
+
+
+//--------PURCHASE SALE-------
+function isExpenseMasterRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/masters/expense_master"
+  );
+}
+
+function isProductBrandRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/masters/product_brand"
+  );
+}
+
 
 function isStockAdjViewRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
