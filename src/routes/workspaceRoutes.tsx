@@ -134,9 +134,11 @@ import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/As
 import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation";
 import StockCountPage from "../pages/wms/stock count/StockCountPage";
 
-import {ProductTypePage} from "../Purchase_Sales/PS_ProductTypePage";
+import {ProductTypePage} from "../Purchase_Sales_G/PS_ProductTypePage";
 
-import { ProductCategoryPage } from "../Purchase_Sales/PS_ProductCategory";
+import { ProductCategoryPage } from "../Purchase_Sales_G/PS_ProductCategory";
+
+import { ZoneMasterPage } from "../Purchase_Sales_G/PS_ZoneMasterPage";
 
 
 type WorkspaceRouteContext = {
@@ -886,6 +888,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   name: "Purchase Sales Product Category",
   match: ({ pathname }) => isProductCategoryRoute(pathname),
   element: () => <ProductCategoryPage />,
+  },
+
+
+  {
+  name: "Purchase Sales Zone Master",
+  match: ({ pathname }) => isZoneMasterRoute(pathname),
+  element: () => <ZoneMasterPage />,
   },
 
 
@@ -1758,5 +1767,16 @@ function isProductCategoryRoute(pathname: string) {
     normalized.includes("/purchase_sales/purchase_sales/masters/product%20category") ||
     normalized.includes("/purchase_sales/purchase_sales/masters/product_category") ||
     normalized.includes("/purchase_sales/purchase_sales/masters/product-category")
+  );
+}
+
+
+function isZoneMasterRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+    normalized.includes("/purchase_sales/purchase_sales/masters/zone%20master") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/zone_master") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/zone-master")
   );
 }

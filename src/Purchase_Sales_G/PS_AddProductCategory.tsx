@@ -69,40 +69,40 @@ export function AddProductCategoryForm({ mode, existingData, onClose }: Props) {
   const set = (field: keyof TProductCategory, value: unknown) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
-  // ── Duplicate check — parameter "PURCHASE_SALE_MSE_PRODCAT" filtered by code ─
-  const checkDuplicate = async () => {
-    if (!form.prodcat_code?.trim() || !user?.company_code) return;
-    setChecking(true);
-    setDuplicateWarning("");
-    try {
-      const response = await getDynamicLookupaccount({
-        parameter: "PURCHASE_SALE_MSE_PRODCAT",
-        loginid: user?.loginid ?? "",
-        code1: user?.company_code ?? "",
-        code2: form.prodcat_code.trim(),
-        code3: "NULL",
-        code4: "NULL",
-        number1: 0,
-        number2: 0,
-        number3: 0,
-        number4: 0,
-        date1: null,
-        date2: null,
-        date3: null,
-        date4: null,
-      });
-      const list = Array.isArray(response) ? response : [];
-      const exists = list.some((r: any) => {
-        const code = r.prodcat_code ?? r.PRODCAT_CODE ?? r.category_code ?? r.CATEGORY_CODE ?? "";
-        return String(code) === form.prodcat_code;
-      });
-      setDuplicateWarning(exists ? "This Prod Category Code already exists." : "Code is available.");
-    } catch (error) {
-      console.error("Failed to check product category code:", error);
-    } finally {
-      setChecking(false);
-    }
-  };
+    // ── Duplicate check — parameter "PURCHASE_SALE_MSE_PRODCAT" filtered by code ─
+    const checkDuplicate = async () => {
+      if (!form.prodcat_code?.trim() || !user?.company_code) return;
+      setChecking(true);
+      setDuplicateWarning("");
+      try {
+        const response = await getDynamicLookupaccount({
+          parameter: "PURCHASE_SALE_MSE_PRODCAT",
+          loginid: user?.loginid ?? "",
+          code1: user?.company_code ?? "",
+          code2: form.prodcat_code.trim(),
+          code3: "NULL",
+          code4: "NULL",
+          number1: 0,
+          number2: 0,
+          number3: 0,
+          number4: 0,
+          date1: null,
+          date2: null,
+          date3: null,
+          date4: null,
+        });
+        const list = Array.isArray(response) ? response : [];
+        const exists = list.some((r: any) => {
+          const code = r.prodcat_code ?? r.PRODCAT_CODE ?? r.category_code ?? r.CATEGORY_CODE ?? "";
+          return String(code) === form.prodcat_code;
+        });
+        setDuplicateWarning(exists ? "This Prod Category Code already exists." : "Code is available.");
+      } catch (error) {
+        console.error("Failed to check product category code:", error);
+      } finally {
+        setChecking(false);
+      }
+    };
 
   // ── Validation ────────────────────────────────────────────────────────
   const validate = (): boolean => {
