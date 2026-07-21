@@ -20,6 +20,7 @@ import { Select } from "../../components/ui/Select";
 
 import type { TPRHeader, TPRItem } from "./PurchaseSummary-types";
 import { almsSave, almsCommonSelect } from "../../api/alms";
+import { openPRPurchaseReport } from "../../api/transactions";
 
 type AddPRRequestPageProps = {
   isEditMode: boolean;
@@ -216,9 +217,20 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
 
   const handleSaveDraft = () => runAction("DRAFT", "Draft saved successfully!");
   const handleSubmit = () => runAction("SUBMITTED", "PR submitted successfully!");
+
+
   const handlePrint = () => {
-    window.print();
-  };
+  if (!requestNumber) {
+    setNotice({ type: "error", message: "Please save the request before printing." });
+    return;
+  }
+  openPRPurchaseReport({
+    parameter: "Amlspf_PRReport", 
+    loginid,
+    code1: companyCode,
+    code2: requestNumber,
+  });
+};
 
   const handleApprove = async () => {
     if (!requestNumber) return setNotice({ type: "error", message: "No PR to approve" });
