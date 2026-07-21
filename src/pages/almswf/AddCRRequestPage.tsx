@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Save, Send, X, ChevronLeft } from "lucide-react";
+import { Save, Send, X, ChevronLeft, FileText, Paperclip } from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
@@ -90,6 +90,8 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const [rejectOpen, setRejectOpen] = useState(false);
   const [sendBackOpen, setSendBackOpen] = useState(false);
   const [remarkText, setRemarkText] = useState("");
+    const [attachOpen, setAttachOpen] = useState(false);
+    const [logOpen, setLogOpen] = useState(false);
 
   const disabled = isViewMode || saving;
   const Required = () => <span className="text-destructive ml-0.5">*</span>;
@@ -133,9 +135,9 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       val1s4: header.DESCRIPTION || "",                  // DESCRIPTION
       val1s5: header.REMARKS || "",                      // REMARKS
       val1s6: header.DEPARTMENT_CODE || "",               // DEPARTMENT_CODE
-      val1s7: header.FLOW_CODE || "CRFLOW",               // FLOW_CODE
+      val1s7: header.FLOW_CODE || "CR",               // FLOW_CODE
       val1s8: loginid,                                    // USER_ID
-      val1s9: header.FINAL_APPROVED || "N",               // FINAL_APPROVED
+      val1s9: header.FINAL_APPROVED || "",               // FINAL_APPROVED
       val1s10: header.CREATE_USER || loginid,             // CREATE_USER
       val1s11: loginid,                                   // LAST_UPDATED
       val1s12: status,                                    // LAST_ACTION ("DRAFT" / "SUBMITTED")
@@ -199,7 +201,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     }
   };
 
-  const handleSaveDraft = () => runAction("DRAFT", "Draft saved successfully!");
+  const handleSaveDraft = () => runAction("SAVEASDRAFT", "Draft saved successfully!");
   const handleSubmit = () => runAction("SUBMITTED", "CR submitted successfully!");
 
   const handleRejectConfirm = async () => {
@@ -261,9 +263,20 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                 Credit Request {requestNumber ? `— ${requestNumber}` : ""}
               </h2>
             </div>
+             {/* <Button type="button" variant="secondary" onClick={() => setAttachOpen(true)}><Paperclip size={15} /> Files</Button>
             <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={() => onClose()}>
               <X size={16} />
-            </Button>
+            </Button> */}
+
+             <div className="flex items-center gap-2">
+          
+                <>
+                  <Button type="button" variant="secondary" onClick={() => setAttachOpen(true)}><Paperclip size={15} /> Files</Button>
+                  <Button type="button" variant="secondary" onClick={() => setLogOpen(true)}><FileText size={15} /> Log</Button>
+                </>
+              
+              <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={() => onClose()}><X size={16} /></Button>
+            </div>
           </div>
         </CardHeader>
 

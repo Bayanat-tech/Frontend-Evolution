@@ -138,7 +138,7 @@ export async function almsCommonSelect<T = Record<string, unknown>>(
 
 export async function almsSave(params: AlmsProcedureParams) {
   const response = await api.post<ApiResponse<unknown>>(
-    "/api/wms/common/proc_build_dynamic_ins_upd_common",
+    "/api/wms/common/proc_build_dynamic_ins_upd_column90",
     normalizeParams(params)
   );
   if (!response.data.success)
@@ -148,6 +148,7 @@ export async function almsSave(params: AlmsProcedureParams) {
     data: uppercaseData([response.data.data])[0],
   };
 }
+
 
 export async function almsDelete(params: AlmsProcedureParams) {
   const response = await api.post<ApiResponse<unknown>>(

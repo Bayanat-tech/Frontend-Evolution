@@ -215,29 +215,60 @@ const MytaskalmsPage = ({ initialTab = 0 }: MytaskalmsPageProps) => {
         size: 160,
         cell: ({ row }) => (row.original as any).NEXT_ACTION_BY || "—",
       },
+      // {
+      //   id: "actions",
+      //   header: "Actions",
+      //   size: 100,
+      //   cell: ({ row }) => (
+      //     <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+      //       <Button
+      //         size="sm" variant="ghost" title="View"
+      //         onClick={() => handleActions("view", row.original)}
+      //         style={{ padding: "4px", height: "28px", width: "28px" }}
+      //       >
+      //         <Eye size={14} />
+      //       </Button>
+      //       <Button
+      //         size="sm" variant="ghost" title="Edit"
+      //         onClick={() => handleActions("edit", row.original)}
+      //         style={{ padding: "4px", height: "28px", width: "28px" }}
+      //       >
+      //         <Edit2 size={14} />
+      //       </Button>
+      //     </div>
+      //   ),
+      // },
+
+
+
       {
-        id: "actions",
-        header: "Actions",
-        size: 100,
-        cell: ({ row }) => (
-          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-            <Button
-              size="sm" variant="ghost" title="View"
-              onClick={() => handleActions("view", row.original)}
-              style={{ padding: "4px", height: "28px", width: "28px" }}
-            >
-              <Eye size={14} />
-            </Button>
-            <Button
-              size="sm" variant="ghost" title="Edit"
-              onClick={() => handleActions("edit", row.original)}
-              style={{ padding: "4px", height: "28px", width: "28px" }}
-            >
-              <Edit2 size={14} />
-            </Button>
-          </div>
-        ),
-      },
+  id: "actions",
+  header: "Actions",
+  size: 100,
+  cell: ({ row }) => {
+    const type = requestType(row.original.REQUEST_NUMBER);
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+        <Button
+          size="sm" variant="ghost" title="View"
+          onClick={() => handleActions("view", row.original)}
+          style={{ padding: "4px", height: "28px", width: "28px" }}
+        >
+          <Eye size={14} />
+        </Button>
+        {type !== "CP" && (
+          <Button
+            size="sm" variant="ghost" title="Edit"
+            onClick={() => handleActions("edit", row.original)}
+            style={{ padding: "4px", height: "28px", width: "28px" }}
+          >
+            <Edit2 size={14} />
+          </Button>
+        )}
+      </div>
+    );
+  },
+},
     ],
     []
   );
