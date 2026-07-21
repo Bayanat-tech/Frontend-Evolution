@@ -641,6 +641,15 @@ export async function exportCapexApprovalExcel(params: ReportParams): Promise<vo
 }
 
 
+export async function openPRPurchaseReport(params: ReportParams) {
+  await openReportInTab(
+    "/api/finance/transactions/reports/PRPurchaseReport/html",
+    params
+  );
+}
+
+
+
 
 
 
