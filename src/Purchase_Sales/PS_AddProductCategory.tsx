@@ -1,8 +1,7 @@
 import { Save, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { executeDynamicMutation, getDynamicLookup } from "../api/lookups";
+import { executeDynamicMutation, getDynamicLookupaccount } from "../api/lookups";
 import { Button } from "../components/ui/Button";
-import { Dialog } from "../components/ui/Dialog";
 import { Input } from "../components/ui/Input";
 import { useAuth } from "../state/AuthContext";
 
@@ -49,14 +48,20 @@ export function AddProductCategoryForm({ mode, existingData, onClose }: Props) {
   const [duplicateWarning, setDuplicateWarning] = useState("");
 
   // ── Load existing record into form ─────────────────────────────────────
+  // existingData now comes pre-normalized from the parent page's normalizeRow
+  // (prodcat_code / prodcat_name), but we keep the extra fallbacks here too
+  // in case this form is ever opened from a caller that hasn't normalized
+  // (e.g. a future "quick add" entry point) — the API's real field names are
+  // category_code / category_name, confirmed via Network tab.
   useEffect(() => {
     if ((isEdit || readonly) && existingData) {
+      const raw = existingData as any;
       setForm({
         ...EMPTY,
         prodcat_code:
-          (existingData as any).PRODCAT_CODE ?? existingData.prodcat_code ?? "",
+          raw.prodcat_code ?? raw.PRODCAT_CODE ?? raw.category_code ?? raw.CATEGORY_CODE ?? "",
         prodcat_name:
-          (existingData as any).PRODCAT_NAME ?? existingData.prodcat_name ?? "",
+          raw.prodcat_name ?? raw.PRODCAT_NAME ?? raw.category_name ?? raw.CATEGORY_NAME ?? "",
       });
     }
   }, [isEdit, readonly, existingData]);
@@ -70,7 +75,7 @@ export function AddProductCategoryForm({ mode, existingData, onClose }: Props) {
     setChecking(true);
     setDuplicateWarning("");
     try {
-      const response = await getDynamicLookup({
+      const response = await getDynamicLookupaccount({
         parameter: "PURCHASE_SALE_MSE_PRODCAT",
         loginid: user?.loginid ?? "",
         code1: user?.company_code ?? "",
@@ -87,9 +92,10 @@ export function AddProductCategoryForm({ mode, existingData, onClose }: Props) {
         date4: null,
       });
       const list = Array.isArray(response) ? response : [];
-      const exists = list.some(
-        (r: any) => String(r.prodcat_code ?? r.PRODCAT_CODE ?? "") === form.prodcat_code,
-      );
+      const exists = list.some((r: any) => {
+        const code = r.prodcat_code ?? r.PRODCAT_CODE ?? r.category_code ?? r.CATEGORY_CODE ?? "";
+        return String(code) === form.prodcat_code;
+      });
       setDuplicateWarning(exists ? "This Prod Category Code already exists." : "Code is available.");
     } catch (error) {
       console.error("Failed to check product category code:", error);
@@ -107,22 +113,27 @@ export function AddProductCategoryForm({ mode, existingData, onClose }: Props) {
     return Object.keys(next).length === 0;
   };
 
-  // ── Save — parameter "pur_prodcat_ins_upd". Slot mapping must stay in
-  // lockstep with the corresponding WHEN branch in
-  // PROC_BUILD_DYNAMIC_INS_UPD_COMMON (val1s1=company_code,
-  // val1s2=prodcat_code, val1s3=prodcat_name). ────────────────────────────
+  // ── Save — parameter "PURCHASE_SALE_MSE_PRODCATEGORY". Slot mapping must
+  // stay in lockstep with the corresponding WHEN branch in
+  // PROC_BUILD_DYNAMIC_INS_UPD_COMMON:
+  //   val1s1 = CATEGORY_CODE (empty = auto-generate)
+  //   val1s2 = COMPANY_CODE
+  //   val1s3 = CATEGORY_NAME
+  //   val1s4 = USER_ID
+  // ────────────────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!validate()) return;
     setSaving(true);
     setApiError("");
     try {
       await executeDynamicMutation({
-        parameter: "PURCHASE_SALE_MSE_PRODCAT",
+        parameter: "PURCHASE_SALE_MSE_PRODCATEGORY",
         loginid: user?.loginid ?? "",
 
-        val1s1: user?.company_code ?? "",
-        val1s2: form.prodcat_code ?? "",
+        val1s1: form.prodcat_code ?? "",
+        val1s2: user?.company_code ?? "",
         val1s3: form.prodcat_name ?? "",
+        val1s4: user?.loginid ?? "",
       });
       onClose(true);
     } catch (error) {

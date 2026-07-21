@@ -28,7 +28,7 @@ type PopupState = {
 // PROC_BUILD_DYNAMIC_LOOKUP / PROC_BUILD_DYNAMIC_DELETE entries for
 // MSE_PRODCAT if these differ.
 const baseParams = (loginid: string, companyCode: string) => ({
-  parameter: "PURCHASE_SALE_MSE_PRODCAT",
+  parameter: "PURCHASE_SALE_MSE_PRODCATEGORY",
   loginid,
   code1: companyCode,
   code2: "NULL",
@@ -42,6 +42,19 @@ const baseParams = (loginid: string, companyCode: string) => ({
   date2: null,
   date3: null,
   date4: null,
+});
+
+// ─── Normalizer ─────────────────────────────────────────────────────────────
+// The API actually returns { category_code, category_name } (confirmed via
+// Network tab response), NOT prodcat_code / prodcat_name / PRODCAT_CODE /
+// PRODCAT_NAME. Every consumer downstream (columns, form, delete, getRowId)
+// expects prodcat_code / prodcat_name, so we map field names once here at the
+// fetch boundary instead of touching every consumer. This is the fix for the
+// grid rendering fully blank while the network response clearly has data.
+const normalizeRow = (r: any): ProductCategoryRow => ({
+  ...r,
+  prodcat_code: r.prodcat_code ?? r.PRODCAT_CODE ?? r.category_code ?? r.CATEGORY_CODE ?? "",
+  prodcat_name: r.prodcat_name ?? r.PRODCAT_NAME ?? r.category_name ?? r.CATEGORY_NAME ?? "",
 });
 
 export function ProductCategoryPage() {
@@ -65,8 +78,8 @@ export function ProductCategoryPage() {
     setNotice(null);
     try {
       const data = await getDynamicLookupaccount(baseParams(loginid, companyCode));
-      const list = Array.isArray(data) ? (data as ProductCategoryRow[]) : [];
-      setRows(list);
+      const list = Array.isArray(data) ? data : [];
+      setRows(list.map(normalizeRow));
     } catch (error) {
       setNotice({
         type: "error",
@@ -97,7 +110,7 @@ export function ProductCategoryPage() {
     setNotice(null);
     try {
       await executeDynamicDelete({
-        parameter: "PURCHASE_SALE_MSE_PRODCAT_DELETE",
+        parameter: "PURCHASE_SALE_MSE_PRODCATEGORY_DELETE",
         loginid,
         code1: companyCode,
         code2: String(prodcatCode),
