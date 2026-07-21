@@ -134,6 +134,7 @@ import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/As
 import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation";
 import StockCountPage from "../pages/wms/stock count/StockCountPage";
 import{ExpenseMasterPage} from "../pages/purchase_sales/Expensemasterpage";
+import MseProdGroup from "../pages/purchase_sales/MseProdGroup";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -154,6 +155,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 
 export const workspaceRoutes: WorkspaceRoute[] = [
 
+  {
+    name: 'MSE Prod Group',
+    match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_group"),
+    element: () => <MseProdGroup />,
+  },
   {
     name: 'mms inspection report',
     match: ({pathname}) => pathname.toLowerCase().includes("/mms/mms/inspection/inspection-report"),
