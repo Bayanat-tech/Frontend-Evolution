@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "../../state/AuthContext";
 import { pamsSelect, pamsSave, pamsDelete } from "../../api/pams";
-import { DataTable } from "../../components/ui/DataTable";
+import { DataTable } from "../../components/ui/PamsDataTable";
 import { LookupField } from "../../components/ui/LookupField";
 import { ColumnDef } from "@tanstack/react-table";
 import { Trash2 } from "lucide-react";
@@ -333,26 +333,6 @@ const AppraisalWeightageMaster: React.FC = () => {
         <span style={{ fontWeight: 600, color: "#0F6E56" }}>{num(getValue())}%</span>
       ),
     },
-    // {
-    //   // ── OLD calculation column ───────────────────────────────────────────
-    //   id: "old_calculation",
-    //   header: "Old Calculation (50/50)",
-    //   cell: ({ row }) => {
-    //     const t = num(row.original.TASK_PCT);
-    //     const c = num(row.original.CHARACTER_PCT);
-    //     // Old logic: simple average (50% each)
-    //     const oldFinal = Math.round((t + c) / 2);
-    //     return (
-    //       <span style={{
-    //         fontSize: "11px", color: "#6b7280",
-    //         display: "flex", flexDirection: "column", gap: "2px",
-    //       }}>
-    //         <span>Task: {(t * 0.5).toFixed(1)} + Char: {(c * 0.5).toFixed(1)}</span>
-    //         <span style={{ fontWeight: 600, color: "#374151" }}>= {oldFinal}</span>
-    //       </span>
-    //     );
-    //   },
-    // },
     {
       accessorKey: "MODIFIED_BY",
       header: "Modified By",
@@ -473,13 +453,9 @@ const AppraisalWeightageMaster: React.FC = () => {
             : "⚠ Each component must be between 1% and 99%"}
         </div>
       </div>
-
-      {/* ── Additional Settings — 3 equal columns ── */}
       <div style={S.card}>
         <div style={S.cardTitle}>Additional Settings</div>
         <div style={S.grid3Equal}>
-
-          {/* Effective Period — LookupField */}
           <div style={S.field}>
             <span style={S.label}>Sel Period <span style={{ color: "#c62828" }}>*</span></span>
             <LookupField
@@ -500,8 +476,6 @@ const AppraisalWeightageMaster: React.FC = () => {
               }}
             />
           </div>
-
-          {/* Division — LookupField */}
           <div style={S.field}>
             <span style={S.label}>Division <span style={{ color: "#c62828" }}>*</span></span>
             <LookupField
@@ -523,8 +497,6 @@ const AppraisalWeightageMaster: React.FC = () => {
               }}
             />
           </div>
-
-          {/* Department — cascaded from division — LookupField */}
           <div style={S.field}>
             <span style={S.label}>Department</span>
             <LookupField
@@ -551,7 +523,6 @@ const AppraisalWeightageMaster: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Saved Configurations — DataTable ── */}
       <div style={S.card}>
         <div style={S.tableHeader}>
           <div style={S.cardTitle} className="mb-0">
@@ -577,7 +548,6 @@ const AppraisalWeightageMaster: React.FC = () => {
 
       {errorMsg && <div style={S.errorMsg}>⚠ {errorMsg}</div>}
 
-      {/* ── Actions — only Save button ── */}
       <div style={S.actions}>
         {savedMsg && <span style={S.savedMsg}>✓ Saved successfully</span>}
         <button
@@ -592,5 +562,4 @@ const AppraisalWeightageMaster: React.FC = () => {
     </div>
   );
 };
-
 export default AppraisalWeightageMaster;

@@ -4,18 +4,11 @@ import {
   RotateCcw,
   BarChart2,
   Loader2,
+  Download,
 } from "lucide-react";
 import { useAuth } from "../../../state/AuthContext";
 import { getDynamicLookup, getDynamicLookupaccount } from "../../../api/lookups";
-import ReportDialogPage from "../../../components/ReportDialogPage";
-import { openAcStatementReport } from "../../../api/transactions";
-// import { useQuery } from "@tanstack/react-query";
-// import { getDynamicLookup, getDynamicLookupaccount } from "../../api/lookups";
-// import { useAuth } from "../../state/AuthContext";
-// import ReportDialogPage from "../../report/ReportDialogPage";
-// import AC_StatementReport from "./AC_StatementReport";
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+import { exportAcStatementExcel, openAcStatementReport } from "../../../api/transactions";
 
 const getRowKey = (row: any, tab: "acCode" | "group"): string =>
   tab === "acCode" ? String(row.ac_code ?? "") : String(row.l4_code ?? "");
@@ -136,6 +129,7 @@ export default function AC_StatementPage() {
   const [groupSearchLeft, setGroupSearchLeft] = useState("");
   const [groupSearchRight, setGroupSearchRight] = useState("");
 
+
   // ── Other state ─────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<"acCode" | "group">("acCode");
   const [currency, setCurrency] = useState<"local" | "foreign">("local");
@@ -144,6 +138,7 @@ export default function AC_StatementPage() {
   const [reportOpen, setReportOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [generatingExcel, setGeneratingExcel] = useState(false);
 
   // ── Track fetched tabs ──────────────────────────────────────────────────────
   const [fetchedTabs, setFetchedTabs] = useState<Set<string>>(new Set());
@@ -302,7 +297,7 @@ export default function AC_StatementPage() {
           : "All",
         code5: formatDateOracle(dateFrom),
         code6: formatDateOracle(dateTo),
-        code20: "ROWSQL"
+        code20: "RAWSQL"
       };
       await openAcStatementReport(params);
     } catch (err: any) {
@@ -312,6 +307,43 @@ export default function AC_StatementPage() {
       setGenerating(false);
     }
   };
+
+
+const handleExportExcel = async () => {
+    if (!division) {
+        setReportError("Please select a Division before exporting.");
+        return;
+    }
+    setReportError(null);
+    setGeneratingExcel(true);
+    try {
+        const params = {
+            parameter: "Account_Report_AC_StatementReport",
+            loginid: loginId,
+            code1: companyCode,
+            code2: division,
+            code3: activeTab === "acCode"
+                ? (acLeftSelected.size > 0 ? Array.from(acLeftSelected).join(",") : "All")
+                : "All",
+            code4: activeTab === "group"
+                ? (groupLeftSelected.size > 0 ? Array.from(groupLeftSelected).join(",") : "All")
+                : "All",
+            code5: formatDateOracle(dateFrom),
+            code6: formatDateOracle(dateTo),
+            code20: "RAWSQL",
+        };
+        await exportAcStatementExcel(params);
+    } catch (err: any) {
+        setReportError("Failed to export Excel.");
+        console.error(err);
+    } finally {
+        setGeneratingExcel(false);
+    }
+};
+
+
+
+
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -328,6 +360,7 @@ export default function AC_StatementPage() {
         tbody tr:hover td { background: #f9fafb; }
         .div-option:hover { background: #f0f7ff; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        .action-btn-excel:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
       `}</style>
 
       <div style={{ maxWidth: 1080, margin: "0 auto", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -404,7 +437,7 @@ export default function AC_StatementPage() {
 
 
             {/* Currency */}
-            <div style={{ flex: "1 1 220px", minWidth: 220 }}>
+            {/* <div style={{ flex: "1 1 220px", minWidth: 220 }}>
               <fieldset style={{ border: "0.5px solid #d1d5db", borderRadius: 6, padding: "6px 12px 10px", margin: 0 }}>
                 <legend style={{ fontSize: 10, color: "#6b7280", padding: "0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   Currency
@@ -425,7 +458,7 @@ export default function AC_StatementPage() {
                   ))}
                 </div>
               </fieldset>
-            </div>
+            </div> */}
 
           </div>
 
@@ -597,12 +630,25 @@ export default function AC_StatementPage() {
           {/* Action bar */}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8, paddingTop: 8, borderTop: "0.5px solid #e5e7eb" }}>
             <button
-              className="action-btn"
+                className="action-btn action-btn-excel"
               onClick={handleReset}
               style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151" }}
             >
               <RotateCcw size={13} /> Reset
             </button>
+
+                      <button
+                            className="action-btn action-btn-excel"
+                            onClick={handleExportExcel}
+                            disabled={generatingExcel}
+                            style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: generatingExcel ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: generatingExcel ? 0.7 : 1 }}
+                        >
+                            <Download size={13} /> {generatingExcel ? "Exporting..." : "Export Excel"}
+                        </button>
+
+
+
+
             <button
               className="action-btn-primary"
               onClick={handleGenerate}

@@ -4,6 +4,8 @@ export type MenuNode = {
   type: "collapse" | "group" | "item";
   icon?: string;
   url_path?: string;
+  component_name?: string;
+  componentName?: string;
   children?: MenuNode[];
 };
 
@@ -14,9 +16,17 @@ export type UserProfile = {
   EMAIL_ID?: string;
   loginid?: string;
   LOGINID?: string;
+  loginid1?: string;
+  LOGINID1?: string;
   company_code?: string;
   COMPANY_CODE?: string;
+  company_name?: string;
+  COMPANY_NAME?: string;
   tenantId?: string;
+  tenant_name?: string;
+  TENANT_NAME?: string;
+  tenantName?: string;
+  TENANTNAME?: string;
 };
 
 export type LoginResponse = {

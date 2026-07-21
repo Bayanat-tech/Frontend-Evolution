@@ -11,7 +11,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -34,6 +34,8 @@ import {
   getAllStockTransReports,
 } from "../../../api/wms";
 import { api } from "../../../api/client";
+import ReportDialogPage from "../../../components/ReportDialogPage";
+import { ImportStockTransEdi } from "./Importstocktransedi";
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -150,14 +152,64 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+
+function IframeReportRenderer({ required_values }: { required_values: { html: string } }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+
+    const win = iframe.contentWindow as any;
+    let originalPrint: (() => void) | undefined;
+    if (win) {
+      originalPrint = win.print;
+      win.print = () => {};
+    }
+
+    doc.open();
+    doc.write(required_values.html);
+    doc.close();
+
+    const restorePrint = () => {
+      if (win && originalPrint) win.print = originalPrint;
+    };
+    if (doc.readyState === "complete") {
+      restorePrint();
+    } else {
+      iframe.addEventListener("load", restorePrint, { once: true });
+    }
+  }, [required_values.html]);
+
+  return (
+    <iframe
+      ref={iframeRef}
+      title="report"
+      style={{ width: "100%", minHeight: "70vh", border: "none" }}
+    />
+  );
+}
+
+function getLoadingHtml(): string {
+  return `<!doctype html><html><body style="display:flex;align-items:center;justify-content:center;height:60vh;font-family:Arial,sans-serif;color:#1a5f4a;font-size:14px">
+  <div style="text-align:center">
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;display:block;margin:0 auto 12px">
+      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+    </svg>
+    <style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>
+    Loading report…
+  </div>
+</body></html>`;
+}
+
 export function StockTransferViewPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  // const { stn_no } = useParams<{ stn_no: string }>();
   const pathSegments = location.pathname.split("/");
-  const viewIndex = pathSegments.findIndex(s => s.toLowerCase() === "view");
+  const viewIndex = pathSegments.findIndex((s) => s.toLowerCase() === "view");
   const stn_no = viewIndex !== -1 ? pathSegments[viewIndex + 1] : "";
 
   const searchParams = new URLSearchParams(location.search);
@@ -178,12 +230,23 @@ export function StockTransferViewPage() {
   const [editingRow, setEditingRow] = useState<WmsRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WmsRow | null>(null);
   const [printOpen, setPrintOpen] = useState(false);
-  const [reports, setReports] = useState<{ reportid: string; reportname: string }[]>([]);
-  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reports] = useState<{ reportid: string; reportname: string }[]>([
+    { reportid: "1", reportname: "Stock Transfer Report" },
+    { reportid: "2", reportname: "Stock Confirmation Report" },
+  ]);
 
   const [processing, setProcessing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const [importOpen, setImportOpen] = useState(false);
+
+
+  // ── Report dialog state (NEW) ──
+  const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportDialogTitle, setReportDialogTitle] = useState<string>("Report");
+  const [reportGenerating, setReportGenerating] = useState(false);
+  const [activeReportId, setActiveReportId] = useState<string | null>(null);
 
   // ── Load data ──
   const loadData = async (clearNotice = true) => {
@@ -209,8 +272,6 @@ export function StockTransferViewPage() {
           };
         })
       );
-      // const batchRaw = await getTfiBatchRows(prin_code, stn_no);
-      // setBatchRows(Array.isArray(batchRaw) ? batchRaw.map(normalizeRow) : []);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load transfer details." });
     } finally {
@@ -259,7 +320,6 @@ export function StockTransferViewPage() {
     if (!selectedRows.length || !stn_no) return;
     setProcessing(true);
     try {
-      // FIX: stn_no from useParams is string | undefined — guard above ensures it's string here
       await processStockTransfer({ company_code, prin_code, stn_no: stn_no, user_id: user?.username || "" });
       setNotice({ type: "success", message: "Stock transfer processed successfully." });
       await loadData(false);
@@ -292,9 +352,7 @@ export function StockTransferViewPage() {
     try {
       await deleteStockTransferDetail({
         COMPANY_CODE: val(deleteTarget, "company_code") || company_code,
-        // FIX: stn_no could be undefined — fallback to empty string, cast to string
         STN_NO: stn_no ?? "",
-        // FIX: _id is unknown — coerce to string explicitly
         KEY_NUMBER: String(deleteTarget._id ?? ""),
       });
       setNotice({ type: "success", message: "Transfer detail deleted." });
@@ -307,21 +365,78 @@ export function StockTransferViewPage() {
     }
   };
 
-  // ── Print ──
-  const openPrint = async () => {
+  // ── Print (report picker) ──
+  const openPrint = () => {
     setPrintOpen(true);
-    setReportsLoading(true);
+  };
+
+  // ── Report: fetch HTML for the chosen report and open the render dialog (FIXED) ──
+  const handleReport = async (report_id: string, stnNoArg: string, companyCodeArg: string, prinCodeArg: string) => {
+    const selected = reports.find((r) => r.reportid === report_id);
+    const route: { [key: string]: string } = {
+      "1":
+        `/api/wms/reports/stocktransfer-report/html?stn_no='${stnNoArg}'&company_code='${companyCodeArg}'&prin_code='${prinCodeArg}'`,
+      "2":
+        `/api/wms/reports/stockconfirmation-report/html?&stn_no='${stnNoArg}'&company_code='${companyCodeArg}'&prin_code='${prinCodeArg}'`,
+    };
+
+    setActiveReportId(report_id);
+    setPrintOpen(false); // close the report-picker dialog
+    setReportDialogTitle(selected?.reportname || "Report");
+    setReportHtml(null); // shows the loading placeholder while fetching
+    setReportGenerating(true);
+    setNotice(null);
+
     try {
-      const data = await getAllStockTransReports();
-      setReports(Array.isArray(data) ? data : []);
-    } catch {
-      setReports([]);
+      // stockConfirmationReportHtml (backend) does res.send(htmlString) with
+      // Content-Type: text/html — the body IS the html, so with an axios-style
+      // client the string lives at response.data.
+      const response = await api.get(route[report_id], { responseType: "text" });
+      const html = typeof response === "string" ? response : (response as any)?.data ?? "";
+      setReportHtml(html);
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load report." });
+      setReportHtml(null);
+      setActiveReportId(null);
     } finally {
-      setReportsLoading(false);
+      setReportGenerating(false);
     }
   };
 
-  // ── Column defs ──
+  // ── Excel: fetch blob and trigger a download (FIXED) ──
+  const handleExcel = async (report_id: string, stnNoArg: string, companyCodeArg: string, prinCodeArg: string) => {
+    const route: { [key: string]: string } = {
+      "1":
+        `/api/wms/reports/stocktransfer-report/excel?stn_no='${stnNoArg}'&company_code='${companyCodeArg}'&prin_code='${prinCodeArg}'`,
+      "2":
+        `/api/wms/reports/stockconfirmation-report/excel?&stn_no='${stnNoArg}'&company_code='${companyCodeArg}'&prin_code='${prinCodeArg}'`,
+    };
+
+    try {
+      const response = await api.get(route[report_id], { responseType: "blob" });
+      const data = (response as any)?.data ?? response;
+      const blob = new Blob([data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `stock-transfer-${stnNoArg}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to download Excel." });
+    }
+  };
+
+  const closeReportDialog = () => {
+    setReportHtml(null);
+    setActiveReportId(null);
+  };
+
+  // ── Column defs ── (unchanged from original — keep exactly as-is)
   const createColumns = useMemo<ColumnDef<WmsRow>[]>(
     () => [
       { id: "row_no", header: "No", size: 52, cell: ({ row }) => row.index + 1 },
@@ -334,49 +449,19 @@ export function StockTransferViewPage() {
       { accessorKey: "to_loc_start", header: "Loc Start (To)", size: 150, cell: ({ row }) => val(row.original, "to_loc_start") },
       { accessorKey: "from_loc_end", header: "Loc End (From)", size: 150, cell: ({ row }) => val(row.original, "from_loc_end") },
       { accessorKey: "to_loc_end", header: "Loc End (To)", size: 150, cell: ({ row }) => val(row.original, "to_loc_end") },
-      {
-        accessorKey: "qty_puom",
-        header: "Qty PUOM",
-        size: 100,
-        cell: ({ row }) => val(row.original, "qty_puom") || val(row.original, "QTY_PUOM"),
-      },
+      { accessorKey: "qty_puom", header: "Qty PUOM", size: 100, cell: ({ row }) => val(row.original, "qty_puom") || val(row.original, "QTY_PUOM") },
       { accessorKey: "uom", header: "UOM", size: 80, cell: ({ row }) => val(row.original, "p_uom") },
       { accessorKey: "job_no", header: "Job No", size: 110, cell: ({ row }) => val(row.original, "job_no") },
       { accessorKey: "batch_no_from", header: "Batch (From)", size: 130, cell: ({ row }) => val(row.original, "batch_no_from") },
       { accessorKey: "batch_no_to", header: "Batch (To)", size: 130, cell: ({ row }) => val(row.original, "batch_no_to") },
       { accessorKey: "lot_no_from", header: "Lot (From)", size: 120, cell: ({ row }) => val(row.original, "lot_no_from") },
       { accessorKey: "lot_no_to", header: "Lot (To)", size: 120, cell: ({ row }) => val(row.original, "lot_no_to") },
-      {
-        accessorKey: "mfg_date_from",
-        header: "Mfg Date (From)",
-        size: 140,
-        cell: ({ row }) => formatDate(val(row.original, "mfg_date_from")),
-      },
-      {
-        accessorKey: "exp_date_from",
-        header: "Exp Date (From)",
-        size: 140,
-        cell: ({ row }) => formatDate(val(row.original, "exp_date_from")),
-      },
-      {
-        accessorKey: "confirmed",
-        header: "Confirmed",
-        size: 100,
-        cell: ({ row }) => <StatusBadge flag={row.original.confirmed as "Y" | "N"} labels={["Yes", "No"]} />,
-      },
-      {
-        accessorKey: "processed",
-        header: "Processed",
-        size: 100,
-        cell: ({ row }) => <StatusBadge flag={row.original.processed as "Y" | "N"} labels={["Yes", "No"]} />,
-      },
+      { accessorKey: "mfg_date_from", header: "Mfg Date (From)", size: 140, cell: ({ row }) => formatDate(val(row.original, "mfg_date_from")) },
+      { accessorKey: "exp_date_from", header: "Exp Date (From)", size: 140, cell: ({ row }) => formatDate(val(row.original, "exp_date_from")) },
+      { accessorKey: "confirmed", header: "Confirmed", size: 100, cell: ({ row }) => <StatusBadge flag={row.original.confirmed as "Y" | "N"} labels={["Yes", "No"]} /> },
+      { accessorKey: "processed", header: "Processed", size: 100, cell: ({ row }) => <StatusBadge flag={row.original.processed as "Y" | "N"} labels={["Yes", "No"]} /> },
       { accessorKey: "user_id", header: "User", size: 100, cell: ({ row }) => val(row.original, "user_id") },
-      {
-        accessorKey: "user_dt",
-        header: "User Date",
-        size: 140,
-        cell: ({ row }) => formatDateTime(val(row.original, "user_dt")),
-      },
+      { accessorKey: "user_dt", header: "User Date", size: 140, cell: ({ row }) => formatDateTime(val(row.original, "user_dt")) },
       {
         id: "actions",
         header: "Actions",
@@ -545,7 +630,7 @@ export function StockTransferViewPage() {
               <Button size="sm" variant="outline" disabled={isAnyConfirmed} title={isAnyConfirmed ? "Cannot add — a confirmed transfer already exists" : ""} onClick={() => setCreateOpen(true)}>
                 <Plus size={14} /> Create Detail
               </Button>
-              <Button size="sm" variant="outline">
+              <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}> 
                 <CloudUpload size={14} /> Import
               </Button>
             </>
@@ -682,41 +767,58 @@ export function StockTransferViewPage() {
         </div>
       </Dialog>
 
-      {/* ── Print dialog ── */}
+      {/* ── Import Dialog ── */}
+      <Dialog
+        open={importOpen}
+        title="Import Stock Transfer from Excel"
+        onClose={() => setImportOpen(false)}
+        wide
+      >
+        <ImportStockTransEdi
+          stn_no={stn_no || 0}
+          onClose={() => setImportOpen(false)}
+          onSuccess={() => {
+            setImportOpen(false);
+            void loadData(false);
+          }}
+        />
+      </Dialog>
+
+      {/* ── Print / report picker dialog ── */}
       <Dialog
         open={printOpen}
         title="Select Report"
         onClose={() => setPrintOpen(false)}
         footer={<Button variant="outline" onClick={() => setPrintOpen(false)}>Close</Button>}
       >
-        {reportsLoading ? (
-          <div className="space-y-2 p-2">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-10 animate-pulse rounded-md bg-muted" />
-            ))}
-          </div>
-        ) : reports.length === 0 ? (
-          <p className="p-4 text-sm text-muted-foreground">No reports available.</p>
-        ) : (
-          <ul className="divide-y">
-            {reports.map((r) => (
-              <li key={r.reportid}>
-                <button
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-accent"
-                  onClick={() => { setPrintOpen(false); }}
-                >
-                  <Printer size={13} className="shrink-0 text-muted-foreground" />
-                  {r.reportname}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <ul className="divide-y">
+          {reports.map((r) => (
+            <li key={r.reportid}>
+              <button
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-accent"
+                onClick={() => handleReport(r.reportid, stn_no || "", company_code, prin_code)}
+              >
+                <Printer size={13} className="shrink-0 text-muted-foreground" />
+                {r.reportname}
+              </button>
+            </li>
+          ))}
+        </ul>
       </Dialog>
+
+      {/* ── Report render dialog (NEW — this is what actually shows the report) ── */}
+      {(reportHtml !== null || reportGenerating) && activeReportId && (
+        <ReportDialogPage
+          title={reportDialogTitle}
+          Report={IframeReportRenderer}
+          required_values={{ html: reportGenerating ? getLoadingHtml() : reportHtml! }}
+          excel={() => handleExcel(activeReportId, stn_no || "", company_code, prin_code)}
+          onClose={closeReportDialog}
+        />
+      )}
     </section>
   );
 }
-
 // ─── Create Detail Dialog ─────────────────────────────────────────────────────
 function CreateDetailDialog({
   open, stn_no, company_code, prin_code, username, onClose, onSuccess, onError,
@@ -734,6 +836,7 @@ function CreateDetailDialog({
   const [toLocEnd, setToLocEnd] = useState("");
   const [qtyPUOM, setQtyPUOM] = useState("");
   const [qtyLUOM, setQtyLUOM] = useState("");
+const [locNotice, setLocNotice] = useState<NoticeState>(null);
 
 const [fromLocOptions, setFromLocOptions] = useState<WmsRow[]>([]);
 const [toLocOptions, setToLocOptions]     = useState<WmsRow[]>([]);
@@ -765,6 +868,7 @@ useEffect(() => {
     setToLocStart(""); setToLocEnd("");
     setQtyPUOM(""); setQtyLUOM("");
     setFromLocOptions([]); setToLocOptions([]); // add this
+        setLocNotice(null); // add this
   }
 }, [open]);
 
@@ -935,7 +1039,19 @@ useEffect(() => {
                       onChange={(v) => { setToSite(v); setToLocStart(""); setToLocEnd(""); }} />
                   </div>
                 </Section>
-
+<NoticeToast notice={locNotice} onClose={() => setLocNotice(null)} />
+{/* {locNotice && (
+  <div className="flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+    <span>⚠ {locNotice.message}</span>
+    <button
+      type="button"
+      className="ml-2 text-red-400 hover:text-red-700"
+      onClick={() => setLocNotice(null)}
+    >
+      ✕
+    </button>
+  </div>
+)} */}
             <Section title="Location">
               <div className="grid gap-2.5 md:grid-cols-2">
                 <LookupField
@@ -949,17 +1065,18 @@ useEffect(() => {
                     { field: "LOC_DESC", header: "Location Name" },
                   ]}
                   placeholder="Select location"
-                    loadOptions={async () => {
-                      if (!fromSite) return [];
-                      const res = await api.post("/api/wms/inbound/executeRawSql", {
-                        raw_sql: `SELECT LOCATION_CODE, LOC_DESC
-                                  FROM MS_LOCATION
-                                  WHERE
-                                     SITE_CODE    = '${fromSite}'`,
-                      });
-                      return Array.isArray(res.data?.data) ? res.data.data
-                          : Array.isArray(res.data)        ? res.data : [];
-                    }}
+                  loadOptions={async () => {
+                    if (!fromSite) return [];
+                    const res = await api.post("/api/wms/inbound/executeRawSql", {
+                      raw_sql: `SELECT LOCATION_CODE, LOC_DESC
+                                FROM MS_LOCATION
+                                WHERE SITE_CODE = '${fromSite}'`,
+                    });
+                    const data = Array.isArray(res.data?.data) ? res.data.data
+                              : Array.isArray(res.data)        ? res.data : [];
+                    if (data.length === 0) setLocNotice({ type: "error", message: `Site "${fromSite}" does not have any locations.` });
+                    return data;
+                  }}
                   onChange={(v) => { setFromLocStart(v); setFromLocEnd(v); }}
                 />
                 <LookupField
@@ -974,14 +1091,16 @@ useEffect(() => {
                   ]}
                   placeholder="Select location"
                   loadOptions={async () => {
-                    if (!fromSite) return [];
+                    if (!toSite) return [];
                     const res = await api.post("/api/wms/inbound/executeRawSql", {
                       raw_sql: `SELECT LOCATION_CODE, LOC_DESC
                                 FROM MS_LOCATION
-                                WHERE SITE_CODE    = '${fromSite}'`,
+                                WHERE SITE_CODE = '${toSite}'`,
                     });
-                    return Array.isArray(res.data?.data) ? res.data.data
-                        : Array.isArray(res.data)        ? res.data : [];
+                    const data = Array.isArray(res.data?.data) ? res.data.data
+                              : Array.isArray(res.data)        ? res.data : [];
+                    if (data.length === 0) setLocNotice({ type: "error", message: `Site "${toSite}" does not have any locations.` });
+                    return data;
                   }}
                   onChange={(v) => { setToLocStart(v); setToLocEnd(v); }}
                 />
@@ -995,16 +1114,18 @@ useEffect(() => {
                     { field: "LOC_DESC", header: "Location Name" },
                   ]}
                   placeholder="Select location"
-                loadOptions={async () => {
-                  if (!fromSite) return [];
-                  const res = await api.post("/api/wms/inbound/executeRawSql", {
-                    raw_sql: `SELECT LOCATION_CODE, LOC_DESC
-                              FROM MS_LOCATION
-                              WHERE SITE_CODE    = '${fromSite}'`,
-                  });
-                  return Array.isArray(res.data?.data) ? res.data.data
-                      : Array.isArray(res.data)        ? res.data : [];
-                }}
+                    loadOptions={async () => {
+                      if (!fromSite) return [];
+                      const res = await api.post("/api/wms/inbound/executeRawSql", {
+                        raw_sql: `SELECT LOCATION_CODE, LOC_DESC
+                                  FROM MS_LOCATION
+                                  WHERE SITE_CODE = '${fromSite}'`,
+                      });
+                      const data = Array.isArray(res.data?.data) ? res.data.data
+                                : Array.isArray(res.data)        ? res.data : [];
+                      if (data.length === 0) setLocNotice({ type: "error", message: `Site "${fromSite}" does not have any locations.` });
+                      return data;
+                    }}
                   onChange={(v) => setFromLocEnd(v)}
                 />
                 <LookupField
@@ -1017,16 +1138,18 @@ useEffect(() => {
                     { field: "LOC_DESC", header: "Location Name" },
                   ]}
                   placeholder="Select location"
-                loadOptions={async () => {
-                  if (!fromSite) return [];
-                  const res = await api.post("/api/wms/inbound/executeRawSql", {
-                    raw_sql: `SELECT LOCATION_CODE, LOC_DESC
-                              FROM MS_LOCATION
-                              WHERE SITE_CODE    = '${fromSite}'`,
-                  });
-                  return Array.isArray(res.data?.data) ? res.data.data
-                      : Array.isArray(res.data)        ? res.data : [];
-                }}
+                        loadOptions={async () => {
+                          if (!toSite) return [];
+                          const res = await api.post("/api/wms/inbound/executeRawSql", {
+                            raw_sql: `SELECT LOCATION_CODE, LOC_DESC
+                                      FROM MS_LOCATION
+                                      WHERE SITE_CODE = '${toSite}'`,
+                          });
+                          const data = Array.isArray(res.data?.data) ? res.data.data
+                                    : Array.isArray(res.data)        ? res.data : [];
+                          if (data.length === 0) setLocNotice({ type: "error", message: `Site "${toSite}" does not have any locations.` });
+                          return data;
+                        }}
                 onChange={(v) => setToLocEnd(v)}
                 />
               </div>

@@ -54,6 +54,7 @@ import {
   AvailableQuantityCard,
   ConfirmToolbar,
 } from "./OutboundFormFields";
+import { OutboundAcitivityBilling } from "./OutboundAcitivityBilling";
 
 // ── OutboundOperationalTab ─────────────────────────────────────────────────────
 export function OutboundOperationalTab({
@@ -67,7 +68,7 @@ export function OutboundOperationalTab({
   jobNo: string;
   tab: string;
   loadingJob: boolean;
-  principalCode?: string;
+  principalCode: string;
 }) {
   const [pickModalOpen, setPickModalOpen] = useState(false);
   const [pickPreference, setPickPreference] = useState("job_no");
@@ -75,6 +76,7 @@ export function OutboundOperationalTab({
   const [leastQty, setLeastQty] = useState(false);
   const [ignoreMinExp, setIgnoreMinExp] = useState(false);
   const { user } = useAuth();
+  const company_code = user?.company_code || "";
   const prinCode = value(job || {}, "prin_code") || principalCode || "";
   const [rows, setRows] = useState<WmsRow[]>([]);
   const [query, setQuery] = useState("");
@@ -108,7 +110,7 @@ export function OutboundOperationalTab({
   const config = getOutboundTabConfig(tab);
 
   const loadRows = async (clearNotice = true) => {
-    if (!config || loadingJob) return;
+    if (!config || loadingJob || tab === "activity_billing") return;
     setLoading(true);
     if (clearNotice) setNotice(null);
     setSelection({});
@@ -133,9 +135,13 @@ export function OutboundOperationalTab({
   };
 
   useEffect(() => {
-    if (!prinCode) return;
+    if (!prinCode || tab === "activity_billing") return;
     void loadRows();
   }, [tab, jobNo, prinCode, loadingJob]);
+
+  if (tab === "activity_billing") {
+    return <OutboundAcitivityBilling company_code={company_code} prin_code={principalCode} job_no={jobNo}  />
+  }
 
   if (!config)
     return (
@@ -217,12 +223,20 @@ export function OutboundOperationalTab({
           }
         );
       } else if (mode === "CONFIRM") {
-        await putWmsOutbound(
-          `picking_details/confirm_order/${encodeURIComponent(jobNo)}`,
-          { serial_no: selectedPayloadKeys },
-          { prin_code: prinCode, confirm_date: pickOptions.confirm_date }
-        );
-      } else {
+        const [year, month, day] = pickOptions.confirm_date.split("-");
+        const formattedConfirmDate = `${day}/${month}/${year}`;
+
+        await executeCommonProcedure({
+          parameter: "SP_PICK_CONFIRM_PARENT",
+          loginid: user?.loginid || "",
+          val1s1: user?.company_code || "",
+          val1s2: prinCode,
+          val1s3: jobNo,
+          val1s4: formattedConfirmDate,
+          val1s5: selectedKeys.join(","),
+        });
+      }
+      else {
         await putWmsOutbound(
           `picking_details/oubcancelPick/${encodeURIComponent(jobNo)}`,
           { serial_no: selectedPayloadKeys },
@@ -467,6 +481,7 @@ export function OutboundOperationalTab({
       </Button>
     </div>
   );
+
 
   return (
     <section className="grid gap-3">
@@ -770,7 +785,49 @@ function OrderEntryDialog({
     </OutboundFormFrame>
   );
 }
+// ── DateFieldWithClear ─────────────────────────────────────────────────────
+function DateFieldWithClear({
+  name,
+  label,
+  form,
+  setForm,
+  onPicked,
+}: {
+  name: string;
+  label: string;
+  form: WmsRow;
+  setForm: React.Dispatch<React.SetStateAction<WmsRow>>;
+  onPicked?: (selected: string) => void;
+}) {
+  const hasValue = Boolean(form[name]);
 
+  return (
+    <div className="relative">
+      <DateField
+        name={name}
+        label={label}
+        form={form}
+        setForm={setForm}
+        onPicked={onPicked}
+      />
+      {hasValue && (
+        <button
+          type="button"
+          title="Clear date"
+          onClick={() =>
+            setForm((current) => ({
+              ...current,
+              [name]: "",
+            }))
+          }
+          className="absolute right-2 top-[27px] rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-destructive"
+        >
+          <X size={13} />
+        </button>
+      )}
+    </div>
+  );
+}
 // ── OrderDetailDialog ──────────────────────────────────────────────────────────
 function OrderDetailDialog({
   open,
@@ -1064,44 +1121,44 @@ function OrderDetailDialog({
             Dates And Conversion
           </legend>
           <div className="grid gap-2.5 lg:grid-cols-5">
-            <DateField
-              name="production_from"
-              label="Production From"
-              form={form}
-              setForm={setForm}
-              onPicked={(selected) =>
-                setForm((current) => ({
-                  ...current,
-                  production_from: selected,
-                  production_to: current.production_to || selected,
-                }))
-              }
-            />
-            <DateField
-              name="production_to"
-              label="Production To"
-              form={form}
-              setForm={setForm}
-            />
-            <DateField
-              name="expiry_from"
-              label="Expiry From"
-              form={form}
-              setForm={setForm}
-              onPicked={(selected) =>
-                setForm((current) => ({
-                  ...current,
-                  expiry_from: selected,
-                  expiry_to: current.expiry_to || selected,
-                }))
-              }
-            />
-            <DateField
-              name="expiry_to"
-              label="Expiry To"
-              form={form}
-              setForm={setForm}
-            />
+        <DateFieldWithClear
+          name="production_from"
+          label="Production From"
+          form={form}
+          setForm={setForm}
+          onPicked={(selected) =>
+            setForm((current) => ({
+              ...current,
+              production_from: selected,
+              production_to: current.production_to || selected,
+            }))
+          }
+        />
+        <DateFieldWithClear
+          name="production_to"
+          label="Production To"
+          form={form}
+          setForm={setForm}
+        />
+        <DateFieldWithClear
+          name="expiry_from"
+          label="Expiry From"
+          form={form}
+          setForm={setForm}
+          onPicked={(selected) =>
+            setForm((current) => ({
+              ...current,
+              expiry_from: selected,
+              expiry_to: current.expiry_to || selected,
+            }))
+          }
+        />
+        <DateFieldWithClear
+          name="expiry_to"
+          label="Expiry To"
+          form={form}
+          setForm={setForm}
+        />
             <ReadOnlyField label="UPPP" value={String(form.uppp || "")} />
           </div>
         </fieldset>

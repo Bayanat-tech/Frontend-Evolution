@@ -1,3 +1,5 @@
+import { TProduct } from "../pages/wms/Masters/Product_Master/product-wms.types";
+import { TTsStnDetailEdi } from "../pages/wms/stock transfer/StockediType";
 import { api } from "./client";
 import type { DynamicQueryParams, LookupRow } from "./lookups";
 
@@ -74,6 +76,29 @@ export type StockAdjustmentListResponse = {
   details: LookupRow[];
 };
 
+type BulkApiResponse = {
+  success: boolean;
+  message?: string;
+  details?: string[];
+};
+
+interface ReportParams {
+  parameter: string;
+  loginid: string;
+  code1?: string;
+  code2?: string;
+  code3?: string;
+  code4?: string;
+  code5?: string;
+  code6?: string;
+  code7?: string | number;
+  code8?: string | number;
+  code9?: string;
+  code10?: string;
+  code20?: string;
+  [key: string]: any;
+}
+
 /** GET — backend always returns ALL headers + ALL details, filter client-side */
 export async function getStockAdjustmentData() {
   const response = await getWmsStockAdjustment<StockAdjustmentListResponse>();
@@ -120,12 +145,12 @@ export async function deleteAdjDetail(payload: DeleteAdjDetailPayload) {
 
 /** POST process stock adjustment (runs SP_WM_ADJUSTMNT_PROCESS) */
 export async function processStockAdjustment(payload: ProcessStockAdjustmentPayload) {
-  return postWmsStockAdjustment("processStockAdjustment", payload as unknown as Record<string, unknown>);
+  return postWmsStockAdjustment("process-adjustment", payload as unknown as Record<string, unknown>);
 }
 
 /** POST confirm stock adjustment */
 export async function confirmStockAdjustment(payload: ConfirmStockAdjustmentPayload) {
-  return postWmsStockAdjustment("confirmStockAdjustment", payload as unknown as Record<string, unknown>);
+  return postWmsStockAdjustment("confirm-adj-detail", payload as unknown as Record<string, unknown>);
 }
 
 /** GET all stock adjustment reports for the print dialog */
@@ -167,6 +192,32 @@ export async function deleteWmsGmRaw(endpoint: string, payload: unknown, method:
       ? await api.delete<ApiResponse<unknown>>(`/api/wms/gm/${endpoint}`, { data: payload })
       : await api.post<ApiResponse<unknown>>(`/api/wms/gm/${endpoint}`, payload);
   if (!response.data.success) throw new Error(response.data.message || `Unable to delete ${endpoint}`);
+  return response.data;
+}
+
+export async function addProduct (values: TProduct){
+  const response = await api.post<ApiResponse<null>>('api/wms/gm/product', values);
+  if (!response.data.success) throw new Error(response.data.message || "Unable add Product");
+  return response.data.data || [];
+}
+
+export async function editProduct (values: TProduct){
+  const response = await api.put<ApiResponse<null>>('api/wms/gm/product', values);
+  if (!response.data.success) throw new Error(response.data.message || "Unable edit Product");
+  return response.data.data || [];
+}
+
+export async function insUpdTsStnDetailEdiBlkApi (  params: {rows: TTsStnDetailEdi[];loginid?: string;}){
+  const response = await api.post<BulkApiResponse>('/api/wms/inbound/insUpdTsStnDetailEdiBulk',{rows: params.rows,loginid: params.loginid});
+  if (!response.data.success) throw new Error(response.data.message || "Failed to Process");
+  return response.data || [];
+}
+
+export async function deleteProduct(product: { prod_code: string;prin_code: string;group_code: string;brand_code: string;company_code?: string;}) {
+  const response = await api.delete<ApiResponse<unknown>>("api/wms/gm/delproduct",{data: product,});
+  if (!response.data.success) {
+    throw new Error(response.data.message || "Unable to delete Product");
+  }
   return response.data;
 }
 
@@ -357,20 +408,281 @@ export async function downloadGrnReportExcel(
   const url  = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href     = url;
-  link.download = `Job_${jobNo}_Details.xlsx`;
+  link.download = `Grn_report_job_no_${jobNo}.xlsx`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
 
+export async function getTallyReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/Tally-report/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+ 
+export async function downloadTallyReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/Tally-report/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Tally_Details_report_jobno_${jobNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export async function getInbServiceActivityReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/inb-serviceactivity/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+ 
+export async function downloadInbServiceActivityReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/inb-serviceactivity/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Inbound_activity_service_report_jobno_${jobNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export async function getDnReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/Dn-report/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+
+export async function downloadDnReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/Dn-report/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `DN_report_jobno_${jobNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export async function getOubPickReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/Oubpick/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+
+export async function downloadOubPickReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/Oubpick/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Outbound_Picking_report_jobno_${jobNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export async function getOubServiceActivityReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/Oub-serviceactivity/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+ 
+export async function downloadOubServiceActivityReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/Oub-serviceactivity/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Outbound_activity_service_report_jobno_${jobNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export async function getOubJobDetReport(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/Oub_jobDet-report/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+
+export async function downloadOubJobDetReportExcel(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/Oub_jobDet-report/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Outbound_Job_Details_report_jobno_${jobNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export async function getAdjConfirmReport(prin_code: string, adj_no: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/AdjConfirmation_report/${adj_no}?prin_code=${prin_code}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+
+export async function downloadAdjConfirmReportExcel(prin_code: string, adj_no: string): Promise<void> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/AdjConfirmation_report/${adj_no}?prin_code=${prin_code}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Adj_confirm_report_adjno_${adj_no}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export async function getGrnSummaryReportHtml(params: ReportParams): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/GrnSummaryReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getGrnSummaryReportExcelDownload(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/GrnSummaryReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "Grn_Summary.xlsx";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function getInvocieDetailReport(prin_code: string, invoice_no: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/invoice-detail/html?prin_code=${prin_code}&invoice_no=${invoice_no}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Invoice Detail Report");
+  return response.data;
+}
+
+export async function downloadInvocieDetailReportExcel(prin_code: string, invoice_no: string): Promise<void> {
+  const response = await api.get(
+    `/api/wms/inbound/reports/invoice-detail/excel?${prin_code}&invoice_no=${invoice_no}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `Invoice_Detail_report_InvocieNo_${invoice_no}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+
 export async function getAllStockTransfers() {
   const response = await api.get<ApiResponse<unknown[]>>("/api/wms/stocktransfer/getAllStockTransfers");
   if (!response.data.success) throw new Error(response.data.message || "Unable to load stock transfers");
   return response.data.data || [];
 }
-
-
 
 export async function createSTN(payload: {
   prin_code: string;
@@ -565,4 +877,260 @@ export async function getAllStockTransReports() {
   return getWmsStockTransfer<{ reportid: string; reportname: string }[]>(
     "getAllStockTransReports"
   );
+}
+// ─── Common Dynamic SQL Procedures (ported from commonservices.ts) ───────────
+
+export type DynamicSqlCommonParams = {
+  parameter: string;
+  loginid?: string;
+  code1?: string;
+  code2?: string;
+  code3?: string;
+  code4?: string;
+  code5?: string;
+  code6?: string;
+  code7?: string;
+  code8?: string;
+  code9?: string;
+  code10?: string;
+  number1?: number;
+  number2?: number;
+  number3?: number;
+  number4?: number;
+  date1?: string | null;
+  date2?: string | null;
+  date3?: string | null;
+  date4?: string | null;
+};
+
+/** GET-style dynamic SELECT via stored proc (code1-10, number1-4, date1-4) */
+export async function procBuildDynamicSqlCommon(params: DynamicSqlCommonParams) {
+  const response = await api.post<ApiResponse<LookupRow[]>>(
+    "/api/wms/common/proc_build_dynamic_sql_common20",
+    params
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load data");
+  return response.data.data || [];
+}
+
+export type DynamicInsUpdCommonParams = {
+  parameter: string;
+  loginid: string;
+
+  // INSERT / UPDATE VALUES
+  val1s1?: string;
+  val1s2?: string;
+  val1s3?: string;
+  val1s4?: string;
+  val1s5?: string;
+  val1s6?: string;
+  val1s7?: string;
+  val1s8?: string;
+  val1s9?: string;
+  val1s10?: string;
+
+  val1n1?: number;
+  val1n2?: number;
+  val1n3?: number;
+  val1n4?: number;
+  val1n5?: number;
+  val1n6?: number;
+  val1n7?: number;
+
+  val1d1?: string | null;
+  val1d2?: string | null;
+  val1d3?: string | null;
+  val1d4?: string | null;
+  val1d5?: string | null;
+
+  // WHERE VALUES
+  wval1s1?: string;
+  wval1s2?: string;
+  wval1s3?: string;
+  wval1s4?: string;
+  wval1s5?: string;
+
+  wval1n1?: number;
+  wval1n2?: number;
+  wval1n3?: number;
+  wval1n4?: number;
+  wval1n5?: number;
+
+  wval1d1?: string | null;
+  wval1d2?: string | null;
+  wval1d3?: string | null;
+  wval1d4?: string | null;
+  wval1d5?: string | null;
+};
+
+/** POST — generic dynamic INSERT/UPDATE via stored proc */
+export async function procBuildDynamicInsUpdCommon(params: DynamicInsUpdCommonParams) {
+  if (!params?.parameter) throw new Error("No values provided");
+  const response = await api.post<ApiResponse<unknown>>(
+    "/api/wms/common/proc_build_dynamic_ins_upd_common",
+    params
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Insert / Update failed");
+  return response.data;
+}
+
+export type DynamicDelCommonParams = {
+  parameter: string;
+  loginid: string;
+  code1?: string;
+  code2?: string;
+  code3?: string;
+  code4?: string;
+  code5?: string;
+  number1?: number;
+  number2?: number;
+  number3?: number;
+  number4?: number;
+  date1?: string | null;
+  date2?: string | null;
+  date3?: string | null;
+  date4?: string | null;
+};
+
+/** POST — generic dynamic DELETE via stored proc */
+export async function procBuildDynamicDelCommon(params: DynamicDelCommonParams) {
+  if (!params?.parameter) throw new Error("No values provided");
+  const response = await api.post<ApiResponse<unknown>>(
+    "/api/wms/common/proc_build_dynamic_del_common",
+    params
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Delete failed");
+  return response.data;
+}
+
+/** GET-style dynamic SELECT via stored proc — base variant (code1-4, number1-4, date1-4) */
+export async function procBuildDynamicSqlCommonBase(params: {
+  parameter: string;
+  loginid?: string;
+  code1?: string;
+  code2?: string;
+  code3?: string;
+  code4?: string;
+  number1?: number;
+  number2?: number;
+  number3?: number;
+  number4?: number;
+  date1?: string | null;
+  date2?: string | null;
+  date3?: string | null;
+  date4?: string | null;
+}) {
+  const response = await api.post<ApiResponse<LookupRow[]>>(
+    "/api/wms/common/proc_build_dynamic_sql_common", // ← no "20" — matches old commonservices.ts
+    params
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load data");
+  return response.data.data || [];
+}
+
+// ─── Stock Count ──────────────────────────────────────────────────────────
+
+export type TStockCountHeader = {
+  prin_code: string;
+  master_count_no?: string;
+  parent_count_no?: string;
+  company_code: string;
+  count_no: string;
+  count_type?: string;
+  counted_by?: string;
+  remarks?: string;
+  prod_group_from?: string;
+  prod_group_to?: string;
+  prod_brand_from?: string;
+  prod_brand_to?: string;
+  prod_code_from?: string;
+  prod_code_to?: string;
+  site_code_from?: string;
+  site_code_to?: string;
+  from_location?: string;
+  to_location?: string;
+  aisle_from?: string | null;
+  aisle_to?: string | null;
+  col_from?: string | null;
+  col_to?: string | null;
+  height_from?: string | null;
+  height_to?: string | null;
+  user_id?: string;
+  count_date?: string;
+  amls_rep?: string;
+  amls_des?: string;
+  client_rep?: string;
+  client_des?: string;
+};
+
+export type TStockCountPrinDetail = {
+  company_code: string;
+  count_no: string;
+  prin_code: string;
+  user_id?: string;
+  user_dt?: string;
+};
+
+export type SaveStockCountPayload = {
+  headers: TStockCountHeader[];
+  details: TStockCountPrinDetail[];
+  loginid: string;
+};
+
+/** GET/POST base helpers, same pattern as getWmsStockAdjustment/postWmsStockAdjustment.
+ *  Adjust the "/api/wms/stock-count" prefix if your backend route differs. */
+export async function getWmsStockCount<T = unknown>(params: Record<string, unknown> = {}) {
+  const response = await api.get<ApiResponse<T>>("/api/wms/stock-count", { params });
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load stock count data");
+  return response.data.data as T;
+}
+
+export async function postWmsStockCount<TPayload extends Record<string, unknown>>(endpoint: string, payload: TPayload) {
+  const response = await api.post<ApiResponse<unknown>>(`/api/wms/inbound/${endpoint}`, payload);
+  if (!response.data.success) throw new Error(response.data.message || `Unable to save ${endpoint}`);
+  return response.data;
+}
+
+/**
+ * GET — principal detail rows for a given count_no (edit mode).
+ * Ported 1:1 from the old page's `STOCKCOUNT_prin_page` call via
+ * common.proc_build_dynamic_sql_common — which is the *non-"20"* variant,
+ * already exposed here as procBuildDynamicSqlCommonBase.
+ */
+export async function getStockCountPrincipals(companyCode: string, countNo: string) {
+  if (!companyCode || !countNo) return [];
+  const data = await procBuildDynamicSqlCommonBase({
+    parameter: "STOCKCOUNT_prin_page",
+    code1: companyCode,
+    code2: countNo,
+  });
+  return data || [];
+}
+
+/**
+ * POST — save stock count header + principal details.
+ * Ported from the old insUpdTcStockCountApi. On a fresh "add" (empty count_no
+ * in the header payload), the old page did a follow-up raw SQL
+ * `SELECT MAX(COUNT_NO)...` to grab the newly generated count number — that
+ * behavior is preserved here so the caller can just read `result.count_no`.
+ */
+export async function saveStockCount(payload: SaveStockCountPayload) {
+  const header = payload.headers?.[0];
+  const result = await postWmsStockCount("insUpdTcStockCountBulk", payload as unknown as Record<string, unknown>);
+
+  const isFreshAdd = !header?.count_no;
+  if (isFreshAdd && header?.company_code && payload.loginid) {
+    try {
+      const rows = await executeWmsInboundSql(
+        `SELECT MAX(COUNT_NO) as COUNT_NO FROM TC_STOCKCOUNT WHERE COMPANY_CODE = '${header.company_code.replace(/'/g, "''")}' AND USER_ID = '${payload.loginid.replace(/'/g, "''")}'`
+      );
+      const fetchedCountNo = (rows?.[0] as any)?.COUNT_NO ?? (rows?.[0] as any)?.count_no ?? "";
+      return { ...result, count_no: fetchedCountNo };
+    } catch (error) {
+      console.error("Error fetching generated count_no:", error);
+      return result;
+    }
+  }
+
+  return result;
 }

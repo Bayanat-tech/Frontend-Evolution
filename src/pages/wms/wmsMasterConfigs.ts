@@ -2,6 +2,7 @@ import { executeDynamicMutation } from "../../api/lookups";
 import { executeWmsInboundSql } from "../../api/wms";
 import msPrincipalServiceInstance from "../../api/principal";
 import type { WmsSimpleMasterConfig } from "./WmsSimpleMasterPage";
+import ImportLocationEdi from "./edi/ImportLocationEdi";
 import { api } from "../../api/client";
 
 const yesNo = [
@@ -34,27 +35,27 @@ export const wmsSimpleMasterConfigs: Record<string, WmsSimpleMasterConfig> = {
     ],
     deleteConfig: { mode: "registered", payload: (row) => [row.prodtype_code] },
   },
-country: {
-  title: "Country Master",
-  subtitle: "Maintain country code, country name, GCC flag, short description, and nationality.",
-  master: "country",
-  gmEndpoint: "country",
-  routeKeys: ["country"],
-  keyField: "country_code",
-  // formTabs: [
-  //   { key: "basic", label: "Basic Info" },
-  //   { key: "extra", label: "Extra Details" },
-  // ],
-  fields: [
-    { name: "country_code", label: "Country Code", required: true, disabledOnEdit: true, width: 150 },
-    { name: "country_name", label: "Country Name", required: true, width: 260 },
-    { name: "country_gcc",     label: "GCC",           type: "select", options: yesNo, width: 100 },
-    { name: "short_desc",   label: "Short Description", width: 200 },
-    { name: "nationality",  label: "Nationality",   width: 180 },
-  ],
-  defaults: { country_gcc: "N" },
-  deleteConfig: { mode: "registered", payload: (row) => [row.country_code] },
-},
+  country: {
+    title: "Country Master",
+    subtitle: "Maintain country code, country name, GCC flag, short description, and nationality.",
+    master: "country",
+    gmEndpoint: "country",
+    routeKeys: ["country"],
+    keyField: "country_code",
+    // formTabs: [
+    //   { key: "basic", label: "Basic Info" },
+    //   { key: "extra", label: "Extra Details" },
+    // ],
+    fields: [
+      { name: "country_code", label: "Country Code", required: true, disabledOnEdit: true, width: 150 },
+      { name: "country_name", label: "Country Name", required: true, width: 260 },
+      { name: "country_gcc",     label: "GCC",           type: "select", options: yesNo, width: 100 },
+      { name: "short_desc",   label: "Short Description", width: 200 },
+      { name: "nationality",  label: "Nationality",   width: 180 },
+    ],
+    defaults: { country_gcc: "N" },
+    deleteConfig: { mode: "registered", payload: (row) => [row.country_code] },
+  },
   activitygroup: {
     fieldsPerRow: 4,
     title: "Activity Group Master",
@@ -426,6 +427,7 @@ saveEndpoint: (form, { editMode, original }) => {
     },
     deleteConfig: { mode: "disabled", payload: () => null, reason: "Delete endpoint is not registered in the existing backend" },
   },
+
   customer: {
     title: "Customer Master",
     subtitle: "Maintain customer details by principal with currency, country, and contacts.",
@@ -449,6 +451,7 @@ saveEndpoint: (form, { editMode, original }) => {
     ],
     deleteConfig: { mode: "disabled", payload: () => null, reason: "Delete endpoint is not registered in the existing backend" },
   },
+  
   supplier: {
     title: "Supplier Master",
     subtitle: "Maintain supplier details with currency, country, and contacts.",
@@ -471,131 +474,137 @@ saveEndpoint: (form, { editMode, original }) => {
     ],
     deleteConfig: { mode: "registered", payload: (row) => [row.supp_code] },
   },
-  product: {
-    title: "Product Master",
-    subtitle: "Maintain product identity, principal, group, brand, UOM, and packing setup.",
-    master: "product",
-    gmEndpoint: "product",
-    routeKeys: ["product"],
-    keyField: "prod_code",
-    fieldsPerRow: 5,
-    formTabs: [
-      { key: "product-details", label: "Product Details" },
-      { key: "uom-volume", label: "UOM & Volume" },
-      { key: "manufacture-validation", label: "Manufacture & Validation" },
-      { key: "category-product", label: "Category & Product" },
-    ],
-    fields: [
-      // Product Details Tab - Principal Info
-      { name: "prin_code", label: "Principal Code", required: true, dropdownParam: "DROP_DOWN_PRINCIPAL", dropdownDisplayFields:["prin_code","prin_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "prin_code", width: 150, tab: "product-details", section: "PRINCIPAL INFO" },
-      { name: "group_code", label: "Group Code", required: true, dropdownParam: "DROP_DOWN_GROUP", dropdownCodeMap: { prin_code: "code1" }, dropdownDisplayFields: ["group_code", "group_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "group_code", width: 140, tab: "product-details", section: "PRINCIPAL INFO" },
-      { name: "brand_code", label: "Brand Code", required: true, dropdownParam: "DROP_DOWN_BRAND", dropdownCodeMap: { prin_code: "code1", group_code: "code2" }, dropdownDisplayFields: ["brand_code", "brand_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "brand_code", width: 140, tab: "product-details", section: "PRINCIPAL INFO" },
 
-      // Product Details Tab - Product Info
-      { name: "prod_code", label: "Product Code", disabledOnEdit: true, width: 160, tab: "product-details", section: "PRODUCT INFO" },
-      { name: "prod_name", label: "Product Name", required: true, width: 320, tab: "product-details", section: "PRODUCT INFO", colSpan: 2 },
-      { name: "model_number", label: "Model #", tab: "product-details", section: "PRODUCT INFO" },
-      { name: "variant_code", label: "Variant", tab: "product-details", section: "PRODUCT INFO" },
+//   product: {
+//     title: "Product Master",
+//     subtitle: "Maintain product identity, principal, group, brand, UOM, and packing setup.",
+//     master: "product",
+//     gmEndpoint: "product",
+//     routeKeys: ["product"],
+//     keyField: "prod_code",
+//     fieldsPerRow: 5,
+//     formTabs: [
+//       { key: "product-details", label: "Product Details" },
+//       { key: "uom-volume", label: "UOM & Volume" },
+//       { key: "manufacture-validation", label: "Manufacture & Validation" },
+//       { key: "category-product", label: "Category & Product" },
+//     ],
+//     fields: [
+//       // Product Details Tab - Principal Info
+//       { name: "prin_code", label: "Principal Code", required: true, dropdownParam: "DROP_DOWN_PRINCIPAL", dropdownDisplayFields:["prin_code","prin_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "prin_code", width: 150, tab: "product-details", section: "PRINCIPAL INFO" },
+//       { name: "group_code", label: "Group Code", required: true, dropdownParam: "DROP_DOWN_GROUP", dropdownCodeMap: { prin_code: "code1" }, dropdownDisplayFields: ["group_code", "group_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "group_code", width: 140, tab: "product-details", section: "PRINCIPAL INFO" },
+//       { name: "brand_code", label: "Brand Code", required: true, dropdownParam: "DROP_DOWN_BRAND", dropdownCodeMap: { prin_code: "code1", group_code: "code2" }, dropdownDisplayFields: ["brand_code", "brand_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "brand_code", width: 140, tab: "product-details", section: "PRINCIPAL INFO" },
 
-      // UOM & Volume Tab - Unit of Measurement
-      { name: "uom_count", label: "No. of UOMs", type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT", required : true },
-      { name: "p_uom", label: "Primary UOM", required: true, dropdownParam: "DROP_DOWN_UOM", dropdownDisplayFields: ["uom_code", "uom_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "uom_code", width: 140, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-      { name: "l_uom", label: "Lowest UOM", required: true, dropdownParam: "DROP_DOWN_UOM", dropdownDisplayFields: ["uom_code", "uom_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "uom_code", width: 130, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-      { name: "uppp", label: "Units/Prim Pack", required: true, type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-      { name: "upp", label: "Def. Units/Pallette", required: true, type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
-      { name: "qty_as_wt", label: "Qty As Wt", type: "checkbox", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
+//       // Product Details Tab - Product Info
+//       { name: "prod_code", label: "Product Code", disabledOnEdit: true, width: 160, tab: "product-details", section: "PRODUCT INFO" },
+//       { name: "prod_name", label: "Product Name", required: true, width: 320, tab: "product-details", section: "PRODUCT INFO", colSpan: 2 },
+//       { name: "model_number", label: "Model #", tab: "product-details", section: "PRODUCT INFO" },
+//       { name: "variant_code", label: "Variant", tab: "product-details", section: "PRODUCT INFO" },
 
-      // UOM & Volume Tab - Volume
-      { name: "length", label: "Length", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-      { name: "breadth", label: "Width", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-      { name: "height", label: "Height", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-      { name: "volume", label: "Volume", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-      { name: "gross_wt", label: "Gross Weight", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-      { name: "net_wt", label: "Net Weight", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-      { name: "prod_hi", label: "Layers", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
-      { name: "prod_ti", label: "Carton / Layer", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+//       // UOM & Volume Tab - Unit of Measurement
+//       { name: "uom_count", label: "No. of UOMs", type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT", required : true },
+//       { name: "p_uom", label: "Primary UOM", required: true, dropdownParam: "DROP_DOWN_UOM", dropdownDisplayFields: ["uom_code", "uom_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "uom_code", width: 140, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
+//       { name: "l_uom", label: "Lowest UOM", required: true, dropdownParam: "DROP_DOWN_UOM", dropdownDisplayFields: ["uom_code", "uom_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "uom_code", width: 130, tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
+//       { name: "uppp", label: "Units/Prim Pack", required: true, type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
+//       { name: "upp", label: "Def. Units/Pallette", required: true, type: "number", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
+//       { name: "qty_as_wt", label: "Qty As Wt", type: "checkbox", tab: "uom-volume", section: "UNIT OF MEASUREMENT" },
 
-      // Manufacture & Validation Tab - Manufacturer
-      { name: "harm_code", label: "Harmonize Code", dropdownParam: "DROP_DOWN_HARMONIZE", dropdownDisplayFields: ["harm_code", "harm_desc"], dropdownDisplaySeparator: " - ", dropdownValueKey: "harm_code", tab: "manufacture-validation", section: "MANUFACTURER" },
-      { name: "imco_code", label: "IMCO Code", tab: "manufacture-validation", section: "MANUFACTURER" },
-      { name: "manu_code", label: "Manufacturer", dropdownParam: "DROP_DOWN_MANUFACTURER", dropdownCodeMap: { prin_code: "code1" }, dropdownDisplayFields: ["manu_code", "manu_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "manu_code", tab: "manufacture-validation", section: "MANUFACTURER" },
-      { name: "alt_prod_code", label: "Alternate Prod Code", tab: "manufacture-validation", section: "MANUFACTURER" },
-      { name: "site_ind", label: "Default Site Ind", required: true, dropdownParam: "DROP_DOWN_SITE_IND",dropdownDisplayFields: ["site_ind", "ind_desc"], dropdownDisplaySeparator: " - ", dropdownValueKey: "site_ind", tab: "manufacture-validation", section: "MANUFACTURER" },
-      { name: "batch_type", label: "Batch Type", type: "number", tab: "manufacture-validation", section: "MANUFACTURER" },
+//       // UOM & Volume Tab - Volume
+//       { name: "length", label: "Length", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+//       { name: "breadth", label: "Width", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+//       { name: "height", label: "Height", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+//       { name: "volume", label: "Volume", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+//       { name: "gross_wt", label: "Gross Weight", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+//       { name: "net_wt", label: "Net Weight", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+//       { name: "prod_hi", label: "Layers", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
+//       { name: "prod_ti", label: "Carton / Layer", type: "number", tab: "uom-volume", section: "VOLUME (METER / KILOGRAM)" },
 
-      // Manufacture & Validation Tab - Validation
-      { name: "chk_mfgexpdt", label: "Mfg/Exp Dt", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
-      { name: "chk_manucode", label: "Supp. cd", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
-      { name: "chk_lotno", label: "Lot No", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
-      { name: "kitting", label: "Kitting", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
-      { name: "serialize", label: "Serialize", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
-      { name: "rcpt_exp_limit", label: "Receipt Exp Limit", type: "number", tab: "manufacture-validation", section: "VALIDATION" },
-      { name: "minperiod_exppick", label: "Min Period Exp Pick", type: "number", tab: "manufacture-validation", section: "VALIDATION" },
+//       // Manufacture & Validation Tab - Manufacturer
+//       { name: "harm_code", label: "Harmonize Code", dropdownParam: "DROP_DOWN_HARMONIZE", dropdownDisplayFields: ["harm_code", "harm_desc"], dropdownDisplaySeparator: " - ", dropdownValueKey: "harm_code", tab: "manufacture-validation", section: "MANUFACTURER" },
+//       { name: "imco_code", label: "IMCO Code", tab: "manufacture-validation", section: "MANUFACTURER" },
+//       { name: "manu_code", label: "Manufacturer", dropdownParam: "DROP_DOWN_MANUFACTURER", dropdownCodeMap: { prin_code: "code1" }, dropdownDisplayFields: ["manu_code", "manu_name"], dropdownDisplaySeparator: " - ", dropdownValueKey: "manu_code", tab: "manufacture-validation", section: "MANUFACTURER" },
+//       { name: "alt_prod_code", label: "Alternate Prod Code", tab: "manufacture-validation", section: "MANUFACTURER" },
+//       { name: "site_ind", label: "Default Site Ind", required: true, dropdownParam: "DROP_DOWN_SITE_IND",dropdownDisplayFields: ["site_ind", "ind_desc"], dropdownDisplaySeparator: " - ", dropdownValueKey: "site_ind", tab: "manufacture-validation", section: "MANUFACTURER" },
+//       { name: "batch_type", label: "Batch Type", type: "number", tab: "manufacture-validation", section: "MANUFACTURER" },
 
-      // Category & Product Tab - Category
-      { name: "category_abc", label: "Category ABC", type: "select", options: [{ label: "A", value: "A" }, { label: "B", value: "B" }, { label: "C", value: "C" }], tab: "category-product", section: "CATEGORY" },
-      { name: "prod_status", label: "Status", required: true, type: "select", options: [{ label: "Active", value: "A" }, { label: "Inactive", value: "I" }], tab: "category-product", section: "CATEGORY" },
-      { name: "prod_type", label: "Product Type", dropdownParam: "DROP_DOWN_PRODUCT_TYPE", tab: "category-product", section: "CATEGORY" },
-      { name: "product_stage", label: "Product Stage", tab: "category-product", section: "CATEGORY" },
-      { name: "base_price", label: "Base Price", type: "number", tab: "category-product", section: "CATEGORY" },
-      { name: "wave_code", label: "Def. Pick Wave", type: "select", options: [{ label: "Wave 1", value: "1" }, { label: "Wave 2", value: "2" }, { label: "Wave 3", value: "3" }], tab: "category-product", section: "CATEGORY" },
-      { name: "shelf_life", label: "Shelf Life (Days)", type: "number", tab: "category-product", section: "CATEGORY" },
+//       // Manufacture & Validation Tab - Validation
+//       { name: "chk_mfgexpdt", label: "Mfg/Exp Dt", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
+//       { name: "chk_manucode", label: "Supp. cd", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
+//       { name: "chk_lotno", label: "Lot No", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
+//       { name: "kitting", label: "Kitting", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
+//       { name: "serialize", label: "Serialize", type: "checkbox", tab: "manufacture-validation", section: "VALIDATION" },
+//       { name: "rcpt_exp_limit", label: "Receipt Exp Limit", type: "number", tab: "manufacture-validation", section: "VALIDATION" },
+//       { name: "minperiod_exppick", label: "Min Period Exp Pick", type: "number", tab: "manufacture-validation", section: "VALIDATION" },
 
-      // Category & Product Tab - Flags
-      { name: "co_pack", label: "Co-packed", type: "checkbox", tab: "category-product", section: "FLAGS" },
-      { name: "pack_key", label: "Barcode Print", type: "checkbox", tab: "category-product", section: "FLAGS" },
-      { name: "hazmat_class", label: "Hazmat Class", type: "checkbox", tab: "category-product", section: "FLAGS" },
-      { name: "food_ind", label: "Food Ind", type: "checkbox", tab: "category-product", section: "FLAGS" },
-      { name: "pharma_ind", label: "Pharma Ind", type: "checkbox", tab: "category-product", section: "FLAGS" },
+//       // Category & Product Tab - Category
+//       { name: "category_abc", label: "Category ABC", type: "select", options: [{ label: "A", value: "A" }, { label: "B", value: "B" }, { label: "C", value: "C" }], tab: "category-product", section: "CATEGORY" },
+//       { name: "prod_status", label: "Status", required: true, type: "select", options: [{ label: "Active", value: "A" }, { label: "Inactive", value: "I" }], tab: "category-product", section: "CATEGORY" },
+//       { name: "prod_type", label: "Product Type", dropdownParam: "DROP_DOWN_PRODUCT_TYPE", tab: "category-product", section: "CATEGORY" },
+//       { name: "product_stage", label: "Product Stage", tab: "category-product", section: "CATEGORY" },
+//       { name: "base_price", label: "Base Price", type: "number", tab: "category-product", section: "CATEGORY" },
+//       { name: "wave_code", label: "Def. Pick Wave", type: "select", options: [{ label: "Wave 1", value: "1" }, { label: "Wave 2", value: "2" }, { label: "Wave 3", value: "3" }], tab: "category-product", section: "CATEGORY" },
+//       { name: "shelf_life", label: "Shelf Life (Days)", type: "number", tab: "category-product", section: "CATEGORY" },
 
-      // Category & Product Tab - Putaway Preference
-      { name: "special_instructions", label: "Special Instructions", type: "textarea", tab: "category-product", section: "PUTAWAY PREFERENCE" },
-    ],
+//       // Category & Product Tab - Flags
+//       { name: "co_pack", label: "Co-packed", type: "checkbox", tab: "category-product", section: "FLAGS" },
+//       { name: "pack_key", label: "Barcode Print", type: "checkbox", tab: "category-product", section: "FLAGS" },
+//       { name: "hazmat_class", label: "Hazmat Class", type: "checkbox", tab: "category-product", section: "FLAGS" },
+//       { name: "food_ind", label: "Food Ind", type: "checkbox", tab: "category-product", section: "FLAGS" },
+//       { name: "pharma_ind", label: "Pharma Ind", type: "checkbox", tab: "category-product", section: "FLAGS" },
 
-    saveEndpoint: (form, { editMode, original }) =>
-      editMode ? `product` : "product",
-    deleteConfig: {
-      mode: "rawDelete",
-      payload: (row) => [{ prod_code: row.prod_code, prin_code: row.prin_code }],
-    },
-    customLoad: async (user) => {
-      const typedUser = user as { loginid: string; company_code: string };
-      const data = await executeWmsInboundSql(`
-        SELECT p.*,
-              pr.PRIN_NAME,
-              g.GROUP_NAME,
-              b.BRAND_NAME
-        FROM MS_PRODUCT p
-        LEFT JOIN MS_PRINCIPAL pr
-              ON pr.COMPANY_CODE = p.COMPANY_CODE
-              AND pr.PRIN_CODE    = p.PRIN_CODE
-        LEFT JOIN MS_PRODGROUP g
-              ON g.COMPANY_CODE = p.COMPANY_CODE
-              AND g.PRIN_CODE    = p.PRIN_CODE
-              AND g.GROUP_CODE   = p.GROUP_CODE
-        LEFT JOIN MS_PRODBRAND b
-              ON b.COMPANY_CODE = p.COMPANY_CODE
-              AND b.PRIN_CODE    = p.PRIN_CODE
-              AND b.GROUP_CODE   = p.GROUP_CODE
-              AND b.BRAND_CODE   = p.BRAND_CODE
-        WHERE p.COMPANY_CODE = '${typedUser.company_code}'
-        ORDER BY p.PROD_CODE
-      `);
-      return {
-        tableData: data as Record<string, unknown>[],
-        count: data.length,
-      };
-    },
-customSave: async (form, context) => {
-  const { user } = context;
-  const typedUser = user as { loginid: string };
-  await api.post('api/wms/inbound/upsertMsProduct', {
-    ...form,
-    loginid: typedUser.loginid,
-  });
-},
-  },
-  site: {
+//       // Category & Product Tab - Putaway Preference
+//       { name: "special_instructions", label: "Special Instructions", type: "textarea", tab: "category-product", section: "PUTAWAY PREFERENCE" },
+//     ],
+
+//     saveEndpoint: (form, { editMode, original }) =>
+//       editMode ? `product` : "product",
+//     deleteConfig: {
+//       mode: "rawDelete",
+//       payload: (row) => [{ prod_code: row.prod_code, prin_code: row.prin_code }],
+//     },
+//     customLoad: async (user) => {
+//       const typedUser = user as { loginid: string; company_code: string };
+//       const data = await executeWmsInboundSql(`
+//         SELECT p.*,
+//               pr.PRIN_NAME,
+//               g.GROUP_NAME,
+//               b.BRAND_NAME
+//         FROM MS_PRODUCT p
+//         LEFT JOIN MS_PRINCIPAL pr
+//               ON pr.COMPANY_CODE = p.COMPANY_CODE
+//               AND pr.PRIN_CODE    = p.PRIN_CODE
+//         LEFT JOIN MS_PRODGROUP g
+//               ON g.COMPANY_CODE = p.COMPANY_CODE
+//               AND g.PRIN_CODE    = p.PRIN_CODE
+//               AND g.GROUP_CODE   = p.GROUP_CODE
+//         LEFT JOIN MS_PRODBRAND b
+//               ON b.COMPANY_CODE = p.COMPANY_CODE
+//               AND b.PRIN_CODE    = p.PRIN_CODE
+//               AND b.GROUP_CODE   = p.GROUP_CODE
+//               AND b.BRAND_CODE   = p.BRAND_CODE
+//         WHERE p.COMPANY_CODE = '${typedUser.company_code}'
+//         ORDER BY p.PROD_CODE
+//       `);
+//       return {
+//         tableData: data as Record<string, unknown>[],
+//         count: data.length,
+//       };
+//     },
+// customSave: async (form, context) => {
+//   const { user } = context;
+//   const typedUser = user as { loginid: string };
+//   await api.post('api/wms/inbound/upsertMsProduct', {
+//     ...form,
+//     loginid: typedUser.loginid,
+//   });
+// },
+// ediUploadConfig: {
+//   open: true,
+//   name: "product",
+// }
+//   },
+ 
+site: {
     title: "Site Master",
     subtitle: "Maintain site setup with warehouse, division, type, and storage behavior.",
     master: "site",
@@ -617,6 +626,40 @@ customSave: async (form, context) => {
     ],
     defaults: { inc_storage: "N", status: "A" },
     deleteConfig: { mode: "disabled", payload: () => null, reason: "Delete endpoint is not registered in the existing backend" },
+    ediUploadConfig: {
+      open: true,
+      name: "site",
+    },
+    customLoad: async (user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      const data = await executeWmsInboundSql(`
+        SELECT
+          SITE_CODE AS "site_code",
+          SITE_IND AS "site_ind",
+          SITE_TYPE AS "site_type",
+          SITE_NAME AS "site_name",
+          SITE_ADDR1 AS "site_addr1",
+          SITE_ADDR2 AS "site_addr2",
+          SITE_ADDR3 AS "site_addr3",
+          SITE_ADDR4 AS "site_addr4",
+          CITY AS "city",
+          COUNTRY_CODE AS "country_code",
+          CONTACT_NAME AS "contact_name",
+          TEL_NO AS "tel_no",
+          CHARGE_IND AS "charge_ind",
+          PRIN_CODE AS "prin_code",
+          GROUP_CODE AS "group_code",
+          LOC_TYPE AS "loc_type",
+          COMPANY_CODE AS "company_code"
+        FROM MS_SITE
+        WHERE COMPANY_CODE = '${typedUser.company_code}'
+        ORDER BY SITE_CODE
+      `);
+      return {
+        tableData: data as Record<string, unknown>[],
+        count: data.length,
+      };
+    },
   },
   warehouse: {
     title: "Warehouse Master",
@@ -628,13 +671,59 @@ customSave: async (form, context) => {
     fields: [
       { name: "wh_code", label: "Warehouse Code", required: true, disabledOnEdit: true, width: 160 },
       { name: "wh_name", label: "Warehouse Name", required: true, width: 280 },
+      { name: "address_1", label: "Address Line 1", width: 220, table: false },
+      { name: "address_2", label: "Address Line 2", width: 220, table: false },
+      { name: "address_3", label: "Address Line 3", width: 220, table: false },
       { name: "country_code", label: "Country Code", width: 140 },
       { name: "city", label: "City", width: 150 },
       { name: "phone", label: "Phone", width: 150 },
-      { name: "address", label: "Address", table: false },
+      { name: "fax", label: "Fax", width: 150, table: false },
+      { name: "contact_person", label: "Contact Person", width: 180, table: false },
     ],
-    deleteConfig: { mode: "disabled", payload: () => null, reason: "Delete endpoint is not registered in the existing backend" },
+    customLoad: async (user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      const data = await executeWmsInboundSql(`
+        SELECT *
+        FROM MS_WAREHOUSE
+        WHERE COMPANY_CODE = '${typedUser.company_code}'
+        ORDER BY WH_CODE
+      `);
+      return {
+        tableData: data as Record<string, unknown>[],
+        count: data.length,
+      };
+    },
+    customSave: async (form, context) => {
+      console.log("Custom save logic for Warehouse Master", form, context);
+      const { editMode, original, user } = context;
+      const typedUser = user as { loginid: string; company_code: string };
+      await executeDynamicMutation({
+        loginid: typedUser.loginid,
+        parameter: "WAREHOUSE_INS_UPD",
+        val1s1: (editMode ? (original?.wh_code ?? form.wh_code) : undefined) as string | undefined,
+        val1s2: form.wh_name as string,
+        val1s3: form.address_1 as string,
+        val1s4: form.address_2 as string,
+        val1s5: form.address_3 as string,
+        val1s6: form.city as string,
+        val1s7: form.country_code as string,
+        val1s8: form.phone as string,
+        val1s9: form.fax as string,
+        val1s10: form.contact_person as string,
+        wval1s1: typedUser.company_code,
+        wval1s2: (editMode ? original?.wh_code : form.wh_code) as string,
+      });
+    },
+    customDelete: async (row, user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      await executeWmsInboundSql(`
+        DELETE FROM MS_WAREHOUSE
+        WHERE COMPANY_CODE = '${typedUser.company_code}'
+        AND WH_CODE = '${row.wh_code}'
+      `);
+    },
   },
+
   location: {
     title: "Location Master",
     subtitle: "Maintain warehouse location code, type, status, physical dimensions, and site.",
@@ -669,7 +758,12 @@ customSave: async (form, context) => {
       { name:"reorder_qty", label:"Reorder Qty", type:"number", width:110, section:"Dimensions" },
     ],
     deleteConfig: { mode: "registered", payload: (row) => [row.location_code] },
+    ediUploadConfig: {
+      open: true,
+      name: "location",
+    }
   },
+
   assetgroup: {
     title: "Asset Group Master",
     subtitle: "Maintain WMS asset group codes and names.",
@@ -683,6 +777,7 @@ customSave: async (form, context) => {
     ],
     deleteConfig: { mode: "registered", payload: (row) => [row.asset_group_code] },
   },
+
   currency: {
     title: "Currency Master",
     subtitle: "Maintain currency code, name, exchange rate, division, subdivision, and sign.",
@@ -700,6 +795,7 @@ customSave: async (form, context) => {
     defaults: { ex_rate: "1", subdivision: "100" },
     deleteConfig: { mode: "registered", payload: (row) => [row.curr_code] },
   },
+
   uom: {
     title: "UOM Master",
     subtitle: "Maintain unit of measurement codes used by product and warehouse transactions.",
@@ -712,6 +808,7 @@ customSave: async (form, context) => {
     ],
     deleteConfig: { mode: "registered", payload: (row) => [row.uom_code] },
   },
+
   uoc: {
     title: "UOC Master",
     subtitle: "Maintain unit of charge records for WMS billing activity.",
@@ -735,6 +832,7 @@ customSave: async (form, context) => {
     }),
     deleteConfig: { mode: "registered", payload: (row) => [{ company_code: row.company_code, charge_type: row.charge_type, charge_code: row.charge_code }] },
   },
+
   brand: {
     title: "Brand Master",
     subtitle: "Maintain brand setup by principal and group with preferred storage ranges.",
@@ -769,6 +867,7 @@ customSave: async (form, context) => {
       });
     },
   },
+
   group: {
     title: "Group Master",
     subtitle: "Maintain product groups by principal with optional storage preferences.",
@@ -785,6 +884,7 @@ customSave: async (form, context) => {
       payload: (row) => [{ group_code: row.group_code, prin_code: row.prin_code, company_code: row.company_code }],
     },
   },
+
   line: {
     title: "Line Master",
     subtitle: "Maintain shipping line codes and names.",
@@ -797,6 +897,7 @@ customSave: async (form, context) => {
     ],
     deleteConfig: { mode: "registered", payload: (row) => [row.line_code] },
   },
+
   vessel: {
     title: "Vessel Master",
     subtitle: "Maintain vessel details, line, contact, and communication information.",
@@ -824,6 +925,7 @@ customSave: async (form, context) => {
     }),
     deleteConfig: { mode: "registered", payload: (row) => [{ vessel_code: row.vessel_code, company_code: row.company_code }] },
   },
+
   airline: {
     title: "Airline Master",
     subtitle: "Maintain airline codes and names.",

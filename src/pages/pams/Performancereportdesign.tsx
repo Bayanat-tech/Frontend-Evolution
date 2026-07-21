@@ -55,7 +55,6 @@ export interface AppraisalCharacteristic {
     RATING?: string | number;
 }
 
-// Section5 ko ab header comments se connect karenge
 export interface AppraisalSection5 {
     APPRAISER_COMMENTS: string;
     APPRAISEE_COMMENTS: string;
@@ -63,7 +62,6 @@ export interface AppraisalSection5 {
     LAST_ACTION_BY_NAME: string;
     COMMENTS_DATE: string;
     APPRAISEE_COMMENTS_DATE: string;
-    // New: level-wise comments from header
     APPRAISER_COMMENTS1?: string;
     APPRAISER_COMMENTS2?: string;
     APPRAISER_COMMENTS3?: string;
@@ -78,6 +76,7 @@ interface Props {
         company_code?: string;
     };
     printRef?: React.RefObject<HTMLDivElement>;
+    onReady?: (ready: boolean) => void;  
 }
 
 type KpiGroup = {
@@ -101,7 +100,6 @@ interface ReportContentProps {
     flowHistory: AppraisalFlowHistory[];
 }
 
-// Yeh function add karo fmtDate ke neeche
 function fmtDateTime(val: string): string {
     if (!val || val === "null" || val === "undefined") return "—";
     const d = new Date(val);
@@ -149,7 +147,6 @@ function fmtDate(val: string): string {
     return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-// ─── Report Content (printable area) ─────────────────────────────────────────
 const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
     (
         {
@@ -168,13 +165,12 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
         const leftRatings = ratings.slice(0, 3);
         const rightRatings = ratings.slice(3);
 
-        // Level-wise comments array
         const commentsByLevel = [
-            section5.APPRAISER_COMMENTS1 ?? "",  // Level 1 — Supervisor's comment (stored by trigger)
-            section5.APPRAISER_COMMENTS2 ?? "",  // Level 2 — Creator/HR comment
-            section5.APPRAISER_COMMENTS3 ?? "",  // Level 3 — COO comment
-            section5.APPRAISER_COMMENTS4 ?? "",  // Level 4 — CEO comment
-            section5.APPRAISER_COMMENTS5 ?? "",  // Level 5 — Final HR comment
+            section5.APPRAISER_COMMENTS1 ?? "",
+            section5.APPRAISER_COMMENTS2 ?? "",
+            section5.APPRAISER_COMMENTS3 ?? "",
+            section5.APPRAISER_COMMENTS4 ?? "",
+            section5.APPRAISER_COMMENTS5 ?? "",
         ];
 
         return (
@@ -224,7 +220,6 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
         `}</style>
 
                 <div className="prf-wrap">
-                    {/* ── Header: Logo + Title ── */}
                     <div className="prf-header">
                         <div style={{ flexShrink: 0, width: 187, height: 68 }}>
                             <svg width="187" height="68" viewBox="0 0 220 80" xmlns="http://www.w3.org/2000/svg">
@@ -242,7 +237,6 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
                         <div className="prf-header-title">Performance Review for Non-Managers</div>
                     </div>
 
-                    {/* ── Section 1 : Details ── */}
                     <table className="prf-tbl">
                         <tbody>
                             <tr>
@@ -287,7 +281,6 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
                         </tbody>
                     </table>
 
-                    {/* ── Rating Scale intro ── */}
                     <table className="prf-tbl">
                         <tbody>
                             <tr>
@@ -312,7 +305,6 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
                         </tbody>
                     </table>
 
-                    {/* ── Section 2 : Performance Assessment ── */}
                     <table className="prf-tbl prf-sec2">
                         <colgroup>
                             <col style={{ width: "4%" }} />
@@ -382,7 +374,6 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
                         </tbody>
                     </table>
 
-                    {/* ── Section 3 : Employee Characteristics ── */}
                     <table className="prf-tbl prf-sec3">
                         <tbody>
                             <tr>
@@ -434,7 +425,6 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
                         </tbody>
                     </table>
 
-                    {/* ── Section 4 : Overall Rating ── */}
                     <table className="prf-tbl prf-sec4">
                         <tbody>
                             <tr>
@@ -449,7 +439,6 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
                         </tbody>
                     </table>
 
-                    {/* ── Section 5 : Comments & Signatures ── */}
                     <table className="prf-tbl prf-sec5">
                         <tbody>
                             <tr>
@@ -464,7 +453,6 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
                                 </td>
                             </tr>
 
-                            {/* Headers */}
                             <tr>
                                 <td className="c-dark-header" style={{ width: "5%" }}>Sr.</td>
                                 <td className="c-dark-header" style={{ width: "22%" }}>Approved By</td>
@@ -474,7 +462,6 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
                                 <td className="c-dark-header" style={{ width: "15%" }}>Signature</td>
                             </tr>
 
-                            {/* Data Rows — level-wise */}
                             {flowHistory.length === 0 ? (
                                 <tr>
                                     <td style={{ padding: "5px 6px" }}>—</td>
@@ -499,7 +486,6 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
 
                                     return (
                                         <tr key={f.HISTORY_ID ?? idx}>
-                                            {/* Sr No */}
                                             <td style={{
                                                 verticalAlign: "top",
                                                 padding: "5px 6px",
@@ -510,7 +496,6 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
                                                 {idx + 1}
                                             </td>
 
-                                            {/* Approved By — Name + Code */}
                                             <td style={{ verticalAlign: "top", padding: "5px 6px", height: "40px" }}>
                                                 <div style={{ fontWeight: 700, fontSize: "8.5px", color: "#000" }}>
                                                     {f.ACTION_BY_NAME || f.ACTION_BY || "—"}
@@ -524,15 +509,10 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
                                                 </div>
                                             </td>
 
-                                            {/* Date & Time — KEY COLUMN */}
-                                            {/* Date & Time — KEY COLUMN */}
                                             <td style={{ verticalAlign: "top", padding: "5px 6px", height: "40px" }}>
                                                 {f.ACTION_DATE ? (
                                                     <div>
-                                                        {/* PURANA — hatao: */}
-                                                        {/* f.ACTION_DATE.split(" ")[0] */}
 
-                                                        {/* NAYA — lagao: */}
                                                         <div style={{ fontSize: "8px", fontWeight: 600, color: "#000" }}>
                                                             {fmtDateTime(f.ACTION_DATE).split(" ")[0]}
                                                         </div>
@@ -545,19 +525,18 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
                                                 )}
                                             </td>
 
-                                            {/* Appraiser Comments */}
                                             <td style={{ verticalAlign: "top", padding: "5px 6px", height: "40px" }}>
                                                 {comment
                                                     ? <span className="c-comment-text">{comment}</span>
                                                     : <span>&nbsp;</span>}
                                             </td>
 
-                                            {/* Appraisee Comments */}
                                             <td style={{ verticalAlign: "top", padding: "5px 6px", height: "40px" }}>
-                                                <span>&nbsp;</span>
+                                                {f.ACTION_BY === appraisal.EMPLOYEE_CODE && section5.APPRAISEE_COMMENTS
+                                                    ? <span className="c-comment-text">{section5.APPRAISEE_COMMENTS}</span>
+                                                    : <span>&nbsp;</span>}
                                             </td>
 
-                                            {/* Signature */}
                                             <td style={{ verticalAlign: "top", padding: "5px 6px", height: "40px" }}>
                                                 <div style={{
                                                     borderBottom: "1px solid #000",
@@ -572,7 +551,6 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
                         </tbody>
                     </table>
 
-                    {/* ── Section 6 : CEO/COO ── */}
                     <table className="prf-tbl prf-sec6">
                         <tbody>
                             <tr>
@@ -600,7 +578,7 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
 ReportContent.displayName = "ReportContent";
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-const PerformanceReportDesign: React.FC<Props> = ({ required_values, printRef }) => {
+const PerformanceReportDesign: React.FC<Props> = ({ required_values, printRef, onReady }) => {
     const { user } = useAuth();
     const { doc_no, employee_code, company_code = COMPANY_CODE } = required_values;
     const loginid = user?.loginid ?? user?.username ?? "";
@@ -643,20 +621,17 @@ const PerformanceReportDesign: React.FC<Props> = ({ required_values, printRef })
         setIsFetching(true);
 
         Promise.all([
-            // Appraisal header (Part1)
             pamsCommonSelect({
                 parameter: "PERFORMANCE_REPORT_EMP_APPRAISAL_PART1_SELECT_BY_DOC_EMP",
                 loginid,
                 code1: doc_no,
                 code2: employee_code,
             }),
-            // Rating scale
             pamsCommonSelect({
                 parameter: "PERFORMANCE_REPORT_EAM_RATING_SELECT",
                 loginid,
                 code1: company_code,
             }),
-            // KPI tasks
             pamsSelect<AppraisalTaskDtl>({
                 parameter: "Trn_task",
                 loginid,
@@ -664,7 +639,6 @@ const PerformanceReportDesign: React.FC<Props> = ({ required_values, printRef })
                 code2: doc_no,
                 code3: employee_code,
             }),
-            // Employee characteristics
             pamsSelect<AppraisalCharacteristic>({
                 parameter: "Trn_character",
                 loginid,
@@ -672,19 +646,16 @@ const PerformanceReportDesign: React.FC<Props> = ({ required_values, printRef })
                 code2: doc_no,
                 code3: employee_code,
             }),
-            // Comments (appraiser + appraisee)
             pamsSelect<Record<string, unknown>>({
                 parameter: "appraisal_comments",
                 loginid,
                 code1: doc_no,
             }),
-            // Flow history
             pamsSelect<AppraisalFlowHistory>({
                 parameter: "get_appraisal_flow_with_name",
                 loginid,
                 code1: doc_no,
             }),
-            // Header data (5 comment columns)
             pamsSelect<Record<string, unknown>>({
                 parameter: "appraisal_comments",
                 loginid,
@@ -730,8 +701,6 @@ const PerformanceReportDesign: React.FC<Props> = ({ required_values, printRef })
                 const appraiseeCmtDate = String(
                     commentsRow["APPRAISEE_COMMENTS_DATE"] ?? commentsRow["appraisee_comments_date"] ?? ""
                 );
-
-                // Header data (currently same as comments row, but conceptually from HDR)
                 const hdrRow = (hdrComments as Record<string, unknown>[])?.[0] ?? {};
                 setHeaderData(hdrRow);
 
@@ -754,6 +723,7 @@ const PerformanceReportDesign: React.FC<Props> = ({ required_values, printRef })
                 setRatingsData([]);
                 setTaskData([]);
                 setCharacteristics([]);
+                onReady?.(false);
             })
             .finally(() => setIsFetching(false));
     }, [loginid, doc_no, employee_code, company_code]);
@@ -817,6 +787,15 @@ const PerformanceReportDesign: React.FC<Props> = ({ required_values, printRef })
             characteristicsData.length
             : 0;
     const charTotal = charTotalNum > 0 ? charTotalNum.toFixed(2) : "";
+    useEffect(() => {
+    if (!isFetching && appraisal) {
+        // Ek frame wait karo taaki ReportContent DOM mein fully paint ho chuke
+        const id = requestAnimationFrame(() => onReady?.(true));
+        return () => cancelAnimationFrame(id);
+    }
+    // Loading shuru hote hi parent ko "not ready" bata do
+    onReady?.(false);
+}, [isFetching, appraisal, onReady]);
 
     if (isFetching) return <div style={{ padding: 24 }}>Loading...</div>;
     if (!appraisal) return <div style={{ padding: 24 }}>No Data</div>;

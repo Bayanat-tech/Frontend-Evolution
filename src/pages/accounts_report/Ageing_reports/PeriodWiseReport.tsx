@@ -6,11 +6,12 @@ import {
     RotateCcw,
     BarChart2,
     Loader2,
+    Download,
 } from "lucide-react";
 
 import { getDynamicLookup, getDynamicLookupaccount } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
-import { openDuedatewiseDetailReport, openDuedatewiseSummaryReport, openInvdatewiseDetailReport, openInvdatewiseSummaryReport, openOutstandingListReport } from "../../../api/transactions";
+import { exportDueDetailExcel, exportDueSummaryExcel, exportInvDetailExcel, exportInvSummaryExcel, exportOutstandingListExcel, openDuedatewiseDetailReport, openDuedatewiseSummaryReport, openInvdatewiseDetailReport, openInvdatewiseSummaryReport, openOutstandingListReport } from "../../../api/transactions";
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 const getRowKey = (row: any, tab: "acCode" | "group" | "salesman"): string => {
@@ -147,6 +148,7 @@ const PeriodWisePage: React.FC = () => {
 
     // ── Track which tabs have been fetched (reset on division change) ─────────
     const [fetchedTabs, setFetchedTabs] = useState<Set<string>>(new Set());
+     const [generatingExcel, setGeneratingExcel] = useState(false);
 
 
     const [generating, setGenerating] = useState(false);
@@ -349,6 +351,133 @@ const PeriodWisePage: React.FC = () => {
         setReportError(null);
     };
 
+    //  const handleExportExcel = async () => {
+    // if (!division) {
+    //     setReportError("Please select a Division before exporting.");
+    //     return;
+    // }
+    // setReportError(null);
+    // setGeneratingExcel(true);
+    // try {
+    //     const params = {
+    //         loginid: user?.loginid || user?.username || "ADMIN",
+    //         code1: user?.company_code || "",
+    //         code2: division,
+    //         code3: accountLeftSelected.size > 0 ? Array.from(accountLeftSelected).join(",") : "All",
+    //         code4: groupLeftSelected.size > 0 ? Array.from(groupLeftSelected).join(",") : "All",
+    //         code5: salesmanLeftSelected.size > 0 ? Array.from(salesmanLeftSelected).join(",") : "All",
+    //         code6: formatDateOracle(asOnDate),
+    //         code7: dateType,
+    //         code8: option,
+    //         code9: String(ages[0]),
+    //         code10: String(ages[1]),
+    //         code11: String(ages[2]),
+    //         code12: String(ages[3]),
+    //         code13: String(ages[4]),
+    //         code14: String(ages[5]),
+    //         code15: String(outstandingList),
+    //         code16: String(salesmanWise),
+    //     };
+
+    //     let url = "";
+    //     if (outstandingList) {
+    //         url = "/api/periodwise-outstanding-excel";
+    //     } else if (dateType === "due" && option === "summary") {
+    //         url = "/api/periodwise-due-summary-excel";
+    //     } else if (dateType === "due" && option === "detail") {
+    //         url = "/api/periodwise-due-detail-excel";
+    //     } else if (option === "summary") {
+    //         url = "/api/periodwise-inv-summary-excel";
+    //     } else {
+    //         url = "/api/periodwise-inv-detail-excel";
+    //     }
+
+    //     const response = await fetch(url, {
+    //         method: "POST",
+    //         headers: { "Content-Type": "application/json" },
+    //         body: JSON.stringify(params),
+    //     });
+
+    //     if (!response.ok) throw new Error("Server error: " + response.status);
+
+    //     const blob = await response.blob();
+    //     const link = document.createElement("a");
+    //     link.href = URL.createObjectURL(blob);
+    //     link.download = `PeriodWise_${outstandingList ? "Outstanding" : dateType === "due" ? "Due" : "Inv"}_${option}_${formatDateOracle(asOnDate)}.xlsx`;
+    //     link.click();
+    //     URL.revokeObjectURL(link.href);
+
+    // } catch (err: any) {
+    //     setReportError(err.message || "Failed to export Excel.");
+    // } finally {
+    //     setGeneratingExcel(false);
+    // }
+    //     };
+
+
+
+
+    const handleExportExcel = async () => {
+    if (!division) {
+        setReportError("Please select a Division before exporting.");
+        return;
+    }
+    setReportError(null);
+    setGeneratingExcel(true);
+    try {
+        const params = {
+
+
+             parameter: outstandingList
+                    ? "Account_Report_VW_PERIODWISE_OUTSTD_LIST"
+                    : dateType === "due" && option === "summary"
+                        ? "Account_Report_VW_PERIODWISE_DUEDATE_SUMMARY"
+                        : dateType === "due" && option === "detail"
+                            ? "Account_Report_VW_PERIODWISE_DUEDATE_DETAIL"
+                            : option === "summary"
+                                ? "Account_Report_VW_PERIODWISE_INV_SUMMARY"
+                                : "Account_Report_VW_PERIODWISE_INV_DETAIL",
+                loginid: user?.loginid || user?.username || "ADMIN",
+            //loginid: user?.loginid || user?.username || "ADMIN",
+            code1: user?.company_code || "",
+            code2: division,
+            code3: accountLeftSelected.size > 0 ? Array.from(accountLeftSelected).join(",") : "All",
+            code4: groupLeftSelected.size > 0 ? Array.from(groupLeftSelected).join(",") : "All",
+            code5: salesmanLeftSelected.size > 0 ? Array.from(salesmanLeftSelected).join(",") : "All",
+            code6: formatDateOracle(asOnDate),
+            code7: dateType,
+            code8: option,
+            code9: String(ages[0]),
+            code10: String(ages[1]),
+            code11: String(ages[2]),
+            code12: String(ages[3]),
+            code13: String(ages[4]),
+            code14: String(ages[5]),
+            code15: String(outstandingList),
+            code16: String(salesmanWise),
+        };
+
+        if (outstandingList) {
+            await exportOutstandingListExcel(params);
+        } else if (dateType === "due" && option === "summary") {
+            await exportDueSummaryExcel(params);
+        } else if (dateType === "due" && option === "detail") {
+            await exportDueDetailExcel(params);
+        } else if (option === "summary") {
+            await exportInvSummaryExcel(params);
+        } else {
+            await exportInvDetailExcel(params);
+        }
+
+    } catch (err: any) {
+        setReportError(err.message || "Failed to export Excel.");
+    } finally {
+        setGeneratingExcel(false);
+    }
+};
+
+    
+
     // ── Filtered lists ────────────────────────────────────────────────────────
     const filteredGroupLeft = groupLeftItems.filter(
         (i) => i.l4_code?.toLowerCase().includes(groupSearchLeft.toLowerCase()) ||
@@ -416,6 +545,8 @@ const PeriodWisePage: React.FC = () => {
                 tbody tr:hover td { background: #f9fafb; }
                 input[type=number]::-webkit-inner-spin-button { opacity: 1; }
                 .div-option:hover { background: #f0f7ff; }
+                 @keyframes spin { to { transform: rotate(360deg); } }
+                  .action-btn-excel:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
             `}</style>
 
             <div style={{ maxWidth: 1080, margin: "0 auto", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -847,12 +978,23 @@ const PeriodWisePage: React.FC = () => {
                     {/* Action bar */}
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8, paddingTop: 8, borderTop: "0.5px solid #e5e7eb" }}>
                         <button
-                            className="action-btn"
+                              className="action-btn action-btn-excel"
                             onClick={handleReset}
                             style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151" }}
                         >
                             <RotateCcw size={13} /> Reset
                         </button>
+
+                        <button
+                             className="action-btn action-btn-excel"
+                            onClick={handleExportExcel}
+                            disabled={generatingExcel}
+                            style={{ padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: generatingExcel ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151", opacity: generatingExcel ? 0.7 : 1 }}
+                        >
+                            <Download size={13} /> {generatingExcel ? "Exporting..." : "Export Excel"}
+                        </button>
+
+
                         <button
                             className="action-btn-primary"
                             onClick={handleGenerate}

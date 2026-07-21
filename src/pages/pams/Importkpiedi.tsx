@@ -205,8 +205,7 @@ const handleUploadToEDI = async () => {
           merged[k] = r[k];
         }
       });
-
-      // ✅ KPI_GROUP/WEIGHTAGE ko explicitly tracked values se set karo
+      
       merged['KPIGROUP'] = lastKpiGroup;
       merged['WEIGHTAGE'] = lastWeightage;
 

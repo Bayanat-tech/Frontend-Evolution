@@ -44,9 +44,9 @@ export function OutboundJobCreateForm({
               <h3 className="m-0 text-sm font-semibold">Outbound Job Creation</h3>
             </div>
           </div>
-          <span className="rounded-full border bg-muted/40 px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+          {/* <span className="rounded-full border bg-muted/40 px-2.5 py-1 text-xs font-semibold text-muted-foreground">
             {companyCode || "Company"}
-          </span>
+          </span> */}
         </div>
         <div className="grid gap-2.5 p-3 md:grid-cols-4">
           <LookupField
@@ -299,7 +299,8 @@ export function OutboundJobCreateForm({
         <div className="grid gap-2.5 p-3 md:grid-cols-4">
           <label className="field md:col-span-2">
             <span>Description</span>
-            <Input
+            <textarea
+            className="ui-textarea min-h-[58px] rounded-md"
               value={String(form.description1 || "")}
               onChange={(event) => setValue("description1", event.target.value)}
               placeholder="Short job description"

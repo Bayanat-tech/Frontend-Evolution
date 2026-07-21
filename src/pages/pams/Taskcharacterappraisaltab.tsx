@@ -58,7 +58,6 @@ const S = {
   emptyMsg: { padding: "40px", textAlign: "center" as const, color: "#9ca3af", fontSize: "13px" },
 };
 
-// ─── Component ────────────────────────────────────────────────────────────────
 const TaskCharacterAppraisalTab: React.FC<Props> = ({
   docNo, employeeCode, onRowsChange, onGrandTotalChange,
 }) => {
@@ -70,7 +69,6 @@ const TaskCharacterAppraisalTab: React.FC<Props> = ({
   const [rowStates, setRowStates] = useState<Record<string, RowState>>({});
   const [loading,   setLoading]   = useState(true);
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!docNo) return;
     setLoading(true);
@@ -92,7 +90,6 @@ const TaskCharacterAppraisalTab: React.FC<Props> = ({
       .finally(() => setLoading(false));
   }, [docNo, employeeCode, loginid, companyCode]);
 
-  // ── Notify parent ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!rows.length || !onRowsChange) return;
     const updated = rows.map((row) => {
@@ -103,7 +100,6 @@ const TaskCharacterAppraisalTab: React.FC<Props> = ({
     onRowsChange(updated);
   }, [rowStates, rows, onRowsChange]);
 
-  // ── Grand total = sum / 4 ──────────────────────────────────────────────────
   const grandTotal = useMemo(() => {
     let sum = 0, count = 0;
     rows.forEach((row) => {
@@ -112,14 +108,13 @@ const TaskCharacterAppraisalTab: React.FC<Props> = ({
         sum += Number(rating); count++;
       }
     });
-    return count > 0 ? Math.round(sum / 4) : 0;
+    return count > 0 ? Math.round(sum / count) : 0
   }, [rows, rowStates]);
 
   useEffect(() => {
     if (onGrandTotalChange) onGrandTotalChange(grandTotal);
   }, [grandTotal, onGrandTotalChange]);
 
-  // ── Rating change ──────────────────────────────────────────────────────────
   const handleRatingChange = (row: Row, value: string) => {
     const key = text(row.KPI_CODE);
     if (value === "") {
@@ -131,7 +126,6 @@ const TaskCharacterAppraisalTab: React.FC<Props> = ({
     setRowStates((prev) => ({ ...prev, [key]: { RATING: rating } }));
   };
 
-  // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div style={S.wrapper}>
       <table style={S.table}>

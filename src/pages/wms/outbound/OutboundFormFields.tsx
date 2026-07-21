@@ -292,12 +292,12 @@ export function ConfirmToolbar({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Input
+      {/* <Input
         className="h-8 w-36 text-xs"
         type="date"
         value={options.confirm_date}
         onChange={(event) => setOptions({ ...options, confirm_date: event.target.value })}
-      />
+      /> */}
       <Button size="sm" variant="outline" disabled={disabled} onClick={onConfirm}>
         Confirm Selected
       </Button>

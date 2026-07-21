@@ -4,7 +4,6 @@ import { useAuth } from "../../state/AuthContext";
 import { pamsSelect, pamsDelete, pamsSave } from "../../api/pams";
 import { CheckCircle, Eye, Edit2, X, Save } from "lucide-react";
 import { Button } from "../../components/ui/Button";
-import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
@@ -12,6 +11,8 @@ import { LookupField } from "../../components/ui/LookupField";
 import { NoticeToast } from "../../components/ui/NoticeToast";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { LookupRow } from "../../api/lookups";
+import { useToast } from "../../components/ui/AlertToast";
+import { DataTable } from "../../components/ui/PamsDataTable";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Row = Record<string, unknown>;
@@ -32,24 +33,25 @@ interface FormData {
   [key: string]: unknown;
 }
 
-// Active weightage config fetched from appraisal_weightage_list
 interface ActiveWeightage {
   taskPct: number;
   charPct: number;
   isHrDefined: boolean;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-const TAB_STATUS   = ["PENDING", "IN PROGRESS", "REJECTED", "SENT BACK", "APPROVED"] as const;
-const TAB_LABELS   = ["Pending", "In Progress", "Rejected", "Sent Back", "Closed"]   as const;
-const HR_APPROVERS = ["2021060535", "2010080001", "2018030473"];
+interface HodBatch {
+  PERIOD_NUMBER: string;
+  READY_COUNT: number | string;
+  PENDING_COUNT: number | string;
+}
 
-// ─── Module-level cache ─────────────────────────────────────────────────────
-// Lives outside the component, so it survives unmount/remount when navigating
-// away to AppraisalViewTabsPage and back. Keyed by company + tab status.
+const TAB_STATUS = ["PENDING", "IN PROGRESS", "REJECTED", "SENT BACK", "APPROVED"] as const;
+const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Closed"] as const;
+const HR_APPROVERS = ["2021060535", "2010080001", "2018030473"];
+// FLOW_LEVEL jispe HOD ke docs pahunchte hain jab HOD apna review complete kar leta hai (2 -> 3)
+const HOD_READY_FLOW_LEVEL = 3;
 const taskPageCache = new Map<string, Row[]>();
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 function text(val: unknown): string {
   if (val === null || val === undefined) return "";
   return String(val);
@@ -63,6 +65,15 @@ function fmtDate(val: unknown): string {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
+function formatPeriodQuarter(row: Row): string {
+  const dateValue = row.PERIOD_FROM_DATE;
+  if (!dateValue) return text(row.PERIOD_NUMBER);
+  const parsed = new Date(String(dateValue));
+  if (isNaN(parsed.getTime())) return text(row.PERIOD_NUMBER);
+  const quarter = Math.floor(parsed.getMonth() / 3) + 1;
+  return `Q${quarter} ${parsed.getFullYear()}`;
+}
+
 function getStatusMeta(
   lastAction: string,
   flowLevel: number,
@@ -72,13 +83,13 @@ function getStatusMeta(
     (flowLevel === 2 || flowLevel === 3) &&
     (status === "DRAFT" || lastAction === "SAVE AS DRAFT" || lastAction === "SAVE_AS_DRAFT");
   const label = isDraft ? "SAVE AS DRAFT" : lastAction;
-  const val   = (lastAction || "").toUpperCase().trim();
+  const val = (lastAction || "").toUpperCase().trim();
 
-  if (isDraft)              return { label, bg: "#fff4e5", color: "#92400e", border: "#fcd38a" };
-  if (val === "SUBMITTED")  return { label, bg: "#e6f9f0", color: "#0a6640", border: "#b7ebd4" };
-  if (val === "APPROVED")   return { label, bg: "#e8f0fe", color: "#1a4fa0", border: "#b3caf5" };
-  if (val === "REJECTED")   return { label, bg: "#fdecea", color: "#a01a1a", border: "#f5b3b3" };
-  if (val === "SENT BACK")  return { label, bg: "#f3e8fe", color: "#6b21a8", border: "#d9b3f5" };
+  if (isDraft) return { label, bg: "#fff4e5", color: "#92400e", border: "#fcd38a" };
+  if (val === "SUBMITTED") return { label, bg: "#e6f9f0", color: "#0a6640", border: "#79c3a2" };
+  if (val === "APPROVED") return { label, bg: "#e8f0fe", color: "#1a4fa0", border: "#b3caf5" };
+  if (val === "REJECTED") return { label, bg: "#fdecea", color: "#a01a1a", border: "#f5b3b3" };
+  if (val === "SENT BACK") return { label, bg: "#f3e8fe", color: "#6b21a8", border: "#d9b3f5" };
   return { label, bg: "#f4f4f5", color: "#52525b", border: "#d4d4d8" };
 }
 
@@ -91,108 +102,92 @@ function normalizeRow(row: Row): Row {
   return normalized;
 }
 
-// ─── Compute final rating using active weightage ──────────────────────────────
 function computeFinalRating(
   taskScore: number,
   charScore: number,
   weightage: ActiveWeightage | null
 ): number {
   if (weightage?.isHrDefined) {
-    // Active weightage hai → weighted formula
     return Math.round((taskScore * weightage.taskPct / 100) + (charScore * weightage.charPct / 100));
   }
-  // Koi active weightage nahi → old logic
   return Math.round((taskScore + charScore) / 2);
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
 const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
-  const navigate     = useNavigate();
-  const { user }     = useAuth();
-  const loginid      = user?.loginid || user?.username || "";
-  const companyCode  = user?.company_code || "";
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const loginid = user?.loginid || user?.username || "";
+  const companyCode = user?.company_code || "";
   const isHRApprover = HR_APPROVERS.includes(loginid);
 
-  // ── Cache key helper — MUST include loginid, not just companyCode.
-  // Without loginid, switching from User A to User B (same company) would
-  // hit User A's cached rows and flash their data for a few seconds.
   const cacheKey = useCallback(
     (tabIdx: number) => `${loginid}-${companyCode}-${TAB_STATUS[tabIdx]}`,
     [loginid, companyCode]
   );
 
-  // ── State ──────────────────────────────────────────────────────────────────
-  const [activeTab,    setActiveTab]    = useState(initialTab);
-  // Lazy-init rows/loading from cache so the FIRST render already shows
-  // previously-fetched data instead of an empty/skeleton table.
-  const [rows,         setRows]         = useState<Row[]>(
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const [rows, setRows] = useState<Row[]>(
     () => taskPageCache.get(`${loginid}-${companyCode}-${TAB_STATUS[initialTab]}`) ?? []
   );
-  const [loading,      setLoading]      = useState(
+  const [loading, setLoading] = useState(
     () => !taskPageCache.has(`${loginid}-${companyCode}-${TAB_STATUS[initialTab]}`)
   );
-  const [notice,       setNotice]       = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
+  const [notice, setNotice] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
-  const [query,        setQuery]        = useState("");
-
-  // ── Active weightage config — fetched once on mount ────────────────────────
+  const [query, setQuery] = useState("");
   const [activeWeightage, setActiveWeightage] = useState<ActiveWeightage | null>(null);
-
-  // Dialog state for Edit/View
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [currentRow, setCurrentRow] = useState<Row | null>(null);
   const [formData, setFormData] = useState<FormData>({
-    APPRAISAL_DOC_NO: "",
-    APPRAISAL_DOC_DATE: "",
-    EMPLOYEE_CODE: "",
-    EMPLOYEE_NAME: "",
-    PERIOD_NUMBER: "",
-    APPRAISAL_FROM: "",
-    APPRAISAL_TO: "",
-    COMPANY_CODE: companyCode,
+    APPRAISAL_DOC_NO: "", APPRAISAL_DOC_DATE: "",
+    EMPLOYEE_CODE: "", EMPLOYEE_NAME: "",
+    PERIOD_NUMBER: "", APPRAISAL_FROM: "",
+    APPRAISAL_TO: "", COMPANY_CODE: companyCode,
   });
   const [saving, setSaving] = useState(false);
   const [periods, setPeriods] = useState<Row[]>([]);
   const [employees, setEmployees] = useState<Row[]>([]);
-
-  const isInitialMount = useRef(true);
-  const currentTabRef = useRef(initialTab);
-  // Tracks the last loginid+companyCode we fetched for, so we can detect a
-  // user switch (e.g. impersonation / re-login without full page reload)
-  // and instantly wipe stale rows before fetching the new user's data.
+  const fetchRequestId = useRef(0);
   const prevUserKeyRef = useRef(`${loginid}-${companyCode}`);
-
   const statusFilter = TAB_STATUS[activeTab];
 
-  // ── Fetch active weightage config ──────────────────────────────────────────
-  // This ensures Avg Score in the table uses the SAME formula as AppraiserCommentsTab
+  const [hodBatches, setHodBatches] = useState<HodBatch[]>([]);
+  const [notifying, setNotifying] = useState<string | null>(null);
+
+  const loadHodBatches = useCallback(async () => {
+    try {
+      const data = await pamsSelect({
+        parameter: "hod_ready_batches",
+        loginid, code1: companyCode,
+      });
+      setHodBatches((data as unknown as HodBatch[]) ?? []);
+    } catch (error) {
+      console.error("Error loading HOD batches:", error);
+    }
+  }, [loginid, companyCode]);
+
+  useEffect(() => { void loadHodBatches(); }, [loadHodBatches]);
+
   useEffect(() => {
     if (!companyCode) return;
     pamsSelect({ parameter: "appraisal_weightage_list", loginid, code1: companyCode })
       .then((data) => {
-        const rows = data as unknown as Array<Record<string, unknown>>;
-        const active = rows?.find((r) => String(r.IS_ACTIVE) === "Y");
+        const wRows = data as unknown as Array<Record<string, unknown>>;
+        const active = wRows?.find((r) => String(r.IS_ACTIVE) === "Y");
         if (active) {
           const taskPct = Number(active.TASK_PCT || 0);
           const charPct = Number(active.CHARACTER_PCT || 0);
-          setActiveWeightage({
-            taskPct,
-            charPct,
-            isHrDefined: taskPct > 0 && charPct > 0,
-          });
+          setActiveWeightage({ taskPct, charPct, isHrDefined: taskPct > 0 && charPct > 0 });
         } else {
-          // No active weightage — use default 50/50
           setActiveWeightage({ taskPct: 50, charPct: 50, isHrDefined: false });
         }
       })
-      .catch(() => {
-        setActiveWeightage({ taskPct: 50, charPct: 50, isHrDefined: false });
-      });
+      .catch(() => setActiveWeightage({ taskPct: 50, charPct: 50, isHrDefined: false }));
   }, [companyCode, loginid]);
 
-  // Load periods and employees for lookup
   useEffect(() => {
     const loadLookups = async () => {
       try {
@@ -206,16 +201,17 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         console.error("Error loading lookups:", error);
       }
     };
-    loadLookups();
+    void loadLookups();
   }, [loginid, companyCode]);
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
-  // isBackground=true → don't toggle the loading skeleton (used when we already
-  // have cached rows on screen and just want to silently refresh them).
+
   const fetchData = useCallback(async (tabIndex: number, isBackground = false) => {
+    const myRequestId = ++fetchRequestId.current;
     const tabStatus = TAB_STATUS[tabIndex];
+
     if (!isBackground) setLoading(true);
     setNotice(null);
+
     try {
       const data = await pamsSelect({
         parameter: "Trn_appraisal",
@@ -224,6 +220,8 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         code2: "NULL",
         code3: tabStatus,
       });
+      if (myRequestId !== fetchRequestId.current) return;
+
       const normalizedData = data.map(normalizeRow);
       setRows(normalizedData);
       taskPageCache.set(cacheKey(tabIndex), normalizedData);
@@ -234,26 +232,19 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       });
       setSelectedRows(initSelected);
     } catch (err: unknown) {
+      if (myRequestId !== fetchRequestId.current) return; // stale error, ignore
       setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to load data" });
     } finally {
-      setLoading(false);
+      // Only clear loading spinner if we're still the latest request
+      if (myRequestId === fetchRequestId.current) setLoading(false);
     }
   }, [loginid, companyCode, cacheKey]);
 
-  // ── Mount / activeTab change ────────────────────────────────────────────────
   useEffect(() => {
     const hasCached = taskPageCache.has(cacheKey(activeTab));
-    // If we already have cached rows showing (lazy-init or tab-switch handled
-    // them), just refresh silently in the background — no skeleton flash.
     void fetchData(activeTab, hasCached);
-    isInitialMount.current = false;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, fetchData]);
 
-  // ── User switch detection ────────────────────────────────────────────────
-  // If loginid/companyCode changes WITHOUT a full component remount (e.g. an
-  // in-app "switch user" action), wipe rows + cache synchronously so the
-  // previous user's data never flashes on screen, even for a moment.
   useEffect(() => {
     const userKey = `${loginid}-${companyCode}`;
     if (prevUserKeyRef.current === userKey) return;
@@ -271,7 +262,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
 
     const cached = taskPageCache.get(cacheKey(index));
     if (cached) {
-      // Show cached data for the new tab instantly — no skeleton.
       setRows(cached);
       setLoading(false);
       const initSelected: Record<string, boolean> = {};
@@ -283,77 +273,62 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     }
 
     setActiveTab(index);
-    currentTabRef.current = index;
     setQuery("");
   }, [activeTab, cacheKey]);
 
   const openAppraisalTabsPage = (row: Row, mode: "view" | "edit" = "view") => {
-  const docNo = text(row.APPRAISAL_DOC_NO);
-  const employeeCode = text(row.EMPLOYEE_CODE);
-  const employeeName = encodeURIComponent(text(row.EMPLOYEE_NAME));
-  const designation = encodeURIComponent(text(row.DESG_NAME));
-  const department = encodeURIComponent(text(row.DEPT_NAME));
-  navigate(
-    `/workspace/pams/appraisal/view/${docNo}?employee_code=${employeeCode}&employee_name=${employeeName}&designation=${designation}&department=${department}&mode=${mode}`,
-    { state: { prefetchedRow: row } }  
-  );
-};
+    const docNo = text(row.APPRAISAL_DOC_NO);
+    const employeeCode = text(row.EMPLOYEE_CODE);
+    const employeeName = encodeURIComponent(text(row.EMPLOYEE_NAME));
+    const designation = encodeURIComponent(text(row.DESG_NAME));
+    const department = encodeURIComponent(text(row.DEPT_NAME));
+    navigate(
+      `/workspace/pams/appraisal/view/${docNo}?employee_code=${employeeCode}&employee_name=${employeeName}&designation=${designation}&department=${department}&mode=${mode}`,
+      { state: { prefetchedRow: row } }
+    );
+  };
 
-  // ── Dialog Handlers ────────────────────────────────────────────────────────
+  function dateToString(value: unknown): string {
+    if (!value) return "";
+    const d = new Date(String(value));
+    if (isNaN(d.getTime())) return "";
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  const buildFormData = (row: Row): FormData => ({
+    APPRAISAL_DOC_NO: text(row.APPRAISAL_DOC_NO),
+    APPRAISAL_DOC_DATE: dateToString(row.APPRAISAL_DOC_DATE),
+    EMPLOYEE_CODE: text(row.EMPLOYEE_CODE),
+    EMPLOYEE_NAME: text(row.EMPLOYEE_NAME),
+    PERIOD_NUMBER: text(row.PERIOD_NUMBER),
+    APPRAISAL_FROM: dateToString(row.APPRAISAL_FROM),
+    APPRAISAL_TO: dateToString(row.APPRAISAL_TO),
+    COMPANY_CODE: text(row.COMPANY_CODE) || companyCode,
+  });
+
   const openViewDialog = (row: Row) => {
     setCurrentRow(row);
-    setFormData({
-      APPRAISAL_DOC_NO: text(row.APPRAISAL_DOC_NO),
-      APPRAISAL_DOC_DATE: dateToString(row.APPRAISAL_DOC_DATE),
-      EMPLOYEE_CODE: text(row.EMPLOYEE_CODE),
-      EMPLOYEE_NAME: text(row.EMPLOYEE_NAME),
-      PERIOD_NUMBER: text(row.PERIOD_NUMBER),
-      APPRAISAL_FROM: dateToString(row.APPRAISAL_FROM),
-      APPRAISAL_TO: dateToString(row.APPRAISAL_TO),
-      COMPANY_CODE: text(row.COMPANY_CODE) || companyCode,
-    });
-    setViewMode(true);
-    setEditMode(false);
-    setDialogOpen(true);
+    setFormData(buildFormData(row));
+    setViewMode(true); setEditMode(false); setDialogOpen(true);
   };
 
   const openEditDialog = (row: Row) => {
     setCurrentRow(row);
-    setFormData({
-      APPRAISAL_DOC_NO: text(row.APPRAISAL_DOC_NO),
-      APPRAISAL_DOC_DATE: dateToString(row.APPRAISAL_DOC_DATE),
-      EMPLOYEE_CODE: text(row.EMPLOYEE_CODE),
-      EMPLOYEE_NAME: text(row.EMPLOYEE_NAME),
-      PERIOD_NUMBER: text(row.PERIOD_NUMBER),
-      APPRAISAL_FROM: dateToString(row.APPRAISAL_FROM),
-      APPRAISAL_TO: dateToString(row.APPRAISAL_TO),
-      COMPANY_CODE: text(row.COMPANY_CODE) || companyCode,
-    });
-    setViewMode(false);
-    setEditMode(true);
-    setDialogOpen(true);
+    setFormData(buildFormData(row));
+    setViewMode(false); setEditMode(true); setDialogOpen(true);
   };
 
   const closeDialog = () => {
-    setDialogOpen(false);
-    setViewMode(false);
-    setEditMode(false);
-    setCurrentRow(null);
+    setDialogOpen(false); setViewMode(false); setEditMode(false); setCurrentRow(null);
     setFormData({
-      APPRAISAL_DOC_NO: "",
-      APPRAISAL_DOC_DATE: "",
-      EMPLOYEE_CODE: "",
-      EMPLOYEE_NAME: "",
-      PERIOD_NUMBER: "",
-      APPRAISAL_FROM: "",
-      APPRAISAL_TO: "",
-      COMPANY_CODE: companyCode,
+      APPRAISAL_DOC_NO: "", APPRAISAL_DOC_DATE: "", EMPLOYEE_CODE: "",
+      EMPLOYEE_NAME: "", PERIOD_NUMBER: "", APPRAISAL_FROM: "", APPRAISAL_TO: "",
+      COMPANY_CODE: companyCode
     });
   };
 
-  const updateFormField = (key: string, value: unknown) => {
+  const updateFormField = (key: string, value: unknown) =>
     setFormData((prev) => ({ ...prev, [key]: value }));
-  };
 
   const handlePeriodChange = (periodNumber: string) => {
     const period = periods.find((p) => text(p.PERIOD_NUMBER) === periodNumber);
@@ -375,21 +350,15 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       setNotice({ type: "error", message: "Employee and period are required" });
       return;
     }
-    setSaving(true);
-    setNotice(null);
+    setSaving(true); setNotice(null);
     try {
       await pamsSave({
-        parameter: "Trn_ems_appraisal_hdr",
-        loginid,
-        val1s1: formData.COMPANY_CODE,
-        val1s4: formData.EMPLOYEE_CODE,
-        val1s5: formData.APPRAISAL_DOC_NO,
-        val1s6: formData.APPRAISAL_DOC_DATE,
-        val1s7: formData.APPRAISAL_FROM,
-        val1s8: formData.APPRAISAL_TO,
+        parameter: "Trn_ems_appraisal_hdr", loginid,
+        val1s1: formData.COMPANY_CODE, val1s4: formData.EMPLOYEE_CODE,
+        val1s5: formData.APPRAISAL_DOC_NO, val1s6: formData.APPRAISAL_DOC_DATE,
+        val1s7: formData.APPRAISAL_FROM, val1s8: formData.APPRAISAL_TO,
         val1s9: formData.PERIOD_NUMBER,
-        wval1s1: formData.COMPANY_CODE,
-        wval1s5: formData.APPRAISAL_DOC_NO,
+        wval1s1: formData.COMPANY_CODE, wval1s5: formData.APPRAISAL_DOC_NO,
       });
       setNotice({ type: "success", message: "Appraisal updated successfully" });
       closeDialog();
@@ -401,15 +370,12 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     }
   };
 
-  // ── Delete ─────────────────────────────────────────────────────────────────
   const handleDelete = async (row: Row) => {
     if (!window.confirm("Are you sure you want to delete this appraisal?")) return;
     try {
       await pamsDelete({
-        parameter: "delete_appraisal_hdr",
-        loginid,
-        code1: text(row.APPRAISAL_DOC_NO),
-        code2: text(row.COMPANY_CODE)
+        parameter: "delete_appraisal_hdr", loginid,
+        code1: text(row.APPRAISAL_DOC_NO), code2: text(row.COMPANY_CODE),
       });
       setNotice({ type: "success", message: "Appraisal deleted successfully" });
       void fetchData(activeTab);
@@ -418,7 +384,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     }
   };
 
-  // ── Bulk approve ───────────────────────────────────────────────────────────
   const handleBulkApprove = async () => {
     const ids = Object.entries(selectedRows).filter(([, v]) => v).map(([id]) => id);
     if (!ids.length) {
@@ -427,12 +392,8 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     }
     try {
       await pamsSelect({
-        parameter: "proc_update_pams_doc_status_bulk",
-        loginid,
-        code1: companyCode,
-        code2: ids.join(","),
-        code3: "A",
-        code4: ""
+        parameter: "proc_update_pams_doc_status_bulk", loginid,
+        code1: companyCode, code2: ids.join(","), code3: "A", code4: "",
       });
       setNotice({ type: "success", message: "Appraisals approved successfully!" });
       setSelectedRows({});
@@ -442,10 +403,8 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     }
   };
 
-  // ── Checkbox handlers ──────────────────────────────────────────────────────
-  const toggleSelect = (id: string, checked: boolean) => {
+  const toggleSelect = (id: string, checked: boolean) =>
     setSelectedRows((prev) => ({ ...prev, [id]: checked }));
-  };
 
   const toggleSelectAll = (checked: boolean) => {
     const next: Record<string, boolean> = {};
@@ -453,14 +412,38 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     setSelectedRows(next);
   };
 
-  function dateToString(value: unknown): string {
-    if (!value) return "";
-    const d = new Date(String(value));
-    if (isNaN(d.getTime())) return "";
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }
+  // flowLevel = jis level pe docs abhi khade hain (HOD ke liye ye hamesha 3 hai)
+  const handleNotifyNextLevel = async (flowLevel: number, periodNumber: string) => {
+    const key = `${flowLevel}-${periodNumber}`;
+    setNotifying(key);
+    try {
+      const res = await pamsSelect({
+        parameter: "notify_next_level_hod_bulk",
+        loginid, code1: companyCode,
+        code2: String(flowLevel - 1),   // p_flow_level jispe wo baitha tha (2 for HOD)
+        code3: periodNumber,
+      });
+      const result = text((res as unknown as Row[])?.[0]?.P_RESULT);
 
-  // ── Columns Definition ─────────────────────────────────────────────────────
+      if (result === "SUCCESS") {
+        toast.success(`Period ${periodNumber} has been sent to the next level for review.`);
+      } else if (result?.startsWith("PENDING")) {
+        const pendingCount = result.split(":")[1];
+        toast.warning(`${pendingCount} employee appraisal(s) are still pending your review. Please complete all reviews before notifying the next level.`);
+      } else if (result === "NOTHING_TO_NOTIFY") {
+        toast.warning("There are no completed appraisals ready to notify at this time.");
+      } else {
+        toast.error(result || "Something went wrong while notifying the next level.");
+      }
+
+      void loadHodBatches();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to notify the next level. Please try again.");
+    } finally {
+      setNotifying(null);
+    }
+  };
+
   const columns = useMemo<ColumnDef<Row>[]>(() => {
     const cols: ColumnDef<Row>[] = [];
 
@@ -474,14 +457,13 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         return (
           <div
             onClick={(e) => {
-              if ((e.target as HTMLElement).tagName !== "INPUT") {
+              if ((e.target as HTMLElement).tagName !== "INPUT")
                 openAppraisalTabsPage(row.original, "view");
-              }
             }}
             style={{
               display: "flex", alignItems: "center", gap: "8px",
               cursor: "pointer", whiteSpace: "nowrap",
-              overflow: "hidden", textOverflow: "ellipsis",
+              overflow: "hidden", textOverflow: "ellipsis"
             }}
           >
             {isHRApprover && (
@@ -495,7 +477,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
             <span
               style={{
                 color: "#082A89", fontWeight: 600, fontSize: "0.82rem",
-                cursor: "pointer", display: "inline-block", minWidth: 80,
+                cursor: "pointer", display: "inline-block", minWidth: 80
               }}
               onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
               onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
@@ -515,11 +497,15 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     });
 
     cols.push({
-      accessorKey: "PERIOD_NUMBER",
-      header: "Period No",
-      size: 100,
-      cell: ({ row }) => text(row.original.PERIOD_NUMBER) || "—",
-    });
+  accessorKey: "PERIOD_NUMBER",
+  header: "Period No",
+  size: 100,
+  cell: ({ row }) =>
+    formatPeriodQuarter({
+      PERIOD_FROM_DATE: row.original.APPRAISAL_FROM,
+      PERIOD_NUMBER: row.original.PERIOD_NUMBER,
+    }) || "—",
+});
 
     cols.push({
       accessorKey: "EMPLOYEE_CODE",
@@ -549,46 +535,65 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       header: "Period Range",
       size: 210,
       cell: ({ row }) => {
-        const from = fmtDate(row.original.APPRAISAL_FROM);
-        const to   = fmtDate(row.original.APPRAISAL_TO);
-        if (from === "NA" && to === "NA") return <span style={{ color: "#9ca3af" }}>—</span>;
+        const fromDate = row.original.APPRAISAL_FROM;
+        const toDate = row.original.APPRAISAL_TO;
+
+
+        const formatDateRange = (dateVal: unknown) => {
+          if (!dateVal) return null;
+
+
+          let dateStr = String(dateVal);
+
+          if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+            return dateStr;
+          }
+
+          const d = new Date(dateStr);
+          if (isNaN(d.getTime())) return null;
+
+          const day = String(d.getDate()).padStart(2, "0");
+          const month = String(d.getMonth() + 1).padStart(2, "0");
+          const year = d.getFullYear();
+          return `${day} ${getMonthAbbreviation(d.getMonth())} ${year}`;
+        };
+
+        const getMonthAbbreviation = (monthIndex: number) => {
+          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          return months[monthIndex];
+        };
+
+        const from = formatDateRange(fromDate);
+        const to = formatDateRange(toDate);
+
+        if (!from && !to) return <span style={{ color: "#9ca3af" }}>—</span>;
+
         return (
           <span style={{ whiteSpace: "nowrap", fontSize: "0.8rem" }}>
-            <span style={{ color: "#374151" }}>{from}</span>
+            <span style={{ color: "#0c0e11" }}>{from || "—"}</span>
             <span style={{ color: "#9ca3af", margin: "0 4px" }}>→</span>
-            <span style={{ color: "#374151" }}>{to}</span>
+            <span style={{ color: "#0a0d11" }}>{to || "—"}</span>
           </span>
         );
       },
     });
 
-    // ── Avg Score ─────────────────────────────────────────────────────────────
-    // DB SP (Trn_appraisal) ab TASK_TOTAL + CHAR_TOTAL return karta hai
-    // VW_KPI_APPRAISAL_DATA se per-appraisal scores.
-    // Client-side activeWeightage se recompute → same formula as AppraiserCommentsTab.
     cols.push({
       accessorKey: "FINAL_RATING",
       header: "Avg Score",
       size: 110,
       cell: ({ row }) => {
-        // Direct se DB fields use karo — SP ne TASK_TOTAL aur CHAR_TOTAL diye hain
         const taskScore = Number(row.original.TASK_TOTAL ?? row.original.task_total ?? 0);
         const charScore = Number(row.original.CHAR_TOTAL ?? row.original.char_total ?? 0);
-
-        let avg: number;
-        if (taskScore > 0 || charScore > 0) {
-          // Recompute using active weightage — same formula as AppraiserCommentsTab
-          avg = computeFinalRating(taskScore, charScore, activeWeightage);
-        } else {
-          // Fallback: TASK_TOTAL still 0 means no ratings given yet → show FINAL_RATING from DB
-          avg = Math.round(Number(row.original.FINAL_RATING || 0));
-        }
+        const avg = (taskScore > 0 || charScore > 0)
+          ? computeFinalRating(taskScore, charScore, activeWeightage)
+          : Math.round(Number(row.original.FINAL_RATING || 0));
 
         if (!avg) return <span style={{ color: "#9ca3af" }}>—</span>;
 
         let bg = "#f3f4f6", color = "#374151", border = "#d1d5db";
-        if (avg >= 5)      { bg = "#e8f0fe"; color = "#0a6640"; border = "#b3caf5"; }
-        else if (avg >= 4) { bg = "#e6f9f0"; color = "#0e0ed1"; border = "#b7ebd4"; }
+        if (avg >= 5) { bg = "#f6fefe"; color = "#35a074"; border = "#6bff15"; }
+        else if (avg >= 4) { bg = "#e6f9f0"; color = "#4d4dc1"; border = "#b7ebd4"; }
         else if (avg >= 3) { bg = "#f3e8fe"; color = "#6b21a8"; border = "#d9b3f5"; }
         else if (avg >= 2) { bg = "#fff4e5"; color = "#0e9289"; border = "#fcd38a"; }
         else if (avg >= 1) { bg = "#fdecea"; color = "#d80a0a"; border = "#f5b3b3"; }
@@ -596,8 +601,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         return (
           <span style={{
             display: "inline-block", padding: "2px 12px", borderRadius: "999px",
-            fontSize: "0.75rem", fontWeight: 700,
-            background: bg, color, border: `1px solid ${border}`,
+            fontSize: "0.75rem", fontWeight: 700, background: bg, color, border: `1px solid ${border}`
           }}>
             {avg}
           </span>
@@ -613,11 +617,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         const code = text(row.original.NEXT_ACTION_BY);
         const name = text(row.original.NEXT_ACTION_BY_NAME);
         if (!code) return <span style={{ color: "#9ca3af" }}>—</span>;
-        return (
-          <span style={{ fontWeight: 500, whiteSpace: "nowrap" }}>
-            {code} {name ? `- ${name}` : ""}
-          </span>
-        );
+        return <span style={{ fontWeight: 500, whiteSpace: "nowrap" }}>{code}{name ? ` - ${name}` : ""}</span>;
       },
     });
 
@@ -627,14 +627,13 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       size: 230,
       cell: ({ row }) => {
         const reason = text(row.original.SENT_BACK_REASON);
-        const by     = text(row.original.SENT_BACK_BY);
+        const by = text(row.original.SENT_BACK_BY);
         if (!reason) return <span style={{ color: "#9ca3af" }}>—</span>;
         return (
           <div style={{ lineHeight: 1.4 }}>
             <div title={reason} style={{
               maxWidth: "210px", overflow: "hidden",
-              textOverflow: "ellipsis", whiteSpace: "nowrap",
-              fontSize: "0.8rem", fontWeight: 500,
+              textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "0.8rem", fontWeight: 500
             }}>
               {reason}
             </div>
@@ -658,7 +657,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
           <span style={{
             display: "inline-block", padding: "2px 10px", borderRadius: "999px",
             fontSize: "0.7rem", fontWeight: 700, whiteSpace: "nowrap",
-            background: status.bg, color: status.color, border: `1px solid ${status.border}`,
+            background: status.bg, color: status.color, border: `1px solid ${status.border}`
           }}>
             {status.label || "—"}
           </span>
@@ -666,25 +665,20 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
       },
     });
 
-    // Actions column — Edit + View only (no Delete per original spec)
     cols.push({
       id: "actions",
       header: "Actions",
       size: 100,
       cell: ({ row }) => (
         <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-          <Button
-            size="sm" variant="ghost" title="Edit"
+          <Button size="sm" variant="ghost" title="Edit"
             onClick={() => openEditDialog(row.original)}
-            style={{ padding: "4px", height: "28px", width: "28px" }}
-          >
+            style={{ padding: "4px", height: "28px", width: "28px" }}>
             <Edit2 size={14} />
           </Button>
-          <Button
-            size="sm" variant="ghost" title="View"
+          <Button size="sm" variant="ghost" title="View"
             onClick={() => openViewDialog(row.original)}
-            style={{ padding: "4px", height: "28px", width: "28px" }}
-          >
+            style={{ padding: "4px", height: "28px", width: "28px" }}>
             <Eye size={14} />
           </Button>
         </div>
@@ -694,9 +688,9 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
     return cols;
   }, [isHRApprover, selectedRows, activeWeightage]);
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "16px" }}>
+
       {/* Breadcrumb */}
       <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "#6b7280" }}>
         <a href="/dashboard" style={{ color: "#6b7280", textDecoration: "none" }}>Home</a>
@@ -706,7 +700,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         <span style={{ color: "#111827", fontWeight: 500 }}>Appraisal</span>
       </div>
 
-      {/* Notice */}
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
       {/* Tabs */}
@@ -731,7 +724,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         ))}
       </div>
 
-      {/* Select All Checkbox */}
+      {/* Select All */}
       {isHRApprover && rows.length > 0 && (
         <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "0 4px" }}>
           <input
@@ -746,7 +739,32 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         </div>
       )}
 
-      {/* Data Table */}
+      {/* HOD — Notify Next Level batches */}
+      {hodBatches
+        .filter((b) => Number(b.PENDING_COUNT) === 0 && Number(b.READY_COUNT) > 0)
+        .map((batch) => {
+          const key = `${HOD_READY_FLOW_LEVEL}-${batch.PERIOD_NUMBER}`;
+          return (
+            <div key={batch.PERIOD_NUMBER} style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "10px 14px", background: "#f0f4ff", border: "1px solid #b3caf5",
+              borderRadius: "8px", marginBottom: "8px",
+            }}>
+              <span style={{ fontSize: "13px", color: "#082A89", fontWeight: 500 }}>
+                Period {batch.PERIOD_NUMBER} — {Number(batch.READY_COUNT)} employees reviewed, ready for next level
+              </span>
+              <Button
+                size="sm"
+                disabled={notifying === key}
+                onClick={() => handleNotifyNextLevel(HOD_READY_FLOW_LEVEL, batch.PERIOD_NUMBER)}
+                style={{ background: "#082a89" }}
+              >
+                <CheckCircle size={14} /> {notifying === key ? "Sending..." : "Notify Next Reviewer"}
+              </Button>
+            </div>
+          );
+        })}
+
       <DataTable
         columns={columns}
         data={rows}
@@ -765,7 +783,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         getRowId={(row) => text(row.APPRAISAL_DOC_NO)}
       />
 
-      {/* Bulk Approve Button */}
+      {/* Bulk Approve */}
       {isHRApprover && Object.values(selectedRows).some(Boolean) && (
         <div style={{ marginTop: "10px", display: "flex", justifyContent: "flex-end" }}>
           <Button onClick={handleBulkApprove} style={{ background: "#082a89" }}>
@@ -774,7 +792,6 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         </div>
       )}
 
-      {/* Edit/View Dialog */}
       <Dialog
         open={dialogOpen}
         wide
@@ -783,9 +800,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         onClose={closeDialog}
         footer={
           <>
-            <Button variant="outline" onClick={closeDialog}>
-              <X size={15} /> Close
-            </Button>
+            <Button variant="outline" onClick={closeDialog}><X size={15} /> Close</Button>
             {editMode && (
               <Button disabled={saving} onClick={saveRecord}>
                 <Save size={15} /> {saving ? "Saving..." : "Save Changes"}
@@ -805,7 +820,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
             <CardContent className="grid max-w-full grid-cols-1 gap-3 pt-4 lg:grid-cols-2">
               <div className="field">
                 <span>Appraisal Doc No</span>
-                <Input disabled value={formData.APPRAISAL_DOC_NO || "Auto generated"} onChange={() => {}} />
+                <Input disabled value={formData.APPRAISAL_DOC_NO || "Auto generated"} onChange={() => { }} />
               </div>
               <div className="field">
                 <span>Appraisal Doc Date</span>
@@ -820,7 +835,9 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
                     disabled={viewMode}
                     label="Employee"
                     value={formData.EMPLOYEE_CODE}
-                    displayValue={formData.EMPLOYEE_NAME ? `${formData.EMPLOYEE_CODE} - ${formData.EMPLOYEE_NAME}` : formData.EMPLOYEE_CODE}
+                    displayValue={formData.EMPLOYEE_NAME
+                      ? `${formData.EMPLOYEE_CODE} - ${formData.EMPLOYEE_NAME}`
+                      : formData.EMPLOYEE_CODE}
                     placeholder="Search employee"
                     columns={[
                       { field: "EMPLOYEE_ID", header: "Employee ID" },
@@ -853,11 +870,11 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
               </div>
               <div className="field">
                 <span>Appraisal From</span>
-                <Input disabled type="date" value={formData.APPRAISAL_FROM} onChange={() => {}} />
+                <Input disabled type="date" value={formData.APPRAISAL_FROM} onChange={() => { }} />
               </div>
               <div className="field">
                 <span>Appraisal To</span>
-                <Input disabled type="date" value={formData.APPRAISAL_TO} onChange={() => {}} />
+                <Input disabled type="date" value={formData.APPRAISAL_TO} onChange={() => { }} />
               </div>
             </CardContent>
           </Card>

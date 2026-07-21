@@ -1,4 +1,4 @@
-import { Edit2, Eye, EyeOff, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, Edit2, Eye, EyeOff, Plus, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { deleteSecurityMaster, getSecurityMaster, saveSecurityMaster } from "../../api/security";
@@ -20,6 +20,10 @@ type SecurityField = {
   disabledOnEdit?: boolean;
   type?: "text" | "number" | "email" | "password" | "select";
   options?: { label: string; value: string }[];
+  optionsFromMaster?: string;
+  optionValue?: string;
+  optionLabelFields?: string[];
+  optionFilter?: Record<string, string>;
   placeholder?: string;
   editPlaceholder?: string;
   table?: boolean;
@@ -190,6 +194,88 @@ export const securityMasterConfigs: Record<string, SecurityMasterConfig> = {
     ],
     deleteEnabled: true,
   },
+  tenantUser: {
+    title: "Tenant User",
+    subtitle: "Create and maintain root-schema users used for tenant login and mapping.",
+    master: "tenant_user",
+    gmEndpoint: "tenant-user",
+    routeKeys: ["tenant_user", "tenant-user", "tenant user", "tenantuser"],
+    keyField: "LOGINID",
+    fields: [
+      { name: "ID", label: "User ID", type: "number", disabledOnAdd: true, disabledOnEdit: true, placeholder: "Auto generated", table: true, width: 100 },
+      { name: "USERNAME", label: "User Name", required: true, table: true, width: 220 },
+      { name: "LOGINID", label: "Login ID", required: true, disabledOnEdit: true, table: true, width: 150 },
+      { name: "USERPASS", label: "Password", type: "password", requiredOnCreate: true, placeholder: "Enter password", editPlaceholder: "Leave blank to keep current password", table: false },
+      { name: "CONTACT_NO", label: "Contact No", table: true, width: 150 },
+      { name: "EMAIL_ID", label: "Email", type: "email", table: true, width: 260 },
+      { name: "ACTIVE_FLAG", label: "Active", type: "select", options: [{ label: "Yes", value: "Y" }, { label: "No", value: "N" }], table: true, width: 100 },
+      { name: "COMPANY_CODE", label: "Company", required: true, table: true, width: 110 },
+    ],
+    defaults: { ACTIVE_FLAG: "Y", COMPANY_CODE: "BSG" },
+    deleteEnabled: true,
+  },
+  tenantRegistry: {
+    title: "Tenant Registry",
+    subtitle: "Maintain root tenant database/schema connection registry records.",
+    master: "tenant_registry",
+    gmEndpoint: "tenant-registry",
+    routeKeys: ["tenant_registry", "tenant-registry", "tenant registry", "tenantregistry"],
+    keyField: "TENANT_ID",
+    fields: [
+      { name: "TENANT_ID", label: "Tenant ID", required: true, disabledOnEdit: true, table: true, width: 180 },
+      { name: "TENANT_NAME", label: "Tenant Name", required: true, table: true, width: 240 },
+      { name: "CONNECTION_TYPE", label: "Connection Type", type: "select", options: [{ label: "Schema", value: "SCHEMA" }, { label: "Database", value: "DATABASE" }], table: true, width: 150 },
+      { name: "SCHEMA_NAME", label: "Schema Name", required: true, table: true, width: 150 },
+      { name: "DB_HOST", label: "DB Host", required: true, table: true, width: 180 },
+      { name: "DB_PORT", label: "DB Port", type: "number", table: true, width: 110 },
+      { name: "DB_SERVICE", label: "DB Service", required: true, table: true, width: 220 },
+      { name: "DB_USER", label: "DB User", required: true, table: true, width: 150 },
+      { name: "DB_PASSWORD", label: "DB Password", type: "password", requiredOnCreate: true, placeholder: "Enter password", editPlaceholder: "Leave blank to keep current password", table: false },
+      { name: "CONNECTION_STRING", label: "Connection String", table: false },
+      { name: "COMPANY_CODE", label: "Company", required: true, table: true, width: 110 },
+      { name: "IS_ACTIVE", label: "Active", type: "select", options: [{ label: "Yes", value: "Y" }, { label: "No", value: "N" }], table: true, width: 100 },
+      { name: "MAX_CONNECTIONS", label: "Max Connections", type: "number", table: true, width: 140 },
+    ],
+    defaults: { CONNECTION_TYPE: "SCHEMA", DB_PORT: 1521, IS_ACTIVE: "Y", MAX_CONNECTIONS: 10, COMPANY_CODE: "BSG" },
+    deleteEnabled: true,
+  },
+  tenantMapping: {
+    title: "Tenant Mapping",
+    subtitle: "Map root users to tenant registry entries and default tenant access.",
+    master: "tenant_mapping",
+    gmEndpoint: "tenant-mapping",
+    routeKeys: ["tenant_mapping", "tenant-mapping", "tenant mapping", "tenantmapping"],
+    keyField: "USER_MAP_ID",
+    fields: [
+      { name: "USER_MAP_ID", label: "Map ID", type: "number", disabledOnAdd: true, disabledOnEdit: true, placeholder: "Auto generated", table: true, width: 110 },
+      {
+        name: "LOGINID",
+        label: "Login ID",
+        required: true,
+        type: "select",
+        optionsFromMaster: "tenant_user",
+        optionValue: "LOGINID",
+        optionLabelFields: ["LOGINID"],
+        optionFilter: { ACTIVE_FLAG: "Y" },
+        table: true,
+        width: 180,
+      },
+      {
+        name: "TENANT_ID",
+        label: "Tenant",
+        required: true,
+        type: "select",
+        optionsFromMaster: "tenant_registry",
+        optionValue: "TENANT_ID",
+        optionLabelFields: ["TENANT_ID"],
+        table: true,
+        width: 260,
+      },
+      { name: "IS_DEFAULT", label: "Default", type: "select", options: [{ label: "Yes", value: "Y" }, { label: "No", value: "N" }], table: true, width: 110 },
+    ],
+    defaults: { IS_DEFAULT: "Y" },
+    deleteEnabled: true,
+  },
 };
 
 export function SecurityMasterPage({ config }: { config: SecurityMasterConfig }) {
@@ -205,7 +291,9 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState<Record<string, unknown>>({});
   const [moduleDropdownRows, setModuleDropdownRows] = useState<Record<string, unknown>[]>([]);
+  const [masterOptionRows, setMasterOptionRows] = useState<Record<string, Record<string, unknown>[]>>({});
   const [openOptionField, setOpenOptionField] = useState<string | null>(null);
+  const [selectSearch, setSelectSearch] = useState<Record<string, string>>({});
   const [deleteTarget, setDeleteTarget] = useState<Record<string, unknown> | null>(null);
   const [saving, setSaving] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -250,6 +338,30 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
     }
     void loadModuleDropdownRows();
   }, [isModuleData]);
+
+  useEffect(() => {
+    const masters = Array.from(new Set(config.fields.map((field) => field.optionsFromMaster).filter(Boolean))) as string[];
+    if (!masters.length) {
+      setMasterOptionRows({});
+      return;
+    }
+    let cancelled = false;
+    void Promise.all(
+      masters.map(async (master) => {
+        try {
+          const response = await getSecurityMaster(master, { page: 1, limit: 100000 });
+          return [master, response.tableData.map(normalizeRow)] as const;
+        } catch {
+          return [master, []] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (!cancelled) setMasterOptionRows(Object.fromEntries(entries));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [config.master, config.fields]);
 
   useEffect(() => {
     if (!isModuleData || !formOpen) return;
@@ -299,6 +411,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
     setEditMode(false);
     setShowPassword(false);
     setOpenOptionField(null);
+    setSelectSearch({});
     setForm(makeEmpty());
     setFormOpen(true);
     setNotice(null);
@@ -308,6 +421,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
     setEditMode(true);
     setShowPassword(false);
     setOpenOptionField(null);
+    setSelectSearch({});
     setForm({ ...makeEmpty(), ...normalizeRow(row), ...(config.gmEndpoint === "secmaster" ? { userpass: "" } : {}) });
     setFormOpen(true);
     setNotice(null);
@@ -450,8 +564,14 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
                     editMode,
                     showPassword,
                     getFieldOptions(field.name, form, moduleDropdownRows, isModuleData),
+                    getSelectOptions(field, masterOptionRows, form[field.name]),
+                    selectSearch[field.name] || "",
                     openOptionField === field.name,
-                    (open) => setOpenOptionField(open ? field.name : null),
+                    (open) => {
+                      setOpenOptionField(open ? field.name : null);
+                      if (!open) setSelectSearch((current) => ({ ...current, [field.name]: "" }));
+                    },
+                    (nextSearch) => setSelectSearch((current) => ({ ...current, [field.name]: nextSearch })),
                     () => setShowPassword((current) => !current),
                     (value) => updateFormField(field, value),
                   )}
@@ -513,8 +633,11 @@ function renderInput(
   editMode: boolean,
   showPassword: boolean,
   fieldOptions: string[],
+  selectOptions: { label: string; value: string }[],
+  selectSearch: string,
   optionsOpen: boolean,
   onOptionsOpenChange: (open: boolean) => void,
+  onSelectSearchChange: (value: string) => void,
   onTogglePassword: () => void,
   onChange: (value: unknown) => void,
 ) {
@@ -579,9 +702,91 @@ function renderInput(
     );
   }
   if (field.type === "select") {
+    const options = selectOptions.length ? selectOptions : field.options || [];
+    if (field.optionsFromMaster) {
+      const currentValue = String(value ?? "");
+      const selectedOption = options.find((option) => option.value === currentValue);
+      const visibleOptions = options
+        .filter((option) => {
+          const needle = selectSearch.trim().toLowerCase();
+          if (!needle) return true;
+          return option.label.toLowerCase().includes(needle) || option.value.toLowerCase().includes(needle);
+        })
+        .slice(0, 200);
+
+      return (
+        <div className="relative">
+          <button
+            type="button"
+            disabled={disabled}
+            className="ui-select flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-1 text-left text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={() => onOptionsOpenChange(!optionsOpen)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") onOptionsOpenChange(false);
+            }}
+            aria-haspopup="listbox"
+            aria-expanded={optionsOpen}
+          >
+            <span className={selectedOption ? "min-w-0 truncate" : "min-w-0 truncate text-muted-foreground"}>
+              {selectedOption?.label || `Select ${field.label}`}
+            </span>
+            <ChevronDown size={15} className="shrink-0 text-muted-foreground" />
+          </button>
+          {optionsOpen && !disabled && (
+            <div
+              className="absolute left-0 top-[calc(100%+6px)] z-[140] w-full min-w-[260px] overflow-hidden rounded-lg border border-border bg-popover text-sm shadow-xl"
+              onMouseDown={(event) => event.preventDefault()}
+            >
+              <div className="border-b bg-background p-2">
+                <div className="relative">
+                  <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    className="h-8 w-full rounded-md border border-input bg-background py-1 pl-8 pr-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                    placeholder={`Search ${field.label.toLowerCase()}...`}
+                    value={selectSearch}
+                    autoFocus
+                    onChange={(event) => onSelectSearchChange(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") onOptionsOpenChange(false);
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="max-h-48 overflow-y-auto p-1" role="listbox">
+                {visibleOptions.length ? (
+                  visibleOptions.map((option) => {
+                    const selected = option.value === currentValue;
+                    return (
+                      <button
+                        type="button"
+                        className="flex h-8 w-full items-center justify-between gap-2 rounded-md px-3 text-left text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+                        onClick={() => {
+                          onChange(option.value);
+                          onSelectSearchChange("");
+                          onOptionsOpenChange(false);
+                        }}
+                        key={option.value}
+                        role="option"
+                        aria-selected={selected}
+                      >
+                        <span className="min-w-0 truncate">{option.label}</span>
+                        {selected && <Check size={14} className="shrink-0 text-primary" />}
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="px-3 py-3 text-xs text-muted-foreground">No matching options</div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
     return (
       <Select disabled={disabled} value={String(value ?? "")} onChange={(event) => onChange(event.target.value)}>
-        {(field.options || []).map((option) => (
+        <option value="">Select {field.label}</option>
+        {options.map((option) => (
           <option value={option.value} key={option.value}>{option.label}</option>
         ))}
       </Select>
@@ -637,6 +842,36 @@ function getFieldOptions(fieldName: string, form: Record<string, unknown>, rows:
   });
   const optionKey = fieldName === "app_code" ? "app_code" : fieldName;
   return uniqueStrings(filtered.map((row) => row[optionKey]));
+}
+
+function getSelectOptions(field: SecurityField, optionRows: Record<string, Record<string, unknown>[]>, currentValue: unknown) {
+  if (!field.optionsFromMaster) return [];
+  const valueKey = field.optionValue || field.name;
+  const rows = (optionRows[field.optionsFromMaster] || []).filter((row) => matchesOptionFilter(row, field.optionFilter));
+  const options = rows
+    .map((row) => {
+      const value = String(row[valueKey] ?? row[valueKey.toLowerCase()] ?? "").trim();
+      if (!value) return null;
+      const labelParts = (field.optionLabelFields?.length ? field.optionLabelFields : [valueKey])
+        .map((key) => String(row[key] ?? row[key.toLowerCase()] ?? "").trim())
+        .filter(Boolean);
+      return { value, label: labelParts.length ? labelParts.join(" - ") : value };
+    })
+    .filter((option): option is { label: string; value: string } => Boolean(option));
+  const uniqueOptions = Array.from(new Map(options.map((option) => [option.value, option])).values());
+  const value = String(currentValue ?? "").trim();
+  if (value && !uniqueOptions.some((option) => option.value === value)) {
+    uniqueOptions.unshift({ value, label: value });
+  }
+  return uniqueOptions.sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function matchesOptionFilter(row: Record<string, unknown>, optionFilter?: Record<string, string>) {
+  if (!optionFilter) return true;
+  return Object.entries(optionFilter).every(([key, expected]) => {
+    const value = row[key] ?? row[key.toLowerCase()];
+    return String(value ?? "").trim().toUpperCase() === expected.toUpperCase();
+  });
 }
 
 function uniqueStrings(values: unknown[]) {

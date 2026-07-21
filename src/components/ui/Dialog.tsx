@@ -10,6 +10,7 @@ type DialogProps = {
   tone?: "default" | "danger";
   compact?: boolean;
   wide?: boolean;
+  contentClassName?: string;
   children: ReactNode;
   footer?: ReactNode;
   onClose: () => void;
@@ -22,25 +23,32 @@ export function Dialog({
   tone = "default",
   compact,
   wide,
+  contentClassName,
   children,
   footer,
   onClose,
 }: DialogProps) {
   if (!open) return null;
+  const editorDialog = wide || /^(add|edit|new|view)\b/i.test(title);
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-5 backdrop-blur-[1px]"
+      className={cn(
+        "fixed inset-0 z-50 grid place-items-center p-5 backdrop-blur-[1px]",
+        editorDialog ? "bg-background/95" : "bg-slate-950/50",
+      )}
       onClick={onClose}
     >
       <div
         className={cn(
           // ← restored: rounded, border, bg, shadow, max-h, overflow-hidden
-          "grid max-h-[92vh] w-[min(96vw,560px)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg border bg-card text-card-foreground shadow-2xl",
+          "grid max-h-[94vh] w-[min(96vw,560px)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg border bg-card text-card-foreground shadow-2xl",
           compact && "w-[min(94vw,460px)]",
-          wide && "w-[min(96vw,1040px)]",
+          wide && "h-[min(96vh,920px)] w-[min(98vw,1440px)]",
+          editorDialog && !compact && !wide && "w-[min(96vw,920px)]",
+          contentClassName,
         )}
-onClick={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div

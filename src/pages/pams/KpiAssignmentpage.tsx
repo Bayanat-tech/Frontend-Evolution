@@ -88,7 +88,6 @@ function Field({
   );
 }
 
-// ─── Item Type Config ──────────────────────────────────────────────────────────
 
 const ITEM_TYPES: { value: ItemType; label: string }[] = [
   { value: "KPI", label: "Task" },
@@ -97,21 +96,14 @@ const ITEM_TYPES: { value: ItemType; label: string }[] = [
   { value: "GOAL", label: "Goal" },
 ];
 
-// ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export function KpiAssignmentPage() {
   const { user } = useAuth();
   const loginid = user?.loginid ?? "";
   const companyCode = user?.company_code ?? "";
-
-  // ── Employee lookup state ─────────────────────────────────────────────────
   const [employees, setEmployees] = useState<Row[]>([]);
-
-  // ── Filter state ──────────────────────────────────────────────────────────
   const [selectedEmployee, setSelectedEmployee] = useState("");
   const [selectedType, setSelectedType] = useState<ItemType>("KPI");
-
-  // ── Assignment grid state ─────────────────────────────────────────────────
   const [rows, setRows] = useState<Row[]>([]);
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
@@ -120,14 +112,12 @@ export function KpiAssignmentPage() {
   const [lastSaved, setLastSaved] = useState("");
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  // ── Load employees on mount ───────────────────────────────────────────────
   useEffect(() => {
     pamsSelect({ parameter: "employee_hierarchy", loginid, code1: companyCode })
       .then((data) => setEmployees(data.map(normalizeRow)))
       .catch(() => setEmployees([]));
   }, [loginid, companyCode]);
 
-  // ── Load assignments when employee or type changes ────────────────────────
   const loadAssignments = async (clearNotice = true) => {
     if (!selectedEmployee || !selectedType) {
       setNotice({ type: "error", message: "Select employee and item type" });
@@ -136,7 +126,6 @@ export function KpiAssignmentPage() {
     setLoading(true);
     if (clearNotice) setNotice(null);
     try {
-      // Populate dept KPI first (fire-and-forget equivalent)
       await pamsSelect({
         parameter: "populate_dept_kpi",
         loginid,
@@ -173,7 +162,6 @@ export function KpiAssignmentPage() {
     if (selectedEmployee && selectedType) void loadAssignments();
   }, [selectedEmployee, selectedType]);
 
-  // ── Save selected assignments ─────────────────────────────────────────────
   const saveAssignments = async () => {
     const rowsToSave = rows.filter((row) => selectedRows[assignmentRowKey(row)]);
     if (!rowsToSave.length) {
@@ -215,7 +203,6 @@ export function KpiAssignmentPage() {
     }
   };
 
-  // ── Derived values ────────────────────────────────────────────────────────
   const employeeOptions = employees.map((employee, index) => ({
     value: text(employee.EMPLOYEE_CODE || employee.employee_code),
     label: [
@@ -241,11 +228,9 @@ export function KpiAssignmentPage() {
     );
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <section className="grid gap-4">
 
-      {/* Page Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="m-0 text-2xl font-semibold text-foreground">KPI Assignment</h1>
@@ -265,11 +250,9 @@ export function KpiAssignmentPage() {
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      {/* Filters */}
       <Card>
         <CardContent className="grid gap-3 pt-4 md:grid-cols-[1.3fr_1fr]">
 
-          {/* Employee Lookup */}
           <Field label="Employee" required>
             <LookupField
               compact
@@ -303,7 +286,6 @@ export function KpiAssignmentPage() {
             />
           </Field>
 
-          {/* Item Type Toggle */}
           <Field label="Item Type" required>
             <div className="flex flex-wrap gap-2">
               {ITEM_TYPES.map((item) => (
@@ -322,7 +304,6 @@ export function KpiAssignmentPage() {
         </CardContent>
       </Card>
 
-      {/* Assignment Table */}
       <Card className="overflow-hidden">
         <CardHeader className="border-b border-border px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -426,7 +407,6 @@ export function KpiAssignmentPage() {
                         key={key}
                         className="border-b border-border align-top hover:bg-muted/40"
                       >
-                        {/* Checkbox */}
                         <td className="px-3 py-2">
                           <input
                             type="checkbox"
@@ -440,7 +420,6 @@ export function KpiAssignmentPage() {
                           />
                         </td>
 
-                        {/* KPI Code + Description */}
                         <td className="px-3 py-2">
                           <button
                             type="button"
@@ -480,7 +459,6 @@ export function KpiAssignmentPage() {
                             )}
                           </button>
 
-                          {/* Expanded sub-items */}
                           {expandedRows[key] && itemRows.length > 0 && (
                             <div className="mt-2 grid gap-1 rounded-md border border-border bg-muted/30 p-2">
                               {itemRows.map((item, index) => (
@@ -495,18 +473,15 @@ export function KpiAssignmentPage() {
                           )}
                         </td>
 
-                        {/* Weightage */}
                         <td className="px-3 py-2">
                           {formatValue(row.WEIGHTAGE || row.STANDARD_WEIGHTAGE)}
                         </td>
 
-                        {/* Division */}
                         <td className="px-3 py-2">
                           {orgLabel(row, "DIVISION_CODE", "DIVISION_NAME") ||
                             orgLabel(row, "DIV_CODE", "DIV_NAME")}
                         </td>
 
-                        {/* Department */}
                         <td className="px-3 py-2">
                           {orgLabel(row, "DEPARTMENT_CODE", "DEPARTMENT_NAME") ||
                             orgLabel(row, "DEPT_CODE", "DEPT_NAME")}
@@ -519,7 +494,6 @@ export function KpiAssignmentPage() {
             </table>
           </div>
 
-          {/* Footer Save Button */}
           <div className="flex justify-end border-t border-border p-3">
             <Button disabled={saving || !rows.length} onClick={saveAssignments}>
               <Save size={15} /> {saving ? "Saving..." : "Save Selection"}

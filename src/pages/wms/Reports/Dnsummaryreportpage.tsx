@@ -1,20 +1,17 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
-    BarChart2,
-    RotateCcw,
     Printer,
-    Loader2,
-    X,
-    FileSpreadsheet,
-    RefreshCw,
-    AlertTriangle,
-    SlidersHorizontal,
-    Calendar,
+    RotateCcw,
+    FileText,
+    Download,
+    Eye,
+    ChevronDown,
+    ChevronUp,
 } from "lucide-react";
-import { getDynamicLookupaccount } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
+import { getDynamicLookupaccount, getLookupText, getLookupValue, LookupRow } from "../../../api/lookups";
 import {
     getDnSummaryReportHtml,
     getDnSummaryReportExcelDownload,
@@ -22,168 +19,362 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface LookupOption {
-    code: string;
-    name: string;
+interface Params {
+    prin_code: string;   // "All" or comma-joined PRIN_CODEs
+    from_date: string;   // "All" or "DD/MM/YYYY"
+    to_date:   string;   // "All" or "DD/MM/YYYY"
 }
+
+const ALL_PARAMS: Params = { prin_code: "All", from_date: "All", to_date: "All" };
+
+// ★ Sentinel used inside the `selected` array to represent "All selected".
+//   We never join this into the API param directly — the parent translates
+//   it (or an empty array) into the literal string "All" that the backend
+//   proc already understands and skips the filter for.
+const ALL_SENTINEL = "__ALL__";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const fetchLookup = async (
-    parameter: string,
-    loginId: string,
-    code1: string,
-    code2: string,
-    code3: string,
-    codeKey: string,
-    nameKey: string,
-): Promise<LookupOption[]> => {
-    try {
-        const res = await getDynamicLookupaccount({
-            parameter, loginid: loginId, code1, code2, code3, code4: "",
-            number1: 0, number2: 0, number3: 0, number4: 0,
-            date1: null, date2: null, date3: null, date4: null,
-        });
-        return Array.isArray(res)
-            ? res
-                .filter((x: any) => x[codeKey] != null && String(x[codeKey]).trim() !== "")
-                .map((x: any) => ({ code: String(x[codeKey]), name: x[nameKey] ?? "" }))
-            : [];
-    } catch (err) {
-        console.error(`[${parameter}] Fetch error:`, err);
-        return [];
-    }
-};
-
-/** Format a date input value (YYYY-MM-DD) → DD/MM/YYYY string for the API */
+/** Format a date input value (YYYY-MM-DD) → DD/MM/YYYY string for the API, or "All" if empty */
 const toApiDateString = (isoDate: string): string => {
-    if (!isoDate) return "";
+    if (!isoDate) return "All";
     const [y, m, d] = isoDate.split("-");
     return `${d}/${m}/${y}`;
 };
 
-// ─── Shared field label ───────────────────────────────────────────────────────
+/**
+ * Turns the dropdown's `selected` array into the value the API expects.
+ * - []                -> "All"        (nothing picked = no filter)
+ * - [ALL_SENTINEL]     -> "All"        (user explicitly picked "All")
+ * - ["P001","P002"]    -> "P001,P002"  (specific codes)
+ */
+const toApiCodeString = (selected: string[]): string => {
+    if (selected.length === 0) return "All";
+    if (selected.includes(ALL_SENTINEL)) return "All";
+    return selected.join(",");
+};
 
-const FieldLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <label style={{
-        display: "block", fontSize: 10, fontWeight: 600, color: "#6b7280",
-        textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5,
-    }}>
-        {children}
-    </label>
-);
+// ─── Shared styles ─────────────────────────────────────────────────────────────
 
-// ─── Searchable Dropdown ──────────────────────────────────────────────────────
+const fieldLabelStyle: React.CSSProperties = {
+    fontSize: 11,
+    fontWeight: 500,
+    color: "#6b7280",
+    marginBottom: 2,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+};
 
-interface SearchableDropdownProps {
+const inputStyle: React.CSSProperties = {
+    width: "100%",
+    fontSize: 12,
+    padding: "8px 10px",
+    border: "1px solid #d1d5db",
+    borderRadius: 7,
+    background: "#fff",
+    color: "#111827",
+    boxSizing: "border-box",
+    outline: "none",
+};
+
+// ─── Reusable components ──────────────────────────────────────────────────────
+
+function FloatLabel({ label, required, children, bgColor = "#fff" }: {
     label: string;
-    value: LookupOption | null;
-    onChange: (v: LookupOption | null) => void;
-    options: LookupOption[];
-    placeholder?: string;
-    disabled?: boolean;
+    required?: boolean;
+    children: React.ReactNode;
+    bgColor?: string;
+}) {
+    return (
+        <div style={{ position: "relative", marginTop: 6 }}>
+            <span style={{
+                position: "absolute",
+                top: -8,
+                left: 10,
+                fontSize: 11,
+                color: "#6b7280",
+                background: bgColor,
+                padding: "0 4px",
+                zIndex: 1,
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                fontWeight: 500,
+            }}>
+                {label} {required && <span style={{ color: "#dc2626" }}>*</span>}
+            </span>
+            {children}
+        </div>
+    );
 }
 
-const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
-    label, value, onChange, options, placeholder = "Search...", disabled = false,
-}) => {
-    const [search, setSearch] = useState("");
+const DateField: React.FC<{
+    label: string;
+    value: string;        // YYYY-MM-DD (native date input format), "" = All
+    onChange: (v: string) => void;
+    max?: string;
+    min?: string;
+}> = ({ label, value, onChange, max, min }) => (
+    <div>
+        {label && <label style={fieldLabelStyle}>{label}</label>}
+        <input
+            type="date"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            min={min}
+            max={max}
+            style={{
+                ...inputStyle,
+                color: value ? "#111827" : "#9ca3af",
+                cursor: "pointer",
+            }}
+        />
+    </div>
+);
+
+// ─── Multi-select checkbox dropdown (same pattern as Transaction Report) ──────
+
+type MultiSelectDropdownProps = {
+    label: string;
+    required?: boolean;
+    selected: string[];
+    onChange: (values: string[]) => void;
+    loadOptions: () => Promise<LookupRow[]>;
+    valueField: string;
+    displayFields: string[];
+    placeholder?: string;
+    bgColor?: string;
+};
+
+function MultiSelectDropdown({
+    label,
+    required,
+    selected,
+    onChange,
+    loadOptions,
+    valueField,
+    displayFields,
+    placeholder = "All",
+    bgColor = "#fff",
+}: MultiSelectDropdownProps) {
     const [open, setOpen] = useState(false);
+    const [rows, setRows] = useState<LookupRow[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [search, setSearch] = useState("");
+    const wrapRef = useRef<HTMLDivElement | null>(null);
 
-    useEffect(() => { if (!value) setSearch(""); }, [value]);
+    useEffect(() => {
+        if (!open) return;
+        const handleClick = (e: MouseEvent) => {
+            if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+                setOpen(false);
+                setSearch("");
+            }
+        };
+        const handleKey = (e: KeyboardEvent) => {
+            if (e.key === "Escape") {
+                setOpen(false);
+                setSearch("");
+            }
+        };
+        document.addEventListener("mousedown", handleClick);
+        document.addEventListener("keydown", handleKey);
+        return () => {
+            document.removeEventListener("mousedown", handleClick);
+            document.removeEventListener("keydown", handleKey);
+        };
+    }, [open]);
 
-    const filtered = options.filter((o) => {
-        if (!search) return true;
-        const q = search.toLowerCase();
-        return o.code.toLowerCase().includes(q) || o.name.toLowerCase().includes(q);
-    });
+    const openDropdown = async () => {
+        const next = !open;
+        setOpen(next);
+        if (next && rows.length === 0 && !loading) {
+            setLoading(true);
+            try {
+                setRows(await loadOptions());
+            } finally {
+                setLoading(false);
+            }
+        }
+    };
 
-    const displayValue = search !== "" ? search : value ? `${value.code} – ${value.name}` : "";
+    const term = search.trim().toLowerCase();
+    const filteredRows = term
+        ? rows.filter((row) => Object.values(row).some((v) => String(v ?? "").toLowerCase().includes(term)))
+        : rows;
+
+    const allValues = rows.map((r) => String(getLookupValue(r, valueField) ?? "")).filter(Boolean);
+
+    // ★ FIX: "All selected" is now determined by the explicit sentinel OR by
+    //   every individual value happening to be checked — not by expanding
+    //   into the full list of codes on selection.
+    const isAllSelected =
+        selected.includes(ALL_SENTINEL) ||
+        (allValues.length > 0 && allValues.every((v) => selected.includes(v)));
+
+    // ★ FIX: clicking "All" now stores the ALL_SENTINEL instead of every
+    //   individual code. This is what lets the parent translate the
+    //   selection back into the literal "All" the API expects.
+    const toggleAll = () => {
+        if (isAllSelected) onChange([]);
+        else onChange([ALL_SENTINEL]);
+    };
+
+    // ★ FIX: if the sentinel is currently active and the user unchecks one
+    //   specific item, expand to "all except that one" first, so partial
+    //   deselection still works as expected.
+    const toggleOne = (val: string) => {
+        const base = selected.includes(ALL_SENTINEL) ? allValues : selected;
+        if (base.includes(val)) onChange(base.filter((v) => v !== val));
+        else onChange([...base, val]);
+    };
+
+    const displayText = isAllSelected
+        ? "All"
+        : selected.length === 0
+        ? placeholder
+        : selected.length === 1
+        ? (() => {
+              const row = rows.find((r) => String(getLookupValue(r, valueField) ?? "") === selected[0]);
+              return row ? getLookupText(row, displayFields.length ? displayFields : [valueField]) : selected[0];
+          })()
+        : `${selected.length} selected`;
 
     return (
-        <div style={{ position: "relative" }}>
-            <FieldLabel>{label}</FieldLabel>
-            <input
-                type="text"
-                placeholder={placeholder}
-                value={displayValue}
-                onChange={(e) => { setSearch(e.target.value); setOpen(true); if (value) onChange(null); }}
-                onFocus={() => !disabled && setOpen(true)}
-                onBlur={() => setTimeout(() => setOpen(false), 150)}
-                disabled={disabled}
-                style={{
-                    width: "100%", fontSize: 13, padding: "8px 10px",
-                    border: "1px solid", borderColor: disabled ? "#e5e7eb" : value ? "#185FA5" : "#d1d5db",
-                    borderRadius: 7, background: disabled ? "#f9fafb" : "#fff",
-                    color: disabled ? "#9ca3af" : "#111827", boxSizing: "border-box",
-                    outline: "none", transition: "border-color 0.15s",
-                    cursor: disabled ? "not-allowed" : "text",
-                }}
-            />
-            {open && !disabled && (
-                <div style={{
-                    position: "absolute", zIndex: 400, top: "calc(100% + 4px)", left: 0, right: 0,
-                    background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8,
-                    boxShadow: "0 8px 24px rgba(0,0,0,0.1)", maxHeight: 200, overflowY: "auto",
-                }}>
-                    <div className="dn-opt"
-                        style={{ padding: "7px 12px", fontSize: 11, color: "#9ca3af", cursor: "pointer", borderBottom: "1px solid #f3f4f6" }}
-                        onMouseDown={() => { onChange(null); setSearch(""); setOpen(false); }}>
-                        — All —
+        <div ref={wrapRef} style={{ position: "relative" }}>
+            <FloatLabel label={label} required={required} bgColor={bgColor}>
+                <button
+                    type="button"
+                    onClick={openDropdown}
+                    style={{
+                        ...inputStyle,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        cursor: "pointer",
+                        textAlign: "left",
+                    }}
+                >
+                    <span
+                        style={{
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            color: selected.length ? "#111827" : "#9ca3af",
+                        }}
+                    >
+                        {displayText}
+                    </span>
+                    {open ? (
+                        <ChevronUp size={14} color="#6b7280" style={{ flexShrink: 0, marginLeft: 6 }} />
+                    ) : (
+                        <ChevronDown size={14} color="#6b7280" style={{ flexShrink: 0, marginLeft: 6 }} />
+                    )}
+                </button>
+            </FloatLabel>
+
+            {open && (
+                <div
+                    style={{
+                        position: "absolute",
+                        top: "100%",
+                        left: 0,
+                        right: 0,
+                        marginTop: 4,
+                        background: "#fff",
+                        border: "0.5px solid #d1d5db",
+                        borderRadius: 6,
+                        boxShadow: "0 6px 16px rgba(0,0,0,0.1)",
+                        zIndex: 50,
+                        maxHeight: 260,
+                        display: "flex",
+                        flexDirection: "column",
+                        overflow: "hidden",
+                    }}
+                >
+                    <div style={{ padding: "6px 8px", borderBottom: "0.5px solid #e5e7eb", flexShrink: 0 }}>
+                        <input
+                            type="text"
+                            autoFocus
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Search..."
+                            style={{ ...inputStyle, fontSize: 11, padding: "4px 8px" }}
+                        />
                     </div>
-                    {filtered.length === 0
-                        ? <div style={{ padding: "10px 12px", fontSize: 12, color: "#9ca3af", textAlign: "center" }}>No results</div>
-                        : filtered.map((o) => (
-                            <div key={o.code} className="dn-opt"
-                                style={{ padding: "8px 12px", fontSize: 12, cursor: "pointer", display: "flex", gap: 8 }}
-                                onMouseDown={() => { onChange(o); setSearch(""); setOpen(false); }}>
-                                <span style={{ fontWeight: 600, color: "#185FA5", minWidth: 56 }}>{o.code}</span>
-                                <span style={{ color: "#6b7280" }}>{o.name}</span>
-                            </div>
-                        ))
-                    }
+                    <div style={{ overflowY: "auto", flex: 1 }}>
+                        {loading ? (
+                            <div style={{ padding: 12, fontSize: 12, color: "#6b7280", textAlign: "center" }}>Loading...</div>
+                        ) : filteredRows.length === 0 ? (
+                            <div style={{ padding: 12, fontSize: 12, color: "#6b7280", textAlign: "center" }}>No records found</div>
+                        ) : (
+                            <>
+                                <label
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 8,
+                                        padding: "7px 10px",
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        cursor: "pointer",
+                                        background: isAllSelected ? "#EFF6FF" : "transparent",
+                                        color: isAllSelected ? "#185FA5" : "#111827",
+                                        borderBottom: "0.5px solid #f3f4f6",
+                                    }}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={isAllSelected}
+                                        onChange={toggleAll}
+                                        style={{ accentColor: "#185FA5", width: 14, height: 14 }}
+                                    />
+                                    All
+                                </label>
+                                {filteredRows.map((row, idx) => {
+                                    const val = String(getLookupValue(row, valueField) ?? "");
+                                    // ★ FIX: when the sentinel is active, every row should render as checked
+                                    const checked = isAllSelected || selected.includes(val);
+                                    const text = getLookupText(row, displayFields.length ? displayFields : [valueField]);
+                                    return (
+                                        <label
+                                            key={val || idx}
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 8,
+                                                padding: "6px 10px",
+                                                fontSize: 12,
+                                                cursor: "pointer",
+                                                background: checked ? "#F5F9FF" : "transparent",
+                                            }}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={checked}
+                                                onChange={() => toggleOne(val)}
+                                                style={{ accentColor: "#185FA5", width: 14, height: 14 }}
+                                            />
+                                            <span
+                                                style={{
+                                                    overflow: "hidden",
+                                                    textOverflow: "ellipsis",
+                                                    whiteSpace: "nowrap",
+                                                    color: "#374151",
+                                                }}
+                                            >
+                                                {text}
+                                            </span>
+                                        </label>
+                                    );
+                                })}
+                            </>
+                        )}
+                    </div>
                 </div>
             )}
         </div>
     );
-};
-
-// ─── Date Field ───────────────────────────────────────────────────────────────
-
-interface DateFieldProps {
-    label: string;
-    value: string;           // YYYY-MM-DD (native date input format)
-    onChange: (v: string) => void;
-    max?: string;
-    min?: string;
 }
-
-const DateField: React.FC<DateFieldProps> = ({ label, value, onChange, max, min }) => (
-    <div style={{ position: "relative" }}>
-        <FieldLabel>{label}</FieldLabel>
-        <div style={{ position: "relative" }}>
-            <input
-                type="date"
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                min={min}
-                max={max}
-                style={{
-                    width: "100%", fontSize: 13, padding: "8px 36px 8px 10px",
-                    border: "1px solid", borderColor: value ? "#185FA5" : "#d1d5db",
-                    borderRadius: 7, background: "#fff", color: value ? "#111827" : "#9ca3af",
-                    boxSizing: "border-box", outline: "none", transition: "border-color 0.15s",
-                    cursor: "pointer", appearance: "none", WebkitAppearance: "none",
-                }}
-            />
-            <Calendar
-                size={14}
-                color={value ? "#185FA5" : "#9ca3af"}
-                style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}
-            />
-        </div>
-    </div>
-);
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -192,412 +383,382 @@ export default function DNSummaryReportPage() {
     const companyCode = user?.company_code ?? "";
     const loginId = user?.loginid ?? user?.username ?? "ADMIN";
 
-    // ── Filter state ──────────────────────────────────────────────────────────
-    const [principalOptions, setPrincipalOptions] = useState<LookupOption[]>([]);
-    const [principal, setPrincipal] = useState<LookupOption | null>(null);
-    const [fromDate, setFromDate] = useState<string>("");   // YYYY-MM-DD
-    const [toDate, setToDate] = useState<string>("");       // YYYY-MM-DD
+    // ── UI state
+    const [loading,   setLoading]   = useState(false);
+    const [exporting, setExporting] = useState(false);
+    const [error,      setError]      = useState<string>("");
+    const [hasGeneratedReport, setHasGeneratedReport] = useState(false);
+    const [lastGeneratedAt, setLastGeneratedAt] = useState<Date | null>(null);
 
-    // ── UI state ──────────────────────────────────────────────────────────────
-    const [sidebarOpen, setSidebarOpen] = useState(false);
-    const [generating, setGenerating] = useState(false);
-    const [reportError, setReportError] = useState<string | null>(null);
+    const reportWindowRef = useRef<Window | null>(null);
 
-    // ── Report state ──────────────────────────────────────────────────────────
-    const [reportHtml, setReportHtml] = useState<string>("");
-    const [excelLoading, setExcelLoading] = useState(false);
+    // ── Filter values
+    const [principalCodes, setPrincipalCodes] = useState<string[]>([]); // multi-select
+    const [fromDateIso, setFromDateIso] = useState<string>("");   // "" = All
+    const [toDateIso,   setToDateIso]   = useState<string>("");   // "" = All
 
-    const iframeRef = useRef<HTMLIFrameElement>(null);
-    const lastParamsRef = useRef<{ prinCode: string; fromDate: string; toDate: string } | null>(null);
+    const lastParamsRef = useRef<Params>(ALL_PARAMS);
 
-    // ── Derived ───────────────────────────────────────────────────────────────
-    const allFieldsSelected = !!principal && !!fromDate && !!toDate;
-    const dateRangeValid = !fromDate || !toDate || fromDate <= toDate;
-    const canGenerate = allFieldsSelected && dateRangeValid;
-    const reportReady = !generating && !reportError && !!reportHtml;
-    const filledCount = [principal, fromDate, toDate].filter(Boolean).length;
+    const dateRangeValid = !fromDateIso || !toDateIso || fromDateIso <= toDateIso;
 
-    // ── Load principals ───────────────────────────────────────────────────────
-    useEffect(() => {
-        fetchLookup("WMS_Stock_principal", loginId, companyCode, "", "", "prin_code", "prin_name")
-            .then(setPrincipalOptions);
-    }, [companyCode, loginId]);
+    // ── Fetch the report HTML from the API and open it in a new browser tab
+    const fetchReport = useCallback(async (p: Params) => {
+        setLoading(true);
+        setError("");
+        lastParamsRef.current = p;
 
-    // ── Actions ───────────────────────────────────────────────────────────────
-    const handleReset = () => {
-        setPrincipal(null);
-        setFromDate("");
-        setToDate("");
-        setReportError(null);
-        setReportHtml("");
-        lastParamsRef.current = null;
-    };
-
-    const handleGenerate = async () => {
-        if (!canGenerate) return;
-        setReportError(null);
-        setReportHtml("");
-        setGenerating(true);
-        setSidebarOpen(false);
-
-        const params = {
-            prinCode: principal!.code,
-            fromDate: toApiDateString(fromDate),   // e.g. "01/06/2025"
-            toDate:   toApiDateString(toDate),     // e.g. "30/06/2025"
-        };
-        lastParamsRef.current = params;
+        const newTab = window.open("", "_blank");
+        if (!newTab) {
+            setLoading(false);
+            setError("Your browser blocked the new tab. Please allow pop-ups for this site and try again.");
+            return;
+        }
+        newTab.document.write(
+            "<title>DN Summary Report</title><body style='font-family:sans-serif;padding:40px;color:#6b7280;'>Loading report…</body>"
+        );
 
         try {
             const html = await getDnSummaryReportHtml({
                 parameter: "WMS_Stock_DN_Summary_Report",
                 loginid:   loginId,
                 code1:     companyCode,
-                code2:     params.prinCode,
-                code3:     params.fromDate,   // fromDate in place of groupCode
-                code4:     params.toDate,     // toDate in place of prodCode
+                code2:     p.prin_code,
+                code3:     p.from_date,
+                code4:     p.to_date,
             });
-            setReportHtml(html);
+
+            newTab.document.open();
+            newTab.document.write(html);
+            newTab.document.close();
+
+            reportWindowRef.current = newTab;
+            setHasGeneratedReport(true);
+            setLastGeneratedAt(new Date());
         } catch (err: any) {
-            setReportError(err?.message ?? "Failed to generate report. Please try again.");
-            console.error(err);
+            newTab.document.open();
+            newTab.document.write(
+                "<title>DN Summary Report</title><body style='font-family:sans-serif;padding:40px;color:#dc2626;'>Failed to load report. Please close this tab and try again.</body>"
+            );
+            newTab.document.close();
+            setError(err?.message ?? "Failed to load report. Please try again.");
         } finally {
-            setGenerating(false);
+            setLoading(false);
+        }
+    }, [loginId, companyCode]);
+
+    // ── Apply current filter selections
+    const handleGenerateReport = () => {
+        if (!dateRangeValid) return;
+        const params: Params = {
+            // ★ FIX: use the sentinel-aware converter instead of blindly
+            //   joining principalCodes — this is what makes "All" send the
+            //   literal "All" string to the API instead of every code.
+            prin_code: toApiCodeString(principalCodes),
+            from_date: toApiDateString(fromDateIso),
+            to_date:   toApiDateString(toDateIso),
+        };
+        fetchReport(params);
+    };
+
+    const handleReset = () => {
+        setPrincipalCodes([]);
+        setFromDateIso("");
+        setToDateIso("");
+        setError("");
+        setHasGeneratedReport(false);
+        setLastGeneratedAt(null);
+    };
+
+    // ── Print (targets the most recently opened report tab)
+    const handlePrint = () => {
+        if (reportWindowRef.current && !reportWindowRef.current.closed) {
+            reportWindowRef.current.focus();
+            reportWindowRef.current.print();
+        } else {
+            setError("No open report tab to print. Generate the report again.");
         }
     };
 
-    const handlePrint = () => iframeRef.current?.contentWindow?.postMessage("print", "*");
-
     const handleExcel = async () => {
-        if (!lastParamsRef.current) return;
-        setExcelLoading(true);
+        setExporting(true);
         try {
             await getDnSummaryReportExcelDownload({
                 parameter: "WMS_Stock_DN_Summary_Report",
                 loginid:   loginId,
                 code1:     companyCode,
-                code2:     lastParamsRef.current.prinCode,
-                code3:     lastParamsRef.current.fromDate,
-                code4:     lastParamsRef.current.toDate,
+                code2:     lastParamsRef.current.prin_code,
+                code3:     lastParamsRef.current.from_date,
+                code4:     lastParamsRef.current.to_date,
             });
         } catch (err) {
             console.error("Excel export error:", err);
+            alert("Excel export failed. Please try again.");
         } finally {
-            setExcelLoading(false);
+            setExporting(false);
         }
     };
 
-    // ─── Render ───────────────────────────────────────────────────────────────
+    const BG = "#EEF5FD";
+
     return (
-        <div style={{
-            background: "#f3f4f6", minHeight: "100vh",
-            fontFamily: "system-ui, -apple-system, sans-serif",
-            display: "flex", flexDirection: "column",
-        }}>
+        <div style={{ background: "#f3f4f6", padding: "6px 10px", fontFamily: "system-ui, sans-serif", minHeight: "100vh" }}>
             <style>{`
-                .dn-opt:hover { background: #f0f7ff !important; }
-                .dn-ghost:hover:not(:disabled) { background: #f3f4f6 !important; }
-                .dn-outline:hover:not(:disabled) { background: #f0f7ff !important; border-color: #185FA5 !important; color: #185FA5 !important; }
-                .dn-primary:hover:not(:disabled) { background: #0C447C !important; }
-                .dn-green:hover:not(:disabled) { background: #15803d !important; }
-                @keyframes spin { to { transform: rotate(360deg); } }
-                .dn-spin { animation: spin 1s linear infinite; }
-                .dn-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.25); z-index: 199; }
-                .dn-sidebar {
-                    position: fixed; top: 0; right: 0; bottom: 0; z-index: 200;
-                    width: 320px; background: #fff;
-                    border-left: 1px solid #e5e7eb;
-                    display: flex; flex-direction: column;
-                    transform: translateX(100%);
-                    transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
-                }
-                .dn-sidebar.open { transform: translateX(0); }
-                input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0; position: absolute; right: 0; width: 36px; height: 100%; cursor: pointer; }
+                .action-btn-primary:hover { background: #1e40af !important; }
+                .action-btn-excel:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
+                .field-row { background: #EEF5FD; border-radius: 8px; padding: 10px 12px; }
+                @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
             `}</style>
 
-            {/* ══ Top bar ════════════════════════════════════════════════════ */}
-            <div style={{
-                background: "#fff", borderBottom: "1px solid #e5e7eb",
-                padding: "0 20px", flexShrink: 0,
-            }}>
-                <div style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    height: 56, gap: 12,
-                }}>
-                    {/* Title */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{
-                            width: 32, height: 32, borderRadius: 8, background: "#eff6ff",
-                            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                        }}>
-                            <BarChart2 size={16} color="#185FA5" />
-                        </div>
-                        <div>
-                            <div style={{ fontSize: 14, fontWeight: 600, color: "#111827", lineHeight: 1.2 }}>DN Summary Report</div>
-                            <div style={{ fontSize: 11, color: "#9ca3af", lineHeight: 1.2 }}>Delivery note summary</div>
-                        </div>
+            <div style={{ maxWidth: 1400, margin: "0 auto" }}>
+                <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 12, padding: "8px 12px" }}>
+
+                    {/* Header */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                        <FileText size={17} color="#185FA5" />
+                        <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>DN Summary Report</span>
+                        {hasGeneratedReport && (
+                            <span style={{
+                                fontSize: 10,
+                                background: "#d1fae5",
+                                color: "#065f46",
+                                padding: "2px 10px",
+                                borderRadius: 12,
+                                fontWeight: 500,
+                            }}>
+                                Report Generated
+                            </span>
+                        )}
                     </div>
 
-                    {/* Actions */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        {/* Print */}
-                        <button className="dn-outline" onClick={handlePrint} disabled={!reportReady}
-                            title={!reportReady ? "Generate a report first" : "Print / Save as PDF"}
-                            style={{
-                                padding: "6px 13px", border: "1px solid #d1d5db", background: "#fff",
-                                display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 7,
-                                color: "#374151", cursor: !reportReady ? "not-allowed" : "pointer",
-                                opacity: !reportReady ? 0.4 : 1, transition: "all 0.15s", fontWeight: 500,
-                            }}>
-                            <Printer size={13} /> Print / PDF
-                        </button>
+                    {/* Error display */}
+                    {error && (
+                        <div style={{
+                            marginBottom: 10,
+                            padding: "8px 14px",
+                            background: "#fef2f2",
+                            border: "1px solid #fecaca",
+                            borderRadius: 6,
+                            color: "#dc2626",
+                            fontSize: 12,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                        }}>
+                            <span>⚠️</span>
+                            {error}
+                            <button
+                                onClick={() => setError("")}
+                                style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "#dc2626" }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    )}
 
-                        {/* Excel */}
-                        <button className="dn-green" onClick={handleExcel} disabled={!reportReady || excelLoading}
-                            title={!reportReady ? "Generate a report first" : "Export to Excel"}
-                            style={{
-                                padding: "6px 13px", border: "1px solid #16a34a", background: "#16a34a",
-                                display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 7,
-                                color: "#fff", cursor: (!reportReady || excelLoading) ? "not-allowed" : "pointer",
-                                opacity: (!reportReady || excelLoading) ? 0.45 : 1, transition: "all 0.15s", fontWeight: 500,
-                            }}>
-                            {excelLoading
-                                ? <><RefreshCw size={13} className="dn-spin" /> Exporting…</>
-                                : <><FileSpreadsheet size={13} /> Export Excel</>
+                    {!dateRangeValid && (
+                        <div style={{
+                            marginBottom: 10,
+                            padding: "8px 14px",
+                            background: "#fffbeb",
+                            border: "1px solid #fde68a",
+                            borderRadius: 6,
+                            color: "#92400e",
+                            fontSize: 12,
+                        }}>
+                            From date must be on or before To date.
+                        </div>
+                    )}
+
+                    {/* ── Form fields ── */}
+                    <div className="field-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 6, width: "100%" }}>
+                        <MultiSelectDropdown
+                            label="Principal"
+                            bgColor={BG}
+                            selected={principalCodes}
+                            onChange={setPrincipalCodes}
+                            valueField="prin_code"
+                            displayFields={["prin_code", "prin_name"]}
+                            placeholder="All"
+                            loadOptions={() =>
+                                getDynamicLookupaccount({
+                                    parameter: "WMS_Stock_principal",
+                                    loginid: loginId,
+                                    code1: companyCode,
+                                    code2: "", code3: "", code4: "",
+                                    number1: 0, number2: 0, number3: 0, number4: 0,
+                                    date1: null, date2: null, date3: null, date4: null,
+                                })
                             }
+                        />
+                        <FloatLabel label="From Date" bgColor={BG}>
+                            <DateField
+                                label=""
+                                value={fromDateIso}
+                                onChange={setFromDateIso}
+                                max={toDateIso || undefined}
+                            />
+                        </FloatLabel>
+                        <FloatLabel label="To Date" bgColor={BG}>
+                            <DateField
+                                label=""
+                                value={toDateIso}
+                                onChange={setToDateIso}
+                                min={fromDateIso || undefined}
+                            />
+                        </FloatLabel>
+                    </div>
+                    <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4, marginLeft: 4 }}>
+                        Leave dates blank to include all transaction dates
+                    </div>
+
+                    {/* Status bar when report is generated */}
+                    {hasGeneratedReport && (
+                        <div style={{
+                            marginTop: 10,
+                            padding: "8px 14px",
+                            background: "#f0fdf4",
+                            border: "1px solid #bbf7d0",
+                            borderRadius: 6,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 12,
+                        }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <span style={{ fontSize: 16 }}>✅</span>
+                                <span style={{ fontSize: 12, color: "#065f46" }}>
+                                    Report generated successfully at {lastGeneratedAt?.toLocaleTimeString()}
+                                </span>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    if (reportWindowRef.current && !reportWindowRef.current.closed) {
+                                        reportWindowRef.current.focus();
+                                    } else {
+                                        setError("Report tab is closed. Please generate again.");
+                                    }
+                                }}
+                                style={{
+                                    padding: "4px 12px",
+                                    background: "#185FA5",
+                                    color: "#fff",
+                                    border: "none",
+                                    borderRadius: 4,
+                                    fontSize: 11,
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 4,
+                                }}
+                            >
+                                <Eye size={12} /> Open Report
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Action bar */}
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10, paddingTop: 8, borderTop: "0.5px solid #e5e7eb" }}>
+                        <button
+                            className="action-btn-excel"
+                            onClick={handleReset}
+                            disabled={loading}
+                            style={{
+                                padding: "7px 16px",
+                                border: "0.5px solid #d1d5db",
+                                background: "#fff",
+                                cursor: loading ? "not-allowed" : "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                                fontSize: 12,
+                                borderRadius: 6,
+                                color: "#374151",
+                                opacity: loading ? 0.6 : 1,
+                            }}
+                        >
+                            <RotateCcw size={13} /> Reset
                         </button>
 
-                        {/* Divider */}
-                        <div style={{ width: 1, height: 24, background: "#e5e7eb" }} />
-
-                        {/* Filters */}
-                        <button onClick={() => setSidebarOpen((p) => !p)}
+                        <button
+                            className="action-btn-excel"
+                            onClick={handlePrint}
+                            disabled={!hasGeneratedReport || loading}
                             style={{
-                                padding: "6px 13px",
-                                border: `1px solid ${sidebarOpen ? "#185FA5" : "#d1d5db"}`,
-                                background: sidebarOpen ? "#eff6ff" : "#fff",
-                                display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 7,
-                                color: sidebarOpen ? "#185FA5" : "#374151",
-                                cursor: "pointer", transition: "all 0.15s", fontWeight: 500,
-                            }}>
-                            <SlidersHorizontal size={13} />
-                            Filters
-                            {filledCount > 0 && (
-                                <span style={{
-                                    background: "#185FA5", color: "#fff",
-                                    fontSize: 10, fontWeight: 700, lineHeight: 1,
-                                    padding: "2px 5px", borderRadius: 20, minWidth: 16, textAlign: "center",
-                                }}>
-                                    {filledCount}
-                                </span>
+                                padding: "7px 16px",
+                                border: "0.5px solid #d1d5db",
+                                background: "#fff",
+                                cursor: (!hasGeneratedReport || loading) ? "not-allowed" : "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                                fontSize: 12,
+                                borderRadius: 6,
+                                color: "#374151",
+                                opacity: (!hasGeneratedReport || loading) ? 0.5 : 1,
+                            }}
+                        >
+                            <Printer size={13} /> Print
+                        </button>
+
+                        <button
+                            className="action-btn-excel"
+                            onClick={handleExcel}
+                            disabled={!hasGeneratedReport || loading || exporting}
+                            style={{
+                                padding: "7px 16px",
+                                border: "0.5px solid #d1d5db",
+                                background: "#fff",
+                                cursor: (!hasGeneratedReport || loading || exporting) ? "not-allowed" : "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                                fontSize: 12,
+                                borderRadius: 6,
+                                color: "#374151",
+                                opacity: (!hasGeneratedReport || loading || exporting) ? 0.5 : 1,
+                            }}
+                        >
+                            <Download size={13} /> {exporting ? "Exporting..." : "Export Excel"}
+                        </button>
+
+                        <button
+                            className="action-btn-primary"
+                            onClick={handleGenerateReport}
+                            disabled={loading || !dateRangeValid}
+                            style={{
+                                padding: "7px 16px",
+                                border: "0.5px solid #185FA5",
+                                background: (loading || !dateRangeValid) ? "#94a3b8" : "#185FA5",
+                                cursor: (loading || !dateRangeValid) ? "not-allowed" : "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                                fontSize: 12,
+                                borderRadius: 6,
+                                color: "#fff",
+                                transition: "background 0.2s",
+                            }}
+                        >
+                            {loading ? (
+                                <>
+                                    <span style={{
+                                        width: 12,
+                                        height: 12,
+                                        border: "2px solid rgba(255,255,255,0.3)",
+                                        borderTop: "2px solid #fff",
+                                        borderRadius: "50%",
+                                        animation: "spin 0.8s linear infinite",
+                                    }} />
+                                    Generating...
+                                </>
+                            ) : (
+                                <>
+                                    <Eye size={13} /> View Report
+                                </>
                             )}
                         </button>
                     </div>
-                </div>
-            </div>
 
-            {/* ══ Report area ════════════════════════════════════════════════ */}
-            <div style={{ flex: 1, padding: 16, display: "flex", flexDirection: "column" }}>
-                <div style={{
-                    flex: 1, background: "#fff", border: "1px solid #e5e7eb",
-                    borderRadius: 12, overflow: "hidden",
-                    display: "flex", flexDirection: "column",
-                    height: "calc(100vh - 104px)", minHeight: 400,
-                }}>
-                    {/* Empty state */}
-                    {!generating && !reportError && !reportHtml && (
-                        <div style={{
-                            flex: 1, display: "flex", flexDirection: "column",
-                            alignItems: "center", justifyContent: "center", gap: 12,
-                        }}>
-                            <div style={{
-                                width: 48, height: 48, borderRadius: 12, background: "#f3f4f6",
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                            }}>
-                                <BarChart2 size={22} color="#d1d5db" strokeWidth={1.5} />
-                            </div>
-                            <div style={{ textAlign: "center" }}>
-                                <div style={{ fontSize: 13, fontWeight: 500, color: "#374151", marginBottom: 4 }}>
-                                    No report generated yet
-                                </div>
-                                <div style={{ fontSize: 12, color: "#9ca3af" }}>
-                                    Open <strong style={{ color: "#185FA5" }}>Filters</strong> to configure and generate your report
-                                </div>
-                            </div>
-                            <button className="dn-outline" onClick={() => setSidebarOpen(true)}
-                                style={{
-                                    marginTop: 4, padding: "7px 16px",
-                                    border: "1px solid #d1d5db", background: "#fff",
-                                    display: "flex", alignItems: "center", gap: 6,
-                                    fontSize: 12, borderRadius: 7, color: "#374151",
-                                    cursor: "pointer", fontWeight: 500,
-                                }}>
-                                <SlidersHorizontal size={13} /> Open Filters
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Loading */}
-                    {generating && (
-                        <div style={{
-                            flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-                            gap: 10, fontSize: 13, color: "#6b7280",
-                        }}>
-                            <Loader2 size={18} className="dn-spin" />
-                            Generating report…
-                        </div>
-                    )}
-
-                    {/* Error */}
-                    {!generating && reportError && (
-                        <div style={{
-                            flex: 1, display: "flex", flexDirection: "column",
-                            alignItems: "center", justifyContent: "center", gap: 8,
-                        }}>
-                            <AlertTriangle size={22} color="#dc2626" strokeWidth={1.5} />
-                            <div style={{ fontSize: 13, color: "#dc2626" }}>{reportError}</div>
-                            <button className="dn-ghost" onClick={() => setSidebarOpen(true)}
-                                style={{
-                                    marginTop: 4, padding: "6px 14px",
-                                    border: "1px solid #d1d5db", background: "#fff",
-                                    fontSize: 12, borderRadius: 7, color: "#374151",
-                                    cursor: "pointer", fontWeight: 500,
-                                }}>
-                                Adjust filters
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Report iframe */}
-                    {reportReady && (
-                        <iframe
-                            ref={iframeRef}
-                            srcDoc={reportHtml}
-                            title="DN Summary Report"
-                            style={{ flex: 1, width: "100%", border: "none", display: "block" }}
-                        />
-                    )}
-                </div>
-            </div>
-
-            {/* ══ Sidebar overlay ════════════════════════════════════════════ */}
-            {sidebarOpen && (
-                <div className="dn-overlay" onClick={() => setSidebarOpen(false)} />
-            )}
-
-            {/* ══ Sidebar panel ══════════════════════════════════════════════ */}
-            <div className={`dn-sidebar${sidebarOpen ? " open" : ""}`}>
-
-                {/* Header */}
-                <div style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    padding: "16px 20px", borderBottom: "1px solid #e5e7eb", flexShrink: 0,
-                }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <SlidersHorizontal size={15} color="#185FA5" />
-                        <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>Report Filters</span>
-                    </div>
-                    <button onClick={() => setSidebarOpen(false)}
-                        style={{
-                            background: "none", border: "none", cursor: "pointer",
-                            padding: 4, borderRadius: 6, color: "#6b7280", display: "flex",
-                        }}>
-                        <X size={16} />
-                    </button>
-                </div>
-
-                {/* Body */}
-                <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
-
-                    {/* Validation hint */}
-                    {(!canGenerate) && (
-                        <div style={{
-                            display: "flex", alignItems: "flex-start", gap: 7,
-                            padding: "8px 12px", background: "#fffbeb", border: "1px solid #fde68a",
-                            borderRadius: 7, fontSize: 11, color: "#92400e", marginBottom: 20, lineHeight: 1.5,
-                        }}>
-                            <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 1 }} />
-                            {!dateRangeValid
-                                ? "From date must be on or before To date."
-                                : "Select a principal and both dates to generate the report."
-                            }
-                        </div>
-                    )}
-
-                    {/* Principal */}
-                    <div style={{ marginBottom: 18 }}>
-                        <SearchableDropdown
-                            label="Principal *"
-                            value={principal}
-                            onChange={setPrincipal}
-                            options={principalOptions}
-                            placeholder="Search principal…"
-                        />
-                    </div>
-
-                    {/* Date range */}
-                    <div style={{ marginBottom: 18 }}>
-                        <DateField
-                            label="From Date *"
-                            value={fromDate}
-                            onChange={setFromDate}
-                            max={toDate || undefined}
-                        />
-                    </div>
-
-                    <div style={{ marginBottom: 4 }}>
-                        <DateField
-                            label="To Date *"
-                            value={toDate}
-                            onChange={setToDate}
-                            min={fromDate || undefined}
-                        />
-                    </div>
-
-                    {/* Date range summary pill */}
-                    {fromDate && toDate && dateRangeValid && (
-                        <div style={{
-                            marginTop: 14, padding: "7px 12px",
-                            background: "#eff6ff", border: "1px solid #bfdbfe",
-                            borderRadius: 7, fontSize: 11, color: "#0C447C",
-                            display: "flex", alignItems: "center", gap: 6,
-                        }}>
-                            <Calendar size={11} />
-                            {toApiDateString(fromDate)} → {toApiDateString(toDate)}
-                        </div>
-                    )}
-
-                </div>
-
-                {/* Footer */}
-                <div style={{
-                    padding: "14px 20px", borderTop: "1px solid #e5e7eb",
-                    display: "flex", gap: 8, flexShrink: 0,
-                }}>
-                    <button className="dn-ghost" onClick={handleReset} disabled={generating}
-                        style={{
-                            flex: 1, padding: "8px", border: "1px solid #d1d5db", background: "#fff",
-                            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                            fontSize: 12, borderRadius: 7, color: "#374151",
-                            cursor: generating ? "not-allowed" : "pointer",
-                            opacity: generating ? 0.5 : 1, fontWeight: 500,
-                        }}>
-                        <RotateCcw size={13} /> Reset
-                    </button>
-                    <button className="dn-primary" onClick={handleGenerate} disabled={!canGenerate || generating}
-                        style={{
-                            flex: 2, padding: "8px",
-                            border: "1px solid #185FA5", background: "#185FA5",
-                            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                            fontSize: 12, borderRadius: 7, color: "#fff",
-                            cursor: (!canGenerate || generating) ? "not-allowed" : "pointer",
-                            opacity: (!canGenerate || generating) ? 0.5 : 1,
-                            transition: "background 0.15s", fontWeight: 500,
-                        }}>
-                        {generating
-                            ? <><Loader2 size={13} className="dn-spin" /> Generating…</>
-                            : <><BarChart2 size={13} /> Generate Report</>
-                        }
-                    </button>
                 </div>
             </div>
         </div>

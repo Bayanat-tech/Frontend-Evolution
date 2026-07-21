@@ -5,7 +5,6 @@ import { pamsDelete, pamsSave, pamsSelect } from "../../api/pams";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
-import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
@@ -13,9 +12,9 @@ import { NoticeToast } from "../../components/ui/NoticeToast";
 import { useAuth } from "../../state/AuthContext";
 import type { LookupRow } from "../../api/lookups";
 import ImportKpiEdi from "./Importkpiedi";
+import { DataTable } from "../../components/ui/PamsDataTable";
 
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
 
 type Row = Record<string, unknown>;
 
@@ -30,7 +29,6 @@ type KpiForm = {
   STANDARD_WEIGHTAGE: number;
 };
 
-// ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function text(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -69,30 +67,22 @@ function Field({ label, required, children }: { label: string; required?: boolea
   );
 }
 
-// ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export function KpiGroupPage() {
   const { user } = useAuth();
   const loginid = user?.loginid ?? "";
   const companyCode = user?.company_code ?? "";
-
-  // ── Grid state ────────────────────────────────────────────────────────────
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
-
-  // ── Dialog state ──────────────────────────────────────────────────────────
   const [formOpen, setFormOpen] = useState(false);
   const [viewMode, setViewMode] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
-
-  // ── Import dialog state ───────────────────────────────────────────────────
   const [importOpen, setImportOpen] = useState(false);
 
-  // ── Form state ────────────────────────────────────────────────────────────
   const [form, setForm] = useState<KpiForm>({
     KPI_CODE: "",
     KPI_TYPE_CODE: "",
@@ -104,7 +94,6 @@ export function KpiGroupPage() {
     STANDARD_WEIGHTAGE: 0,
   });
 
-  // ── Lookup state ──────────────────────────────────────────────────────────
   const [kpiTypeList, setKpiTypeList] = useState<Row[]>([]);
   const [divisionList, setDivisionList] = useState<Row[]>([]);
   const [departmentList, setDepartmentList] = useState<Row[]>([]);
@@ -112,7 +101,6 @@ export function KpiGroupPage() {
   const [designationList, setDesignationList] = useState<Row[]>([]);
   const [formError, setFormError] = useState("");
 
-  // ── Load table rows ───────────────────────────────────────────────────────
   const loadRows = async (clearNotice = true) => {
     setLoading(true);
     if (clearNotice) setNotice(null);
@@ -128,7 +116,6 @@ export function KpiGroupPage() {
 
   useEffect(() => { void loadRows(); }, [loginid, companyCode]);
 
-  // ── Load lookups on dialog open ───────────────────────────────────────────
   const loadStaticLookups = async () => {
     try {
       const [kpiTypes, divisions] = await Promise.all([
@@ -163,7 +150,6 @@ export function KpiGroupPage() {
     } catch { setSectionList([]); setDesignationList([]); }
   };
 
-  // ── Open Add ──────────────────────────────────────────────────────────────
   const openAdd = () => {
     setEditMode(false);
     setViewMode(false);
@@ -176,7 +162,6 @@ export function KpiGroupPage() {
     void loadStaticLookups();
   };
 
-  // ── Open Edit ─────────────────────────────────────────────────────────────
   const openEdit = async (row: Row) => {
     setEditMode(true);
     setViewMode(false);
@@ -197,7 +182,6 @@ export function KpiGroupPage() {
     await loadSectionsAndDesignations(text(row.DIVISION_CODE), text(row.DEPARTMENT_CODE));
   };
 
-  // ── Open View ─────────────────────────────────────────────────────────────
   const openView = async (row: Row) => {
     setEditMode(false);
     setViewMode(true);
@@ -218,7 +202,6 @@ export function KpiGroupPage() {
     await loadSectionsAndDesignations(text(row.DIVISION_CODE), text(row.DEPARTMENT_CODE));
   };
 
-  // ── Field change ──────────────────────────────────────────────────────────
   const updateField = (name: keyof KpiForm, value: string | number) => {
     setForm((prev) => {
       const next = { ...prev, [name]: value };
@@ -239,7 +222,6 @@ export function KpiGroupPage() {
     });
   };
 
-  // ── Save ──────────────────────────────────────────────────────────────────
   const saveRecord = async (event: FormEvent) => {
     event.preventDefault();
     if (!form.KPI_TYPE_CODE.trim()) { setFormError("KPI Type Code is required"); return; }
@@ -270,7 +252,6 @@ export function KpiGroupPage() {
     }
   };
 
-  // ── Delete ────────────────────────────────────────────────────────────────
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setSaving(true);
@@ -293,7 +274,6 @@ export function KpiGroupPage() {
     }
   };
 
-  // ── Columns ───────────────────────────────────────────────────────────────
   const columns = useMemo<ColumnDef<Row>[]>(() => [
     { accessorKey: "KPI_TYPE_CODE", header: "KPI Type Code", size: 160, cell: ({ row }) => formatValue(row.original.KPI_TYPE_CODE) },
     { accessorKey: "KPI_CODE",      header: "KPI Code",      size: 140, cell: ({ row }) => formatValue(row.original.KPI_CODE) },
@@ -328,7 +308,6 @@ export function KpiGroupPage() {
     },
   ], []);
 
-  // ── Lookup options for LookupField ────────────────────────────────────────
   const kpiTypeOptions   = kpiTypeList.map(normalizeRow);
   const divisionOptions  = divisionList.map(normalizeRow);
   const deptOptions      = departmentList.map(normalizeRow);
@@ -340,11 +319,8 @@ export function KpiGroupPage() {
     return found ? `${text(found[valueKey])} - ${text(found[labelKey])}` : val;
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <section className="grid gap-4">
-
-      {/* Page header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="m-0 text-2xl font-semibold text-foreground">KPI Groups</h1>
@@ -352,7 +328,6 @@ export function KpiGroupPage() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => void loadRows()}><RefreshCw size={15} /> Refresh</Button>
-          {/* ── IMPORT BUTTON ── */}
           <Button variant="outline" onClick={() => setImportOpen(true)}>
             <Upload size={15} /> Import from Excel
           </Button>
@@ -362,7 +337,6 @@ export function KpiGroupPage() {
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      {/* Table — parameter 'kpi_master' → MS_EAM_KPI sabka data */}
       <DataTable
         columns={columns}
         data={rows}
@@ -380,7 +354,6 @@ export function KpiGroupPage() {
         getRowId={(row, index) => `${text(row.KPI_CODE)}_${text(row.KPI_TYPE_CODE)}_${index}`}
       />
 
-      {/* ── IMPORT DIALOG ── */}
       <Dialog
         open={importOpen}
         wide
@@ -398,7 +371,6 @@ export function KpiGroupPage() {
         />
       </Dialog>
 
-      {/* Add / Edit / View Dialog */}
       <Dialog
         open={formOpen}
         wide
@@ -561,7 +533,6 @@ export function KpiGroupPage() {
         </form>
       </Dialog>
 
-      {/* Delete confirm */}
       <Dialog
         open={Boolean(deleteTarget)}
         compact

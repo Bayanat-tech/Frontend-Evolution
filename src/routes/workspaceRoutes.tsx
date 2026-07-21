@@ -18,7 +18,6 @@ import { ExpenseTypePage } from "../pages/finance/ExpenseTypePage";
 import { FinanceUtilityMasterPage, financeUtilityConfigs } from "../pages/finance/FinanceUtilityMasterPage";
 // import { JournalVoucherPage } from "../pages/finance/JournalVoucherPage";
 import { PaymentDocumentPage } from "../pages/finance/PaymentDocumentPage";
-import { PLSetupPage } from "../pages/finance/PLSetupPage";
 import { PrepaidRegisterPage } from "../pages/finance/PrepaidRegisterPage";
 import { WmsInboundPage } from "../pages/wms/inbound/WmsInboundPage";
 import { WmsOutboundPage } from "../pages/wms/outbound/WmsOutboundPage";
@@ -50,10 +49,10 @@ import {
   oxMaintMasterConfigs,
 } from "../pages/oxmaint/OxMaintPages";
 import { SalaryAdvancePage } from "../pages/hr/SalaryAdvancePage";
-import { TrainingFeedbackPage } from "../pages/hr/Hrtrainingfeedbackpage";
+import { TrainingFeedbackPage } from "../pages/hr/Trainingfeedbackpage";
 import { Leaf } from "lucide-react";
 import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics";
-import { WmsBillingActPage } from "../pages/wms/WmsBillingActivityPage";
+import { WmsBillingActPage } from "../pages/wms/Masters/WmsBillingActivityPage";
 // import ProfitLossPage from "../pages/accounts_report/ProfitLossPage";
 import AppraisalWeightageMaster from "../pages/pams/Appraisalweightagemaster";
 import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseReport";
@@ -61,7 +60,6 @@ import PeriodWisePage from "../pages/accounts_report/Ageing_reports/PeriodWiseRe
 import AC_StatementPage from "../pages/accounts_report/detailed_reports/AC_StatementReportPage";
 import OutstandingStatementPage from "../pages/accounts_report/detailed_reports/OutstandingStatementPage";
 import BalanceSheetReportFilter from "../pages/accounts_report/detailed_reports/BalanceSheetReportFilter";
-import InspectionFormPage from "../pages/oxmaint/inspection_form/InspectionFormMainPage";
 import AssignUserDiv from "../pages/finance/AssignUserDiv";
 import TrialBalancePage from "../pages/accounts_report/detailed_reports/TrailBalaneReports";
 import StockTransferPage from "../pages/wms/stock transfer/StockTransferPage";
@@ -69,18 +67,88 @@ import { StockTransferViewPage } from "../pages/wms/stock transfer/GetStockTrans
 import ProfitLossPage from "../pages/accounts_report/ProfitLossPage";
 import VisaExpiryListingPage from "../pages/hr/Reports/Visaexpirylistingpage";
 import Dnsummaryreportpage from "../pages/wms/Reports/Dnsummaryreportpage";
+import StockSummaryReportPage from "../pages/wms/Reports/StockSummaryReportPage";
+import StockAgeingQuantityReport from "../pages/wms/Reports/StockAgeingQuantityReport";
+import StockAgeingVolumeReport from "../pages/wms/Reports/StockAgeingVolumeReport";
+
 import { RJVDocumentEditor } from "../pages/finance/RJVDocuments";
 import { AlmsSimpleMasterConfigs } from "../pages/almswf/almsMasterConfig";
 import { AlmsSimpleMasterPage } from "../pages/almswf/AlmsMasterPage";
+import TransactionReportPage from "../pages/wms/Stock_Reports/Transaction_report";
 import TaxReportFilter from "../pages/accounts_report/tax_report/TaxReport";
 import JobListingReport from "../pages/wms/stock transfer/JobListingReport";
+import PLSetupPage from "../pages/finance/PLSetupPage";
 import StockDetailReport from "../pages/wms_report/StockDetailReport";
 import StockAdjustmentPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
+import { VendorWorkspacePage } from "../pages/vendor/VendorWorkspacePage";
+import { isVendorRouteText } from "../pages/vendor/vendorRoutes";
+import { StockAdjViewPage } from "../pages/wms/stock adjustment/StockAdjustmentViewPage";
+import StockAdjPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
+import {StorageComputationPage} from "../pages/wms/storage computation/StorageComputation";
+import LeaveEncashmentPage from "../pages/hr/LeaveEncashmentPage";
+import EmployeeSalaryIncrement from "../pages/hr/EmployeeSalaryIncrement";
+import { EmployeeProfilePage } from "../pages/hr/EmployeeProfilePage";
+
+import { ContinuousAutoMemoPage } from "../pages/hr/HrContinuousAutoMemo";
+
+import { ApplicantInfoPage } from "../pages/hr/Applicantinfopage";
+
+import { InterviewEvalPage } from "../pages/hr/Interviewevalpage";
+
+import { HrJoiningPage } from "../pages/hr/HrJoiningPage";
+
+import { HrEmpEducationPage } from "../pages/hr/HrEmpEducationPage";  
+import GradeSalaryIncrement from "../pages/hr/GradeSalaryIncrement.";
+import EmployeeMasterPage from "../pages/hr/Employee Master/EmployeeMasterPage";
+import SalaryAdditionDeductionMainPage from "../pages/hr/addition_deduction/SalaryAdditionDeductionMainPage";
+import AbsentMemoMainPage from "../pages/hr/absent_memo/AbsentMemoMainPage";
+import { BudgetRequestEditor } from "../pages/finance/budget/BudgetRequestEditor";
+
+import { HrManpowerPage } from "../pages/hr/HrManpower";
+import { BudgetRequestPage } from "../pages/finance/budget/BudgetRequestPage";
+import { ProductWmsPage } from "../pages/wms/Masters/Product_Master/WmsProductPage";
+import {
+  EmployeePayslipPage,
+  EmployeePayslipViewPage,
+  LeaveRegisterPage,
+  LeaveResumptionWorkspacePage,
+  LeaveCancelRequestPage,
+  LeaveClosedRequestPage,
+  LeaveInProgressPage,
+  LeaveRejectedRequestPage,
+  LeaveWorkspacePage,
+  leaveFlowConfigList,
+  type LeaveFlowKey,
+} from "../pages/hr/leave";
+import { SmsDashboardPage } from "../pages/sms/SmsDashboardPage";
+import { SmsMasterPage, smsMasterConfigs } from "../pages/sms/SmsMasterPage";
+import { SmsSalesRequestPage } from "../pages/sms/SmsSalesRequestPage";
+import InspectionReportMainPage from "../pages/oxmaint/inspection-report-tailwind/InspectionReportMainPage";
+
+import { GradeMasterPage } from "../pages/hr/Grademasterpage";
+import InvoicePage from "../pages/wms/invoice/InvoicePage";
+import InspectionFormPage from "../pages/oxmaint/inspection-form-tailwind/inspection_form/InspectionFormMainPage";
+import GrnSummaryReportPage from "../pages/wms/Reports/Grnsummaryreport";
+import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/AssetInventoryMainPage";
+
+import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation";
+import StockCountPage from "../pages/wms/stock count/StockCountPage";
+import{ExpenseMasterPage} from "../pages/purchase_sales/Expensemasterpage";
+import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
+
+
+import {ProductTypePage} from "../pages/purchase_sales/PS_ProductTypePage";
+
+import { ProductCategoryPage } from "../pages/purchase_sales/PS_ProductCategory";
+
+import { ZoneMasterPage } from "../pages/purchase_sales/PS_ZoneMasterPage";
+
 import Mytaskalmspage from "../pages/almswf/Mytaskalmspage";
 
 type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
+  activeMenu?: MenuNode;
 };
 
 type WorkspaceRoute = {
@@ -95,6 +163,144 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+
+  {
+    name: 'mms inspection report',
+    match: ({pathname}) => pathname.toLowerCase().includes("/mms/mms/inspection/inspection-report"),
+    element: () => <InspectionReportMainPage />,
+  },
+  {
+    name: 'mms inspection form',
+    match: ({pathname}) => pathname.toLowerCase().includes("/mms/mms/inspection/inspection-form"),
+    element: () => <InspectionFormPage />
+  },
+  {
+    name: 'mms asset inventory',
+    match: ({pathname}) => pathname.toLowerCase().includes("/mms/mms/oxmaint/asset_inventory"),
+    element: () => <AssetInventoryMainPage />
+  },
+
+  {
+    name: "SMS Dashboard",
+    match: (context) => isSmsRoute(context) && getGenericMatchText(context).includes("dashboard"),
+    element: () => <SmsDashboardPage />,
+  },
+  {
+    name: "SMS Sales Request",
+    match: (context) => isSmsRoute(context) && getGenericMatchText(context).replace(/[^a-z0-9]/g, "").includes("salesrequest"),
+    element: () => <SmsSalesRequestPage />,
+  },
+  {
+    name: "SMS Master",
+    match: (context) => Boolean(getSmsMasterConfig(context)),
+    element: (context) => <SmsMasterPage config={getSmsMasterConfig(context)!} />,
+  },
+  {
+    name: "HR Leave Workspace",
+    match: (context) => isLeaveFlowRoute(context, "request"),
+    element: () => <LeaveWorkspacePage initialTab="request" />,
+  },
+  {
+    name: "HR Leave In Progress",
+    match: (context) => isLeaveFlowRoute(context, "inProgress"),
+    element: () => <LeaveInProgressPage />,
+  },
+  {
+    name: "HR Leave Closed Request",
+    match: (context) => isLeaveFlowRoute(context, "closed"),
+    element: () => <LeaveClosedRequestPage />,
+  },
+  {
+    name: "HR Leave Cancel Request",
+    match: (context) => isLeaveFlowRoute(context, "cancelled"),
+    element: () => <LeaveCancelRequestPage />,
+  },
+  {
+    name: "HR Leave Rejected Request",
+    match: (context) => isLeaveFlowRoute(context, "rejected"),
+    element: () => <LeaveRejectedRequestPage />,
+  },
+  {
+    name: "HR Employee Payslip",
+    match: (context) => isHrRoute(context) && isHrEmployeePayslipRoute(context),
+    element: () => <EmployeePayslipPage />,
+  },
+  {
+    name: "HR Employee Payslip View",
+    match: (context) => isHrRoute(context) && isHrEmployeePayslipViewRoute(context),
+    element: () => <EmployeePayslipViewPage />,
+  },
+  {
+    name: "HR Leave Register",
+    match: (context) => isHrRoute(context) && isHrLeaveRegisterRoute(context),
+    element: () => <LeaveRegisterPage />,
+  },
+  {
+    name: "HR Leave Resumption",
+    match: (context) => isHrRoute(context) && isHrLeaveResumptionRoute(context),
+    element: () => <LeaveResumptionWorkspacePage />,
+  },
+  {
+    name: "HR Employee Profile",
+    match: (context) => isHrRoute(context) && isHrEmployeeProfileRoute(context),
+    element: () => <EmployeeProfilePage />,
+  },
+  {
+    name: "HR Absent Memo",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/memo_and_forms/absent_memo"),
+    element: () => <AbsentMemoMainPage />,
+  },
+  {
+    name: "HR Salary Addition Deduction Page",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/memo_and_forms/addition/deduction_letter"),
+    element: () => <SalaryAdditionDeductionMainPage />,
+  },
+
+//Grade master page route 
+  {
+  name: "HR Grade Master",
+  match: ({ pathname }) =>
+    pathname
+      .toLowerCase()
+      .includes("/workspace/hcm/hcm/general%20master/grade%20master"),
+  element: () => <GradeMasterPage />,
+},
+
+{
+  name: "HR Grade Master",
+  match: ({ pathname }) =>
+    pathname
+      .toLowerCase()
+      .includes("/workspace/bt-masters/hcm/general%20master/grade%20maste"),
+  element: () => <GradeMasterPage />,
+},
+
+
+  {
+    name:"HR Grade Salary Increment",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/grade_salary_increment"),
+    element: () => <GradeSalaryIncrement />
+  },
+  {
+    name: "HR Employee Salary Increment",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/salary%20increment"),
+    element: () => <EmployeeSalaryIncrement />
+  },
+  {
+    name: "HR Leave Encashmen",
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/leave_encashment"),
+    element: () => <LeaveEncashmentPage />
+  },
+  {
+    name: "Employee Master",
+    match: ({pathname})=> pathname.toLocaleLowerCase().includes("/hr/hr/employee/employee_master"),
+    element: () => <EmployeeMasterPage />
+  },
+  {
+    name: "Vendor System",
+    match: (context) => isVendorRoute(context),
+    element: (context) => <VendorWorkspacePage routePath={getGenericMatchText(context)} />,
+  },
   {
     name: "Finance Ledger Basics",
     match: ({ pathname }) => pathname.toLowerCase().includes("/wms/wms/reports/stock%20report/stock_detail"),
@@ -132,7 +338,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   element: () => <AC_StatementPage />,
 },
 
-
+{
+  name: "Storage Computation",
+  match: ({ pathname }) => isStorageComputationRoute(pathname),
+  element: () => <StorageComputationPage />,
+},
 {
   name: "Finance Outstanding Statement",
   match: ({ pathname }) => isOutstandingStatementRoute(pathname),
@@ -173,6 +383,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isDocumentSetupRoute(pathname),
     element: () => <DocumentSetupPage />,
   },
+    {
+    name: "Budget Allocation Setup",
+    match: ({ pathname }) => isBudgetSetupRoute(pathname),
+    element: () => <BudgetRequestPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
   {
     name: "Finance Budget Version",
     match: ({ pathname }) => isBudgetVersionRoute(pathname),
@@ -183,16 +400,38 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isStockTransferViewRoute(pathname),
     element: () => <StockTransferViewPage />,   
   },
+  {
+  name: "Stock Count",
+  match: ({ pathname }) => isStockCountRoute(pathname),
+  element: () => <StockCountPage />,
+},
     {
     name: "Stock Transfer",
     match: ({ pathname }) => isStockTransferRoute(pathname),
     element: () => <StockTransferPage />,
   },
+  {
+  name: "Stock Adjustment View",
+  match: ({ pathname }) => isStockAdjViewRoute(pathname),
+  element: () => <StockAdjViewPage />,
+},
 {
   name: "Stock Adjustment",
   match: ({ pathname }) => isStockAdjustmentRoute(pathname),
-  element: () => <StockAdjustmentPage />,
+  element: () => <StockAdjPage />,
 },
+{
+  name: "WMS Invoice",
+  match: ({ pathname }) => isInvoiceRoute(pathname),
+  element: () => <InvoicePage />,
+},
+  {
+    name: "WMS Stock Transaction Report",
+    match: ({ pathname }) => isTransactionReportRoute(pathname),
+    element: () => <TransactionReportPage />,
+  },
+
+
   {
     name: "Finance Account Wise Budget",
     match: ({ pathname }) => isAccountWiseBudgetRoute(pathname),
@@ -278,13 +517,18 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({pathname}) => isVisaExpiryListingRoute(pathname),
     element: () => <VisaExpiryListingPage/>
   },
-{
+
+  {
     name : "DN Summary Report",
     match: ({pathname}) => isDnRoute(pathname),
     element: () => <Dnsummaryreportpage/>
   },
 
-  
+  {
+    name : "Grn Summary Report",
+    match: ({pathname}) => isGrnRoute(pathname),
+    element: () => <GrnSummaryReportPage/>
+  },
 
   {
     name: "WMS Inbound",
@@ -301,7 +545,27 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isWmsBillingActRoute(pathname),
     element: () => <WmsBillingActPage />,
   },
-     {
+  {
+    name: "Product Master",
+    match: ({pathname})=> pathname.toLocaleLowerCase().includes("/wms/wms/masters/gm/product"),
+    element: () => <ProductWmsPage />
+  },
+  {
+    name: "WMS Stock Summary Report",
+    match: ({ pathname }) => isStockSummaryRoute(pathname),
+    element: () => <StockSummaryReportPage />,
+  },
+  {
+  name: "WMS Stock Ageing Quantity Report",
+  match: ({ pathname }) => isStockAgeingQuantityRoute(pathname),
+  element: () => <StockAgeingQuantityReport />,
+  },
+  {
+  name: "WMS Stock Ageing Volume Report",
+  match: ({ pathname }) => isStockAgeingVolumeRoute(pathname),
+  element: () => <StockAgeingVolumeReport />,
+  },
+  {
     name: "WMS Stock Report Job Listing",
     match: ({ pathname }) => isJobListingRoute(pathname),
     element: () => <JobListingReport />,
@@ -594,6 +858,24 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => isHrRoute(context) && isHrMemosAndFormsWarningLetterRoute(context),
     element: () => <SalaryAdvancePage />,
   },
+  
+  {
+  name: "HR Applicant Info",
+  match: (context) => isHrRoute(context) && isHrApplicantInfoRoute(context),
+  element: () => <ApplicantInfoPage />,
+  },
+
+  {
+  name: "HR Continuous Auto Memo",
+  match: (context) => isHrRoute(context) && isHrContinuousAutoMemoRoute(context),
+  element: () => <ContinuousAutoMemoPage />,
+},
+
+{
+  name: "HR Interview Evaluation",
+  match: (context) => isHrRoute(context) && isHrInterviewEvalRoute(context),
+  element: () => <InterviewEvalPage />,
+},
 
   {
   name: "HR Training Feedback",
@@ -602,6 +884,31 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
 
   {
+  name: "HR Joining",
+  match: (context) => isHrRoute(context) && isHrJoiningRoute(context),
+  element: () => <HrJoiningPage />,
+},
+
+{
+  name: "HR Manpower Requisition",
+  match: (context) => isHrRoute(context) && isHrManpowerRequisitionRoute(context),
+  element: () => <HrManpowerPage />,
+},
+
+{
+  name: "HR Employee Education",
+  match: (context) => isHrRoute(context) && isHrEmpEducationRoute(context),
+  element: () => <HrEmpEducationPage />,
+},
+
+{
+  name: "Employee Information",
+  match: (context) => isHrRoute(context) && isHrEmployeeInformationRoute(context),
+  element: () => <KpiEmployeeInformationPage />,
+},
+
+
+{
     name: "HR Payroll Account Setup",
     match: (context) => isHrRoute(context) && isHrPayrollAccountSetupRoute(context),
     element: () => <HrPayrollAccountSetupPage />,
@@ -611,8 +918,69 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => Boolean(getHrMasterConfig(context)),
     element: (context) => <HrMasterPage config={getHrMasterConfig(context)!} />,
   },
+
+  {
+  name: "Purchase Sales Product Type",
+  match: ({ pathname }) => isProductTypeRoute(pathname),
+  element: () => <ProductTypePage />,
+  },
+
+
+  {
+  name: "Purchase Sales Product Category",
+  match: ({ pathname }) => isProductCategoryRoute(pathname),
+  element: () => <ProductCategoryPage />,
+  },
+
+   {
+  name: "Purchase Sales Zone Master",
+  match: ({ pathname }) => isZoneMasterRoute(pathname),
+  element: () => <ZoneMasterPage />,
+  },
+
+  {
+    name : "Product Brand",
+    match: ({pathname}) => isProductBrandRoute(pathname),
+    element: () => <ProductBrandPage/>
+  },
+
+  {
+    name : "Expense Master",
+    match: ({pathname}) => isExpenseMasterRoute(pathname),
+    element: () => <ExpenseMasterPage/>
+  },
+  
 ];
 
+function isStorageComputationRoute(pathname: string) {
+  return pathname.toLowerCase().includes("wms/activity/request/storage_computation");
+}
+
+
+
+//--------PURCHASE SALE-------
+function isExpenseMasterRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/masters/expense_master"
+  );
+}
+
+function isProductBrandRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/masters/product_brand"
+  );
+}
+
+
+function isStockAdjViewRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.includes("wms/activity/request/stock_adj") &&
+    normalized.includes("/view/")
+  );
+}
 function isBankMasterRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return (
@@ -645,6 +1013,12 @@ function isDocumentSetupRoute(pathname: string) {
     normalized.includes("/finance/utilities/document_setup") ||
     normalized.includes("/finance/utilities/document-setup") ||
     normalized.includes("/finance/utilities/documentsetup")
+  );
+}
+function isBudgetSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.includes("/finance/budget/budget_allocation")
   );
 }
 
@@ -839,11 +1213,26 @@ function isStockTransferRoute(pathname: string) {
     !normalized.includes("/view/")  // ← add this
   );
 }
+function isInvoiceRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("wms/activity/request/invoice");
+}
 function isStockAdjustmentRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("wms/activity/request/stock_adj") && !normalized.includes("/view/");
 }
 
+
+
+function isTransactionReportRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/wms/reports/stock%20report/transaction_report") ||
+         normalized.includes("/wms/reports/stock%20report/transaction-report");
+}
+function isStockCountRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("wms/activity/stock_count") && !normalized.includes("/view/");
+}
 function isStockTransferViewRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return (
@@ -854,7 +1243,30 @@ function isStockTransferViewRoute(pathname: string) {
 
 function isJobListingRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  return (normalized.includes("/wms/reports/stock%20report/job_listing") || normalized.includes("/wms/reports/stock-report/job_listing") || normalized.includes("/wms/reports/stock-report/job-listing"));
+  return (
+    normalized.includes("/wms/reports/stock%20report/job_listing") ||
+    normalized.includes("/wms/reports/stock-report/job_listing") ||
+    normalized.includes("/wms/reports/stock-report/job-listing")
+  );
+}
+function isStockSummaryRoute(pathname: string) {  
+  const normalized = pathname.toLowerCase();
+  const stockReportPath =
+    normalized.includes("/wms/wms/reports/stock%20report/") ||
+    normalized.includes("/wms/wms/reports/stock_report/") ||
+    normalized.includes("/wms/wms/reports/stock-report/") ||
+    normalized.includes("/wms/wms/reports/stockreport/") ||
+    normalized.includes("/wms/reports/stock%20report/") ||
+    normalized.includes("/wms/reports/stock_report/") ||
+    normalized.includes("/wms/reports/stock-report/") ||
+    normalized.includes("/wms/reports/stockreport/");
+
+  const stockSummarySegment =
+    normalized.includes("/stock_summary") ||
+    normalized.includes("/stock-summary") ||
+    normalized.includes("/stock_detail");
+
+  return stockReportPath && stockSummarySegment;
 }
 function isAssetDepreciationRoute(pathname: string) {
   return pathname.toLowerCase().includes("/finance/a/c_others/assets/asset_depreciation");
@@ -881,8 +1293,11 @@ function isDnRoute(pathname:string) {
    || normalized.includes("/wms/wms/reports/summary_report/dn_summary");
 }
 
-
-
+function isGrnRoute(pathname:string) {  
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/wms/wms/reports/summary%20report/grn_summary")
+   || normalized.includes("/wms/wms/reports/summary_report/grn_summary");
+}
 
 function isVisaExpiryListingRoute(pathname:string) {
   const normalized = pathname.toLowerCase();
@@ -1098,22 +1513,36 @@ function getPamsMasterConfig(context: WorkspaceRouteContext) {
 
 function getPamsMatchText(context: WorkspaceRouteContext) {
   const pathname = context.pathname.toLowerCase();
-  const leaves = collectMenuLeaves(context.activeApp?.children || []);
-  const activeLeaf = leaves.find((leaf) => {
-    const path = (leaf.url_path || "").replace(/^\/+/, "").toLowerCase();
-    return path && pathname.includes(path);
-  });
-  return [pathname, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
+  const activeLeaf = getActiveLeaf(context);
+  return buildRouteMatchText(pathname, context.activeApp, activeLeaf);
 }
 
 function getGenericMatchText(context: WorkspaceRouteContext) {
   const pathname = context.pathname.toLowerCase();
-  const leaves = collectMenuLeaves(context.activeApp?.children || []);
-  const activeLeaf = leaves.find((leaf) => {
-    const path = (leaf.url_path || "").replace(/^\/+/, "").toLowerCase();
-    return path && pathname.includes(path);
-  });
-  return [pathname, context.activeApp?.title, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
+  const activeLeaf = getActiveLeaf(context);
+  return buildRouteMatchText(pathname, context.activeApp, activeLeaf);
+}
+
+function isVendorRoute(context: WorkspaceRouteContext) {
+  return isVendorRouteText(getGenericMatchText(context));
+}
+
+function isSmsRoute(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  return matchText.includes("/sms/") || matchText.includes(" sms ") || matchText.startsWith("sms ");
+}
+
+function getSmsMasterConfig(context: WorkspaceRouteContext) {
+  if (!isSmsRoute(context)) return null;
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  const matches = Object.values(smsMasterConfigs)
+    .flatMap((config) => config.routeKeys.map((key) => ({ config, key: key.toLowerCase() })))
+    .sort((a, b) => b.key.length - a.key.length);
+  return matches.find(({ key }) => {
+    const keyCompact = key.replace(/[^a-z0-9]/g, "");
+    return matchText.includes(`/${key}`) || matchText.includes(`/${key.replace(/_/g, "-")}`) || matchText.includes(key) || compact.includes(keyCompact);
+  })?.config || null;
 }
 
 function isApplicationProgressRoute(context: WorkspaceRouteContext) {
@@ -1134,22 +1563,18 @@ function isOxMaintRoute(context: WorkspaceRouteContext) {
     matchText.includes("/oxmaint") ||
     compact.includes("oxmaint") ||
     compact.includes("assetinventory") ||
-    compact.includes("inspectionform") ||
-    compact.includes("inspectionreport") ||
     compact.includes("assettype") ||
-    compact.includes("siteproject")
+    compact.includes("siteproject") ||
+    compact.includes("status")
   );
 }
 
 function getOxMaintElement(context: WorkspaceRouteContext) {
   const matchText = getGenericMatchText(context);
   const compact = matchText.replace(/[^a-z0-9]/g, "");
-  if (compact.includes("assetinventory")) return <OxAssetInventoryPage />;
-  if (compact.includes("inspectionreport")) return <OxInspectionReportPage />;
-  if (compact.includes("inspectionform")) return <InspectionFormPage />;
   if (compact.includes("assettype")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.assetType} />;
   if (compact.includes("siteproject")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.siteProject} />;
-  if (compact.includes("status") || matchText.includes("/status")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.status} />;
+  if (compact.includes("status")) return <OxSimpleMasterPage config={oxMaintMasterConfigs.status} />;
   return <OxMaintDashboard />;
 }
 
@@ -1167,18 +1592,69 @@ function getHrMasterConfig(context: WorkspaceRouteContext) {
 }
 
 function getHrMatchText(context: WorkspaceRouteContext) {
-  const pathname = context.pathname.toLowerCase();
+  const pathname = decodeRouteText(context.pathname).toLowerCase();
+  const activeLeaf = getActiveLeaf(context);
+  return buildRouteMatchText(pathname, context.activeApp, activeLeaf);
+}
+
+function getActiveLeaf(context: WorkspaceRouteContext) {
+  if (context.activeMenu) return context.activeMenu;
+  const pathname = decodeRouteText(context.pathname).toLowerCase();
   const leaves = collectMenuLeaves(context.activeApp?.children || []);
-  const activeLeaf = leaves.find((leaf) => {
-    const path = (leaf.url_path || "").replace(/^\/+/, "").toLowerCase();
+  return leaves.find((leaf) => {
+    const path = decodeRouteText((leaf.url_path || "").replace(/^\/+/, "")).toLowerCase();
     return path && pathname.includes(path);
   });
-  return [pathname, activeLeaf?.title, activeLeaf?.url_path].filter(Boolean).join(" ").toLowerCase();
+}
+
+function buildRouteMatchText(pathname: string, activeApp?: MenuNode, activeLeaf?: MenuNode) {
+  return [
+    pathname,
+    activeApp?.title,
+    activeApp?.url_path,
+    activeApp?.component_name,
+    activeApp?.componentName,
+    activeLeaf?.title,
+    activeLeaf?.url_path,
+    activeLeaf?.component_name,
+    activeLeaf?.componentName,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
 }
 
 function isHrRoute(context: WorkspaceRouteContext) {
   const matchText = getHrMatchText(context);
-  return matchText.includes("/hr/") || matchText.includes(" hr ") || matchText.includes("human");
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return (
+    matchText.includes("/hr/") ||
+    matchText.includes("/hcm/") ||
+    matchText.includes("/ems/") ||
+    matchText.includes(" hr ") ||
+    matchText.includes(" hcm ") ||
+    matchText.includes(" ems ") ||
+    matchText.includes("human") ||
+    matchText.includes("employee management") ||
+    compact.includes("employeemanagement") ||
+    compact.includes("humancapitalmanagement")
+  );
+}
+
+function isLeaveFlowRoute(context: WorkspaceRouteContext, key: LeaveFlowKey) {
+  if (!isHrRoute(context)) return false;
+  const config = leaveFlowConfigList.find((item) => item.key === key);
+  if (!config) return false;
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return config.routeTokens.some((token) => compact.includes(token));
+}
+
+function decodeRouteText(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function isHrPayrollProcessRoute(context: WorkspaceRouteContext) {
@@ -1199,6 +1675,35 @@ function isHrPayUnitsDependantRoute(context: WorkspaceRouteContext) {
 function isHrLeaveCancelRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
   return compact.includes("leavecancel") || compact.includes("leavecancellation") || compact.includes("pgleaveflowcancel");
+}
+
+function isHrEmployeePayslipRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return (
+    !compact.includes("employeepayslipview") &&
+    !compact.includes("viewpayslipreport") &&
+    (compact.includes("employeepayslip") || compact.includes("hrpayslips") || compact.includes("payslip"))
+  );
+}
+
+function isHrEmployeePayslipViewRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("employeepayslipview") || compact.includes("viewpayslipreport");
+}
+
+function isHrLeaveRegisterRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("leaveregister") || compact.includes("hremployeeregistermainpage");
+}
+
+function isHrLeaveResumptionRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("leaveresumption") || compact.includes("hrleaveresumptionmainpage");
+}
+
+function isHrEmployeeProfileRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("employeeprofile") || compact.includes("employeemaster") || compact.includes("hremployeeprofile");
 }
 
 function isHrPayrollAccountSetupRoute(context: WorkspaceRouteContext) {
@@ -1224,3 +1729,5 @@ function isHrTrainingFeedbackRoute(context: WorkspaceRouteContext) {
     normalized.includes("training-feedback")
   );
 }
+
+

@@ -30,7 +30,7 @@ import {
   upsertBulkAccountEntryApi,
   getFinanceOutstanding,
 } from "../../api/transactions";
-import { getDynamicLookup, getLookupValue, LookupRow } from "../../api/lookups";
+import { getDynamicLookup, getDynamicFinanceLookup, getLookupValue, LookupRow } from "../../api/lookups";
 import { Badge } from "../../components/ui/Badge";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
@@ -139,7 +139,7 @@ export function PaymentDocumentPage({ docType }: { docType: TransactionType }) {
     { accessorKey: "remarks", header: "Description" },
     ...(docType !== "CR" ? [{ accessorKey: "cheque_no", header: "Cheque No" } as ColumnDef<TransactionDocumentRow>] : []),
     ...(docType === "BR" ? [{ accessorKey: "cheque_bank", header: "Cheque Bank" } as ColumnDef<TransactionDocumentRow>] : []),
-    { accessorKey: "div_code", header: "Div" },
+    { accessorKey: "div_code", header: "Div"  ,size : 30},
     {
       accessorKey: "canceled",
       header: "Status",
@@ -732,10 +732,17 @@ function PaymentDocumentEditor({
     if (detail.child_table !== "invoice") return false;
     const childRows = (form.children[detail.id] || []) as TransactionChildRow[];
     if (childRows.length === 0) return false;
-    const totalOutstanding = childRows.reduce(
-      (sum, r) => sum + (Number(r.c_bal_amt_org) || 0), 0
-    );
-    return Number(detail.amount || 0) > totalOutstanding;
+
+    // In edit mode: outstanding may be 0 because THIS doc already holds the allocation.
+    // Use max(c_bal_amt_org, child.amount) per row as the effective ceiling.
+    const effectiveCeiling = childRows.reduce((sum, r) => {
+      const outstanding = Number(r.c_bal_amt_org) || 0;
+      const allocated = Number(r.amount) || 0;
+      // effective ceiling = outstanding + what this doc already allocated to it
+      return sum + Math.max(outstanding, allocated);
+    }, 0);
+
+    return Number(detail.amount || 0) > effectiveCeiling + 0.001; // small epsilon for float
   });
 
   return (
@@ -859,12 +866,37 @@ function PaymentDocumentEditor({
                   disabled={disabled || !form.div_code}
 
                   onChange={async (value, row) => {
+                    const selectedCurrency = text(getLookupValue(row || {}, "curr_code"));
+                    const selectedCurrName = text(getLookupValue(row || {}, "curr_name"));
+                    const selectedExRate = Number(getLookupValue(row || {}, "ex_rate") || row?.ex_rate || 0);
+                    let resolvedExRate = selectedExRate;
+
+                    if (!resolvedExRate && selectedCurrency) {
+                      try {
+                        const currencyRows = await getDynamicFinanceLookup({
+                          parameter: "Account_Currency_CODE_Search",
+                          code1: user?.company_code || "",
+                        });
+                        const match = currencyRows.find(
+                          (currencyRow) =>
+                            String(getLookupValue(currencyRow, "curr_code") || "").toUpperCase() ===
+                            selectedCurrency.toUpperCase(),
+                        );
+                        resolvedExRate = Number(getLookupValue(match || {}, "ex_rate") || match?.ex_rate || 0);
+                      } catch {
+                        resolvedExRate = 0;
+                      }
+                    }
+
                     setForm((current) => ({
                       ...current,
                       ac_code: value,
                       ac_name: text(getLookupValue(row || {}, "ac_name")),
-                      curr_code: text(getLookupValue(row || {}, "curr_code")),
+                      curr_code: selectedCurrency,
+                      curr_name: selectedCurrName,
+                      ex_rate: resolvedExRate || current.ex_rate || 1,
                     }));
+
                     if (docType !== "CR" && value) {
                       const cheque: Record<string, unknown> = await getCheque(value).catch(() => ({}));
                       setForm((current) => ({
@@ -891,8 +923,9 @@ function PaymentDocumentEditor({
                     ...current,
                     curr_code: value,
                     curr_name: text(getLookupValue(row || {}, "curr_name")),
-                    ex_rate: Number(row?.ex_rate ?? 1),
+                    ex_rate: Number(getLookupValue(row || {}, "ex_rate") || row?.ex_rate || current.ex_rate || 1),
                   }))}
+
                 />
                 <Field label="Exchange Rate*"><Input disabled={disabled} required type="number" style={{ textAlign: "right" }} step="0.0001" value={Number.isFinite(form.ex_rate) ? form.ex_rate.toFixed(6) : ""} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} /></Field>
                 {/* {docType !== "CR" && (
@@ -949,7 +982,6 @@ function PaymentDocumentEditor({
                       <th className="px-2 py-2 text-left">Tax %</th>
                       <th className="finance-amount-cell px-2 py-2 text-left">Tax Amt</th>
                       <th className="px-2 py-2 text-left">Job No</th>
-                      <th className="px-2 py-2 text-left">Dept</th>
                       <th className="finance-amount-cell px-2 py-2 text-left">Base Amount</th>
                       <th className="px-2 py-2 text-left">Action</th>
                     </tr>
@@ -961,26 +993,28 @@ function PaymentDocumentEditor({
                       <tr className={selectedDetail?.id === detail.id ? "border-t bg-primary/5" : "border-t odd:bg-muted/20"} key={detail.id}>
                         <td className="finance-sticky-col finance-col-no px-2 py-1 text-xs">{detail.serial_no}</td>
                         <td className="finance-sticky-col finance-col-div px-2 py-1"><Input disabled value={detail.div_code || form.div_code} /></td>
-                        <td className="finance-sticky-col finance-col-account finance-account-cell px-2 py-1">
-                          <LookupField
-                            label="Detail Account"
-                            compact
-                            placeholder="A/c code"
-                            value={detail.ac_code}
-                            displayValue={detail.ac_name ? `${detail.ac_code} - ${detail.ac_name}` : detail.ac_code}
-                            columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
-                            valueField="ac_code"
-                            displayFields={["ac_code", "ac_name", "curr_code"]}
-                            loadOptions={() => getDynamicLookup({
-                              parameter: "Account_AC_CODE_Serach_HDR",
-                              code1: user?.company_code,
-                              code2: "D",
-                              code3: form.doc_type,
-                              code4: form.div_code
-                            })}
-                            disabled={disabled}
-                            onChange={(value, row) => void selectDetailAccount(detail, value, row)}
-                          />
+                        <td className="finance-sticky-col finance-col-account finance-account-cell w-[260px] max-w-[260px] px-2 py-1">
+                          <div className="w-full max-w-[460px] truncate">
+                            <LookupField
+                              label="Detail Account"
+                              compact
+                              placeholder="A/c code"
+                              value={detail.ac_code}
+                              displayValue={detail.ac_name ? `${detail.ac_code} - ${detail.ac_name}` : detail.ac_code}
+                              columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "curr_code", header: "Currency" }]}
+                              valueField="ac_code"
+                              displayFields={["ac_code", "ac_name", "curr_code", "exp_type_code"]}
+                              loadOptions={() => getDynamicLookup({
+                                parameter: "Account_AC_CODE_Serach_HDR",
+                                code1: user?.company_code,
+                                code2: "D",
+                                code3: form.doc_type,
+                                code4: form.div_code
+                              })}
+                              disabled={disabled}
+                              onChange={(value, row) => void selectDetailAccount(detail, value, row)}
+                            />
+                          </div>
                         </td>
                         <td className="px-2 py-1 text-center">
                           <input
@@ -991,7 +1025,8 @@ function PaymentDocumentEditor({
                             type="radio"
                           />
                         </td>
-                        <td className="w-[220px] px-2 py-1"><Input disabled={disabled} value={detail.remarks || ""} onChange={(event) => updateDetail(detail.id, { remarks: event.target.value })} /></td>
+                        <td className="w-[220px] px-2 py-1"><textarea className="border border-gray-400 rounded p-1" disabled={disabled} value={detail.remarks || ""} onChange={(event) => updateDetail(detail.id, { remarks: event.target.value })} /></td>
+
                         <td className="w-[210px] px-2 py-1">
                           <LookupField
                             label="Currency"
@@ -1034,14 +1069,15 @@ function PaymentDocumentEditor({
                               const childRows = (form.children[detail.id] || []) as TransactionChildRow[];
                               if (detail.child_table !== "invoice" || childRows.length === 0) return null;
 
-                              const totalOutstanding = childRows.reduce(
-                                (sum, r) => sum + (Number(r.c_bal_amt_org) || 0), 0
-                              );
+                              const effectiveCeiling = childRows.reduce((sum, r) => {
+                                const outstanding = Number(r.c_bal_amt_org) || 0;
+                                const allocated = Number(r.amount) || 0;
+                                return sum + Math.max(outstanding, allocated);
+                              }, 0);
 
-                              // ✅ Compare user's typed detail amount against total outstanding
-                              return Number(detail.amount || 0) > totalOutstanding ? (
+                              return Number(detail.amount || 0) > effectiveCeiling + 0.001 ? (
                                 <span className="text-xs text-red-500">
-                                  Amount exceeds total outstanding ({totalOutstanding.toFixed(3)})
+                                  Amount exceeds total outstanding ({effectiveCeiling.toFixed(3)})
                                 </span>
                               ) : null;
                             })()}
@@ -1053,7 +1089,7 @@ function PaymentDocumentEditor({
                             <option value={-1}>Cr</option>
                           </Select>
                         </td>
-                        <td className="w-32 px-2 py-1">
+                        <td className="w-28 px-2 py-1">
                           <LookupField
                             label="Tax Code"
                             compact
@@ -1075,7 +1111,7 @@ function PaymentDocumentEditor({
                             onChange={(value) => updateDetail(detail.id, { tx_compntcat_code_1: value })}
                           />
                         </td>
-                        <td className="w-28 px-2 py-1">
+                        <td className="w-40 px-2 py-1">
                           <Select
                             disabled={disabled}
                             value={detail.tx_compnt_1_expmt || "N"}
@@ -1099,7 +1135,6 @@ function PaymentDocumentEditor({
                         <td className="w-28 px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" value={detail.tx_compnt_perc_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} /></td>
                         <td className="finance-amount-cell px-2 py-1"><Input className="finance-money-input" disabled={disabled} type="number" value={detail.tx_compnt_amt_1 ?? 0} onChange={(event) => updateDetail(detail.id, { tx_compnt_amt_1: Number(event.target.value || 0) })} /></td>
                         <td className="w-32 px-2 py-1"><Input disabled={disabled} value={detail.job_no || ""} onChange={(event) => updateDetail(detail.id, { job_no: event.target.value })} /></td>
-                        <td className="w-28 px-2 py-1"><Input disabled={disabled} value={detail.dept_code || ""} onChange={(event) => updateDetail(detail.id, { dept_code: event.target.value })} /></td>
                         <td className="finance-amount-cell px-2 py-1"><Input className="finance-money-input" disabled value={Math.abs(Number(detail.amount || 0) * Number(detail.ex_rate || form.ex_rate || 1))} /></td>
                         <td className="px-2 py-1"><Button disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => removeDetailRow(detail.id)}><X size={14} /></Button></td>
                       </tr>
@@ -1310,7 +1345,7 @@ function ChildAllocationTable({
                         type="number"
                         style={{ textAlign: "right" }}
                         step="0.001"
-                        value={Number(row.amount.toFixed(3) || 0)}
+                        value={Number(((Number(row.amount) || 0) * (Number(row.ex_rate) || 1)).toFixed(3))}
                         onChange={(event) =>
                           onChange(row.id, {
                             amount: Number(event.target.value || 0),
@@ -1323,11 +1358,13 @@ function ChildAllocationTable({
                         }
                       />
 
-                      {Number(row.amount || 0) > Number(row.c_bal_amt_org || 0) && (
-                        <span className="text-xs text-red-500">
-                          Amount exceeds available balance
-                        </span>
-                      )}
+                      {!row.isEditMode &&
+                        Number(row.c_bal_amt_org || 0) > 0 &&
+                        Number(row.amount || 0) > Number(row.c_bal_amt_org || 0) + 0.001 && (
+                          <span className="text-xs text-red-500">
+                            Amount exceeds available balance
+                          </span>
+                        )}
                     </div>
                   </td>
                 </>

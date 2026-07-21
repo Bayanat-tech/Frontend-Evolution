@@ -5,6 +5,7 @@ import {
   FileText,
   Folder,
   FolderOpen,
+  Info,
   Paperclip,
   Plus,
   RefreshCw,
@@ -34,6 +35,7 @@ import { Select } from "../../components/ui/Select";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { cn } from "../../lib/utils";
 import { useAuth } from "../../state/AuthContext";
+import { AccountDetails } from "./AccountDetail";
 
 type DialogState =
   | { mode: "create"; level: number; parent: AccountTreeNode }
@@ -205,16 +207,16 @@ const ACCOUNT_FORM_SECTIONS: Array<{
       { name: "exp_subtype_description", label: "Exp SubType Description" },
     ],
   },
-  {
-    title: "Approval",
-    fields: [
-      // { name: "cr_no", label: "CR No" },
-      // { name: "apprval_factor", label: "Approval Factor" },
-      // { name: "request_number", label: "Request Number" },
-      // { name: "ac_type", label: "Account Type" },
-      { name: "ac_active", label: "Active", type: "flag" },
-    ],
-  },
+  // {
+  //   title: "Approval",
+  //   fields: [
+  //     // { name: "cr_no", label: "CR No" },
+  //     // { name: "apprval_factor", label: "Approval Factor" },
+  //     // { name: "request_number", label: "Request Number" },
+  //     // { name: "ac_type", label: "Account Type" },
+  //     { name: "ac_active", label: "Active", type: "flag" },
+  //   ],
+  // },
 ];
 
 export function AccountTreePage() {
@@ -228,6 +230,8 @@ export function AccountTreePage() {
   const [deleteTarget, setDeleteTarget] = useState<AccountTreeNode | null>(null);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsNode, setDetailsNode] = useState<AccountTreeNode | null>(null);
 
   const loadTree = async (clearNotice = true) => {
     setLoading(true);
@@ -235,16 +239,7 @@ export function AccountTreePage() {
     try {
       const data = await getAccountTree();
       setTree(data);
-      setExpanded((prev) => {
-        const newExpanded = { ...prev };
-         const seed = seedExpansion(data);
-        flattenTree(data).forEach((node) => {
-          if (node.children && node.children.length > 0) {
-            newExpanded[node.id] = false;
-          }
-        });
-        return { ...seed, ...prev };
-      });
+      setExpanded(seedExpansion(data));
       setSelectedId((prev) => (prev && flattenTree(data).some((node) => node.id === prev) ? prev : data[0]?.id || ""));
       if (data.length === 0) {
         setNotice({
@@ -347,7 +342,10 @@ export function AccountTreePage() {
 
         <Card className="account-detail-panel overflow-hidden">
           {dialog ? (
-            <AccountNodeEditor dialog={dialog} onClose={() => setDialog(null)} onSaved={handleDialogSaved} />
+            <AccountNodeEditor dialog={dialog} onClose={() => setDialog(null)} onSaved={handleDialogSaved} onDetails={(node) => {       
+              setDetailsNode(node);
+               setDetailsOpen(true);
+             }}/>
           ) : selectedNode ? (
             <>
               <CardHeader className="detail-head flex-row items-center gap-4 space-y-0 border-b">
@@ -371,6 +369,13 @@ export function AccountTreePage() {
               </CardContent>
 
               <div className="detail-actions flex flex-wrap items-center justify-end gap-2 px-4 pb-4">
+                {/* Detail */}
+                 {/* {selectedNode.level === 5 && (
+                    <Button variant="outline" onClick={() => setDetailsOpen(true)}>
+                      <Info size={15} /> Details
+                    </Button>
+                 )} */}
+
                 {selectedNode.level === 5 && (
                   <Button variant="outline" onClick={() => setAttachmentOpen(true)}>
                     <Paperclip size={15} /> Attachments
@@ -410,6 +415,14 @@ export function AccountTreePage() {
         loginId={user?.loginid || user?.username || ""}
         flowLevel={selectedNode?.level || 0}
       />
+      {detailsOpen && detailsNode && (
+  <AccountDetails
+    acCode={detailsNode.id}
+    acName={detailsNode.label}
+    onClose={() => { setDetailsOpen(false); setDetailsNode(null); }}
+  />
+    )}
+
 
       {deleteTarget && (
         <Dialog
@@ -441,25 +454,27 @@ function TreeNodeView({
   expanded,
   setExpanded,
   setSelectedId,
+  depth = 0,
 }: {
   node: AccountTreeNode;
   selectedId: string;
   expanded: Record<string, boolean>;
   setExpanded: Dispatch<SetStateAction<Record<string, boolean>>>;
   setSelectedId: (id: string) => void;
+  depth?: number;
 }) {
   const hasChildren = node.children.length > 0;
   const isExpanded = expanded[node.id] ?? node.level <= 2;
   const selected = selectedId === node.id;
 
   return (
-    <div className="tree-node">
+    <div className="tree-node" data-depth={depth} data-selected={selected ? "true" : undefined}>
       <div
         className={cn(
           "tree-row flex min-h-8 items-center gap-1 rounded-md pr-2 text-sm hover:bg-accent",
           selected && "selected bg-primary/10 text-primary",
         )}
-        style={{ paddingLeft: 8 + node.level * 14 }}
+        style={{ paddingLeft: 8 }}
       >
         <button
           className="tree-caret grid h-7 w-6 place-items-center rounded border-0 bg-transparent text-muted-foreground disabled:cursor-default"
@@ -481,21 +496,26 @@ function TreeNodeView({
           {node.level >= 3 && <code className="ml-auto rounded border bg-card px-1.5 py-0.5 text-[11px] text-primary">{node.id}</code>}
         </button>
       </div>
-      {hasChildren && isExpanded && node.children.map((child) => (
-        <TreeNodeView
-          key={child.id}
-          node={child}
-          selectedId={selectedId}
-          expanded={expanded}
-          setExpanded={setExpanded}
-          setSelectedId={setSelectedId}
-        />
-      ))}
+      {hasChildren && isExpanded && (
+        <div className="tree-children">
+          {node.children.map((child) => (
+            <TreeNodeView
+              key={child.id}
+              node={child}
+              selectedId={selectedId}
+              expanded={expanded}
+              setExpanded={setExpanded}
+              setSelectedId={setSelectedId}
+              depth={depth + 1}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function AccountNodeEditor({ dialog, onClose, onSaved }: { dialog: DialogState; onClose: () => void; onSaved: (message?: string) => Promise<void> }) {
+function AccountNodeEditor({ dialog, onClose, onSaved, onDetails }: { dialog: DialogState; onClose: () => void; onSaved: (message?: string) => Promise<void>; onDetails: (node: AccountTreeNode) => void }) {
   const isEdit = dialog?.mode === "edit";
   const level = isEdit ? dialog.node.level : dialog?.level || 2;
   const parent = dialog?.mode === "create" ? dialog.parent : null;
@@ -513,8 +533,19 @@ function AccountNodeEditor({ dialog, onClose, onSaved }: { dialog: DialogState; 
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [showDetails, setShowDetails] = useState(false);
 
   if (!dialog) return null;
+
+  if (showDetails && node) {
+    return (
+      <AccountDetails
+        acCode={node.id}
+        acName={node.label}
+        onClose={() => setShowDetails(false)}  // ← Back goes to editor
+      />
+    );
+  }
 
   const title = `${isEdit ? "Edit" : "Add"} Level ${level}${level === 5 ? " Account" : ""}`;
 
@@ -667,6 +698,13 @@ function AccountNodeEditor({ dialog, onClose, onSaved }: { dialog: DialogState; 
       </form>
 
       <div className="flex items-center justify-end gap-2 border-t bg-card p-4">
+         <div>
+    {isEdit && level === 5 && node && (
+      <Button variant="outline" type="button" onClick={() => onDetails(node)}>
+        <Info size={15} /> Details
+      </Button>
+    )}
+  </div>
         <Button variant="outline" type="button" onClick={onClose}>Cancel</Button>
         <Button disabled={saving} type="submit" form="account-node-form">
           {saving ? <span className="spinner small" /> : "Save"}
@@ -780,15 +818,15 @@ function AccountLevelFiveForm({
       columns: ["1", "2", "3"].includes(value.l4_code.slice(0, 1))
         ? [
             { field: "bl_code", header: "Code" },
-            { field: "bl_name", header: "Name" },
+            { field: "bl_description", header: "Description" },
           ]
         : [
             { field: "pl_code", header: "Code" },
-            { field: "pl_name", header: "Name" },
+            { field: "pl_description", header: "Description" },
           ],
       valueField: ["1", "2", "3"].includes(value.l4_code.slice(0, 1)) ? "bl_code" : "pl_code",
-      displayFields: ["1", "2", "3"].includes(value.l4_code.slice(0, 1)) ? ["bl_code", "bl_name"] : ["pl_code", "pl_name"],
-      loadOptions: () => getMasterLookup("wms", ["1", "2", "3"].includes(value.l4_code.slice(0, 1)) ? "bl_setup" : "pl_setup"),
+      displayFields: ["1", "2", "3"].includes(value.l4_code.slice(0, 1)) ? ["bl_code", "bl_description"] : ["pl_code", "pl_description"],
+      loadOptions: () => getMasterLookup("finance", ["1", "2", "3"].includes(value.l4_code.slice(0, 1)) ? "bl_setup" : "pl_setup"),
       onChange: (nextValue) => setField("pl_bl_code", nextValue),
     },
     exp_type_description: {
@@ -1066,7 +1104,7 @@ function flattenTree(nodes: AccountTreeNode[]): AccountTreeNode[] {
 function seedExpansion(nodes: AccountTreeNode[]) {
   const next: Record<string, boolean> = {};
   flattenTree(nodes).forEach((node) => {
-    if (node.level <= 2) next[node.id] = true;
+    if (node.children && node.children.length > 0) next[node.id] = false;
   });
   return next;
 }
