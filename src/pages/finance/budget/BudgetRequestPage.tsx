@@ -81,7 +81,7 @@ export function BudgetRequestPage({ onClose }: { onClose?: () => void } = {}) {
   // };
 const fetchBudgetRequests = async () => {
   const response = await getDynamicLookup({
-    parameter: "MS_BUDGET_ACCOUNT_TAB__List",
+    parameter: "MS_BUDGET_ACCOUNT_TAB_List",
     code1: user?.company_code,
     code2: user?.loginid || user?.username || "ADMIN",
     code3: tab,
