@@ -6,30 +6,30 @@ import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { useAuth } from "../../state/AuthContext";
-import { AddProductBrandForm } from "./Addproductbrandform";
+import { AddZoneMasterForm } from "./PS_AddZoneMasterPage";
 
-
-type ProductBrandRow = {
-  company_code: string;
-  brand_code: string;
-  brand_name: string;
-  user_id: string;
-  user_dt: string;
+// ─── Types ──────────────────────────────────────────────────────────────────
+// Field set matches the OLD dw_erp_zone DataWindow / MSE_ZONE table exactly
+// (COMPANY_CODE, ZONE_CODE, ZONE_NAME, USER_ID, USER_DT) — no invented
+// columns, since the old grid only ever exposed code + name.
+type ZoneRow = {
+  zone_code: string;
+  zone_name: string;
   [key: string]: unknown;
 };
 
 type PopupState = {
   open: boolean;
   mode: "add" | "edit" | "view";
-  data: Partial<ProductBrandRow>;
+  data: Partial<ZoneRow>;
 };
 
-
-const PURCHASE_SALE_MSE_PRODBRAND = "PURCHASE_SALE_MSE_PRODBRAND";
-const PURCHASE_SALE_MSE_PRODBRAND_DELETE = "PURCHASE_SALE_MSE_PRODBRAND_DELETE";
-
+// ─── Lookup / delete params — VERIFY against the actual DB proc names ──────
+// Placeholder parameter names below — swap for the real
+// PROC_BUILD_DYNAMIC_LOOKUP / PROC_BUILD_DYNAMIC_DELETE entries for
+// MSE_ZONE if these differ.
 const baseParams = (loginid: string, companyCode: string) => ({
-  parameter: PURCHASE_SALE_MSE_PRODBRAND,
+  parameter: "PURCHASE_SALE_MSE_ZONE",
   loginid,
   code1: companyCode,
   code2: "NULL",
@@ -45,40 +45,46 @@ const baseParams = (loginid: string, companyCode: string) => ({
   date4: null,
 });
 
+// ─── Normalizer ─────────────────────────────────────────────────────────────
+// Same defensive mapping used on Product Category — the API may return
+// upper/lower cased keys (zone_code / ZONE_CODE) that don't line up 1:1 with
+// what the grid/form expect. Normalizing once here at the fetch boundary
+// avoids touching every consumer if casing differs by environment.
+const normalizeRow = (r: any): ZoneRow => ({
+  ...r,
+  zone_code: r.zone_code ?? r.ZONE_CODE ?? "",
+  zone_name: r.zone_name ?? r.ZONE_NAME ?? "",
+});
 
-export function ProductBrandPage() {
+export function ZoneMasterPage() {
   const { user } = useAuth();
-  const loginid = user?.loginid || "ADMIN";
-  const companyCode = user?.company_code || "";
+  const loginid = user?.loginid ?? "";
+  const companyCode = user?.company_code ?? "";
 
-  const [rows, setRows] = useState<ProductBrandRow[]>([]);
+  const [rows, setRows] = useState<ZoneRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(
+    null,
+  );
   const [popup, setPopup] = useState<PopupState>({ open: false, mode: "add", data: {} });
-  const [deleteTarget, setDeleteTarget] = useState<ProductBrandRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ZoneRow | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // ─── FETCH: Main grid data ──────────────────────────────────────────────
   const loadRows = useCallback(async () => {
     if (!companyCode) return;
     setLoading(true);
     setNotice(null);
     try {
       const data = await getDynamicLookupaccount(baseParams(loginid, companyCode));
-      const raw = Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
-      const list: ProductBrandRow[] = raw.map((r) => ({
-        ...(r as ProductBrandRow),
-        company_code: String(r.company_code ?? r.COMPANY_CODE ?? companyCode),
-        brand_code: String(r.brand_code ?? r.BRAND_CODE ?? ""),
-        brand_name: String(r.brand_name ?? r.BRAND_NAME ?? ""),
-        user_id: String(r.user_id ?? r.USER_ID ?? ""),
-        user_dt: String(r.user_dt ?? r.USER_DT ?? ""),
-      }));
-     setRows(list);
+      const list = Array.isArray(data) ? data : [];
+      setRows(list.map(normalizeRow));
     } catch (error) {
       setNotice({
         type: "error",
-        message: error instanceof Error ? error.message : "Unable to load product brand records",
+        message: error instanceof Error ? error.message : "Unable to load zone records",
       });
+      setRows([]);
     } finally {
       setLoading(false);
     }
@@ -88,38 +94,48 @@ export function ProductBrandPage() {
     void loadRows();
   }, [loadRows]);
 
+  // ─── DELETE ─────────────────────────────────────────────────────────────
   const confirmDelete = async () => {
     if (!deleteTarget) return;
+    const zoneCode = deleteTarget.zone_code ?? (deleteTarget as any).ZONE_CODE ?? "";
+
+    if (!zoneCode) {
+      console.error("Missing zone_code for delete:", deleteTarget);
+      setDeleteTarget(null);
+      return;
+    }
+
     setDeleting(true);
     setNotice(null);
     try {
       await executeDynamicDelete({
-        parameter: PURCHASE_SALE_MSE_PRODBRAND_DELETE,
+        parameter: "PURCHASE_SALE_MSE_ZONE_DELETE",
         loginid,
         code1: companyCode,
-        code2: deleteTarget.brand_code,
+        code2: String(zoneCode),
       });
       setDeleteTarget(null);
-      setNotice({ type: "success", message: `Brand ${deleteTarget.brand_code} deleted successfully.` });
+      setNotice({ type: "success", message: `Zone ${zoneCode} deleted successfully.` });
       await loadRows();
     } catch (error) {
       setNotice({
         type: "error",
-        message: error instanceof Error ? error.message : "Unable to delete product brand record",
+        message: error instanceof Error ? error.message : "Unable to delete zone",
       });
     } finally {
       setDeleting(false);
     }
   };
 
-  const columns = useMemo<ColumnDef<ProductBrandRow>[]>(
+  // ─── COLUMNS — same columns as the old page (Zone Code, Zone Name) ────
+  const columns = useMemo<ColumnDef<ZoneRow>[]>(
     () => [
-      { accessorKey: "brand_code", header: "Brand Code", size: 140, enableSorting: false },
-      { accessorKey: "brand_name", header: "Brand Name", size: 260, enableSorting: false },
+      { accessorKey: "zone_code", header: "Zone Code", size: 160 },
+      { accessorKey: "zone_name", header: "Zone Name", size: 260 },
       {
         id: "actions",
         header: "Actions",
-        size: 100,
+        size: 120,
         enableColumnFilter: false,
         cell: ({ row }) => (
           <div className="flex items-center gap-1">
@@ -158,9 +174,9 @@ export function ProductBrandPage() {
     <section className="grid gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="m-0 text-2xl font-semibold text-foreground">Product Brand Master</h1>
+          <h1 className="m-0 text-2xl font-semibold text-foreground">Zone Master</h1>
           <p className="m-0 mt-1 text-sm text-muted-foreground">
-            Manage product brand codes used across purchase and sales documents.
+            Manage zone master records.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -168,7 +184,7 @@ export function ProductBrandPage() {
             <RefreshCw size={15} /> Refresh
           </Button>
           <Button onClick={() => setPopup({ open: true, mode: "add", data: {} })}>
-            <Plus size={15} /> Add Brand
+            <Plus size={15} /> Create Zone
           </Button>
         </div>
       </div>
@@ -183,15 +199,18 @@ export function ProductBrandPage() {
         columns={columns}
         data={rows}
         title={`${rows.length.toLocaleString()} Records`}
-        subtitle="Product Brand List"
-        searchPlaceholder="Search brand code, name..."
+        subtitle="Zone Master List"
+        searchPlaceholder="Search code, name..."
         loading={loading}
         height={560}
         minWidth={700}
         density="grid"
         enablePagination
         pageSize={100}
-        getRowId={(row) => `${row.company_code}-${row.brand_code}`}
+        getRowId={(row) => {
+          const zoneCode = row.zone_code ?? (row as any).ZONE_CODE ?? "";
+          return String(zoneCode);
+        }}
       />
 
       {popup.open && (
@@ -199,15 +218,14 @@ export function ProductBrandPage() {
           open
           title={
             popup.mode === "add"
-              ? "Add Brand"
+              ? "Add Zone"
               : popup.mode === "edit"
-                ? "Edit Brand"
-                : "View Brand"
+                ? "Edit Zone"
+                : "View Zone"
           }
-          wide
           onClose={() => setPopup((p) => ({ ...p, open: false }))}
         >
-          <AddProductBrandForm
+          <AddZoneMasterForm
             mode={popup.mode}
             existingData={popup.data}
             onClose={(shouldRefetch?: boolean) => {
@@ -220,7 +238,7 @@ export function ProductBrandPage() {
 
       <Dialog
         open={Boolean(deleteTarget)}
-        title="Delete Brand"
+        title="Delete Zone"
         description="This action cannot be undone."
         compact
         tone="danger"
@@ -237,7 +255,7 @@ export function ProductBrandPage() {
         }
       >
         <p className="text-sm text-muted-foreground">
-          Confirm delete for brand code <strong>{deleteTarget?.brand_code}</strong>?
+          Confirm delete for zone <strong>{deleteTarget?.zone_code}</strong>?
         </p>
       </Dialog>
     </section>
