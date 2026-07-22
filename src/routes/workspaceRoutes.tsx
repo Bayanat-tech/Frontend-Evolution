@@ -921,20 +921,20 @@ export const workspaceRoutes: WorkspaceRoute[] = [
 
   {
   name: "Purchase Sales Product Type",
-  match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/purchase_sales/purchase_sales/masters/product%20type"),
+  match: ({ pathname }) => isProductTypeRoute(pathname),
   element: () => <ProductTypePage />,
   },
 
 
   {
   name: "Purchase Sales Product Category",
-  match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/purchase_sales/purchase_sales/masters/product%20category"),
+  match: ({ pathname }) => isProductCategoryRoute(pathname),
   element: () => <ProductCategoryPage />,
   },
 
    {
   name: "Purchase Sales Zone Master",
-  match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/purchase_sales/purchase_sales/masters/zone%20master"),
+  match: ({ pathname }) => isZoneMasterRoute(pathname),
   element: () => <ZoneMasterPage />,
   },
 
@@ -1837,6 +1837,38 @@ function isHrTrainingFeedbackRoute(context: WorkspaceRouteContext) {
     compact.includes("trainingfeedback") ||
     normalized.includes("training_feedback") ||
     normalized.includes("training-feedback")
+  );
+}
+
+function isProductTypeRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+    normalized.includes("/purchase_sales/purchase_sales/masters/product%20type") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/product_type") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/product-type")
+  );
+}
+
+
+function isProductCategoryRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+    normalized.includes("/purchase_sales/purchase_sales/masters/product%20category") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/product_category") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/product-category")
+  );
+}
+
+
+function isZoneMasterRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+    normalized.includes("/purchase_sales/purchase_sales/masters/zone%20master") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/zone_master") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/zone-master")
   );
 }
 
