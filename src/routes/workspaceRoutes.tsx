@@ -921,20 +921,20 @@ export const workspaceRoutes: WorkspaceRoute[] = [
 
   {
   name: "Purchase Sales Product Type",
-  match: ({ pathname }) => isProductTypeRoute(pathname),
+  match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/purchase_sales/purchase_sales/masters/product%20type"),
   element: () => <ProductTypePage />,
   },
 
 
   {
   name: "Purchase Sales Product Category",
-  match: ({ pathname }) => isProductCategoryRoute(pathname),
+  match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/purchase_sales/purchase_sales/masters/product%20category"),
   element: () => <ProductCategoryPage />,
   },
 
    {
   name: "Purchase Sales Zone Master",
-  match: ({ pathname }) => isZoneMasterRoute(pathname),
+  match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/purchase_sales/purchase_sales/masters/zone%20master"),
   element: () => <ZoneMasterPage />,
   },
 
@@ -1112,6 +1112,87 @@ function isAgeingReportRoute(pathname: string) {
   return normalized.includes("/finance/accounts_report/ageing/period_wise") || normalized.includes("/finance/accounts/reports/ageing/period_wise/PeriodWisePage");
 }
 
+function isHrJoiningRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("hrjoining") ||
+    compact.includes("joiningform") ||
+    compact.includes("hrjoin") ||
+    normalized.includes("hr_joining") ||
+    normalized.includes("joining_form") ||
+    normalized.includes("cam_join")
+  );
+}
+
+function isHrEmployeeInformationRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+
+  return (
+    compact.includes("employeeinformation") ||
+    normalized.includes("employee_information") ||
+    normalized.includes("employee-information")
+  );
+}
+
+function isHrEmpEducationRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("empeducation") ||
+    compact.includes("educationqualification") ||
+    normalized.includes("emp_education") ||
+    normalized.includes("educational_qualification") ||
+    normalized.includes("education_qualification")
+  );
+}
+
+function isHrManpowerRequisitionRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("manpowerrequisition") ||
+    compact.includes("confirmationreview") ||
+    normalized.includes("manpower_requisition") ||
+    normalized.includes("manpower-requisition") ||
+    normalized.includes("confirmation_review")
+  );
+}
+
+function isHrContinuousAutoMemoRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("continuousautomemo") ||
+    normalized.includes("continuous_auto_memo") ||
+    normalized.includes("continuous-auto-memo")
+  );
+}
+
+function isHrApplicantInfoRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("applicantinfo") ||
+    compact.includes("applicantinformation") ||
+    normalized.includes("applicant_info") ||
+    normalized.includes("applicant-info")
+  );
+}
+
+
+function isHrInterviewEvalRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("intervieweval") ||
+    compact.includes("interviewevaluation") ||
+    normalized.includes("interview_eval") ||
+    normalized.includes("int_eval")
+  );
+}
+
 
 
 function getCreditDebitNoteDocType(pathname: string) {
@@ -1268,6 +1349,35 @@ function isStockSummaryRoute(pathname: string) {
 
   return stockReportPath && stockSummarySegment;
 }
+
+function isStockAgeingQuantityRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+    normalized.includes("/wms/wms/reports/stock%20report/stock_ageing_quantity") ||
+    normalized.includes("/wms/wms/reports/stock_report/stock_ageing_quantity") ||
+    normalized.includes("/wms/wms/reports/stock-report/stock_ageing_quantity") ||
+
+    normalized.includes("/wms/reports/stock%20report/stock_ageing_quantity") ||
+    normalized.includes("/wms/reports/stock_report/stock_ageing_quantity") ||
+    normalized.includes("/wms/reports/stock-report/stock_ageing_quantity")
+  );
+}
+
+function isStockAgeingVolumeRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+    normalized.includes("/wms/wms/reports/stock%20report/stock_ageing_volume") ||
+    normalized.includes("/wms/wms/reports/stock_report/stock_ageing_volume") ||
+    normalized.includes("/wms/wms/reports/stock-report/stock_ageing_volume") ||
+
+    normalized.includes("/wms/reports/stock%20report/stock_ageing_volume") ||
+    normalized.includes("/wms/reports/stock_report/stock_ageing_volume") ||
+    normalized.includes("/wms/reports/stock-report/stock_ageing_volume")
+  );
+}
+
 function isAssetDepreciationRoute(pathname: string) {
   return pathname.toLowerCase().includes("/finance/a/c_others/assets/asset_depreciation");
 }
