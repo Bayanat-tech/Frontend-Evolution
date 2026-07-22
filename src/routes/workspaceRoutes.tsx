@@ -25,7 +25,6 @@ import { WmsSimpleMasterPage } from "../pages/wms/WmsSimpleMasterPage";
 import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
 import { FreightMasterPage } from "../pages/freight/FreightMasterPage";
 import { freightMasterConfigs } from "../pages/freight/freightMasterConfigs";
-import { FreightEnquiryActivitiesPage } from "../pages/freight/FreightEnquiryActivitiesPage";
 import { FreightEnquiryMainPage } from "../pages/freight/FreightEnquiryMainPage";
 import { FreightWorkspacePage } from "../pages/freight/FreightWorkspacePage";
 import { SecurityAssignmentPage, securityAssignmentConfigs } from "../pages/security/SecurityAssignmentPage";
@@ -572,7 +571,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: "Freight RFQ Activities",
     match: (context) => isFreightRfqActivitiesRoute(context),
-    element: () => <FreightEnquiryActivitiesPage screenType="rfq" />,
+    element: (context) => <FreightEnquiryMainPage target={getFreightWorkspaceTarget(context)} screenType="rfq" />,
   },
   {
     name: "Freight RFQ",
@@ -582,7 +581,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: "Freight Enquiry Activities",
     match: (context) => isFreightEnquiryActivitiesRoute(context),
-    element: () => <FreightEnquiryActivitiesPage />,
+    element: (context) => <FreightEnquiryMainPage target={getFreightWorkspaceTarget(context)} />,
   },
   {
     name: "Freight Enquiry",
