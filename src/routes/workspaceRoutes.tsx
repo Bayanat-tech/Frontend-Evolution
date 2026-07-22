@@ -145,6 +145,8 @@ import { ZoneMasterPage } from "../pages/purchase_sales/PS_ZoneMasterPage";
 
 import Mytaskalmspage from "../pages/almswf/Mytaskalmspage";
 
+import { StockInquiryPage } from "../pages/purchase_sales/PS_StockInquiry";
+
 type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -948,6 +950,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name : "Expense Master",
     match: ({pathname}) => isExpenseMasterRoute(pathname),
     element: () => <ExpenseMasterPage/>
+  },
+
+
+  {
+  name: "Purchase Sales Stock Inquiry",
+  match: ({ pathname }) => isStockInquiryRoute(pathname),
+  element: () => <StockInquiryPage />,
   },
   
 ];
@@ -1872,4 +1881,9 @@ function isZoneMasterRoute(pathname: string) {
   );
 }
 
-
+function isStockInquiryRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/inquiry/stock%20inquiry"
+  );
+}
