@@ -133,6 +133,18 @@ import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/As
 
 import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation";
 import StockCountPage from "../pages/wms/stock count/StockCountPage";
+import{ExpenseMasterPage} from "../pages/purchase_sales/Expensemasterpage";
+import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
+
+
+import {ProductTypePage} from "../pages/purchase_sales/PS_ProductTypePage";
+
+import { ProductCategoryPage } from "../pages/purchase_sales/PS_ProductCategory";
+
+import { ZoneMasterPage } from "../pages/purchase_sales/PS_ZoneMasterPage";
+
+import Mytaskalmspage from "../pages/almswf/Mytaskalmspage";
+
 type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -585,6 +597,43 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: (context) => <SecurityMasterPage config={getSecurityMasterConfig(context)!} />,
   },
 
+   // ── ALMS My Task Routes (specific tabs first, then generic fallback) ──
+  {
+    name: "ALMS My Task Pending",
+    match: (context) => isAlmsMyTaskTabRoute(context, ["pending"]),
+    element: () => <Mytaskalmspage initialTab={0} />,
+  },
+  {
+    name: "ALMS My Task In Progress",
+    match: (context) => isAlmsMyTaskTabRoute(context, ["in_progress", "in-progress"]),
+    element: () => <Mytaskalmspage initialTab={1} />,
+  },
+  {
+    name: "ALMS My Task Rejected",
+    match: (context) => isAlmsMyTaskTabRoute(context, ["rejected"]),
+    element: () => <Mytaskalmspage initialTab={2} />,
+  },
+  {
+    name: "ALMS My Task Sent Back",
+    match: (context) => isAlmsMyTaskTabRoute(context, ["sent_back", "sent-back"]),
+    element: () => <Mytaskalmspage initialTab={3} />,
+  },
+  {
+    name: "ALMS My Task Approved",
+    match: (context) => isAlmsMyTaskTabRoute(context, ["approved", "final_approved", "final-approved"]),
+    element: () => <Mytaskalmspage initialTab={4} />,
+  },
+  {
+    name: "ALMS My Task Po Generated",
+    match: (context) => isAlmsMyTaskTabRoute(context, ["po_generated", "po-generated"]),
+    element: () => <Mytaskalmspage initialTab={5} />,
+  },
+  {
+    name: 'My Task',
+    match:(context) => isMyTaskRoute(context),
+    element: () => <Mytaskalmspage initialTab={0} />
+  },
+
   //// PAMS Routes
   {
     name: "PAMS Dashboard",
@@ -772,6 +821,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isPamsRoute(pathname) && isPamsAppraisalWeightageRoute(pathname),
     element: () => <AppraisalWeightageMaster />,
   },
+ 
   {
     name: "Application Progress",
     match: (context) => isApplicationProgressRoute(context),
@@ -857,6 +907,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   element: () => <KpiEmployeeInformationPage />,
 },
 
+
 {
     name: "HR Payroll Account Setup",
     match: (context) => isHrRoute(context) && isHrPayrollAccountSetupRoute(context),
@@ -867,11 +918,61 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => Boolean(getHrMasterConfig(context)),
     element: (context) => <HrMasterPage config={getHrMasterConfig(context)!} />,
   },
+
+  {
+  name: "Purchase Sales Product Type",
+  match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/purchase_sales/purchase_sales/masters/product%20type"),
+  element: () => <ProductTypePage />,
+  },
+
+
+  {
+  name: "Purchase Sales Product Category",
+  match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/purchase_sales/purchase_sales/masters/product%20category"),
+  element: () => <ProductCategoryPage />,
+  },
+
+   {
+  name: "Purchase Sales Zone Master",
+  match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/purchase_sales/purchase_sales/masters/zone%20master"),
+  element: () => <ZoneMasterPage />,
+  },
+
+  {
+    name : "Product Brand",
+    match: ({pathname}) => isProductBrandRoute(pathname),
+    element: () => <ProductBrandPage/>
+  },
+
+  {
+    name : "Expense Master",
+    match: ({pathname}) => isExpenseMasterRoute(pathname),
+    element: () => <ExpenseMasterPage/>
+  },
+  
 ];
 
 function isStorageComputationRoute(pathname: string) {
   return pathname.toLowerCase().includes("wms/activity/request/storage_computation");
 }
+
+
+
+//--------PURCHASE SALE-------
+function isExpenseMasterRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/masters/expense_master"
+  );
+}
+
+function isProductBrandRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/masters/product_brand"
+  );
+}
+
 
 function isStockAdjViewRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -1009,6 +1110,87 @@ function isOutstandingStatementRoute(pathname: string) {
 function isAgeingReportRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/finance/accounts_report/ageing/period_wise") || normalized.includes("/finance/accounts/reports/ageing/period_wise/PeriodWisePage");
+}
+
+function isHrJoiningRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("hrjoining") ||
+    compact.includes("joiningform") ||
+    compact.includes("hrjoin") ||
+    normalized.includes("hr_joining") ||
+    normalized.includes("joining_form") ||
+    normalized.includes("cam_join")
+  );
+}
+
+function isHrEmployeeInformationRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+
+  return (
+    compact.includes("employeeinformation") ||
+    normalized.includes("employee_information") ||
+    normalized.includes("employee-information")
+  );
+}
+
+function isHrEmpEducationRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("empeducation") ||
+    compact.includes("educationqualification") ||
+    normalized.includes("emp_education") ||
+    normalized.includes("educational_qualification") ||
+    normalized.includes("education_qualification")
+  );
+}
+
+function isHrManpowerRequisitionRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("manpowerrequisition") ||
+    compact.includes("confirmationreview") ||
+    normalized.includes("manpower_requisition") ||
+    normalized.includes("manpower-requisition") ||
+    normalized.includes("confirmation_review")
+  );
+}
+
+function isHrContinuousAutoMemoRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("continuousautomemo") ||
+    normalized.includes("continuous_auto_memo") ||
+    normalized.includes("continuous-auto-memo")
+  );
+}
+
+function isHrApplicantInfoRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("applicantinfo") ||
+    compact.includes("applicantinformation") ||
+    normalized.includes("applicant_info") ||
+    normalized.includes("applicant-info")
+  );
+}
+
+
+function isHrInterviewEvalRoute(context: WorkspaceRouteContext) {
+  const normalized = getHrMatchText(context);
+  const compact    = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    compact.includes("intervieweval") ||
+    compact.includes("interviewevaluation") ||
+    normalized.includes("interview_eval") ||
+    normalized.includes("int_eval")
+  );
 }
 
 
@@ -1167,6 +1349,35 @@ function isStockSummaryRoute(pathname: string) {
 
   return stockReportPath && stockSummarySegment;
 }
+
+function isStockAgeingQuantityRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+    normalized.includes("/wms/wms/reports/stock%20report/stock_ageing_quantity") ||
+    normalized.includes("/wms/wms/reports/stock_report/stock_ageing_quantity") ||
+    normalized.includes("/wms/wms/reports/stock-report/stock_ageing_quantity") ||
+
+    normalized.includes("/wms/reports/stock%20report/stock_ageing_quantity") ||
+    normalized.includes("/wms/reports/stock_report/stock_ageing_quantity") ||
+    normalized.includes("/wms/reports/stock-report/stock_ageing_quantity")
+  );
+}
+
+function isStockAgeingVolumeRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+    normalized.includes("/wms/wms/reports/stock%20report/stock_ageing_volume") ||
+    normalized.includes("/wms/wms/reports/stock_report/stock_ageing_volume") ||
+    normalized.includes("/wms/wms/reports/stock-report/stock_ageing_volume") ||
+
+    normalized.includes("/wms/reports/stock%20report/stock_ageing_volume") ||
+    normalized.includes("/wms/reports/stock_report/stock_ageing_volume") ||
+    normalized.includes("/wms/reports/stock-report/stock_ageing_volume")
+  );
+}
+
 function isAssetDepreciationRoute(pathname: string) {
   return pathname.toLowerCase().includes("/finance/a/c_others/assets/asset_depreciation");
 }
@@ -1258,6 +1469,29 @@ function getAlmsSimpleMasterConfig(pathname: string) {
     .flatMap((config) => (config.routeKeys || [config.master]).map((key) => ({ config, key: key.toLowerCase() })))
     .sort((a, b) => b.key.length - a.key.length);
   return matches.find(({ key }) => normalized.includes(`/${key}`) || normalized.includes(`/${key.replace(/_/g, "-")}`))?.config || null;
+}
+
+function isAlmsRoute(pathname: string) {
+  return pathname.toLowerCase().includes("/almswf/");
+}
+
+function isMyTaskRoute(context: WorkspaceRouteContext) {
+  const normalized = getGenericMatchText(context);
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    isAlmsRoute(context.pathname) &&
+    (normalized.includes("/my_task") ||
+      normalized.includes("/my-task") ||
+      compact.includes("mytask")) &&
+    !normalized.includes("/view/") &&
+    !normalized.includes("/edit/")
+  );
+}
+
+function isAlmsMyTaskTabRoute(context: WorkspaceRouteContext, tabKeys: string[]) {
+  if (!isMyTaskRoute(context)) return false;
+  const normalized = getGenericMatchText(context);
+  return tabKeys.some((key) => normalized.includes(`/${key}`));
 }
 
 function isSecurityContext({ pathname, activeApp }: WorkspaceRouteContext) {
@@ -1607,112 +1841,3 @@ function isHrTrainingFeedbackRoute(context: WorkspaceRouteContext) {
 }
 
 
-function isHrContinuousAutoMemoRoute(context: WorkspaceRouteContext) {
-  const normalized = getHrMatchText(context);
-  const compact    = normalized.replace(/[^a-z0-9]/g, "");
-  return (
-    compact.includes("continuousautomemo") ||
-    normalized.includes("continuous_auto_memo") ||
-    normalized.includes("continuous-auto-memo")
-  );
-}
-
-function isHrApplicantInfoRoute(context: WorkspaceRouteContext) {
-  const normalized = getHrMatchText(context);
-  const compact    = normalized.replace(/[^a-z0-9]/g, "");
-  return (
-    compact.includes("applicantinfo") ||
-    compact.includes("applicantinformation") ||
-    normalized.includes("applicant_info") ||
-    normalized.includes("applicant-info")
-  );
-}
-
-
-function isHrInterviewEvalRoute(context: WorkspaceRouteContext) {
-  const normalized = getHrMatchText(context);
-  const compact    = normalized.replace(/[^a-z0-9]/g, "");
-  return (
-    compact.includes("intervieweval") ||
-    compact.includes("interviewevaluation") ||
-    normalized.includes("interview_eval") ||
-    normalized.includes("int_eval")
-  );
-}
-
-function isHrJoiningRoute(context: WorkspaceRouteContext) {
-  const normalized = getHrMatchText(context);
-  const compact    = normalized.replace(/[^a-z0-9]/g, "");
-  return (
-    compact.includes("hrjoining") ||
-    compact.includes("joiningform") ||
-    compact.includes("hrjoin") ||
-    normalized.includes("hr_joining") ||
-    normalized.includes("joining_form") ||
-    normalized.includes("cam_join")
-  );
-}
-
-function isHrEmpEducationRoute(context: WorkspaceRouteContext) {
-  const normalized = getHrMatchText(context);
-  const compact    = normalized.replace(/[^a-z0-9]/g, "");
-  return (
-    compact.includes("empeducation") ||
-    compact.includes("educationqualification") ||
-    normalized.includes("emp_education") ||
-    normalized.includes("educational_qualification") ||
-    normalized.includes("education_qualification")
-  );
-}
-
-function isHrManpowerRequisitionRoute(context: WorkspaceRouteContext) {
-  const normalized = getHrMatchText(context);
-  const compact    = normalized.replace(/[^a-z0-9]/g, "");
-  return (
-    compact.includes("manpowerrequisition") ||
-    compact.includes("confirmationreview") ||
-    normalized.includes("manpower_requisition") ||
-    normalized.includes("manpower-requisition") ||
-    normalized.includes("confirmation_review")
-  );
-}
-
-function isStockAgeingQuantityRoute(pathname: string) {
-  const normalized = pathname.toLowerCase();
-
-  return (
-    normalized.includes("/wms/wms/reports/stock%20report/stock_ageing_quantity") ||
-    normalized.includes("/wms/wms/reports/stock_report/stock_ageing_quantity") ||
-    normalized.includes("/wms/wms/reports/stock-report/stock_ageing_quantity") ||
-
-    normalized.includes("/wms/reports/stock%20report/stock_ageing_quantity") ||
-    normalized.includes("/wms/reports/stock_report/stock_ageing_quantity") ||
-    normalized.includes("/wms/reports/stock-report/stock_ageing_quantity")
-  );
-}
-
-function isStockAgeingVolumeRoute(pathname: string) {
-  const normalized = pathname.toLowerCase();
-
-  return (
-    normalized.includes("/wms/wms/reports/stock%20report/stock_ageing_volume") ||
-    normalized.includes("/wms/wms/reports/stock_report/stock_ageing_volume") ||
-    normalized.includes("/wms/wms/reports/stock-report/stock_ageing_volume") ||
-
-    normalized.includes("/wms/reports/stock%20report/stock_ageing_volume") ||
-    normalized.includes("/wms/reports/stock_report/stock_ageing_volume") ||
-    normalized.includes("/wms/reports/stock-report/stock_ageing_volume")
-  );
-}
-
-
-function isHrEmployeeInformationRoute(context: WorkspaceRouteContext) {
-  const normalized = getHrMatchText(context);
-  const compact = normalized.replace(/[^a-z0-9]/g, "");
-
-  return (
-    compact.includes("employeeinformation") ||
-    normalized.includes("employee_information") ||
-    normalized.includes("employee-information")
-  );
-}
