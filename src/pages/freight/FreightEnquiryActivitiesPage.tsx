@@ -35,11 +35,12 @@ const transportModes = [
   { value: "R", label: "Road" },
 ];
 
-export function FreightEnquiryActivitiesPage() {
+export function FreightEnquiryActivitiesPage({ screenType = "enquiry" }: { screenType?: "enquiry" | "rfq" }) {
   const { user } = useAuth();
   const userInfo = user as Record<string, unknown> | null;
+  const isRfq = screenType === "rfq";
   const [companyCode, setCompanyCode] = useState(String(userInfo?.company_code || userInfo?.COMPANY_CODE || ""));
-  const [enquiryType, setEnquiryType] = useState("ENQ");
+  const [enquiryType, setEnquiryType] = useState(isRfq ? "RFQ" : "EQI");
   const [enquiryNr, setEnquiryNr] = useState("");
   const [prinCode, setPrinCode] = useState("");
   const [rows, setRows] = useState<ActivityRow[]>([emptyRow(1)]);
@@ -72,7 +73,7 @@ export function FreightEnquiryActivitiesPage() {
     setLoading(true);
     setNotice(null);
     try {
-      const response = await api.post<{ success?: boolean; data?: ActivityRow[]; message?: string }>("/api/freight/enquiry-activities/list", {
+      const response = await api.post<{ success?: boolean; data?: ActivityRow[]; message?: string }>(isRfq ? "/api/freight/rfq-activities/list" : "/api/freight/enquiry-activities/list", {
         company_code: companyCode,
         enquiry_type: enquiryType,
         enquiry_nr: enquiryNr,
@@ -94,7 +95,7 @@ export function FreightEnquiryActivitiesPage() {
     setNotice(null);
     try {
       const loginid = String(userInfo?.loginid || userInfo?.USERID || userInfo?.user_id || "");
-      const response = await api.post<{ success?: boolean; message?: string }>("/api/freight/enquiry-activities/save", {
+      const response = await api.post<{ success?: boolean; message?: string }>(isRfq ? "/api/freight/rfq-activities/save" : "/api/freight/enquiry-activities/save", {
         company_code: companyCode,
         enquiry_type: enquiryType,
         enquiry_nr: enquiryNr,
@@ -122,25 +123,27 @@ export function FreightEnquiryActivitiesPage() {
   };
 
   return (
-    <form className="grid gap-4" onSubmit={saveRows}>
-      <div className="rounded-lg border border-slate-200 bg-gradient-to-r from-slate-950 via-slate-900 to-teal-950 p-4 text-white shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-md border border-white/15 bg-white/10 text-cyan-100">
-              <Activity size={22} />
+    <form className="grid gap-2" onSubmit={saveRows}>
+      <div className="rounded-md border border-slate-200 bg-gradient-to-r from-slate-950 via-slate-900 to-teal-950 px-3 py-2.5 text-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-md border border-white/15 bg-white/10 text-cyan-100">
+              <Activity size={18} />
             </div>
             <div>
-              <div className="mb-2 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-wide">
-                <span className="rounded-full bg-white/12 px-3 py-1 text-cyan-100">{enquiryType}</span>
-                <span className="rounded-full bg-white/12 px-3 py-1 text-emerald-100">{companyCode || "Company"}</span>
+              <div className="mb-1 flex flex-wrap gap-1.5 text-[11px] font-semibold uppercase tracking-wide">
+                <span className="rounded bg-white/12 px-2 py-0.5 text-cyan-100">{enquiryType}</span>
+                <span className="rounded bg-white/12 px-2 py-0.5 text-emerald-100">{companyCode || "Company"}</span>
               </div>
-              <h1 className="m-0 text-2xl font-semibold tracking-tight">Enquiry Activities</h1>
-              <p className="m-0 text-sm text-slate-300">{enquiryNr || "Select enquiry"} / {prinCode || "Principal pending"}</p>
+              <div className="flex flex-wrap items-end gap-3">
+                <h1 className="m-0 text-xl font-semibold tracking-tight">{isRfq ? "RFQ Activities" : "Enquiry Activities"}</h1>
+                <p className="m-0 text-xs text-slate-300">{enquiryNr || (isRfq ? "Select RFQ" : "Select enquiry")} / {prinCode || "Principal pending"}</p>
+              </div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {notice && (
-              <span className={`rounded-md px-3 py-2 text-sm font-medium ${notice.type === "success" ? "bg-emerald-400/15 text-emerald-100" : "bg-red-400/15 text-red-100"}`}>
+              <span className={`rounded px-2 py-1 text-xs font-medium ${notice.type === "success" ? "bg-emerald-400/15 text-emerald-100" : "bg-red-400/15 text-red-100"}`}>
                 {notice.text}
               </span>
             )}
@@ -154,7 +157,7 @@ export function FreightEnquiryActivitiesPage() {
             </Button>
           </div>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           <MetricTile icon={Layers3} label="Lines" value={String(rows.length)} tone="cyan" />
           <MetricTile icon={CircleDollarSign} label="Bill" value={formatAmount(totals.bill)} tone="emerald" />
           <MetricTile icon={BadgeDollarSign} label="Cost" value={formatAmount(totals.cost)} tone="amber" />
@@ -162,14 +165,14 @@ export function FreightEnquiryActivitiesPage() {
         </div>
       </div>
 
-      <section className="rounded-lg border border-slate-200 bg-card p-4 shadow-sm">
-        <div className="mb-3">
-          <h2 className="m-0 text-sm font-semibold uppercase text-slate-700">Selection</h2>
-          <p className="m-0 text-xs text-muted-foreground">Company, enquiry and principal reference</p>
+      <section className="rounded-md border border-slate-200 bg-card p-2.5 shadow-sm">
+        <div className="mb-2">
+          <h2 className="m-0 text-xs font-semibold uppercase text-slate-700">Selection</h2>
+          <p className="m-0 text-xs text-muted-foreground">Company, {isRfq ? "RFQ" : "enquiry"} and principal reference</p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
           <FormInput label="Company" value={companyCode} onChange={setCompanyCode} required />
-          <FormInput label="Enquiry No" value={enquiryNr} onChange={setEnquiryNr} required actionTitle="Search enquiry" />
+          <FormInput label={isRfq ? "RFQ No" : "Enquiry No"} value={enquiryNr} onChange={setEnquiryNr} required actionTitle={isRfq ? "Search RFQ" : "Search enquiry"} />
           <FormInput label="Enquiry Type" value={enquiryType} onChange={setEnquiryType} />
           <FormInput label="Principal" value={prinCode} onChange={setPrinCode} />
           <div className="flex items-end">
@@ -181,11 +184,11 @@ export function FreightEnquiryActivitiesPage() {
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-lg border border-slate-200 bg-card shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-slate-50 px-4 py-3">
+      <section className="overflow-hidden rounded-md border border-slate-200 bg-card shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-slate-50 px-3 py-2">
           <div>
-            <h2 className="m-0 text-sm font-semibold uppercase text-slate-700">Activity Lines</h2>
-            <p className="m-0 text-xs text-muted-foreground">Billable and cost activities for the selected enquiry</p>
+            <h2 className="m-0 text-xs font-semibold uppercase text-slate-700">Activity Lines</h2>
+            <p className="m-0 text-xs text-muted-foreground">Billable and cost activities for the selected {isRfq ? "RFQ" : "enquiry"}</p>
           </div>
           <Button type="button" size="sm" variant="outline" onClick={addRow}>
             <Plus size={14} />
@@ -193,11 +196,11 @@ export function FreightEnquiryActivitiesPage() {
           </Button>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-[1500px] w-full border-collapse text-sm">
+          <table className="min-w-[1500px] w-full border-collapse text-xs">
             <thead>
               <tr className="border-b bg-white text-left text-xs uppercase text-slate-600">
                 {["Act Code", "Activity", "Group", "Mode", "Origin", "Destination", "Qty", "UOM", "Bill Rate", "Cost Rate", "Bill", "Cost", "Currency", "Remarks", ""].map((label) => (
-                  <th key={label} className="px-2 py-2 font-semibold">{label}</th>
+                  <th key={label} className="px-1.5 py-1.5 font-semibold">{label}</th>
                 ))}
               </tr>
             </thead>
@@ -256,14 +259,14 @@ function MetricTile({
   }[tone];
 
   return (
-    <div className="rounded-md border border-white/15 bg-white/10 px-3 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-semibold uppercase text-slate-300">{label}</span>
-        <span className={`flex h-8 w-8 items-center justify-center rounded-md ${toneClass}`}>
-          <Icon size={16} />
+    <div className="rounded border border-white/15 bg-white/10 px-2.5 py-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] font-semibold uppercase text-slate-300">{label}</span>
+        <span className={`flex h-6 w-6 items-center justify-center rounded ${toneClass}`}>
+          <Icon size={13} />
         </span>
       </div>
-      <div className="mt-2 truncate text-lg font-semibold text-white">{value}</div>
+      <div className="truncate text-xs font-semibold text-white">{value}</div>
     </div>
   );
 }
@@ -343,10 +346,10 @@ function FormInput({
   actionTitle?: string;
 }) {
   return (
-    <label className="grid gap-1 text-xs font-semibold uppercase text-muted-foreground">
+    <label className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
       {label}
       <div className="flex gap-2">
-        <Input value={value} type={type} required={required} onChange={(event) => onChange(event.target.value)} />
+        <Input className="h-8 text-xs" value={value} type={type} required={required} onChange={(event) => onChange(event.target.value)} />
         {actionTitle && (
           <Button type="button" variant="outline" size="icon" title={actionTitle}>
             <Search size={14} />
@@ -369,11 +372,11 @@ function CellInput({
   className?: string;
 }) {
   return (
-    <td className="px-2 py-2">
-      <Input className={`h-8 ${className}`} type={type} value={value} onChange={(event) => onChange(event.target.value)} />
+    <td className="px-1.5 py-1.5">
+      <Input className={`h-7 text-xs ${className}`} type={type} value={value} onChange={(event) => onChange(event.target.value)} />
     </td>
   );
 }
 
 const fieldClassName =
-  "flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  "flex h-7 w-full rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";

@@ -570,6 +570,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: ({ pathname }) => <WmsSimpleMasterPage config={getWmsSimpleMasterConfig(pathname)!} />,
   },
   {
+    name: "Freight RFQ Activities",
+    match: (context) => isFreightRfqActivitiesRoute(context),
+    element: () => <FreightEnquiryActivitiesPage screenType="rfq" />,
+  },
+  {
     name: "Freight RFQ",
     match: (context) => isFreightRfqRoute(context),
     element: (context) => <FreightEnquiryMainPage target={getFreightWorkspaceTarget(context)} screenType="rfq" />,
@@ -1336,6 +1341,12 @@ function isFreightRfqRoute(context: WorkspaceRouteContext) {
   const compact = matchText.replace(/[^a-z0-9]/g, "");
   if (compact.includes("rfqactivities") || compact.includes("rfqlist")) return false;
   return compact.includes("freightrequestquoterfq") || compact.includes("requestquoterfq") || compact.includes("rfqtest");
+}
+
+function isFreightRfqActivitiesRoute(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return compact.includes("freightrequestquoterfqactivities") || compact.includes("requestquoterfqactivities") || compact.includes("rfqactivities");
 }
 
 function getFreightWorkspaceTarget(context: WorkspaceRouteContext) {

@@ -1,8 +1,11 @@
 import { FormEvent, useMemo, useState } from "react";
-import { Activity, CreditCard, MapPinned, PackageCheck, Plus, RotateCcw, Save, Search, ShipWheel, Trash2 } from "lucide-react";
+import { Activity, CreditCard, MapPinned, PackageCheck, Plus, RotateCcw, Save, ShipWheel, Trash2 } from "lucide-react";
 import { api } from "../../api/client";
+import { executeWmsInboundSql } from "../../api/wms";
+import { getLookupValue, type LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
+import { LookupField } from "../../components/ui/LookupField";
 import { useAuth } from "../../state/AuthContext";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
 
@@ -142,6 +145,27 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
     setHeader((current) => ({ ...current, [field]: value }));
   };
 
+  const applyHeaderLookup = (field: keyof EnquiryHeader, value: string, row: LookupRow | null) => {
+    setHeader((current) => {
+      const next = { ...current, [field]: value };
+      if (field === "prin_code" && row) {
+        next.dept_code = lookupText(row, "prin_dept_code") || next.dept_code;
+        next.curr_code = lookupText(row, "curr_code") || next.curr_code;
+        next.ex_rate = lookupText(row, "ex_rate") || next.ex_rate;
+      }
+      if (field === "origin_port" && row) {
+        next.country_origin = lookupText(row, "country_name") || lookupText(row, "country_code") || next.country_origin;
+      }
+      if (field === "destination_port" && row) {
+        next.country_destination = lookupText(row, "country_name") || lookupText(row, "country_code") || next.country_destination;
+      }
+      if (field === "curr_code" && row) {
+        next.ex_rate = lookupText(row, "ex_rate") || next.ex_rate;
+      }
+      return next;
+    });
+  };
+
   const setDetailField = (index: number, field: keyof EnquiryDetail, value: string) => {
     setDetails((current) =>
       current.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)),
@@ -214,22 +238,24 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   };
 
   return (
-    <form className="grid gap-4" onSubmit={saveEnquiry}>
-      <div className="rounded-lg border border-slate-200 bg-gradient-to-r from-slate-950 via-slate-900 to-cyan-950 p-4 text-white shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+    <form className="grid gap-2" onSubmit={saveEnquiry}>
+      <div className="rounded-md border border-slate-200 bg-gradient-to-r from-slate-950 via-slate-900 to-cyan-950 px-3 py-2.5 text-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <div className="mb-2 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-wide">
-              <span className="rounded-full bg-white/12 px-3 py-1 text-cyan-100">{modeLabel(header.transport_mode)}</span>
-              <span className="rounded-full bg-white/12 px-3 py-1 text-emerald-100">{header.job_type === "IMP" ? "Import" : "Export"}</span>
-              <span className="rounded-full bg-white/12 px-3 py-1 text-amber-100">{header.indstatus === "A" ? "Approved" : "Not Approved"}</span>
+            <div className="mb-1 flex flex-wrap gap-1.5 text-[11px] font-semibold uppercase tracking-wide">
+              <span className="rounded bg-white/12 px-2 py-0.5 text-cyan-100">{modeLabel(header.transport_mode)}</span>
+              <span className="rounded bg-white/12 px-2 py-0.5 text-emerald-100">{header.job_type === "IMP" ? "Import" : "Export"}</span>
+              <span className="rounded bg-white/12 px-2 py-0.5 text-amber-100">{header.indstatus === "A" ? "Approved" : "Not Approved"}</span>
             </div>
-            <h1 className="m-0 text-2xl font-semibold tracking-tight">{isRfq ? "Request For Quote" : "Freight Enquiry"}</h1>
-            <p className="m-0 text-sm text-slate-300">{header.enquiry_nr || (isRfq ? "New RFQ" : "New enquiry")} / {header.prin_code || "Principal pending"}</p>
+            <div className="flex flex-wrap items-end gap-3">
+              <h1 className="m-0 text-xl font-semibold tracking-tight">{isRfq ? "Request For Quote" : "Freight Enquiry"}</h1>
+              <p className="m-0 text-xs text-slate-300">{header.enquiry_nr || (isRfq ? "New RFQ" : "New enquiry")} / {header.prin_code || "Principal pending"}</p>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {notice && (
               <span
-                className={`rounded-md px-3 py-2 text-sm font-medium ${
+                className={`rounded px-2 py-1 text-xs font-medium ${
                   notice.type === "success" ? "bg-emerald-400/15 text-emerald-100" : "bg-red-400/15 text-red-100"
                 }`}
               >
@@ -246,7 +272,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
             </Button>
           </div>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-4">
+        <div className="mt-2 grid gap-2 md:grid-cols-4">
           <SummaryTile label="Route" value={`${header.origin_port || "-"} -> ${header.destination_port || "-"}`} />
           <SummaryTile label="Currency" value={`${header.curr_code || "-"} / ${header.ex_rate || "1"}`} />
           <SummaryTile label="Cargo" value={header.commodity || "-"} />
@@ -254,36 +280,36 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
         </div>
       </div>
 
-      <section className="rounded-lg border border-slate-200 bg-card p-4 shadow-sm">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+      <section className="rounded-md border border-slate-200 bg-card p-2.5 shadow-sm">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
           <FormInput label="Company" value={header.company_code} onChange={(value) => setHeaderField("company_code", value)} required />
           <FormInput label="Enquiry No" value={header.enquiry_nr} onChange={(value) => setHeaderField("enquiry_nr", value)} placeholder="Auto" />
           <FormInput label="Date" type="date" value={header.enquiry_date} onChange={(value) => setHeaderField("enquiry_date", value)} required />
-          <FormInput label="Department" value={header.dept_code} onChange={(value) => setHeaderField("dept_code", value)} />
+          <FormLookup label="Department" value={header.dept_code} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} />
           <FormSelect label="Job Type" value={header.job_type} onChange={(value) => setHeaderField("job_type", value)} options={jobTypes} />
           <FormSelect label="Mode" value={header.transport_mode} onChange={(value) => setHeaderField("transport_mode", value)} options={transportModes} />
-          <FormInput label="Principal" value={header.prin_code} onChange={(value) => setHeaderField("prin_code", value)} required actionTitle="Search principal" />
-          <FormInput label="Walk-in Principal" value={header.walkin_prin_code} onChange={(value) => setHeaderField("walkin_prin_code", value)} />
-          <FormInput label="Salesman" value={header.salesman_code} onChange={(value) => setHeaderField("salesman_code", value)} />
+          <FormLookup label="Principal" value={header.prin_code} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required />
+          <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }, { field: "prin_telno1", header: "Phone" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} />
+          <FormLookup label="Salesman" value={header.salesman_code} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Salesman" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} />
           <FormSelect label="Status" value={header.indstatus} onChange={(value) => setHeaderField("indstatus", value)} options={approvalStatuses} />
           <FormInput label="Offer Validity" type="date" value={header.offer_validity} onChange={(value) => setHeaderField("offer_validity", value)} />
           <FormInput label="Enquiry Type" value={header.enquiry_type} onChange={(value) => setHeaderField("enquiry_type", value)} />
         </div>
       </section>
 
-      <div className="rounded-lg border border-slate-200 bg-card shadow-sm">
-        <div className="flex gap-1 overflow-x-auto border-b bg-slate-50 px-3 pt-3">
+      <div className="rounded-md border border-slate-200 bg-card shadow-sm">
+        <div className="flex gap-1 overflow-x-auto border-b bg-slate-50 px-2 pt-2">
           {enquiryTabs.map((tab) => (
             <TabButton key={tab.key} tab={tab} active={activeTab === tab.key} onClick={() => setActiveTab(tab.key)} />
           ))}
         </div>
 
-        <div className="p-4">
+        <div className="p-2.5">
           {activeTab === "cargo" && (
             <section>
               <SectionHeading title="Cargo And Parties" description="Commodity, measurement, shipper and consignee details" />
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <FormInput label="Commodity" value={header.commodity} onChange={(value) => setHeaderField("commodity", value)} />
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+                <FormLookup label="Commodity" value={header.commodity} valueField="prodtype_desc" displayFields={["prodtype_desc", "prodtype_code"]} columns={[{ field: "prodtype_desc", header: "Commodity" }, { field: "prodtype_code", header: "Code" }]} loadOptions={() => loadCommodityLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("commodity", value, row)} />
                 <FormInput label="Weight" type="number" value={header.weight} onChange={(value) => setHeaderField("weight", value)} />
                 <FormInput label="Volume" type="number" value={header.volume} onChange={(value) => setHeaderField("volume", value)} />
                 <FormInput label="Gross Weight" type="number" value={header.gross_wt} onChange={(value) => setHeaderField("gross_wt", value)} />
@@ -293,23 +319,23 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
                 <FormInput label="Dimension" value={header.dimension} onChange={(value) => setHeaderField("dimension", value)} />
                 <FormInput label="Container Type" value={header.container_type} onChange={(value) => setHeaderField("container_type", value)} />
                 <FormInput label="Containers" type="number" value={header.no_of_contaners} onChange={(value) => setHeaderField("no_of_contaners", value)} />
-                <FormInput label="Vehicle Type" value={header.vehicle_type} onChange={(value) => setHeaderField("vehicle_type", value)} />
+                <FormLookup label="Vehicle Type" value={header.vehicle_type} valueField="vtype_code" displayFields={["vtype_code", "vtype_name"]} columns={[{ field: "vtype_code", header: "Code" }, { field: "vtype_name", header: "Vehicle Type" }]} loadOptions={() => loadVehicleTypeLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("vehicle_type", value, row)} />
                 <FormInput label="T/F" value={header.t_f} onChange={(value) => setHeaderField("t_f", value)} />
-                <FormTextarea label="Cargo Detail" value={header.cargo_detail} onChange={(value) => setHeaderField("cargo_detail", value)} className="sm:col-span-2" />
-                <FormTextarea label="Remarks" value={header.remarks} onChange={(value) => setHeaderField("remarks", value)} className="sm:col-span-2" />
-                <FormTextarea label="Shipper" value={header.shipper_name} onChange={(value) => setHeaderField("shipper_name", value)} />
-                <FormTextarea label="Shipper Address" value={header.shipper_address} onChange={(value) => setHeaderField("shipper_address", value)} />
-                <FormTextarea label="Consignee" value={header.consignee_name} onChange={(value) => setHeaderField("consignee_name", value)} />
-                <FormTextarea label="Consignee Address" value={header.consignee_address} onChange={(value) => setHeaderField("consignee_address", value)} />
+                <FormTextarea label="Cargo Detail" value={header.cargo_detail} onChange={(value) => setHeaderField("cargo_detail", value)} className="sm:col-span-2 xl:col-span-3" />
+                <FormTextarea label="Remarks" value={header.remarks} onChange={(value) => setHeaderField("remarks", value)} className="sm:col-span-2 xl:col-span-3" />
+                <FormTextarea label="Shipper" value={header.shipper_name} onChange={(value) => setHeaderField("shipper_name", value)} className="xl:col-span-2" />
+                <FormTextarea label="Shipper Address" value={header.shipper_address} onChange={(value) => setHeaderField("shipper_address", value)} className="xl:col-span-2" />
+                <FormTextarea label="Consignee" value={header.consignee_name} onChange={(value) => setHeaderField("consignee_name", value)} className="xl:col-span-2" />
+                <FormTextarea label="Consignee Address" value={header.consignee_address} onChange={(value) => setHeaderField("consignee_address", value)} className="xl:col-span-2" />
               </div>
             </section>
           )}
           {activeTab === "journey" && (
             <section>
               <h2 className="m-0 mb-3 text-sm font-semibold uppercase text-muted-foreground">Journey</h2>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <FormInput label="Port of Loading" value={header.origin_port} onChange={(value) => setHeaderField("origin_port", value)} actionTitle="Search loading port" />
-                <FormInput label="Port of Destination" value={header.destination_port} onChange={(value) => setHeaderField("destination_port", value)} actionTitle="Search destination port" />
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+                <FormLookup label="Port of Loading" value={header.origin_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("origin_port", value, row)} />
+                <FormLookup label="Port of Destination" value={header.destination_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("destination_port", value, row)} />
                 <FormInput label="Via" value={header.via} onChange={(value) => setHeaderField("via", value)} className="lg:col-span-2" />
                 <FormInput label="Country Origin" value={header.country_origin} onChange={(value) => setHeaderField("country_origin", value)} />
                 <FormInput label="Country Destination" value={header.country_destination} onChange={(value) => setHeaderField("country_destination", value)} />
@@ -322,12 +348,12 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
           {activeTab === "carrier" && (
             <section>
               <h2 className="m-0 mb-3 text-sm font-semibold uppercase text-muted-foreground">Carrier Details</h2>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <FormInput label="Carrier" value={header.carrier} onChange={(value) => setHeaderField("carrier", value)} actionTitle="Search carrier" />
-                <FormInput label="Forwarder" value={header.forwarder_code} onChange={(value) => setHeaderField("forwarder_code", value)} actionTitle="Search forwarder" />
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+                <FormLookup key={`carrier-${header.transport_mode}`} label="Carrier" value={header.carrier} {...carrierLookupProps(header.transport_mode, header.company_code)} onChange={(value, row) => applyHeaderLookup("carrier", value, row)} />
+                <FormLookup label="Forwarder" value={header.forwarder_code} valueField="forwarder_code" displayFields={["forwarder_code", "forwarder_name"]} columns={[{ field: "forwarder_code", header: "Code" }, { field: "forwarder_name", header: "Forwarder" }]} loadOptions={() => loadForwarderLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("forwarder_code", value, row)} />
                 <FormInput label="Transit Time" value={header.transit_time} onChange={(value) => setHeaderField("transit_time", value)} />
                 <FormInput label="Frequency" value={header.frequency} onChange={(value) => setHeaderField("frequency", value)} />
-                <FormInput label="Sales Executive" value={header.salesman_code} onChange={(value) => setHeaderField("salesman_code", value)} actionTitle="Search sales executive" />
+                <FormLookup label="Sales Executive" value={header.salesman_code} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Sales Executive" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} />
                 <FormInput label="Ready Date" type="date" value={header.schedule_date} onChange={(value) => setHeaderField("schedule_date", value)} />
               </div>
             </section>
@@ -336,23 +362,23 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
           {activeTab === "payment" && (
             <section>
               <h2 className="m-0 mb-3 text-sm font-semibold uppercase text-muted-foreground">Payment Terms</h2>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
                 <FormSelect label="INCO Terms" value={header.payment_terms} onChange={(value) => setHeaderField("payment_terms", value)} options={paymentTerms.map((value) => ({ value, label: value }))} />
                 <FormSelect label="Freight Payable At" value={header.tos} onChange={(value) => setHeaderField("tos", value)} options={tosOptions.map((value) => ({ value, label: value }))} />
-                <FormInput label="Currency" value={header.curr_code} onChange={(value) => setHeaderField("curr_code", value)} />
+                <FormLookup label="Currency" value={header.curr_code} valueField="curr_code" displayFields={["curr_code", "curr_name"]} columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Currency" }, { field: "ex_rate", header: "Rate" }]} loadOptions={() => loadCurrencyLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("curr_code", value, row)} />
                 <FormInput label="Exchange Rate" type="number" value={header.ex_rate} onChange={(value) => setHeaderField("ex_rate", value)} />
                 <FormSelect label="Member Type" value={header.member_type} onChange={(value) => setHeaderField("member_type", value)} options={memberTypes.map((value) => ({ value, label: value || "Blank" }))} />
                 <FormSelect label="Sale Type" value={header.sale_type} onChange={(value) => setHeaderField("sale_type", value)} options={saleTypes.map((value) => ({ value, label: value }))} />
                 <FormSelect label="Job Category" value={header.job_category} onChange={(value) => setHeaderField("job_category", value)} options={jobCategories.map((value) => ({ value, label: value }))} />
-                <FormInput label="Ref Enquiry No" value={header.ref_enquiry_nr} onChange={(value) => setHeaderField("ref_enquiry_nr", value)} />
-                <FormTextarea label="Special Instructions" value={header.spl_instructions} onChange={(value) => setHeaderField("spl_instructions", value)} className="sm:col-span-2 lg:col-span-4" />
+                <FormLookup label="Ref Enquiry No" value={header.ref_enquiry_nr} valueField="enquiry_nr" displayFields={["enquiry_nr", "enquiry_date"]} columns={[{ field: "enquiry_nr", header: "Enquiry" }, { field: "enquiry_date", header: "Date" }, { field: "prin_code", header: "Principal" }]} loadOptions={() => loadReferenceEnquiryLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("ref_enquiry_nr", value, row)} />
+                <FormTextarea label="Special Instructions" value={header.spl_instructions} onChange={(value) => setHeaderField("spl_instructions", value)} className="sm:col-span-2 lg:col-span-4 xl:col-span-6" />
               </div>
             </section>
           )}
 
           {activeTab === "activities" && (
             <section>
-              <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
                 <h2 className="m-0 text-sm font-semibold uppercase text-muted-foreground">Activities</h2>
                 <Button type="button" size="sm" variant="outline" onClick={addDetail}>
                   <Plus size={14} />
@@ -360,11 +386,11 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
                 </Button>
               </div>
               <div className="overflow-x-auto">
-                <table className="min-w-[1320px] w-full border-collapse text-sm">
+                <table className="min-w-[1320px] w-full border-collapse text-xs">
                   <thead>
                     <tr className="border-b bg-muted/40 text-left text-xs uppercase text-muted-foreground">
                       {["Act Code", "Activity", "Mode", "Origin", "Destination", "Qty", "UOM", "Bill Rate", "Cost Rate", "Bill", "Cost", "Currency", "Remarks", ""].map((label) => (
-                        <th key={label} className="px-2 py-2 font-semibold">{label}</th>
+                        <th key={label} className="px-1.5 py-1.5 font-semibold">{label}</th>
                       ))}
                     </tr>
                   </thead>
@@ -424,13 +450,13 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`flex h-10 items-center gap-2 rounded-t-md border px-4 text-sm font-semibold transition ${
+      className={`flex h-8 items-center gap-1.5 rounded-t-md border px-3 text-xs font-semibold transition ${
         active
           ? "border-slate-200 border-b-card bg-card text-slate-950"
           : "border-transparent text-slate-500 hover:bg-white hover:text-slate-900"
       }`}
     >
-      <Icon size={15} />
+      <Icon size={14} />
       {tab.label}
     </button>
   );
@@ -438,8 +464,8 @@ function TabButton({
 
 function SectionHeading({ title, description }: { title: string; description: string }) {
   return (
-    <div className="mb-3">
-      <h2 className="m-0 text-sm font-semibold uppercase text-slate-700">{title}</h2>
+    <div className="mb-2">
+      <h2 className="m-0 text-xs font-semibold uppercase text-slate-700">{title}</h2>
       <p className="m-0 text-xs text-muted-foreground">{description}</p>
     </div>
   );
@@ -447,9 +473,9 @@ function SectionHeading({ title, description }: { title: string; description: st
 
 function SummaryTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-white/15 bg-white/10 px-3 py-2">
-      <div className="text-xs font-semibold uppercase text-slate-300">{label}</div>
-      <div className="mt-1 truncate text-sm font-semibold text-white">{value}</div>
+    <div className="rounded border border-white/15 bg-white/10 px-2.5 py-1.5">
+      <div className="text-[11px] font-semibold uppercase text-slate-300">{label}</div>
+      <div className="truncate text-xs font-semibold text-white">{value}</div>
     </div>
   );
 }
@@ -555,7 +581,6 @@ function FormInput({
   type = "text",
   required,
   placeholder,
-  actionTitle,
   className = "",
 }: {
   label: string;
@@ -564,21 +589,53 @@ function FormInput({
   type?: string;
   required?: boolean;
   placeholder?: string;
-  actionTitle?: string;
   className?: string;
 }) {
   return (
-    <label className={`grid gap-1 text-xs font-semibold uppercase text-muted-foreground ${className}`}>
+    <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
       {label}
-      <div className="flex gap-2">
-        <Input value={value} type={type} required={required} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
-        {actionTitle && (
-          <Button type="button" variant="outline" size="icon" title={actionTitle}>
-            <Search size={14} />
-          </Button>
-        )}
-      </div>
+      <Input className="h-8 text-xs" value={value} type={type} required={required} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
     </label>
+  );
+}
+
+function FormLookup({
+  label,
+  value,
+  valueField,
+  displayFields,
+  columns,
+  loadOptions,
+  onChange,
+  required,
+  className = "",
+}: {
+  label: string;
+  value: string;
+  valueField: string;
+  displayFields: string[];
+  columns: Array<{ field: string; header: string }>;
+  loadOptions: () => Promise<LookupRow[]>;
+  onChange: (value: string, row: LookupRow | null) => void;
+  required?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
+      {label}
+      <LookupField
+        compact
+        label={label}
+        value={value}
+        columns={columns}
+        valueField={valueField}
+        displayFields={displayFields}
+        loadOptions={loadOptions}
+        onChange={onChange}
+        required={required}
+        placeholder={`Select ${label}`}
+      />
+    </div>
   );
 }
 
@@ -594,7 +651,7 @@ function FormSelect({
   options: Array<{ value: string; label: string }>;
 }) {
   return (
-    <label className="grid gap-1 text-xs font-semibold uppercase text-muted-foreground">
+    <label className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
       {label}
       <select className={fieldClassName} value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => (
@@ -619,9 +676,9 @@ function FormTextarea({
   className?: string;
 }) {
   return (
-    <label className={`grid gap-1 text-xs font-semibold uppercase text-muted-foreground ${className}`}>
+    <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
       {label}
-      <textarea className={`${fieldClassName} min-h-20 resize-y py-2`} value={value} onChange={(event) => onChange(event.target.value)} />
+      <textarea className={`${fieldClassName} min-h-14 resize-y py-1.5`} value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }
@@ -638,8 +695,8 @@ function CellInput({
   className?: string;
 }) {
   return (
-    <td className="px-2 py-2">
-      <Input className={`h-8 ${className}`} type={type} value={value} onChange={(event) => onChange(event.target.value)} />
+    <td className="px-1.5 py-1.5">
+      <Input className={`h-7 text-xs ${className}`} type={type} value={value} onChange={(event) => onChange(event.target.value)} />
     </td>
   );
 }
@@ -650,9 +707,205 @@ function modeLabel(mode: string) {
   return "Air";
 }
 
+const portColumns = [
+  { field: "port_code", header: "Code" },
+  { field: "port_name", header: "Port" },
+  { field: "country_name", header: "Country" },
+];
+
+function carrierLookupProps(mode: string, companyCode: string) {
+  if (mode === "S") {
+    return {
+      valueField: "vessel_code",
+      displayFields: ["vessel_code", "vessel_name"],
+      columns: [
+        { field: "vessel_code", header: "Code" },
+        { field: "vessel_name", header: "Vessel" },
+      ],
+      loadOptions: () => loadCarrierLookup(companyCode, mode),
+    };
+  }
+  if (mode === "R") {
+    return {
+      valueField: "vehicle_no",
+      displayFields: ["vehicle_no", "vehicle_desc"],
+      columns: [
+        { field: "vehicle_no", header: "Vehicle" },
+        { field: "vehicle_desc", header: "Description" },
+      ],
+      loadOptions: () => loadCarrierLookup(companyCode, mode),
+    };
+  }
+  return {
+    valueField: "airline_code",
+    displayFields: ["airline_code", "airline_name"],
+    columns: [
+      { field: "airline_code", header: "Code" },
+      { field: "airline_name", header: "Airline" },
+    ],
+    loadOptions: () => loadCarrierLookup(companyCode, mode),
+  };
+}
+
+async function loadPrincipalLookup(companyCode: string) {
+  return loadFreightLookup(`
+    SELECT
+      p.PRIN_CODE,
+      p.PRIN_NAME,
+      p.PRIN_DEPT_CODE,
+      p.CURR_CODE,
+      c.CURR_NAME,
+      c.EX_RATE,
+      d.DEPT_NAME
+    FROM MS_PRINCIPAL p
+    LEFT JOIN MS_CURRENCY c
+      ON c.COMPANY_CODE = p.COMPANY_CODE
+     AND c.CURR_CODE = p.CURR_CODE
+    LEFT JOIN MS_DEPARTMENT d
+      ON d.COMPANY_CODE = p.COMPANY_CODE
+     AND d.DEPT_CODE = p.PRIN_DEPT_CODE
+    WHERE p.COMPANY_CODE = '${sqlEscape(companyCode)}'
+    ORDER BY p.PRIN_CODE
+  `);
+}
+
+async function loadWalkinPrincipalLookup(companyCode: string) {
+  return loadFreightLookup(`
+    SELECT PRIN_CODE, PRIN_NAME, PRIN_CONTACT1, PRIN_EMAIL1, PRIN_TELNO1
+    FROM MS_PRINCIPAL_WALKIN
+    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
+    ORDER BY PRIN_CODE
+  `);
+}
+
+async function loadDepartmentLookup(companyCode: string) {
+  return loadFreightLookup(`
+    SELECT DEPT_CODE, DEPT_NAME
+    FROM MS_DEPARTMENT
+    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
+    ORDER BY DEPT_CODE
+  `);
+}
+
+async function loadCommodityLookup(companyCode: string) {
+  return loadFreightLookup(`
+    SELECT PRODTYPE_DESC, PRODTYPE_CODE
+    FROM MS_PRODTYPE
+    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
+    ORDER BY PRODTYPE_DESC
+  `);
+}
+
+async function loadPortLookup(companyCode: string) {
+  return loadFreightLookup(`
+    SELECT
+      p.PORT_CODE,
+      p.PORT_NAME,
+      p.COUNTRY_CODE,
+      c.COUNTRY_NAME
+    FROM MS_PORT p
+    LEFT JOIN MS_COUNTRY c
+      ON c.COUNTRY_CODE = p.COUNTRY_CODE
+    WHERE p.COMPANY_CODE = '${sqlEscape(companyCode)}'
+    ORDER BY p.PORT_NAME
+  `);
+}
+
+async function loadCurrencyLookup(companyCode: string) {
+  return loadFreightLookup(`
+    SELECT CURR_CODE, CURR_NAME, EX_RATE
+    FROM MS_CURRENCY
+    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
+    ORDER BY CURR_CODE
+  `);
+}
+
+async function loadSalesmanLookup(companyCode: string) {
+  return loadFreightLookup(`
+    SELECT SALESMAN_CODE, SALESMAN_NAME
+    FROM MS_SALESMAN
+    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
+    ORDER BY SALESMAN_CODE
+  `);
+}
+
+async function loadForwarderLookup(companyCode: string) {
+  return loadFreightLookup(`
+    SELECT FORWARDER_CODE, FORWARDER_NAME
+    FROM MS_FORWARDER
+    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
+    ORDER BY FORWARDER_CODE
+  `);
+}
+
+async function loadVehicleTypeLookup(companyCode: string) {
+  return loadFreightLookup(`
+    SELECT VTYPE_CODE, VTYPE_NAME
+    FROM MS_VEHICLE_TYPE
+    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
+    ORDER BY VTYPE_CODE
+  `);
+}
+
+async function loadCarrierLookup(companyCode: string, mode: string) {
+  if (mode === "S") {
+    return loadFreightLookup(`
+      SELECT VESSEL_CODE, VESSEL_NAME
+      FROM MS_VESSEL
+      WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
+      ORDER BY VESSEL_CODE
+    `);
+  }
+  if (mode === "R") {
+    return loadFreightLookup(`
+      SELECT VEHICLE_NO, VEHICLE_DESC
+      FROM MS_VEHICLE
+      WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
+      ORDER BY VEHICLE_NO
+    `);
+  }
+  return loadFreightLookup(`
+    SELECT AIRLINE_CODE, AIRLINE_NAME
+    FROM MS_AIRLINE
+    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
+    ORDER BY AIRLINE_CODE
+  `);
+}
+
+async function loadReferenceEnquiryLookup(companyCode: string) {
+  return loadFreightLookup(`
+    SELECT ENQUIRY_NR, ENQUIRY_DATE, PRIN_CODE, JOB_TYPE, TRANSPORT_MODE, DEPT_CODE, CURR_CODE
+    FROM TF_ENQUIRY
+    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
+      AND ENQUIRY_TYPE = 'EQI'
+    ORDER BY ENQUIRY_DATE DESC
+  `);
+}
+
+async function loadFreightLookup(sql: string) {
+  const rows = await executeWmsInboundSql(sql);
+  return Array.isArray(rows) ? rows.map(normalizeLookupRow) : [];
+}
+
+function normalizeLookupRow(row: LookupRow): LookupRow {
+  const normalized: LookupRow = { ...row };
+  Object.entries(row || {}).forEach(([key, value]) => {
+    normalized[key.toLowerCase()] = value;
+  });
+  return normalized;
+}
+
+function lookupText(row: LookupRow, field: string) {
+  return String(getLookupValue(row, field) ?? "").trim();
+}
+
+function sqlEscape(input: string) {
+  return String(input || "").replace(/'/g, "''");
+}
+
 function toInputDate(value: Date) {
   return value.toISOString().slice(0, 10);
 }
 
 const fieldClassName =
-  "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60";
+  "flex h-8 w-full rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60";
