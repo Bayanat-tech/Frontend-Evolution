@@ -239,7 +239,39 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
 
   const setDetailField = (index: number, field: keyof EnquiryDetail, value: string) => {
     setDetails((current) =>
-      current.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)),
+      current.map((row, rowIndex) => {
+        if (rowIndex !== index) return row;
+        const next = { ...row, [field]: value };
+        if (field === "quantity" || field === "bill_rate") {
+          next.bill = multiplyText(next.quantity, next.bill_rate);
+        }
+        if (field === "quantity" || field === "cost_rate") {
+          next.cost = multiplyText(next.quantity, next.cost_rate);
+        }
+        return next;
+      }),
+    );
+  };
+
+  const applyDetailActivityLookup = (index: number, value: string, row: LookupRow | null) => {
+    setDetails((current) =>
+      current.map((line, rowIndex) => {
+        if (rowIndex !== index) return line;
+        const quantity = lookupText(row || {}, "quantity") || line.quantity || "1";
+        const billRate = lookupText(row || {}, "bill") || line.bill_rate || "0";
+        const costRate = lookupText(row || {}, "cost") || line.cost_rate || "0";
+        return {
+          ...line,
+          act_code: value,
+          activity: lookupText(row || {}, "activity") || line.activity,
+          quantity,
+          uom: lookupText(row || {}, "uom") || line.uom,
+          bill_rate: billRate,
+          cost_rate: costRate,
+          bill: multiplyText(quantity, billRate),
+          cost: multiplyText(quantity, costRate),
+        };
+      }),
     );
   };
 
@@ -350,12 +382,15 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
             AND ENQUIRY_TYPE = '${sqlEscape(enquiryType)}'
         `),
         executeWmsInboundSql(`
-          SELECT *
-          FROM TF_ENQUIRY_DET
-          WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
-            AND ENQUIRY_NR = '${sqlEscape(enquiryNr)}'
-            AND ENQUIRY_TYPE = '${sqlEscape(enquiryType)}'
-          ORDER BY NVL(SRNO, SR_NO), SR_NO
+          SELECT d.*, a.ACTIVITY
+          FROM TF_ENQUIRY_DET d
+          LEFT JOIN MS_ACTIVITY a
+            ON a.COMPANY_CODE = d.COMPANY_CODE
+           AND a.ACTIVITY_CODE = d.ACT_CODE
+          WHERE d.COMPANY_CODE = '${sqlEscape(companyCode)}'
+            AND d.ENQUIRY_NR = '${sqlEscape(enquiryNr)}'
+            AND d.ENQUIRY_TYPE = '${sqlEscape(enquiryType)}'
+          ORDER BY NVL(d.SRNO, d.SR_NO), d.SR_NO
         `),
       ]);
       const loadedHeader = toHeaderFromRow(normalizeLookupRow(headerRows[0] || row), userInfo, target, screenType);
@@ -724,7 +759,25 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
                   <tbody>
                     {details.map((row, index) => (
                       <tr key={row.srno} className="border-b transition hover:bg-primary/5 last:border-0">
-                        <CellInput value={row.act_code} onChange={(value) => setDetailField(index, "act_code", value)} />
+                        <td className="px-1.5 py-1.5">
+                          <LookupField
+                            compact
+                            label="Activity"
+                            value={row.act_code}
+                            valueField="activity_code"
+                            displayFields={["activity_code", "activity"]}
+                            columns={[
+                              { field: "activity_code", header: "Code" },
+                              { field: "activity", header: "Activity" },
+                              { field: "uom", header: "UOM" },
+                              { field: "bill", header: "Bill" },
+                              { field: "cost", header: "Cost" },
+                            ]}
+                            loadOptions={() => loadActivityLookup(header.company_code)}
+                            onChange={(value, lookupRow) => applyDetailActivityLookup(index, value, lookupRow)}
+                            placeholder="Activity"
+                          />
+                        </td>
                         <CellInput value={row.activity} onChange={(value) => setDetailField(index, "activity", value)} className="min-w-52" />
                         <td className="px-2 py-2">
                           <select
@@ -1458,6 +1511,26 @@ async function loadCarrierLookup(companyCode: string, mode: string) {
   `);
 }
 
+async function loadActivityLookup(companyCode: string) {
+  return loadFreightLookup(`
+    SELECT
+      ACTIVITY_CODE,
+      ACTIVITY,
+      NVL(QUANTITY, 1) QUANTITY,
+      UOM,
+      NVL(BILL, 0) BILL,
+      NVL(COST, 0) COST,
+      ACTIVITY_GROUP_CODE,
+      ACTIVITY_SUBGROUP_CODE,
+      MANDATORY_FLAG,
+      ACT_TYPE
+    FROM MS_ACTIVITY
+    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
+      AND NVL(FREEZE_FLAG, 'N') = 'N'
+    ORDER BY ACTIVITY_CODE
+  `);
+}
+
 async function loadReferenceEnquiryLookup(companyCode: string) {
   return loadFreightLookup(`
     SELECT ENQUIRY_NR, ENQUIRY_DATE, PRIN_CODE, JOB_TYPE, TRANSPORT_MODE, DEPT_CODE, CURR_CODE
@@ -1483,6 +1556,12 @@ function normalizeLookupRow(row: LookupRow): LookupRow {
 
 function lookupText(row: LookupRow, field: string) {
   return String(getLookupValue(row, field) ?? "").trim();
+}
+
+function multiplyText(quantity: string, rate: string) {
+  const total = Number(quantity || 0) * Number(rate || 0);
+  if (!Number.isFinite(total)) return "0";
+  return total.toFixed(3).replace(/\.?0+$/, "");
 }
 
 function sqlEscape(input: string) {
