@@ -1,6 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, ArrowLeft, Ban, Copy, CreditCard, Eye, MapPinned, PackageCheck, Paperclip, Plus, RefreshCw, RotateCcw, Save, ShieldCheck, ShipWheel, Sparkles, Trash2, X } from "lucide-react";
+import { Activity, AlertTriangle, ArrowLeft, Ban, CreditCard, Eye, MapPinned, PackageCheck, Paperclip, Plus, RefreshCw, RotateCcw, Save, ShieldCheck, ShipWheel, Sparkles, Trash2, X } from "lucide-react";
 import { api } from "../../api/client";
 import { executeWmsInboundSql } from "../../api/wms";
 import { getLookupValue, type LookupRow } from "../../api/lookups";
@@ -119,6 +119,7 @@ const transportModes = [
 const approvalStatuses = [
   { value: "N", label: "Not Approved" },
   { value: "A", label: "Approved" },
+  { value: "C", label: "Cancelled" },
 ];
 const tosOptions = ["ORIGIN", "DESTINATION"];
 const memberTypes = ["", "IFLN", "AFFAL", "None"];
@@ -155,6 +156,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [assistOpen, setAssistOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [cancelRemarks, setCancelRemarks] = useState("");
 
   const enquiryLabel = isRfq ? "RFQ" : "Enquiry";
@@ -191,7 +193,10 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
         accessorKey: "indstatus",
         header: "Status",
         size: 130,
-        cell: ({ row }) => <span className={statusBadgeClass(lookupText(row.original, "indstatus"))}>{lookupText(row.original, "indstatus") === "A" ? "Approved" : "Not Approved"}</span>,
+        cell: ({ row }) => {
+          const status = lookupText(row.original, "indstatus");
+          return <span className={statusBadgeClass(status)}>{statusLabel(status)}</span>;
+        },
       },
       {
         id: "actions",
@@ -327,42 +332,49 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
     setView("editor");
   };
 
-  const copyAsNew = () => {
-    const copiedHeader = {
-      ...header,
-      enquiry_nr: "",
-      enquiry_date: toInputDate(new Date()),
-      indstatus: "N",
-      ref_enquiry_type: header.enquiry_type,
-      ref_enquiry_nr: header.enquiry_nr,
-    };
-    setHeader(copiedHeader);
-    setDetails((current) => current.map((row, index) => ({
-      ...row,
-      srno: index + 1,
-      enquiry_type: copiedHeader.enquiry_type,
-      curr_code: row.curr_code || copiedHeader.curr_code,
-      ex_rate: row.ex_rate || copiedHeader.ex_rate,
-    })));
-    setNotice({ type: "success", text: `${enquiryLabel} copied as a new draft` });
-  };
-
   const requestCancel = () => {
     if (!header.enquiry_nr) {
       setView("list");
       return;
     }
+    if (header.indstatus === "C") {
+      setNotice({ type: "error", text: `${enquiryLabel} is already cancelled` });
+      return;
+    }
     setCancelOpen(true);
   };
 
-  const confirmCancel = () => {
+  const confirmCancel = async () => {
     if (!cancelRemarks.trim()) {
       setNotice({ type: "error", text: "Please enter cancellation remarks" });
       return;
     }
-    setCancelOpen(false);
-    setCancelRemarks("");
-    setNotice({ type: "error", text: "Freight enquiry cancel procedure is not mapped yet. Create/map the Oracle cancel SP before posting cancellation." });
+    setCancelling(true);
+    setNotice(null);
+    try {
+      const response = await api.post<{ success?: boolean; message?: string }>(
+        isRfq ? "/api/freight/rfq/cancel" : "/api/freight/enquiry/cancel",
+        {
+          company_code: header.company_code,
+          enquiry_type: header.enquiry_type,
+          enquiry_nr: header.enquiry_nr,
+          cancel_by: loginId,
+          cancel_remarks: cancelRemarks.trim(),
+        },
+      );
+      if (response.data?.success === false) {
+        throw new Error(response.data.message || `Unable to cancel ${enquiryLabel}`);
+      }
+      setHeaderField("indstatus", "C");
+      setCancelOpen(false);
+      setCancelRemarks("");
+      setNotice({ type: "success", text: response.data?.message || `${enquiryLabel} cancelled` });
+      await loadEnquiries();
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : `Unable to cancel ${enquiryLabel}` });
+    } finally {
+      setCancelling(false);
+    }
   };
 
   const openEnquiry = async (row: EnquiryListRow) => {
@@ -523,19 +535,19 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   return (
     <>
     <form className="grid gap-2.5" onSubmit={saveEnquiry}>
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card px-4 py-3 shadow-sm">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-            <ShipWheel size={17} />
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-card px-3 py-2 shadow-sm">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+            <ShipWheel size={16} />
           </div>
           <div className="min-w-0">
             <p className="eyebrow mb-0.5">{isRfq ? "Freight RFQ" : "Freight Enquiry"}</p>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="m-0 text-xl font-semibold leading-tight text-foreground">{isRfq ? "Request For Quote" : "Freight Enquiry"}</h1>
+              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{isRfq ? "Request For Quote" : "Freight Enquiry"}</h1>
               <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">
                 {header.enquiry_nr || (isRfq ? "New RFQ" : "New enquiry")}
               </span>
-              <span className={statusBadgeClass(header.indstatus)}>{header.indstatus === "A" ? "Approved" : "Not Approved"}</span>
+              <span className={statusBadgeClass(header.indstatus)}>{statusLabel(header.indstatus)}</span>
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span>{modeLabel(header.transport_mode)}</span>
@@ -546,7 +558,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
           <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}>
             <ArrowLeft size={14} />
             List
@@ -562,7 +574,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
           )}
           <Button type="button" size="sm" variant="outline" onClick={() => setAssistOpen((open) => !open)}>
             <Sparkles size={14} />
-            Smart Check
+            Check
             {(urgentChecks + warningChecks) > 0 && (
               <span className="rounded bg-amber-100 px-1.5 text-[10px] font-bold text-amber-700">{urgentChecks + warningChecks}</span>
             )}
@@ -571,11 +583,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
             <Paperclip size={14} />
             Files
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={copyAsNew} disabled={!header.prin_code && !header.enquiry_nr}>
-            <Copy size={14} />
-            Copy
-          </Button>
-          <Button type="button" size="sm" variant="outline" onClick={requestCancel}>
+          <Button type="button" size="sm" variant="outline" onClick={requestCancel} disabled={header.indstatus === "C"}>
             {header.enquiry_nr ? <Ban size={14} /> : <X size={14} />}
             {header.enquiry_nr ? "Cancel" : "Close"}
           </Button>
@@ -583,7 +591,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
             <RotateCcw size={14} />
             Reset
           </Button>
-          <Button type="submit" size="sm" disabled={saving}>
+          <Button type="submit" size="sm" disabled={saving || header.indstatus === "C"}>
             <Save size={14} />
             {saving ? "Saving" : "Save"}
           </Button>
@@ -592,8 +600,8 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
 
       {assistOpen && <FreightAssistPanel checks={smartChecks} />}
 
-      <section className="rounded-md border bg-card p-2.5 shadow-sm">
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+      <section className="rounded-md border bg-card p-2 shadow-sm">
+        <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
           <FormInput label="Company" value={header.company_code} onChange={(value) => setHeaderField("company_code", value)} required />
           <FormInput label="Enquiry No" value={header.enquiry_nr} onChange={(value) => setHeaderField("enquiry_nr", value)} placeholder="Auto" />
           <FormInput label="Date" type="date" value={header.enquiry_date} onChange={(value) => setHeaderField("enquiry_date", value)} required />
@@ -833,18 +841,18 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
       tone="danger"
       compact
       title={`Cancel ${enquiryLabel}`}
-      description="Cancellation needs a mapped Oracle procedure before it can post to the database."
+      description="This marks the record as cancelled and keeps the enquiry history."
       onClose={() => setCancelOpen(false)}
       footer={
         <>
-          <Button type="button" variant="outline" onClick={() => setCancelOpen(false)}>Close</Button>
-          <Button type="button" variant="destructive" onClick={confirmCancel}>Confirm Cancel</Button>
+          <Button type="button" variant="outline" onClick={() => setCancelOpen(false)} disabled={cancelling}>Close</Button>
+          <Button type="button" variant="destructive" onClick={confirmCancel} disabled={cancelling}>{cancelling ? "Cancelling" : "Confirm Cancel"}</Button>
         </>
       }
     >
       <div className="grid gap-3">
         <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          PB cancellation found for freight jobs (`TI_JOB`), but not for enquiry (`TF_ENQUIRY`). This UI is ready; backend needs a cancel SP before final posting.
+          Delete is not used for enquiries. Cancel will call the Oracle cancel procedure and set the record status to Cancelled.
         </div>
         <label className="grid gap-1 text-xs font-semibold uppercase text-muted-foreground">
           Cancel Remarks
@@ -893,42 +901,29 @@ function SectionHeading({ title, description }: { title: string; description: st
 
 function FreightAssistPanel({ checks }: { checks: SmartCheck[] }) {
   const ready = checks.every((item) => item.tone === "ok");
+  const reviewCount = checks.filter((item) => item.tone !== "ok").length;
   return (
-    <section className="grid gap-2 rounded-md border bg-card p-2.5 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className={`grid h-8 w-8 place-items-center rounded-md ${ready ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-            {ready ? <ShieldCheck size={16} /> : <Sparkles size={16} />}
-          </span>
-          <div>
-            <h2 className="m-0 text-sm font-semibold text-foreground">Freight Assist</h2>
-            <p className="m-0 text-xs text-muted-foreground">Quick save-readiness checks for route, cargo, payment and activity lines.</p>
-          </div>
-        </div>
-        <span className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${ready ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
-          {ready ? "Ready" : `${checks.filter((item) => item.tone !== "ok").length} to review`}
+    <section className="flex flex-wrap items-center gap-1.5 rounded-md border bg-card p-1.5 shadow-sm">
+      <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-semibold ${ready ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+        {ready ? <ShieldCheck size={13} /> : <Sparkles size={13} />}
+        {ready ? "Ready" : `${reviewCount} review`}
+      </span>
+      {checks.map((check) => (
+        <span
+          key={check.title}
+          title={check.detail}
+          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold ${
+            check.tone === "danger"
+              ? "border-red-200 bg-red-50 text-red-800"
+              : check.tone === "warn"
+                ? "border-amber-200 bg-amber-50 text-amber-800"
+                : "border-emerald-200 bg-emerald-50 text-emerald-800"
+          }`}
+        >
+          {check.tone === "ok" ? <ShieldCheck size={12} /> : <AlertTriangle size={12} />}
+          {check.title}
         </span>
-      </div>
-      <div className="grid gap-1.5 md:grid-cols-2 xl:grid-cols-4">
-        {checks.map((check) => (
-          <div
-            key={check.title}
-            className={`rounded-md border px-2.5 py-2 ${
-              check.tone === "danger"
-                ? "border-red-200 bg-red-50 text-red-800"
-                : check.tone === "warn"
-                  ? "border-amber-200 bg-amber-50 text-amber-800"
-                  : "border-emerald-200 bg-emerald-50 text-emerald-800"
-            }`}
-          >
-            <div className="flex items-center gap-1.5 text-xs font-semibold">
-              {check.tone === "ok" ? <ShieldCheck size={13} /> : <AlertTriangle size={13} />}
-              {check.title}
-            </div>
-            <p className="m-0 mt-1 text-[11px] leading-snug opacity-85">{check.detail}</p>
-          </div>
-        ))}
-      </div>
+      ))}
     </section>
   );
 }
@@ -974,9 +969,19 @@ function HeaderChip({ label, value }: { label: string; value: string }) {
 }
 
 function statusBadgeClass(status: string) {
-  return status === "A"
-    ? "inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700"
-    : "inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700";
+  if (status === "A") {
+    return "inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700";
+  }
+  if (status === "C") {
+    return "inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-700";
+  }
+  return "inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700";
+}
+
+function statusLabel(status: string) {
+  if (status === "A") return "Approved";
+  if (status === "C") return "Cancelled";
+  return "Not Approved";
 }
 
 function buildSmartChecks(header: EnquiryHeader, details: EnquiryDetail[], isRfq: boolean): SmartCheck[] {
