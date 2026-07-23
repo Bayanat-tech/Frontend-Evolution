@@ -1,6 +1,6 @@
-// src/pages/almswf/Mytaskalmspage.tsx
+// src/pages/almswf/RequestTaskPage.tsx
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../state/AuthContext";
 import { Plus, Eye, Edit2 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
@@ -10,11 +10,11 @@ import { NoticeToast } from "../../components/ui/NoticeToast";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { TPurchaseSummaryTxn } from "./PurchaseSummary-types";
 import AddPRRequestPage from "./Addprrequestpage";
-import { almsCommonSelect } from "../../api/alms";
 import AddCRRequestPage from "./AddCRRequestPage";
 import AddCPRequestPage from "./AddCPRequestPage";
+import { almsCommonSelect } from "../../api/alms";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Constants (common across all types) ──────────────────────────────────────
 const TAB_STATUS = ["PENDING", "IN PROGRESS", "REJECTED", "SENT BACK", "APPROVED", "PO GENERATED"] as const;
 const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Final Approved", "Po Generated"] as const;
 
@@ -27,6 +27,54 @@ const STATUS_MATCH: Record<(typeof TAB_STATUS)[number], string[]> = {
   "PO GENERATED": ["PO GENERATED"],
 };
 
+// ─── Type-specific config (only this differs between PR / CR / CP) ───────────
+type RequestType = "PR" | "CR" | "CP";
+
+interface RequestTypeConfig {
+  parameter: string;         // backend proc_build_dynamic_sql_common parameter name
+  queryKeyBase: string;      // react-query cache key prefix
+  breadcrumbLabel: string;   // e.g. "Purchase Request"
+  addLabel: string;          // e.g. "Add PR"
+  addColor: string;          // button background color
+  showEdit: boolean;         // whether Edit action is available for this type
+  FormComponent: React.ComponentType<{
+    isEditMode: boolean;
+    isViewMode: boolean;
+    existingData?: { request_number?: string };
+    onClose: (refresh?: boolean) => void;
+  }>;
+}
+
+const REQUEST_CONFIGS: Record<RequestType, RequestTypeConfig> = {
+  PR: {
+    parameter: "Amlspf_VW_PR_PAGE",
+    queryKeyBase: "purchase-request-page",
+    breadcrumbLabel: "Purchase Request",
+    addLabel: "Add PR",
+    addColor: "#082A89",
+    showEdit: true,
+    FormComponent: AddPRRequestPage,
+  },
+  CR: {
+    parameter: "Amlspf_VW_CR_PAGE",
+    queryKeyBase: "credit-request-page",
+    breadcrumbLabel: "Credit Request",
+    addLabel: "Add CR",
+    addColor: "#0a6640",
+    showEdit: true,
+    FormComponent: AddCRRequestPage,
+  },
+  CP: {
+    parameter: "Amlspf_VW_CP_PAGE",
+    queryKeyBase: "capex-request-page",
+    breadcrumbLabel: "Capex Request",
+    addLabel: "Add CP",
+    addColor: "#6b21a8",
+    showEdit: false, // CP is view-only, no Edit action (matches original Mytaskalmspage behavior)
+    FormComponent: AddCPRequestPage,
+  },
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtDate(val: unknown): string {
   const raw = String(val || "");
@@ -36,32 +84,28 @@ function fmtDate(val: unknown): string {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-function requestType(requestNumber?: string): "PR" | "CR" | "CP" {
-  if (requestNumber?.startsWith("PR")) return "PR";
-  if (requestNumber?.startsWith("CR")) return "CR";
-  return "CP";
-}
-
 function statusOf(row: TPurchaseSummaryTxn): string {
   return String((row as any).PURCH_STATUS ?? (row as any).purch_status ?? "").toUpperCase();
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
-interface MytaskalmsPageProps {
+interface RequestTaskPageProps {
+  type: RequestType;
   initialTab?: number;
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
-const MytaskalmsPage = ({ initialTab = 0 }: MytaskalmsPageProps) => {
+// ─── Main Component (shared by PR / CR / CP) ──────────────────────────────────
+const RequestTaskPage = ({ type, initialTab = 0 }: RequestTaskPageProps) => {
+  const config = REQUEST_CONFIGS[type];
   const { user } = useAuth();
   const loginid = user?.loginid || user?.username || "";
   const companyCode = user?.company_code || "";
+  const queryClient = useQueryClient();
 
   // ── Tabs ───────────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState(initialTab);
   const statusFilter = TAB_STATUS[activeTab];
   const [query, setQuery] = useState("");
-
 
   // ── Popup state (Add / Edit / View) ─────────────────────────────────────────
   const [taskPopup, setTaskPopup] = useState({
@@ -71,19 +115,20 @@ const MytaskalmsPage = ({ initialTab = 0 }: MytaskalmsPageProps) => {
       existingData: null as TPurchaseSummaryTxn | null,
       isEditMode: false,
       isViewMode: false,
-      type: "" as "PR" | "CR" | "CP" | "",
     },
   });
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
+  const queryKey = [config.queryKeyBase, loginid, companyCode];
+
+  // ── Fetch (type-specific view, blank code2 = full list) ─────────────────────
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["mytask-alms", loginid, companyCode],
+    queryKey,
     queryFn: () =>
       almsCommonSelect<TPurchaseSummaryTxn>({
-        parameter: "Amlspf_mytaskalmsPage",
+        parameter: config.parameter,
         loginid,
         code1: companyCode,
-        code3: statusFilter,
+        code2: "", // blank = fetch all records for this company; backend should NVL/skip filter when blank
       }),
     enabled: !!loginid && !!companyCode,
   });
@@ -95,7 +140,7 @@ const MytaskalmsPage = ({ initialTab = 0 }: MytaskalmsPageProps) => {
     const allowed = STATUS_MATCH[statusFilter];
     return rows.filter((row) => allowed.includes(statusOf(row)));
   }, [rows, statusFilter]);
-  
+
   const filteredRows = useMemo(() => {
     if (!query.trim()) return statusFilteredRows;
     const q = query.toLowerCase();
@@ -107,16 +152,15 @@ const MytaskalmsPage = ({ initialTab = 0 }: MytaskalmsPageProps) => {
   }, [statusFilteredRows, query]);
 
   // ── Popup handlers ──────────────────────────────────────────────────────────
-  const openAddPopup = (type: "PR" | "CR" | "CP") => {
+  const openAddPopup = () => {
     setTaskPopup({
       open: true,
-      title: `Add ${type}`,
-      data: { existingData: null, isEditMode: false, isViewMode: false, type },
+      title: config.addLabel,
+      data: { existingData: null, isEditMode: false, isViewMode: false },
     });
   };
 
   const handleActions = (actionType: "view" | "edit", row: TPurchaseSummaryTxn) => {
-    const type = requestType(row.REQUEST_NUMBER);
     setTaskPopup({
       open: true,
       title: `${actionType === "edit" ? "Edit" : "View"} ${type} - ${row.REQUEST_NUMBER}`,
@@ -124,7 +168,6 @@ const MytaskalmsPage = ({ initialTab = 0 }: MytaskalmsPageProps) => {
         existingData: row,
         isEditMode: actionType === "edit",
         isViewMode: actionType === "view",
-        type,
       },
     });
   };
@@ -132,10 +175,11 @@ const MytaskalmsPage = ({ initialTab = 0 }: MytaskalmsPageProps) => {
   const closePopup = (refresh?: boolean) => {
     setTaskPopup((prev) => ({ ...prev, open: false }));
     if (refresh) {
+      queryClient.invalidateQueries({ queryKey });
     }
   };
 
-  // ── Columns ──────────────────────────────────────────────────────────────────
+  // ── Columns (identical structure across all types) ─────────────────────────
   const columns = useMemo<ColumnDef<TPurchaseSummaryTxn>[]>(
     () => [
       {
@@ -216,35 +260,34 @@ const MytaskalmsPage = ({ initialTab = 0 }: MytaskalmsPageProps) => {
         id: "actions",
         header: "Actions",
         size: 100,
-        cell: ({ row }) => {
-          const type = requestType(row.original.REQUEST_NUMBER);
-          return (
-            <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+        cell: ({ row }) => (
+          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <Button
+              size="sm" variant="ghost" title="View"
+              onClick={() => handleActions("view", row.original)}
+              style={{ padding: "4px", height: "28px", width: "28px" }}
+            >
+              <Eye size={14} />
+            </Button>
+            {config.showEdit && (
               <Button
-                size="sm" variant="ghost" title="View"
-                onClick={() => handleActions("view", row.original)}
+                size="sm" variant="ghost" title="Edit"
+                onClick={() => handleActions("edit", row.original)}
                 style={{ padding: "4px", height: "28px", width: "28px" }}
               >
-                <Eye size={14} />
+                <Edit2 size={14} />
               </Button>
-              {type !== "CP" && (
-                <Button
-                  size="sm" variant="ghost" title="Edit"
-                  onClick={() => handleActions("edit", row.original)}
-                  style={{ padding: "4px", height: "28px", width: "28px" }}
-                >
-                  <Edit2 size={14} />
-                </Button>
-              )}
-            </div>
-          );
-        },
+            )}
+          </div>
+        ),
       },
     ],
-    []
+    [config.showEdit]
   );
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  const FormComponent = config.FormComponent;
+
+  // ── Render (identical header/footer/table markup across all types) ─────────
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "16px" }}>
       {/* Breadcrumb */}
@@ -253,7 +296,7 @@ const MytaskalmsPage = ({ initialTab = 0 }: MytaskalmsPageProps) => {
         <span style={{ color: "#d1d5db" }}>/</span>
         <a href="/alms" style={{ color: "#6b7280", textDecoration: "none" }}>ALMS</a>
         <span style={{ color: "#d1d5db" }}>/</span>
-        <span style={{ color: "#111827", fontWeight: 500 }}>My Task</span>
+        <span style={{ color: "#111827", fontWeight: 500 }}>{config.breadcrumbLabel}</span>
       </div>
 
       {/* Notice */}
@@ -288,15 +331,9 @@ const MytaskalmsPage = ({ initialTab = 0 }: MytaskalmsPageProps) => {
         </div>
 
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          <Button onClick={() => openAddPopup("PR")} style={{ background: "#082A89" }}>
-            <Plus size={15} /> Add PR
+          <Button onClick={openAddPopup} style={{ background: config.addColor }}>
+            <Plus size={15} /> {config.addLabel}
           </Button>
-          <Button onClick={() => openAddPopup("CR")} style={{ background: "#0a6640" }}>
-            <Plus size={15} /> Add CR
-          </Button>
-          {/* <Button onClick={() => openAddPopup("CP")} style={{ background: "#6b21a8" }}>
-            <Plus size={15} /> Add CP
-          </Button> */}
         </div>
       </div>
 
@@ -315,7 +352,7 @@ const MytaskalmsPage = ({ initialTab = 0 }: MytaskalmsPageProps) => {
         enablePagination
         pageSize={50}
         enableColumnFilters
-        getRowId={(row) => row.REQUEST_NUMBER ?? ""}
+        getRowId={(row, index) => row.REQUEST_NUMBER || `temp-${index}`}
       />
 
       {/* Add / Edit / View Dialog */}
@@ -325,32 +362,8 @@ const MytaskalmsPage = ({ initialTab = 0 }: MytaskalmsPageProps) => {
         title={taskPopup.title}
         onClose={() => closePopup()}
       >
-        {taskPopup.open && taskPopup.data.type === "PR" && (
-          <AddPRRequestPage
-            isEditMode={taskPopup.data.isEditMode}
-            isViewMode={taskPopup.data.isViewMode}
-            existingData={
-              taskPopup.data.existingData
-                ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }
-                : undefined
-            }
-            onClose={closePopup}
-          />
-        )}
-        {taskPopup.open && taskPopup.data.type === "CR" && (
-          <AddCRRequestPage
-            isEditMode={taskPopup.data.isEditMode}
-            isViewMode={taskPopup.data.isViewMode}
-            existingData={
-              taskPopup.data.existingData
-                ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }
-                : undefined
-            }
-            onClose={closePopup}
-          />
-        )}
-        {taskPopup.open && taskPopup.data.type === "CP" && (
-          <AddCPRequestPage
+        {taskPopup.open && (
+          <FormComponent
             isEditMode={taskPopup.data.isEditMode}
             isViewMode={taskPopup.data.isViewMode}
             existingData={
@@ -366,4 +379,17 @@ const MytaskalmsPage = ({ initialTab = 0 }: MytaskalmsPageProps) => {
   );
 };
 
-export default MytaskalmsPage;
+export default RequestTaskPage;
+
+// ─── Pre-bound exports for routing (drop-in replacement for the 3 separate files) ─
+export const Purchase_Request_page = (props: { initialTab?: number }) => (
+  <RequestTaskPage type="PR" {...props} />
+);
+
+export const Credit_Request_page = (props: { initialTab?: number }) => (
+  <RequestTaskPage type="CR" {...props} />
+);
+
+export const Capex_Request_page = (props: { initialTab?: number }) => (
+  <RequestTaskPage type="CP" {...props} />
+);

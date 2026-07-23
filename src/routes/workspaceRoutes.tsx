@@ -144,6 +144,9 @@ import { ProductCategoryPage } from "../pages/purchase_sales/PS_ProductCategory"
 import { ZoneMasterPage } from "../pages/purchase_sales/PS_ZoneMasterPage";
 
 import Mytaskalmspage from "../pages/almswf/Mytaskalmspage";
+import Credit_Request_page from "../pages/almswf/CreaditRequestPage";
+import Capex_Request_page from "../pages/almswf/CapexRequestPage";
+import Purchase_Request_page from "../pages/almswf/PurchaseRequestPage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -633,6 +636,27 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match:(context) => isMyTaskRoute(context),
     element: () => <Mytaskalmspage initialTab={0} />
   },
+
+  {
+    name: 'Credit Request page',
+    match:(context) => isCreditRequestTaskRoute(context),
+    element: () => <Credit_Request_page initialTab={0} />
+  },
+
+  {
+    name: 'Capex Request page',
+    match:(context) => isCapexRequestTaskRoute(context),
+    element: () => <Capex_Request_page initialTab={0} />
+  },
+
+
+  {
+    name: 'Purchase Request page',
+    match:(context) => isPurchaseRequestTaskRoute(context),
+    element: () => <Purchase_Request_page initialTab={0} />
+  },
+
+
 
   //// PAMS Routes
   {
@@ -1483,6 +1507,49 @@ function isMyTaskRoute(context: WorkspaceRouteContext) {
     (normalized.includes("/my_task") ||
       normalized.includes("/my-task") ||
       compact.includes("mytask")) &&
+    !normalized.includes("/view/") &&
+    !normalized.includes("/edit/")
+  );
+}
+
+function isCreditRequestTaskRoute(context: WorkspaceRouteContext) {
+  const normalized = getGenericMatchText(context);
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    isAlmsRoute(context.pathname) &&
+    (normalized.includes("/credit_request") ||
+      normalized.includes("/credit-request") ||
+      compact.includes("creditrequest")) &&
+    !normalized.includes("/view/") &&
+    !normalized.includes("/edit/")
+  );
+}
+
+
+
+function isCapexRequestTaskRoute(context: WorkspaceRouteContext) {
+  const normalized = getGenericMatchText(context);
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    isAlmsRoute(context.pathname) &&
+    (normalized.includes("/capex") ||
+      normalized.includes("/capex-request") ||
+      compact.includes("capexrequest")) &&
+    !normalized.includes("/view/") &&
+    !normalized.includes("/edit/")
+  );
+}
+
+
+
+function isPurchaseRequestTaskRoute(context: WorkspaceRouteContext) {
+  const normalized = getGenericMatchText(context);
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    isAlmsRoute(context.pathname) &&
+    (normalized.includes("/purchase_request") ||
+      normalized.includes("/purchase-request") ||
+      compact.includes("purchaserequest")) &&
     !normalized.includes("/view/") &&
     !normalized.includes("/edit/")
   );
