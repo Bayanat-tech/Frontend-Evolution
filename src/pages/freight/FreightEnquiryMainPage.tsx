@@ -413,7 +413,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
       const response = await api.post<{ success?: boolean; message?: string; data?: { enquiry_nr?: string } }>(
         isRfq ? "/api/freight/rfq/save" : "/api/freight/enquiry/save",
         payload
-      ).catch(() => api.post<{ success?: boolean; message?: string; data?: { enquiry_nr?: string } }>("/api/freight/insUpdTfEnquiryBulk", payload));
+      );
       if (response.data?.success === false) {
         throw new Error(response.data.message || "Unable to save enquiry");
       }
