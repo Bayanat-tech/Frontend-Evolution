@@ -188,6 +188,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
 
   const enquiryLabel = isRfq ? "RFQ" : "Enquiry";
   const loginId = String(userInfo?.loginid || userInfo?.USERID || userInfo?.user_id || userInfo?.username || "");
+  const isCancelled = header.indstatus === "C";
   const attachmentRequestNumber = header.enquiry_nr ? `${header.company_code}-${header.enquiry_type}-${header.enquiry_nr}` : "";
   const smartChecks = useMemo(() => buildSmartChecks(header, details, isRfq), [details, header, isRfq]);
   const urgentChecks = smartChecks.filter((item) => item.tone === "danger").length;
@@ -411,7 +412,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
       setView("list");
       return;
     }
-    if (header.indstatus === "C") {
+    if (isCancelled) {
       setNotice({ type: "error", text: `${enquiryLabel} is already cancelled` });
       return;
     }
@@ -711,26 +712,26 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
               {notice.text}
             </span>
           )}
-          <Button type="button" size="sm" variant="outline" onClick={() => setAssistOpen((open) => !open)}>
+          <Button type="button" size="sm" variant="outline" onClick={() => setAssistOpen((open) => !open)} disabled={isCancelled}>
             <Sparkles size={14} />
             Check
             {(urgentChecks + warningChecks) > 0 && (
               <span className="rounded bg-amber-100 px-1.5 text-[10px] font-bold text-amber-700">{urgentChecks + warningChecks}</span>
             )}
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => setAttachmentOpen(true)}>
+          <Button type="button" size="sm" variant="outline" onClick={() => setAttachmentOpen(true)} disabled={isCancelled}>
             <Paperclip size={14} />
             Files
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={requestCancel} disabled={header.indstatus === "C"}>
+          <Button type="button" size="sm" variant="outline" onClick={requestCancel} disabled={isCancelled}>
             {header.enquiry_nr ? <Ban size={14} /> : <X size={14} />}
             {header.enquiry_nr ? "Cancel" : "Close"}
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={resetForm}>
+          <Button type="button" size="sm" variant="outline" onClick={resetForm} disabled={isCancelled}>
             <RotateCcw size={14} />
             Reset
           </Button>
-          <Button type="submit" size="sm" disabled={saving || header.indstatus === "C"}>
+          <Button type="submit" size="sm" disabled={saving || isCancelled}>
             <Save size={14} />
             {saving ? "Saving" : "Save"}
           </Button>
@@ -889,7 +890,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
             <section>
               <div className="mb-2 flex items-center justify-between gap-2">
                 <h2 className="m-0 text-sm font-semibold uppercase text-muted-foreground">Activities</h2>
-                <Button type="button" size="sm" variant="outline" onClick={addDetail}>
+                <Button type="button" size="sm" variant="outline" onClick={addDetail} disabled={isCancelled}>
                   <Plus size={14} />
                   Add Line
                 </Button>
@@ -946,7 +947,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
                         <CellInput value={row.curr_code} onChange={(value) => setDetailField(index, "curr_code", value)} className="w-24" />
                         <CellInput value={row.remarks} onChange={(value) => setDetailField(index, "remarks", value)} className="min-w-56" />
                         <td className="px-2 py-2 text-right">
-                          <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={details.length === 1} onClick={() => removeDetail(index)}>
+                          <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={isCancelled || details.length === 1} onClick={() => removeDetail(index)}>
                             <Trash2 size={14} />
                           </Button>
                         </td>
