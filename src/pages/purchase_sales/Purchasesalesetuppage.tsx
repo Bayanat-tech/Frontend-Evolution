@@ -2,6 +2,7 @@ import { Save, X } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
   executeDynamicMutation,
+  executeDynamicMutationColumn90,
   getDynamicLookup,
   getDynamicLookupaccount,
   getLookupValue,
@@ -14,7 +15,11 @@ import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { useAuth } from "../../state/AuthContext";
 
-const PURCHASE_SALE_MSE_SETUP = "PURCHASE_SALE_MSE_SETUP"; // TODO: confirm with backend
+// Insert/Update parameter, per the PL/SQL: `WHEN 'PURCHASE_SALE_MSE_SETUP_INS_UPD' THEN ...`
+// NOTE: this page intentionally does NOT fetch existing setup data on load.
+// It always starts blank; Submit inserts a new row or (if the procedure's
+// own COMPANY_CODE lookup finds one) updates the existing row for this company.
+const PURCHASE_SALE_MSE_SETUP_INS_UPD = "PURCHASE_SALE_MSE_SETUP_INS_UPD";
 
 const PURCHASE_SALE_MSE_SETUP_DEPT = "PURCHASE_SALE_MSE_SETUP_DEPT";
 const DIVISION_PARAM = "Account_division";
@@ -79,12 +84,6 @@ const EMPTY: SetupForm = {
   edit_dn_dt: false,
   itemdesc_edit: false,
   plead_time: "",
-};
-
-const toYN = (v: unknown): YesNo => (String(v ?? "N").trim().toUpperCase() === "Y" ? "Y" : "N");
-const toBool = (v: unknown): boolean => {
-  const s = String(v ?? "").trim().toUpperCase();
-  return s === "Y" || s === "1" || s === "TRUE";
 };
 
 // ── Reusable field pieces ───────────────────────────────────────────────
@@ -243,7 +242,6 @@ export function PurchaseSaleSetupPage() {
   const [baseDiscCodes, setBaseDiscCodes] = useState<CodeOption[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
 
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [errors, setErrors] = useState<Partial<Record<keyof SetupForm, string>>>({});
@@ -251,25 +249,12 @@ export function PurchaseSaleSetupPage() {
   const setField = <K extends keyof SetupForm>(field: K, value: SetupForm[K]) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
-  const lookupParams = useCallback(
-    (parameter: string) => ({
-      parameter,
-      loginid,
-      code1: companyCode,
-      code2: "NULL",
-      code3: "NULL",
-      code4: "NULL",
-      number1: 0,
-      number2: 0,
-      number3: 0,
-      number4: 0,
-      date1: null,
-      date2: null,
-      date3: null,
-      date4: null,
-    }),
-    [loginid, companyCode],
-  );
+  // No data fetch for the setup row itself — the form always starts blank.
+  // We only ever prefill company_code, since it comes from auth context
+  // rather than from any lookup call.
+  useEffect(() => {
+    setForm((prev) => (prev.company_code === companyCode ? prev : { ...prev, company_code: companyCode }));
+  }, [companyCode]);
 
   // Generic {code,name} lookup fetch — used for Dept, Div, Zone, and
   // Base Discount plain <select> dropdowns. `codeField`/`nameField` are
@@ -332,103 +317,33 @@ export function PurchaseSaleSetupPage() {
     }
   }, [loadCodeOptions]);
 
-  const loadSetup = useCallback(async () => {
-    if (!companyCode) return;
-    setLoading(true);
-    setNotice(null);
-    try {
-      const data = await getDynamicLookupaccount(lookupParams(PURCHASE_SALE_MSE_SETUP));
-      const raw = Array.isArray(data) ? (data as Record<string, unknown>[]) : [data as Record<string, unknown>];
-      const r = raw[0] ?? {};
-      setForm({
-        company_code: String(r.company_code ?? r.COMPANY_CODE ?? companyCode),
-        def_dept_code: String(r.def_dept_code ?? r.DEF_DEPT_CODE ?? ""),
-        def_div_code: String(r.def_div_code ?? r.DEF_DIV_CODE ?? ""),
-        def_zone_code: String(r.def_zone_code ?? r.DEF_ZONE_CODE ?? ""),
-        allow_neg_stock: toYN(r.allow_neg_stock ?? r.ALLOW_NEG_STOCK),
-        allow_neg_pick: toYN(r.allow_neg_pick ?? r.ALLOW_NEG_PICK),
-        reserve_on_order: toYN(r.reserve_on_order ?? r.RESERVE_ON_ORDER),
-        grn_auto_confirm: toYN(r.grn_auto_confirm ?? r.GRN_AUTO_CONFIRM),
-        dn_auto_confirm: toYN(r.dn_auto_confirm ?? r.DN_AUTO_CONFIRM),
-        adjust_ac_code: String(r.adjust_ac_code ?? r.ADJUST_AC_CODE ?? ""),
-        pin_auto_post: toYN(r.pin_auto_post ?? r.PIN_AUTO_POST),
-        sin_auto_post: toYN(r.sin_auto_post ?? r.SIN_AUTO_POST),
-        base_disc_code: String(r.base_disc_code ?? r.BASE_DISC_CODE ?? ""),
-        dupl_item_pur: toYN(r.dupl_item_pur ?? r.DUPL_ITEM_PUR),
-        edit_grn_dt: toBool(r.edit_grn_dt ?? r.EDIT_GRN_DT),
-        edit_dn_dt: toBool(r.edit_dn_dt ?? r.EDIT_DN_DT),
-        itemdesc_edit: toBool(r.itemdesc_edit ?? r.ITEMDESC_EDIT),
-        plead_time: String(r.plead_time ?? r.PLEAD_TIME ?? ""),
-      });
-      // The MSE_SETUP row itself may not send the A/C name back, only the
-      // code — the effect below backfills it from the account list if so.
-      setAdjustAcName(String(r.adjust_ac_name ?? r.ADJUST_AC_NAME ?? ""));
-    } catch (error) {
-      setNotice({
-        type: "error",
-        message: error instanceof Error ? error.message : "Unable to load purchase/sales setup",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [companyCode, lookupParams]);
-
   useEffect(() => {
-    void loadSetup();
     void loadDropdownOptions();
-  }, [loadSetup, loadDropdownOptions]);
+  }, [loadDropdownOptions]);
 
-  // Resolve the Adjustment A/c display name once, on initial load, if the
-  // backend didn't send one back with the MSE_SETUP row — same account
-  // list source (Account_AC_CODE_Serach / common) the LookupField itself uses.
-  useEffect(() => {
-    if (!form.adjust_ac_code || adjustAcName) return;
-    let cancelled = false;
-    getDynamicLookup({
-      parameter: Account_AC_CODE_Serach,
-      code1: companyCode,
-      code2: "",
-      code3: "",
-      code4: "",
-      number1: 0,
-      number2: 0,
-      number3: 0,
-      number4: 0,
-      date1: null,
-      date2: null,
-      date3: null,
-      date4: null,
-    })
-      .then((rows) => {
-        if (cancelled) return;
-        const match = rows.find((row) => String(getLookupValue(row, "ac_code")) === form.adjust_ac_code);
-        if (match) setAdjustAcName(String(getLookupValue(match, "ac_name") || ""));
-      })
-      .catch(() => {
-        /* non-fatal: field still shows the raw code */
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.adjust_ac_code, companyCode]);
+  // Resolve the Adjustment A/c display name whenever a code is picked from
+  // the lookup itself (onSelect below) — no longer backfilled from any
+  // MSE_SETUP fetch, since this page doesn't fetch existing setup rows.
 
   const validate = (): boolean => {
     const next: Partial<Record<keyof SetupForm, string>> = {};
     if (!form.def_dept_code.trim()) next.def_dept_code = "Default Dept Code is required";
     if (!form.def_div_code.trim()) next.def_div_code = "Default Div Code is required";
     if (!form.def_zone_code.trim()) next.def_zone_code = "Default Zone Code is required";
+    if (form.plead_time.trim() && Number.isNaN(Number(form.plead_time))) {
+      next.plead_time = "Purchase Lead Time must be a number";
+    }
     setErrors(next);
     return Object.keys(next).length === 0;
   };
 
-  // Cancel discards unsaved edits — same idea as AddExpenseMasterForm's
-  // Cancel button, except there's no parent modal to close here, so it
-  // simply reloads the last-saved MSE_SETUP row and clears any errors.
+  // Cancel now just discards in-progress edits and resets to a blank form
+  // (there's no saved row to reload back to).
   const handleCancel = () => {
     setErrors({});
     setNotice(null);
-    void loadSetup();
+    setAdjustAcName("");
+    setForm({ ...EMPTY, company_code: companyCode });
   };
 
   const handleSubmit = async (event: FormEvent) => {
@@ -438,10 +353,14 @@ export function PurchaseSaleSetupPage() {
     setSaving(true);
     setNotice(null);
     try {
-      const leadTimeNum = Number(form.plead_time);
-
-      await executeDynamicMutation({
-        parameter: PURCHASE_SALE_MSE_SETUP,
+      // Matches the PL/SQL branch WHEN 'PURCHASE_SALE_MSE_SETUP_INS_UPD':
+      // P_VAL1S1..P_VAL1S14 map 1:1, in order, onto
+      // COMPANY_CODE, DEF_DEPT_CODE, DEF_DIV_CODE, DEF_ZONE_CODE,
+      // ALLOW_NEG_STOCK, ALLOW_NEG_PICK, RESERVE_ON_ORDER, GRN_AUTO_CONFIRM,
+      // DN_AUTO_CONFIRM, ADJUST_AC_CODE, PIN_AUTO_POST, SIN_AUTO_POST,
+      // BASE_DISC_CODE, DUPL_ITEM_PUR.
+      await executeDynamicMutationColumn90({
+        parameter: PURCHASE_SALE_MSE_SETUP_INS_UPD,
         loginid,
         val1s1: companyCode,
         val1s2: form.def_dept_code.trim(),
@@ -457,15 +376,9 @@ export function PurchaseSaleSetupPage() {
         val1s12: form.sin_auto_post,
         val1s13: form.base_disc_code.trim(),
         val1s14: form.dupl_item_pur,
-        val1s15: form.edit_grn_dt ? "Y" : "N",
-        val1s16: form.edit_dn_dt ? "Y" : "N",
-        val1s17: form.itemdesc_edit ? "Y" : "N",
-        val1s18: loginid,
-        val1n1: Number.isFinite(leadTimeNum) ? leadTimeNum : 0,
       });
 
       setNotice({ type: "success", message: "Purchase/Sales setup saved successfully." });
-      await loadSetup();
     } catch (error) {
       setNotice({
         type: "error",
@@ -510,7 +423,7 @@ export function PurchaseSaleSetupPage() {
                 value={form.def_dept_code}
                 options={depts}
                 onChange={(v) => setField("def_dept_code", v)}
-                disabled={loading}
+                disabled={saving}
                 loading={loadingOptions}
                 required
                 error={errors.def_dept_code}
@@ -521,7 +434,7 @@ export function PurchaseSaleSetupPage() {
                 value={form.def_div_code}
                 options={divisions}
                 onChange={(v) => setField("def_div_code", v)}
-                disabled={loading}
+                disabled={saving}
                 loading={loadingOptions}
                 required
                 error={errors.def_div_code}
@@ -532,7 +445,7 @@ export function PurchaseSaleSetupPage() {
                 value={form.def_zone_code}
                 options={zones}
                 onChange={(v) => setField("def_zone_code", v)}
-                disabled={loading}
+                disabled={saving}
                 loading={loadingOptions}
                 required
                 error={errors.def_zone_code}
@@ -547,7 +460,7 @@ export function PurchaseSaleSetupPage() {
                     : form.adjust_ac_code
                 }
                 companyCode={companyCode}
-                disabled={loading}
+                disabled={saving}
                 onSelect={(value, row) => {
                   setField("adjust_ac_code", value);
                   setAdjustAcName(row ? String(getLookupValue(row, "ac_name") ?? "") : "");
@@ -559,7 +472,7 @@ export function PurchaseSaleSetupPage() {
                 value={form.base_disc_code}
                 options={baseDiscCodes}
                 onChange={(v) => setField("base_disc_code", v)}
-                disabled={loading}
+                disabled={saving}
                 loading={loadingOptions}
               />
 
@@ -567,7 +480,7 @@ export function PurchaseSaleSetupPage() {
                 label="Duplicate Items in Purchase"
                 value={form.dupl_item_pur}
                 onChange={(v) => setField("dupl_item_pur", v)}
-                disabled={loading}
+                disabled={saving}
               />
 
               <div className="grid gap-2">
@@ -575,19 +488,19 @@ export function PurchaseSaleSetupPage() {
                   label="Product Name Editable"
                   checked={form.itemdesc_edit}
                   onChange={(v) => setField("itemdesc_edit", v)}
-                  disabled={loading}
+                  disabled={saving}
                 />
                 <CheckboxField
                   label="GRN Date Change"
                   checked={form.edit_grn_dt}
                   onChange={(v) => setField("edit_grn_dt", v)}
-                  disabled={loading}
+                  disabled={saving}
                 />
                 <CheckboxField
                   label="DN Date Change"
                   checked={form.edit_dn_dt}
                   onChange={(v) => setField("edit_dn_dt", v)}
-                  disabled={loading}
+                  disabled={saving}
                 />
               </div>
             </div>
@@ -598,43 +511,43 @@ export function PurchaseSaleSetupPage() {
                 label="Allow Negative Stock"
                 value={form.allow_neg_stock}
                 onChange={(v) => setField("allow_neg_stock", v)}
-                disabled={loading}
+                disabled={saving}
               />
               <YesNoSelect
                 label="Allow Negative Pick"
                 value={form.allow_neg_pick}
                 onChange={(v) => setField("allow_neg_pick", v)}
-                disabled={loading}
+                disabled={saving}
               />
               <YesNoSelect
                 label="Reserve On Order"
                 value={form.reserve_on_order}
                 onChange={(v) => setField("reserve_on_order", v)}
-                disabled={loading}
+                disabled={saving}
               />
               <YesNoSelect
                 label="GRN Auto Confirm"
                 value={form.grn_auto_confirm}
                 onChange={(v) => setField("grn_auto_confirm", v)}
-                disabled={loading}
+                disabled={saving}
               />
               <YesNoSelect
                 label="DN Auto Confirm"
                 value={form.dn_auto_confirm}
                 onChange={(v) => setField("dn_auto_confirm", v)}
-                disabled={loading}
+                disabled={saving}
               />
               <YesNoSelect
                 label="P.Invoice Auto Post"
                 value={form.pin_auto_post}
                 onChange={(v) => setField("pin_auto_post", v)}
-                disabled={loading}
+                disabled={saving}
               />
               <YesNoSelect
                 label="Sales Invoice Auto Post"
                 value={form.sin_auto_post}
                 onChange={(v) => setField("sin_auto_post", v)}
-                disabled={loading}
+                disabled={saving}
               />
               <label className="field">
                 <span>Purchase Lead Time</span>
@@ -642,10 +555,13 @@ export function PurchaseSaleSetupPage() {
                   type="number"
                   min={0}
                   value={form.plead_time}
-                  disabled={loading}
+                  disabled={saving}
                   onChange={(e) => setField("plead_time", e.target.value)}
                   placeholder="Days"
                 />
+                {errors.plead_time && (
+                  <span className="text-destructive text-xs mt-0.5">{errors.plead_time}</span>
+                )}
               </label>
             </div>
           </CardContent>
@@ -653,10 +569,10 @@ export function PurchaseSaleSetupPage() {
       </form>
 
       <div className="flex items-center justify-end gap-2 border-t bg-card p-4">
-        <Button variant="outline" onClick={handleCancel} disabled={loading || saving}>
+        <Button variant="outline" onClick={handleCancel} disabled={saving}>
           <X size={15} /> Cancel
         </Button>
-        <Button disabled={saving || loading} type="submit" form="purchase-sale-setup-form">
+        <Button disabled={saving} type="submit" form="purchase-sale-setup-form">
           {saving ? <span className="spinner small" /> : <Save size={15} />} {saving ? "Saving..." : "Submit"}
         </Button>
       </div>
