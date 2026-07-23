@@ -26,6 +26,7 @@ import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
 import { FreightMasterPage } from "../pages/freight/FreightMasterPage";
 import { freightMasterConfigs } from "../pages/freight/freightMasterConfigs";
 import { FreightEnquiryMainPage } from "../pages/freight/FreightEnquiryMainPage";
+import { FreightQuotationPage } from "../pages/freight/FreightQuotationPage";
 import { FreightWorkspacePage } from "../pages/freight/FreightWorkspacePage";
 import { SecurityAssignmentPage, securityAssignmentConfigs } from "../pages/security/SecurityAssignmentPage";
 import { SecurityMasterPage, securityMasterConfigs } from "../pages/security/SecurityMasterPage";
@@ -587,6 +588,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Freight Enquiry",
     match: (context) => isFreightEnquiryRoute(context),
     element: (context) => <FreightEnquiryMainPage target={getFreightWorkspaceTarget(context)} />,
+  },
+  {
+    name: "Freight Quotation",
+    match: (context) => isFreightQuotationRoute(context),
+    element: (context) => <FreightQuotationPage target={getFreightWorkspaceTarget(context)} />,
   },
   {
     name: "Freight Master",
@@ -1307,9 +1313,12 @@ function getFreightMasterConfig(context: WorkspaceRouteContext) {
 }
 
 function isFreightWorkspaceRoute(context: WorkspaceRouteContext) {
+  const pathname = context.pathname.toLowerCase();
   const matchText = getGenericMatchText(context);
   const compact = matchText.replace(/[^a-z0-9]/g, "");
   return (
+    pathname === "/workspace/fms/fms" ||
+    pathname === "/workspace/fms/fms/" ||
     matchText.includes("/freight") ||
     compact.includes("freight") ||
     compact.includes("frieght") ||
@@ -1346,6 +1355,13 @@ function isFreightRfqActivitiesRoute(context: WorkspaceRouteContext) {
   const matchText = getGenericMatchText(context);
   const compact = matchText.replace(/[^a-z0-9]/g, "");
   return compact.includes("freightrequestquoterfqactivities") || compact.includes("requestquoterfqactivities") || compact.includes("rfqactivities");
+}
+
+function isFreightQuotationRoute(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  if (compact.includes("airlinetarriff") || compact.includes("quotationlist")) return false;
+  return compact.includes("freightfreightquotationquotation") || compact.includes("freightquotationquotation");
 }
 
 function getFreightWorkspaceTarget(context: WorkspaceRouteContext) {
