@@ -144,6 +144,7 @@ import { ProductCategoryPage } from "../pages/purchase_sales/PS_ProductCategory"
 import { ZoneMasterPage } from "../pages/purchase_sales/PS_ZoneMasterPage";
 
 import Mytaskalmspage from "../pages/almswf/Mytaskalmspage";
+import { PurchaseSaleSetupPage } from "../pages/purchase_sales/Purchasesalesetuppage";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -950,6 +951,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <ExpenseMasterPage/>
   },
   
+
+  {
+    name : "Purchase Sale Setup",
+    match: ({pathname}) => isPurchaseSaleSetupRoute(pathname),
+    element: () => <PurchaseSaleSetupPage/>
+  },
 ];
 
 function isStorageComputationRoute(pathname: string) {
@@ -970,6 +977,13 @@ function isProductBrandRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes(
     "/workspace/purchase_sales/purchase_sales/masters/product_brand"
+  );
+}
+
+function isPurchaseSaleSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/utilities/purchase/sales_setup"
   );
 }
 
