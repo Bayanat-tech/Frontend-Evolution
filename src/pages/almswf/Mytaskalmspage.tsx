@@ -14,8 +14,6 @@ import { almsCommonSelect } from "../../api/alms";
 import AddCRRequestPage from "./AddCRRequestPage";
 import AddCPRequestPage from "./AddCPRequestPage";
 
-// import AddCPRequestPage from "./AddCPRequestPage";
-
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TAB_STATUS = ["PENDING", "IN PROGRESS", "REJECTED", "SENT BACK", "APPROVED", "PO GENERATED"] as const;
 const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Final Approved", "Po Generated"] as const;
@@ -63,7 +61,7 @@ const MytaskalmsPage = ({ initialTab = 0 }: MytaskalmsPageProps) => {
   const [activeTab, setActiveTab] = useState(initialTab);
   const statusFilter = TAB_STATUS[activeTab];
   const [query, setQuery] = useState("");
-  
+
 
   // ── Popup state (Add / Edit / View) ─────────────────────────────────────────
   const [taskPopup, setTaskPopup] = useState({
@@ -134,7 +132,6 @@ const MytaskalmsPage = ({ initialTab = 0 }: MytaskalmsPageProps) => {
   const closePopup = (refresh?: boolean) => {
     setTaskPopup((prev) => ({ ...prev, open: false }));
     if (refresh) {
-      // Refetch data if needed
     }
   };
 
@@ -215,60 +212,34 @@ const MytaskalmsPage = ({ initialTab = 0 }: MytaskalmsPageProps) => {
         size: 160,
         cell: ({ row }) => (row.original as any).NEXT_ACTION_BY || "—",
       },
-      // {
-      //   id: "actions",
-      //   header: "Actions",
-      //   size: 100,
-      //   cell: ({ row }) => (
-      //     <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-      //       <Button
-      //         size="sm" variant="ghost" title="View"
-      //         onClick={() => handleActions("view", row.original)}
-      //         style={{ padding: "4px", height: "28px", width: "28px" }}
-      //       >
-      //         <Eye size={14} />
-      //       </Button>
-      //       <Button
-      //         size="sm" variant="ghost" title="Edit"
-      //         onClick={() => handleActions("edit", row.original)}
-      //         style={{ padding: "4px", height: "28px", width: "28px" }}
-      //       >
-      //         <Edit2 size={14} />
-      //       </Button>
-      //     </div>
-      //   ),
-      // },
-
-
-
       {
-  id: "actions",
-  header: "Actions",
-  size: 100,
-  cell: ({ row }) => {
-    const type = requestType(row.original.REQUEST_NUMBER);
-    return (
-      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-        <Button
-          size="sm" variant="ghost" title="View"
-          onClick={() => handleActions("view", row.original)}
-          style={{ padding: "4px", height: "28px", width: "28px" }}
-        >
-          <Eye size={14} />
-        </Button>
-        {type !== "CP" && (
-          <Button
-            size="sm" variant="ghost" title="Edit"
-            onClick={() => handleActions("edit", row.original)}
-            style={{ padding: "4px", height: "28px", width: "28px" }}
-          >
-            <Edit2 size={14} />
-          </Button>
-        )}
-      </div>
-    );
-  },
-},
+        id: "actions",
+        header: "Actions",
+        size: 100,
+        cell: ({ row }) => {
+          const type = requestType(row.original.REQUEST_NUMBER);
+          return (
+            <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              <Button
+                size="sm" variant="ghost" title="View"
+                onClick={() => handleActions("view", row.original)}
+                style={{ padding: "4px", height: "28px", width: "28px" }}
+              >
+                <Eye size={14} />
+              </Button>
+              {type !== "CP" && (
+                <Button
+                  size="sm" variant="ghost" title="Edit"
+                  onClick={() => handleActions("edit", row.original)}
+                  style={{ padding: "4px", height: "28px", width: "28px" }}
+                >
+                  <Edit2 size={14} />
+                </Button>
+              )}
+            </div>
+          );
+        },
+      },
     ],
     []
   );
@@ -289,30 +260,30 @@ const MytaskalmsPage = ({ initialTab = 0 }: MytaskalmsPageProps) => {
       {isError && (
         <NoticeToast
           notice={{ type: "error", message: error instanceof Error ? error.message : "Failed to load tasks" }}
-          onClose={() => {}}
+          onClose={() => { }}
         />
       )}
 
-      {/* Tabs + Add buttons */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "2px", borderBottom: "2px solid #e5e7eb" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
+        <div className="flex flex-wrap gap-2 rounded-md">
           {TAB_LABELS.map((label, index) => (
-            <button
+            <Button
               key={index}
+              size="default"
+              variant={activeTab === index ? "default" : "outline"}
               onClick={() => setActiveTab(index)}
+              className="px-6 py-2.5 min-w-[120px]"
               style={{
-                padding: "8px 20px", fontSize: "14px",
-                fontWeight: activeTab === index ? 700 : 500,
-                color: activeTab === index ? "#082A89" : "#6b7280",
-                background: activeTab === index ? "#f0f4ff" : "transparent",
-                border: "none",
-                borderBottom: activeTab === index ? "2px solid #082A89" : "2px solid transparent",
-                borderRadius: "8px 8px 0 0", cursor: "pointer",
-                marginBottom: "-2px", whiteSpace: "nowrap",
+                fontSize: "15px",
+                fontWeight: activeTab === index ? 600 : 500,
+                transition: "all 0.2s ease",
+                ...(activeTab === index && {
+                  boxShadow: "0 2px 8px rgba(8, 42, 137, 0.2)",
+                })
               }}
             >
               {label}
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -320,10 +291,10 @@ const MytaskalmsPage = ({ initialTab = 0 }: MytaskalmsPageProps) => {
           <Button onClick={() => openAddPopup("PR")} style={{ background: "#082A89" }}>
             <Plus size={15} /> Add PR
           </Button>
-        <Button onClick={() => openAddPopup("CR")} style={{ background: "#0a6640" }}>
+          <Button onClick={() => openAddPopup("CR")} style={{ background: "#0a6640" }}>
             <Plus size={15} /> Add CR
           </Button>
-             {/*<Button onClick={() => openAddPopup("CP")} style={{ background: "#6b21a8" }}>
+          {/* <Button onClick={() => openAddPopup("CP")} style={{ background: "#6b21a8" }}>
             <Plus size={15} /> Add CP
           </Button> */}
         </div>
@@ -347,50 +318,49 @@ const MytaskalmsPage = ({ initialTab = 0 }: MytaskalmsPageProps) => {
         getRowId={(row) => row.REQUEST_NUMBER ?? ""}
       />
 
-      {/* Add / Edit / View Dialog - Uncomment this */}
+      {/* Add / Edit / View Dialog */}
       <Dialog
         open={taskPopup.open}
         wide
         title={taskPopup.title}
         onClose={() => closePopup()}
       >
-       {taskPopup.open && taskPopup.data.type === "PR" && (
-  <AddPRRequestPage
-    isEditMode={taskPopup.data.isEditMode}
-    isViewMode={taskPopup.data.isViewMode}
-    existingData={
-      taskPopup.data.existingData
-        ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }
-        : undefined
-    }
-    onClose={closePopup}
-  />
-)}
+        {taskPopup.open && taskPopup.data.type === "PR" && (
+          <AddPRRequestPage
+            isEditMode={taskPopup.data.isEditMode}
+            isViewMode={taskPopup.data.isViewMode}
+            existingData={
+              taskPopup.data.existingData
+                ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }
+                : undefined
+            }
+            onClose={closePopup}
+          />
+        )}
         {taskPopup.open && taskPopup.data.type === "CR" && (
-  <AddCRRequestPage
-    isEditMode={taskPopup.data.isEditMode}
-    isViewMode={taskPopup.data.isViewMode}
-    existingData={
-      taskPopup.data.existingData
-        ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }
-        : undefined
-    }
-    onClose={closePopup}
-  />
-)}
-
-{taskPopup.open && taskPopup.data.type === "CP" && (
- <AddCPRequestPage
-     isEditMode={taskPopup.data.isEditMode}
-     isViewMode={taskPopup.data.isViewMode}
-     existingData={
-       taskPopup.data.existingData
-         ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }
-         : undefined
-     }
-     onClose={closePopup}
-   />
-)}
+          <AddCRRequestPage
+            isEditMode={taskPopup.data.isEditMode}
+            isViewMode={taskPopup.data.isViewMode}
+            existingData={
+              taskPopup.data.existingData
+                ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }
+                : undefined
+            }
+            onClose={closePopup}
+          />
+        )}
+        {taskPopup.open && taskPopup.data.type === "CP" && (
+          <AddCPRequestPage
+            isEditMode={taskPopup.data.isEditMode}
+            isViewMode={taskPopup.data.isViewMode}
+            existingData={
+              taskPopup.data.existingData
+                ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }
+                : undefined
+            }
+            onClose={closePopup}
+          />
+        )}
       </Dialog>
     </div>
   );
