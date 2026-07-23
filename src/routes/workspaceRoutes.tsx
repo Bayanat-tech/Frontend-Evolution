@@ -145,6 +145,7 @@ import { ZoneMasterPage } from "../pages/purchase_sales/PS_ZoneMasterPage";
 
 import Mytaskalmspage from "../pages/almswf/Mytaskalmspage";
 
+import { PurchaseOrderPage } from "../pages/purchase_sales/purchase/Purchaseorderpage";
 type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -645,6 +646,14 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isPamsRoute(pathname) && isPamsBulkAppraisalRoute(pathname),
     element: () => <PamsBulkAppraisalPage />,
   },
+
+  {
+    name: "Purchase Sales Setup",
+    match: ({ pathname }) => isPurchaseSalesSetupRoute(pathname),
+    element: () => <PurchaseOrderPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
   // ── PAMS My Task Routes (Specific tabs first, then default) ──
   {
     name: "PAMS My Task Pending",
@@ -1019,6 +1028,14 @@ function isBudgetSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return (
     normalized.includes("/finance/budget/budget_allocation")
+  );
+}
+
+
+function isPurchaseSalesSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return (
+    normalized.includes("purchase_sales/purchase/purchase_order")
   );
 }
 
