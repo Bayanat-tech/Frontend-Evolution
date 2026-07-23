@@ -180,10 +180,10 @@ type LookupFieldProps = {
 
     return (
       <>
-        <label className={compact ? "block" : "field"}>
+        <label className={compact ? "block w-full min-w-0" : "field"}>
           {!compact && <span>{label} {required && ( <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span>)}
         </span>}
-          <div ref={triggerRef} className="flex h-9 overflow-hidden rounded-md border bg-background">
+          <div ref={triggerRef} className="flex h-9 w-full min-w-0 overflow-hidden rounded-md border bg-background">
             <button
               className="min-w-0 flex-1 border-0 bg-transparent px-3 text-left text-sm text-foreground disabled:opacity-60"
               type="button"

@@ -100,6 +100,32 @@ type EnquiryDetail = {
   remarks: string;
 };
 
+type EnquiryHeaderNames = {
+  prin_name: string;
+  walkin_prin_name: string;
+  dept_name: string;
+  curr_name: string;
+  origin_port_name: string;
+  destination_port_name: string;
+  salesman_name: string;
+  forwarder_name: string;
+  vehicle_type_name: string;
+  carrier_name: string;
+};
+
+const emptyHeaderNames: EnquiryHeaderNames = {
+  prin_name: "",
+  walkin_prin_name: "",
+  dept_name: "",
+  curr_name: "",
+  origin_port_name: "",
+  destination_port_name: "",
+  salesman_name: "",
+  forwarder_name: "",
+  vehicle_type_name: "",
+  carrier_name: "",
+};
+
 type Notice = { type: "success" | "error"; text: string } | null;
 type EnquiryTab = "cargo" | "journey" | "carrier" | "payment" | "activities";
 type EnquiryView = "list" | "editor";
@@ -158,6 +184,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelRemarks, setCancelRemarks] = useState("");
+  const [headerNames, setHeaderNames] = useState<EnquiryHeaderNames>(emptyHeaderNames);
 
   const enquiryLabel = isRfq ? "RFQ" : "Enquiry";
   const loginId = String(userInfo?.loginid || userInfo?.USERID || userInfo?.user_id || userInfo?.username || "");
@@ -221,27 +248,73 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
     setHeader((current) => ({ ...current, [field]: value }));
   };
 
-  const applyHeaderLookup = (field: keyof EnquiryHeader, value: string, row: LookupRow | null) => {
-    setHeader((current) => {
-      const next = { ...current, [field]: value };
-      if (field === "prin_code" && row) {
-        next.dept_code = lookupText(row, "prin_dept_code") || next.dept_code;
-        next.curr_code = lookupText(row, "curr_code") || next.curr_code;
-        next.ex_rate = lookupText(row, "ex_rate") || next.ex_rate;
-      }
-      if (field === "origin_port" && row) {
-        next.country_origin = lookupText(row, "country_name") || lookupText(row, "country_code") || next.country_origin;
-      }
-      if (field === "destination_port" && row) {
-        next.country_destination = lookupText(row, "country_name") || lookupText(row, "country_code") || next.country_destination;
-      }
-      if (field === "curr_code" && row) {
-        next.ex_rate = lookupText(row, "ex_rate") || next.ex_rate;
-      }
-      return next;
-    });
-  };
+  // const applyHeaderLookup = (field: keyof EnquiryHeader, value: string, row: LookupRow | null) => {
+  //   setHeader((current) => {
+  //     const next = { ...current, [field]: value };
+  //     if (field === "prin_code" && row) {
+  //       next.dept_code = lookupText(row, "prin_dept_code") || next.dept_code;
+  //       next.curr_code = lookupText(row, "curr_code") || next.curr_code;
+  //       next.ex_rate = lookupText(row, "ex_rate") || next.ex_rate;
+  //     }
+  //     if (field === "origin_port" && row) {
+  //       next.country_origin = lookupText(row, "country_name") || lookupText(row, "country_code") || next.country_origin;
+  //     }
+  //     if (field === "destination_port" && row) {
+  //       next.country_destination = lookupText(row, "country_name") || lookupText(row, "country_code") || next.country_destination;
+  //     }
+  //     if (field === "curr_code" && row) {
+  //       next.ex_rate = lookupText(row, "ex_rate") || next.ex_rate;
+  //     }
+  //     return next;
+  //   });
+  // };
 
+
+  const applyHeaderLookup = (field: keyof EnquiryHeader, value: string, row: LookupRow | null) => {
+  setHeader((current) => {
+    const next = { ...current, [field]: value };
+    if (field === "prin_code" && row) {
+      next.dept_code = lookupText(row, "prin_dept_code") || next.dept_code;
+      next.curr_code = lookupText(row, "curr_code") || next.curr_code;
+      next.ex_rate = lookupText(row, "ex_rate") || next.ex_rate;
+    }
+    if (field === "origin_port" && row) {
+      next.country_origin = lookupText(row, "country_name") || lookupText(row, "country_code") || next.country_origin;
+    }
+    if (field === "destination_port" && row) {
+      next.country_destination = lookupText(row, "country_name") || lookupText(row, "country_code") || next.country_destination;
+    }
+    if (field === "curr_code" && row) {
+      next.ex_rate = lookupText(row, "ex_rate") || next.ex_rate;
+    }
+    return next;
+  });
+
+  setHeaderNames((current) => {
+    const next = { ...current };
+    if (field === "prin_code") {
+      next.prin_name = row ? lookupText(row, "prin_name") : "";
+      if (row) {
+        next.dept_name = lookupText(row, "dept_name") || next.dept_name;
+        next.curr_name = lookupText(row, "curr_name") || next.curr_name;
+      }
+    }
+    if (field === "walkin_prin_code") next.walkin_prin_name = row ? lookupText(row, "prin_name") : "";
+    if (field === "dept_code") next.dept_name = row ? lookupText(row, "dept_name") : "";
+    if (field === "curr_code") next.curr_name = row ? lookupText(row, "curr_name") : "";
+    if (field === "origin_port") next.origin_port_name = row ? lookupText(row, "port_name") : "";
+    if (field === "destination_port") next.destination_port_name = row ? lookupText(row, "port_name") : "";
+    if (field === "salesman_code") next.salesman_name = row ? lookupText(row, "salesman_name") : "";
+    if (field === "forwarder_code") next.forwarder_name = row ? lookupText(row, "forwarder_name") : "";
+    if (field === "vehicle_type") next.vehicle_type_name = row ? lookupText(row, "vtype_name") : "";
+    if (field === "carrier") {
+      next.carrier_name = row
+        ? lookupText(row, "vessel_name") || lookupText(row, "vehicle_desc") || lookupText(row, "airline_name")
+        : "";
+    }
+    return next;
+  });
+ };
   const setDetailField = (index: number, field: keyof EnquiryDetail, value: string) => {
     setDetails((current) =>
       current.map((row, rowIndex) => {
@@ -322,6 +395,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   const resetForm = () => {
     const freshHeader = buildInitialHeader(userInfo, target, screenType);
     setHeader(freshHeader);
+    setHeaderNames(emptyHeaderNames);
     setDetails([buildInitialDetail(freshHeader, 1)]);
     setNotice(null);
   };
@@ -386,27 +460,92 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
     setNotice(null);
     try {
       const [headerRows, detailRows] = await Promise.all([
-        executeWmsInboundSql(`
-          SELECT *
-          FROM TF_ENQUIRY
-          WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
-            AND ENQUIRY_NR = '${sqlEscape(enquiryNr)}'
-            AND ENQUIRY_TYPE = '${sqlEscape(enquiryType)}'
-        `),
-        executeWmsInboundSql(`
-          SELECT d.*, a.ACTIVITY
-          FROM TF_ENQUIRY_DET d
-          LEFT JOIN MS_ACTIVITY a
-            ON a.COMPANY_CODE = d.COMPANY_CODE
-           AND a.ACTIVITY_CODE = d.ACT_CODE
-          WHERE d.COMPANY_CODE = '${sqlEscape(companyCode)}'
-            AND d.ENQUIRY_NR = '${sqlEscape(enquiryNr)}'
-            AND d.ENQUIRY_TYPE = '${sqlEscape(enquiryType)}'
-          ORDER BY NVL(d.SRNO, d.SR_NO), d.SR_NO
-        `),
-      ]);
+      //   executeWmsInboundSql(`
+      //     SELECT *
+      //     FROM TF_ENQUIRY
+      //     WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
+      //       AND ENQUIRY_NR = '${sqlEscape(enquiryNr)}'
+      //       AND ENQUIRY_TYPE = '${sqlEscape(enquiryType)}'
+      //   `),
+      //   executeWmsInboundSql(`
+      //     SELECT d.*, a.ACTIVITY
+      //     FROM TF_ENQUIRY_DET d
+      //     LEFT JOIN MS_ACTIVITY a
+      //       ON a.COMPANY_CODE = d.COMPANY_CODE
+      //      AND a.ACTIVITY_CODE = d.ACT_CODE
+      //     WHERE d.COMPANY_CODE = '${sqlEscape(companyCode)}'
+      //       AND d.ENQUIRY_NR = '${sqlEscape(enquiryNr)}'
+      //       AND d.ENQUIRY_TYPE = '${sqlEscape(enquiryType)}'
+      //     ORDER BY NVL(d.SRNO, d.SR_NO), d.SR_NO
+      //   `),
+      // ]);
+
+      executeWmsInboundSql(`
+    SELECT e.*,
+           p.PRIN_NAME,
+           wp.PRIN_NAME AS WALKIN_PRIN_NAME,
+           d.DEPT_NAME,
+           c.CURR_NAME,
+           op.PORT_NAME AS ORIGIN_PORT_NAME,
+           dp.PORT_NAME AS DESTINATION_PORT_NAME,
+           s.SALESMAN_NAME,
+           f.FORWARDER_NAME,
+           v.VTYPE_NAME
+    FROM TF_ENQUIRY e
+    LEFT JOIN MS_PRINCIPAL p ON p.COMPANY_CODE = e.COMPANY_CODE AND p.PRIN_CODE = e.PRIN_CODE
+    LEFT JOIN MS_PRINCIPAL_WALKIN wp ON wp.COMPANY_CODE = e.COMPANY_CODE AND wp.PRIN_CODE = e.WALKIN_PRIN_CODE
+    LEFT JOIN MS_DEPARTMENT d ON d.COMPANY_CODE = e.COMPANY_CODE AND d.DEPT_CODE = e.DEPT_CODE
+    LEFT JOIN MS_CURRENCY c ON c.COMPANY_CODE = e.COMPANY_CODE AND c.CURR_CODE = e.CURR_CODE
+    LEFT JOIN MS_PORT op ON op.COMPANY_CODE = e.COMPANY_CODE AND op.PORT_CODE = e.ORIGIN_PORT
+    LEFT JOIN MS_PORT dp ON dp.COMPANY_CODE = e.COMPANY_CODE AND dp.PORT_CODE = e.DESTINATION_PORT
+    LEFT JOIN MS_SALESMAN s ON s.COMPANY_CODE = e.COMPANY_CODE AND s.SALESMAN_CODE = e.SALESMAN_CODE
+    LEFT JOIN MS_FORWARDER f ON f.COMPANY_CODE = e.COMPANY_CODE AND f.FORWARDER_CODE = e.FORWARDER_CODE
+    LEFT JOIN MS_VEHICLE_TYPE v ON v.COMPANY_CODE = e.COMPANY_CODE AND v.VTYPE_CODE = e.VEHICLE_TYPE
+    WHERE e.COMPANY_CODE = '${sqlEscape(companyCode)}'
+      AND e.ENQUIRY_NR = '${sqlEscape(enquiryNr)}'
+      AND e.ENQUIRY_TYPE = '${sqlEscape(enquiryType)}'
+  `),
+  executeWmsInboundSql(`
+    SELECT d.*, a.ACTIVITY
+    FROM TF_ENQUIRY_DET d
+    LEFT JOIN MS_ACTIVITY a
+      ON a.COMPANY_CODE = d.COMPANY_CODE
+     AND a.ACTIVITY_CODE = d.ACT_CODE
+    WHERE d.COMPANY_CODE = '${sqlEscape(companyCode)}'
+      AND d.ENQUIRY_NR = '${sqlEscape(enquiryNr)}'
+      AND d.ENQUIRY_TYPE = '${sqlEscape(enquiryType)}'
+    ORDER BY NVL(d.SRNO, d.SR_NO), d.SR_NO
+  `),
+ ]);
+      const loadedRow = normalizeLookupRow(headerRows[0] || row);
       const loadedHeader = toHeaderFromRow(normalizeLookupRow(headerRows[0] || row), userInfo, target, screenType);
       setHeader(loadedHeader);
+      setHeaderNames({
+  prin_name: lookupText(loadedRow, "prin_name"),
+  walkin_prin_name: lookupText(loadedRow, "walkin_prin_name"),
+  dept_name: lookupText(loadedRow, "dept_name"),
+  curr_name: lookupText(loadedRow, "curr_name"),
+  origin_port_name: lookupText(loadedRow, "origin_port_name"),
+  destination_port_name: lookupText(loadedRow, "destination_port_name"),
+  salesman_name: lookupText(loadedRow, "salesman_name"),
+  forwarder_name: lookupText(loadedRow, "forwarder_name"),
+  vehicle_type_name: lookupText(loadedRow, "vtype_name"),
+  carrier_name: "", // no single join table for carrier (mode-dependent); resolved on demand below
+});
+
+    if (loadedHeader.carrier) {
+  loadCarrierLookup(loadedHeader.company_code, loadedHeader.transport_mode)
+    .then((rows) => {
+      const match = rows.find((r) => lookupText(r, "vessel_code") === loadedHeader.carrier
+        || lookupText(r, "vehicle_no") === loadedHeader.carrier
+        || lookupText(r, "airline_code") === loadedHeader.carrier);
+      if (match) {
+        const name = lookupText(match, "vessel_name") || lookupText(match, "vehicle_desc") || lookupText(match, "airline_name");
+        setHeaderNames((current) => ({ ...current, carrier_name: name }));
+      }
+    })
+    .catch(() => {});
+ }
       setDetails(detailRows.length ? detailRows.map((detail, index) => toDetailFromRow(normalizeLookupRow(detail), loadedHeader, index + 1)) : [buildInitialDetail(loadedHeader, 1)]);
       setActiveTab("cargo");
       setView("editor");
@@ -600,17 +739,17 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
 
       {assistOpen && <FreightAssistPanel checks={smartChecks} />}
 
-      <section className="rounded-md border bg-card p-2 shadow-sm">
-        <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-          <FormInput label="Company" value={header.company_code} onChange={(value) => setHeaderField("company_code", value)} required />
+      <section className="rounded-md border bg-card p-2.5 shadow-sm">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+          {/* <FormInput label="Company" value={header.company_code} onChange={(value) => setHeaderField("company_code", value)} required /> */}
           <FormInput label="Enquiry No" value={header.enquiry_nr} onChange={(value) => setHeaderField("enquiry_nr", value)} placeholder="Auto" />
           <FormInput label="Date" type="date" value={header.enquiry_date} onChange={(value) => setHeaderField("enquiry_date", value)} required />
-          <FormLookup label="Department" value={header.dept_code} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} />
+          <FormLookup label="Department" value={header.dept_code} displayValue={headerNames.dept_name} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} />
           <FormSelect label="Job Type" value={header.job_type} onChange={(value) => setHeaderField("job_type", value)} options={jobTypes} />
           <FormSelect label="Mode" value={header.transport_mode} onChange={(value) => setHeaderField("transport_mode", value)} options={transportModes} />
-          <FormLookup label="Principal" value={header.prin_code} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required />
-          <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }, { field: "prin_telno1", header: "Phone" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} />
-          <FormLookup label="Salesman" value={header.salesman_code} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Salesman" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} />
+          <FormLookup label="Principal" value={header.prin_code} displayValue={headerNames.prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required />
+          <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayValue={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }, { field: "prin_telno1", header: "Phone" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} />
+          <FormLookup label="Salesman" value={header.salesman_code} displayValue={headerNames.salesman_name} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Salesman" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} />
           <FormSelect label="Status" value={header.indstatus} onChange={(value) => setHeaderField("indstatus", value)} options={approvalStatuses} />
           <FormInput label="Offer Validity" type="date" value={header.offer_validity} onChange={(value) => setHeaderField("offer_validity", value)} />
           <FormInput label="Enquiry Type" value={header.enquiry_type} onChange={(value) => setHeaderField("enquiry_type", value)} />
@@ -632,12 +771,12 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
                 <SectionPanel className="xl:col-span-7" icon={PackageCheck} title="Cargo Profile" meta={`${header.commodity || "Commodity pending"} / ${header.gross_wt || header.weight || "0"} kgs`}>
                   <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-4">
                     <FormLookup label="Commodity" value={header.commodity} valueField="prodtype_desc" displayFields={["prodtype_desc", "prodtype_code"]} columns={[{ field: "prodtype_desc", header: "Commodity" }, { field: "prodtype_code", header: "Code" }]} loadOptions={() => loadCommodityLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("commodity", value, row)} className="xl:col-span-2" />
-                    <FormInput label="Weight" type="number" value={header.weight} onChange={(value) => setHeaderField("weight", value)} />
-                    <FormInput label="Gross Weight" type="number" value={header.gross_wt} onChange={(value) => setHeaderField("gross_wt", value)} />
+                    <FormInput label="Weight(kgs)" type="number" value={header.weight} onChange={(value) => setHeaderField("weight", value)} />
+                    <FormInput label="Gross Weight(kgs)" type="number" value={header.gross_wt} onChange={(value) => setHeaderField("gross_wt", value)} />
                     <FormInput label="Volume" type="number" value={header.volume} onChange={(value) => setHeaderField("volume", value)} />
-                    <FormInput label="Length" type="number" value={header.l} onChange={(value) => setHeaderField("l", value)} />
-                    <FormInput label="Breadth" type="number" value={header.b} onChange={(value) => setHeaderField("b", value)} />
-                    <FormInput label="Height" type="number" value={header.h} onChange={(value) => setHeaderField("h", value)} />
+                    <FormInput label="Length(cm)" type="number" value={header.l} onChange={(value) => setHeaderField("l", value)} />
+                    <FormInput label="Breadth(cm)" type="number" value={header.b} onChange={(value) => setHeaderField("b", value)} />
+                    <FormInput label="Height(cm)" type="number" value={header.h} onChange={(value) => setHeaderField("h", value)} />
                     <FormInput label="Dimension" value={header.dimension} onChange={(value) => setHeaderField("dimension", value)} />
                   </div>
                 </SectionPanel>
@@ -1032,7 +1171,7 @@ function buildInitialHeader(user: Record<string, unknown> | null, target?: Freig
     prin_code: "",
     enquiry_nr: "",
     enquiry_date: toInputDate(new Date()),
-    dept_code: "22",
+    dept_code: "",
     origin_port: "",
     destination_port: "",
     transit_time: "",
@@ -1238,6 +1377,7 @@ function FormInput({
 function FormLookup({
   label,
   value,
+  displayValue,
   valueField,
   displayFields,
   columns,
@@ -1248,6 +1388,7 @@ function FormLookup({
 }: {
   label: string;
   value: string;
+  displayValue?: string;
   valueField: string;
   displayFields: string[];
   columns: Array<{ field: string; header: string }>;
@@ -1263,6 +1404,7 @@ function FormLookup({
         compact
         label={label}
         value={value}
+        displayValue={displayValue}
         columns={columns}
         valueField={valueField}
         displayFields={displayFields}
