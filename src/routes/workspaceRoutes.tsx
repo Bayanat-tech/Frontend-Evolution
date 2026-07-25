@@ -28,6 +28,12 @@ import { freightMasterConfigs } from "../pages/freight/freightMasterConfigs";
 import { FreightEnquiryMainPage } from "../pages/freight/FreightEnquiryMainPage";
 import { FreightQuotationPage } from "../pages/freight/FreightQuotationPage";
 import { FreightWorkspacePage } from "../pages/freight/FreightWorkspacePage";
+import { FreightAirlineTariffPage } from "../pages/freight/FreightAirlineTariffPage";
+import { FreightJobPage } from "../pages/freight/FreightJobPage";
+import { FreightPacklistPage } from "../pages/freight/FreightPacklistPage";
+import { FreightJobActivitiesPage } from "../pages/freight/FreightJobActivitiesPage";
+import { FreightJobWorkspacePage } from "../pages/freight/FreightJobWorkspacePage";
+import { FreightReportPage, type FreightReportKey } from "../pages/freight/FreightReportPage";
 import { SecurityAssignmentPage, securityAssignmentConfigs } from "../pages/security/SecurityAssignmentPage";
 import { SecurityMasterPage, securityMasterConfigs } from "../pages/security/SecurityMasterPage";
 import { SecurityOperationAccessPage } from "../pages/security/SecurityOperationAccessPage";
@@ -583,6 +589,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: ({ pathname }) => <WmsSimpleMasterPage config={getWmsSimpleMasterConfig(pathname)!} />,
   },
   {
+    name: "Freight Reports",
+    match: (context) => Boolean(getFreightReportKey(context)),
+    element: (context) => <FreightReportPage reportKey={getFreightReportKey(context)!} />,
+  },
+  {
     name: "Freight RFQ Activities",
     match: (context) => isFreightRfqActivitiesRoute(context),
     element: (context) => <FreightEnquiryMainPage target={getFreightWorkspaceTarget(context)} screenType="rfq" />,
@@ -605,7 +616,32 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: "Freight Quotation",
     match: (context) => isFreightQuotationRoute(context),
-    element: (context) => <FreightQuotationPage target={getFreightWorkspaceTarget(context)} />,
+    element: (context) => <FreightQuotationPage target={getFreightWorkspaceTarget(context)} initialTab={getFreightQuotationInitialTab(context)} />,
+  },
+  {
+    name: "Freight Airline Tariff Report",
+    match: (context) => isFreightAirlineTariffReportRoute(context),
+    element: () => <FreightAirlineTariffPage mode="report" />,
+  },
+  {
+    name: "Freight Airline Tariff",
+    match: (context) => isFreightAirlineTariffRoute(context),
+    element: () => <FreightAirlineTariffPage mode="entry" />,
+  },
+  {
+    name: "Freight Pack List",
+    match: (context) => isFreightPacklistRoute(context),
+    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="packlist" />,
+  },
+  {
+    name: "Freight Service Activities",
+    match: (context) => isFreightServiceActivitiesRoute(context),
+    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="activities" />,
+  },
+  {
+    name: "Freight Job",
+    match: (context) => isFreightOperationalJobRoute(context),
+    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} />,
   },
   {
     name: "Freight Master",
@@ -1551,6 +1587,22 @@ function isFreightWorkspaceRoute(context: WorkspaceRouteContext) {
   );
 }
 
+function getFreightReportKey(context: WorkspaceRouteContext): FreightReportKey | null {
+  const compact = getGenericMatchText(context).replace(/[^a-z0-9]/g, "");
+  if (!compact.includes("freightreports")) return null;
+  if (compact.includes("enquirylist") || compact.includes("equirylist")) return "enquiry_list";
+  if (compact.includes("rfqlist")) return "rfq_list";
+  if (compact.includes("quotationlist") || compact.includes("quotationtable")) return "quotation_list";
+  if (compact.includes("freightjoblist") || compact.includes("joblist")) return "freight_job_list";
+  if (compact.includes("freightprofit") || compact.includes("profit")) return "freight_profit";
+  if (compact.includes("freightexpense") || compact.includes("expense")) return "freight_expense";
+  if (compact.includes("freightrevenue") || compact.includes("revenue")) return "freight_revenue";
+  if (compact.includes("freightbrokerage") || compact.includes("brokerage")) return "freight_brokerage";
+  if (compact.includes("containerdeposit") || compact.includes("contrdeposit")) return "container_deposit";
+  if (compact.includes("deposits") || compact.includes("deposit")) return "deposits";
+  return null;
+}
+
 function isFreightEnquiryRoute(context: WorkspaceRouteContext) {
   const matchText = getGenericMatchText(context);
   const compact = matchText.replace(/[^a-z0-9]/g, "");
@@ -1585,8 +1637,53 @@ function isFreightRfqActivitiesRoute(context: WorkspaceRouteContext) {
 function isFreightQuotationRoute(context: WorkspaceRouteContext) {
   const matchText = getGenericMatchText(context);
   const compact = matchText.replace(/[^a-z0-9]/g, "");
-  if (compact.includes("airlinetarriff") || compact.includes("quotationlist")) return false;
-  return compact.includes("freightfreightquotationquotation") || compact.includes("freightquotationquotation");
+  if (compact.includes("airlinetarriff") || compact.includes("airlinetariff") || compact.includes("quotationlist")) return false;
+  return compact.includes("freightfreightquotationquotation")
+    || compact.includes("freightquotationquotation")
+    || compact.includes("freightfreightquotationactivities")
+    || compact.includes("freightquotationactivities")
+    || compact.includes("freightfreightquotationtermscondition")
+    || compact.includes("freightquotationtermscondition")
+    || compact.includes("termscondition");
+}
+
+function isFreightAirlineTariffRoute(context: WorkspaceRouteContext) {
+  const compact = getGenericMatchText(context).replace(/[^a-z0-9]/g, "");
+  if (compact.includes("report")) return false;
+  return compact.includes("freightfreightquotationairlinetarriff")
+    || compact.includes("freightfreightquotationairlinetariff")
+    || compact.includes("airlinetarriff");
+}
+
+function isFreightAirlineTariffReportRoute(context: WorkspaceRouteContext) {
+  const compact = getGenericMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("airlinetarriffreport") || compact.includes("airlinetariffreport");
+}
+
+function isFreightPacklistRoute(context: WorkspaceRouteContext) {
+  const compact = getGenericMatchText(context).replace(/[^a-z0-9]/g, "");
+  return (compact.includes("freightair") || compact.includes("freightsea") || compact.includes("freightroad"))
+    && (compact.includes("packlist") || compact.includes("packinglist"));
+}
+
+function isFreightServiceActivitiesRoute(context: WorkspaceRouteContext) {
+  const compact = getGenericMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("serviceactivities") || compact.includes("costsheet") || compact.includes("jobsheet");
+}
+
+function isFreightOperationalJobRoute(context: WorkspaceRouteContext) {
+  const compact = getGenericMatchText(context).replace(/[^a-z0-9]/g, "");
+  if (compact.includes("packlist") || compact.includes("packinglist") || compact.includes("serviceactivities") || compact.includes("costsheet") || compact.includes("jobsheet")) return false;
+  return (compact.includes("freightair") || compact.includes("freightsea") || compact.includes("freightroad"))
+    && (compact.includes("import") || compact.includes("export") || compact.includes("reexport"));
+}
+
+function getFreightQuotationInitialTab(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  if (compact.includes("activities")) return "charges" as const;
+  if (compact.includes("termscondition") || compact.includes("terms")) return "terms" as const;
+  return "summary" as const;
 }
 
 function getFreightWorkspaceTarget(context: WorkspaceRouteContext) {

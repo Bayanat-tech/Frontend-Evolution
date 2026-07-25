@@ -142,11 +142,6 @@ const transportModes = [
   { value: "S", label: "Sea" },
   { value: "R", label: "Road" },
 ];
-const approvalStatuses = [
-  { value: "N", label: "Not Approved" },
-  { value: "A", label: "Approved" },
-  { value: "C", label: "Cancelled" },
-];
 const tosOptions = ["ORIGIN", "DESTINATION"];
 const memberTypes = ["", "IFLN", "AFFAL", "None"];
 const saleTypes = ["Normal", "FreeIn"];
@@ -172,6 +167,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   const [header, setHeader] = useState<EnquiryHeader>(initialHeader);
   const [details, setDetails] = useState<EnquiryDetail[]>([buildInitialDetail(initialHeader, 1)]);
   const [saving, setSaving] = useState(false);
+  const [approving, setApproving] = useState(false);
   const [loadingList, setLoadingList] = useState(false);
   const [loadingRecord, setLoadingRecord] = useState(false);
   const [listRows, setListRows] = useState<EnquiryListRow[]>([]);
@@ -188,7 +184,10 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
 
   const enquiryLabel = isRfq ? "RFQ" : "Enquiry";
   const loginId = String(userInfo?.loginid || userInfo?.USERID || userInfo?.user_id || userInfo?.username || "");
+  const isApproved = header.indstatus === "A";
   const isCancelled = header.indstatus === "C";
+  const isLocked = isApproved || isCancelled;
+  const canApprove = Boolean(header.enquiry_nr) && !isApproved && !isCancelled;
   const attachmentRequestNumber = header.enquiry_nr ? `${header.company_code}-${header.enquiry_type}-${header.enquiry_nr}` : "";
   const smartChecks = useMemo(() => buildSmartChecks(header, details, isRfq), [details, header, isRfq]);
   const urgentChecks = smartChecks.filter((item) => item.tone === "danger").length;
@@ -316,6 +315,103 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
     return next;
   });
  };
+
+  const applyReferenceEnquiryLookup = async (value: string, row: LookupRow | null) => {
+    setHeaderField("ref_enquiry_nr", value);
+    if (!value) {
+      setHeaderField("ref_enquiry_type", "");
+      return;
+    }
+
+    const companyCode = lookupText(row || {}, "company_code") || header.company_code;
+    const referenceType = lookupText(row || {}, "enquiry_type") || "EQI";
+    setHeader((current) => ({ ...current, ref_enquiry_nr: value, ref_enquiry_type: referenceType }));
+
+    if (!isRfq) return;
+
+    setLoadingRecord(true);
+    setNotice(null);
+    try {
+      const [headerRows, detailRows] = await Promise.all([
+        executeWmsInboundSql(`
+          SELECT e.*,
+                 p.PRIN_NAME,
+                 wp.PRIN_NAME AS WALKIN_PRIN_NAME,
+                 d.DEPT_NAME,
+                 c.CURR_NAME,
+                 op.PORT_NAME AS ORIGIN_PORT_NAME,
+                 dp.PORT_NAME AS DESTINATION_PORT_NAME,
+                 s.SALESMAN_NAME,
+                 f.FORWARDER_NAME,
+                 v.VTYPE_NAME
+          FROM TF_ENQUIRY e
+          LEFT JOIN MS_PRINCIPAL p ON p.COMPANY_CODE = e.COMPANY_CODE AND p.PRIN_CODE = e.PRIN_CODE
+          LEFT JOIN MS_PRINCIPAL_WALKIN wp ON wp.COMPANY_CODE = e.COMPANY_CODE AND wp.PRIN_CODE = e.WALKIN_PRIN_CODE
+          LEFT JOIN MS_DEPARTMENT d ON d.COMPANY_CODE = e.COMPANY_CODE AND d.DEPT_CODE = e.DEPT_CODE
+          LEFT JOIN MS_CURRENCY c ON c.COMPANY_CODE = e.COMPANY_CODE AND c.CURR_CODE = e.CURR_CODE
+          LEFT JOIN MS_PORT op ON op.COMPANY_CODE = e.COMPANY_CODE AND op.PORT_CODE = e.ORIGIN_PORT
+          LEFT JOIN MS_PORT dp ON dp.COMPANY_CODE = e.COMPANY_CODE AND dp.PORT_CODE = e.DESTINATION_PORT
+          LEFT JOIN MS_SALESMAN s ON s.COMPANY_CODE = e.COMPANY_CODE AND s.SALESMAN_CODE = e.SALESMAN_CODE
+          LEFT JOIN MS_FORWARDER f ON f.COMPANY_CODE = e.COMPANY_CODE AND f.FORWARDER_CODE = e.FORWARDER_CODE
+          LEFT JOIN MS_VEHICLE_TYPE v ON v.COMPANY_CODE = e.COMPANY_CODE AND v.VTYPE_CODE = e.VEHICLE_TYPE
+          WHERE e.COMPANY_CODE = '${sqlEscape(companyCode)}'
+            AND e.ENQUIRY_NR = '${sqlEscape(value)}'
+            AND e.ENQUIRY_TYPE = '${sqlEscape(referenceType)}'
+        `),
+        executeWmsInboundSql(`
+          SELECT d.*, a.ACTIVITY
+          FROM TF_ENQUIRY_DET d
+          LEFT JOIN MS_ACTIVITY a
+            ON a.COMPANY_CODE = d.COMPANY_CODE
+           AND a.ACTIVITY_CODE = d.ACT_CODE
+          WHERE d.COMPANY_CODE = '${sqlEscape(companyCode)}'
+            AND d.ENQUIRY_NR = '${sqlEscape(value)}'
+            AND d.ENQUIRY_TYPE = '${sqlEscape(referenceType)}'
+          ORDER BY NVL(d.SRNO, d.SR_NO), d.SR_NO
+        `),
+      ]);
+
+      const sourceRow = normalizeLookupRow(headerRows[0] || {});
+      if (!headerRows.length) {
+        throw new Error("Reference enquiry not found");
+      }
+
+      const currentRfqNo = header.enquiry_nr;
+      const copiedHeader = {
+        ...toHeaderFromRow(sourceRow, userInfo, target, "rfq"),
+        enquiry_nr: currentRfqNo,
+        enquiry_date: header.enquiry_date || toInputDate(new Date()),
+        enquiry_type: "RFQ",
+        indstatus: header.indstatus || "N",
+        ref_enquiry_type: referenceType,
+        ref_enquiry_nr: value,
+      };
+
+      setHeader(copiedHeader);
+      setHeaderNames({
+        prin_name: lookupText(sourceRow, "prin_name"),
+        walkin_prin_name: lookupText(sourceRow, "walkin_prin_name"),
+        dept_name: lookupText(sourceRow, "dept_name"),
+        curr_name: lookupText(sourceRow, "curr_name"),
+        origin_port_name: lookupText(sourceRow, "origin_port_name"),
+        destination_port_name: lookupText(sourceRow, "destination_port_name"),
+        salesman_name: lookupText(sourceRow, "salesman_name"),
+        forwarder_name: lookupText(sourceRow, "forwarder_name"),
+        vehicle_type_name: lookupText(sourceRow, "vtype_name"),
+        carrier_name: "",
+      });
+      setDetails(detailRows.length ? detailRows.map((detail, index) => ({
+        ...toDetailFromRow(normalizeLookupRow(detail), copiedHeader, index + 1),
+        enquiry_type: "RFQ",
+      })) : [buildInitialDetail(copiedHeader, 1)]);
+      setNotice({ type: "success", text: `Copied approved enquiry ${value} into RFQ` });
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to copy enquiry into RFQ" });
+    } finally {
+      setLoadingRecord(false);
+    }
+  };
+
   const setDetailField = (index: number, field: keyof EnquiryDetail, value: string) => {
     setDetails((current) =>
       current.map((row, rowIndex) => {
@@ -452,6 +548,46 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
     }
   };
 
+  const approveEnquiry = async () => {
+    if (!header.enquiry_nr) {
+      setNotice({ type: "error", text: `Save ${enquiryLabel.toLowerCase()} before approval` });
+      return;
+    }
+    if (isApproved) {
+      setNotice({ type: "error", text: `${enquiryLabel} is already approved` });
+      return;
+    }
+    if (isCancelled) {
+      setNotice({ type: "error", text: `Cancelled ${enquiryLabel.toLowerCase()} cannot be approved` });
+      return;
+    }
+
+    setApproving(true);
+    setNotice(null);
+    try {
+      const response = await api.post<{ success?: boolean; message?: string }>(
+        isRfq ? "/api/freight/rfq/approve" : "/api/freight/enquiry/approve",
+        {
+          company_code: header.company_code,
+          enquiry_type: header.enquiry_type,
+          enquiry_nr: header.enquiry_nr,
+          approved_by: loginId,
+          approval_remarks: "",
+        },
+      );
+      if (response.data?.success === false) {
+        throw new Error(response.data.message || `Unable to approve ${enquiryLabel}`);
+      }
+      setHeaderField("indstatus", "A");
+      setNotice({ type: "success", text: response.data?.message || `${enquiryLabel} approved` });
+      await loadEnquiries();
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : `Unable to approve ${enquiryLabel}` });
+    } finally {
+      setApproving(false);
+    }
+  };
+
   const openEnquiry = async (row: EnquiryListRow) => {
     const companyCode = lookupText(row, "company_code") || header.company_code;
     const enquiryNr = lookupText(row, "enquiry_nr");
@@ -569,6 +705,10 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
 
   const saveEnquiry = async (event: FormEvent) => {
     event.preventDefault();
+    if (isLocked) {
+      setNotice({ type: "error", text: `${statusLabel(header.indstatus)} ${enquiryLabel.toLowerCase()} is read-only` });
+      return;
+    }
     setSaving(true);
     setNotice(null);
     try {
@@ -723,15 +863,21 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
             <Paperclip size={14} />
             Files
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={requestCancel} disabled={isCancelled}>
+          <Button type="button" size="sm" variant="outline" onClick={requestCancel} disabled={isLocked}>
             {header.enquiry_nr ? <Ban size={14} /> : <X size={14} />}
             {header.enquiry_nr ? "Cancel" : "Close"}
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={resetForm} disabled={isCancelled}>
+          <Button type="button" size="sm" variant="outline" onClick={resetForm} disabled={isLocked}>
             <RotateCcw size={14} />
             Reset
           </Button>
-          <Button type="submit" size="sm" disabled={saving || isCancelled}>
+          {canApprove && (
+            <Button type="button" size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={approveEnquiry} disabled={approving || saving}>
+              <ShieldCheck size={14} />
+              {approving ? "Approving" : "Approve"}
+            </Button>
+          )}
+          <Button type="submit" size="sm" disabled={saving || isLocked}>
             <Save size={14} />
             {saving ? "Saving" : "Save"}
           </Button>
@@ -740,10 +886,11 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
 
       {assistOpen && <FreightAssistPanel checks={smartChecks} />}
 
+      <fieldset disabled={isLocked} className="contents">
       <section className="rounded-md border bg-card p-2.5 shadow-sm">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
           {/* <FormInput label="Company" value={header.company_code} onChange={(value) => setHeaderField("company_code", value)} required /> */}
-          <FormInput label="Enquiry No" value={header.enquiry_nr} onChange={(value) => setHeaderField("enquiry_nr", value)} placeholder="Auto" />
+          <FormInput label={`${enquiryLabel} No`} value={header.enquiry_nr} onChange={(value) => setHeaderField("enquiry_nr", value)} placeholder="Auto" />
           <FormInput label="Date" type="date" value={header.enquiry_date} onChange={(value) => setHeaderField("enquiry_date", value)} required />
           <FormLookup label="Department" value={header.dept_code} displayValue={headerNames.dept_name} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} />
           <FormSelect label="Job Type" value={header.job_type} onChange={(value) => setHeaderField("job_type", value)} options={jobTypes} />
@@ -751,9 +898,27 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
           <FormLookup label="Principal" value={header.prin_code} displayValue={headerNames.prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required />
           <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayValue={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }, { field: "prin_telno1", header: "Phone" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} />
           <FormLookup label="Salesman" value={header.salesman_code} displayValue={headerNames.salesman_name} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Salesman" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} />
-          <FormSelect label="Status" value={header.indstatus} onChange={(value) => setHeaderField("indstatus", value)} options={approvalStatuses} />
+          <StatusField status={header.indstatus} />
           <FormInput label="Offer Validity" type="date" value={header.offer_validity} onChange={(value) => setHeaderField("offer_validity", value)} />
-          <FormInput label="Enquiry Type" value={header.enquiry_type} onChange={(value) => setHeaderField("enquiry_type", value)} />
+          <TypeField label="Type" value={header.enquiry_type} />
+          {isRfq && !header.enquiry_nr && (
+            <FormLookup
+              label="Source Enquiry"
+              value={header.ref_enquiry_nr}
+              valueField="enquiry_nr"
+              displayFields={["enquiry_nr", "enquiry_date"]}
+              columns={[
+                { field: "enquiry_nr", header: "Enquiry" },
+                { field: "enquiry_date", header: "Date" },
+                { field: "prin_code", header: "Principal" },
+                { field: "prin_name", header: "Principal Name" },
+              ]}
+              loadOptions={() => loadReferenceEnquiryLookup(header.company_code)}
+              onChange={applyReferenceEnquiryLookup}
+              className="xl:col-span-2"
+            />
+          )}
+          {isRfq && header.enquiry_nr && <TypeField label="Source Enquiry" value={header.ref_enquiry_nr || "-"} />}
         </div>
       </section>
 
@@ -875,7 +1040,6 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
                     <FormSelect label="Member Type" value={header.member_type} onChange={(value) => setHeaderField("member_type", value)} options={memberTypes.map((value) => ({ value, label: value || "Blank" }))} />
                     <FormSelect label="Sale Type" value={header.sale_type} onChange={(value) => setHeaderField("sale_type", value)} options={saleTypes.map((value) => ({ value, label: value }))} />
                     <FormSelect label="Job Category" value={header.job_category} onChange={(value) => setHeaderField("job_category", value)} options={jobCategories.map((value) => ({ value, label: value }))} />
-                    <FormLookup label="Ref Enquiry No" value={header.ref_enquiry_nr} valueField="enquiry_nr" displayFields={["enquiry_nr", "enquiry_date"]} columns={[{ field: "enquiry_nr", header: "Enquiry" }, { field: "enquiry_date", header: "Date" }, { field: "prin_code", header: "Principal" }]} loadOptions={() => loadReferenceEnquiryLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("ref_enquiry_nr", value, row)} />
                   </div>
                 </SectionPanel>
 
@@ -890,7 +1054,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
             <section>
               <div className="mb-2 flex items-center justify-between gap-2">
                 <h2 className="m-0 text-sm font-semibold uppercase text-muted-foreground">Activities</h2>
-                <Button type="button" size="sm" variant="outline" onClick={addDetail} disabled={isCancelled}>
+                <Button type="button" size="sm" variant="outline" onClick={addDetail} disabled={isLocked}>
                   <Plus size={14} />
                   Add Line
                 </Button>
@@ -947,7 +1111,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
                         <CellInput value={row.curr_code} onChange={(value) => setDetailField(index, "curr_code", value)} className="w-24" />
                         <CellInput value={row.remarks} onChange={(value) => setDetailField(index, "remarks", value)} className="min-w-56" />
                         <td className="px-2 py-2 text-right">
-                          <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={isCancelled || details.length === 1} onClick={() => removeDetail(index)}>
+                          <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={isLocked || details.length === 1} onClick={() => removeDetail(index)}>
                             <Trash2 size={14} />
                           </Button>
                         </td>
@@ -964,6 +1128,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
           )}
         </div>
       </div>
+      </fieldset>
     </form>
     <AttachmentDialog
       open={attachmentOpen}
@@ -974,7 +1139,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
       type={isRfq ? "FRT_RFQ" : "FRT_ENQUIRY"}
       companyCode={header.company_code}
       loginId={loginId}
-      readOnly={!header.enquiry_nr}
+      readOnly={!header.enquiry_nr || isCancelled}
     />
     <Dialog
       open={cancelOpen}
@@ -1375,6 +1540,28 @@ function FormInput({
   );
 }
 
+function StatusField({ status }: { status: string }) {
+  return (
+    <div className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
+      Status
+      <div className="flex h-8 items-center rounded-md border border-input bg-muted/40 px-2">
+        <span className={statusBadgeClass(status)}>{statusLabel(status)}</span>
+      </div>
+    </div>
+  );
+}
+
+function TypeField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
+      {label}
+      <div className="flex h-8 items-center rounded-md border border-input bg-muted/40 px-2 text-xs font-semibold text-foreground">
+        {value || "-"}
+      </div>
+    </div>
+  );
+}
+
 function FormLookup({
   label,
   value,
@@ -1681,11 +1868,27 @@ async function loadActivityLookup(companyCode: string) {
 
 async function loadReferenceEnquiryLookup(companyCode: string) {
   return loadFreightLookup(`
-    SELECT ENQUIRY_NR, ENQUIRY_DATE, PRIN_CODE, JOB_TYPE, TRANSPORT_MODE, DEPT_CODE, CURR_CODE
-    FROM TF_ENQUIRY
-    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
-      AND ENQUIRY_TYPE = 'EQI'
-    ORDER BY ENQUIRY_DATE DESC
+    SELECT
+      e.ENQUIRY_NR,
+      e.ENQUIRY_DATE,
+      e.ENQUIRY_TYPE,
+      e.COMPANY_CODE,
+      e.PRIN_CODE,
+      p.PRIN_NAME,
+      e.JOB_TYPE,
+      e.TRANSPORT_MODE,
+      e.DEPT_CODE,
+      e.CURR_CODE,
+      e.ORIGIN_PORT,
+      e.DESTINATION_PORT
+    FROM TF_ENQUIRY e
+    LEFT JOIN MS_PRINCIPAL p
+      ON p.COMPANY_CODE = e.COMPANY_CODE
+     AND p.PRIN_CODE = e.PRIN_CODE
+    WHERE e.COMPANY_CODE = '${sqlEscape(companyCode)}'
+      AND e.ENQUIRY_TYPE = 'EQI'
+      AND NVL(e.INDSTATUS, 'N') = 'A'
+    ORDER BY e.ENQUIRY_DATE DESC, e.ENQUIRY_NR DESC
   `);
 }
 
