@@ -144,8 +144,8 @@ import { ProductCategoryPage } from "../pages/purchase_sales/PS_ProductCategory"
 import { ZoneMasterPage } from "../pages/purchase_sales/PS_ZoneMasterPage";
 
 import Mytaskalmspage from "../pages/almswf/Mytaskalmspage";
-
-type WorkspaceRouteContext = {
+import { PurchaseSaleSetupPage } from "../pages/purchase_sales/Purchasesalesetuppage";
+import { FlowAssignmentPage } from "../pages/security/FlowAssignmentPage"; type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
   activeMenu?: MenuNode;
@@ -274,7 +274,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
       .includes("/workspace/bt-masters/hcm/general%20master/grade%20maste"),
   element: () => <GradeMasterPage />,
 },
-
+{
+  name: "Security Flow Assignment",
+  match: ({ pathname }) => isFlowAssignmentRoute(pathname),
+  element: () => <FlowAssignmentPage />,
+},
 
   {
     name:"HR Grade Salary Increment",
@@ -950,6 +954,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <ExpenseMasterPage/>
   },
   
+
+  {
+    name : "Purchase Sale Setup",
+    match: ({pathname}) => isPurchaseSaleSetupRoute(pathname),
+    element: () => <PurchaseSaleSetupPage/>
+  },
 ];
 
 function isStorageComputationRoute(pathname: string) {
@@ -970,6 +980,13 @@ function isProductBrandRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes(
     "/workspace/purchase_sales/purchase_sales/masters/product_brand"
+  );
+}
+
+function isPurchaseSaleSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/utilities/purchase/sales_setup"
   );
 }
 
@@ -1066,9 +1083,17 @@ function isAccountTreeRoute(pathname: string) {
 function isAccountReportRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts/reports/account-report/detailed-reports/ledger-basic")
-  
 }
-
+function isFlowAssignmentRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/security/security/masters/general master/flow_assignment") ||
+    normalized.includes("/security/security/masters/general%20master/flow_assignment") ||
+    compact.includes("generalmasterflowassignment") ||
+    compact.includes("flowassignment")
+  );
+}
 function isTaxReportRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/finance/accounts_report/tax_report") || normalized.includes("/finance/accounts/reports/tax-report");
@@ -1098,13 +1123,6 @@ function isOutstandingStatementRoute(pathname: string) {
          normalized.includes("/finance/accounts_report/detailed_reports/outstanding-statement") ||
          normalized.includes("/finance/accounts/reports/account-report/detailed-reports/outstanding-statement");
 }
-
-
-// function isAccountReportRoute(pathname: string) {
-//   const normalized = pathname.toLowerCase();
-//   return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts_report/detailed_reports/a/c_statement")
-// }
-
 
 
 function isAgeingReportRoute(pathname: string) {

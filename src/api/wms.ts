@@ -76,6 +76,23 @@ export type StockAdjustmentListResponse = {
   details: LookupRow[];
 };
 
+export type DynamicSqlSecurityParams = {
+  parameter: string;
+  loginid?: string;
+  code1?: string;
+  code2?: string;
+  code3?: string;
+  code4?: string;
+  number1?: number;
+  number2?: number;
+  number3?: number;
+  number4?: number;
+  date1?: string | null;
+  date2?: string | null;
+  date3?: string | null;
+  date4?: string | null;
+};
+
 type BulkApiResponse = {
   success: boolean;
   message?: string;
@@ -232,6 +249,146 @@ export async function getSalesOrderSheetReportExcelDownload(params: ReportParams
 }
 */
 
+export async function procBuildDynamicSqlSecurity(params: DynamicSqlSecurityParams) {
+  const response = await api.post<ApiResponse<LookupRow[]>>(
+    "/api/wms/common/proc_build_dynamic_sql_common", // TODO: confirm this matches your actual route
+    params
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load data");
+  return response.data.data || [];
+}
+ 
+// ─── Flow Assignment (Approver Levels + Role Users) ───────────────────────
+ 
+export type TFlowProcess = { PROCESS: string };
+ 
+export type TFlowLevelDetail = {
+  COMPANY_CODE?: string;
+  PROCESS?: string;
+  LEVEL1?: string;
+  LEVEL2?: string;
+  LEVEL3?: string;
+  LEVEL4?: string;
+  LEVEL5?: string;
+  COUNT?: number | string;
+  [key: string]: unknown;
+};
+ 
+export type TFlowRole = { ROLE_ID: string; ROLE_DESC: string };
+ 
+export type TFlowRoleUser = {
+  SERIAL_NO_OR_ROLE_ID?: string;
+  LOGINID?: string;
+  USERNAME?: string;
+  COMPANY_CODE?: string;
+  [key: string]: unknown;
+};
+ 
+/** Process dropdown */
+export async function getFlowAssignProcesses(companyCode: string) {
+  return procBuildDynamicSqlSecurity({
+    parameter: "PROC_FUN_ASSIGN_PROCESS",
+    code1: companyCode,
+  }) as Promise<TFlowProcess[]>;
+}
+ 
+/** Level details (LEVEL1-5 + COUNT) for the selected process */
+export async function getFlowAssignLevelDetails(companyCode: string, process: string) {
+  if (!process) return [] as TFlowLevelDetail[];
+  return procBuildDynamicSqlSecurity({
+    parameter: "PROC_FUN_ASSIGN_LEVEL_DETAILS",
+    code1: companyCode,
+    code2: process,
+  }) as Promise<TFlowLevelDetail[]>;
+}
+ 
+/** Role Name dropdown */
+export async function getFlowAssignRoles(companyCode: string) {
+  return procBuildDynamicSqlSecurity({
+    parameter: "PROC_FUN_ASSIGN_ROLE_DROPDOWN",
+    code1: companyCode,
+  }) as Promise<TFlowRole[]>;
+}
+ 
+/** Users currently assigned to the selected role */
+export async function getFlowAssignRoleUsers(companyCode: string, roleId: string) {
+  if (!roleId) return [] as TFlowRoleUser[];
+  return procBuildDynamicSqlSecurity({
+    parameter: "PROC_FUN_ASSIGN_ROLE_USERS",
+    code1: companyCode,
+    code2: roleId,
+  }) as Promise<TFlowRoleUser[]>;
+}
+ export const saveFlowAssignLevels = async (
+  companyCode: string,
+  process: string,
+  levelValues: {
+    level1_role: string;
+    level2_role: string;
+    level3_role?: string;
+    level4_role?: string;
+    level5_role?: string;
+    last_level: number;
+  }
+) => {
+  const payload = {
+    rows: [
+      {
+        company_code: companyCode,
+        process: process,
+        level1_role: levelValues.level1_role,
+        level2_role: levelValues.level2_role,
+        level3_role: levelValues.level3_role || null,
+        level4_role: levelValues.level4_role || null,
+        level5_role: levelValues.level5_role || null,
+        last_level: levelValues.last_level,
+      },
+    ],
+  };
+
+  const res = await api.post("/insUpdMsApproverLevels", payload);
+  return res.data;
+};
+// ─── Add / Remove user from role ──────────────────────────────────────────
+// No insert/delete branch was provided in PROC_BUILD_DYNAMIC_SQL_PROC_FUN_ASSIGN
+// yet, so these two stubs call a generic ins/upd/del common proc the same way
+// wms.ts does (procBuildDynamicInsUpdCommon / procBuildDynamicDelCommon).
+// Ask the backend to add corresponding CASE branches, then swap the
+// parameter/endpoint below once they exist — everything else on the page
+// will keep working unchanged.
+ 
+export async function addUserToRole(companyCode: string, roleId: string, loginid: string, actorLoginId: string) {
+  const response = await api.post<ApiResponse<unknown>>(
+    "/api/wms/common/proc_build_dynamic_ins_upd_common", // TODO: confirm route + parameter name with backend
+    {
+      parameter: "PROC_FUN_ASSIGN_ADD_ROLE_USER", // TODO: backend needs to add this branch
+      loginid: actorLoginId,
+      wval1s1: companyCode,
+      wval1s2: roleId,
+      wval1s3: loginid,
+    }
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Unable to add user to role");
+  return response.data;
+}
+ export const insSecRoleFunctionAccessUser = async (rows: any[]) => {
+  const res = await api.post("/insSecRoleFunctionAccessUser", { rows });
+  return res.data;
+};
+export async function removeUserFromRole(companyCode: string, roleId: string, loginid: string, actorLoginId: string) {
+  const response = await api.post<ApiResponse<unknown>>(
+    "/api/wms/common/proc_build_dynamic_del_common", // TODO: confirm route + parameter name with backend
+    {
+      parameter: "PROC_FUN_ASSIGN_DEL_ROLE_USER", // TODO: backend needs to add this branch
+      loginid: actorLoginId,
+      code1: companyCode,
+      code2: roleId,
+      code3: loginid,
+    }
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Unable to remove user from role");
+  return response.data;
+}
 
 export async function deleteWmsMaster(master: string, ids: unknown[]) {
   const response = await api.post<ApiResponse<unknown>>(`/api/wms/${master}`, { ids });
