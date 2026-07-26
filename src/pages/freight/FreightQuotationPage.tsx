@@ -279,6 +279,33 @@ export function FreightQuotationPage({ target, initialTab = "summary" }: { targe
     setDetails((current) => current.map((row, rowIndex) => (rowIndex === index ? recalcDetail({ ...row, [field]: value }, field) : row)));
   };
 
+  const applyDetailActivityLookup = (index: number, value: string, row: LookupRow | null) => {
+    setDetails((current) =>
+      current.map((line, rowIndex) => {
+        if (rowIndex !== index) return line;
+        const quantity = lookupText(row || {}, "quantity") || line.quantity || "1";
+        const costRate = lookupText(row || {}, "cost") || line.fc_costrate || "0";
+        const billRate = lookupText(row || {}, "bill") || line.fc_billrate || "0";
+        return recalcDetail(
+          {
+            ...line,
+            act_code: value,
+            activity: lookupText(row || {}, "activity") || line.activity,
+            quantity,
+            uom: lookupText(row || {}, "uom") || line.uom,
+            cost_curr_code: line.cost_curr_code || header.curr_code,
+            cost_ex_rate: line.cost_ex_rate || header.ex_rate,
+            fc_costrate: costRate,
+            curr_code: line.curr_code || header.curr_code,
+            ex_rate: line.ex_rate || header.ex_rate,
+            fc_billrate: billRate,
+          },
+          "quantity"
+        );
+      })
+    );
+  };
+
   const setTermField = (index: number, field: keyof QuotationTerm, value: string) => {
     setTerms((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)));
   };
@@ -699,7 +726,25 @@ export function FreightQuotationPage({ target, initialTab = "summary" }: { targe
                     <tbody>
                       {details.map((row, index) => (
                         <tr key={row.srno} className="border-b transition hover:bg-primary/5 last:border-0">
-                          <CellInput value={row.act_code} onChange={(value) => setDetailField(index, "act_code", value)} />
+                          <td className="px-1.5 py-1.5">
+                            <LookupField
+                              compact
+                              label="Activity"
+                              value={row.act_code}
+                              valueField="activity_code"
+                              displayFields={["activity_code", "activity"]}
+                              columns={[
+                                { field: "activity_code", header: "Code" },
+                                { field: "activity", header: "Activity" },
+                                { field: "uom", header: "UOM" },
+                                { field: "bill", header: "Bill" },
+                                { field: "cost", header: "Cost" },
+                              ]}
+                              loadOptions={() => loadActivityLookup(header.company_code)}
+                              onChange={(value, lookupRow) => applyDetailActivityLookup(index, value, lookupRow)}
+                              placeholder="Activity"
+                            />
+                          </td>
                           <CellInput value={row.activity} onChange={(value) => setDetailField(index, "activity", value)} className="min-w-44" />
                           <CellInput value={row.activity_remarks || row.rate_remarks} onChange={(value) => { setDetailField(index, "activity_remarks", value); setDetailField(index, "rate_remarks", value); }} className="min-w-44" />
                           <td className="px-2 py-2"><select className={fieldClassName} value={row.transport_mode} onChange={(event) => setDetailField(index, "transport_mode", event.target.value)}>{transportModes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></td>
@@ -1113,6 +1158,25 @@ async function loadPortLookup(companyCode: string) { return loadFreightLookup(`S
 async function loadCurrencyLookup(companyCode: string) { return loadFreightLookup(`SELECT CURR_CODE, CURR_NAME, EX_RATE FROM MS_CURRENCY WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY CURR_CODE`); }
 async function loadForwarderLookup(companyCode: string) { return loadFreightLookup(`SELECT FORWARDER_CODE, FORWARDER_NAME FROM MS_FORWARDER WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY FORWARDER_NAME`); }
 async function loadVehicleTypeLookup(companyCode: string) { return loadFreightLookup(`SELECT VTYPE_CODE, VTYPE_NAME FROM MS_VEHICLE_TYPE WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY VTYPE_CODE`); }
+async function loadActivityLookup(companyCode: string) {
+  return loadFreightLookup(`
+    SELECT
+      ACTIVITY_CODE,
+      ACTIVITY,
+      NVL(QUANTITY, 1) QUANTITY,
+      UOM,
+      NVL(BILL, 0) BILL,
+      NVL(COST, 0) COST,
+      ACTIVITY_GROUP_CODE,
+      ACTIVITY_SUBGROUP_CODE,
+      MANDATORY_FLAG,
+      ACT_TYPE
+    FROM MS_ACTIVITY
+    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
+      AND NVL(FREEZE_FLAG, 'N') = 'N'
+    ORDER BY ACTIVITY_CODE
+  `);
+}
 function carrierLookupProps(mode: string, companyCode: string) { if (mode === "S") return { valueField: "vessel_code", displayFields: ["vessel_code", "vessel_name"], columns: [{ field: "vessel_code", header: "Code" }, { field: "vessel_name", header: "Vessel" }], loadOptions: () => loadFreightLookup(`SELECT VESSEL_CODE, VESSEL_NAME FROM MS_VESSEL WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY VESSEL_CODE`) }; if (mode === "R") return { valueField: "vehicle_no", displayFields: ["vehicle_no", "vehicle_desc"], columns: [{ field: "vehicle_no", header: "Vehicle" }, { field: "vehicle_desc", header: "Description" }], loadOptions: () => loadFreightLookup(`SELECT VEHICLE_NO, VEHICLE_DESC FROM MS_VEHICLE WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY VEHICLE_NO`) }; return { valueField: "airline_code", displayFields: ["airline_code", "airline_name"], columns: [{ field: "airline_code", header: "Code" }, { field: "airline_name", header: "Airline" }], loadOptions: () => loadFreightLookup(`SELECT AIRLINE_CODE, AIRLINE_NAME FROM MS_AIRLINE WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY AIRLINE_CODE`) }; }
 async function loadFreightLookup(sql: string) { return (await executeWmsInboundSql(sql)).map(normalizeLookupRow); }
 
