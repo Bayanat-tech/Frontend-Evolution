@@ -357,19 +357,29 @@ export function FreightQuotationPage({ target, initialTab = "summary" }: { targe
   };
 
   const copyFromEnquiry = async (companyCode: string, prinCode: string, enquiryNo: string, enquiryType: string) => {
-    if (!companyCode || !prinCode || !enquiryNo) return;
+    if (!companyCode || !enquiryNo) return;
     try {
-      const data = await executeWmsInboundSql(`
-        SELECT * FROM TF_ENQUIRY
-        WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
-          AND PRIN_CODE = '${sqlEscape(prinCode)}'
-          AND ENQUIRY_NR = '${sqlEscape(enquiryNo)}'
-          AND ENQUIRY_TYPE = '${sqlEscape(enquiryType || "EQI")}'
-      `);
-      if (!data.length) return;
-      const copied = toHeaderFromEnquiry(normalizeLookupRow(data[0]), header);
-      setHeader((current) => ({ ...current, ...copied, enquiry_no: enquiryNo, enquiry_type: enquiryType || copied.enquiry_type || "" }));
-      setDetails([buildInitialDetail({ ...header, ...copied }, 1)]);
+      const sourceType = enquiryType || "EQI";
+      const response = await api.post<{ success?: boolean; data?: { header?: LookupRow | null; details?: LookupRow[] }; message?: string }>(
+        sourceType === "RFQ" ? "/api/freight/rfq/get" : "/api/freight/enquiry/get",
+        {
+          company_code: companyCode,
+          enquiry_type: sourceType,
+          enquiry_nr: enquiryNo,
+        }
+      );
+      if (response.data?.success === false) {
+        throw new Error(response.data.message || "Unable to copy enquiry data");
+      }
+      const sourceHeader = normalizeLookupRow(response.data?.data?.header || {});
+      if (!sourceHeader.enquiry_nr && !sourceHeader.ENQUIRY_NR) return;
+
+      const copied = toHeaderFromEnquiry(sourceHeader, header);
+      const nextHeader = { ...header, ...copied, enquiry_no: enquiryNo, enquiry_type: sourceType || copied.enquiry_type || "" };
+      const sourceDetails = (response.data?.data?.details || []).map(normalizeLookupRow);
+      setHeader((current) => ({ ...current, ...copied, enquiry_no: enquiryNo, enquiry_type: sourceType || copied.enquiry_type || "" }));
+      setDetails(sourceDetails.length ? sourceDetails.map((item, index) => toDetailFromSourceEnquiry(item, nextHeader, index + 1)) : [buildInitialDetail(nextHeader, 1)]);
+      setActiveTab("charges");
     } catch (error) {
       setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to copy enquiry data" });
     }
@@ -557,7 +567,7 @@ export function FreightQuotationPage({ target, initialTab = "summary" }: { targe
             <FormLookup label="Principal" value={header.prin_code} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required />
             <FormInput label="Department" value={header.dept_code} onChange={(value) => setHeaderField("dept_code", value)} required />
             {!header.quotation_nr ? (
-              <FormLookup label="Source Enquiry/RFQ" value={header.enquiry_no} valueField="enquiry_nr" displayFields={["enquiry_nr", "enquiry_date"]} columns={[{ field: "enquiry_nr", header: "Enquiry" }, { field: "enquiry_type", header: "Type" }, { field: "prin_code", header: "Principal" }]} loadOptions={() => loadEnquiryLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("enquiry_no", value, row)} />
+              <FormLookup label="Source Enquiry/RFQ" value={header.enquiry_no} valueField="enquiry_nr" displayFields={["enquiry_nr", "enquiry_date_display"]} columns={[{ field: "enquiry_nr", header: "Enquiry" }, { field: "enquiry_date_display", header: "Date" }, { field: "enquiry_type", header: "Type" }, { field: "prin_code", header: "Principal" }]} loadOptions={() => loadEnquiryLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("enquiry_no", value, row)} />
             ) : (
               <ReadOnlyField label="Source Enquiry/RFQ" value={header.enquiry_no || "-"} />
             )}
@@ -978,6 +988,40 @@ function toDetailFromRow(row: LookupRow, header: QuotationHeader, srno: number):
   };
 }
 
+function toDetailFromSourceEnquiry(row: LookupRow, header: QuotationHeader, srno: number): QuotationDetail {
+  const quantity = lookupText(row, "quantity") || "1";
+  const costRate = lookupText(row, "cost_rate") || lookupText(row, "fc_costrate") || "0";
+  const billRate = lookupText(row, "bill_rate") || lookupText(row, "fc_billrate") || "0";
+  const costExRate = lookupText(row, "cost_ex_rate") || lookupText(row, "ex_rate") || header.ex_rate;
+  const billExRate = lookupText(row, "ex_rate") || header.ex_rate;
+  return recalcDetail(
+    {
+      ...buildInitialDetail(header, srno),
+      srno: Number(lookupText(row, "srno") || lookupText(row, "sr_no")) || srno,
+      act_code: lookupText(row, "act_code"),
+      activity: lookupText(row, "activity") || lookupText(row, "ms_activity_activity"),
+      activity_remarks: lookupText(row, "remarks"),
+      rate_remarks: lookupText(row, "remarks"),
+      transport_mode: lookupText(row, "transport_mode") || header.transport_mode,
+      origin_port: lookupText(row, "origin_port") || header.origin_port,
+      destination_port: lookupText(row, "destination_port") || header.destination_port,
+      quantity,
+      uom: lookupText(row, "uom"),
+      cost_curr_code: lookupText(row, "curr_code") || header.curr_code,
+      cost_ex_rate: costExRate,
+      fc_costrate: costRate,
+      cost: lookupText(row, "cost") || "0",
+      curr_code: lookupText(row, "curr_code") || header.curr_code,
+      ex_rate: billExRate,
+      fc_billrate: billRate,
+      bill: lookupText(row, "bill") || "0",
+      partners_curr_code: lookupText(row, "curr_code") || header.curr_code,
+      partners_ex_rate: billExRate,
+    },
+    "quantity"
+  );
+}
+
 function toTermFromRow(row: LookupRow, index: number): QuotationTerm {
   return {
     serial_no: Number(lookupText(row, "serial_no")) || index,
@@ -1055,7 +1099,8 @@ const portColumns = [{ field: "port_code", header: "Code" }, { field: "port_name
 async function loadPrincipalLookup(companyCode: string) { return loadFreightLookup(`SELECT p.PRIN_CODE, p.PRIN_NAME, p.PRIN_DEPT_CODE, p.CURR_CODE, c.EX_RATE FROM MS_PRINCIPAL p LEFT JOIN MS_CURRENCY c ON c.COMPANY_CODE = p.COMPANY_CODE AND c.CURR_CODE = p.CURR_CODE WHERE p.COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY p.PRIN_CODE`); }
 async function loadEnquiryLookup(companyCode: string) {
   return loadFreightLookup(`
-    SELECT ENQUIRY_NR, ENQUIRY_DATE, ENQUIRY_TYPE, PRIN_CODE, JOB_TYPE, TRANSPORT_MODE, DEPT_CODE, CURR_CODE, COMPANY_CODE
+    SELECT ENQUIRY_NR, ENQUIRY_DATE, TO_CHAR(ENQUIRY_DATE, 'DD/MM/YYYY') AS ENQUIRY_DATE_DISPLAY,
+           ENQUIRY_TYPE, PRIN_CODE, JOB_TYPE, TRANSPORT_MODE, DEPT_CODE, CURR_CODE, COMPANY_CODE
     FROM TF_ENQUIRY
     WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
       AND ENQUIRY_TYPE IN ('EQI', 'RFQ')
