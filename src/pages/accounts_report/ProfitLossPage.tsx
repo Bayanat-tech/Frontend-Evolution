@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Play, RefreshCw, X } from "lucide-react";
+import { Play, RefreshCw, X, Search } from "lucide-react";
 
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
@@ -203,13 +203,12 @@ export default function ProfitLossPage() {
   const loginId = user?.loginid ?? user?.username ?? "ADMIN";
 
   // ── Division lookup ──────────────────────────────────────────────────────
-  // NOTE: dropdown now matches the Trial Balance page — a plain <select>
-  // instead of the old search-as-you-type combobox. Division is optional;
-  // an empty selection is sent to the backend as "All" (same fallback the
-  // Trial Balance page relies on).
   const [divisionList, setDivisionList] = useState<Division[]>([]);
   const [divisionLoading, setDivisionLoading] = useState(false);
+  const [divisionSearch, setDivisionSearch] = useState("");
+  const [showDivisionDropdown, setShowDivisionDropdown] = useState(false);
   const [division, setDivision] = useState("");
+  const [divisionDisplay, setDivisionDisplay] = useState("");
 
   // ── Form state ───────────────────────────────────────────────────────────
   const [dateFrom, setDateFrom] = useState(getStartOfYear());
@@ -233,7 +232,12 @@ export default function ProfitLossPage() {
   const onCloseRef = useRef<() => void>(() => {});
 
   // ── Derived ──────────────────────────────────────────────────────────────
-  const canGenerate = Boolean(dateFrom && dateTo);
+  const filteredDivisions = divisionList.filter((d) =>
+    `${d.div_code} ${d.div_name}`
+      .toLowerCase()
+      .includes(divisionSearch.toLowerCase())
+  );
+  const canGenerate = Boolean(division && dateFrom && dateTo);
   const currentDrill = drillStack[drillStack.length - 1] ?? null;
   const activeHtml = currentDrill?.html ?? reportHtml;
   const dialogTitle = currentDrill?.title ?? "Profit & Loss";
@@ -348,7 +352,7 @@ export default function ProfitLossPage() {
       parameter: "ProfitLoss",
       loginid: loginId,
       company_code: companyCode,
-      division_code: division || "All",
+      division_code: division,
       from_date: dateFrom,
       to_date: dateTo,
     }),
@@ -458,6 +462,8 @@ export default function ProfitLossPage() {
 
   const handleReset = () => {
     setDivision("");
+    setDivisionDisplay("");
+    setDivisionSearch("");
     setDateFrom(getStartOfYear());
     setDateTo(getToday());
     setReportError(null);
@@ -575,7 +581,7 @@ export default function ProfitLossPage() {
       )}
 
       {/* Filters Card */}
-      <Card className="border-border shadow-sm overflow-hidden">
+      <Card className="border-border shadow-sm overflow-visible">
         <CardHeader className="bg-muted/30 border-b border-border px-4 py-2">
           <div className="flex items-center gap-2">
             <div className="h-3.5 w-1 rounded-full bg-primary" />
@@ -589,27 +595,56 @@ export default function ProfitLossPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="px-4 py-3">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
+        <CardContent className="px-4 py-3 overflow-visible">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4 overflow-visible">
 
-            {/* Division — plain select, same pattern as Trial Balance page */}
-            <label className="flex flex-col gap-1.5 sm:col-span-2">
+            {/* Division searchable select */}
+            <label className="flex flex-col gap-1.5 sm:col-span-2 overflow-visible">
               <span className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide">
-                Division
+                Division <strong className="text-destructive">*</strong>
               </span>
-              <select
-                value={division}
-                onChange={(e) => setDivision(e.target.value)}
-                disabled={divisionLoading}
-                className="h-8 w-full rounded border border-input bg-background px-2 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary disabled:opacity-50"
-              >
-                <option value="">— All Divisions —</option>
-                {divisionList.map((d) => (
-                  <option key={d.div_code} value={d.div_code}>
-                    {d.div_code} – {d.div_name}
-                  </option>
-                ))}
-              </select>
+              <div className="relative z-50 overflow-visible">
+                <div className="flex items-center gap-2 rounded border border-input bg-background px-2">
+                  <Search size={13} className="text-muted-foreground flex-shrink-0" />
+                  <input
+                    type="text"
+                    placeholder={divisionLoading ? "Loading…" : "Search division…"}
+                    value={showDivisionDropdown ? divisionSearch : divisionDisplay}
+                    onChange={(e) => {
+                      setDivisionSearch(e.target.value);
+                      setShowDivisionDropdown(true);
+                    }}
+                    onFocus={() => setShowDivisionDropdown(true)}
+                    onBlur={() =>
+                      setTimeout(() => setShowDivisionDropdown(false), 200)
+                    }
+                    disabled={divisionLoading}
+                    className="h-8 w-full bg-transparent text-[11px] text-foreground outline-none disabled:opacity-50"
+                  />
+                </div>
+                {showDivisionDropdown && filteredDivisions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full z-[9999] mt-1 max-h-52 overflow-y-auto rounded border border-border bg-background shadow-lg">
+                    {filteredDivisions.map((d) => (
+                      <button
+                        key={d.div_code}
+                        type="button"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] hover:bg-muted/40"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setDivision(d.div_code);
+                          setDivisionDisplay(`${d.div_code} – ${d.div_name}`);
+                          setDivisionSearch("");
+                          setShowDivisionDropdown(false);
+                          setReportError(null);
+                        }}
+                      >
+                        <span className="w-20 flex-shrink-0 font-medium">{d.div_code}</span>
+                        <span className="truncate text-muted-foreground">{d.div_name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </label>
 
             {/* From Date */}
