@@ -9,12 +9,26 @@ import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { useAuth } from "../../state/AuthContext";
 
-// ─── Field set — mirrors the old dw_erp_stockinquiry DataWindow filter bar.
-// Only the filter fields visible on the old screen are kept; nothing new
-// invented here. product_name is intentionally NOT a separate filter field —
-// the Product Code LookupField already resolves and displays the product
-// name alongside the code once a code is selected, so a standalone name
-// input would just duplicate that. ─────────────────────────────────────────
+// ─── Field set — mirrors the old dw_erp_stockinquiry DataWindow filter bar,
+// trimmed down to only the slots the retrieve proc (PROC_BUILD_DYNAMIC_SQL_
+// PURCHASE_SALE, STOCK_INQUIRY_* branches) actually reads:
+//   P_CODE2  -> prod_code
+//   P_CODE4  -> div_code
+//   P_CODE6  -> group_code
+//   P_CODE7  -> category_code
+//   P_CODE8  -> brand_code
+//   P_CODE9  -> prodtype_code
+//   P_CODE10 -> manu_code
+// Origin Country has NO branch anywhere in the proc — that param is never
+// referenced in the WHERE clause, so that filter input was removed rather
+// than shipping a control that silently does nothing. Barcode and Model
+// Number are kept per request (as P_CODE3 and P_CODE5 respectively), but
+// note the proc as pasted has no WHERE predicate on either slot yet — both
+// will be received and ignored server-side until matching WHEN clauses /
+// WHERE conditions are added there. Re-add Origin Country here too once the
+// proc grows a matching predicate. Division WAS wired in the UI before but
+// was never sent (code4 was hard-coded to "NULL") — that's fixed here since
+// div_code is a real predicate on every branch. ──────────────────────────
 type TStockInquiryFilters = {
   product_code: string;
   barcode: string;
@@ -25,7 +39,6 @@ type TStockInquiryFilters = {
   product_type: string;
   manufacturer: string;
   division: string;
-  origin_country: string;
   refresh_product_list: boolean;
 };
 
@@ -39,22 +52,34 @@ const EMPTY_FILTERS: TStockInquiryFilters = {
   product_type: "",
   manufacturer: "",
   division: "",
-  origin_country: "",
   refresh_product_list: false,
 };
 
-// ─── Row shapes — one per tab/grid, field names follow the "TAB SCREEN"
-// reference screenshots. TODO: confirm exact column names against the real
-// stock inquiry proc output before wiring against production. ─────────────
+// ─── Row shapes — one per tab/grid, field names copied verbatim from the
+// SELECT list of each STOCK_INQUIRY_* branch in the proc. ─────────────────
 
-// TAB1 — Stock Summary
+// TAB1 — Stock Summary (STOCK_INQUIRY_STOCK_SUMMARY)
+// Note: manu_code/manu_name are in the proc's GROUP BY but NOT in its
+// SELECT list, so they're intentionally absent here too — the proc simply
+// doesn't return manufacturer on this branch.
 type TStockSummaryRow = {
-  product_code: string;
-  product_name: string;
-  stock_quantity: number;
-  reserve_quantity: number;
-  available_quantity: number;
-  uom: string;
+  company_code: string;
+  div_code: string;
+  prod_code: string;
+  prod_name: string;
+  qty_stock: number;
+  qty_picked: number;
+  qty_avl: number;
+  l_uom: string;
+  wt_avg_price: number;
+  group_code: string;
+  group_name: string;
+  brand_code: string;
+  brand_name: string;
+  category_code: string;
+  category_name: string;
+  prodtype_code: string;
+  prodtype_name: string;
   unit_price: number;
   sell_price: number;
   is_inventory: string;
@@ -62,48 +87,91 @@ type TStockSummaryRow = {
   [key: string]: unknown;
 };
 
-// TAB2 — Stock by Zone
+// TAB2 — Stock by Zone (STOCK_INQUIRY_STOCK_BY_ZONE)
 type TStockByZoneRow = {
-  product_code: string;
-  product_name: string;
-  stock_quantity: number;
-  reserve_quantity: number;
-  available_quantity: number;
-  uom: string;
+  company_code: string;
+  div_code: string;
+  prod_code: string;
+  prod_name: string;
+  qty_stock: number;
+  qty_picked: number;
+  qty_avl: number;
+  l_uom: string;
+  wt_avg_price: number;
+  group_code: string;
+  group_name: string;
+  brand_code: string;
+  brand_name: string;
+  category_code: string;
+  category_name: string;
+  prodtype_code: string;
+  prodtype_name: string;
   zone_code: string;
   [key: string]: unknown;
 };
 
-// TAB3 — Stock Detail
+// TAB3 — Stock Detail (STOCK_INQUIRY_STOCK_DETAIL)
 type TStockDetailRow = {
+  company_code: string;
+  div_code: string;
+  dept_code: string;
+  doc_type: string;
+  doc_no: string;
+  doc_serial_no: string;
   doc_date: string;
-  product_code: string;
-  product_name: string;
-  stock_quantity: number;
-  reserve_quantity: number;
-  available_quantity: number;
-  uom: string;
+  prod_code: string;
+  prod_name: string;
+  qty_stock: number;
+  qty_picked: number;
+  qty_avl: number;
+  wt_avg_price: number;
+  unit_price: number;
+  disc_code?: string;
+  curr_code?: string;
+  ex_rate?: number;
   lot_no?: string;
   mfg_date?: string;
   expiry_date?: string;
-  product_group?: string;
-  product_brand?: string;
-  category?: string;
-  product_type?: string;
-  manufacturer?: string;
-  doc_type: string;
-  doc_no: string;
+  tx_identity_number?: string;
+  group_code: string;
+  group_name: string;
+  brand_code: string;
+  brand_name: string;
+  category_code: string;
+  category_name: string;
+  prodtype_code: string;
+  prodtype_name: string;
+  manu_code?: string;
+  manu_name?: string;
+  p_uom?: string;
+  l_uom: string;
+  uppp?: number;
+  volume?: number;
+  gross_wt?: number;
   [key: string]: unknown;
 };
 
-// ─── LookupField configs — one per dropdown filter. Field names for
-// PRODCODE/PRODBRAND/PRODCATEGORY/PRODTYPE/ORIGIN_COUNTRY/BARCODE match the
-// columns already SELECTed in PROC_BUILD_DYNAMIC_SQL_PURCHASE_SALE. GROUP/
-// MANUFACTURER/DIVISION parameters, table names, and column names are
-// PLACEHOLDERS — that proc has no branch for them yet; add the WHEN clauses
-// (same simple "SELECT CODE, NAME ... WHERE COMPANY_CODE = ..." shape as
-// PURCHASE_SALE_MSE_PRODBRAND) and confirm real table/column names before
-// wiring this against production. ──────────────────────────────────────────
+// TAB4 — Product Info (STOCK_INQUIRY_PRODUCT_INFO)
+type TProductInfoRow = {
+  prod_code: string;
+  prod_name: string;
+  group_code: string;
+  group_name: string;
+  brand_code: string;
+  brand_name: string;
+  category_code: string;
+  category_name: string;
+  prodtype_code: string;
+  prodtype_name: string;
+  manu_code: string;
+  manu_name: string;
+  wt_avg_cost: number;
+  vis_ind?: string;
+  [key: string]: unknown;
+};
+
+// ─── LookupField configs — one per dropdown filter still backed by a real
+// param. Origin Country lookup removed (see note above). ──────────────────
 
 const PRODUCT_LOOKUP_PARAMETER = "PURCHASE_SALE_MSE_PRODCODE";
 const PRODUCT_LOOKUP_COLUMNS: { field: string; header: string }[] = [
@@ -118,7 +186,7 @@ const BARCODE_LOOKUP_COLUMNS: { field: string; header: string }[] = [
   { field: "prod_code", header: "Product Code" },
 ];
 
-const GROUP_LOOKUP_PARAMETER = "PURCHASE_SALE_MSE_PRODGROUP"; // TODO: not yet in proc
+const GROUP_LOOKUP_PARAMETER = "PURCHASE_SALE_MSE_PRODGROUP";
 const GROUP_LOOKUP_COLUMNS: { field: string; header: string }[] = [
   { field: "group_code", header: "Group Code" },
   { field: "group_name", header: "Group Name" },
@@ -142,36 +210,17 @@ const PRODUCT_TYPE_LOOKUP_COLUMNS: { field: string; header: string }[] = [
   { field: "prodtype_name", header: "Type Name" },
 ];
 
-const MANUFACTURER_LOOKUP_PARAMETER = "PURCHASE_SALE_MSE_MANUFACTURER"; // TODO: not yet in proc
+const MANUFACTURER_LOOKUP_PARAMETER = "PURCHASE_SALE_MSE_MANUFACTURER";
 const MANUFACTURER_LOOKUP_COLUMNS: { field: string; header: string }[] = [
-  { field: "manufacturer_code", header: "Manufacturer Code" },
-  { field: "manufacturer_name", header: "Manufacturer Name" },
+  { field: "manu_code", header: "Manufacturer Code" },
+  { field: "manu_name", header: "Manufacturer Name" },
 ];
 
-const DIVISION_LOOKUP_PARAMETER = "PURCHASE_SALE_MSE_DIVISION"; // TODO: not yet in proc
+const DIVISION_LOOKUP_PARAMETER = "PURCHASE_SALE_MSE_DIVISION";
 const DIVISION_LOOKUP_COLUMNS: { field: string; header: string }[] = [
-  { field: "division_code", header: "Division Code" },
-  { field: "division_name", header: "Division Name" },
+  { field: "div_code", header: "Division Code" },
+  { field: "div_name", header: "Division Name" },
 ];
-
-// Backed by MS_COUNTRY (COUNTRY_CODE, COUNTRY_NAME), scoped by COMPANY_CODE.
-const ORIGIN_COUNTRY_LOOKUP_PARAMETER = "PURCHASE_SALE_MSE_ORIGIN_COUNTRY";
-const ORIGIN_COUNTRY_LOOKUP_COLUMNS: { field: string; header: string }[] = [
-  { field: "country_code", header: "Country Code" },
-  { field: "country_name", header: "Country Name" },
-];
-
-// TAB4 — Product Info
-type TProductInfoRow = {
-  product_code: string;
-  product_name: string;
-  group_code: string;
-  brand_code: string;
-  category_code: string;
-  product_type: string;
-  manufacturer?: string;
-  [key: string]: unknown;
-};
 
 type TabKey = "stock_summary" | "stock_by_zone" | "stock_detail" | "product_info";
 
@@ -182,14 +231,11 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "product_info", label: "Product Info." },
 ];
 
-// ─── Retrieve — parameter names are PLACEHOLDERS, one per tab/grid. VERIFY
-// against the real PROC_BUILD_DYNAMIC_SQL_COMMON20 (or equivalent) entries
-// for stock inquiry before wiring this up against production. ─────────────
 const RETRIEVE_PARAMETER: Record<TabKey, string> = {
-  stock_summary: "STOCK_INQUIRY_STOCK_SUMMARY",
-  stock_by_zone: "STOCK_INQUIRY_STOCK_BY_ZONE",
-  stock_detail: "STOCK_INQUIRY_STOCK_DETAIL",
-  product_info: "STOCK_INQUIRY_PRODUCT_INFO",
+  stock_summary: "PURCHASE_SALE_STOCK_INQUIRY_STOCK_SUMMARY",
+  stock_by_zone: "PURCHASE_SALE_STOCK_INQUIRY_STOCK_BY_ZONE",
+  stock_detail: "PURCHASE_SALE_STOCK_INQUIRY_STOCK_DETAIL",
+  product_info: "PURCHASE_SALE_STOCK_INQUIRY_PRODUCT_INFO",
 };
 
 export function StockInquiryPage() {
@@ -246,12 +292,11 @@ export function StockInquiryPage() {
     [loginid, companyCode],
   );
 
-  // ── Retrieve — sends filter bar values through to the dynamic lookup proc
-  // for whichever tab is currently active. TODO: confirm code1..code10 slot
-  // mapping against the actual proc; this ordering is a best-effort
-  // placeholder following the filter bar layout. Note code4 (previously
-  // filters.product_name) is now always "NULL" since the product name
-  // filter input was removed. ────────────────────────────────────────────
+  // ── Retrieve — slot mapping matches what each STOCK_INQUIRY_* branch
+  // reads out of P_CODE1..P_CODE10 (see comment block up top). code3
+  // (Barcode) and code5 (Model Number) have no WHERE predicate in the
+  // proc yet, so they currently have no filtering effect server-side —
+  // they're still sent in case/when those predicates get added. ─────────
   const handleRetrieve = useCallback(async () => {
     if (!companyCode) return;
     setLoading(true);
@@ -263,7 +308,7 @@ export function StockInquiryPage() {
         code1: companyCode,
         code2: filters.product_code || "NULL",
         code3: filters.barcode || "NULL",
-        code4: "NULL",
+        code4: filters.division || "NULL",
         code5: filters.model_number || "NULL",
         code6: filters.group_code || "NULL",
         code7: filters.category_code || "NULL",
@@ -321,59 +366,85 @@ export function StockInquiryPage() {
 
   // TAB1 — Stock Summary columns
   const stockSummaryColumns: ColumnDef<TStockSummaryRow>[] = [
-    { accessorKey: "product_code", header: "Product Code", size: 130 },
-    { accessorKey: "product_name", header: "Product Name", size: 240 },
-    { accessorKey: "stock_quantity", header: "Stock Quantity", size: 120 },
-    { accessorKey: "reserve_quantity", header: "Reserve Quantity", size: 130 },
-    { accessorKey: "available_quantity", header: "Available Quantity", size: 140 },
-    { accessorKey: "uom", header: "UoM", size: 80 },
+    { accessorKey: "prod_code", header: "Product Code", size: 130 },
+    { accessorKey: "prod_name", header: "Product Name", size: 220 },
+    { accessorKey: "div_code", header: "Division", size: 90 },
+    { accessorKey: "qty_stock", header: "Stock Qty", size: 100 },
+    { accessorKey: "qty_picked", header: "Picked Qty", size: 100 },
+    { accessorKey: "qty_avl", header: "Available Qty", size: 110 },
+    { accessorKey: "l_uom", header: "UoM", size: 80 },
+    { accessorKey: "wt_avg_price", header: "Wt. Avg Price", size: 110 },
     { accessorKey: "unit_price", header: "Unit Price", size: 100 },
     { accessorKey: "sell_price", header: "Sell Price", size: 100 },
+    { accessorKey: "group_code", header: "Group", size: 100 },
+    { accessorKey: "brand_code", header: "Brand", size: 100 },
+    { accessorKey: "category_code", header: "Category", size: 100 },
+    { accessorKey: "prodtype_code", header: "Product Type", size: 110 },
     { accessorKey: "is_inventory", header: "Is Inventory", size: 100 },
     { accessorKey: "is_active", header: "Is Active", size: 90 },
   ];
 
   // TAB2 — Stock by Zone columns
   const stockByZoneColumns: ColumnDef<TStockByZoneRow>[] = [
-    { accessorKey: "product_code", header: "Product Code", size: 130 },
-    { accessorKey: "product_name", header: "Product Name", size: 240 },
-    { accessorKey: "stock_quantity", header: "Stock Quantity", size: 120 },
-    { accessorKey: "reserve_quantity", header: "Reserve Quantity", size: 130 },
-    { accessorKey: "available_quantity", header: "Available Quantity", size: 140 },
-    { accessorKey: "uom", header: "UoM", size: 80 },
+    { accessorKey: "prod_code", header: "Product Code", size: 130 },
+    { accessorKey: "prod_name", header: "Product Name", size: 220 },
+    { accessorKey: "div_code", header: "Division", size: 90 },
     { accessorKey: "zone_code", header: "Zone Code", size: 100 },
+    { accessorKey: "qty_stock", header: "Stock Qty", size: 100 },
+    { accessorKey: "qty_picked", header: "Picked Qty", size: 100 },
+    { accessorKey: "qty_avl", header: "Available Qty", size: 110 },
+    { accessorKey: "l_uom", header: "UoM", size: 80 },
+    { accessorKey: "wt_avg_price", header: "Wt. Avg Price", size: 110 },
+    { accessorKey: "group_code", header: "Group", size: 100 },
+    { accessorKey: "brand_code", header: "Brand", size: 100 },
+    { accessorKey: "category_code", header: "Category", size: 100 },
+    { accessorKey: "prodtype_code", header: "Product Type", size: 110 },
   ];
 
   // TAB3 — Stock Detail columns
   const stockDetailColumns: ColumnDef<TStockDetailRow>[] = [
     { accessorKey: "doc_date", header: "Doc Date", size: 110 },
-    { accessorKey: "product_code", header: "Product Code", size: 120 },
-    { accessorKey: "product_name", header: "Product Name", size: 220 },
-    { accessorKey: "stock_quantity", header: "Stock Quantity", size: 110 },
-    { accessorKey: "reserve_quantity", header: "Reserve Quantity", size: 120 },
-    { accessorKey: "available_quantity", header: "Available Quantity", size: 130 },
-    { accessorKey: "uom", header: "UoM", size: 70 },
+    { accessorKey: "doc_type", header: "Doc Type", size: 90 },
+    { accessorKey: "doc_no", header: "Doc No", size: 120 },
+    { accessorKey: "doc_serial_no", header: "Doc Serial No", size: 110 },
+    { accessorKey: "prod_code", header: "Product Code", size: 120 },
+    { accessorKey: "prod_name", header: "Product Name", size: 200 },
+    { accessorKey: "div_code", header: "Division", size: 90 },
+    { accessorKey: "dept_code", header: "Department", size: 100 },
+    { accessorKey: "qty_stock", header: "Stock Qty", size: 100 },
+    { accessorKey: "qty_picked", header: "Picked Qty", size: 100 },
+    { accessorKey: "qty_avl", header: "Available Qty", size: 110 },
+    { accessorKey: "l_uom", header: "UoM", size: 70 },
+    { accessorKey: "wt_avg_price", header: "Wt. Avg Price", size: 110 },
+    { accessorKey: "unit_price", header: "Unit Price", size: 100 },
+    { accessorKey: "disc_code", header: "Discount", size: 90 },
+    { accessorKey: "curr_code", header: "Currency", size: 90 },
+    { accessorKey: "ex_rate", header: "Ex. Rate", size: 90 },
     { accessorKey: "lot_no", header: "Lot No", size: 100 },
     { accessorKey: "mfg_date", header: "Mfg Date", size: 110 },
     { accessorKey: "expiry_date", header: "Expiry Date", size: 110 },
-    { accessorKey: "product_group", header: "Product Group", size: 130 },
-    { accessorKey: "product_brand", header: "Product Brand", size: 130 },
-    { accessorKey: "category", header: "Category", size: 120 },
-    { accessorKey: "product_type", header: "Product Type", size: 120 },
-    { accessorKey: "manufacturer", header: "Manufacturer", size: 140 },
-    { accessorKey: "doc_type", header: "Doc Type", size: 90 },
-    { accessorKey: "doc_no", header: "Doc No", size: 120 },
+    { accessorKey: "group_code", header: "Group", size: 100 },
+    { accessorKey: "brand_code", header: "Brand", size: 100 },
+    { accessorKey: "category_code", header: "Category", size: 100 },
+    { accessorKey: "prodtype_code", header: "Product Type", size: 110 },
+    { accessorKey: "manu_code", header: "Manufacturer", size: 130 },
+    { accessorKey: "p_uom", header: "Purch. UoM", size: 100 },
+    { accessorKey: "uppp", header: "Units/Pack", size: 100 },
+    { accessorKey: "volume", header: "Volume", size: 90 },
+    { accessorKey: "gross_wt", header: "Gross Wt", size: 90 },
+    { accessorKey: "tx_identity_number", header: "Tx Identity No.", size: 130 },
   ];
 
   // TAB4 — Product Info columns
   const productInfoColumns: ColumnDef<TProductInfoRow>[] = [
-    { accessorKey: "product_code", header: "Product Code", size: 140 },
-    { accessorKey: "product_name", header: "Product Name", size: 260 },
-    { accessorKey: "group_code", header: "Group", size: 120 },
-    { accessorKey: "brand_code", header: "Brand", size: 120 },
-    { accessorKey: "category_code", header: "Category", size: 120 },
-    { accessorKey: "product_type", header: "Product Type", size: 130 },
-    { accessorKey: "manufacturer", header: "Manufacturer", size: 150 },
+    { accessorKey: "prod_code", header: "Product Code", size: 140 },
+    { accessorKey: "prod_name", header: "Product Name", size: 240 },
+    { accessorKey: "group_code", header: "Group", size: 110 },
+    { accessorKey: "brand_code", header: "Brand", size: 110 },
+    { accessorKey: "category_code", header: "Category", size: 110 },
+    { accessorKey: "prodtype_code", header: "Product Type", size: 120 },
+    { accessorKey: "manu_code", header: "Manufacturer", size: 130 },
+    { accessorKey: "wt_avg_cost", header: "Wt. Avg Cost", size: 110 },
   ];
 
   return (
@@ -394,13 +465,9 @@ export function StockInquiryPage() {
       )}
 
       {/* ── Filter bar ───────────────────────────────────────────────── */}
-      {/* 3–4 fields per row on wider screens; every code+name dropdown uses
-          LookupField (it owns its own display text, so the old disabled
-          "name" companion inputs are gone). The standalone Product Name
-          input is gone too — the Product Code field already shows the name
-          once a product is selected, so it now spans 2 grid columns to make
-          room for the longer "code - name" display text. Barcode is now a
-          LookupField against MS_PROD_BARCODE instead of a free-text input. */}
+      {/* Origin Country was removed — the retrieve proc never reads that
+          slot. Barcode (P_CODE3) and Model Number (P_CODE5) are kept per
+          request even though the proc doesn't filter on either yet. */}
       <div className="rounded-md border bg-card p-3">
         <div className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           <div className="flex items-center gap-1.5 min-w-0 sm:col-span-2" key="product_code">
@@ -442,6 +509,7 @@ export function StockInquiryPage() {
                 className="h-7 text-sm px-2"
                 value={filters.model_number}
                 onChange={(e) => set("model_number", e.target.value)}
+                placeholder="Model number"
               />
             </div>
           </div>
@@ -517,8 +585,8 @@ export function StockInquiryPage() {
                 compact
                 value={filters.manufacturer}
                 columns={MANUFACTURER_LOOKUP_COLUMNS}
-                valueField="manufacturer_code"
-                displayFields={["manufacturer_code", "manufacturer_name"]}
+                valueField="manu_code"
+                displayFields={["manu_code", "manu_name"]}
                 loadOptions={() => loadLookupRows(MANUFACTURER_LOOKUP_PARAMETER)}
                 onChange={(value) => set("manufacturer", value)}
                 placeholder="Code or name"
@@ -533,26 +601,10 @@ export function StockInquiryPage() {
                 compact
                 value={filters.division}
                 columns={DIVISION_LOOKUP_COLUMNS}
-                valueField="division_code"
-                displayFields={["division_code", "division_name"]}
+                valueField="div_code"
+                displayFields={["div_code", "div_name"]}
                 loadOptions={() => loadLookupRows(DIVISION_LOOKUP_PARAMETER)}
                 onChange={(value) => set("division", value)}
-                placeholder="Code or name"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1.5 min-w-0" key="origin_country">
-            <span className="w-24 shrink-0 text-sm">Origin Country:</span>
-            <div className="min-w-0 flex-1">
-              <LookupField
-                compact
-                value={filters.origin_country}
-                columns={ORIGIN_COUNTRY_LOOKUP_COLUMNS}
-                valueField="country_code"
-                displayFields={["country_code", "country_name"]}
-                loadOptions={() => loadLookupRows(ORIGIN_COUNTRY_LOOKUP_PARAMETER)}
-                onChange={(value) => set("origin_country", value)}
                 placeholder="Code or name"
               />
             </div>
@@ -603,11 +655,11 @@ export function StockInquiryPage() {
           searchPlaceholder="Search code, name..."
           loading={loading}
           height={480}
-          minWidth={1100}
+          minWidth={1300}
           density="grid"
           enablePagination
           pageSize={100}
-          getRowId={(row) => String(row.product_code ?? "")}
+          getRowId={(row, index) => `${row.prod_code ?? ""}-${row.div_code ?? ""}-${index}`}
         />
       )}
 
@@ -620,11 +672,11 @@ export function StockInquiryPage() {
           searchPlaceholder="Search code, name..."
           loading={loading}
           height={480}
-          minWidth={900}
+          minWidth={1000}
           density="grid"
           enablePagination
           pageSize={100}
-          getRowId={(row, index) => `${row.product_code ?? ""}-${row.zone_code ?? ""}-${index}`}
+          getRowId={(row, index) => `${row.prod_code ?? ""}-${row.zone_code ?? ""}-${index}`}
         />
       )}
 
@@ -637,11 +689,11 @@ export function StockInquiryPage() {
           searchPlaceholder="Search code, name, doc no..."
           loading={loading}
           height={480}
-          minWidth={1500}
+          minWidth={1700}
           density="grid"
           enablePagination
           pageSize={100}
-          getRowId={(row, index) => `${row.product_code ?? ""}-${row.doc_no ?? ""}-${index}`}
+          getRowId={(row, index) => `${row.prod_code ?? ""}-${row.doc_no ?? ""}-${index}`}
         />
       )}
 
@@ -654,11 +706,11 @@ export function StockInquiryPage() {
           searchPlaceholder="Search code, name..."
           loading={loading}
           height={480}
-          minWidth={900}
+          minWidth={1000}
           density="grid"
           enablePagination
           pageSize={100}
-          getRowId={(row) => String(row.product_code ?? "")}
+          getRowId={(row) => String(row.prod_code ?? "")}
         />
       )}
     </section>

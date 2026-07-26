@@ -962,6 +962,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({pathname}) => isPurchaseSaleSetupRoute(pathname),
     element: () => <PurchaseSaleSetupPage/>
   },
+
+  {
+  name: "Purchase Sales Stock Inquiry",
+  match: ({ pathname }) => isStockInquiryRoute(pathname),
+  element: () => <StockInquiryPage />,
+  },
+  
 ];
 
 function isStorageComputationRoute(pathname: string) {
