@@ -619,94 +619,50 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
     setLoadingRecord(true);
     setNotice(null);
     try {
-      const [headerRows, detailRows] = await Promise.all([
-      //   executeWmsInboundSql(`
-      //     SELECT *
-      //     FROM TF_ENQUIRY
-      //     WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
-      //       AND ENQUIRY_NR = '${sqlEscape(enquiryNr)}'
-      //       AND ENQUIRY_TYPE = '${sqlEscape(enquiryType)}'
-      //   `),
-      //   executeWmsInboundSql(`
-      //     SELECT d.*, a.ACTIVITY
-      //     FROM TF_ENQUIRY_DET d
-      //     LEFT JOIN MS_ACTIVITY a
-      //       ON a.COMPANY_CODE = d.COMPANY_CODE
-      //      AND a.ACTIVITY_CODE = d.ACT_CODE
-      //     WHERE d.COMPANY_CODE = '${sqlEscape(companyCode)}'
-      //       AND d.ENQUIRY_NR = '${sqlEscape(enquiryNr)}'
-      //       AND d.ENQUIRY_TYPE = '${sqlEscape(enquiryType)}'
-      //     ORDER BY NVL(d.SRNO, d.SR_NO), d.SR_NO
-      //   `),
-      // ]);
-
-      executeWmsInboundSql(`
-    SELECT e.*,
-           p.PRIN_NAME,
-           wp.PRIN_NAME AS WALKIN_PRIN_NAME,
-           d.DEPT_NAME,
-           c.CURR_NAME,
-           op.PORT_NAME AS ORIGIN_PORT_NAME,
-           dp.PORT_NAME AS DESTINATION_PORT_NAME,
-           s.SALESMAN_NAME,
-           f.FORWARDER_NAME,
-           v.VTYPE_NAME
-    FROM TF_ENQUIRY e
-    LEFT JOIN MS_PRINCIPAL p ON p.COMPANY_CODE = e.COMPANY_CODE AND p.PRIN_CODE = e.PRIN_CODE
-    LEFT JOIN MS_PRINCIPAL_WALKIN wp ON wp.COMPANY_CODE = e.COMPANY_CODE AND wp.PRIN_CODE = e.WALKIN_PRIN_CODE
-    LEFT JOIN MS_DEPARTMENT d ON d.COMPANY_CODE = e.COMPANY_CODE AND d.DEPT_CODE = e.DEPT_CODE
-    LEFT JOIN MS_CURRENCY c ON c.COMPANY_CODE = e.COMPANY_CODE AND c.CURR_CODE = e.CURR_CODE
-    LEFT JOIN MS_PORT op ON op.COMPANY_CODE = e.COMPANY_CODE AND op.PORT_CODE = e.ORIGIN_PORT
-    LEFT JOIN MS_PORT dp ON dp.COMPANY_CODE = e.COMPANY_CODE AND dp.PORT_CODE = e.DESTINATION_PORT
-    LEFT JOIN MS_SALESMAN s ON s.COMPANY_CODE = e.COMPANY_CODE AND s.SALESMAN_CODE = e.SALESMAN_CODE
-    LEFT JOIN MS_FORWARDER f ON f.COMPANY_CODE = e.COMPANY_CODE AND f.FORWARDER_CODE = e.FORWARDER_CODE
-    LEFT JOIN MS_VEHICLE_TYPE v ON v.COMPANY_CODE = e.COMPANY_CODE AND v.VTYPE_CODE = e.VEHICLE_TYPE
-    WHERE e.COMPANY_CODE = '${sqlEscape(companyCode)}'
-      AND e.ENQUIRY_NR = '${sqlEscape(enquiryNr)}'
-      AND e.ENQUIRY_TYPE = '${sqlEscape(enquiryType)}'
-  `),
-  executeWmsInboundSql(`
-    SELECT d.*, a.ACTIVITY
-    FROM TF_ENQUIRY_DET d
-    LEFT JOIN MS_ACTIVITY a
-      ON a.COMPANY_CODE = d.COMPANY_CODE
-     AND a.ACTIVITY_CODE = d.ACT_CODE
-    WHERE d.COMPANY_CODE = '${sqlEscape(companyCode)}'
-      AND d.ENQUIRY_NR = '${sqlEscape(enquiryNr)}'
-      AND d.ENQUIRY_TYPE = '${sqlEscape(enquiryType)}'
-    ORDER BY NVL(d.SRNO, d.SR_NO), d.SR_NO
-  `),
- ]);
-      const loadedRow = normalizeLookupRow(headerRows[0] || row);
-      const loadedHeader = toHeaderFromRow(normalizeLookupRow(headerRows[0] || row), userInfo, target, screenType);
+      const response = await api.post<{ success?: boolean; data?: { header?: LookupRow | null; details?: LookupRow[] }; message?: string }>(
+        isRfq ? "/api/freight/rfq/get" : "/api/freight/enquiry/get",
+        {
+          company_code: companyCode,
+          enquiry_type: enquiryType,
+          enquiry_nr: enquiryNr,
+        }
+      );
+      if (response.data?.success === false) {
+        throw new Error(response.data.message || `Unable to open ${enquiryLabel}`);
+      }
+      const headerRow = normalizeLookupRow(response.data?.data?.header || row);
+      const detailRows = (response.data?.data?.details || []).map(normalizeLookupRow);
+      const listRow = normalizeLookupRow(row);
+      const loadedRow = { ...listRow, ...headerRow };
+      const loadedHeader = toHeaderFromRow(loadedRow, userInfo, target, screenType);
       setHeader(loadedHeader);
       setHeaderNames({
-  prin_name: lookupText(loadedRow, "prin_name"),
-  walkin_prin_name: lookupText(loadedRow, "walkin_prin_name"),
-  dept_name: lookupText(loadedRow, "dept_name"),
-  curr_name: lookupText(loadedRow, "curr_name"),
-  origin_port_name: lookupText(loadedRow, "origin_port_name"),
-  destination_port_name: lookupText(loadedRow, "destination_port_name"),
-  salesman_name: lookupText(loadedRow, "salesman_name"),
-  forwarder_name: lookupText(loadedRow, "forwarder_name"),
-  vehicle_type_name: lookupText(loadedRow, "vtype_name"),
-  carrier_name: "", // no single join table for carrier (mode-dependent); resolved on demand below
-});
+        prin_name: lookupText(loadedRow, "prin_name"),
+        walkin_prin_name: lookupText(loadedRow, "walkin_prin_name"),
+        dept_name: lookupText(loadedRow, "dept_name"),
+        curr_name: lookupText(loadedRow, "curr_name"),
+        origin_port_name: lookupText(loadedRow, "origin_port_name"),
+        destination_port_name: lookupText(loadedRow, "destination_port_name"),
+        salesman_name: lookupText(loadedRow, "salesman_name"),
+        forwarder_name: lookupText(loadedRow, "forwarder_name"),
+        vehicle_type_name: lookupText(loadedRow, "vtype_name"),
+        carrier_name: "",
+      });
 
-    if (loadedHeader.carrier) {
-  loadCarrierLookup(loadedHeader.company_code, loadedHeader.transport_mode)
-    .then((rows) => {
-      const match = rows.find((r) => lookupText(r, "vessel_code") === loadedHeader.carrier
-        || lookupText(r, "vehicle_no") === loadedHeader.carrier
-        || lookupText(r, "airline_code") === loadedHeader.carrier);
-      if (match) {
-        const name = lookupText(match, "vessel_name") || lookupText(match, "vehicle_desc") || lookupText(match, "airline_name");
-        setHeaderNames((current) => ({ ...current, carrier_name: name }));
+      if (loadedHeader.carrier) {
+        loadCarrierLookup(loadedHeader.company_code, loadedHeader.transport_mode)
+          .then((rows) => {
+            const match = rows.find((r) => lookupText(r, "vessel_code") === loadedHeader.carrier
+              || lookupText(r, "vehicle_no") === loadedHeader.carrier
+              || lookupText(r, "airline_code") === loadedHeader.carrier);
+            if (match) {
+              const name = lookupText(match, "vessel_name") || lookupText(match, "vehicle_desc") || lookupText(match, "airline_name");
+              setHeaderNames((current) => ({ ...current, carrier_name: name }));
+            }
+          })
+          .catch(() => {});
       }
-    })
-    .catch(() => {});
- }
-      setDetails(detailRows.length ? detailRows.map((detail, index) => toDetailFromRow(normalizeLookupRow(detail), loadedHeader, index + 1)) : [buildInitialDetail(loadedHeader, 1)]);
+      setDetails(detailRows.length ? detailRows.map((detail, index) => toDetailFromRow(detail, loadedHeader, index + 1)) : [buildInitialDetail(loadedHeader, 1)]);
       setActiveTab("cargo");
       setView("editor");
     } catch (error) {
@@ -966,6 +922,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
           {isRfq && header.enquiry_nr && <TypeField label="Source Enquiry" value={header.ref_enquiry_nr || "-"} />}
         </div>
       </section>
+      </fieldset>
 
       <div className="grid gap-0 rounded-md border bg-card shadow-sm">
         <div className="flex gap-2 overflow-x-auto p-2">
@@ -974,6 +931,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
           ))}
         </div>
 
+        <fieldset disabled={isLocked} className="contents">
         <div className="border-t p-2.5">
           {activeTab === "cargo" && (
             <section>
@@ -1172,8 +1130,8 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
             </section>
           )}
         </div>
+        </fieldset>
       </div>
-      </fieldset>
     </form>
     <AttachmentDialog
       open={attachmentOpen}

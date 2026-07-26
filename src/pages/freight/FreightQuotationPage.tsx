@@ -569,11 +569,13 @@ export function FreightQuotationPage({ target, initialTab = "summary" }: { targe
             <FormInput label="Subject" value={header.subject} onChange={(value) => setHeaderField("subject", value)} />
           </div>
         </section>
+        </fieldset>
 
         <div className="grid min-h-0 gap-0 rounded-md border bg-card shadow-sm">
           <div className="flex gap-1 overflow-x-auto p-1">
             {tabs.map((tab) => <TabButton key={tab.key} tab={tab} active={activeTab === tab.key} onClick={() => setActiveTab(tab.key)} />)}
           </div>
+          <fieldset disabled={isLocked} className="contents">
           <div className="min-h-0 border-t p-1.5">
             {activeTab === "summary" && (
               <section className="grid gap-1.5 xl:grid-cols-12">
@@ -734,8 +736,8 @@ export function FreightQuotationPage({ target, initialTab = "summary" }: { targe
               </section>
             )}
           </div>
+          </fieldset>
         </div>
-        </fieldset>
       </form>
       <AttachmentDialog open={attachmentOpen} onClose={() => setAttachmentOpen(false)} requestNumber={attachmentRequestNumber} title="Quotation Attachments" module="FREIGHT" type="FRT_QUOTATION" companyCode={header.company_code} loginId={loginId} readOnly={!header.quotation_nr} />
     </>
