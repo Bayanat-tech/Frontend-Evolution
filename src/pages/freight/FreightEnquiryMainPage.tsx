@@ -159,6 +159,15 @@ type FreightEnquiryMainPageProps = {
   screenType?: "enquiry" | "rfq";
 };
 
+type ListStatusTab = "in_progress" | "approved" | "cancelled" | "all";
+
+const listStatusTabs: { key: ListStatusTab; label: string }[] = [
+  { key: "in_progress", label: "In Progress" },
+  { key: "approved", label: "Approved" },
+  { key: "cancelled", label: "Cancelled" },
+  { key: "all", label: "All" },
+];
+
 export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: FreightEnquiryMainPageProps) {
   const { user } = useAuth();
   const userInfo = user as Record<string, unknown> | null;
@@ -172,6 +181,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   const [loadingRecord, setLoadingRecord] = useState(false);
   const [listRows, setListRows] = useState<EnquiryListRow[]>([]);
   const [listQuery, setListQuery] = useState("");
+  const [activeListTab, setActiveListTab] = useState<ListStatusTab>("in_progress");
   const [view, setView] = useState<EnquiryView>("list");
   const [notice, setNotice] = useState<Notice>(null);
   const [activeTab, setActiveTab] = useState<EnquiryTab>("cargo");
@@ -192,6 +202,10 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   const smartChecks = useMemo(() => buildSmartChecks(header, details, isRfq), [details, header, isRfq]);
   const urgentChecks = smartChecks.filter((item) => item.tone === "danger").length;
   const warningChecks = smartChecks.filter((item) => item.tone === "warn").length;
+  const filteredListRows = useMemo(
+    () => listRows.filter((row) => matchesListStatusTab(row, activeListTab)),
+    [activeListTab, listRows]
+  );
   const listColumns = useMemo<ColumnDef<EnquiryListRow>[]>(
     () => [
       {
@@ -788,10 +802,32 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card p-2 shadow-sm">
+          {listStatusTabs.map((tab) => {
+            const count = listRows.filter((row) => matchesListStatusTab(row, tab.key)).length;
+            const active = activeListTab === tab.key;
+            return (
+              <Button
+                key={tab.key}
+                type="button"
+                size="sm"
+                variant={active ? "default" : "outline"}
+                onClick={() => setActiveListTab(tab.key)}
+                className={active ? "" : "bg-background"}
+              >
+                {tab.label}
+                <span className={`ml-1 rounded px-1.5 text-[10px] font-bold ${active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                  {count}
+                </span>
+              </Button>
+            );
+          })}
+        </div>
+
         <DataTable
           columns={listColumns}
-          data={listRows}
-          title={loadingList ? "Loading" : `${listRows.length} ${enquiryLabel} Records`}
+          data={filteredListRows}
+          title={loadingList ? "Loading" : `${filteredListRows.length} ${enquiryLabel} Records`}
           subtitle={`Freight ${enquiryLabel}`}
           searchValue={listQuery}
           onSearchChange={setListQuery}
@@ -805,7 +841,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
           enableExport
           exportFilename={`freight-${enquiryLabel.toLowerCase()}-list.csv`}
           getRowId={(row, index) => `${lookupText(row, "company_code")}-${lookupText(row, "enquiry_type")}-${lookupText(row, "enquiry_nr") || index}`}
-          rowClassName={(row) => lookupText(row, "indstatus") === "A" ? "bg-emerald-50/60" : "bg-amber-50/50"}
+          rowClassName={statusRowClassName}
           onRowClick={openEnquiry}
         />
       </section>
@@ -1287,6 +1323,21 @@ function statusLabel(status: string) {
   if (status === "A") return "Approved";
   if (status === "C") return "Cancelled";
   return "Not Approved";
+}
+
+function matchesListStatusTab(row: EnquiryListRow, tab: ListStatusTab) {
+  const status = lookupText(row, "indstatus");
+  if (tab === "approved") return status === "A";
+  if (tab === "cancelled") return status === "C";
+  if (tab === "in_progress") return status !== "A" && status !== "C";
+  return true;
+}
+
+function statusRowClassName(row: EnquiryListRow) {
+  const status = lookupText(row, "indstatus");
+  if (status === "A") return "bg-emerald-50/60";
+  if (status === "C") return "bg-red-50/50";
+  return "bg-amber-50/50";
 }
 
 function buildSmartChecks(header: EnquiryHeader, details: EnquiryDetail[], isRfq: boolean): SmartCheck[] {

@@ -145,6 +145,15 @@ const tabs: { key: FreightQuotationInitialTab; label: string; icon: typeof Packa
   { key: "terms", label: "Terms", icon: FileText },
 ];
 
+type ListStatusTab = "in_progress" | "approved" | "cancelled" | "all";
+
+const listStatusTabs: { key: ListStatusTab; label: string }[] = [
+  { key: "in_progress", label: "In Progress" },
+  { key: "approved", label: "Approved" },
+  { key: "cancelled", label: "Cancelled" },
+  { key: "all", label: "All" },
+];
+
 export function FreightQuotationPage({ target, initialTab = "summary" }: { target?: FreightWorkspaceTarget; initialTab?: FreightQuotationInitialTab }) {
   const { user } = useAuth();
   const userInfo = user as Record<string, unknown> | null;
@@ -154,6 +163,7 @@ export function FreightQuotationPage({ target, initialTab = "summary" }: { targe
   const [terms, setTerms] = useState<QuotationTerm[]>([]);
   const [rows, setRows] = useState<LookupRow[]>([]);
   const [query, setQuery] = useState("");
+  const [activeListTab, setActiveListTab] = useState<ListStatusTab>("in_progress");
   const [view, setView] = useState<ViewMode>("list");
   const [activeTab, setActiveTab] = useState<FreightQuotationInitialTab>(initialTab);
   const [loading, setLoading] = useState(false);
@@ -168,6 +178,10 @@ export function FreightQuotationPage({ target, initialTab = "summary" }: { targe
   const smartChecks = useMemo(() => buildSmartChecks(header, details, terms), [details, header, terms]);
   const checkCount = smartChecks.filter((item) => item.tone !== "ok").length;
   const totals = useMemo(() => buildTotals(details), [details]);
+  const filteredRows = useMemo(
+    () => rows.filter((row) => matchesListStatusTab(row, activeListTab)),
+    [activeListTab, rows]
+  );
   const isApproved = header.indstatus === "A";
   const isLocked = isApproved;
   const canApprove = Boolean(header.quotation_nr) && !isApproved;
@@ -195,7 +209,10 @@ export function FreightQuotationPage({ target, initialTab = "summary" }: { targe
       accessorKey: "indstatus",
       header: "Status",
       size: 130,
-      cell: ({ row }) => <span className={statusBadgeClass(lookupText(row.original, "indstatus"))}>{lookupText(row.original, "indstatus") === "A" ? "Approved" : "Not Approved"}</span>,
+      cell: ({ row }) => {
+        const status = lookupText(row.original, "indstatus");
+        return <span className={statusBadgeClass(status)}>{statusLabel(status)}</span>;
+      },
     },
     {
       id: "actions",
@@ -438,10 +455,31 @@ export function FreightQuotationPage({ target, initialTab = "summary" }: { targe
             <Button type="button" size="sm" onClick={startNew}><Plus size={14} />Add Quotation</Button>
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card p-2 shadow-sm">
+          {listStatusTabs.map((tab) => {
+            const count = rows.filter((row) => matchesListStatusTab(row, tab.key)).length;
+            const active = activeListTab === tab.key;
+            return (
+              <Button
+                key={tab.key}
+                type="button"
+                size="sm"
+                variant={active ? "default" : "outline"}
+                onClick={() => setActiveListTab(tab.key)}
+                className={active ? "" : "bg-background"}
+              >
+                {tab.label}
+                <span className={`ml-1 rounded px-1.5 text-[10px] font-bold ${active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                  {count}
+                </span>
+              </Button>
+            );
+          })}
+        </div>
         <DataTable
           columns={columns}
-          data={rows}
-          title={loading ? "Loading" : `${rows.length} Quotation Records`}
+          data={filteredRows}
+          title={loading ? "Loading" : `${filteredRows.length} Quotation Records`}
           subtitle="Freight Quotation"
           searchValue={query}
           onSearchChange={setQuery}
@@ -455,7 +493,7 @@ export function FreightQuotationPage({ target, initialTab = "summary" }: { targe
           enableExport
           exportFilename="freight-quotation-list.csv"
           getRowId={(row, index) => `${lookupText(row, "company_code")}-${lookupText(row, "quotation_nr") || index}`}
-          rowClassName={(row) => lookupText(row, "indstatus") === "A" ? "bg-emerald-50/60" : "bg-amber-50/50"}
+          rowClassName={statusRowClassName}
           onRowClick={openQuotation}
         />
       </section>
@@ -473,7 +511,7 @@ export function FreightQuotationPage({ target, initialTab = "summary" }: { targe
               <div className="flex flex-wrap items-center gap-1.5">
                 <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Quotation</h1>
                 <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">{header.quotation_nr || "New quotation"}</span>
-                <span className={statusBadgeClass(header.indstatus)}>{header.indstatus === "A" ? "Approved" : "Not Approved"}</span>
+                <span className={statusBadgeClass(header.indstatus)}>{statusLabel(header.indstatus)}</span>
               </div>
               <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
                 <span>{modeLabel(header.transport_mode)}</span><span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
@@ -741,7 +779,34 @@ function HeaderChip({ label, value }: { label: string; value: string }) {
 }
 
 function statusBadgeClass(status: string) {
-  return status === "A" ? "inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700" : "inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700";
+  if (status === "A") {
+    return "inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700";
+  }
+  if (status === "C") {
+    return "inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-700";
+  }
+  return "inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700";
+}
+
+function statusLabel(status: string) {
+  if (status === "A") return "Approved";
+  if (status === "C") return "Cancelled";
+  return "Not Approved";
+}
+
+function matchesListStatusTab(row: LookupRow, tab: ListStatusTab) {
+  const status = lookupText(row, "indstatus");
+  if (tab === "approved") return status === "A";
+  if (tab === "cancelled") return status === "C";
+  if (tab === "in_progress") return status !== "A" && status !== "C";
+  return true;
+}
+
+function statusRowClassName(row: LookupRow) {
+  const status = lookupText(row, "indstatus");
+  if (status === "A") return "bg-emerald-50/60";
+  if (status === "C") return "bg-red-50/50";
+  return "bg-amber-50/50";
 }
 
 function StatusField({ status }: { status: string }) {
@@ -749,7 +814,7 @@ function StatusField({ status }: { status: string }) {
     <div className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
       Status
       <div className="flex h-6 items-center rounded-md border border-input bg-muted/40 px-2">
-        <span className={statusBadgeClass(status)}>{status === "A" ? "Approved" : "Not Approved"}</span>
+        <span className={statusBadgeClass(status)}>{statusLabel(status)}</span>
       </div>
     </div>
   );

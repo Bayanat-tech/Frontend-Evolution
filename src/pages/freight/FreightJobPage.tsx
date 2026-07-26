@@ -95,7 +95,7 @@ const directionMap = {
   reexport: { code: "IRE", label: "Import for Re-export" },
 };
 
-export function FreightJobPage({ target }: { target?: FreightWorkspaceTarget }) {
+export function FreightJobPage({ target, initialJob, startMode = "list" }: { target?: FreightWorkspaceTarget; initialJob?: LookupRow | null; startMode?: ViewMode }) {
   const { user } = useAuth();
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
@@ -106,7 +106,7 @@ export function FreightJobPage({ target }: { target?: FreightWorkspaceTarget }) 
   const direction = directionMap[directionKey];
   const Icon = mode.icon;
 
-  const [view, setView] = useState<ViewMode>("list");
+  const [view, setView] = useState<ViewMode>(startMode);
   const [rows, setRows] = useState<LookupRow[]>([]);
   const [query, setQuery] = useState("");
   const [job, setJob] = useState<JobForm>(() => emptyJob(companyCode, userId, mode.code, direction.code));
@@ -143,8 +143,8 @@ export function FreightJobPage({ target }: { target?: FreightWorkspaceTarget }) 
   useEffect(() => {
     setJob(emptyJob(companyCode, userId, mode.code, direction.code));
     setPack(emptyPack());
-    setView("list");
-  }, [companyCode, direction.code, mode.code, userId]);
+    setView(startMode);
+  }, [companyCode, direction.code, mode.code, startMode, userId]);
 
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
     { accessorKey: "job_no", header: "Job No", size: 120, cell: ({ row }) => <button type="button" className="font-semibold text-primary hover:underline" onClick={() => openJob(row.original)}>{lookupText(row.original, "job_no")}</button> },
@@ -188,6 +188,17 @@ export function FreightJobPage({ target }: { target?: FreightWorkspaceTarget }) 
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (startMode !== "editor") return;
+    if (initialJob && lookupText(initialJob, "job_no") && lookupText(initialJob, "prin_code")) {
+      void openJob(initialJob);
+      return;
+    }
+    setJob(emptyJob(companyCode, userId, mode.code, direction.code));
+    setPack(emptyPack());
+    setView("editor");
+  }, [initialJob, startMode]);
 
   const saveJob = async (event: FormEvent) => {
     event.preventDefault();
