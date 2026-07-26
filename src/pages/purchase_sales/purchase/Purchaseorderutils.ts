@@ -1,8 +1,9 @@
 import { getDynamicLookup } from "../../../api/lookups";
-import { upsertBulkPurchaseNSalesEntryApi } from "../../../api/purchaseSales";
+import { upsertBulkPurchaseEntryApi } from "../../../api/purchaseSales";
 import {
   EXPENSE_AC_OPTIONS,
   PO_DOC_TYPE,
+  PODocType,
   PurchaseOrderEditorState,
   PurchaseOrderForm,
   PurchaseOrderLineRow,
@@ -97,11 +98,11 @@ export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
   };
 }
 
-export async function fetchPurchaseOrderHeader(docNo: string, companyCode?: string, loginid?: string): Promise<Record<string, unknown>> {
+export async function fetchPurchaseOrderHeader(docNo: string, companyCode?: string, loginid?: string,docType?: PODocType,): Promise<Record<string, unknown>> {
   const rows = await getDynamicLookup({
     parameter: "POORDER_ENTRY_HEADER_PAGE",
     code1: companyCode,
-    code2: PO_DOC_TYPE,
+    code2: docType,
     code3: docNo,
     loginid: loginid || "ADMIN",
   });
@@ -109,11 +110,11 @@ export async function fetchPurchaseOrderHeader(docNo: string, companyCode?: stri
   return row ? lowerRecord(row) : {};
 }
 
-export async function fetchPurchaseOrderDetail(docNo: string, companyCode?: string, loginid?: string): Promise<PurchaseOrderLineRow[]> {
+export async function fetchPurchaseOrderDetail(docNo: string, companyCode?: string, loginid?: string,docType?: PODocType): Promise<PurchaseOrderLineRow[]> {
   const rows = await getDynamicLookup({
     parameter: "POORDER_ENTRY_DETAIL_PAGE",
     code1: companyCode,
-    code2: PO_DOC_TYPE,
+    code2:docType,
     code3: docNo,
     loginid: loginid || "ADMIN",
   });
@@ -145,10 +146,10 @@ export async function fetchPurchaseOrderDetail(docNo: string, companyCode?: stri
   });
 }
 
-export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string) {
+export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: PODocType) {
   return {
     doc_no: form.doc_no || undefined,
-    doc_type: PO_DOC_TYPE,
+    doc_type: docType,
     doc_date: form.doc_date,
     quotn_no: form.quotn_no,
     quotn_date: form.quotn_date,
@@ -234,18 +235,21 @@ export function buildDetailsPayload(rows: PurchaseOrderLineRow[]) {
 
 export async function runWorkflow(
   status: "SAVEASDRAFT" | "SUBMITTED" | "REJECTED" | "CLOSED" | "CANCELED" | "SENTBACK",
+    docType: PODocType,
   form: PurchaseOrderForm,
   rows: PurchaseOrderLineRow[],
   companyCode?: string,
   loginid?: string,
 ) {
-  return upsertBulkPurchaseNSalesEntryApi(
+  return upsertBulkPurchaseEntryApi(
     {
-      header: buildHeaderPayload(form, companyCode, loginid),
+      header: buildHeaderPayload(form, companyCode, loginid, docType),
       details: buildDetailsPayload(rows),
       company_code: companyCode || "",
       loginid: loginid || "ADMIN",
     },
     status,
+    docType
   );
 }
+

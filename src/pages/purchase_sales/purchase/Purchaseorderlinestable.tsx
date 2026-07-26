@@ -31,7 +31,7 @@ function stickyHeaderStyle(col: keyof typeof STICKY_COLS): React.CSSProperties {
   return { position: "sticky", top: 0, left, width, minWidth: width, maxWidth: width, zIndex: 3, backgroundColor: "var(--primary, #1d4ed8)" };
 }
 
-const plainHeaderStyle: React.CSSProperties = { position: "sticky", top: 0, zIndex: 1, backgroundColor: "var(--primary, #1d4ed8)" };
+const plainHeaderStyle: React.CSSProperties = { position: "sticky", top: 0, zIndex: 1, backgroundColor: "var(--primary, #1d4ed8)",width: "100%" };
 
 const TABLE_COLUMN_COUNT = 24;
 
@@ -83,7 +83,7 @@ export function PurchaseOrderLinesTable({
               <th className="finance-sticky-col px-2 py-2 text-left" style={stickyHeaderStyle("div")}>Div</th>
               <th className="finance-sticky-col px-2 py-2 text-left w-32" style={stickyHeaderStyle("zone")}>Zone</th>
               <th className="finance-sticky-col px-2 py-2 text-left" style={stickyHeaderStyle("product")}>Product Code</th>
-              <th className="px-2 py-2 text-left w-24" style={plainHeaderStyle}>P Uom</th>
+              <th className="px-2 py-2 text-left w-64" style={plainHeaderStyle}>P Uom</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Qty Puom</th>
               <th className="px-2 py-2 text-left w-24" style={plainHeaderStyle}>L Uom</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-20" style={plainHeaderStyle}>Qty Luom</th>
@@ -122,7 +122,7 @@ export function PurchaseOrderLinesTable({
                     columns={[{ field: "zone_code", header: "Code" }, { field: "zone_name", header: "Name" }]}
                     valueField="zone_code"
                     displayFields={["zone_code", "zone_name"]}
-                    loadOptions={() => getDynamicLookup({ parameter: "POORDER_ENTRY_ZONE_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
+                    loadOptions={() => getDynamicLookup({ parameter: "PS_POORDER_ENTRY_ZONE_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
                     disabled={headerAndLineDisabled}
                     onChange={(value, selectedRow) => updateRow(row.id, {
                       zone_code: value,
@@ -138,7 +138,7 @@ export function PurchaseOrderLinesTable({
                     columns={[{ field: "prod_code", header: "Code" }, { field: "prod_name", header: "Name" }, { field: "p_uom", header: "P Uom" }, { field: "unit_price", header: "Unit Price" }]}
                     valueField="prod_code"
                     displayFields={["prod_code", "prod_name"]}
-                    loadOptions={() => getDynamicLookup({ parameter: "POORDER_ENTRY_PRODUCT_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
+                    loadOptions={() => getDynamicLookup({ parameter: "PS_POORDER_ENTRY_PRODUCT_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
                     disabled={headerAndLineDisabled}
                     onChange={(value, selectedRow) => updateRow(row.id, {
                       prod_code: value,
@@ -157,7 +157,7 @@ export function PurchaseOrderLinesTable({
                     columns={[{ field: "uom_code", header: "Code" }, { field: "uom_name", header: "Name" }, { field: "p_uom", header: "P Uom" }, { field: "unit_price", header: "Unit Price" }]}
                     valueField="uom_code"
                     displayFields={["uom_code", "uom_name"]}
-                    loadOptions={() => getDynamicLookup({ parameter: "POORDER_ENTRY_UOM_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
+                    loadOptions={() => getDynamicLookup({ parameter: "PS_POORDER_ENTRY_UOM_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
                     disabled={headerAndLineDisabled}
                     onChange={(value, selectedRow) => updateRow(row.id, {
                       uom_code: value,
@@ -168,7 +168,7 @@ export function PurchaseOrderLinesTable({
                 <td className="finance-amount-cell w-24 px-2 py-1">
                   <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.001" value={row.qty_puom} onChange={(event) => updateRow(row.id, { qty_puom: Number(event.target.value || 0) })} />
                 </td>
-                <td className="w-32 px-2 py-1">
+                <td className="w-64 px-2 py-1">
                   <LookupField
                     label=""
                     value={row.uom_code || ""}
@@ -176,7 +176,7 @@ export function PurchaseOrderLinesTable({
                     columns={[{ field: "uom_code", header: "Code" }, { field: "uom_name", header: "Name" }, { field: "p_uom", header: "P Uom" }, { field: "unit_price", header: "Unit Price" }]}
                     valueField="uom_code"
                     displayFields={["uom_code", "uom_name"]}
-                    loadOptions={() => getDynamicLookup({ parameter: "POORDER_ENTRY_UOM_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
+                    loadOptions={() => getDynamicLookup({ parameter: "PS_POORDER_ENTRY_UOM_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
                     disabled={headerAndLineDisabled}
                     onChange={(value, selectedRow) => updateRow(row.id, {
                       uom_code: value,

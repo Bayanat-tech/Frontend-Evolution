@@ -83,6 +83,10 @@ export interface SendBackUserOption {
   level_no: number;
 }
 
-export const PO_DOC_TYPE = "LPO";
+export const PO_DOC_TYPE = {
+  LPO: "LPO",
+  PQA: "PQA",
+} as const;
 export const PROCESS = "purchase_order";
 export const EXPENSE_AC_OPTIONS = ["Inventory A/c", "Expense A/c", "Fixed Asset A/c"];
+export type PODocType = typeof PO_DOC_TYPE[keyof typeof PO_DOC_TYPE];

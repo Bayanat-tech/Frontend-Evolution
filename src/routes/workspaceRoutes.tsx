@@ -148,7 +148,8 @@ import Mytaskalmspage from "../pages/almswf/Mytaskalmspage";
 import { PurchaseOrderPage } from "../pages/purchase_sales/purchase/Purchaseorderpage";
 
 import { PurchaseSaleSetupPage } from "../pages/purchase_sales/Purchasesalesetuppage";
-import { FlowAssignmentPage } from "../pages/security/FlowAssignmentPage"; type WorkspaceRouteContext = {
+import { FlowAssignmentPage } from "../pages/security/FlowAssignmentPage";import { PurchaseQuotationPage } from "../pages/purchase_sales/purchase/PurchaseQuatationPage";
+ type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
   activeMenu?: MenuNode;
@@ -660,6 +661,14 @@ export const workspaceRoutes: WorkspaceRoute[] = [
       throw new Error("Function not implemented.");
     } }  />,
   },
+
+    {
+    name: "Purchase Quotation Setup",
+    match: ({ pathname }) => isPurchaseQuotationSetupRoute(pathname),
+    element: () => <PurchaseQuotationPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
   // ── PAMS My Task Routes (Specific tabs first, then default) ──
   {
     name: "PAMS My Task Pending",
@@ -1053,9 +1062,14 @@ function isBudgetSetupRoute(pathname: string) {
 
 function isPurchaseSalesSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
-  return (
-    normalized.includes("purchase_sales/purchase/purchase_order")
-  );
+  
+    return (normalized.includes("purchase_sales/purchase/purchase_order"))
+}
+
+function isPurchaseQuotationSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/purchase/purchase_quotation"))
 }
 
 function isExpenseTypeRoute(pathname: string) {
