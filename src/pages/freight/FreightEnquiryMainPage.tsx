@@ -942,10 +942,10 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
               label="Source Enquiry"
               value={header.ref_enquiry_nr}
               valueField="enquiry_nr"
-              displayFields={["enquiry_nr", "enquiry_date"]}
+              displayFields={["enquiry_nr", "enquiry_date_display"]}
               columns={[
                 { field: "enquiry_nr", header: "Enquiry" },
-                { field: "enquiry_date", header: "Date" },
+                { field: "enquiry_date_display", header: "Date" },
                 { field: "prin_code", header: "Principal" },
                 { field: "prin_name", header: "Principal Name" },
               ]}
@@ -1922,6 +1922,7 @@ async function loadReferenceEnquiryLookup(companyCode: string) {
     SELECT
       e.ENQUIRY_NR,
       e.ENQUIRY_DATE,
+      TO_CHAR(e.ENQUIRY_DATE, 'DD/MM/YYYY') AS ENQUIRY_DATE_DISPLAY,
       e.ENQUIRY_TYPE,
       e.COMPANY_CODE,
       e.PRIN_CODE,
