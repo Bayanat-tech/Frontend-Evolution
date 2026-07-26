@@ -23,6 +23,7 @@ import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
+import { useToast } from "../../components/ui/AlertToast";
 import { useAuth } from "../../state/AuthContext";
 
 type AirlineTariffMode = "entry" | "report";
@@ -111,6 +112,7 @@ const slabFields: { key: keyof TariffForm; label: string }[] = [
 
 export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTariffMode }) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
   const userId = String(userRecord.user_id || userRecord.USER_ID || userRecord.loginid || userRecord.LOGINID || "");
@@ -130,6 +132,13 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
     destination: "All",
     iata_code: "All",
   });
+
+  useEffect(() => {
+    if (!notice) return;
+    if (notice.type === "success") toast.success(notice.text);
+    else toast.error(notice.text);
+    setNotice(null);
+  }, [notice, toast]);
 
   const isReport = mode === "report";
   const reportSummary = useMemo(() => {

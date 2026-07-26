@@ -5,6 +5,7 @@ import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
+import { useToast } from "../../components/ui/AlertToast";
 import { useAuth } from "../../state/AuthContext";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
 
@@ -24,6 +25,7 @@ const directionMap = { import: "IMP", export: "EXP", reexport: "IRE" };
 export function FreightJobFollowupTab({ target, kind }: { target?: FreightWorkspaceTarget; kind: FollowupKind }) {
   const cfg = meta[kind];
   const Icon = cfg.icon;
+  const { toast } = useToast();
   const [job, setJob] = useState<LookupRow | null>(null);
   const [rows, setRows] = useState<LookupRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -36,6 +38,13 @@ export function FreightJobFollowupTab({ target, kind }: { target?: FreightWorksp
   const mode = modeMap[target?.mode || "air"];
   const jobType = directionMap[target?.direction || "import"];
   const stats = useMemo(() => getStats(kind, rows), [kind, rows]);
+
+  useEffect(() => {
+    if (!notice) return;
+    if (notice.type === "success") toast.success(notice.text);
+    else toast.error(notice.text);
+    setNotice(null);
+  }, [notice, toast]);
 
   const loadRows = useCallback(async (selected = job) => {
     if (!selected) return;

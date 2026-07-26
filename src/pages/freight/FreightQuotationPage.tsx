@@ -28,6 +28,7 @@ import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
+import { useToast } from "../../components/ui/AlertToast";
 import { useAuth } from "../../state/AuthContext";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
 
@@ -156,6 +157,7 @@ const listStatusTabs: { key: ListStatusTab; label: string }[] = [
 
 export function FreightQuotationPage({ target, initialTab = "summary" }: { target?: FreightWorkspaceTarget; initialTab?: FreightQuotationInitialTab }) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const userInfo = user as Record<string, unknown> | null;
   const initialHeader = useMemo(() => buildInitialHeader(userInfo, target), [target, userInfo]);
   const [header, setHeader] = useState<QuotationHeader>(initialHeader);
@@ -172,6 +174,13 @@ export function FreightQuotationPage({ target, initialTab = "summary" }: { targe
   const [notice, setNotice] = useState<Notice>(null);
   const [assistOpen, setAssistOpen] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+
+  useEffect(() => {
+    if (!notice) return;
+    if (notice.type === "success") toast.success(notice.text);
+    else toast.error(notice.text);
+    setNotice(null);
+  }, [notice, toast]);
 
   const loginId = String(userInfo?.loginid || userInfo?.USERID || userInfo?.user_id || userInfo?.username || "");
   const attachmentRequestNumber = header.quotation_nr ? `${header.company_code}-QTN-${header.quotation_nr}` : "";

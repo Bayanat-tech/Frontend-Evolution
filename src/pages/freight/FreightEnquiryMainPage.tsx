@@ -10,6 +10,7 @@ import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
+import { useToast } from "../../components/ui/AlertToast";
 import { useAuth } from "../../state/AuthContext";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
 
@@ -170,6 +171,7 @@ const listStatusTabs: { key: ListStatusTab; label: string }[] = [
 
 export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: FreightEnquiryMainPageProps) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const userInfo = user as Record<string, unknown> | null;
   const isRfq = screenType === "rfq";
   const initialHeader = useMemo(() => buildInitialHeader(userInfo, target, screenType), [screenType, target, userInfo]);
@@ -191,6 +193,13 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   const [cancelling, setCancelling] = useState(false);
   const [cancelRemarks, setCancelRemarks] = useState("");
   const [headerNames, setHeaderNames] = useState<EnquiryHeaderNames>(emptyHeaderNames);
+
+  useEffect(() => {
+    if (!notice) return;
+    if (notice.type === "success") toast.success(notice.text);
+    else toast.error(notice.text);
+    setNotice(null);
+  }, [notice, toast]);
 
   const enquiryLabel = isRfq ? "RFQ" : "Enquiry";
   const loginId = String(userInfo?.loginid || userInfo?.USERID || userInfo?.user_id || userInfo?.username || "");

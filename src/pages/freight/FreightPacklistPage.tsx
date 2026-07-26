@@ -21,6 +21,7 @@ import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
+import { useToast } from "../../components/ui/AlertToast";
 import { useAuth } from "../../state/AuthContext";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
 
@@ -92,6 +93,7 @@ const directionMap = {
 
 export function FreightPacklistPage({ target }: { target?: FreightWorkspaceTarget }) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
   const userId = String(userRecord.user_id || userRecord.USER_ID || userRecord.loginid || userRecord.LOGINID || "");
@@ -108,6 +110,13 @@ export function FreightPacklistPage({ target }: { target?: FreightWorkspaceTarge
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+
+  useEffect(() => {
+    if (!notice) return;
+    if (notice.type === "success") toast.success(notice.text);
+    else toast.error(notice.text);
+    setNotice(null);
+  }, [notice, toast]);
 
   const isAir = mode.code === "A";
 
