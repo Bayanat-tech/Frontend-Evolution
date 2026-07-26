@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { RefreshCw, Search } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useCallback, useState } from "react";
 import { getDynamicLookupaccount } from "../../api/lookups";
 import type { LookupRow } from "../../api/lookups";
@@ -11,13 +11,13 @@ import { useAuth } from "../../state/AuthContext";
 
 // ─── Field set — mirrors the old dw_erp_stockinquiry DataWindow filter bar.
 // Only the filter fields visible on the old screen are kept; nothing new
-// invented here. The *_name companion fields from the old DataWindow are
-// gone — LookupField resolves and displays the name itself once a code is
-// selected, so there's no separate piece of state to keep in sync. ────────
+// invented here. product_name is intentionally NOT a separate filter field —
+// the Product Code LookupField already resolves and displays the product
+// name alongside the code once a code is selected, so a standalone name
+// input would just duplicate that. ─────────────────────────────────────────
 type TStockInquiryFilters = {
   product_code: string;
   barcode: string;
-  product_name: string;
   model_number: string;
   group_code: string;
   category_code: string;
@@ -32,7 +32,6 @@ type TStockInquiryFilters = {
 const EMPTY_FILTERS: TStockInquiryFilters = {
   product_code: "",
   barcode: "",
-  product_name: "",
   model_number: "",
   group_code: "",
   category_code: "",
@@ -98,9 +97,9 @@ type TStockDetailRow = {
 };
 
 // ─── LookupField configs — one per dropdown filter. Field names for
-// PRODCODE/PRODBRAND/PRODCATEGORY/PRODTYPE match the columns already
-// SELECTed in PROC_BUILD_DYNAMIC_SQL_PURCHASE_SALE. GROUP/MANUFACTURER/
-// DIVISION/ORIGIN_COUNTRY parameters, table names, and column names are
+// PRODCODE/PRODBRAND/PRODCATEGORY/PRODTYPE/ORIGIN_COUNTRY/BARCODE match the
+// columns already SELECTed in PROC_BUILD_DYNAMIC_SQL_PURCHASE_SALE. GROUP/
+// MANUFACTURER/DIVISION parameters, table names, and column names are
 // PLACEHOLDERS — that proc has no branch for them yet; add the WHEN clauses
 // (same simple "SELECT CODE, NAME ... WHERE COMPANY_CODE = ..." shape as
 // PURCHASE_SALE_MSE_PRODBRAND) and confirm real table/column names before
@@ -110,6 +109,13 @@ const PRODUCT_LOOKUP_PARAMETER = "PURCHASE_SALE_MSE_PRODCODE";
 const PRODUCT_LOOKUP_COLUMNS: { field: string; header: string }[] = [
   { field: "prod_code", header: "Product Code" },
   { field: "prod_name", header: "Product Name" },
+];
+
+// Backed by MS_PROD_BARCODE (PROD_CODE, BARCODE), scoped by COMPANY_CODE.
+const BARCODE_LOOKUP_PARAMETER = "PURCHASE_SALE_MSE_BARCODE";
+const BARCODE_LOOKUP_COLUMNS: { field: string; header: string }[] = [
+  { field: "barcode", header: "Barcode" },
+  { field: "prod_code", header: "Product Code" },
 ];
 
 const GROUP_LOOKUP_PARAMETER = "PURCHASE_SALE_MSE_PRODGROUP"; // TODO: not yet in proc
@@ -148,7 +154,8 @@ const DIVISION_LOOKUP_COLUMNS: { field: string; header: string }[] = [
   { field: "division_name", header: "Division Name" },
 ];
 
-const ORIGIN_COUNTRY_LOOKUP_PARAMETER = "PURCHASE_SALE_MSE_ORIGIN_COUNTRY"; // TODO: not yet in proc
+// Backed by MS_COUNTRY (COUNTRY_CODE, COUNTRY_NAME), scoped by COMPANY_CODE.
+const ORIGIN_COUNTRY_LOOKUP_PARAMETER = "PURCHASE_SALE_MSE_ORIGIN_COUNTRY";
 const ORIGIN_COUNTRY_LOOKUP_COLUMNS: { field: string; header: string }[] = [
   { field: "country_code", header: "Country Code" },
   { field: "country_name", header: "Country Name" },
@@ -242,7 +249,9 @@ export function StockInquiryPage() {
   // ── Retrieve — sends filter bar values through to the dynamic lookup proc
   // for whichever tab is currently active. TODO: confirm code1..code10 slot
   // mapping against the actual proc; this ordering is a best-effort
-  // placeholder following the filter bar layout. ────────────────────────────
+  // placeholder following the filter bar layout. Note code4 (previously
+  // filters.product_name) is now always "NULL" since the product name
+  // filter input was removed. ────────────────────────────────────────────
   const handleRetrieve = useCallback(async () => {
     if (!companyCode) return;
     setLoading(true);
@@ -254,7 +263,7 @@ export function StockInquiryPage() {
         code1: companyCode,
         code2: filters.product_code || "NULL",
         code3: filters.barcode || "NULL",
-        code4: filters.product_name || "NULL",
+        code4: "NULL",
         code5: filters.model_number || "NULL",
         code6: filters.group_code || "NULL",
         code7: filters.category_code || "NULL",
@@ -387,12 +396,14 @@ export function StockInquiryPage() {
       {/* ── Filter bar ───────────────────────────────────────────────── */}
       {/* 3–4 fields per row on wider screens; every code+name dropdown uses
           LookupField (it owns its own display text, so the old disabled
-          "name" companion inputs are gone). Inputs sit in a flexible column
-          rather than a fixed px width, so they're a bit wider than before
-          without needing per-field width tuning. */}
+          "name" companion inputs are gone). The standalone Product Name
+          input is gone too — the Product Code field already shows the name
+          once a product is selected, so it now spans 2 grid columns to make
+          room for the longer "code - name" display text. Barcode is now a
+          LookupField against MS_PROD_BARCODE instead of a free-text input. */}
       <div className="rounded-md border bg-card p-3">
         <div className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          <div className="flex items-center gap-1.5 min-w-0" key="product_code">
+          <div className="flex items-center gap-1.5 min-w-0 sm:col-span-2" key="product_code">
             <span className="w-24 shrink-0 text-sm text-primary font-medium">Product Code:</span>
             <div className="min-w-0 flex-1">
               <LookupField
@@ -411,24 +422,15 @@ export function StockInquiryPage() {
           <div className="flex items-center gap-1.5 min-w-0" key="barcode">
             <span className="w-24 shrink-0 text-sm">Barcode:</span>
             <div className="min-w-0 flex-1">
-              <Input
-                className="h-7 text-sm px-2"
+              <LookupField
+                compact
                 value={filters.barcode}
-                onChange={(e) => set("barcode", e.target.value)}
-              />
-            </div>
-            <Button size="icon" variant="outline" className="h-7 w-7" title="Search barcode">
-              <Search size={12} />
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-1.5 min-w-0" key="product_name">
-            <span className="w-24 shrink-0 text-sm">Product Name:</span>
-            <div className="min-w-0 flex-1">
-              <Input
-                className="h-7 text-sm px-2"
-                value={filters.product_name}
-                onChange={(e) => set("product_name", e.target.value)}
+                columns={BARCODE_LOOKUP_COLUMNS}
+                valueField="barcode"
+                displayFields={["barcode", "prod_code"]}
+                loadOptions={() => loadLookupRows(BARCODE_LOOKUP_PARAMETER)}
+                onChange={(value) => set("barcode", value)}
+                placeholder="Barcode"
               />
             </div>
           </div>
