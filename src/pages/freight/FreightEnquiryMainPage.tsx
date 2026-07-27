@@ -894,16 +894,20 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
 
       <fieldset disabled={isLocked} className="contents">
       <section className="rounded-md border bg-card p-2.5 shadow-sm">
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+        <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6 xl:grid-cols-8">
           {/* <FormInput label="Company" value={header.company_code} onChange={(value) => setHeaderField("company_code", value)} required /> */}
-          <FormInput label={`${enquiryLabel} No`} value={header.enquiry_nr} onChange={(value) => setHeaderField("enquiry_nr", value)} placeholder="Auto" />
+          <FormInput label={`${enquiryLabel} No`} value={header.enquiry_nr} onChange={(value) => setHeaderField("enquiry_nr", value)} placeholder="Auto" disabled required inputClassName={header.enquiry_nr
+            ? "bg-muted text-foreground"
+            : "bg-amber-50 border-dashed border-amber-300 text-amber-700 italic"
+           } />
           <FormInput label="Date" type="date" value={header.enquiry_date} onChange={(value) => setHeaderField("enquiry_date", value)} required />
-          <FormLookup label="Department" value={header.dept_code} displayValue={headerNames.dept_name} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} />
-          <FormSelect label="Job Type" value={header.job_type} onChange={(value) => setHeaderField("job_type", value)} options={jobTypes} />
-          <FormSelect label="Mode" value={header.transport_mode} onChange={(value) => setHeaderField("transport_mode", value)} options={transportModes} />
-          <FormLookup label="Principal" value={header.prin_code} displayValue={headerNames.prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required />
-          <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayValue={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }, { field: "prin_telno1", header: "Phone" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} />
-          <FormLookup label="Salesman" value={header.salesman_code} displayValue={headerNames.salesman_name} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Salesman" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} />
+          {/* <FormLookup label="Department" value={header.dept_code} displayValue={headerNames.dept_name} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} className="sm:col-span-2 xl:col-span-1.5" /> */}
+          <FormSelect label="Job Type" value={header.job_type} onChange={(value) => setHeaderField("job_type", value)} options={jobTypes} required/>
+          <FormSelect label="Mode" value={header.transport_mode} onChange={(value) => setHeaderField("transport_mode", value)} options={transportModes}  required />
+          <FormLookup label="Department" value={header.dept_code} displayValue={headerNames.dept_name} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} required className="sm:col-span-2 xl:col-span-1.5" />
+          <FormLookup label="Principal" value={header.prin_code} displayValue={headerNames.prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required className="sm:col-span-2 xl:col-span-1.5" />
+          <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayValue={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }, { field: "prin_telno1", header: "Phone" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} className="sm:col-span-2 xl:col-span-1.5" />
+          <FormLookup label="Salesman" value={header.salesman_code} displayValue={headerNames.salesman_name} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Salesman" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} className="sm:col-span-2 xl:col-span-1.5" />
           <StatusField status={header.indstatus} />
           <FormInput label="Offer Validity" type="date" value={header.offer_validity} onChange={(value) => setHeaderField("offer_validity", value)} />
           <TypeField label="Type" value={header.enquiry_type} />
@@ -988,7 +992,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
               <div className="grid gap-2 lg:grid-cols-12">
                 <SectionPanel className="lg:col-span-7" icon={MapPinned} title="Routing" meta={`${header.origin_port || "Origin"} -> ${header.destination_port || "Destination"}`}>
                   <div className="grid gap-2 sm:grid-cols-2">
-                    <FormLookup label="Port of Loading" value={header.origin_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("origin_port", value, row)} />
+                    <FormLookup label="Port of Loading" value={header.origin_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("origin_port", value, row)} required />
                     <FormLookup label="Port of Destination" value={header.destination_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("destination_port", value, row)} />
                     <FormInput label="Country Origin" value={header.country_origin} onChange={(value) => setHeaderField("country_origin", value)} />
                     <FormInput label="Country Destination" value={header.country_destination} onChange={(value) => setHeaderField("country_destination", value)} />
@@ -1038,8 +1042,8 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
                   <div className="grid gap-2 sm:grid-cols-2">
                     <FormSelect label="INCO Terms" value={header.payment_terms} onChange={(value) => setHeaderField("payment_terms", value)} options={paymentTerms.map((value) => ({ value, label: value }))} />
                     <FormSelect label="Freight Payable At" value={header.tos} onChange={(value) => setHeaderField("tos", value)} options={tosOptions.map((value) => ({ value, label: value }))} />
-                    <FormLookup label="Currency" value={header.curr_code} valueField="curr_code" displayFields={["curr_code", "curr_name"]} columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Currency" }, { field: "ex_rate", header: "Rate" }]} loadOptions={() => loadCurrencyLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("curr_code", value, row)} />
-                    <FormInput label="Exchange Rate" type="number" value={header.ex_rate} onChange={(value) => setHeaderField("ex_rate", value)} />
+                    <FormLookup label="Currency" value={header.curr_code} valueField="curr_code" displayFields={["curr_code", "curr_name"]} columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Currency" }, { field: "ex_rate", header: "Rate" }]} loadOptions={() => loadCurrencyLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("curr_code", value, row)} required />
+                    <FormInput label="Exchange Rate" type="number" value={header.ex_rate} onChange={(value) => setHeaderField("ex_rate", value)} required/>
                   </div>
                 </SectionPanel>
 
@@ -1547,6 +1551,8 @@ function FormInput({
   required,
   placeholder,
   className = "",
+  disabled,
+  inputClassName = "",
 }: {
   label: string;
   value: string;
@@ -1555,11 +1561,13 @@ function FormInput({
   required?: boolean;
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
+  inputClassName?: string;
 }) {
   return (
     <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
       {label}
-      <Input className="h-8 text-xs" value={value} type={type} required={required} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+      <Input className={`h-8 text-xs ${inputClassName}`} value={value} type={type} required={required} placeholder={placeholder} disabled={disabled} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }
@@ -1611,7 +1619,9 @@ function FormLookup({
 }) {
   return (
     <div className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
-      {label}
+    <span>
+       {label} {required && <span style={{ color: "#E24B4A" }}>*</span>}
+     </span>
       <LookupField
         compact
         label={label}
@@ -1634,16 +1644,18 @@ function FormSelect({
   value,
   onChange,
   options,
+  required,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: Array<{ value: string; label: string }>;
+   required?: boolean;
 }) {
   return (
     <label className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
-      {label}
-      <select className={fieldClassName} value={value} onChange={(event) => onChange(event.target.value)}>
+      <span> {label} {required && <span style={{ color: "#E24B4A" }}>*</span>} </span>
+      <select className={fieldClassName} value={value} required={required} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}

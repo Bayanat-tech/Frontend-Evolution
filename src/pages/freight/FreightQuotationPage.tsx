@@ -18,6 +18,7 @@ import {
   ShipWheel,
   Sparkles,
   Trash2,
+  CreditCard
 } from "lucide-react";
 import { api } from "../../api/client";
 import { executeWmsInboundSql, executeWmsInboundSqlCached } from "../../api/wms";
@@ -121,7 +122,7 @@ type QuotationTerm = {
 
 type Notice = { type: "success" | "error"; text: string } | null;
 type ViewMode = "list" | "editor";
-export type FreightQuotationInitialTab = "cargo" | "charges" | "terms";
+export type FreightQuotationInitialTab = "cargo" | "payment" | "charges" | "terms";
 type SmartCheck = { tone: "ok" | "warn" | "danger"; title: string; detail: string };
 
 const jobTypes = [
@@ -140,7 +141,8 @@ const saleTypes = ["Normal", "FreeIn"];
 const jobCategories = ["International", "Combined services", "Clearance", "Others"];
 const tabs: { key: FreightQuotationInitialTab; label: string; icon: typeof PackageCheck }[] = [
   { key: "cargo", label: "Cargo", icon: MapPinned },
-  { key: "charges", label: "Rates", icon: Activity },
+  { key: "payment", label: "Payment", icon: CreditCard },
+  { key: "charges", label: "Activity", icon: Activity },
   { key: "terms", label: "Terms", icon: FileText },
 ];
 
@@ -617,6 +619,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
             <FormInput label="Quotation No" value={header.quotation_nr} onChange={(value) => setHeaderField("quotation_nr", value)} placeholder="Auto" />
             <FormInput label="Date" type="date" value={header.quotation_date} onChange={(value) => setHeaderField("quotation_date", value)} required />
             <FormLookup label="Principal" value={header.prin_code} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required />
+            <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }, { field: "prin_telno1", header: "Phone" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} className="sm:col-span-2 xl:col-span-2" />
+            {/* <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayFields={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }, { field: "prin_telno1", header: "Phone" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} className="sm:col-span-2 xl:col-span-1.5" /> */}
             <FormInput label="Department" value={header.dept_code} onChange={(value) => setHeaderField("dept_code", value)} required />
             {!header.quotation_nr ? (
               <FormLookup label="Source Enquiry/RFQ" value={header.enquiry_no} valueField="enquiry_nr" displayFields={["enquiry_nr", "enquiry_date_display"]} columns={[{ field: "enquiry_nr", header: "Enquiry" }, { field: "enquiry_date_display", header: "Date" }, { field: "enquiry_type", header: "Type" }, { field: "prin_code", header: "Principal" }]} loadOptions={() => loadEnquiryLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("enquiry_no", value, row)} />
@@ -627,6 +631,9 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
             <FormSelect label="Mode" value={header.transport_mode} onChange={(value) => setHeaderField("transport_mode", value)} options={transportModes} />
             <StatusField status={header.indstatus} />
             <FormInput label="Offer Validity" type="date" value={header.offer_validity} onChange={(value) => setHeaderField("offer_validity", value)} />
+            <FormSelect label="Member Type" value={header.member_type} onChange={(value) => setHeaderField("member_type", value)} options={memberTypes.map((value) => ({ value, label: value || "Blank" }))} />
+            <FormSelect label="Sale Type" value={header.sale_type} onChange={(value) => setHeaderField("sale_type", value)} options={saleTypes.map((value) => ({ value, label: value }))} />
+            <FormSelect label="Job Category" value={header.job_category} onChange={(value) => setHeaderField("job_category", value)} options={jobCategories.map((value) => ({ value, label: value }))} />
             <FormInput label="Contact Person" value={header.contact_person} onChange={(value) => setHeaderField("contact_person", value)} />
             <FormInput label="Subject" value={header.subject} onChange={(value) => setHeaderField("subject", value)} />
           </div>
@@ -640,63 +647,85 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
           <fieldset disabled={isLocked} className="contents">
           <div className="min-h-0 border-t p-1.5">
             {activeTab === "cargo" && (
-              <section className="grid gap-1.5 xl:grid-cols-12">
-                <SectionPanel className="xl:col-span-12 border-primary/15 bg-primary/[0.015]" icon={Activity} title="Commercial Profile" meta={`${header.member_type || "No member"} / ${header.sale_type || "Sale type"} / ${header.job_category || "Category"}`}>
-                  <div className="grid gap-1.5 md:grid-cols-[1fr_1fr_1fr_1.2fr]">
-                    <FormSelect label="Member Type" value={header.member_type} onChange={(value) => setHeaderField("member_type", value)} options={memberTypes.map((value) => ({ value, label: value || "Blank" }))} />
-                    <FormSelect label="Sale Type" value={header.sale_type} onChange={(value) => setHeaderField("sale_type", value)} options={saleTypes.map((value) => ({ value, label: value }))} />
-                    <FormSelect label="Job Category" value={header.job_category} onChange={(value) => setHeaderField("job_category", value)} options={jobCategories.map((value) => ({ value, label: value }))} />
-                    <div className="grid gap-0.5 rounded-md border bg-muted/25 px-2 py-1">
-                      <div className="text-[11px] font-semibold uppercase text-muted-foreground">Quotation Profile</div>
-                      <div className="flex flex-wrap gap-1.5">
-                        <HeaderChip label="Mode" value={modeLabel(header.transport_mode)} />
-                        <HeaderChip label="Type" value={jobTypeLabel(header.job_type)} />
-                        <HeaderChip label="Currency" value={`${header.curr_code || "-"} / ${header.ex_rate || "1"}`} />
-                      </div>
-                    </div>
-                  </div>
-                </SectionPanel>
+               <section className="grid gap-1.5 xl:grid-cols-12">
+          
                 <SectionPanel className="xl:col-span-6" icon={PackageCheck} title="Cargo" meta={`${header.commodity || "Commodity pending"} / ${header.gross_wt || header.weight || "0"} kgs`}>
                   <div className="grid gap-1 sm:grid-cols-2 xl:grid-cols-4">
                     <FormLookup label="Commodity" value={header.commodity} valueField="prodtype_desc" displayFields={["prodtype_desc", "prodtype_code"]} columns={[{ field: "prodtype_desc", header: "Commodity" }, { field: "prodtype_code", header: "Code" }]} loadOptions={() => loadCommodityLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("commodity", value, row)} className="xl:col-span-2" />
-                    <FormInput label="L" type="number" value={header.l} onChange={(value) => setHeaderField("l", value)} />
-                    <FormInput label="B" type="number" value={header.b} onChange={(value) => setHeaderField("b", value)} />
-                    <FormInput label="H" type="number" value={header.h} onChange={(value) => setHeaderField("h", value)} />
-                    <FormInput label="Volume" type="number" value={header.volume} onChange={(value) => setHeaderField("volume", value)} />
-                    <FormInput label="Vol Weight" type="number" value={header.weight} onChange={(value) => setHeaderField("weight", value)} />
-                    <FormInput label="Gross Wt" type="number" value={header.gross_wt} onChange={(value) => setHeaderField("gross_wt", value)} />
+                    <FormInput label="Length(cm)" type="number" value={header.l} onChange={(value) => setHeaderField("l", value)} />
+                    <FormInput label="Breadth(cm)" type="number" value={header.b} onChange={(value) => setHeaderField("b", value)} />
+                    <FormInput label="Height(cm)" type="number" value={header.h} onChange={(value) => setHeaderField("h", value)} />
+                    <FormInput label="Volume(c.b.m)" type="number" value={header.volume} onChange={(value) => setHeaderField("volume", value)} />
+                    <FormInput label="Volume Weight(kgs)" type="number" value={header.weight} onChange={(value) => setHeaderField("weight", value)} />
+                    <FormInput label="Gross Weight(kgs)" type="number" value={header.gross_wt} onChange={(value) => setHeaderField("gross_wt", value)} />
                   </div>
                 </SectionPanel>
                 <SectionPanel className="xl:col-span-6" icon={MapPinned} title="Journey" meta={`${header.origin_port || "Origin"} -> ${header.destination_port || "Destination"}`}>
                   <div className="grid gap-1 sm:grid-cols-2">
-                    <FormLookup label="Origin Port" value={header.origin_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("origin_port", value, row)} />
-                    <FormLookup label="Destination Port" value={header.destination_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("destination_port", value, row)} />
+                    <FormLookup label="Port of Loading" value={header.origin_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("origin_port", value, row)} />
+                    <FormLookup label="Port of Destination" value={header.destination_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("destination_port", value, row)} />
                     <FormInput label="Country Origin" value={header.country_origin} onChange={(value) => setHeaderField("country_origin", value)} />
                     <FormInput label="Country Destn" value={header.country_destination} onChange={(value) => setHeaderField("country_destination", value)} />
                     <FormInput label="Via" value={header.via} onChange={(value) => setHeaderField("via", value)} className="sm:col-span-2" />
                   </div>
                 </SectionPanel>
-                <SectionPanel className="xl:col-span-7" icon={ShipWheel} title="Carrier And Equipment" meta={`${modeLabel(header.transport_mode)} / ${header.carrier || "Carrier pending"}`}>
+                <SectionPanel className="xl:col-span-12" icon={ShipWheel} title="Carrier And Equipment" meta={`${modeLabel(header.transport_mode)} / ${header.carrier || "Carrier pending"}`}>
                   <div className="grid gap-1 sm:grid-cols-3">
                     <FormLookup key={`carrier-${header.transport_mode}`} label="Carrier" value={header.carrier} {...carrierLookupProps(header.transport_mode, header.company_code)} onChange={(value, row) => applyHeaderLookup("carrier", value, row)} />
                     <FormLookup label="Forwarder" value={header.forwarder_code} valueField="forwarder_code" displayFields={["forwarder_code", "forwarder_name"]} columns={[{ field: "forwarder_code", header: "Code" }, { field: "forwarder_name", header: "Forwarder" }]} loadOptions={() => loadForwarderLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("forwarder_code", value, row)} />
                     <FormInput label="Transit" value={header.transit_time} onChange={(value) => setHeaderField("transit_time", value)} />
                     <FormInput label="Frequency" value={header.frequency} onChange={(value) => setHeaderField("frequency", value)} />
                     <FormInput label="Container Type" value={header.container_type} onChange={(value) => setHeaderField("container_type", value)} />
-                    <FormInput label="Containers" type="number" value={header.no_of_contaners} onChange={(value) => setHeaderField("no_of_contaners", value)} />
+                    <FormInput label="No of Containers" type="number" value={header.no_of_contaners} onChange={(value) => setHeaderField("no_of_contaners", value)} />
                     <FormLookup label="Vehicle Type" value={header.vehicle_type} valueField="vtype_code" displayFields={["vtype_code", "vtype_name"]} columns={[{ field: "vtype_code", header: "Code" }, { field: "vtype_name", header: "Vehicle Type" }]} loadOptions={() => loadVehicleTypeLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("vehicle_type", value, row)} />
                     <FormInput label="T/F" value={header.t_f} onChange={(value) => setHeaderField("t_f", value)} />
+                    <FormTextarea label="Cargo Detail" value={header.cargo_detail} onChange={(value) => setHeaderField("cargo_detail", value)} compact />
                   </div>
                 </SectionPanel>
-                <SectionPanel className="xl:col-span-5" icon={PackageCheck} title="Notes" meta={header.remarks ? "Remarks added" : "No remarks"}>
+                {/* <SectionPanel className="xl:col-span-5" icon={PackageCheck} title="Notes" meta={header.remarks ? "Remarks added" : "No remarks"}>
                   <div className="grid gap-1 sm:grid-cols-2">
                     <FormTextarea label="Cargo Detail" value={header.cargo_detail} onChange={(value) => setHeaderField("cargo_detail", value)} compact />
                     <FormTextarea label="Remarks" value={header.remarks} onChange={(value) => setHeaderField("remarks", value)} compact />
                     <FormTextarea label="Special Instructions" value={header.spl_instructions} onChange={(value) => setHeaderField("spl_instructions", value)} compact className="sm:col-span-2" />
                   </div>
-                </SectionPanel>
+                </SectionPanel> */}
               </section>
             )}
+
+            {activeTab === "payment" && (
+                        <section>
+                          <SectionPanel icon={CreditCard} title="Payment Terms" meta=" PaymentTerms & instructions"><div className="grid gap-2 sm:grid-cols-2">
+                   <FormSelect label="INCO Terms" value={header.payment_terms} onChange={(value) => setHeaderField("payment_terms", value)} options={paymentTerms.map((value) => ({ value, label: value }))} />
+                   <FormSelect label="Freight Payable At" value={header.tos} onChange={(value) => setHeaderField("tos", value)} options={tosOptions.map((value) => ({ value, label: value }))} />
+                   <FormLookup label="Currency" value={header.curr_code} valueField="curr_code" displayFields={["curr_code", "curr_name"]} columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Currency" }, { field: "ex_rate", header: "Rate" }]} loadOptions={() => loadCurrencyLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("curr_code", value, row)} required />
+                   <FormInput label="Exchange Rate" type="number" value={header.ex_rate} onChange={(value) => setHeaderField("ex_rate", value)} required/>
+                    </div>
+                   <FormTextarea label="Special Instructions" value={header.spl_instructions} onChange={(value) => setHeaderField("spl_instructions", value)} />
+                    </SectionPanel>
+                          {/* <div className="grid gap-2 lg:grid-cols-12">
+                            <SectionPanel className="lg:col-span-5" icon={CreditCard} title="Terms And Currency" meta={`${header.payment_terms || "Terms"} / ${header.curr_code || "Currency"}`}>
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                <FormSelect label="INCO Terms" value={header.payment_terms} onChange={(value) => setHeaderField("payment_terms", value)} options={paymentTerms.map((value) => ({ value, label: value }))} />
+                                <FormSelect label="Freight Payable At" value={header.tos} onChange={(value) => setHeaderField("tos", value)} options={tosOptions.map((value) => ({ value, label: value }))} />
+                                <FormLookup label="Currency" value={header.curr_code} valueField="curr_code" displayFields={["curr_code", "curr_name"]} columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Currency" }, { field: "ex_rate", header: "Rate" }]} loadOptions={() => loadCurrencyLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("curr_code", value, row)} required />
+                                <FormInput label="Exchange Rate" type="number" value={header.ex_rate} onChange={(value) => setHeaderField("ex_rate", value)} required/>
+                              </div>
+                            </SectionPanel>
+
+                              <SectionPanel className="lg:col-span-4" icon={PackageCheck} title="Classification" meta={`${header.sale_type || "Sale"} / ${header.job_category || "Category"}`}>
+                                              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                                                <FormSelect label="Member Type" value={header.member_type} onChange={(value) => setHeaderField("member_type", value)} options={memberTypes.map((value) => ({ value, label: value || "Blank" }))} />
+                                                <FormSelect label="Sale Type" value={header.sale_type} onChange={(value) => setHeaderField("sale_type", value)} options={saleTypes.map((value) => ({ value, label: value }))} />
+                                                <FormSelect label="Job Category" value={header.job_category} onChange={(value) => setHeaderField("job_category", value)} options={jobCategories.map((value) => ({ value, label: value }))} />
+                                              </div>
+                                            </SectionPanel>
+                            
+                                            <SectionPanel className="lg:col-span-3" icon={Activity} title="Instructions" meta={header.spl_instructions ? "Added" : "Pending"}>
+                                              <FormTextarea label="Special Instructions" value={header.spl_instructions} onChange={(value) => setHeaderField("spl_instructions", value)} />
+                                            </SectionPanel>
+                                          </div> */}
+                           </section>
+                                      )}
 
             {activeTab === "charges" && (
               <section>
@@ -818,7 +847,7 @@ function FreightAssistPanel({ checks }: { checks: SmartCheck[] }) {
   );
 }
 
-function SectionPanel({ title, meta, icon: Icon, children, className = "" }: { title: string; meta?: string; icon: typeof PackageCheck; children: React.ReactNode; className?: string }) {
+function SectionPanel({ title, meta, icon: Icon, children, className = "" }: { title: string; meta?: string; icon: typeof PackageCheck; children?: React.ReactNode; className?: string }) {
   return (
     <section className={`overflow-hidden rounded-md border bg-background shadow-sm ${className}`}>
       <div className="flex items-center justify-between gap-2 border-b bg-muted/35 px-2 py-0.5">
@@ -1138,6 +1167,7 @@ const fieldClassName = "h-6 w-full rounded-md border border-input bg-background 
 const portColumns = [{ field: "port_code", header: "Code" }, { field: "port_name", header: "Port" }, { field: "country_name", header: "Country" }];
 
 async function loadPrincipalLookup(companyCode: string) { return loadFreightLookup(`SELECT p.PRIN_CODE, p.PRIN_NAME, p.PRIN_DEPT_CODE, p.CURR_CODE, c.EX_RATE FROM MS_PRINCIPAL p LEFT JOIN MS_CURRENCY c ON c.COMPANY_CODE = p.COMPANY_CODE AND c.CURR_CODE = p.CURR_CODE WHERE p.COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY p.PRIN_CODE`); }
+async function loadWalkinPrincipalLookup(companyCode: string) {return loadFreightLookup(` SELECT PRIN_CODE, PRIN_NAME, PRIN_CONTACT1, PRIN_EMAIL1, PRIN_TELNO1 FROM MS_PRINCIPAL_WALKIN WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'ORDER BY PRIN_CODE`);}
 async function loadEnquiryLookup(companyCode: string) {
   return loadFreightLookup(`
     SELECT ENQUIRY_NR, ENQUIRY_DATE, TO_CHAR(ENQUIRY_DATE, 'DD/MM/YYYY') AS ENQUIRY_DATE_DISPLAY,

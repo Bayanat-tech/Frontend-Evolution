@@ -35,6 +35,7 @@ type AirlineTariffRow = {
   AIRLINE_NAME?: string;
   SOURCE?: string;
   DESTINATION?: string;
+  DIRECT_VIA?: string;
   IATA_CODE?: string;
   CURR_CODE?: string;
   MINIMUM?: number | string;
@@ -47,6 +48,8 @@ type AirlineTariffRow = {
   K_1000?: number | string;
   HARD_FREIGHT?: string;
   PERISHABLE?: string;
+  RESTRICTION?: string;
+  RESTRICTION_DET?: string;
   USER_ID?: string;
   USER_DT?: string;
   [key: string]: unknown;
@@ -59,6 +62,7 @@ type TariffForm = {
   airline_name: string;
   source: string;
   destination: string;
+  direct_via: string;
   iata_code: string;
   curr_code: string;
   minimum: string;
@@ -71,6 +75,8 @@ type TariffForm = {
   k_1000: string;
   hard_freight: string;
   perishable: string;
+  restriction: string;
+  restriction_det: string;
   user_id: string;
 };
 
@@ -84,6 +90,7 @@ const emptyForm = (companyCode: string, userId: string): TariffForm => ({
   airline_name: "",
   source: "",
   destination: "",
+  direct_via: "",
   iata_code: "",
   curr_code: "",
   minimum: "",
@@ -95,7 +102,9 @@ const emptyForm = (companyCode: string, userId: string): TariffForm => ({
   k_500: "",
   k_1000: "",
   hard_freight: "N",
-  perishable: "N",
+  perishable: "",
+  restriction: "",
+  restriction_det: "",
   user_id: userId,
 });
 
@@ -281,6 +290,7 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
     { accessorKey: "AIRLINE_NAME", header: "Airline Name", size: 210 },
     { accessorKey: "SOURCE", header: "Source", size: 110 },
     { accessorKey: "DESTINATION", header: "Destination", size: 120 },
+    { accessorKey: "DIRECT_VIA", header: "Direct/Via", size: 200 },
     { accessorKey: "IATA_CODE", header: "IATA", size: 90 },
     { accessorKey: "CURR_CODE", header: "Currency", size: 85 },
     { accessorKey: "MINIMUM", header: "Min", size: 80 },
@@ -293,6 +303,8 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
     { accessorKey: "K_1000", header: "+1000", size: 80 },
     { accessorKey: "HARD_FREIGHT", header: "Hard", size: 70 },
     { accessorKey: "PERISHABLE", header: "Perish", size: 70 },
+    { accessorKey: "RESTRICTION", header: "Restriction", size: 20},
+    { accessorKey: "RESTRICTION_DET", header: "Restriction Detail", size: 500 },
     ...(!isReport ? [{
       id: "actions",
       header: "Actions",
@@ -408,12 +420,14 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
             </>
           ) : entryView === "editor" ? (
             <form className="grid gap-3" onSubmit={saveTariff}>
-              <div className="grid gap-3 lg:grid-cols-[1.2fr_1fr]">
+              <div className="grid gap-3 ">
                 <div className="rounded-md border bg-muted/20">
                   <SectionTitle title="Route and Airline" subtitle={`${form.airline_code || "Airline pending"} / ${form.source || "-"} -> ${form.destination || "-"}`} />
                   <div className="grid gap-2 p-3 md:grid-cols-4">
                     <Field label="Tariff No" value={form.air_tariff_no || "Auto"} disabled onChange={() => undefined} />
-                    <LookupField
+                    <div className="grid gap-1 text-[11px] font-bold uppercase text-muted-foreground">
+                      <span>Airline <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span></span>
+                      <LookupField
                       label="Airline"
                       value={form.airline_code}
                       displayValue={form.airline_name}
@@ -429,10 +443,14 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
                         airline_name: text(row, "AIRLINE_NAME", "airline_name"),
                       })}
                     />
+                    </div>
                     <Field label="Source" value={form.source} required disabled={readOnly} onChange={(value) => updateForm(setForm, { source: value })} />
                     <Field label="Destination" value={form.destination} required disabled={readOnly} onChange={(value) => updateForm(setForm, { destination: value })} />
+                    <Field label="Direct/Via" value={form.direct_via} disabled={readOnly} onChange={(value) => updateForm(setForm, { direct_via: value })} />
                     <Field label="IATA Code" value={form.iata_code} disabled={readOnly} onChange={(value) => updateForm(setForm, { iata_code: value })} />
-                    <LookupField
+                    <div className="grid gap-1 text-[11px] font-bold uppercase text-muted-foreground">
+                      <span>Currency <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span></span>
+                      <LookupField
                       label="Currency"
                       value={form.curr_code}
                       compact
@@ -443,8 +461,13 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
                       disabled={readOnly}
                       onChange={(value) => updateForm(setForm, { curr_code: value })}
                     />
+                    </div>
                     <SelectField label="Hard Freight" value={form.hard_freight} disabled={readOnly} onChange={(value) => updateForm(setForm, { hard_freight: value })} />
                     <SelectField label="Perishable" value={form.perishable} disabled={readOnly} onChange={(value) => updateForm(setForm, { perishable: value })} />
+                    <SelectField label="Restriction" value={form.restriction} disabled={readOnly} onChange={(value) => updateForm(setForm, { restriction: value })} />
+                    <div className="grid gap-2 p-3 pt-0 md:grid-cols-1">
+                    <Field label="Restriction Detail" value={form.restriction_det} disabled={readOnly} onChange={(value) => updateForm(setForm, { restriction_det: value })} />
+                  </div>
                   </div>
                 </div>
 
@@ -683,6 +706,7 @@ function fromRow(row: AirlineTariffRow, companyCode: string, userId: string): Ta
     airline_name: text(row, "AIRLINE_NAME"),
     source: text(row, "SOURCE"),
     destination: text(row, "DESTINATION"),
+    direct_via: text(row, "DIRECT_VIA"),
     iata_code: text(row, "IATA_CODE"),
     curr_code: text(row, "CURR_CODE"),
     minimum: text(row, "MINIMUM"),
@@ -695,6 +719,8 @@ function fromRow(row: AirlineTariffRow, companyCode: string, userId: string): Ta
     k_1000: text(row, "K_1000"),
     hard_freight: text(row, "HARD_FREIGHT") || "N",
     perishable: text(row, "PERISHABLE") || "N",
+    restriction: text(row, "RESTRICTION"),
+    restriction_det: text(row, "RESTRICTION_DET"),
     user_id: text(row, "USER_ID") || userId,
   };
 }
@@ -725,7 +751,7 @@ function sqlEscape(value: string) {
 }
 
 function exportCsv(rows: AirlineTariffRow[]) {
-  const headers = ["AIR_TARIFF_NO", "AIRLINE_CODE", "AIRLINE_NAME", "SOURCE", "DESTINATION", "IATA_CODE", "CURR_CODE", "MINIMUM", "NORMAL", "K_45", "K_100", "K_250", "K_300", "K_500", "K_1000", "HARD_FREIGHT", "PERISHABLE"];
+  const headers = ["AIR_TARIFF_NO", "AIRLINE_CODE", "AIRLINE_NAME", "SOURCE", "DESTINATION", "DIRECT_VIA", "IATA_CODE", "CURR_CODE", "MINIMUM", "NORMAL", "K_45", "K_100", "K_250", "K_300", "K_500", "K_1000", "HARD_FREIGHT", "PERISHABLE", "RESTRICTION", "RESTRICTION_DET"];
   const csv = [headers.join(","), ...rows.map((row) => headers.map((header) => csvValue(row[header])).join(","))].join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
