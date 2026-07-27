@@ -7,18 +7,16 @@ import {
   Edit2,
   FileText,
   MapPinned,
-  PackageCheck,
   Plane,
   Plus,
   RefreshCw,
   Save,
   Ship,
   Truck,
-  UserRound,
 } from "lucide-react";
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
-import { executeWmsInboundSql } from "../../api/wms";
+import { executeWmsInboundSqlCached } from "../../api/wms";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Input } from "../../components/ui/Input";
@@ -64,26 +62,6 @@ type JobForm = {
   user_id: string;
 };
 
-type PackForm = {
-  shipper_name: string;
-  shipper_address: string;
-  consignee_name: string;
-  consignee_address: string;
-  notify_name: string;
-  notify_address: string;
-  cargo_details: string;
-  no_of_packings: string;
-  quantity: string;
-  puom: string;
-  volume: string;
-  gross_wt: string;
-  charge_wt: string;
-  container_no: string;
-  container_size: string;
-  container_type: string;
-  bl_no: string;
-};
-
 const modeMap = {
   air: { code: "A", label: "Air", icon: Plane },
   sea: { code: "S", label: "Sea", icon: Ship },
@@ -112,7 +90,6 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
   const [rows, setRows] = useState<LookupRow[]>([]);
   const [query, setQuery] = useState("");
   const [job, setJob] = useState<JobForm>(() => emptyJob(companyCode, userId, mode.code, direction.code));
-  const [pack, setPack] = useState<PackForm>(() => emptyPack());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
@@ -151,7 +128,6 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
 
   useEffect(() => {
     setJob(emptyJob(companyCode, userId, mode.code, direction.code));
-    setPack(emptyPack());
     setView(startMode);
   }, [companyCode, direction.code, mode.code, startMode, userId]);
 
@@ -171,7 +147,6 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
 
   const openAdd = () => {
     setJob(emptyJob(companyCode, userId, mode.code, direction.code));
-    setPack(emptyPack());
     setNotice(null);
     setView("editor");
   };
@@ -183,13 +158,12 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
     setLoading(true);
     setNotice(null);
     try {
-      const response = await api.post<{ success?: boolean; data?: { header?: LookupRow; packlist?: LookupRow } }>("/api/freight/job/get", {
+      const response = await api.post<{ success?: boolean; data?: { header?: LookupRow } }>("/api/freight/job/get", {
         company_code: companyCode,
         prin_code: prinCode,
         job_no: jobNo,
       });
       setJob(toJobForm(normalizeLookupRow(response.data.data?.header || row), companyCode, userId, mode.code, direction.code));
-      setPack(toPackForm(normalizeLookupRow(response.data.data?.packlist || {})));
       setView("editor");
     } catch (error: any) {
       setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to open freight job." });
@@ -205,7 +179,6 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
       return;
     }
     setJob(emptyJob(companyCode, userId, mode.code, direction.code));
-    setPack(emptyPack());
     setView("editor");
   }, [initialJob, startMode]);
 
@@ -214,7 +187,7 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
     setSaving(true);
     setNotice(null);
     try {
-      const response = await api.post<{ success?: boolean; data?: { job_no?: string }; message?: string }>("/api/freight/job/save", { job, packlist: pack });
+      const response = await api.post<{ success?: boolean; data?: { job_no?: string }; message?: string }>("/api/freight/job/save", { job });
       setNotice({ type: "success", text: response.data.message || "Freight job saved." });
       setJob((current) => ({ ...current, job_no: response.data.data?.job_no || current.job_no }));
       await loadRows();
@@ -239,6 +212,29 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
       setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to cancel freight job." });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const copyQuotationToJob = async (quotationNr: string, row: LookupRow | null) => {
+    setJob((current) => ({
+      ...current,
+      quotation_ref: quotationNr,
+      prin_code: row ? lookupText(row, "PRIN_CODE") || current.prin_code : current.prin_code,
+    }));
+    if (!quotationNr) return;
+
+    try {
+      const prinCode = row ? lookupText(row, "PRIN_CODE") : job.prin_code;
+      const response = await api.post<{ success?: boolean; data?: { header?: LookupRow; details?: LookupRow[] } }>("/api/freight/quotation/get", {
+        company_code: companyCode,
+        prin_code: prinCode,
+        quotation_nr: quotationNr,
+      });
+      const quotation = normalizeLookupRow(response.data.data?.header || {});
+      setJob((current) => toJobFromQuotation(quotation, current, quotationNr));
+      setNotice({ type: "success", text: `Quotation ${quotationNr} copied to job draft.` });
+    } catch (error: any) {
+      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to copy quotation details." });
     }
   };
 
@@ -287,7 +283,7 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
               <ReadOnlyField label="Job No" value={job.job_no || "Auto"} />
               <Field label="Job Date" type="date" value={job.job_date} onChange={(value) => setJobField(setJob, "job_date", value)} />
               <Lookup label="Principal" value={job.prin_code} valueField="PRIN_CODE" displayFields={["PRIN_CODE", "PRIN_NAME"]} columns={[{ field: "PRIN_CODE", header: "Code" }, { field: "PRIN_NAME", header: "Principal" }]} loadOptions={() => lookup(`SELECT PRIN_CODE, PRIN_NAME FROM MS_PRINCIPAL WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY PRIN_CODE`)} onChange={(value) => setJobField(setJob, "prin_code", value)} />
-              <Lookup label="Quotation" value={job.quotation_ref} valueField="QUOTATION_NR" displayFields={["QUOTATION_NR", "QUOTATION_DATE"]} columns={[{ field: "QUOTATION_NR", header: "Quotation" }, { field: "PRIN_CODE", header: "Principal" }, { field: "QUOTATION_DATE", header: "Date" }]} loadOptions={() => lookup(`SELECT QUOTATION_NR, QUOTATION_DATE, PRIN_CODE FROM TF_QUOTATION WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' AND TRANSPORT_MODE='${sqlEscape(mode.code)}' AND JOB_TYPE='${sqlEscape(direction.code === "IRE" ? "IMP" : direction.code)}' AND NVL(INDSTATUS,'N')='A' ORDER BY QUOTATION_DATE DESC`)} onChange={(value, row) => { setJobField(setJob, "quotation_ref", value); if (row) setJobField(setJob, "prin_code", lookupText(row, "PRIN_CODE")); }} />
+              <Lookup label="Quotation" value={job.quotation_ref} valueField="QUOTATION_NR" displayFields={["QUOTATION_NR", "QUOTATION_DATE"]} columns={[{ field: "QUOTATION_NR", header: "Quotation" }, { field: "PRIN_CODE", header: "Principal" }, { field: "QUOTATION_DATE", header: "Date" }]} loadOptions={() => lookup(`SELECT QUOTATION_NR, QUOTATION_DATE, PRIN_CODE FROM TF_QUOTATION WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' AND TRANSPORT_MODE='${sqlEscape(mode.code)}' AND JOB_TYPE='${sqlEscape(direction.code === "IRE" ? "IMP" : direction.code)}' AND NVL(INDSTATUS,'N')='A' ORDER BY QUOTATION_DATE DESC`)} onChange={(value, row) => void copyQuotationToJob(value, row)} />
               <Field label="Department" value={job.dept_code} onChange={(value) => setJobField(setJob, "dept_code", value)} />
               <Field label="Currency" value={job.curr_code} onChange={(value) => setJobField(setJob, "curr_code", value)} />
             </div>
@@ -306,34 +302,25 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
             </div>
           </Panel>
 
-          <Panel className="lg:col-span-5" icon={PackageCheck} title="Cargo And Pack List" meta={`${pack.quantity || "0"} ${pack.puom || ""} / ${pack.gross_wt || "0"} kgs`}>
+          <Panel className="lg:col-span-5" icon={BriefcaseBusiness} title="Commercial" meta={`${job.payment_terms || "Terms"} / ${job.payableat || "Payable"}`}>
             <div className="grid gap-1.5 sm:grid-cols-2">
-              <Field label="Pieces" type="number" value={pack.quantity} onChange={(value) => setPackField(setPack, "quantity", value)} />
-              <Field label="UOM" value={pack.puom} onChange={(value) => setPackField(setPack, "puom", value)} />
-              <Field label="Gross Wt" type="number" value={pack.gross_wt} onChange={(value) => setPackField(setPack, "gross_wt", value)} />
-              <Field label="Charge Wt" type="number" value={pack.charge_wt} onChange={(value) => setPackField(setPack, "charge_wt", value)} />
-              <Field label="Volume" type="number" value={pack.volume} onChange={(value) => setPackField(setPack, "volume", value)} />
-              <Field label="Packs" type="number" value={pack.no_of_packings} onChange={(value) => setPackField(setPack, "no_of_packings", value)} />
-              {mode.code !== "A" && <Field label="Container No" value={pack.container_no} onChange={(value) => setPackField(setPack, "container_no", value)} />}
-              {mode.code !== "A" && <Field label="Container Type" value={pack.container_type} onChange={(value) => setPackField(setPack, "container_type", value)} />}
+              <Field label="Payment Terms" value={job.payment_terms} onChange={(value) => setJobField(setJob, "payment_terms", value)} />
+              <Field label="Payable At" value={job.payableat} onChange={(value) => setJobField(setJob, "payableat", value)} />
+              <Field label="Exchange Rate" type="number" value={job.ex_rate} onChange={(value) => setJobField(setJob, "ex_rate", value)} />
+              <Lookup label="Forwarder" value={job.forwarder_code} valueField="SUPP_CODE" displayFields={["SUPP_CODE", "SUPP_NAME"]} columns={[{ field: "SUPP_CODE", header: "Code" }, { field: "SUPP_NAME", header: "Forwarder" }]} loadOptions={() => lookup(`SELECT SUPP_CODE, SUPP_NAME FROM MS_SUPPLIER WHERE COMPANY_CODE='${sqlEscape(companyCode)}' ORDER BY SUPP_CODE`)} onChange={(value) => setJobField(setJob, "forwarder_code", value)} />
+              <ReadOnlyField label="Pack List" value="Create from Pack List screen after job save" />
+              <ReadOnlyField label="PowerBuilder Split" value="TI_JOB only on this screen" />
             </div>
           </Panel>
 
-          <Panel className="lg:col-span-6" icon={UserRound} title="Parties" meta="Shipper / Consignee / Notify">
-            <div className="grid gap-1.5 sm:grid-cols-2">
-              <Textarea label="Shipper" value={pack.shipper_name} onChange={(value) => setPackField(setPack, "shipper_name", value)} />
-              <Textarea label="Shipper Address" value={pack.shipper_address} onChange={(value) => setPackField(setPack, "shipper_address", value)} />
-              <Textarea label="Consignee" value={pack.consignee_name} onChange={(value) => setPackField(setPack, "consignee_name", value)} />
-              <Textarea label="Consignee Address" value={pack.consignee_address} onChange={(value) => setPackField(setPack, "consignee_address", value)} />
-            </div>
-          </Panel>
-
-          <Panel className="lg:col-span-6" icon={FileText} title="Customs And Notes" meta={job.be_no || job.custom_recno || "Operational references"}>
+          <Panel className="lg:col-span-12" icon={FileText} title="Customs And References" meta={job.be_no || job.custom_recno || "Operational references"}>
             <div className="grid gap-1.5 sm:grid-cols-3">
               <Field label="BE No" value={job.be_no} onChange={(value) => setJobField(setJob, "be_no", value)} />
               <Field label="BE Date" type="date" value={job.be_date} onChange={(value) => setJobField(setJob, "be_date", value)} />
               <Field label="Custom Ref" value={job.custom_recno} onChange={(value) => setJobField(setJob, "custom_recno", value)} />
-              <Textarea label="Cargo Detail" value={pack.cargo_details} onChange={(value) => setPackField(setPack, "cargo_details", value)} className="sm:col-span-2" />
+              <Field label="Customs Job Ref" value={job.ref_customs} onChange={(value) => setJobField(setJob, "ref_customs", value)} />
+              <Field label="Country Origin" value={job.country_origin} onChange={(value) => setJobField(setJob, "country_origin", value)} />
+              <Field label="Country Destination" value={job.country_destination} onChange={(value) => setJobField(setJob, "country_destination", value)} />
               <Textarea label="Remarks" value={job.remarks} onChange={(value) => setJobField(setJob, "remarks", value)} />
             </div>
           </Panel>
@@ -401,30 +388,41 @@ function emptyJob(companyCode: string, userId: string, transportMode: string, jo
   return { company_code: companyCode, prin_code: "", job_no: "", job_date: today(), job_type: jobType, transport_mode: transportMode, dept_code: "22", quotation_ref: "", doc_ref: "", hawb: "", port_code: "", destination_port: "", vessel_name: "", voyage_no: "", carrier: "", forwarder_code: "", eta: "", etd: "", payment_terms: "CIF", payableat: "ORIGIN", curr_code: "OMR", ex_rate: "1", be_no: "", be_date: "", country_origin: "", country_destination: "", custom_recno: "", ref_customs: "", remarks: "", canceled: "N", user_id: userId };
 }
 
-function emptyPack(): PackForm {
-  return { shipper_name: "", shipper_address: "", consignee_name: "", consignee_address: "", notify_name: "", notify_address: "", cargo_details: "", no_of_packings: "", quantity: "1", puom: "", volume: "", gross_wt: "", charge_wt: "", container_no: "", container_size: "", container_type: "STANDARD", bl_no: "" };
-}
-
 function toJobForm(row: LookupRow, companyCode: string, userId: string, mode: string, jobType: string): JobForm {
   const base = emptyJob(companyCode, userId, mode, jobType);
   return Object.fromEntries(Object.keys(base).map((key) => [key, lookupText(row, key) || (base as any)[key]])) as JobForm;
 }
 
-function toPackForm(row: LookupRow): PackForm {
-  const base = emptyPack();
-  return Object.fromEntries(Object.keys(base).map((key) => [key, lookupText(row, key) || (base as any)[key]])) as PackForm;
+function toJobFromQuotation(row: LookupRow, current: JobForm, quotationNr: string): JobForm {
+  return {
+    ...current,
+    company_code: lookupText(row, "COMPANY_CODE") || current.company_code,
+    prin_code: lookupText(row, "PRIN_CODE") || current.prin_code,
+    quotation_ref: quotationNr,
+    dept_code: lookupText(row, "DEPT_CODE") || current.dept_code,
+    job_type: lookupText(row, "JOB_TYPE") || current.job_type,
+    transport_mode: lookupText(row, "TRANSPORT_MODE") || current.transport_mode,
+    port_code: lookupText(row, "ORIGIN_PORT") || current.port_code,
+    destination_port: lookupText(row, "DESTINATION_PORT") || current.destination_port,
+    vessel_name: lookupText(row, "CARRIER") || current.vessel_name,
+    carrier: lookupText(row, "CARRIER") || current.carrier,
+    forwarder_code: lookupText(row, "FORWARDER_CODE") || current.forwarder_code,
+    payment_terms: lookupText(row, "PAYMENT_TERMS") || current.payment_terms,
+    payableat: lookupText(row, "TOS") || current.payableat,
+    curr_code: lookupText(row, "CURR_CODE") || current.curr_code,
+    ex_rate: lookupText(row, "EX_RATE") || current.ex_rate,
+    country_origin: lookupText(row, "COUNTRY_ORIGIN") || current.country_origin,
+    country_destination: lookupText(row, "COUNTRY_DESTINATION") || current.country_destination,
+    remarks: lookupText(row, "REMARKS") || current.remarks,
+  };
 }
 
 function setJobField(setJob: (updater: (current: JobForm) => JobForm) => void, field: keyof JobForm, value: string) {
   setJob((current) => ({ ...current, [field]: value }));
 }
 
-function setPackField(setPack: (updater: (current: PackForm) => PackForm) => void, field: keyof PackForm, value: string) {
-  setPack((current) => ({ ...current, [field]: value }));
-}
-
 async function lookup(sql: string) {
-  return (await executeWmsInboundSql(sql)).map(normalizeLookupRow);
+  return (await executeWmsInboundSqlCached(sql)).map(normalizeLookupRow);
 }
 
 function normalizeLookupRow(row: LookupRow) {

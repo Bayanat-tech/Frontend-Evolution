@@ -167,7 +167,7 @@ function InstructionGrid({ rows, setRows, deleteRow }: GridProps) {
 }
 
 function AlertGrid({ rows, setRows, deleteRow }: GridProps) {
-  return <EditableGrid columns={["op_code", "op_desc", "op_date", "op_yesno", "op_count", "remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} addFactory={() => ({ OP_CODE: "", OP_DESC: "", OP_DATE: "", OP_YESNO: "", OP_COUNT: "0", REMARKS: "" })} />;
+  return <EditableGrid columns={["op_desc", "op_date", "op_yesno", "op_count", "remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} />;
 }
 
 function DepositGrid({ rows, setRows, deleteRow }: GridProps) {
@@ -202,6 +202,7 @@ function EditableGrid({ columns, rows, setRows, deleteRow, addFactory }: GridPro
 function Cell({ row, column, onChange }: { row: LookupRow; column: string; onChange: (value: string) => void }) {
   const value = text(row, column);
   if (column.includes("date")) return <Input className="h-7 text-xs" type="date" value={dateValue(value)} onChange={(event) => onChange(event.target.value)} />;
+  if (column === "op_desc") return <Input className="h-7 bg-muted/35 text-xs font-semibold" value={value} readOnly />;
   if (["mandatory", "collected"].includes(column)) return <select className="h-7 rounded-md border bg-background px-1 text-xs" value={value || "N"} onChange={(event) => onChange(event.target.value)}><option value="Y">Y</option><option value="N">N</option></select>;
   if (column === "op_yesno") return <select className="h-7 rounded-md border bg-background px-1 text-xs" value={value || ""} onChange={(event) => onChange(event.target.value)}><option value="">Blank</option><option value="Yes">Yes</option><option value="No">No</option></select>;
   return <Input className="h-7 text-xs" value={value} onChange={(event) => onChange(event.target.value)} />;

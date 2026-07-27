@@ -5,7 +5,6 @@ import {
   AlertTriangle,
   ArrowLeft,
   Copy,
-  CreditCard,
   Eye,
   FileText,
   MapPinned,
@@ -21,7 +20,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { api } from "../../api/client";
-import { executeWmsInboundSql } from "../../api/wms";
+import { executeWmsInboundSql, executeWmsInboundSqlCached } from "../../api/wms";
 import type { LookupRow } from "../../api/lookups";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
@@ -122,7 +121,7 @@ type QuotationTerm = {
 
 type Notice = { type: "success" | "error"; text: string } | null;
 type ViewMode = "list" | "editor";
-export type FreightQuotationInitialTab = "summary" | "cargo" | "charges" | "terms";
+export type FreightQuotationInitialTab = "cargo" | "charges" | "terms";
 type SmartCheck = { tone: "ok" | "warn" | "danger"; title: string; detail: string };
 
 const jobTypes = [
@@ -140,7 +139,6 @@ const memberTypes = ["", "IFLN", "AFFAL", "None"];
 const saleTypes = ["Normal", "FreeIn"];
 const jobCategories = ["International", "Combined services", "Clearance", "Others"];
 const tabs: { key: FreightQuotationInitialTab; label: string; icon: typeof PackageCheck }[] = [
-  { key: "summary", label: "Overview", icon: PackageCheck },
   { key: "cargo", label: "Cargo", icon: MapPinned },
   { key: "charges", label: "Rates", icon: Activity },
   { key: "terms", label: "Terms", icon: FileText },
@@ -155,7 +153,7 @@ const listStatusTabs: { key: ListStatusTab; label: string }[] = [
   { key: "all", label: "All" },
 ];
 
-export function FreightQuotationPage({ target, initialTab = "summary" }: { target?: FreightWorkspaceTarget; initialTab?: FreightQuotationInitialTab }) {
+export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?: FreightWorkspaceTarget; initialTab?: FreightQuotationInitialTab }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const userInfo = user as Record<string, unknown> | null;
@@ -184,6 +182,11 @@ export function FreightQuotationPage({ target, initialTab = "summary" }: { targe
 
   const loginId = String(userInfo?.loginid || userInfo?.USERID || userInfo?.user_id || userInfo?.username || "");
   const attachmentRequestNumber = header.quotation_nr ? `${header.company_code}-QTN-${header.quotation_nr}` : "";
+  const sourceAttachmentRequestNumbers = useMemo(() => {
+    if (!header.enquiry_no) return [];
+    const sourceKey = `${header.company_code}-${header.enquiry_type || "EQI"}-${header.enquiry_no}`;
+    return sourceKey && sourceKey !== attachmentRequestNumber ? [sourceKey] : [];
+  }, [attachmentRequestNumber, header.company_code, header.enquiry_no, header.enquiry_type]);
   const smartChecks = useMemo(() => buildSmartChecks(header, details, terms), [details, header, terms]);
   const checkCount = smartChecks.filter((item) => item.tone !== "ok").length;
   const totals = useMemo(() => buildTotals(details), [details]);
@@ -243,6 +246,11 @@ export function FreightQuotationPage({ target, initialTab = "summary" }: { targe
   useEffect(() => {
     setActiveTab(initialTab);
   }, [initialTab]);
+
+  useEffect(() => {
+    if (activeTab !== "terms" || terms.length || !header.company_code) return;
+    void populateDefaultTerms();
+  }, [activeTab, header.company_code, terms.length]);
 
   const setHeaderField = (field: keyof QuotationHeader, value: string) => {
     setHeader((current) => {
@@ -308,6 +316,23 @@ export function FreightQuotationPage({ target, initialTab = "summary" }: { targe
 
   const setTermField = (index: number, field: keyof QuotationTerm, value: string) => {
     setTerms((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)));
+  };
+
+  const populateDefaultTerms = async () => {
+    try {
+      const rows = await loadDefaultQuotationTerms(header.company_code);
+      if (!rows.length) return;
+      setTerms((current) => current.length ? current : rows.map((row, index) => ({
+        serial_no: index + 1,
+        sr_no: lookupText(row, "srno") || String(index + 1),
+        type_ind: lookupText(row, "type_ind") || "T",
+        description: lookupText(row, "quote_desc"),
+        font_type: "Normal",
+        font_size: "Normal",
+      })));
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to load quotation terms" });
+    }
   };
 
   const loadRows = async () => {
@@ -614,35 +639,6 @@ export function FreightQuotationPage({ target, initialTab = "summary" }: { targe
           </div>
           <fieldset disabled={isLocked} className="contents">
           <div className="min-h-0 border-t p-1.5">
-            {activeTab === "summary" && (
-              <section className="grid gap-1.5 xl:grid-cols-12">
-                <SectionPanel className="xl:col-span-4" icon={FileText} title="Source" meta={header.enquiry_no ? `${header.enquiry_type || "EQI"} / ${header.enquiry_no}` : "Manual quotation"}>
-                  <div className="grid gap-1.5 sm:grid-cols-2">
-                    <ReadOnlyField label="Quotation Type" value={header.quotation_type || "QTN"} />
-                    <ReadOnlyField label="Status" value={header.indstatus === "A" ? "Approved" : "Not Approved"} />
-                    <FormInput label="Contact Person" value={header.contact_person} onChange={(value) => setHeaderField("contact_person", value)} />
-                    <FormInput label="Subject" value={header.subject} onChange={(value) => setHeaderField("subject", value)} />
-                  </div>
-                </SectionPanel>
-                <SectionPanel className="xl:col-span-4" icon={CreditCard} title="Commercial" meta={`${header.payment_terms || "Terms"} / ${header.curr_code || "Currency"}`}>
-                  <div className="grid gap-1.5 sm:grid-cols-2">
-                    <FormSelect label="INCO" value={header.payment_terms} onChange={(value) => setHeaderField("payment_terms", value)} options={paymentTerms.map((value) => ({ value, label: value }))} />
-                    <FormSelect label="Payable At" value={header.tos} onChange={(value) => setHeaderField("tos", value)} options={tosOptions.map((value) => ({ value, label: value }))} />
-                    <FormLookup label="Currency" value={header.curr_code} valueField="curr_code" displayFields={["curr_code", "curr_name"]} columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Currency" }, { field: "ex_rate", header: "Rate" }]} loadOptions={() => loadCurrencyLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("curr_code", value, row)} />
-                    <FormInput label="Exchange Rate" type="number" value={header.ex_rate} onChange={(value) => setHeaderField("ex_rate", value)} />
-                  </div>
-                </SectionPanel>
-                <SectionPanel className="xl:col-span-4" icon={Activity} title="Totals" meta={`Profit ${formatAmount(totals.profit)}`}>
-                  <div className="grid gap-1.5 sm:grid-cols-2">
-                    <ReadOnlyField label="Cost" value={formatAmount(totals.cost)} />
-                    <ReadOnlyField label="Sell" value={formatAmount(totals.bill)} />
-                    <ReadOnlyField label="Agent" value={formatAmount(totals.partners)} />
-                    <ReadOnlyField label="Profit" value={formatAmount(totals.profit)} />
-                  </div>
-                </SectionPanel>
-              </section>
-            )}
-
             {activeTab === "cargo" && (
               <section className="grid gap-1.5 xl:grid-cols-12">
                 <SectionPanel className="xl:col-span-12 border-primary/15 bg-primary/[0.015]" icon={Activity} title="Commercial Profile" meta={`${header.member_type || "No member"} / ${header.sale_type || "Sale type"} / ${header.job_category || "Category"}`}>
@@ -794,7 +790,7 @@ export function FreightQuotationPage({ target, initialTab = "summary" }: { targe
           </fieldset>
         </div>
       </form>
-      <AttachmentDialog open={attachmentOpen} onClose={() => setAttachmentOpen(false)} requestNumber={attachmentRequestNumber} title="Quotation Attachments" module="FREIGHT" type="FRT_QUOTATION" companyCode={header.company_code} loginId={loginId} readOnly={!header.quotation_nr} />
+      <AttachmentDialog open={attachmentOpen} onClose={() => setAttachmentOpen(false)} requestNumber={attachmentRequestNumber} relatedRequestNumbers={sourceAttachmentRequestNumbers} title="Quotation Attachments" module="FREIGHT" type="FRT_QUOTATION" companyCode={header.company_code} loginId={loginId} readOnly={!header.quotation_nr} />
     </>
   );
 }
@@ -1158,6 +1154,14 @@ async function loadPortLookup(companyCode: string) { return loadFreightLookup(`S
 async function loadCurrencyLookup(companyCode: string) { return loadFreightLookup(`SELECT CURR_CODE, CURR_NAME, EX_RATE FROM MS_CURRENCY WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY CURR_CODE`); }
 async function loadForwarderLookup(companyCode: string) { return loadFreightLookup(`SELECT FORWARDER_CODE, FORWARDER_NAME FROM MS_FORWARDER WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY FORWARDER_NAME`); }
 async function loadVehicleTypeLookup(companyCode: string) { return loadFreightLookup(`SELECT VTYPE_CODE, VTYPE_NAME FROM MS_VEHICLE_TYPE WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY VTYPE_CODE`); }
+async function loadDefaultQuotationTerms(companyCode: string) {
+  return loadFreightLookup(`
+    SELECT TYPE_IND, SRNO, QUOTE_DESC
+    FROM MS_QUOTE_TERMS
+    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
+    ORDER BY TYPE_IND, SRNO
+  `);
+}
 async function loadActivityLookup(companyCode: string) {
   return loadFreightLookup(`
     SELECT
@@ -1178,7 +1182,7 @@ async function loadActivityLookup(companyCode: string) {
   `);
 }
 function carrierLookupProps(mode: string, companyCode: string) { if (mode === "S") return { valueField: "vessel_code", displayFields: ["vessel_code", "vessel_name"], columns: [{ field: "vessel_code", header: "Code" }, { field: "vessel_name", header: "Vessel" }], loadOptions: () => loadFreightLookup(`SELECT VESSEL_CODE, VESSEL_NAME FROM MS_VESSEL WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY VESSEL_CODE`) }; if (mode === "R") return { valueField: "vehicle_no", displayFields: ["vehicle_no", "vehicle_desc"], columns: [{ field: "vehicle_no", header: "Vehicle" }, { field: "vehicle_desc", header: "Description" }], loadOptions: () => loadFreightLookup(`SELECT VEHICLE_NO, VEHICLE_DESC FROM MS_VEHICLE WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY VEHICLE_NO`) }; return { valueField: "airline_code", displayFields: ["airline_code", "airline_name"], columns: [{ field: "airline_code", header: "Code" }, { field: "airline_name", header: "Airline" }], loadOptions: () => loadFreightLookup(`SELECT AIRLINE_CODE, AIRLINE_NAME FROM MS_AIRLINE WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY AIRLINE_CODE`) }; }
-async function loadFreightLookup(sql: string) { return (await executeWmsInboundSql(sql)).map(normalizeLookupRow); }
+async function loadFreightLookup(sql: string) { return (await executeWmsInboundSqlCached(sql)).map(normalizeLookupRow); }
 
 function normalizeLookupRow(row: LookupRow): LookupRow {
   return Object.entries(row || {}).reduce<LookupRow>((acc, [key, value]) => {

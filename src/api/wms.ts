@@ -261,6 +261,19 @@ export async function executeWmsInboundSql(rawSql: string, signal?: AbortSignal)
   return response.data.data || [];
 }
 
+const rawSqlLookupCache = new Map<string, { expiresAt: number; rows: LookupRow[] }>();
+const RAW_SQL_LOOKUP_TTL_MS = 5 * 60 * 1000;
+
+export async function executeWmsInboundSqlCached(rawSql: string, signal?: AbortSignal) {
+  const cacheKey = rawSql.replace(/\s+/g, " ").trim();
+  const cached = rawSqlLookupCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.rows;
+
+  const rows = await executeWmsInboundSql(rawSql, signal);
+  rawSqlLookupCache.set(cacheKey, { expiresAt: Date.now() + RAW_SQL_LOOKUP_TTL_MS, rows });
+  return rows;
+}
+
 export async function executeWmsInboundSqlBody(query_parameter: string, query_where: string, query_updatevalues: string) {
   const response = await api.post<ApiResponse<LookupRow[]> & { data?: LookupRow[]; totalCount?: number; error?: string; details?: string }>("/api/wms/inbound/executeRawSqlbody", {
     query_parameter,

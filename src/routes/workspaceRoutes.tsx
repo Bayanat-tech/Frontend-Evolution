@@ -629,7 +629,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <FreightAirlineTariffPage mode="entry" />,
   },
   {
-    name: "Freight Pack List",
+    name: "Freight Job Sheet",
     match: (context) => isFreightPacklistRoute(context),
     element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="packlist" />,
   },
@@ -1663,12 +1663,12 @@ function isFreightAirlineTariffReportRoute(context: WorkspaceRouteContext) {
 function isFreightPacklistRoute(context: WorkspaceRouteContext) {
   const compact = getGenericMatchText(context).replace(/[^a-z0-9]/g, "");
   return (compact.includes("freightair") || compact.includes("freightsea") || compact.includes("freightroad"))
-    && (compact.includes("packlist") || compact.includes("packinglist"));
+    && (compact.includes("packlist") || compact.includes("packinglist") || compact.includes("jobsheet"));
 }
 
 function isFreightServiceActivitiesRoute(context: WorkspaceRouteContext) {
   const compact = getGenericMatchText(context).replace(/[^a-z0-9]/g, "");
-  return compact.includes("serviceactivities") || compact.includes("costsheet") || compact.includes("jobsheet");
+  return compact.includes("serviceactivities") || compact.includes("costsheet");
 }
 
 function isFreightOperationalJobRoute(context: WorkspaceRouteContext) {
@@ -1683,7 +1683,7 @@ function getFreightQuotationInitialTab(context: WorkspaceRouteContext) {
   const compact = matchText.replace(/[^a-z0-9]/g, "");
   if (compact.includes("activities")) return "charges" as const;
   if (compact.includes("termscondition") || compact.includes("terms")) return "terms" as const;
-  return "summary" as const;
+  return "cargo" as const;
 }
 
 function getFreightWorkspaceTarget(context: WorkspaceRouteContext) {

@@ -2,7 +2,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, ArrowLeft, Ban, CreditCard, Eye, MapPinned, PackageCheck, Paperclip, Plus, RefreshCw, RotateCcw, Save, ShieldCheck, ShipWheel, Sparkles, Trash2, X } from "lucide-react";
 import { api } from "../../api/client";
-import { executeWmsInboundSql } from "../../api/wms";
+import { executeWmsInboundSql, executeWmsInboundSqlCached } from "../../api/wms";
 import { getLookupValue, type LookupRow } from "../../api/lookups";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
@@ -208,6 +208,11 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   const isLocked = isApproved || isCancelled;
   const canApprove = Boolean(header.enquiry_nr) && !isApproved && !isCancelled;
   const attachmentRequestNumber = header.enquiry_nr ? `${header.company_code}-${header.enquiry_type}-${header.enquiry_nr}` : "";
+  const sourceAttachmentRequestNumbers = useMemo(() => {
+    if (!isRfq || !header.ref_enquiry_nr) return [];
+    const sourceKey = `${header.company_code}-${header.ref_enquiry_type || "EQI"}-${header.ref_enquiry_nr}`;
+    return sourceKey && sourceKey !== attachmentRequestNumber ? [sourceKey] : [];
+  }, [attachmentRequestNumber, header.company_code, header.ref_enquiry_nr, header.ref_enquiry_type, isRfq]);
   const smartChecks = useMemo(() => buildSmartChecks(header, details, isRfq), [details, header, isRfq]);
   const urgentChecks = smartChecks.filter((item) => item.tone === "danger").length;
   const warningChecks = smartChecks.filter((item) => item.tone === "warn").length;
@@ -1137,6 +1142,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
       open={attachmentOpen}
       onClose={() => setAttachmentOpen(false)}
       requestNumber={attachmentRequestNumber}
+      relatedRequestNumbers={sourceAttachmentRequestNumbers}
       title={`${enquiryLabel} Attachments`}
       module="FREIGHT"
       type={isRfq ? "FRT_RFQ" : "FRT_ENQUIRY"}
@@ -1912,7 +1918,7 @@ async function loadReferenceEnquiryLookup(companyCode: string) {
 }
 
 async function loadFreightLookup(sql: string) {
-  const rows = await executeWmsInboundSql(sql);
+  const rows = await executeWmsInboundSqlCached(sql);
   return Array.isArray(rows) ? rows.map(normalizeLookupRow) : [];
 }
 

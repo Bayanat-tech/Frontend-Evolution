@@ -48,8 +48,8 @@ const modeIcon = {
 
 const tabs: { key: JobTab; label: string; icon: typeof ClipboardList; ready: boolean }[] = [
   { key: "job", label: "Job / File", icon: ClipboardList, ready: true },
-  { key: "packlist", label: "Pack List", icon: PackageCheck, ready: true },
-  { key: "activities", label: "Cost Sheet", icon: ReceiptText, ready: true },
+  { key: "packlist", label: "Job Sheet", icon: PackageCheck, ready: true },
+  { key: "activities", label: "Service & Activities", icon: ReceiptText, ready: true },
   { key: "documents", label: "Documents", icon: FileText, ready: true },
   { key: "instructions", label: "Instructions", icon: Info, ready: true },
   { key: "alerts", label: "Alerts", icon: Bell, ready: true },
@@ -266,7 +266,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
       </div>
 
       {activeTab === "job" && <FreightJobPage target={target} initialJob={selectedJob} startMode="editor" />}
-      {activeTab === "packlist" && <FreightPacklistPage target={target} />}
+      {activeTab === "packlist" && <FreightPacklistPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} />}
       {activeTab === "activities" && <FreightJobActivitiesPage target={target} />}
       {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" />}
       {activeTab === "instructions" && <FreightJobFollowupTab target={target} kind="instructions" />}

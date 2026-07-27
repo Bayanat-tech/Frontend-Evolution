@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Calculator, CheckCircle2, Edit2, Plus, RefreshCw, Save, Trash2, TrendingUp } from "lucide-react";
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
-import { executeWmsInboundSql } from "../../api/wms";
+import { executeWmsInboundSqlCached } from "../../api/wms";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Input } from "../../components/ui/Input";
@@ -85,7 +85,7 @@ export function FreightJobActivitiesPage({ target }: { target?: FreightWorkspace
         job_type: direction.code,
         search: query,
       });
-      setRows((response.data.data || []).map(normalizeLookupRow));
+      setRows((response.data.data || []).map(normalizeLookupRow).filter((row) => matchesCurrentJobBucket(row, mode.code, direction.code)));
     } catch (error: any) {
       setRows([]);
       setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to load freight jobs." });
@@ -101,6 +101,8 @@ export function FreightJobActivitiesPage({ target }: { target?: FreightWorkspace
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
     { accessorKey: "job_no", header: "Job No", size: 120, cell: ({ row }) => <button type="button" className="font-semibold text-primary hover:underline" onClick={() => openJob(row.original)}>{lookupText(row.original, "job_no")}</button> },
     { accessorKey: "job_date", header: "Date", size: 110, cell: ({ row }) => formatDate(lookupText(row.original, "job_date")) },
+    { accessorKey: "transport_mode", header: "Mode", size: 70 },
+    { accessorKey: "job_type", header: "Type", size: 80 },
     { accessorKey: "prin_code", header: "Principal", size: 90 },
     { accessorKey: "prin_name", header: "Principal Name", size: 220 },
     { accessorKey: "activity_count", header: "Lines", size: 70 },
@@ -318,11 +320,20 @@ function calculateTotals(lines: ActivityLine[]) {
 }
 
 async function loadFreightLookup(sql: string) {
-  return (await executeWmsInboundSql(sql)).map(normalizeLookupRow);
+  return (await executeWmsInboundSqlCached(sql)).map(normalizeLookupRow);
 }
 
 function normalizeLookupRow(row: LookupRow) {
   return Object.fromEntries(Object.entries(row || {}).map(([key, value]) => [key.toUpperCase(), value])) as LookupRow;
+}
+
+function matchesCurrentJobBucket(row: LookupRow, mode: string, jobType: string) {
+  const rowMode = lookupText(row, "transport_mode");
+  const rowJobType = lookupText(row, "job_type");
+  if (rowMode && rowMode !== mode) return false;
+  if (rowJobType && jobType === "IRE") return rowJobType === "IRE" || (rowJobType === "IMP" && lookupText(row, "reexport") === "Y");
+  if (rowJobType && rowJobType !== jobType) return false;
+  return true;
 }
 
 function lookupText(row: LookupRow | null | undefined, key: string) {

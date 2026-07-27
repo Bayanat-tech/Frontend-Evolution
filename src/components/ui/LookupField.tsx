@@ -1,7 +1,7 @@
   import { Search, X } from "lucide-react";
   import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
   import { createPortal } from "react-dom";
-  import { getLookupText, getLookupValue, LookupRow } from "../../api/lookups";
+  import { formatLookupDisplayValue, getLookupText, getLookupValue, LookupRow } from "../../api/lookups";
   import { Input } from "./Input";
   import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./Table";
 
@@ -295,7 +295,7 @@ type LookupFieldProps = {
                           >
                             {columns.map((column) => (
                               <TableCell className="px-3 py-1.5 text-xs" key={column.field}>
-                                {String(getLookupValue(row, column.field) || "")}
+                                {formatLookupDisplayValue(column.field, getLookupValue(row, column.field))}
                               </TableCell>
                             ))}
                           </TableRow>

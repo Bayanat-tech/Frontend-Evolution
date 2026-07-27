@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
-import { executeWmsInboundSql } from "../../api/wms";
+import { executeWmsInboundSqlCached } from "../../api/wms";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Input } from "../../components/ui/Input";
@@ -704,7 +704,7 @@ function updateForm(setForm: (updater: (current: TariffForm) => TariffForm) => v
 }
 
 async function loadLookup(sql: string) {
-  return (await executeWmsInboundSql(sql)).map((row) => normalizeLookupRow(row));
+  return (await executeWmsInboundSqlCached(sql)).map((row) => normalizeLookupRow(row));
 }
 
 function normalizeLookupRow(row: LookupRow) {

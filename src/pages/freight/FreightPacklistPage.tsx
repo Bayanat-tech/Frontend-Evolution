@@ -38,6 +38,8 @@ type PackForm = {
   job_type: string;
   job_date: string;
   prin_name: string;
+  cust_code: string;
+  broker_code: string;
   shipper_name: string;
   shipper_address: string;
   consignee_name: string;
@@ -54,6 +56,9 @@ type PackForm = {
   net_wt: string;
   gross_wt: string;
   charge_wt: string;
+  feus: string;
+  teus: string;
+  bl_mode: string;
   container_no: string;
   container_size: string;
   container_type: string;
@@ -65,10 +70,32 @@ type PackForm = {
   import_bldate: string;
   hawb: string;
   airline: string;
+  airline_address: string;
   flight_info: string;
+  issuing_carrier: string;
+  issuing_carrier_add: string;
+  agents_iata_code: string;
+  acc_info: string;
+  accnt_no: string;
+  chg_code: string;
+  dec_val_carr: string;
+  dec_val_cus: string;
+  valuation_chg: string;
+  tax_chg: string;
+  agent_amount: string;
+  carrier_amount: string;
   issue_place: string;
   issue_date: string;
+  shipon_board: string;
+  signature: string;
+  po_no: string;
   shipment_status: string;
+  rate_ind: string;
+  amt_insurance: string;
+  kg_ind: string;
+  rate_class: string;
+  item_no: string;
+  routing: string;
   terms_of_delivery: string;
   curr_code: string;
   ex_rate: string;
@@ -91,7 +118,7 @@ const directionMap = {
   reexport: { code: "IRE", label: "Import for Re-export" },
 };
 
-export function FreightPacklistPage({ target }: { target?: FreightWorkspaceTarget }) {
+export function FreightPacklistPage({ target, initialJob = null, startMode = "list" }: { target?: FreightWorkspaceTarget; initialJob?: LookupRow | null; startMode?: ViewMode }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const userRecord = (user || {}) as Record<string, unknown>;
@@ -145,8 +172,13 @@ export function FreightPacklistPage({ target }: { target?: FreightWorkspaceTarge
 
   useEffect(() => {
     setPack(emptyPack(companyCode, userId, mode.code, direction.code));
-    setView("list");
-  }, [companyCode, direction.code, mode.code, userId]);
+    setView(startMode);
+  }, [companyCode, direction.code, mode.code, startMode, userId]);
+
+  useEffect(() => {
+    if (!initialJob) return;
+    void openInitialJob(initialJob);
+  }, [initialJob]);
 
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
     { accessorKey: "seq_number", header: "Pack List", size: 140, cell: ({ row }) => <button type="button" className="font-semibold text-primary hover:underline" onClick={() => openPack(row.original)}>{lookupText(row.original, "seq_number") || `${lookupText(row.original, "job_no")}/${lookupText(row.original, "packlist_no")}`}</button> },
@@ -167,6 +199,40 @@ export function FreightPacklistPage({ target }: { target?: FreightWorkspaceTarge
     setPack(emptyPack(companyCode, userId, mode.code, direction.code));
     setNotice(null);
     setView("editor");
+  };
+
+  const openInitialJob = async (row: LookupRow) => {
+    const normalized = normalizeLookupRow(row);
+    const jobNo = lookupText(normalized, "job_no");
+    const prinCode = lookupText(normalized, "prin_code");
+    if (!jobNo) return;
+    setLoading(true);
+    setNotice(null);
+    try {
+      const response = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/packlist/list", {
+        company_code: companyCode,
+        transport_mode: mode.code,
+        job_type: direction.code,
+        search: jobNo,
+      });
+      const match = (response.data.data || [])
+        .map(normalizeLookupRow)
+        .find((item) => lookupText(item, "job_no") === jobNo && (!prinCode || lookupText(item, "prin_code") === prinCode));
+
+      if (match && lookupText(match, "packlist_no")) {
+        await openPack(match);
+        return;
+      }
+
+      setPack(toPackDraftFromJob(normalized, companyCode, userId, mode.code, direction.code));
+      setView("editor");
+    } catch (error: any) {
+      setPack(toPackDraftFromJob(normalized, companyCode, userId, mode.code, direction.code));
+      setView("editor");
+      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to check existing pack list; opened new draft." });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const openPack = async (row: LookupRow) => {
@@ -231,10 +297,10 @@ export function FreightPacklistPage({ target }: { target?: FreightWorkspaceTarge
   if (view === "list") {
     return (
       <section className="grid gap-3">
-        <Header title={`${mode.label} ${direction.label} Pack List`} subtitle="Freight packing document listing" icon={Icon}>
+        <Header title={`${mode.label} ${direction.label} Job Sheet`} subtitle="Pack list / shipment sheet listing" icon={Icon}>
           {notice && <NoticeChip notice={notice} />}
           <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}><RefreshCw size={14} />Refresh</Button>
-          <Button type="button" size="sm" onClick={openAdd}><Plus size={14} />Add Pack List</Button>
+          <Button type="button" size="sm" onClick={openAdd}><Plus size={14} />Add Job Sheet</Button>
         </Header>
         <DataTable
           columns={columns}
@@ -243,7 +309,7 @@ export function FreightPacklistPage({ target }: { target?: FreightWorkspaceTarge
           searchValue={query}
           onSearchChange={setQuery}
           searchPlaceholder="Search pack list, job, principal, BL/AWB..."
-          title={`${rows.length} Pack Lists`}
+          title={`${rows.length} Job Sheets`}
           subtitle={`${mode.label} / ${direction.label}`}
           height="calc(100vh - 240px)"
           minWidth={1280}
@@ -260,7 +326,7 @@ export function FreightPacklistPage({ target }: { target?: FreightWorkspaceTarge
 
   return (
     <form className="grid gap-2" onSubmit={savePack}>
-      <Header title={`${mode.label} ${direction.label} Pack List`} subtitle={pack.seq_number || "New pack list"} icon={Icon}>
+      <Header title={`${mode.label} ${direction.label} Job Sheet`} subtitle={pack.seq_number || "New job sheet"} icon={Icon}>
         {notice && <NoticeChip notice={notice} />}
         <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>
         <Button type="submit" size="sm" disabled={saving || !pack.job_no}><Save size={14} />Save</Button>
@@ -274,6 +340,8 @@ export function FreightPacklistPage({ target }: { target?: FreightWorkspaceTarge
             <ReadOnlyField label="Seq No" value={pack.seq_number || "Auto"} />
             <ReadOnlyField label="Principal" value={pack.prin_code || "-"} />
             <ReadOnlyField label="Principal Name" value={pack.prin_name || "-"} />
+            <Field label="Customer" value={pack.cust_code} onChange={(value) => setPackField(setPack, "cust_code", value)} />
+            <Field label="Broker" value={pack.broker_code} onChange={(value) => setPackField(setPack, "broker_code", value)} />
             <Field label={isAir ? "AWB No" : "BL No"} value={pack.bl_no} onChange={(value) => setPackField(setPack, "bl_no", value)} />
             <Field label={isAir ? "AWB Date" : "BL Date"} type="date" value={pack.bl_date} onChange={(value) => setPackField(setPack, "bl_date", value)} />
             <Field label="Currency" value={pack.curr_code} onChange={(value) => setPackField(setPack, "curr_code", value)} />
@@ -300,6 +368,9 @@ export function FreightPacklistPage({ target }: { target?: FreightWorkspaceTarge
             <Field label="Net Wt" type="number" value={pack.net_wt} onChange={(value) => setPackField(setPack, "net_wt", value)} />
             <Field label="Gross Wt" type="number" value={pack.gross_wt} onChange={(value) => setPackField(setPack, "gross_wt", value)} />
             <Field label="Charge Wt" type="number" value={pack.charge_wt} onChange={(value) => setPackField(setPack, "charge_wt", value)} />
+            <Field label="FEU" type="number" value={pack.feus} onChange={(value) => setPackField(setPack, "feus", value)} />
+            <Field label="TEU" type="number" value={pack.teus} onChange={(value) => setPackField(setPack, "teus", value)} />
+            <SelectField label="BL Mode" value={pack.bl_mode} options={["FCL", "LCL", "NONE"]} onChange={(value) => setPackField(setPack, "bl_mode", value)} />
             <Field label="Rate" type="number" value={pack.rate} onChange={(value) => setPackField(setPack, "rate", value)} />
             <Field label="Amount" type="number" value={pack.amount} onChange={(value) => setPackField(setPack, "amount", value)} />
           </div>
@@ -311,9 +382,12 @@ export function FreightPacklistPage({ target }: { target?: FreightWorkspaceTarge
               <>
                 <Field label="HAWB" value={pack.hawb} onChange={(value) => setPackField(setPack, "hawb", value)} />
                 <Field label="Airline" value={pack.airline} onChange={(value) => setPackField(setPack, "airline", value)} />
+                <Field label="IATA Code" value={pack.agents_iata_code} onChange={(value) => setPackField(setPack, "agents_iata_code", value)} />
+                <SelectField label="Charge Code" value={pack.chg_code} options={["PP", "CC"]} onChange={(value) => setPackField(setPack, "chg_code", value)} />
                 <Field label="Flight Info" value={pack.flight_info} onChange={(value) => setPackField(setPack, "flight_info", value)} />
                 <Field label="Issue Place" value={pack.issue_place} onChange={(value) => setPackField(setPack, "issue_place", value)} />
                 <Field label="Issue Date" type="date" value={pack.issue_date} onChange={(value) => setPackField(setPack, "issue_date", value)} />
+                <Field label="Ship On Board" type="date" value={pack.shipon_board} onChange={(value) => setPackField(setPack, "shipon_board", value)} />
                 <Field label="Status" value={pack.shipment_status} onChange={(value) => setPackField(setPack, "shipment_status", value)} />
               </>
             ) : (
@@ -342,10 +416,36 @@ export function FreightPacklistPage({ target }: { target?: FreightWorkspaceTarge
           <div className="grid gap-1.5 sm:grid-cols-4">
             <Field label="Terms" value={pack.terms_of_delivery} onChange={(value) => setPackField(setPack, "terms_of_delivery", value)} />
             <Field label="Ex Rate" type="number" value={pack.ex_rate} onChange={(value) => setPackField(setPack, "ex_rate", value)} />
+            <Field label="PO No" value={pack.po_no} onChange={(value) => setPackField(setPack, "po_no", value)} />
+            <Field label="Signature" value={pack.signature} onChange={(value) => setPackField(setPack, "signature", value)} />
             {!isAir && <Field label="Import BL Date" type="date" value={pack.import_bldate} onChange={(value) => setPackField(setPack, "import_bldate", value)} />}
             <Textarea className="sm:col-span-2" label="Handling Info" value={pack.handling_info} onChange={(value) => setPackField(setPack, "handling_info", value)} />
           </div>
         </Panel>
+
+        {isAir && (
+          <Panel className="lg:col-span-12" icon={Plane} title="Air Waybill Accounting" meta="PB AWB valuation, carrier and account fields">
+            <div className="grid gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
+              <Field label="Airline Address" value={pack.airline_address} onChange={(value) => setPackField(setPack, "airline_address", value)} />
+              <Field label="Issuing Carrier" value={pack.issuing_carrier} onChange={(value) => setPackField(setPack, "issuing_carrier", value)} />
+              <Field label="Carrier Address" value={pack.issuing_carrier_add} onChange={(value) => setPackField(setPack, "issuing_carrier_add", value)} />
+              <Field label="Account Info" value={pack.acc_info} onChange={(value) => setPackField(setPack, "acc_info", value)} />
+              <Field label="Dec Val Carr" value={pack.dec_val_carr} onChange={(value) => setPackField(setPack, "dec_val_carr", value)} />
+              <Field label="Dec Val Cus" value={pack.dec_val_cus} onChange={(value) => setPackField(setPack, "dec_val_cus", value)} />
+              <Field label="Valuation Chg" type="number" value={pack.valuation_chg} onChange={(value) => setPackField(setPack, "valuation_chg", value)} />
+              <Field label="Tax Chg" type="number" value={pack.tax_chg} onChange={(value) => setPackField(setPack, "tax_chg", value)} />
+              <Field label="Agent Amount" type="number" value={pack.agent_amount} onChange={(value) => setPackField(setPack, "agent_amount", value)} />
+              <Field label="Carrier Amount" type="number" value={pack.carrier_amount} onChange={(value) => setPackField(setPack, "carrier_amount", value)} />
+              <Field label="Account No" value={pack.accnt_no} onChange={(value) => setPackField(setPack, "accnt_no", value)} />
+              <Field label="Insurance Amt" value={pack.amt_insurance} onChange={(value) => setPackField(setPack, "amt_insurance", value)} />
+              <SelectField label="Rate Ind" value={pack.rate_ind} options={["N", "A", "R"]} onChange={(value) => setPackField(setPack, "rate_ind", value)} />
+              <SelectField label="KG Ind" value={pack.kg_ind} options={["K", "L"]} onChange={(value) => setPackField(setPack, "kg_ind", value)} />
+              <Field label="Rate Class" value={pack.rate_class} onChange={(value) => setPackField(setPack, "rate_class", value)} />
+              <Field label="Item No" value={pack.item_no} onChange={(value) => setPackField(setPack, "item_no", value)} />
+              <Field label="Routing" value={pack.routing} onChange={(value) => setPackField(setPack, "routing", value)} />
+            </div>
+          </Panel>
+        )}
       </div>
     </form>
   );
@@ -357,7 +457,7 @@ function Header({ title, subtitle, icon: Icon, children }: { title: string; subt
       <div className="flex min-w-0 items-center gap-2">
         <span className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary"><Icon size={18} /></span>
         <div>
-          <p className="eyebrow mb-0.5">Freight Pack List</p>
+          <p className="eyebrow mb-0.5">Freight Job Sheet</p>
           <h1 className="m-0 text-lg font-semibold text-foreground">{title}</h1>
           <p className="m-0 text-xs text-muted-foreground">{subtitle}</p>
         </div>
@@ -381,6 +481,10 @@ function Panel({ title, meta, icon: Icon, children, className = "" }: { title: s
 
 function Field({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
   return <label className="grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground">{label}<Input className="h-7 text-xs font-semibold" type={type} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+}
+
+function SelectField({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
+  return <label className="grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground">{label}<select className="h-7 rounded-md border bg-background px-2 text-xs font-semibold" value={value} onChange={(event) => onChange(event.target.value)}><option value="">Blank</option>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>;
 }
 
 function Textarea({ label, value, onChange, className = "" }: { label: string; value: string; onChange: (value: string) => void; className?: string }) {
@@ -410,6 +514,8 @@ function emptyPack(companyCode: string, userId: string, transportMode: string, j
     job_type: jobType,
     job_date: "",
     prin_name: "",
+    cust_code: "",
+    broker_code: "",
     shipper_name: "",
     shipper_address: "",
     consignee_name: "",
@@ -426,6 +532,9 @@ function emptyPack(companyCode: string, userId: string, transportMode: string, j
     net_wt: "",
     gross_wt: "",
     charge_wt: "",
+    feus: "",
+    teus: "",
+    bl_mode: "LCL",
     container_no: "",
     container_size: "",
     container_type: "STANDARD",
@@ -437,10 +546,32 @@ function emptyPack(companyCode: string, userId: string, transportMode: string, j
     import_bldate: "",
     hawb: "",
     airline: "",
+    airline_address: "",
     flight_info: "",
+    issuing_carrier: "",
+    issuing_carrier_add: "",
+    agents_iata_code: "",
+    acc_info: "",
+    accnt_no: "",
+    chg_code: "PP",
+    dec_val_carr: "NVD",
+    dec_val_cus: "NCV",
+    valuation_chg: "0",
+    tax_chg: "0",
+    agent_amount: "0",
+    carrier_amount: "0",
     issue_place: "",
     issue_date: "",
+    shipon_board: "",
+    signature: "",
+    po_no: "",
     shipment_status: "READY",
+    rate_ind: "N",
+    amt_insurance: "",
+    kg_ind: "K",
+    rate_class: "",
+    item_no: "",
+    routing: "",
     terms_of_delivery: "",
     curr_code: "OMR",
     ex_rate: "1",
@@ -462,7 +593,7 @@ function selectJob(value: string, row: LookupRow | null, setPack: (updater: (cur
     setPack((current) => ({ ...current, job_no: value }));
     return;
   }
-  const next = toPackForm(row, companyCode, userId, mode, jobType);
+  const next = toPackDraftFromJob(row, companyCode, userId, mode, jobType);
   setPack((current) => ({
     ...current,
     ...next,
@@ -472,6 +603,27 @@ function selectJob(value: string, row: LookupRow | null, setPack: (updater: (cur
     curr_code: lookupText(row, "curr_code") || current.curr_code,
     ex_rate: lookupText(row, "ex_rate") || current.ex_rate,
   }));
+}
+
+function toPackDraftFromJob(row: LookupRow, companyCode: string, userId: string, mode: string, jobType: string): PackForm {
+  const base = emptyPack(companyCode, userId, mode, jobType);
+  return {
+    ...base,
+    company_code: lookupText(row, "company_code") || base.company_code,
+    prin_code: lookupText(row, "prin_code") || base.prin_code,
+    prin_name: lookupText(row, "prin_name") || base.prin_name,
+    cust_code: lookupText(row, "cust_code") || lookupText(row, "prin_code") || base.cust_code,
+    job_no: lookupText(row, "job_no") || base.job_no,
+    job_date: normalizeDateInput(lookupText(row, "job_date")),
+    transport_mode: lookupText(row, "transport_mode") || base.transport_mode,
+    job_type: lookupText(row, "job_type") || base.job_type,
+    vessel_name: lookupText(row, "vessel_name") || lookupText(row, "carrier") || base.vessel_name,
+    voyage_no: lookupText(row, "voyage_no") || base.voyage_no,
+    bl_no: lookupText(row, "doc_ref") || base.bl_no,
+    hawb: lookupText(row, "hawb") || base.hawb,
+    curr_code: lookupText(row, "curr_code") || base.curr_code,
+    ex_rate: lookupText(row, "ex_rate") || base.ex_rate,
+  };
 }
 
 function setPackField(setPack: (updater: (current: PackForm) => PackForm) => void, field: keyof PackForm, value: string) {
@@ -504,6 +656,13 @@ function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString("en-GB");
+}
+
+function normalizeDateInput(value: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toISOString().slice(0, 10);
 }
 
 const jobColumns = [
