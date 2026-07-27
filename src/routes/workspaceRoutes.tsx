@@ -145,7 +145,8 @@ import { ZoneMasterPage } from "../pages/purchase_sales/PS_ZoneMasterPage";
 
 import Mytaskalmspage from "../pages/almswf/Mytaskalmspage";
 import { PurchaseSaleSetupPage } from "../pages/purchase_sales/Purchasesalesetuppage";
-import { FlowAssignmentPage } from "../pages/security/FlowAssignmentPage"; type WorkspaceRouteContext = {
+import { FlowAssignmentPage } from "../pages/security/FlowAssignmentPage";import { LeaveTypesPage } from "../pages/hr/Leavetypespage";
+ type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
   activeMenu?: MenuNode;
@@ -917,6 +918,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => isHrRoute(context) && isHrPayrollAccountSetupRoute(context),
     element: () => <HrPayrollAccountSetupPage />,
   },
+
+    {
+    name: "HR Leave Types",
+    match: ({ pathname }) => isHrLeaveTypeRoute(pathname),
+    element: () => <LeaveTypesPage />,
+  },
+  
   {
     name: "HR Master",
     match: (context) => Boolean(getHrMasterConfig(context)),
@@ -960,6 +968,8 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({pathname}) => isPurchaseSaleSetupRoute(pathname),
     element: () => <PurchaseSaleSetupPage/>
   },
+
+
 ];
 
 function isStorageComputationRoute(pathname: string) {
@@ -990,6 +1000,15 @@ function isPurchaseSaleSetupRoute(pathname: string) {
   );
 }
 
+function isHrLeaveTypeRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  // const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/pay components/leave_types1") ||
+    normalized.includes("/hcm/hcm/pay%20components/leave_types1")
+    // compact.includes("paycomponentsleavetype")
+  );
+}
 
 function isStockAdjViewRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
