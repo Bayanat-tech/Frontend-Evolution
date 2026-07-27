@@ -101,7 +101,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     queryKey: ["cr-header", requestNumber, companyCode],
     queryFn: () =>
       almsCommonSelect<TCRHeader>({
-        parameter: "Amlspf_TabCRHeader", // TODO: confirm actual select parameter name
+        parameter: "Amlspf_VW_CR_PAGE", 
         loginid,
         code1: companyCode,
         code2: requestNumber,
@@ -310,7 +310,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                   </label>
                   <label className="field col-span-3">
                     <span>Company Name<Required /></span>
-                    <Input disabled={disabled} value={header.COMPANY_NAME || ""} onChange={(e) => setHdr("COMPANY_NAME", e.target.value)} />
+                    <Input disabled={disabled} value={header.DESCRIPTION || ""} onChange={(e) => setHdr("DESCRIPTION", e.target.value)} />
                   </label>
                 </div>
               </div>

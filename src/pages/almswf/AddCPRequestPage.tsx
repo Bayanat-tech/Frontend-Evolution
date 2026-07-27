@@ -1,376 +1,338 @@
-import { useState, useMemo, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { X, Paperclip, FileText, Printer, FileSpreadsheet } from "lucide-react";
-import type { ColumnDef } from "@tanstack/react-table";
-
+// src/pages/almswf/Credit_Request_page.tsx
+import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "../../state/AuthContext";
+import { Plus, Eye, Edit2 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
-import { Input } from "../../components/ui/Input";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
-import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
-import { Badge } from "../../components/ui/Badge";
-import { CardHeader } from "../../components/ui/Card";
-import { useAuth } from "../../state/AuthContext";
-import { almsSave, almsCommonSelect } from "../../api/alms";
-import { exportCapexApprovalExcel, openCapexApprovalReport } from "../../api/transactions";
+import { NoticeToast } from "../../components/ui/NoticeToast";
+import type { ColumnDef } from "@tanstack/react-table";
+import type { TPurchaseSummaryTxn } from "./PurchaseSummary-types";
+import AddCRRequestPage from "./AddCRRequestPage";
+import { getDynamicLookup } from "../../api/lookups";
 
-// ─── Types ────────────────────────────────────────────────────────────────
-// TODO: move into CapexRequest-types.ts if you keep a shared types file
-export type TCPHeader = {
-  REQUEST_NUMBER?: string;
-  REQUEST_DATE?: string | Date;
-  DESCRIPTION?: string;
-  REMARKS?: string;
-  DEPARTMENT_CODE?: string;
-  FLOW_CODE?: string;
-  FLOW_LEVEL_INITIAL?: number;
-  FLOW_LEVEL_RUNNING?: number;
-  FLOW_LEVEL_FINAL?: number;
-  COMPANY_CODE?: string;
-  USER_DT?: string | Date;
-  USER_ID?: string;
-  FA_UPLOADED?: string;
-  FINAL_APPROVED?: string;
-  CREATE_USER?: string;
-  CREATE_DATE?: string | Date;
-  LAST_UPDATED?: string;
-  LAST_ACTION?: string;
-  HISTORY_SERIAL?: number;
-  MOBILE_APP_UPDATE?: string;
-  HOD_USER?: string;
-  FA_USER?: string;
-  MAIL_CC?: string;
-  REF_REQUEST_NUMBER?: string;
-  REF_REQUEST_DATE?: string | Date;
-  REMARKS_HISTRY?: string;
-  SUPPLIER?: string;       // Supplier Code
-  AC_NAME?: string;        // Supplier Name (joined from MS_ACCODES)
-  REF_DOC_NO?: string;     // PO Number
-  BUDGETED?: string;       // Y/N
-  BOARD_APPROVAL?: string; // Y/N
-  purch_status?: string;   // Status label shown in header chip
-};
+// ─── Constants ────────────────────────────────────────────────────────────────
+// NOTE: these must exactly match PROC_BUILD_DYNAMIC_CREDITREQUEST_ENTRY's P_CODE3
+// CASE values (PS_CREDITREQUEST_ENTRY_TAB_LIST). No spaces — "INPROGRESS" and
+// "SENDBACK" are single words on the backend, unlike the generic PR/PO tab set.
+const TAB_STATUS = ["PENDING", "INPROGRESS", "CLOSED", "CANCELED", "REJECTED", "SENDBACK"] as const;
+const TAB_LABELS = ["Pending", "In Progress", "Closed", "Canceled", "Rejected", "Send Back"] as const;
 
-export type TCPItem = {
-  REQUEST_NUMBER?: string;
-  ITEM_CODE?: string;
-  COMPANY_CODE?: string;
-  USER_DT?: string | Date;
-  USER_ID?: string;
-  LAST_ACTION?: string;
-  HISTORY_SERIAL?: number;
-  ITEM_SRNO?: number;
-  REF_DOC_NO?: string;
-  ITEM_RATE?: number;
-  ITEM_QTY?: number;
-  AMOUNT?: number;
-  TX_COMPNT_AMT_1?: number;
-  ITEM_DESP?: string;
-};
+type CRTab = (typeof TAB_STATUS)[number];
 
-type AddCPRequestPageProps = {
-  isEditMode: boolean;
-  isViewMode?: boolean;
-  existingData?: { request_number?: string };
-  onClose: (refresh?: boolean) => void;
-};
-
-function num(v: unknown) {
-  return Number(v) || 0;
-}
-function fmt3(n: number) {
-  return n.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function fmtDate(val: unknown): string {
+  const raw = String(val || "");
+  if (!raw || raw === "null" || raw === "undefined") return "NA";
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return "NA";
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClose }: AddCPRequestPageProps) => {
+function statusOf(row: TPurchaseSummaryTxn): string {
+  return String((row as any).PURCH_STATUS ?? (row as any).purch_status ?? "").toUpperCase();
+}
+
+// getDynamicLookup returns raw lowercase keys from Oracle (unlike almsCommonSelect,
+// which auto-uppercases). Normalize here so columns/cells (which read UPPERCASE keys
+// like REQUEST_NUMBER, DESCRIPTION, AMOUNT) resolve correctly instead of showing NA/blank.
+function uppercaseKeys<T extends Record<string, unknown>>(row: T): T {
+  const out: Record<string, unknown> = {};
+  for (const key in row) {
+    out[key.toUpperCase()] = row[key];
+  }
+  return out as T;
+}
+
+// ─── Props ────────────────────────────────────────────────────────────────────
+interface CreditRequestPageProps {
+  initialTab?: number; // index into TAB_STATUS, kept for backward-compat with existing routing
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+const Credit_Request_page = ({ initialTab = 0 }: CreditRequestPageProps) => {
   const { user } = useAuth();
-  const companyCode = user?.company_code ?? "";
-  const loginid = user?.loginid ?? "";
 
-  // CP pages only ever open against an existing request (edit/view) — never "add"
-  const requestNumber = existingData?.request_number;
-
+  const [rows, setRows] = useState<TPurchaseSummaryTxn[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [totalRows, setTotalRows] = useState(0);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [header, setHeader] = useState<Partial<TCPHeader>>({});
-  const [attachOpen, setAttachOpen] = useState(false);
-  const [logOpen, setLogOpen] = useState(false);
+  const [tab, setTab] = useState<CRTab>(TAB_STATUS[initialTab] ?? "PENDING");
+  const [query, setQuery] = useState("");
 
-  const disabled = isViewMode || saving;
-
-  // ── Fetch header ───────────────────────────────────────────────────────────
-  const { data: hdrList = [], isLoading: hdrLoading } = useQuery<TCPHeader[]>({
-    queryKey: ["cp-header", requestNumber, companyCode],
-    queryFn: () =>
-      almsCommonSelect<TCPHeader>({
-        parameter: "Amlspf_TabCPHeader",
-        loginid,
-        code1: companyCode,
-        code2: requestNumber,
-      }),
-    enabled: !!requestNumber,
+  // ── Popup state (Add / Edit / View) ─────────────────────────────────────────
+  const [taskPopup, setTaskPopup] = useState({
+    open: false,
+    title: "",
+    data: {
+      existingData: null as TPurchaseSummaryTxn | null,
+      isEditMode: false,
+      isViewMode: false,
+    },
   });
+
+  // ── Fetch (server-side, tab-driven — mirrors PS_POORDER_ENTRY_TAB_List pattern) ──
+  const fetchCreditRequest = async () => {
+    const response = await getDynamicLookup({
+      parameter: "PS_CREDITREQUEST_ENTRY_TAB_LIST",
+      code1: user?.company_code,
+      code2: user?.loginid || user?.username || "ADMIN",
+      code3: tab,
+    });
+
+    const rawRows = (response ?? []) as unknown as Record<string, unknown>[];
+    return rawRows.map(uppercaseKeys) as TPurchaseSummaryTxn[];
+  };
+
+  const loadRows = async (clearNotice = true) => {
+    setLoading(true);
+    if (clearNotice) setNotice(null);
+    try {
+      const response = await fetchCreditRequest();
+      setRows(response);
+      setTotalRows(response.length);
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load credit requests" });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (hdrList.length > 0) {
-      setHeader(hdrList[0]);
+    void loadRows();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, user?.company_code, user?.loginid, user?.username]);
+
+  // ── Client-side search filter (tab filtering is already done server-side) ───
+  const filteredRows = useMemo(() => {
+    if (!query.trim()) return rows;
+    const q = query.toLowerCase();
+    return rows.filter((row) =>
+      [row.REQUEST_NUMBER, (row as any).DESCRIPTION, (row as any).CREATE_USER, (row as any).PURCH_STATUS]
+        .filter(Boolean)
+        .some((field) => String(field).toLowerCase().includes(q))
+    );
+  }, [rows, query]);
+
+  // ── Popup handlers ──────────────────────────────────────────────────────────
+  const openAddPopup = () => {
+    setTaskPopup({
+      open: true,
+      title: "Add CR",
+      data: { existingData: null, isEditMode: false, isViewMode: false },
+    });
+  };
+
+  const handleActions = (actionType: "view" | "edit", row: TPurchaseSummaryTxn) => {
+    setTaskPopup({
+      open: true,
+      title: `${actionType === "edit" ? "Edit" : "View"} CR - ${row.REQUEST_NUMBER}`,
+      data: {
+        existingData: row,
+        isEditMode: actionType === "edit",
+        isViewMode: actionType === "view",
+      },
+    });
+  };
+
+  const closePopup = (refresh?: boolean) => {
+    setTaskPopup((prev) => ({ ...prev, open: false }));
+    if (refresh) {
+      void loadRows(false);
     }
-  }, [hdrList]);
+  };
 
-  // Derived loading flag — resolves as soon as the header query settles,
-  // even if it comes back empty, instead of relying on manual state.
-  const loading = !!requestNumber && hdrLoading;
-
-  // ── Fetch details (read-only, sourced from PR line items) ─────────────────
-  const { data: items = [], isLoading: itemsLoading } = useQuery<TCPItem[]>({
-    queryKey: ["cp-details", requestNumber, companyCode],
-    queryFn: () =>
-      almsCommonSelect<TCPItem>({
-        parameter: "Amlspf_TabCPDetails",
-        loginid,
-        code1: companyCode,
-        code2: requestNumber,
-      }),
-    enabled: !!requestNumber,
-  });
-
-  const setHdr = (field: keyof TCPHeader, value: unknown) =>
-    setHeader((prev) => ({ ...prev, [field]: value }));
-
-  const totalAmount = items.reduce((s, r) => s + num(r.AMOUNT), 0);
-  const totalTax = items.reduce((s, r) => s + num(r.TX_COMPNT_AMT_1), 0);
-
-  // ── Print ──────────────────────────────────────────────────────────────────
-  // ── Print ──────────────────────────────────────────────────────────────────
-const handlePrint = async () => {
-  if (!requestNumber) return;
-  setSaving(true);
-  setNotice(null);
-  try {
-    await openCapexApprovalReport({
-      parameter: "CapexApprovalReport",
-      loginid,
-      code1: companyCode,
-      code2: requestNumber,
-    });
-  } catch (err) {
-    setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to open report" });
-  } finally {
-    setSaving(false);
-  }
-};
-
-  // ── Generate Excel ──────────────────────────────────────────────────────────
-  // TODO: wire this to your actual export endpoint/util. Left as a clear stub
-  // so it's easy to plug in (e.g. an XLSX export util, or a backend endpoint
-  // that streams a file back).
-  const handleGenerateExcel = async () => {
-  if (!requestNumber) return;
-  setSaving(true);
-  setNotice(null);
-  try {
-    await exportCapexApprovalExcel({
-      parameter: "CapexApprovalReport",
-      loginid,
-      code1: companyCode,
-      code2: requestNumber,
-    });
-    setNotice({ type: "success", message: "Excel generated successfully!" });
-  } catch (err) {
-    setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to generate Excel" });
-  } finally {
-    setSaving(false);
-  }
-};
-  // ── Details grid columns (read-only) ───────────────────────────────────────
-  const itemColumns = useMemo<ColumnDef<TCPItem>[]>(
+  // ── Columns ──────────────────────────────────────────────────────────────────
+  const columns = useMemo<ColumnDef<TPurchaseSummaryTxn>[]>(
     () => [
-      { accessorKey: "ITEM_SRNO", header: "Item SR No", size: 100 },
-      { accessorKey: "ITEM_CODE", header: "Item Code", size: 120 },
-      { accessorKey: "ITEM_DESP", header: "Item Description", size: 300 },
-      { accessorKey: "ITEM_QTY", header: "Quantity", size: 100, cell: ({ getValue }) => fmt3(num(getValue())) },
-      { accessorKey: "ITEM_RATE", header: "Rate", size: 100, cell: ({ getValue }) => fmt3(num(getValue())) },
-      { accessorKey: "AMOUNT", header: "Amount", size: 120, cell: ({ getValue }) => <strong>{fmt3(num(getValue()))}</strong> },
-      { accessorKey: "TX_COMPNT_AMT_1", header: "Tax", size: 100, cell: ({ getValue }) => fmt3(num(getValue())) },
+      {
+        accessorKey: "request_number",
+        header: "Request No",
+        size: 150,
+        cell: ({ row }) => (
+          <span style={{ color: "#082A89", fontWeight: 600, fontSize: "0.82rem" }}>
+            {row.original.REQUEST_NUMBER}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "request_date",
+        header: "Request Date",
+        size: 150,
+        cell: ({ row }) => fmtDate((row.original as any).REQUEST_DATE),
+      },
+      {
+        accessorKey: "DESCRIPTION",
+        header: "Description",
+        size: 600,
+        cell: ({ row }) => (row.original as any).DESCRIPTION || "—",
+      },
+      {
+        accessorKey: "AMOUNT",
+        header: "Amount",
+        size: 120,
+        cell: ({ row }) => {
+          const amt = (row.original as any).AMOUNT || 0;
+          return <span style={{ fontWeight: 600 }}>{Number(amt).toLocaleString()}</span>;
+        },
+      },
+      {
+        accessorKey: "CREATE_USER",
+        header: "Create User",
+        size: 120,
+      },
+      {
+        accessorKey: "create_date",
+        header: "Create Date",
+        size: 120,
+        cell: ({ row }) => fmtDate((row.original as any).CREATE_DATE),
+      },
+      {
+        accessorKey: "purch_status",
+        header: "Status",
+        size: 130,
+        cell: ({ row }) => {
+          const val = statusOf(row.original);
+          let bg = "#f4f4f5", color = "#52525b", border = "#d4d4d8";
+          if (val === "APPROVED" || val === "A/C POSTED") { bg = "#e8f0fe"; color = "#1a4fa0"; border = "#b3caf5"; }
+          else if (val === "PENDING") { bg = "#fff4e5"; color = "#92400e"; border = "#fcd38a"; }
+          else if (val === "INPROGRESS") { bg = "#dbeafe"; color = "#1e40af"; border = "#93c5fd"; }
+          else if (val === "REJECTED") { bg = "#fdecea"; color = "#a01a1a"; border = "#f5b3b3"; }
+          else if (val === "SENT BACK") { bg = "#f3e8fe"; color = "#6b21a8"; border = "#d9b3f5"; }
+          else if (val === "PO GENERATED") { bg = "#d1fae5"; color = "#065f46"; border = "#6ee7b7"; }
+          return (
+            <span
+              style={{
+                display: "inline-block", padding: "2px 10px", borderRadius: "999px",
+                fontSize: "0.7rem", fontWeight: 700, whiteSpace: "nowrap",
+                background: bg, color, border: `1px solid ${border}`,
+              }}
+            >
+              {(row.original as any).PURCH_STATUS || (row.original as any).purch_status || "—"}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "next_action_by",
+        header: "Next Action By",
+        size: 160,
+        cell: ({ row }) => (row.original as any).NEXT_ACTION_BY || "—",
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        size: 100,
+        cell: ({ row }) => (
+          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <Button
+              size="sm" variant="ghost" title="View"
+              onClick={() => handleActions("view", row.original)}
+              style={{ padding: "4px", height: "28px", width: "28px" }}
+            >
+              <Eye size={14} />
+            </Button>
+            {tab !== "INPROGRESS" && (
+              <Button
+                size="sm" variant="ghost" title="Edit"
+                onClick={() => handleActions("edit", row.original)}
+                style={{ padding: "4px", height: "28px", width: "28px" }}
+              >
+                <Edit2 size={14} />
+              </Button>
+            )}
+          </div>
+        ),
+      },
     ],
-    []
+    [tab]
   );
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 z-50 bg-background">
-      <section className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]">
-        {/* ── Command header (same format as AddPRRequestPage) ───────────────── */}
-        <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
-          <div className="flex min-h-10 items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
-              <div>
-                <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                  {isViewMode ? "View Document" : isEditMode ? "Edit Document" : "New Document"}
-                </p>
-                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Capex Request</h2>
-              </div>
-              <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
-                <strong className="block text-sm leading-tight text-primary-foreground">{requestNumber || "New"}</strong>
-              </div>
-              <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
-                <strong className="block text-sm leading-tight text-primary-foreground">{fmt3(totalAmount)}</strong>
-              </div>
-              {header.purch_status && (
-                <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                  <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Status</span>
-                  <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">{header.purch_status}</Badge>
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {requestNumber && (
-                <>
-                  <Button type="button" variant="secondary" onClick={() => setAttachOpen(true)}><Paperclip size={15} /> Files</Button>
-                  <Button type="button" variant="secondary" onClick={() => setLogOpen(true)}><FileText size={15} /> Log</Button>
-                </>
-              )}
-              <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={() => onClose()}><X size={16} /></Button>
-            </div>
-          </div>
-        </CardHeader>
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "16px" }}>
+      {/* Breadcrumb */}
+      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "#6b7280" }}>
+        <a href="/dashboard" style={{ color: "#6b7280", textDecoration: "none" }}>Home</a>
+        <span style={{ color: "#d1d5db" }}>/</span>
+        <a href="/alms" style={{ color: "#6b7280", textDecoration: "none" }}>ALMS</a>
+        <span style={{ color: "#d1d5db" }}>/</span>
+        <span style={{ color: "#111827", fontWeight: 500 }}>Credit Request</span>
+      </div>
 
-        <div className="min-h-0 overflow-auto p-3">
-          {loading ? (
-            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
-          ) : (
-            <div className="grid gap-3">
-              <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
+      {/* Notice */}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-              <div className="rounded-md border bg-card">
-                  <div className="border-b bg-secondary/40 px-3 py-1.5">
-                    <p className="eyebrow m-0">Header</p>
-                    <h3 className="m-0 text-sm font-semibold leading-tight">Request Information</h3>
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                    {/* <label className="field">
-                      <span>Request Number</span>
-                      <Input disabled value={header.REQUEST_NUMBER || ""} />
-                    </label> */}
-                    <label className="field">
-                      <span>Request Date</span>
-                      <Input disabled type="date" value={header.REQUEST_DATE ? String(header.REQUEST_DATE).slice(0, 10) : ""} />
-                    </label>
-                    <label className="field">
-                      <span>Ref. Request Number</span>
-                      <Input disabled value={header.REF_REQUEST_NUMBER || ""} />
-                    </label>
-                    <label className="field">
-                      <span>Ref. Request Date</span>
-                      <Input disabled type="date" value={header.REF_REQUEST_DATE ? String(header.REF_REQUEST_DATE).slice(0, 10) : ""} />
-                    </label>
-                    <label className="field">
-                      <span>Supplier Code</span>
-                      <Input disabled value={header.SUPPLIER || ""} />
-                    </label>
-                    <label className="field">
-                      <span>Supplier Name</span>
-                      <Input disabled value={header.AC_NAME || ""} />
-                    </label>
-                    <label className="field">
-                      <span>PO Number</span>
-                      <Input disabled value={header.REF_DOC_NO || ""} />
-                    </label>
-                    <label className="field">
-                      <span>Budgeted (Y/N)</span>
-                      <select
-                        disabled={disabled}
-                        value={header.BUDGETED || ""}
-                        onChange={(e) => setHdr("BUDGETED", e.target.value)}
-                        className="flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm"
-                      >
-                        <option value="">— Select —</option>
-                        <option value="Y">Y</option>
-                        <option value="N">N</option>
-                      </select>
-                    </label>
-                    <label className="field">
-                      <span>Board Approval (Y/N)</span>
-                      <select
-                        disabled={disabled}
-                        value={header.BOARD_APPROVAL || ""}
-                        onChange={(e) => setHdr("BOARD_APPROVAL", e.target.value)}
-                        className="flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm"
-                      >
-                        <option value="">— Select —</option>
-                        <option value="Y">Y</option>
-                        <option value="N">N</option>
-                      </select>
-                    </label>
-
-                    <label className="field col-span-2 max-lg:col-span-1 max-md:col-span-1">
-                      <span>Description</span>
-                      <textarea
-                        disabled={disabled}
-                        rows={3}
-                        value={header.DESCRIPTION || ""}
-                        onChange={(e) => setHdr("DESCRIPTION", e.target.value)}
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                      />
-                    </label>
-                    <label className="field col-span-2 max-lg:col-span-1 max-md:col-span-1">
-                      <span>Remarks</span>
-                      <textarea
-                        disabled={disabled}
-                        rows={3}
-                        value={header.REMARKS || ""}
-                        onChange={(e) => setHdr("REMARKS", e.target.value)}
-                        className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                      />
-                    </label>
-                  </div>
-                </div>
-
-              <div className="commercial-lines-card rounded-md border bg-card">
-                  <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
-                    <div>
-                      <p className="eyebrow m-0">Details</p>
-                      <h3 className="m-0 text-sm font-semibold leading-tight">Line Items</h3>
-                    </div>
-                  </div>
-                  <DataTable
-                    columns={itemColumns}
-                    data={items}
-                    title={`${items.length} Items`}
-                    loading={itemsLoading}
-                    height={360}
-                    density="grid"
-                    enablePagination={false}
-                    getRowId={(row) => String(row.ITEM_SRNO ?? row.ITEM_CODE ?? "")}
-                  />
-                  <div className="flex items-center justify-end gap-8 border-t px-3 py-1.5 text-sm">
-                    <span className="text-muted-foreground">Amount</span><strong className="text-primary">{fmt3(totalAmount)}</strong>
-                  </div>
-                  <div className="flex items-center justify-end gap-8 px-3 py-1.5 text-sm">
-                    <span className="text-muted-foreground">Tax</span><strong className="text-primary">{fmt3(totalTax)}</strong>
-                  </div>
-                </div>
-            </div>
-          )}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
+        <div className="flex flex-wrap gap-2 rounded-md">
+          {TAB_LABELS.map((label, index) => (
+            <Button
+              key={index}
+              size="default"
+              variant={tab === TAB_STATUS[index] ? "default" : "outline"}
+              onClick={() => setTab(TAB_STATUS[index])}
+              className="px-6 py-2.5 min-w-[120px]"
+              style={{
+                fontSize: "15px",
+                fontWeight: tab === TAB_STATUS[index] ? 600 : 500,
+                transition: "all 0.2s ease",
+                ...(tab === TAB_STATUS[index] && {
+                  boxShadow: "0 2px 8px rgba(8, 42, 137, 0.2)",
+                })
+              }}
+            >
+              {label}
+            </Button>
+          ))}
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
-          <div className="text-sm text-muted-foreground">Total Amount <strong className="text-primary">{fmt3(totalAmount)}</strong></div>
-          <div className="flex items-center gap-2">
-            <Button disabled={saving} type="button" variant="outline" onClick={() => onClose()}>Close</Button>
-            <Button disabled={saving} type="button" variant="outline" onClick={handlePrint}>
-              <Printer size={15} /> Print
-            </Button>
-            <Button disabled={saving} type="button" variant="default" onClick={handleGenerateExcel}>
-              <FileSpreadsheet size={15} /> {saving ? "Generating..." : "Generate Excel"}
-            </Button>
-          </div>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <Button onClick={openAddPopup} style={{ background: "#0a6640" }}>
+            <Plus size={15} /> Add CR
+          </Button>
         </div>
-      </section>
+      </div>
 
+      {/* Data Table */}
+      <DataTable
+        columns={columns}
+        data={filteredRows}
+        title={loading ? "Loading" : `${totalRows.toLocaleString()} Records`}
+        subtitle={`${TAB_LABELS[TAB_STATUS.indexOf(tab)]} Requests`}
+        searchValue={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="Search request..."
+        loading={loading}
+        height={500}
+        density="compact"
+        enablePagination
+        pageSize={50}
+        enableColumnFilters
+        getRowId={(row, index) => row.REQUEST_NUMBER || `temp-${index}`}
+      />
+
+      {/* Add / Edit / View Dialog */}
+      <Dialog
+        open={taskPopup.open}
+        wide
+        title={taskPopup.title}
+        onClose={() => closePopup()}
+      >
+        {taskPopup.open && (
+          <AddCRRequestPage
+            isEditMode={taskPopup.data.isEditMode}
+            isViewMode={taskPopup.data.isViewMode}
+            existingData={
+              taskPopup.data.existingData
+                ? { request_number: taskPopup.data.existingData.REQUEST_NUMBER }
+                : undefined
+            }
+            onClose={closePopup}
+          />
+        )}
+      </Dialog>
     </div>
   );
 };
 
-export default AddCPRequestPage;
+export default Credit_Request_page;
