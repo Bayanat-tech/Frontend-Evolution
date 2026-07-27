@@ -267,11 +267,11 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
 
       {activeTab === "job" && <FreightJobPage target={target} initialJob={selectedJob} startMode="editor" />}
       {activeTab === "packlist" && <FreightPacklistPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} />}
-      {activeTab === "activities" && <FreightJobActivitiesPage target={target} />}
-      {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" />}
-      {activeTab === "instructions" && <FreightJobFollowupTab target={target} kind="instructions" />}
-      {activeTab === "alerts" && <FreightJobFollowupTab target={target} kind="alerts" />}
-      {activeTab === "deposits" && <FreightJobFollowupTab target={target} kind="deposits" />}
+      {activeTab === "activities" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} />}
+      {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" initialJob={selectedJob} />}
+      {activeTab === "instructions" && <FreightJobFollowupTab target={target} kind="instructions" initialJob={selectedJob} />}
+      {activeTab === "alerts" && <FreightJobFollowupTab target={target} kind="alerts" initialJob={selectedJob} />}
+      {activeTab === "deposits" && <FreightJobFollowupTab target={target} kind="deposits" initialJob={selectedJob} />}
     </section>
   );
 }

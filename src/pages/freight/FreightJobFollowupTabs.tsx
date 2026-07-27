@@ -22,7 +22,7 @@ const meta = {
 const modeMap = { air: "A", sea: "S", land: "R" };
 const directionMap = { import: "IMP", export: "EXP", reexport: "IRE" };
 
-export function FreightJobFollowupTab({ target, kind }: { target?: FreightWorkspaceTarget; kind: FollowupKind }) {
+export function FreightJobFollowupTab({ target, kind, initialJob = null }: { target?: FreightWorkspaceTarget; kind: FollowupKind; initialJob?: LookupRow | null }) {
   const cfg = meta[kind];
   const Icon = cfg.icon;
   const { toast } = useToast();
@@ -66,6 +66,13 @@ export function FreightJobFollowupTab({ target, kind }: { target?: FreightWorksp
     setJob(null);
     setRows([]);
   }, [jobType, mode]);
+
+  useEffect(() => {
+    if (!initialJob) return;
+    const selected = normalizeLookupRow(initialJob);
+    setJob(selected);
+    void loadRows(selected);
+  }, [initialJob]);
 
   async function initRows() {
     if (!job) return;
@@ -130,21 +137,25 @@ export function FreightJobFollowupTab({ target, kind }: { target?: FreightWorksp
 
       <div className="grid gap-2 lg:grid-cols-[minmax(360px,520px)_1fr_1fr]">
         <div className="rounded-md border bg-card p-2 shadow-sm">
-          <label className="grid gap-1 text-[10px] font-semibold uppercase text-muted-foreground">Freight Job
-            <LookupField
-              value={text(job || undefined, "job_no")}
-              compact
-              valueField="JOB_NO"
-              displayFields={["JOB_NO", "PRIN_CODE", "PRIN_NAME"]}
-              columns={[{ field: "JOB_NO", header: "Job" }, { field: "JOB_DATE", header: "Date" }, { field: "PRIN_CODE", header: "Principal" }, { field: "PRIN_NAME", header: "Name" }]}
-              loadOptions={() => loadJobs(companyCode, mode, jobType)}
-              onChange={(_, row) => {
-                const selected = normalizeLookupRow(row || {});
-                setJob(selected);
-                void loadRows(selected);
-              }}
-            />
-          </label>
+          {initialJob ? (
+            <Metric label="Selected Freight Job" value={`${text(job || undefined, "job_no") || "-"} / ${text(job || undefined, "prin_name") || text(job || undefined, "prin_code") || "-"}`} />
+          ) : (
+            <label className="grid gap-1 text-[10px] font-semibold uppercase text-muted-foreground">Freight Job
+              <LookupField
+                value={text(job || undefined, "job_no")}
+                compact
+                valueField="JOB_NO"
+                displayFields={["JOB_NO", "PRIN_CODE", "PRIN_NAME"]}
+                columns={[{ field: "JOB_NO", header: "Job" }, { field: "JOB_DATE", header: "Date" }, { field: "PRIN_CODE", header: "Principal" }, { field: "PRIN_NAME", header: "Name" }]}
+                loadOptions={() => loadJobs(companyCode, mode, jobType)}
+                onChange={(_, row) => {
+                  const selected = normalizeLookupRow(row || {});
+                  setJob(selected);
+                  void loadRows(selected);
+                }}
+              />
+            </label>
+          )}
         </div>
         <Metric label="Job" value={text(job || undefined, "job_no") || "-"} />
         <Metric label={cfg.summary} value={stats} />

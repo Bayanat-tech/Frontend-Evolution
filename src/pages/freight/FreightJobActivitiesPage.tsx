@@ -48,7 +48,7 @@ const directionMap = {
   reexport: { code: "IRE", label: "Import for Re-export" },
 };
 
-export function FreightJobActivitiesPage({ target }: { target?: FreightWorkspaceTarget }) {
+export function FreightJobActivitiesPage({ target, initialJob = null, startMode = "list" }: { target?: FreightWorkspaceTarget; initialJob?: LookupRow | null; startMode?: ViewMode }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const userRecord = (user || {}) as Record<string, unknown>;
@@ -57,7 +57,7 @@ export function FreightJobActivitiesPage({ target }: { target?: FreightWorkspace
   const mode = modeMap[target?.mode || "air"];
   const direction = directionMap[target?.direction || "import"];
 
-  const [view, setView] = useState<ViewMode>("list");
+  const [view, setView] = useState<ViewMode>(startMode);
   const [rows, setRows] = useState<LookupRow[]>([]);
   const [query, setQuery] = useState("");
   const [header, setHeader] = useState<LookupRow | null>(null);
@@ -95,8 +95,17 @@ export function FreightJobActivitiesPage({ target }: { target?: FreightWorkspace
   }, [companyCode, direction.code, mode.code, query]);
 
   useEffect(() => {
-    void loadRows();
-  }, [loadRows]);
+    if (view === "list") void loadRows();
+  }, [loadRows, view]);
+
+  useEffect(() => {
+    setView(startMode);
+  }, [startMode]);
+
+  useEffect(() => {
+    if (!initialJob) return;
+    void openJob(initialJob);
+  }, [initialJob]);
 
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
     { accessorKey: "job_no", header: "Job No", size: 120, cell: ({ row }) => <button type="button" className="font-semibold text-primary hover:underline" onClick={() => openJob(row.original)}>{lookupText(row.original, "job_no")}</button> },
@@ -206,7 +215,7 @@ export function FreightJobActivitiesPage({ target }: { target?: FreightWorkspace
     <section className="grid gap-2">
       <Header title="Service & Activities" subtitle={`${lookupText(header, "job_no")} / ${lookupText(header, "prin_name") || lookupText(header, "prin_code")}`}>
         {notice && <NoticeChip notice={notice} />}
-        <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>
+        {!initialJob && <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>}
         <Button type="button" size="sm" variant="outline" onClick={addLine}><Plus size={14} />Line</Button>
         <Button type="button" size="sm" variant="outline" onClick={() => void confirmJob()} disabled={saving || !lines.length}><CheckCircle2 size={14} />Confirm</Button>
         <Button type="button" size="sm" onClick={() => void saveLines()} disabled={saving}><Save size={14} />Save</Button>

@@ -281,7 +281,7 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
           <Panel className="lg:col-span-12" icon={BriefcaseBusiness} title="Job Identity" meta={`${job.job_no || "Auto"} / ${mode.label} / ${direction.label}`}>
             <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-6">
               <ReadOnlyField label="Job No" value={job.job_no || "Auto"} />
-              <Field label="Job Date" type="date" value={job.job_date} onChange={(value) => setJobField(setJob, "job_date", value)} />
+              <DateField label="Job Date" value={job.job_date} onChange={(value) => setJobField(setJob, "job_date", value)} />
               <Lookup label="Principal" value={job.prin_code} valueField="PRIN_CODE" displayFields={["PRIN_CODE", "PRIN_NAME"]} columns={[{ field: "PRIN_CODE", header: "Code" }, { field: "PRIN_NAME", header: "Principal" }]} loadOptions={() => lookup(`SELECT PRIN_CODE, PRIN_NAME FROM MS_PRINCIPAL WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY PRIN_CODE`)} onChange={(value) => setJobField(setJob, "prin_code", value)} />
               <Lookup label="Quotation" value={job.quotation_ref} valueField="QUOTATION_NR" displayFields={["QUOTATION_NR", "QUOTATION_DATE"]} columns={[{ field: "QUOTATION_NR", header: "Quotation" }, { field: "PRIN_CODE", header: "Principal" }, { field: "QUOTATION_DATE", header: "Date" }]} loadOptions={() => lookup(`SELECT QUOTATION_NR, QUOTATION_DATE, PRIN_CODE FROM TF_QUOTATION WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' AND TRANSPORT_MODE='${sqlEscape(mode.code)}' AND JOB_TYPE='${sqlEscape(direction.code === "IRE" ? "IMP" : direction.code)}' AND NVL(INDSTATUS,'N')='A' ORDER BY QUOTATION_DATE DESC`)} onChange={(value, row) => void copyQuotationToJob(value, row)} />
               <Field label="Department" value={job.dept_code} onChange={(value) => setJobField(setJob, "dept_code", value)} />
@@ -295,8 +295,8 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
               <Lookup label="Destination" value={job.destination_port} valueField="PORT_CODE" displayFields={["PORT_CODE", "PORT_NAME"]} columns={portColumns} loadOptions={() => lookup(`SELECT PORT_CODE, PORT_NAME, COUNTRY_CODE FROM MS_PORT WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY PORT_CODE`)} onChange={(value) => setJobField(setJob, "destination_port", value)} />
               <ModeCarrierLookup mode={mode.code} companyCode={companyCode} value={job.vessel_name} onChange={(value) => setJobField(setJob, "vessel_name", value)} />
               <Field label={mode.code === "R" ? "Trip / Route No" : mode.code === "A" ? "Flight No" : "Voyage No"} value={job.voyage_no} onChange={(value) => setJobField(setJob, "voyage_no", value)} />
-              <Field label="ETA" type="date" value={job.eta} onChange={(value) => setJobField(setJob, "eta", value)} />
-              <Field label="ETD" type="date" value={job.etd} onChange={(value) => setJobField(setJob, "etd", value)} />
+              <DateField label="ETA" value={job.eta} onChange={(value) => setJobField(setJob, "eta", value)} />
+              <DateField label="ETD" value={job.etd} onChange={(value) => setJobField(setJob, "etd", value)} />
               <Field label={mode.code === "A" ? "MAWB" : "BL / Doc Ref"} value={job.doc_ref} onChange={(value) => setJobField(setJob, "doc_ref", value)} />
               <Field label={mode.code === "A" ? "HAWB" : "House Ref"} value={job.hawb} onChange={(value) => setJobField(setJob, "hawb", value)} />
             </div>
@@ -316,7 +316,7 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
           <Panel className="lg:col-span-12" icon={FileText} title="Customs And References" meta={job.be_no || job.custom_recno || "Operational references"}>
             <div className="grid gap-1.5 sm:grid-cols-3">
               <Field label="BE No" value={job.be_no} onChange={(value) => setJobField(setJob, "be_no", value)} />
-              <Field label="BE Date" type="date" value={job.be_date} onChange={(value) => setJobField(setJob, "be_date", value)} />
+              <DateField label="BE Date" value={job.be_date} onChange={(value) => setJobField(setJob, "be_date", value)} />
               <Field label="Custom Ref" value={job.custom_recno} onChange={(value) => setJobField(setJob, "custom_recno", value)} />
               <Field label="Customs Job Ref" value={job.ref_customs} onChange={(value) => setJobField(setJob, "ref_customs", value)} />
               <Field label="Country Origin" value={job.country_origin} onChange={(value) => setJobField(setJob, "country_origin", value)} />
@@ -359,7 +359,38 @@ function Panel({ title, meta, icon: Icon, children, className = "" }: { title: s
 }
 
 function Field({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
-  return <label className="grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground">{label}<Input className="h-7 text-xs font-semibold" type={type} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+  const safeValue = type === "date" ? dateInputValue(value) : value;
+  return <label className="grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground">{label}<Input className="h-7 text-xs font-semibold" type={type} value={safeValue} onChange={(event) => onChange(event.target.value)} /></label>;
+}
+
+function DateField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  const [displayValue, setDisplayValue] = useState(() => toDisplayDate(value));
+
+  useEffect(() => {
+    setDisplayValue(toDisplayDate(value));
+  }, [value]);
+
+  function commit(nextDisplayValue = displayValue) {
+    const parsed = parseDisplayDate(nextDisplayValue);
+    if (parsed || !nextDisplayValue.trim()) onChange(parsed);
+    setDisplayValue(parsed ? toDisplayDate(parsed) : nextDisplayValue);
+  }
+
+  return (
+    <label className="grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
+      {label}
+      <Input
+        className="h-7 text-xs font-semibold"
+        placeholder="dd/mm/yyyy"
+        value={displayValue}
+        onChange={(event) => setDisplayValue(event.target.value)}
+        onBlur={() => commit()}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") commit();
+        }}
+      />
+    </label>
+  );
 }
 
 function Textarea({ label, value, onChange, className = "" }: { label: string; value: string; onChange: (value: string) => void; className?: string }) {
@@ -390,7 +421,10 @@ function emptyJob(companyCode: string, userId: string, transportMode: string, jo
 
 function toJobForm(row: LookupRow, companyCode: string, userId: string, mode: string, jobType: string): JobForm {
   const base = emptyJob(companyCode, userId, mode, jobType);
-  return Object.fromEntries(Object.keys(base).map((key) => [key, lookupText(row, key) || (base as any)[key]])) as JobForm;
+  return Object.fromEntries(Object.keys(base).map((key) => {
+    const value = lookupText(row, key) || (base as any)[key];
+    return [key, isJobDateField(key) ? dateInputValue(value) : value];
+  })) as JobForm;
 }
 
 function toJobFromQuotation(row: LookupRow, current: JobForm, quotationNr: string): JobForm {
@@ -438,6 +472,41 @@ function lookupText(row: LookupRow | undefined, key: string) {
 
 function today() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function isJobDateField(key: string) {
+  return ["job_date", "eta", "etd", "be_date"].includes(key.toLowerCase());
+}
+
+function dateInputValue(value: string) {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+function toDisplayDate(value: string) {
+  const normalized = dateInputValue(value);
+  if (!normalized) return "";
+  const [year, month, day] = normalized.split("-");
+  return `${day}/${month}/${year}`;
+}
+
+function parseDisplayDate(value: string) {
+  const text = value.trim();
+  if (!text) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const match = text.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+  if (!match) return "";
+  const day = match[1].padStart(2, "0");
+  const month = match[2].padStart(2, "0");
+  const year = match[3];
+  const candidate = `${year}-${month}-${day}`;
+  const date = new Date(`${candidate}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  if (date.getFullYear() !== Number(year) || date.getMonth() + 1 !== Number(month) || date.getDate() !== Number(day)) return "";
+  return candidate;
 }
 
 function formatDate(value: string) {
