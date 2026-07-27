@@ -1,4 +1,3 @@
-import type { ColumnDef } from "@tanstack/react-table";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { BarChart3, Boxes, CalendarDays, Download, FileSpreadsheet, Filter, Loader2, Printer, RefreshCw, Search, Ship, UserRound, WalletCards } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -6,7 +5,6 @@ import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
 import { executeWmsInboundSqlCached } from "../../api/wms";
 import { Button } from "../../components/ui/Button";
-import { DataTable } from "../../components/ui/DataTable";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { useAuth } from "../../state/AuthContext";
@@ -34,6 +32,16 @@ type ReportConfig = {
   amountFields: string[];
   filters: FilterKey[];
   primaryMetric: string;
+};
+type ReportFilters = {
+  from_date: string;
+  to_date: string;
+  prin_code: string;
+  job_no: string;
+  transport_mode: string;
+  job_type: string;
+  status: string;
+  search: string;
 };
 
 const reportConfigs: Record<FreightReportKey, ReportConfig> = {
@@ -291,15 +299,15 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
   const [rows, setRows] = useState<LookupRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("Select filters and run the report.");
-  const [search, setSearch] = useState("");
 
-  const columns = useMemo<ColumnDef<LookupRow>[]>(() => buildColumns(config), [config]);
   const totals = useMemo(() => buildTotals(rows, config.amountFields), [config.amountFields, rows]);
   const visibleFilters = config.filters;
+  const userName = String(userRecord.user_id || userRecord.USER_ID || userRecord.username || userRecord.USERNAME || "Admin");
 
   async function runReport() {
     setLoading(true);
     setMessage("");
+    const reportWindow = openReportShell(config.title);
     try {
       const response = await api.post<{ success?: boolean; data?: LookupRow[]; totalCount?: number }>("/api/freight/reports/run", {
         company_code: companyCode,
@@ -309,9 +317,12 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
       const nextRows = (response.data.data || []).map(normalizeRow);
       setRows(nextRows);
       setMessage(nextRows.length ? `${nextRows.length} records loaded from Oracle.` : "No records found for selected filters.");
+      writeReportWindow(reportWindow, reportHtml(config, companyCode, userName, filters, principalText, nextRows, buildTotals(nextRows, config.amountFields), true));
     } catch (error: any) {
       setRows([]);
-      setMessage(error?.response?.data?.details || error?.response?.data?.message || "Unable to generate Freight report.");
+      const errorMessage = error?.response?.data?.details || error?.response?.data?.message || "Unable to generate Freight report.";
+      setMessage(errorMessage);
+      writeReportWindow(reportWindow, reportErrorHtml(config.title, errorMessage));
     } finally {
       setLoading(false);
     }
@@ -321,17 +332,16 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
     setFilters({ from_date: "", to_date: "", prin_code: "", job_no: "", transport_mode: "", job_type: "", status: "", search: "" });
     setPrincipalText("");
     setRows([]);
-    setSearch("");
     setMessage("Select filters and run the report.");
   }
 
   function printReport() {
-    const win = window.open("", "_blank", "noopener,noreferrer,width=1200,height=800");
-    if (!win) return;
-    win.document.write(reportHtml(config, companyCode, rows, totals));
-    win.document.close();
-    win.focus();
-    setTimeout(() => win.print(), 250);
+    if (!rows.length) {
+      setMessage("Run the report and load records before printing.");
+      return;
+    }
+    const reportWindow = openReportShell(config.title);
+    writeReportWindow(reportWindow, reportHtml(config, companyCode, userName, filters, principalText, rows, totals, true));
   }
 
   return (
@@ -414,27 +424,14 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
         <ReportTile icon={Filter} label="Status" value={visibleFilters.includes("status") ? optionLabel(statusOptions, filters.status) : "Not applicable"} />
       </div>
 
-      <div className="rounded-md border bg-card shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2">
-          <div>
-            <h2 className="m-0 text-sm font-semibold text-foreground">{config.title} Output</h2>
-            <p className="m-0 text-xs text-muted-foreground">{message}</p>
-          </div>
-          <Input className="h-8 w-72 max-w-full" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Filter visible rows..." />
-        </div>
-        <DataTable
-          columns={columns}
-          data={rows}
-          loading={loading}
-          searchValue={search}
-          onSearchChange={setSearch}
-          density="grid"
-          height="calc(100vh - 375px)"
-          minWidth={Math.max(900, config.columns.length * 112)}
-          enableExport={false}
-          emptyText="No report rows found"
-        />
-      </div>
+      <ReportLaunchPanel
+        config={config}
+        rows={rows}
+        totals={totals}
+        loading={loading}
+        message={message}
+        onOpen={() => printReport()}
+      />
     </section>
   );
 }
@@ -511,22 +508,6 @@ function ReportTile({ icon: Icon, label, value }: { icon: typeof CalendarDays; l
   );
 }
 
-function buildColumns(config: ReportConfig): ColumnDef<LookupRow>[] {
-  return config.columns.map((column) => ({
-    accessorKey: column.key,
-    header: column.label,
-    cell: ({ row, getValue }) => {
-      const value = getValue() ?? firstExisting(row.original, column.key);
-      if (column.kind === "amount") return <span className="block text-right font-semibold text-foreground">{formatAmount(Number(value || 0))}</span>;
-      if (column.kind === "date") return formatCellDate(value);
-      if (column.kind === "status") return <StatusPill value={String(value ?? "")} />;
-      if (column.kind === "mode") return modeLabel(String(value ?? ""));
-      if (column.kind === "type") return typeLabel(String(value ?? ""));
-      return formatText(value);
-    },
-  }));
-}
-
 function StatusPill({ value }: { value: string }) {
   const code = value.trim().toUpperCase();
   const text = statusLabel(code);
@@ -536,6 +517,390 @@ function StatusPill({ value }: { value: string }) {
       ? "border-rose-200 bg-rose-50 text-rose-700"
       : "border-amber-200 bg-amber-50 text-amber-700";
   return <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${className}`}>{text}</span>;
+}
+
+function ReportLaunchPanel({
+  config,
+  rows,
+  totals,
+  loading,
+  message,
+  onOpen,
+}: {
+  config: ReportConfig;
+  rows: LookupRow[];
+  totals: { label: string; value: number }[];
+  loading: boolean;
+  message: string;
+  onOpen: () => void;
+}) {
+  return (
+    <div className="rounded-md border bg-card shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+        <div>
+          <h2 className="m-0 text-sm font-semibold text-foreground">Report Viewer</h2>
+          <p className="m-0 text-xs text-muted-foreground">{message}</p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={onOpen} disabled={!rows.length || loading}>
+          <Printer size={14} /> Open Report Window
+        </Button>
+      </div>
+      <div className="grid gap-3 p-4 md:grid-cols-[1.1fr_1fr_1fr]">
+        <div className="rounded-md border bg-muted/20 p-4">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">{config.family}</div>
+          <div className="mt-2 text-2xl font-bold text-foreground">{config.title}</div>
+          <p className="m-0 mt-1 text-sm text-muted-foreground">Run opens the formatted report in a separate viewer window, matching the PowerBuilder report flow.</p>
+        </div>
+        <div className="rounded-md border bg-background p-4">
+          <div className="text-[10px] font-semibold uppercase text-muted-foreground">{config.primaryMetric}</div>
+          <div className="mt-2 text-3xl font-bold text-foreground">{loading ? "..." : rows.length}</div>
+          <div className="mt-1 text-xs text-muted-foreground">Records loaded from Oracle</div>
+        </div>
+        <div className="rounded-md border bg-background p-4">
+          <div className="text-[10px] font-semibold uppercase text-muted-foreground">Totals</div>
+          {totals.length ? (
+            <div className="mt-2 grid gap-1">
+              {totals.map((item) => <div key={item.label} className="flex justify-between text-sm"><span className="text-muted-foreground">{item.label}</span><strong>{formatAmount(item.value)}</strong></div>)}
+            </div>
+          ) : (
+            <div className="mt-2 text-sm font-semibold text-foreground">No amount totals</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReportPreview({
+  config,
+  companyCode,
+  userName,
+  filters,
+  principalText,
+  rows,
+  totals,
+  loading,
+  message,
+}: {
+  config: ReportConfig;
+  companyCode: string;
+  userName: string;
+  filters: ReportFilters;
+  principalText: string;
+  rows: LookupRow[];
+  totals: { label: string; value: number }[];
+  loading: boolean;
+  message: string;
+}) {
+  return (
+    <div className="rounded-md border bg-card shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2">
+        <div>
+          <h2 className="m-0 text-sm font-semibold text-foreground">Report Preview</h2>
+          <p className="m-0 text-xs text-muted-foreground">{message}</p>
+        </div>
+        {loading && <span className="inline-flex items-center gap-2 text-xs font-semibold text-primary"><Loader2 size={14} className="animate-spin" /> Loading Oracle report</span>}
+      </div>
+      <div className="overflow-auto bg-muted/20 p-3">
+        <div className="mx-auto min-w-[1120px] max-w-[1320px] border bg-white px-5 py-4 text-slate-900 shadow-sm">
+          <ReportHeader config={config} companyCode={companyCode} userName={userName} filters={filters} principalText={principalText} rows={rows} totals={totals} />
+          {loading ? (
+            <div className="grid min-h-56 place-items-center text-sm font-semibold text-slate-500">Generating report...</div>
+          ) : rows.length ? (
+            <ReportBody config={config} rows={rows} />
+          ) : (
+            <div className="grid min-h-56 place-items-center rounded border border-dashed border-slate-300 bg-slate-50 text-sm font-semibold text-slate-500">No report rows found for selected filters.</div>
+          )}
+          <div className="mt-4 border-t pt-2 text-center text-[11px] font-semibold text-slate-500">End of report</div>
+          <div className="mt-1 text-right text-[10px] font-semibold uppercase tracking-[0.22em] text-primary">powered by AWARE</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReportHeader({
+  config,
+  companyCode,
+  userName,
+  filters,
+  principalText,
+  rows,
+  totals,
+}: {
+  config: ReportConfig;
+  companyCode: string;
+  userName: string;
+  filters: ReportFilters;
+  principalText: string;
+  rows: LookupRow[];
+  totals: { label: string; value: number }[];
+}) {
+  return (
+    <>
+      <div className="border-b-2 border-slate-400 pb-2">
+        <div className="mb-2 flex h-14 items-center justify-between border-b border-slate-300">
+          <div className="text-[12px] font-bold uppercase tracking-[0.28em] text-primary">Bayanat Technology</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Freight Management System</div>
+        </div>
+      </div>
+      <div className="grid grid-cols-[1.35fr_1fr] gap-4 border-b border-slate-300 py-2">
+        <div>
+          <h3 className="m-0 text-xl font-bold uppercase tracking-wide text-slate-950">{config.title}</h3>
+          <p className="m-0 text-[11px] text-slate-500">
+            {config.family} | Company {companyCode}
+            {rows.length ? ` | ${rows.length} record${rows.length === 1 ? "" : "s"}` : ""}
+            {totals.map((item) => ` | ${item.label}: ${formatAmount(item.value)}`).join("")}
+          </p>
+        </div>
+        <div className="grid justify-end gap-0.5 text-right text-[11px] text-slate-700">
+          <div><span className="inline-block w-14 text-left font-semibold text-slate-900">Date :</span> {new Date().toLocaleString()}</div>
+          <div><span className="inline-block w-14 text-left font-semibold text-slate-900">User :</span> {userName}</div>
+          <div><span className="inline-block w-14 text-left font-semibold text-slate-500">Report :</span> {config.title}</div>
+          <div><span className="font-semibold text-slate-900">Page 1 of 1</span></div>
+        </div>
+      </div>
+      <div className="grid grid-cols-4 gap-x-4 border-b border-slate-300 py-2 text-[11px] text-slate-700">
+        <div><span className="font-semibold text-slate-900">Period:</span> {toDisplayDate(filters.from_date) || "Start"} - {toDisplayDate(filters.to_date) || "Today"}</div>
+        <div><span className="font-semibold text-slate-900">Principal:</span> {principalText || "All"}</div>
+        <div><span className="font-semibold text-slate-900">Movement:</span> {optionLabel(modeOptions, filters.transport_mode)} / {optionLabel(jobTypeOptions, filters.job_type)}</div>
+        <div><span className="font-semibold text-slate-900">Status:</span> {optionLabel(statusOptions, filters.status)}</div>
+      </div>
+    </>
+  );
+}
+
+function PrintChip({ label: chipLabel, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className={`rounded border px-3 py-2 ${strong ? "border-primary/30 bg-primary/5" : "border-slate-200 bg-slate-50"}`}>
+      <div className="text-[10px] font-semibold uppercase text-slate-500">{chipLabel}</div>
+      <div className="truncate text-sm font-bold text-slate-900">{value}</div>
+    </div>
+  );
+}
+
+function ReportBody({ config, rows }: { config: ReportConfig; rows: LookupRow[] }) {
+  if (config.title === "Enquiry List" || config.title === "RFQ List") return <CommercialReport config={config} rows={rows} />;
+  if (config.title === "Freight Profit") return <FinanceReport rows={rows} variant="profit" />;
+  if (config.title === "Freight Expense") return <FinanceReport rows={rows} variant="expense" />;
+  if (config.title === "Freight Revenue") return <FinanceReport rows={rows} variant="revenue" />;
+  if (config.title === "Freight Brokerage") return <BrokerageReport rows={rows} />;
+  if (config.title === "Container Deposit") return <ContainerReport rows={rows} />;
+  return <GenericReport config={config} rows={rows} />;
+}
+
+function CommercialReport({ config, rows }: { config: ReportConfig; rows: LookupRow[] }) {
+  return (
+    <GroupedReport rows={rows}>
+      {(groupRows) => (
+        <table className="w-full border-collapse text-[10.5px]">
+          <thead>
+            <tr className="border-y border-slate-500 bg-slate-100 text-center text-[10px] text-slate-900">
+              <th className="px-1.5 py-2">Enquiry Nr.</th><th className="px-1.5 py-2">Date</th><th className="px-1.5 py-2">Type</th><th className="px-1.5 py-2">Mode</th>
+              <th className="px-1.5 py-2">Origin Port</th><th className="px-1.5 py-2">Destination Port</th><th className="px-1.5 py-2">Cargo Detail</th><th className="px-1.5 py-2">Commodity</th><th className="px-1.5 py-2">Dimension</th><th className="px-1.5 py-2 text-right">Gross Wt</th><th className="px-1.5 py-2 text-right">Volume</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groupRows.map((row, index) => (
+              <>
+                <tr key={`${index}-main`} className="align-top">
+                  <td className="px-1.5 py-1.5 text-center font-bold text-primary">{textFrom(row, config.title === "RFQ List" ? ["RFQ_NO", "ENQUIRY_NR"] : ["ENQUIRY_NR"])}</td>
+                  <td className="px-1.5 py-1.5">{dateFrom(row, ["RFQ_DATE", "ENQUIRY_DATE"])}</td>
+                  <td className="px-1.5 py-1.5 text-center">{typeLabel(textFrom(row, ["JOB_TYPE"]))}</td>
+                  <td className="px-1.5 py-1.5 text-center">{modeLabel(textFrom(row, ["TRANSPORT_MODE"]))}</td>
+                  <td className="px-1.5 py-1.5">{textFrom(row, ["ORIGIN_PORT", "PORT_CODE"])}</td>
+                  <td className="px-1.5 py-1.5">{textFrom(row, ["DESTINATION_PORT"])}</td>
+                  <td className="px-1.5 py-1.5">{textFrom(row, ["CARGO_DETAIL", "REMARKS"])}</td>
+                  <td className="px-1.5 py-1.5">{textFrom(row, ["COMMODITY"])}</td>
+                  <td className="px-1.5 py-1.5">{textFrom(row, ["DIMENSION"])}</td>
+                  <td className="px-1.5 py-1.5 text-right">{amountFrom(row, ["GROSS_WT", "WEIGHT"])}</td>
+                  <td className="px-1.5 py-1.5 text-right">{amountFrom(row, ["VOLUME"])}</td>
+                </tr>
+                <tr key={`${index}-sub`} className="border-b border-slate-400 text-slate-700">
+                  <td colSpan={11} className="px-1.5 pb-2 pt-0">
+                    <span className="font-semibold">Ref Number:</span> {textFrom(row, ["REF_ENQUIRY_TYPE"])} {textFrom(row, ["SOURCE_ENQUIRY", "REF_ENQUIRY_NR", "REFERENCE_ENQUIRY_NR", "JOB_NUMBER"]) || "-"}
+                    <span className="ml-8 font-semibold">Carrier:</span> {textFrom(row, ["CARRIER"]) || "-"}
+                    <span className="ml-8 font-semibold">Transit Time:</span> {textFrom(row, ["TRANSIT_TIME"]) || "-"}
+                    <span className="ml-8 font-semibold">Via:</span> {textFrom(row, ["VIA"]) || "-"}
+                    <span className="ml-8 font-semibold">Schedule Date:</span> {dateFrom(row, ["SCHEDULE_DATE"]) || "-"}
+                  </td>
+                </tr>
+              </>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </GroupedReport>
+  );
+}
+
+function FinanceReport({ rows, variant }: { rows: LookupRow[]; variant: "profit" | "expense" | "revenue" }) {
+  const columns = variant === "profit"
+    ? ["Date", "Job No", "Remarks", "Customs Duty", "Demurrage", "Actual Cost", "Partner Cost", "Transport Cost", "Revenue", "Profit"]
+    : variant === "expense"
+      ? ["Date", "Job No", "Remarks", "Customs Duty", "Expense"]
+      : ["Date", "Job No", "Remarks", "Invoice No", "Customs Duty", "Revenue"];
+  return (
+    <GroupedReport rows={rows}>
+      {(groupRows) => (
+        <table className="w-full border-collapse text-[11px]">
+          <thead><tr className="border-y border-slate-300 bg-slate-100 text-left text-[10px] uppercase text-slate-600">{columns.map((column) => <th key={column} className={`px-2 py-2 ${isAmountHeader(column) ? "text-right" : ""}`}>{column}</th>)}</tr></thead>
+          <tbody>
+            {groupRows.map((row, index) => (
+              <tr key={index} className="border-b border-slate-100">
+                <td className="px-2 py-2">{dateFrom(row, ["INVOICE_DATE", "JOB_DATE"])}</td>
+                <td className="px-2 py-2 font-semibold text-primary">{textFrom(row, ["JOB_NO"])}</td>
+                <td className="px-2 py-2">{textFrom(row, ["REMARKS", "ACTIVITY"])}</td>
+                {variant === "profit" && <>
+                  <AmountCell row={row} keys={["FFCON_BILL", "CUSTOMS_DUTY"]} />
+                  <AmountCell row={row} keys={["FFDEM_BILL", "DEMURRAGE"]} />
+                  <AmountCell row={row} keys={["ACTUAL_COST", "COST_RATE", "EXPENSE"]} />
+                  <AmountCell row={row} keys={["PARTNERS_PRICE", "PARTNER_COST"]} />
+                  <AmountCell row={row} keys={["TRANSPORT_PRICE", "TRANSPORT_COST"]} />
+                  <AmountCell row={row} keys={["BILL_RATE", "REVENUE"]} />
+                  <AmountCell row={row} keys={["PROFIT"]} highlight />
+                </>}
+                {variant === "expense" && <>
+                  <AmountCell row={row} keys={["FFCON_BILL", "CUSTOMS_DUTY"]} />
+                  <AmountCell row={row} keys={["ACTUAL_COST", "EXPENSE", "COST_RATE"]} />
+                </>}
+                {variant === "revenue" && <>
+                  <td className="px-2 py-2">{textFrom(row, ["CONSOLIDATED_INVNO", "INVOICE_NO"])}</td>
+                  <AmountCell row={row} keys={["FFCON_BILL", "CUSTOMS_DUTY"]} />
+                  <AmountCell row={row} keys={["BILL_RATE", "REVENUE"]} />
+                </>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </GroupedReport>
+  );
+}
+
+function BrokerageReport({ rows }: { rows: LookupRow[] }) {
+  return (
+    <GroupedReport rows={rows} groupKeys={["BROKER_CODE", "BROKER_NAME", "PRIN_CODE", "PRIN_NAME"]}>
+      {(groupRows) => (
+        <SimpleReportTable
+          rows={groupRows}
+          columns={[
+            { key: "JOB_DATE", label: "Date", kind: "date" },
+            { key: "JOB_NO", label: "Job No" },
+            { key: "REMARKS", label: "Remarks" },
+            { key: "COST_RATE", label: "Partner Reimbursable", kind: "amount" },
+            { key: "PARTNERS_PRICE", label: "Partner Price", kind: "amount" },
+            { key: "BROKERAGE_BASE", label: "Total Payable", kind: "amount" },
+          ]}
+        />
+      )}
+    </GroupedReport>
+  );
+}
+
+function ContainerReport({ rows }: { rows: LookupRow[] }) {
+  return (
+    <GroupedReport rows={rows}>
+      {(groupRows) => (
+        <SimpleReportTable
+          rows={groupRows}
+          columns={[
+            { key: "CONTAINER_NO", label: "Container No" },
+            { key: "CONTAINER_TYPE", label: "Type" },
+            { key: "T_F", label: "Size" },
+            { key: "GROSS_WEIGHT", label: "Gross Wt", kind: "amount" },
+            { key: "VOLUME", label: "Volume", kind: "amount" },
+            { key: "DOC_REF", label: "B/L No" },
+            { key: "VESSEL_NAME", label: "Vessel / Airline" },
+            { key: "VOYAGE_NO", label: "Voyage" },
+            { key: "CONFIRM_DATE", label: "Confirm Date", kind: "date" },
+            { key: "JOB_NO", label: "Job No" },
+          ]}
+        />
+      )}
+    </GroupedReport>
+  );
+}
+
+function GenericReport({ config, rows }: { config: ReportConfig; rows: LookupRow[] }) {
+  return <GroupedReport rows={rows}>{(groupRows) => <SimpleReportTable rows={groupRows} columns={config.columns} />}</GroupedReport>;
+}
+
+function GroupedReport({
+  rows,
+  children,
+  groupKeys = ["PRIN_CODE", "PRIN_NAME"],
+}: {
+  rows: LookupRow[];
+  children: (rows: LookupRow[]) => ReactNode;
+  groupKeys?: string[];
+}) {
+  const groups = groupRows(rows, groupKeys);
+  return (
+    <div className="grid gap-4">
+      {groups.map((group) => (
+        <div key={group.key}>
+          <div className="mb-1 rounded bg-slate-100 px-2 py-1 text-sm font-bold text-slate-900">{group.label}</div>
+          {children(group.rows)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SimpleReportTable({ rows, columns }: { rows: LookupRow[]; columns: ReportColumn[] }) {
+  return (
+    <table className="w-full border-collapse text-[11px]">
+      <thead><tr className="border-y border-slate-300 bg-slate-100 text-left text-[10px] uppercase text-slate-600">{columns.map((column) => <th key={column.key} className={`px-2 py-2 ${column.kind === "amount" ? "text-right" : ""}`}>{column.label}</th>)}</tr></thead>
+      <tbody>
+        {rows.map((row, index) => (
+          <tr key={index} className="border-b border-slate-100">
+            {columns.map((column) => <td key={column.key} className={`px-2 py-2 ${column.kind === "amount" ? "text-right font-semibold" : ""}`}>{formatPrintValue(row, column)}</td>)}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function AmountCell({ row, keys, highlight }: { row: LookupRow; keys: string[]; highlight?: boolean }) {
+  return <td className={`px-2 py-2 text-right font-semibold ${highlight ? "text-emerald-700" : ""}`}>{amountFrom(row, keys)}</td>;
+}
+
+function groupRows(rows: LookupRow[], keys: string[]) {
+  const map = new Map<string, LookupRow[]>();
+  rows.forEach((row) => {
+    const keyValue = keys.map((key) => textFrom(row, [key])).filter(Boolean).join(" - ") || "Unassigned";
+    const existing = map.get(keyValue) || [];
+    existing.push(row);
+    map.set(keyValue, existing);
+  });
+  return Array.from(map.entries()).map(([key, value]) => ({ key, label: key, rows: value }));
+}
+
+function textFrom(row: LookupRow, keys: string[]) {
+  for (const key of keys) {
+    const value = firstExisting(row, key);
+    if (value !== null && value !== undefined && String(value).trim() !== "") return String(value).trim();
+  }
+  return "";
+}
+
+function dateFrom(row: LookupRow, keys: string[]) {
+  const value = textFrom(row, keys);
+  return formatCellDate(value);
+}
+
+function amountFrom(row: LookupRow, keys: string[]) {
+  for (const key of keys) {
+    const value = Number(firstExisting(row, key) || 0);
+    if (value !== 0) return formatAmount(value);
+  }
+  return formatAmount(0);
+}
+
+function isAmountHeader(text: string) {
+  return /cost|revenue|profit|duty|demurrage|expense/i.test(text);
 }
 
 function buildTotals(rows: LookupRow[], amountFields: string[]) {
@@ -660,9 +1025,7 @@ function parseDisplayDate(value: string) {
 
 function exportCsv(title: string, rows: LookupRow[]) {
   if (!rows.length) return;
-  const headers = Object.keys(rows[0]);
-  const lines = [headers.join(","), ...rows.map((row) => headers.map((key) => csvCell(row[key])).join(","))];
-  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const blob = new Blob([exportRowsAsCsvString(rows)], { type: "text/csv;charset=utf-8" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
   link.download = `${title.replace(/\s+/g, "_").toLowerCase()}_${new Date().toISOString().slice(0, 10)}.csv`;
@@ -670,18 +1033,135 @@ function exportCsv(title: string, rows: LookupRow[]) {
   URL.revokeObjectURL(link.href);
 }
 
+function exportRowsAsCsvString(rows: LookupRow[]) {
+  if (!rows.length) return "";
+  const headers = Object.keys(rows[0]);
+  const lines = [headers.join(","), ...rows.map((row) => headers.map((key) => csvCell(row[key])).join(","))];
+  return lines.join("\n");
+}
+
 function csvCell(value: unknown) {
   const text = value === null || value === undefined ? "" : String(value);
   return `"${text.replace(/"/g, '""')}"`;
 }
 
-function reportHtml(config: ReportConfig, companyCode: string, rows: LookupRow[], totals: { label: string; value: number }[]) {
-  const tableRows = rows.map((row) => `<tr>${config.columns.map((column) => `<td>${escapeHtml(formatPrintValue(row, column))}</td>`).join("")}</tr>`).join("");
+function openReportShell(title: string) {
+  const win = window.open("", `freight_report_${Date.now()}`, "popup=yes,width=1320,height=860,left=80,top=40,resizable=yes,scrollbars=yes");
+  if (!win) return null;
+  writeReportWindow(win, reportLoadingHtml(title));
+  win.focus();
+  return win;
+}
+
+function writeReportWindow(win: Window | null, html: string) {
+  if (!win) return;
+  try {
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+  } catch {
+    window.alert("Report popup opened, but browser blocked report rendering. Please allow popups for this site and run again.");
+  }
+}
+
+function reportLoadingHtml(title: string) {
+  return `<!doctype html><html><head><title>${escapeHtml(title)}</title><style>
+    body{margin:0;font-family:Arial,sans-serif;background:#eef3f9;color:#0f172a}
+    .bar{height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:white;border-bottom:1px solid #dbe3ef;box-shadow:0 8px 22px rgba(15,23,42,.06)}
+    .bar strong{font-size:16px}.bar span{font-size:12px;color:#64748b}
+    .loading{height:calc(100vh - 58px);display:grid;place-items:center;text-align:center}
+    .box{width:430px;border:1px solid #dbe3ef;background:white;border-radius:12px;padding:30px 34px;box-shadow:0 18px 45px rgba(15,23,42,.10)}
+    .spinner{width:32px;height:32px;border:3px solid #dbe3ef;border-top-color:#0b4ca1;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
+    .title{font-size:20px;font-weight:800}.sub{margin-top:7px;color:#64748b;font-size:13px}.hint{margin-top:18px;border-radius:8px;background:#f8fafc;padding:10px;color:#475569;font-size:12px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  </style></head><body><div class="bar"><strong>Freight Report Viewer</strong><span>${escapeHtml(title)}</span></div><div class="loading"><div class="box"><div class="spinner"></div><div class="title">Generating ${escapeHtml(title)}</div><div class="sub">Fetching report data from Oracle...</div><div class="hint">Please keep this window open. The formatted report will appear here automatically.</div></div></div></body></html>`;
+}
+
+function reportErrorHtml(title: string, message: string) {
+  return `<!doctype html><html><head><title>${escapeHtml(title)}</title><style>
+    body{margin:0;font-family:Arial,sans-serif;background:#f8fafc;color:#0f172a}.wrap{height:100vh;display:grid;place-items:center}.card{max-width:720px;border:1px solid #fecdd3;background:white;border-radius:10px;padding:24px;box-shadow:0 12px 30px rgba(15,23,42,.08)}
+    h1{margin:0 0 8px;font-size:22px;color:#be123c}pre{white-space:pre-wrap;color:#475569;background:#f8fafc;border:1px solid #e2e8f0;padding:12px;border-radius:8px}
+    button{height:34px;border:1px solid #cbd5e1;border-radius:8px;background:white;font-weight:700;padding:0 14px;cursor:pointer}
+  </style></head><body><div class="wrap"><div class="card"><h1>Report failed</h1><p>Oracle did not return the report data.</p><pre>${escapeHtml(message)}</pre><button onclick="window.close()">Close</button></div></div></body></html>`;
+}
+
+function reportHtml(
+  config: ReportConfig,
+  companyCode: string,
+  userName: string,
+  filters: ReportFilters,
+  principalText: string,
+  rows: LookupRow[],
+  totals: { label: string; value: number }[],
+  interactive = false,
+) {
+  const body = reportBodyHtml(config, rows);
+  const csv = escapeHtml(exportRowsAsCsvString(rows));
   return `<!doctype html><html><head><title>${escapeHtml(config.title)}</title><style>
-    body{font-family:Arial,sans-serif;margin:24px;color:#111827} h1{margin:0;font-size:22px}.meta{color:#64748b;font-size:12px;margin:4px 0 16px}
-    .totals{display:flex;gap:8px;margin-bottom:12px}.pill{border:1px solid #dbe3ef;border-radius:6px;padding:8px 12px}.pill b{display:block}
-    table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #dbe3ef;padding:5px 7px;text-align:left}th{background:#f1f5f9}
-  </style></head><body><h1>${escapeHtml(config.title)}</h1><div class="meta">Company ${escapeHtml(companyCode)} | ${new Date().toLocaleString()}</div><div class="totals">${totals.map((item) => `<div class="pill">${escapeHtml(item.label)}<b>${formatAmount(item.value)}</b></div>`).join("")}</div><table><thead><tr>${config.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}</tr></thead><tbody>${tableRows}</tbody></table></body></html>`;
+    @page{size:landscape;margin:14mm}
+    body{font-family:Arial,sans-serif;margin:0;color:#0f172a;background:${interactive ? "#eef3f9" : "#fff"}}
+    .viewerbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff;border-bottom:1px solid #dbe3ef;padding:10px 18px;box-shadow:0 8px 22px rgba(15,23,42,.06)}
+    .viewerbar h1{margin:0;font-size:16px}.viewerbar p{margin:2px 0 0;color:#64748b;font-size:12px}.actions{display:flex;gap:8px}.actions button{height:34px;border:1px solid #cbd5e1;border-radius:8px;background:white;color:#0f172a;font-weight:700;padding:0 13px;cursor:pointer}.actions button.primary{background:#0b4ca1;border-color:#0b4ca1;color:white}
+    .sheet{padding:${interactive ? "18px" : "0"}}.paper{max-width:1280px;margin:0 auto;background:white;padding:14px;${interactive ? "border:1px solid #dbe3ef;box-shadow:0 18px 42px rgba(15,23,42,.08)" : ""}}
+    .logo{height:48px;border-bottom:1px solid #94a3b8;display:flex;align-items:center;justify-content:space-between}.brand{font-size:12px;font-weight:800;letter-spacing:.28em;color:#0b4ca1;text-transform:uppercase}.system{font-size:10px;font-weight:700;letter-spacing:.18em;color:#64748b;text-transform:uppercase}
+    .top{display:grid;grid-template-columns:1.35fr 1fr;gap:20px;border-bottom:1px solid #94a3b8;padding:8px 0}.title{font-size:20px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin:0}.sub{font-size:11px;color:#64748b;margin-top:2px}
+    .meta{text-align:right;font-size:11px;color:#334155;line-height:1.45}.meta b{display:inline-block;width:54px;text-align:left;color:#0f172a}.params{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;border-bottom:1px solid #cbd5e1;padding:7px 0;font-size:11px;color:#334155}.params b{color:#0f172a}
+    .group{margin-top:10px}.group-title{background:#f1f5f9;padding:4px 6px;font-size:13px;font-weight:800}
+    table{border-collapse:collapse;width:100%;font-size:10.5px;margin-top:3px}th{background:#f1f5f9;color:#0f172a;font-size:10px;border-top:1px solid #475569;border-bottom:1px solid #475569;padding:6px 5px;text-align:center;font-weight:700}td{padding:4px 5px;vertical-align:top}
+    .line2 td,.rowline{border-bottom:1px solid #64748b}.right{text-align:right}.center{text-align:center}.primary-text{color:#0b4ca1;font-weight:800}.profit{color:#047857;font-weight:700}.muted{color:#64748b}.empty{border:1px dashed #cbd5e1;background:#f8fafc;text-align:center;padding:56px;margin-top:14px;color:#64748b;font-weight:700}
+    .footer{margin-top:14px;border-top:1px solid #94a3b8;padding-top:6px;text-align:center;font-size:11px;font-weight:700}.aware{text-align:right;font-size:9px;letter-spacing:.22em;color:#0b4ca1;text-transform:uppercase;font-weight:800}
+    @media print{body{background:white}.viewerbar{display:none}.sheet{padding:0}.paper{border:0;box-shadow:none;max-width:none}}
+  </style></head><body>${interactive ? `<div class="viewerbar"><div><h1>${escapeHtml(config.title)}</h1><p>${rows.length} rows | ${escapeHtml(principalText || "All principals")} | ${escapeHtml(new Date().toLocaleString())}</p></div><div class="actions"><button class="primary" onclick="window.print()">Print</button><button onclick="downloadCsv()">CSV</button><button onclick="window.close()">Close</button></div></div>` : ""}<div class="sheet"><div class="paper">
+    <div class="logo"><div class="brand">Bayanat Technology</div><div class="system">Freight Management System</div></div>
+    <div class="top"><div><div class="title">${escapeHtml(config.title)}</div><div class="sub">${escapeHtml(config.family)} | Company ${escapeHtml(companyCode)} | ${rows.length} record${rows.length === 1 ? "" : "s"}${totals.map((item) => ` | ${item.label}: ${formatAmount(item.value)}`).join("")}</div></div>
+    <div class="meta"><div><b>Date:</b> ${escapeHtml(new Date().toLocaleString())}</div><div><b>User:</b> ${escapeHtml(userName)}</div><div><b>Report:</b> ${escapeHtml(config.title)}</div><div><b>Page:</b> 1 of 1</div></div></div>
+    <div class="params"><div><b>Period:</b> ${escapeHtml(toDisplayDate(filters.from_date) || "Start")} - ${escapeHtml(toDisplayDate(filters.to_date) || "Today")}</div><div><b>Principal:</b> ${escapeHtml(principalText || "All")}</div><div><b>Movement:</b> ${escapeHtml(`${optionLabel(modeOptions, filters.transport_mode)} / ${optionLabel(jobTypeOptions, filters.job_type)}`)}</div><div><b>Status:</b> ${escapeHtml(optionLabel(statusOptions, filters.status))}</div></div>
+    ${rows.length ? body : `<div class="empty">No report rows found for selected filters.</div>`}
+    <div class="footer">End of report</div><div class="aware">powered by AWARE</div>
+  </div></div><script>
+    const csvText = ${JSON.stringify(csv)};
+    function downloadCsv(){
+      const text = csvText.replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+      const blob = new Blob([text], {type:'text/csv;charset=utf-8'});
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = ${JSON.stringify(`${config.title.replace(/\s+/g, "_").toLowerCase()}_${new Date().toISOString().slice(0, 10)}.csv`)};
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+  </script></body></html>`;
+}
+
+function reportBodyHtml(config: ReportConfig, rows: LookupRow[]) {
+  if (config.title === "Enquiry List" || config.title === "RFQ List") return commercialReportHtml(config, rows);
+  if (config.title === "Freight Profit") return financeReportHtml(rows, "profit");
+  if (config.title === "Freight Expense") return financeReportHtml(rows, "expense");
+  if (config.title === "Freight Revenue") return financeReportHtml(rows, "revenue");
+  const groups = groupRows(rows, config.title === "Freight Brokerage" ? ["BROKER_CODE", "BROKER_NAME", "PRIN_CODE", "PRIN_NAME"] : ["PRIN_CODE", "PRIN_NAME"]);
+  return groups.map((group) => `<div class="group"><div class="group-title">${escapeHtml(group.label)}</div>${simpleTableHtml(group.rows, config.columns)}</div>`).join("");
+}
+
+function commercialReportHtml(config: ReportConfig, rows: LookupRow[]) {
+  return groupRows(rows, ["PRIN_CODE", "PRIN_NAME"]).map((group) => `<div class="group"><div class="group-title">${escapeHtml(group.label)}</div><table><thead><tr><th>Enquiry Nr.</th><th>Date</th><th>Type</th><th>Mode</th><th>Origin Port</th><th>Destination Port</th><th>Cargo Detail</th><th>Commodity</th><th>Dimension</th><th class="right">Gross Wt</th><th class="right">Volume</th></tr></thead><tbody>${group.rows.map((row) => `<tr><td class="primary-text center">${escapeHtml(textFrom(row, config.title === "RFQ List" ? ["RFQ_NO", "ENQUIRY_NR"] : ["ENQUIRY_NR"]))}</td><td>${escapeHtml(dateFrom(row, ["RFQ_DATE", "ENQUIRY_DATE"]))}</td><td class="center">${escapeHtml(typeLabel(textFrom(row, ["JOB_TYPE"])))}</td><td class="center">${escapeHtml(modeLabel(textFrom(row, ["TRANSPORT_MODE"])))}</td><td>${escapeHtml(textFrom(row, ["ORIGIN_PORT", "PORT_CODE"]))}</td><td>${escapeHtml(textFrom(row, ["DESTINATION_PORT"]))}</td><td>${escapeHtml(textFrom(row, ["CARGO_DETAIL", "REMARKS"]))}</td><td>${escapeHtml(textFrom(row, ["COMMODITY"]))}</td><td>${escapeHtml(textFrom(row, ["DIMENSION"]))}</td><td class="right">${amountFrom(row, ["GROSS_WT", "WEIGHT"])}</td><td class="right">${amountFrom(row, ["VOLUME"])}</td></tr><tr class="line2"><td colspan="11"><b>Ref Number:</b> ${escapeHtml(`${textFrom(row, ["REF_ENQUIRY_TYPE"])} ${textFrom(row, ["SOURCE_ENQUIRY", "REF_ENQUIRY_NR", "REFERENCE_ENQUIRY_NR", "JOB_NUMBER"]) || "-"}`)} <span style="margin-left:26px"><b>Carrier:</b> ${escapeHtml(textFrom(row, ["CARRIER"]) || "-")}</span> <span style="margin-left:26px"><b>Transit Time:</b> ${escapeHtml(textFrom(row, ["TRANSIT_TIME"]) || "-")}</span> <span style="margin-left:26px"><b>Via:</b> ${escapeHtml(textFrom(row, ["VIA"]) || "-")}</span> <span style="margin-left:26px"><b>Schedule Date:</b> ${escapeHtml(dateFrom(row, ["SCHEDULE_DATE"]) || "-")}</span></td></tr>`).join("")}</tbody></table></div>`).join("");
+}
+
+function financeReportHtml(rows: LookupRow[], variant: "profit" | "expense" | "revenue") {
+  const headers = variant === "profit"
+    ? ["Date", "Job No", "Remarks", "Customs Duty", "Demurrage", "Actual Cost", "Partner Cost", "Transport Cost", "Revenue", "Profit"]
+    : variant === "expense"
+      ? ["Date", "Job No", "Remarks", "Customs Duty", "Expense"]
+      : ["Date", "Job No", "Remarks", "Invoice No", "Customs Duty", "Revenue"];
+  return groupRows(rows, ["PRIN_CODE", "PRIN_NAME"]).map((group) => `<div class="group"><div class="group-title">${escapeHtml(group.label)}</div><table><thead><tr>${headers.map((header) => `<th class="${isAmountHeader(header) ? "right" : ""}">${escapeHtml(header)}</th>`).join("")}</tr></thead><tbody>${group.rows.map((row) => {
+    const common = `<td>${escapeHtml(dateFrom(row, ["INVOICE_DATE", "JOB_DATE"]))}</td><td class="primary-text">${escapeHtml(textFrom(row, ["JOB_NO"]))}</td><td>${escapeHtml(textFrom(row, ["REMARKS", "ACTIVITY"]))}</td>`;
+    if (variant === "profit") return `<tr>${common}<td class="right">${amountFrom(row, ["FFCON_BILL", "CUSTOMS_DUTY"])}</td><td class="right">${amountFrom(row, ["FFDEM_BILL", "DEMURRAGE"])}</td><td class="right">${amountFrom(row, ["ACTUAL_COST", "COST_RATE", "EXPENSE"])}</td><td class="right">${amountFrom(row, ["PARTNERS_PRICE", "PARTNER_COST"])}</td><td class="right">${amountFrom(row, ["TRANSPORT_PRICE", "TRANSPORT_COST"])}</td><td class="right">${amountFrom(row, ["BILL_RATE", "REVENUE"])}</td><td class="right profit">${amountFrom(row, ["PROFIT"])}</td></tr>`;
+    if (variant === "expense") return `<tr>${common}<td class="right">${amountFrom(row, ["FFCON_BILL", "CUSTOMS_DUTY"])}</td><td class="right">${amountFrom(row, ["ACTUAL_COST", "EXPENSE", "COST_RATE"])}</td></tr>`;
+    return `<tr>${common}<td>${escapeHtml(textFrom(row, ["CONSOLIDATED_INVNO", "INVOICE_NO"]))}</td><td class="right">${amountFrom(row, ["FFCON_BILL", "CUSTOMS_DUTY"])}</td><td class="right">${amountFrom(row, ["BILL_RATE", "REVENUE"])}</td></tr>`;
+  }).join("")}</tbody></table></div>`).join("");
+}
+
+function simpleTableHtml(rows: LookupRow[], columns: ReportColumn[]) {
+  return `<table><thead><tr>${columns.map((column) => `<th class="${column.kind === "amount" ? "right" : ""}">${escapeHtml(column.label)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${columns.map((column) => `<td class="${column.kind === "amount" ? "right" : ""}">${escapeHtml(formatPrintValue(row, column))}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
 }
 
 function formatPrintValue(row: LookupRow, column: ReportColumn) {

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import type { MenuNode } from "../types/auth";
 import { AccountWiseBudgetPage } from "../pages/finance/AccountWiseBudgetPage";
 import { AccountTreePage } from "../pages/finance/AccountTreePage";
@@ -171,7 +171,8 @@ type WorkspaceRoute = {
 
 export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
   const route = workspaceRoutes.find((item) => item.match(context));
-  return route?.element(context) || null;
+  const element = route?.element(context);
+  return element ? <Fragment key={getWorkspaceRouteKey(context)}>{element}</Fragment> : null;
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
@@ -1571,6 +1572,17 @@ function getFreightMasterConfig(context: WorkspaceRouteContext) {
     const keyCompact = key.replace(/[^a-z0-9]/g, "");
     return matchText.includes(`/${key}`) || matchText.includes(`/${hyphenKey}`) || matchText.includes(key) || compact.includes(keyCompact);
   })?.config || null;
+}
+
+function getWorkspaceRouteKey(context: WorkspaceRouteContext) {
+  const activeLeaf = getActiveLeaf(context);
+  const leafRecord = (activeLeaf || {}) as Record<string, unknown>;
+  const appRecord = (context.activeApp || {}) as Record<string, unknown>;
+  return [
+    context.pathname.toLowerCase(),
+    String(leafRecord.menu_id || leafRecord.MENU_ID || leafRecord.menu_code || leafRecord.MENU_CODE || leafRecord.route || leafRecord.path || leafRecord.name || ""),
+    String(appRecord.app_code || appRecord.APP_CODE || appRecord.name || ""),
+  ].join("|");
 }
 
 function isFreightWorkspaceRoute(context: WorkspaceRouteContext) {
