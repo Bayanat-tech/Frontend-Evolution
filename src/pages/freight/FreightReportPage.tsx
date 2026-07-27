@@ -364,8 +364,14 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
             <Button type="button" variant="outline" size="sm" onClick={printReport} disabled={!rows.length}>
               <Printer size={14} /> Print
             </Button>
-            <Button type="button" variant="outline" size="sm" disabled={!rows.length} onClick={() => exportCsv(config.title, rows)}>
-              <Download size={14} /> CSV
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!rows.length}
+              onClick={() => exportReportExcel(config.title, reportHtml(config, companyCode, userName, filters, principalText, rows, totals, false))}
+            >
+              <Download size={14} /> Excel
             </Button>
           </div>
         </div>
@@ -640,7 +646,10 @@ function ReportHeader({
     <>
       <div className="border-b-2 border-slate-400 pb-2">
         <div className="mb-2 flex h-14 items-center justify-between border-b border-slate-300">
-          <div className="text-[12px] font-bold uppercase tracking-[0.28em] text-primary">Bayanat Technology</div>
+          <div className="flex items-center gap-3">
+            <img src="/bayanat-logo.png" alt="Bayanat Technology" className="h-9 w-9 object-contain" />
+            <div className="text-[12px] font-bold uppercase tracking-[0.28em] text-primary">Bayanat Technology</div>
+          </div>
           <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Freight Management System</div>
         </div>
       </div>
@@ -654,7 +663,7 @@ function ReportHeader({
           </p>
         </div>
         <div className="grid justify-end gap-0.5 text-right text-[11px] text-slate-700">
-          <div><span className="inline-block w-14 text-left font-semibold text-slate-900">Date :</span> {new Date().toLocaleString()}</div>
+          <div><span className="inline-block w-14 text-left font-semibold text-slate-900">Date :</span> {formatReportDateTime(new Date())}</div>
           <div><span className="inline-block w-14 text-left font-semibold text-slate-900">User :</span> {userName}</div>
           <div><span className="inline-block w-14 text-left font-semibold text-slate-500">Report :</span> {config.title}</div>
           <div><span className="font-semibold text-slate-900">Page 1 of 1</span></div>
@@ -1007,6 +1016,17 @@ function toDisplayDate(value: string) {
   return `${day}/${month}/${year}`;
 }
 
+function formatReportDateTime(value: Date) {
+  const day = String(value.getDate()).padStart(2, "0");
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const year = value.getFullYear();
+  let hours = value.getHours();
+  const minutes = String(value.getMinutes()).padStart(2, "0");
+  const suffix = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12 || 12;
+  return `${day}/${month}/${year} ${String(hours).padStart(2, "0")}:${minutes} ${suffix}`;
+}
+
 function parseDisplayDate(value: string) {
   const text = value.trim();
   if (!text) return "";
@@ -1029,6 +1049,18 @@ function exportCsv(title: string, rows: LookupRow[]) {
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
   link.download = `${title.replace(/\s+/g, "_").toLowerCase()}_${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function exportReportExcel(title: string, html: string) {
+  const excelHtml = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<div class="viewerbar"[\s\S]*?<\/div><div class="sheet">/i, '<div class="sheet">');
+  const blob = new Blob([excelHtml], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `${title.replace(/\s+/g, "_").toLowerCase()}_${new Date().toISOString().slice(0, 10)}.xls`;
   link.click();
   URL.revokeObjectURL(link.href);
 }
@@ -1098,13 +1130,15 @@ function reportHtml(
 ) {
   const body = reportBodyHtml(config, rows);
   const csv = escapeHtml(exportRowsAsCsvString(rows));
+  const logoUrl = `${window.location.origin}/bayanat-logo.png`;
+  const generatedAt = formatReportDateTime(new Date());
   return `<!doctype html><html><head><title>${escapeHtml(config.title)}</title><style>
     @page{size:landscape;margin:14mm}
     body{font-family:Arial,sans-serif;margin:0;color:#0f172a;background:${interactive ? "#eef3f9" : "#fff"}}
     .viewerbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff;border-bottom:1px solid #dbe3ef;padding:10px 18px;box-shadow:0 8px 22px rgba(15,23,42,.06)}
     .viewerbar h1{margin:0;font-size:16px}.viewerbar p{margin:2px 0 0;color:#64748b;font-size:12px}.actions{display:flex;gap:8px}.actions button{height:34px;border:1px solid #cbd5e1;border-radius:8px;background:white;color:#0f172a;font-weight:700;padding:0 13px;cursor:pointer}.actions button.primary{background:#0b4ca1;border-color:#0b4ca1;color:white}
     .sheet{padding:${interactive ? "18px" : "0"}}.paper{max-width:1280px;margin:0 auto;background:white;padding:14px;${interactive ? "border:1px solid #dbe3ef;box-shadow:0 18px 42px rgba(15,23,42,.08)" : ""}}
-    .logo{height:48px;border-bottom:1px solid #94a3b8;display:flex;align-items:center;justify-content:space-between}.brand{font-size:12px;font-weight:800;letter-spacing:.28em;color:#0b4ca1;text-transform:uppercase}.system{font-size:10px;font-weight:700;letter-spacing:.18em;color:#64748b;text-transform:uppercase}
+    .logo{height:54px;border-bottom:1px solid #94a3b8;display:flex;align-items:center;justify-content:space-between}.brand-wrap{display:flex;align-items:center;gap:10px}.brand-wrap img{width:36px;height:36px;object-fit:contain}.brand{font-size:12px;font-weight:800;letter-spacing:.28em;color:#0b4ca1;text-transform:uppercase}.system{font-size:10px;font-weight:700;letter-spacing:.18em;color:#64748b;text-transform:uppercase}
     .top{display:grid;grid-template-columns:1.35fr 1fr;gap:20px;border-bottom:1px solid #94a3b8;padding:8px 0}.title{font-size:20px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin:0}.sub{font-size:11px;color:#64748b;margin-top:2px}
     .meta{text-align:right;font-size:11px;color:#334155;line-height:1.45}.meta b{display:inline-block;width:54px;text-align:left;color:#0f172a}.params{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;border-bottom:1px solid #cbd5e1;padding:7px 0;font-size:11px;color:#334155}.params b{color:#0f172a}
     .group{margin-top:10px}.group-title{background:#f1f5f9;padding:4px 6px;font-size:13px;font-weight:800}
@@ -1112,21 +1146,26 @@ function reportHtml(
     .line2 td,.rowline{border-bottom:1px solid #64748b}.right{text-align:right}.center{text-align:center}.primary-text{color:#0b4ca1;font-weight:800}.profit{color:#047857;font-weight:700}.muted{color:#64748b}.empty{border:1px dashed #cbd5e1;background:#f8fafc;text-align:center;padding:56px;margin-top:14px;color:#64748b;font-weight:700}
     .footer{margin-top:14px;border-top:1px solid #94a3b8;padding-top:6px;text-align:center;font-size:11px;font-weight:700}.aware{text-align:right;font-size:9px;letter-spacing:.22em;color:#0b4ca1;text-transform:uppercase;font-weight:800}
     @media print{body{background:white}.viewerbar{display:none}.sheet{padding:0}.paper{border:0;box-shadow:none;max-width:none}}
-  </style></head><body>${interactive ? `<div class="viewerbar"><div><h1>${escapeHtml(config.title)}</h1><p>${rows.length} rows | ${escapeHtml(principalText || "All principals")} | ${escapeHtml(new Date().toLocaleString())}</p></div><div class="actions"><button class="primary" onclick="window.print()">Print</button><button onclick="downloadCsv()">CSV</button><button onclick="window.close()">Close</button></div></div>` : ""}<div class="sheet"><div class="paper">
-    <div class="logo"><div class="brand">Bayanat Technology</div><div class="system">Freight Management System</div></div>
+  </style></head><body>${interactive ? `<div class="viewerbar"><div><h1>${escapeHtml(config.title)}</h1><p>${rows.length} rows | ${escapeHtml(principalText || "All principals")} | ${escapeHtml(generatedAt)}</p></div><div class="actions"><button class="primary" onclick="window.print()">Print</button><button onclick="downloadExcel()">Excel</button><button onclick="window.close()">Close</button></div></div>` : ""}<div class="sheet"><div class="paper">
+    <div class="logo"><div class="brand-wrap"><img src="${escapeHtml(logoUrl)}" alt="Bayanat Technology"><div class="brand">Bayanat Technology</div></div><div class="system">Freight Management System</div></div>
     <div class="top"><div><div class="title">${escapeHtml(config.title)}</div><div class="sub">${escapeHtml(config.family)} | Company ${escapeHtml(companyCode)} | ${rows.length} record${rows.length === 1 ? "" : "s"}${totals.map((item) => ` | ${item.label}: ${formatAmount(item.value)}`).join("")}</div></div>
-    <div class="meta"><div><b>Date:</b> ${escapeHtml(new Date().toLocaleString())}</div><div><b>User:</b> ${escapeHtml(userName)}</div><div><b>Report:</b> ${escapeHtml(config.title)}</div><div><b>Page:</b> 1 of 1</div></div></div>
+    <div class="meta"><div><b>Date:</b> ${escapeHtml(generatedAt)}</div><div><b>User:</b> ${escapeHtml(userName)}</div><div><b>Report:</b> ${escapeHtml(config.title)}</div><div><b>Page:</b> 1 of 1</div></div></div>
     <div class="params"><div><b>Period:</b> ${escapeHtml(toDisplayDate(filters.from_date) || "Start")} - ${escapeHtml(toDisplayDate(filters.to_date) || "Today")}</div><div><b>Principal:</b> ${escapeHtml(principalText || "All")}</div><div><b>Movement:</b> ${escapeHtml(`${optionLabel(modeOptions, filters.transport_mode)} / ${optionLabel(jobTypeOptions, filters.job_type)}`)}</div><div><b>Status:</b> ${escapeHtml(optionLabel(statusOptions, filters.status))}</div></div>
     ${rows.length ? body : `<div class="empty">No report rows found for selected filters.</div>`}
     <div class="footer">End of report</div><div class="aware">powered by AWARE</div>
   </div></div><script>
     const csvText = ${JSON.stringify(csv)};
-    function downloadCsv(){
-      const text = csvText.replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-      const blob = new Blob([text], {type:'text/csv;charset=utf-8'});
+    function cleanHtmlForExcel(){
+      const clone = document.documentElement.cloneNode(true);
+      clone.querySelectorAll('script,.viewerbar').forEach((node) => node.remove());
+      return '<!doctype html>' + clone.outerHTML;
+    }
+    function downloadExcel(){
+      const text = cleanHtmlForExcel();
+      const blob = new Blob([text], {type:'application/vnd.ms-excel;charset=utf-8'});
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = ${JSON.stringify(`${config.title.replace(/\s+/g, "_").toLowerCase()}_${new Date().toISOString().slice(0, 10)}.csv`)};
+      link.download = ${JSON.stringify(`${config.title.replace(/\s+/g, "_").toLowerCase()}_${new Date().toISOString().slice(0, 10)}.xls`)};
       link.click();
       URL.revokeObjectURL(link.href);
     }
