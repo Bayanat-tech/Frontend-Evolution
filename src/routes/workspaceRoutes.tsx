@@ -148,7 +148,11 @@ import Credit_Request_page from "../pages/almswf/CreaditRequestPage";
 import Capex_Request_page from "../pages/almswf/CapexRequestPage";
 import Purchase_Request_page from "../pages/almswf/PurchaseRequestPage";
 
-type WorkspaceRouteContext = {
+import { PurchaseOrderPage } from "../pages/purchase_sales/purchase/Purchaseorderpage";
+
+import { PurchaseSaleSetupPage } from "../pages/purchase_sales/Purchasesalesetuppage";
+import { FlowAssignmentPage } from "../pages/security/FlowAssignmentPage";import { PurchaseQuotationPage } from "../pages/purchase_sales/purchase/PurchaseQuatationPage";
+ type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
   activeMenu?: MenuNode;
@@ -277,7 +281,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
       .includes("/workspace/bt-masters/hcm/general%20master/grade%20maste"),
   element: () => <GradeMasterPage />,
 },
-
+{
+  name: "Security Flow Assignment",
+  match: ({ pathname }) => isFlowAssignmentRoute(pathname),
+  element: () => <FlowAssignmentPage />,
+},
 
   {
     name:"HR Grade Salary Increment",
@@ -670,6 +678,22 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isPamsRoute(pathname) && isPamsBulkAppraisalRoute(pathname),
     element: () => <PamsBulkAppraisalPage />,
   },
+
+  {
+    name: "Purchase Sales Setup",
+    match: ({ pathname }) => isPurchaseSalesSetupRoute(pathname),
+    element: () => <PurchaseOrderPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
+
+    {
+    name: "Purchase Quotation Setup",
+    match: ({ pathname }) => isPurchaseQuotationSetupRoute(pathname),
+    element: () => <PurchaseQuotationPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
   // ── PAMS My Task Routes (Specific tabs first, then default) ──
   {
     name: "PAMS My Task Pending",
@@ -975,6 +999,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <ExpenseMasterPage/>
   },
   
+
+  {
+    name : "Purchase Sale Setup",
+    match: ({pathname}) => isPurchaseSaleSetupRoute(pathname),
+    element: () => <PurchaseSaleSetupPage/>
+  },
 ];
 
 function isStorageComputationRoute(pathname: string) {
@@ -995,6 +1025,13 @@ function isProductBrandRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes(
     "/workspace/purchase_sales/purchase_sales/masters/product_brand"
+  );
+}
+
+function isPurchaseSaleSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/utilities/purchase/sales_setup"
   );
 }
 
@@ -1047,6 +1084,19 @@ function isBudgetSetupRoute(pathname: string) {
   );
 }
 
+
+function isPurchaseSalesSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/purchase/purchase_order"))
+}
+
+function isPurchaseQuotationSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/purchase/purchase_quotation"))
+}
+
 function isExpenseTypeRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return (
@@ -1091,9 +1141,17 @@ function isAccountTreeRoute(pathname: string) {
 function isAccountReportRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts/reports/account-report/detailed-reports/ledger-basic")
-  
 }
-
+function isFlowAssignmentRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/security/security/masters/general master/flow_assignment") ||
+    normalized.includes("/security/security/masters/general%20master/flow_assignment") ||
+    compact.includes("generalmasterflowassignment") ||
+    compact.includes("flowassignment")
+  );
+}
 function isTaxReportRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("/finance/accounts_report/tax_report") || normalized.includes("/finance/accounts/reports/tax-report");
@@ -1123,13 +1181,6 @@ function isOutstandingStatementRoute(pathname: string) {
          normalized.includes("/finance/accounts_report/detailed_reports/outstanding-statement") ||
          normalized.includes("/finance/accounts/reports/account-report/detailed-reports/outstanding-statement");
 }
-
-
-// function isAccountReportRoute(pathname: string) {
-//   const normalized = pathname.toLowerCase();
-//   return normalized.includes("/finance/accounts_report/detailed_reports/ledger_basic") || normalized.includes("/finance/accounts_report/detailed_reports/a/c_statement")
-// }
-
 
 
 function isAgeingReportRoute(pathname: string) {
