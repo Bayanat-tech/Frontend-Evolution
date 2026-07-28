@@ -1,14 +1,13 @@
 import { getDynamicLookup } from "../../../api/lookups";
-import { upsertBulkPurchaseEntryApi } from "../../../api/purchaseSales";
+import { upsertBulkPurchaseEntryApi, upsertBulkSaleseEntryApi } from "../../../api/purchaseSales";
 import {
   EXPENSE_AC_OPTIONS,
-  PO_DOC_TYPE,
-  PODocType,
-  PurchaseConfig,
+  SODocType,
+  SalesConfig,
   PurchaseOrderEditorState,
   PurchaseOrderForm,
   PurchaseOrderLineRow,
-} from "./Purchaseordertypes";
+} from "./SalesOrdertypes";
 
 export const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
@@ -99,9 +98,9 @@ export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
   };
 }
 
-export async function fetchPurchaseOrderHeader(
+export async function fetchSalesOrderHeader(
   docNo: string,
-  config: PurchaseConfig,
+  config: SalesConfig,
   companyCode?: string,
   loginid?: string,
 ): Promise<Record<string, unknown>> {
@@ -118,9 +117,9 @@ export async function fetchPurchaseOrderHeader(
   return row ? lowerRecord(row) : {};
 }
 
-export async function fetchPurchaseOrderDetail(
+export async function fetchSalesOrderDetail(
   docNo: string,
-  config: PurchaseConfig,
+  config: SalesConfig,
   companyCode?: string,
   loginid?: string,
 ): Promise<PurchaseOrderLineRow[]> {
@@ -160,7 +159,7 @@ export async function fetchPurchaseOrderDetail(
   });
 }
 
-export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: PODocType) {
+export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: SODocType) {
   return {
     doc_no: form.doc_no || undefined,
     doc_type: docType,
@@ -249,13 +248,13 @@ export function buildDetailsPayload(rows: PurchaseOrderLineRow[]) {
 
 export async function runWorkflow(
   status: "SAVEASDRAFT" | "SUBMITTED" | "REJECTED" | "CLOSED" | "CANCELED" | "SENTBACK",
-    docType: PODocType,
+    docType: SODocType,
   form: PurchaseOrderForm,
   rows: PurchaseOrderLineRow[],
   companyCode?: string,
   loginid?: string,
 ) {
-  return upsertBulkPurchaseEntryApi(
+  return upsertBulkSaleseEntryApi(
     {
       header: buildHeaderPayload(form, companyCode, loginid, docType),
       details: buildDetailsPayload(rows),

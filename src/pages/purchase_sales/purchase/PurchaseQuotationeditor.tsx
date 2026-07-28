@@ -10,8 +10,10 @@ import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
 import {
   ActionKey,
+  LPO_CONFIG,
   PO_DOC_TYPE,
-  PROCESS,
+  PROCESSQUOTATION,
+  PurchaseConfig,
   PurchaseOrderEditorState,
   PurchaseOrderForm,
   PurchaseOrderLineRow,
@@ -42,11 +44,13 @@ import { RejectDialog } from "./Rejectdialog";
 export type { PurchaseOrderEditorState };
 
 export function PurchaseQuotationEditor({
+   config,
   editor,
   isPendingTab,
   onClose,
   onSaved,
 }: {
+  config: PurchaseConfig;
   editor: PurchaseOrderEditorState;
   isPendingTab: boolean;
   onClose: () => void;
@@ -95,8 +99,19 @@ export function PurchaseQuotationEditor({
       try {
         const docNo = editor.row.doc_no;
         const [headerRaw, detailRows] = await Promise.all([
-          fetchPurchaseOrderHeader(docNo, user?.company_code, user?.loginid || user?.username),
-          fetchPurchaseOrderDetail(docNo, user?.company_code, user?.loginid || user?.username),
+          fetchPurchaseOrderHeader(
+            docNo,
+            config,
+            user?.company_code,
+            user?.loginid || user?.username
+          ),
+          fetchPurchaseOrderDetail(
+            docNo,
+            config,
+            user?.company_code,
+            user?.loginid || user?.username
+          ),
+
         ]);
         if (!mounted) return;
 
@@ -159,7 +174,7 @@ export function PurchaseQuotationEditor({
           parameter: "PS_POORDER_ENTRY_FUN_CHECK_GLOBAL_APPR_LEVEL",
           code1: user?.company_code,
           code2: user?.loginid || user?.username || "ADMIN",
-          code3: PROCESS,
+          code3: PROCESSQUOTATION,
         });
         if (!mounted) return;
         const first = (rows || [])[0] as Record<string, unknown> | undefined;
@@ -269,7 +284,7 @@ export function PurchaseQuotationEditor({
         parameter: "PS_POORDER_ENTRY_SENTBACK_USER_LIST",
         code1: user?.company_code,
         number1: flowLevelRunning,
-        code2: PROCESS,
+        code2: PROCESSQUOTATION,
       });
       const options: SendBackUserOption[] = (rows || []).map((raw) => {
         const row = lowerRecord(raw as Record<string, unknown>);

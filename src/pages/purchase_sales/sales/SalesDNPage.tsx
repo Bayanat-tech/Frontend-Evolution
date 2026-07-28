@@ -11,11 +11,13 @@ import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { TabStrip } from "../../vendor/components";
-import {  PurchaseOrderEditorState, PurchaseQuotationEditor } from "./PurchaseQuotationeditor";
-import { PQA_CONFIG } from "./Purchaseordertypes";
+import { PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchaseordereditor";
+import {  JO_CONFIG } from "../../purchase_sales/purchase/Purchaseordertypes";
+import { SalesOrderEditor } from "./SalesOrdereditor";
+import { SalesDNEditor } from "./SalesDNeditor";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
-export interface PurchaseOrderRow {
+export interface SalesOrderRow {
   doc_type: string;
   doc_no: string;
   doc_date: string;
@@ -66,9 +68,9 @@ async function cancelPurchaseOrderApi(_docNo: string): Promise<void> {
 
 type RequestTab = "PENDING" | "INPROGRESS" | "CLOSED" | "CANCELED" | "REJECTED" | "SENDBACK";
 
-export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}) {
+export function SalesDNPage({ onClose }: { onClose?: () => void } = {}) {
   const { user } = useAuth();
-  const [rows, setRows] = useState<PurchaseOrderRow[]>([]);
+  const [rows, setRows] = useState<SalesOrderRow[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -81,7 +83,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
   const canViewCanceledTab = approvalLevel <= 1;
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<PurchaseOrderEditorState>(null);
-  const [cancelTarget, setCancelTarget] = useState<PurchaseOrderRow | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<SalesOrderRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
@@ -107,13 +109,13 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
   // TODO: confirm lookup parameter name against your Oracle package (mirrors MS_BUDGET_ACCOUNT_TAB__List).
   const fetchPurchaseOrders = async () => {
     const response = await getDynamicLookup({
-      parameter: "PS_QUOTATION_ENTRY_TAB_List",
+      parameter: "PS_SDN_ENTRY_TAB_LIST",
       code1: user?.company_code,
       code2: user?.loginid || user?.username || "ADMIN",
       code3: tab,
     });
 
-    return response as unknown as PurchaseOrderRow[];
+    return response as unknown as SalesOrderRow[];
   };
 
   useEffect(() => {
@@ -135,7 +137,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
           parameter: "PS_POORDER_ENTRY_FUN_CHECK_GLOBAL_APPR_LEVEL",
           code1: user?.company_code,
           code2: user?.loginid || user?.username || "ADMIN",
-          code3: "purchase_quotation",
+          code3: "purchase_order",
         });
         if (!mounted) return;
         const first = (rows || [])[0] as Record<string, unknown> | undefined;
@@ -155,7 +157,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
     void loadRows();
   }, [tab, query, pageIndex, pageSize, columnFilters]);
 
-  const columns = useMemo<ColumnDef<PurchaseOrderRow>[]>(() => [
+  const columns = useMemo<ColumnDef<SalesOrderRow>[]>(() => [
     {
       accessorKey: "doc_no",
       header: "Doc No",
@@ -208,14 +210,14 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
     <section className="finance-list-page grid gap-4">
       <div className="finance-list-heading">
         <div className="finance-list-title">
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">Purchase Quotation</h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">Purchase quotation document</p>
+          <h1 className="m-0 text-2xl font-semibold tracking-tight">Sales Order</h1>
+          <p className="m-0 mt-1 text-sm text-muted-foreground">Sales order document</p>
         </div>
         <div className="finance-list-actions">
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
-          <Button title="Add Purchase Quotation" onClick={() => setDivisionPicker(true)}>
+          <Button title="Add Sales Order" onClick={() => setDivisionPicker(true)}>
             <Plus size={15} /> Add
           </Button>
         </div>
@@ -246,8 +248,8 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
         <DataTable
           columns={columns}
           data={rows}
-          title={loading ? "Loading" : `${totalRows.toLocaleString()} Purchase Quotations`}
-          subtitle="Purchase Quotation List"
+          title={loading ? "Loading" : `${totalRows.toLocaleString()} Sales Orders`}
+          subtitle="Sales Order List"
           searchValue={query}
           onSearchChange={(value) => {
             setQuery(value);
@@ -255,14 +257,14 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
           }}
           searchPlaceholder="Search doc no, division, vendor..."
           loading={loading}
-          emptyText="No purchase quotations found"
+          emptyText="No sales order found"
           height={620}
           minWidth={1000}
           density="grid"
           enablePagination
           manualPagination
           enableExport
-          exportFilename="purchase-quotations.csv"
+          exportFilename="purchase-orders.csv"
           initialSorting={[{ id: "doc_date", desc: true }]}
           pageIndex={pageIndex}
           pageSize={pageSize}
@@ -283,9 +285,9 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
 
       {editor && (
         <div className="fixed inset-0 z-50 bg-background">
-          <PurchaseQuotationEditor
+          <SalesDNEditor
             key={editor?.mode === "edit" ? editor.row.doc_no : editor?.mode || "create"}
-            config={PQA_CONFIG}
+            config={JO_CONFIG}
             editor={editor}
             isPendingTab={isPendingTab}
             onClose={() => setEditor(null)}
@@ -301,7 +303,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
       <Dialog
         open={divisionPicker}
         title="Select Division"
-        description="Choose the division before opening the purchase order form."
+        description="Choose the division before opening the sales order form."
         onClose={() => setDivisionPicker(false)}
         footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}
       >

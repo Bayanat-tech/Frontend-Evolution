@@ -150,6 +150,12 @@ import { PurchaseOrderPage } from "../pages/purchase_sales/purchase/Purchaseorde
 import { StockInquiryPage } from "../pages/purchase_sales/PS_StockInquiry";
 import { PurchaseSaleSetupPage } from "../pages/purchase_sales/Purchasesalesetuppage";
 import { FlowAssignmentPage } from "../pages/security/FlowAssignmentPage";import { PurchaseQuotationPage } from "../pages/purchase_sales/purchase/PurchaseQuatationPage";
+import { PurchaseGRNPage } from "../pages/purchase_sales/purchase/PurchaseGRNPage";
+import { ProductionJobOrderPage } from "../pages/purchase_sales/production/ProductionJobOrderPage";
+import { SalesOrderPage } from "../pages/purchase_sales/sales/SalesorderPage";
+import { SalesDNPage } from "../pages/purchase_sales/sales/SalesDNPage";
+import { StocksTransferPage } from "../pages/purchase_sales/inventory/StockTransferPage";
+import { StocksAdjectmentPage } from "../pages/purchase_sales/inventory/StockadjustmentPage";
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -669,6 +675,58 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <PurchaseQuotationPage onClose={function (): void {
       throw new Error("Function not implemented.");
     } }  />,
+
+    
+  },
+     {
+    name: "Purchase Quotation Setup",
+    match: ({ pathname }) => isPurchaseGRNSetupRoute(pathname),
+    element: () => <PurchaseGRNPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
+
+       {
+    name: "Purchase Quotation Setup",
+    match: ({ pathname }) => isPProductionJoborderSetupRoute(pathname),
+    element: () => <ProductionJobOrderPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
+
+         {
+    name: "Sales Order Setup",
+    match: ({ pathname }) => isSalesorderSetupRoute(pathname),
+    element: () => <SalesOrderPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
+           {
+    name: "Sales Order Setup",
+    match: ({ pathname }) => isSalesDNSetupRoute(pathname),
+    element: () => <SalesDNPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+
+    
+  },
+             {
+    name: "Inventory Setup",
+    match: ({ pathname }) => isStocksTransferSetupRoute(pathname),
+    element: () => <StocksTransferPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+
+    
+  },
+               {
+    name: "Inventory Setup",
+    match: ({ pathname }) => isStocksAdjectmentSetupRoute(pathname),
+    element: () => <StocksAdjectmentPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+
+    
   },
   // ── PAMS My Task Routes (Specific tabs first, then default) ──
   {
@@ -1078,6 +1136,38 @@ function isPurchaseQuotationSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   
     return (normalized.includes("purchase_sales/purchase/purchase_quotation"))
+}
+function isPurchaseGRNSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/purchase/purchase_grn"))
+}
+
+function isPProductionJoborderSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/production/job_order"))
+}
+
+function isSalesorderSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/sales/sales_order"))
+}
+function isSalesDNSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/sales/sales_dn"))
+}
+function isStocksTransferSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/inventory/stock_transfer"))
+}
+function isStocksAdjectmentSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/inventory/stock_adjustment"))
 }
 
 function isExpenseTypeRoute(pathname: string) {

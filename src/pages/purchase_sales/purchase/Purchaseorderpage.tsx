@@ -12,6 +12,7 @@ import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { TabStrip } from "../../vendor/components";
 import { PurchaseOrderEditor, PurchaseOrderEditorState } from "./Purchaseordereditor";
+import { LPO_CONFIG } from "./Purchaseordertypes";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface PurchaseOrderRow {
@@ -284,6 +285,7 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
         <div className="fixed inset-0 z-50 bg-background">
           <PurchaseOrderEditor
             key={editor?.mode === "edit" ? editor.row.doc_no : editor?.mode || "create"}
+            config={LPO_CONFIG}
             editor={editor}
             isPendingTab={isPendingTab}
             onClose={() => setEditor(null)}

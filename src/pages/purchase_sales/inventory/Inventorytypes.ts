@@ -1,8 +1,8 @@
-import { PurchaseOrderRow } from "./Purchaseorderpage";
+import { InventoryOrderRow } from "./StockTransferPage";
 
 export type PurchaseOrderEditorState =
   | { mode: "create"; divCode?: string; divName?: string }
-  | { mode: "edit"; row: PurchaseOrderRow }
+  | { mode: "edit"; row: InventoryOrderRow }
   | null;
 
 export type ActionKey = "draft" | "submit" | "sendBack" | "reject" | "cancel" | "close";
@@ -75,9 +75,14 @@ export interface PurchaseOrderForm {
   next_action_by?: string;
   sentback_reason?: string;
   reject_reason?: string;
-  zone_code?: string;
-  zone_name?: string;
-  
+  from_zone_code?:string,
+  to_zone_code?:string,
+  issued_by ?: string,
+  received_by?: string,
+  zone_name?: string,
+  dept_name?: string,
+  zone_code? : string
+
 }
 
 export interface SendBackUserOption {
@@ -86,45 +91,30 @@ export interface SendBackUserOption {
   level_no: number;
 }
 
-export const PO_DOC_TYPE = {
-  LPO: "LPO",
-  PQA: "PQA",
-  GRN: "GRN",
-  JO :"JO"
+export const IV_DOC_TYPE = {
+  STR: "STR",
+  SAJ :"SAJ"
 } as const;
-export const PROCESS = "purchase_order";
-export const PROCESSQUOTATION = 'purchase_quotation'
-export const PROCESSGRN ='purchase_grn'
-export const PROCESSJO ='production_joborder'
+export const PROCESSST ='stock_transfer'
+export const PROCESSSA ='stock_adjustment'
 export const EXPENSE_AC_OPTIONS = ["Inventory A/c", "Expense A/c", "Fixed Asset A/c"];
-export type PODocType = typeof PO_DOC_TYPE[keyof typeof PO_DOC_TYPE];
+export type InventoryDocType = typeof IV_DOC_TYPE[keyof typeof IV_DOC_TYPE];
 
-export interface PurchaseConfig {
-  docType: PODocType;
+export interface InventoryConfig {
+  docType: InventoryDocType;
   headerParameter: string;
   detailParameter: string;
 }
 
-export const LPO_CONFIG: PurchaseConfig = {
-  docType: PO_DOC_TYPE.LPO,
-  headerParameter: "PS_POORDER_ENTRY_HEADER_PAGE",
-  detailParameter: "PS_POORDER_ENTRY_DETAIL_PAGE",
+
+export const STR_CONFIG: InventoryConfig = {
+  docType: IV_DOC_TYPE.STR,
+  headerParameter: "PS_TRANSFER_ENTRY_HEADER_PAGE",
+  detailParameter: "PS_TRANSFER_ENTRY_DETAIL_PAGE",
 };
 
-export const PQA_CONFIG: PurchaseConfig = {
-  docType: PO_DOC_TYPE.PQA,
-  headerParameter: "PS_QUOTATION_ENTRY_HEADER_PAGE",
-  detailParameter: "PS_QUOTATION_ENTRY_DETAIL_PAGE",
-};
-
-export const GRN_CONFIG: PurchaseConfig = {
-  docType: PO_DOC_TYPE.GRN,
-  headerParameter: "PS_GRN_ENTRY_HEADER_PAGE",
-  detailParameter: "PS_GRN_ENTRY_DETAIL_PAGE",
-};
-
-export const JO_CONFIG: PurchaseConfig = {
-  docType: PO_DOC_TYPE.JO,
-  headerParameter: "PS_JORDER_ENTRY_HEADER_PAGE",
-  detailParameter: "PS_JORDER_ENTRY_DETAIL_PAGE",
+export const SAJ_CONFIG: InventoryConfig = {
+  docType: IV_DOC_TYPE.SAJ,
+  headerParameter: "PS_ADJUSTMENT_ENTRY_HEADER_PAGE",
+  detailParameter: "PS_ADJUSTMENT_ENTRY_DETAIL_PAGE",
 };
