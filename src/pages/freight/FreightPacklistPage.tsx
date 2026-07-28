@@ -38,6 +38,11 @@ type PackForm = {
   job_type: string;
   job_date: string;
   prin_name: string;
+  port_code: string;
+  destination_port: string;
+  place_receipt: string;
+  place_delivery: string;
+  doc_ref: string;
   cust_code: string;
   broker_code: string;
   shipper_name: string;
@@ -118,7 +123,7 @@ const directionMap = {
   reexport: { code: "IRE", label: "Import for Re-export" },
 };
 
-export function FreightPacklistPage({ target, initialJob = null, startMode = "list" }: { target?: FreightWorkspaceTarget; initialJob?: LookupRow | null; startMode?: ViewMode }) {
+export function FreightPacklistPage({ target, initialJob = null, startMode = "list", screen = "packlist" }: { target?: FreightWorkspaceTarget; initialJob?: LookupRow | null; startMode?: ViewMode; screen?: "packlist" | "jobsheet" }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const userRecord = (user || {}) as Record<string, unknown>;
@@ -129,6 +134,8 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
   const mode = modeMap[modeKey];
   const direction = directionMap[directionKey];
   const Icon = mode.icon;
+  const screenTitle = screen === "jobsheet" ? "JOB Sheet" : "Pack List";
+  const screenSubtitle = screen === "jobsheet" ? "PowerBuilder job sheet using pack list datawindow" : "Bill of lading and cargo packing details";
 
   const [view, setView] = useState<ViewMode>("list");
   const [rows, setRows] = useState<LookupRow[]>([]);
@@ -297,7 +304,7 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
   if (view === "list") {
     return (
       <section className="grid gap-3">
-        <Header title={`${mode.label} ${direction.label} Job Sheet`} subtitle="Pack list / shipment sheet listing" icon={Icon}>
+        <Header title={`${mode.label} ${direction.label} ${screenTitle}`} subtitle={screenSubtitle} icon={Icon} screenTitle={screenTitle}>
           {notice && <NoticeChip notice={notice} />}
           <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}><RefreshCw size={14} />Refresh</Button>
           <Button type="button" size="sm" onClick={openAdd}><Plus size={14} />Add Job Sheet</Button>
@@ -309,7 +316,7 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
           searchValue={query}
           onSearchChange={setQuery}
           searchPlaceholder="Search pack list, job, principal, BL/AWB..."
-          title={`${rows.length} Job Sheets`}
+          title={`${rows.length} ${screenTitle}s`}
           subtitle={`${mode.label} / ${direction.label}`}
           height="calc(100vh - 240px)"
           minWidth={1280}
@@ -325,14 +332,14 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
   }
 
   return (
-    <form className="grid gap-2" onSubmit={savePack}>
-      <Header title={`${mode.label} ${direction.label} Job Sheet`} subtitle={pack.seq_number || "New job sheet"} icon={Icon}>
+    <form className="freight-document-form" onSubmit={savePack}>
+      <Header title={`${mode.label} ${direction.label} ${screenTitle}`} subtitle={pack.seq_number || `New ${screenTitle.toLowerCase()}`} icon={Icon} screenTitle={screenTitle}>
         {notice && <NoticeChip notice={notice} />}
         <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>
         <Button type="submit" size="sm" disabled={saving || !pack.job_no}><Save size={14} />Save</Button>
       </Header>
 
-      <div className="grid gap-2 lg:grid-cols-12">
+      <div className="freight-document-paper grid gap-2 lg:grid-cols-12">
         <Panel className="lg:col-span-12" icon={FileSignature} title="Document Reference" meta={`${pack.seq_number || "Auto"} / ${pack.job_no || "Select job"}`}>
           <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-8">
             <Lookup label="Freight Job" value={pack.job_no} valueField="JOB_NO" displayFields={["JOB_NO", "PRIN_CODE", "PRIN_NAME"]} columns={jobColumns} loadOptions={() => lookupJobs(companyCode, mode.code, direction.code, pack.job_no)} onChange={(value, row) => selectJob(value, row, setPack, companyCode, userId, mode.code, direction.code)} />
@@ -342,8 +349,8 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
             <ReadOnlyField label="Principal Name" value={pack.prin_name || "-"} />
             <Field label="Customer" value={pack.cust_code} onChange={(value) => setPackField(setPack, "cust_code", value)} />
             <Field label="Broker" value={pack.broker_code} onChange={(value) => setPackField(setPack, "broker_code", value)} />
-            <Field label={isAir ? "AWB No" : "BL No"} value={pack.bl_no} onChange={(value) => setPackField(setPack, "bl_no", value)} />
-            <Field label={isAir ? "AWB Date" : "BL Date"} type="date" value={pack.bl_date} onChange={(value) => setPackField(setPack, "bl_date", value)} />
+            <Field label={isAir ? "AWB No" : "HBL Number"} value={pack.bl_no} onChange={(value) => setPackField(setPack, "bl_no", value)} />
+            <Field label={isAir ? "AWB Date" : "WBL Date"} type="date" value={pack.bl_date} onChange={(value) => setPackField(setPack, "bl_date", value)} />
             <Field label="Currency" value={pack.curr_code} onChange={(value) => setPackField(setPack, "curr_code", value)} />
           </div>
         </Panel>
@@ -423,6 +430,22 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
           </div>
         </Panel>
 
+        {!isAir && (
+          <Panel className="lg:col-span-12" icon={Ship} title="Bill Of Lading Route" meta={`${pack.port_code || "Loading"} -> ${pack.destination_port || "Discharge"}`}>
+            <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-6">
+              <Field label="MSWB / Master BL" value={pack.doc_ref} onChange={(value) => setPackField(setPack, "doc_ref", value)} />
+              <Field label="PO No" value={pack.po_no} onChange={(value) => setPackField(setPack, "po_no", value)} />
+              <Field label="Pre-Carriage By" value={pack.vessel_name} onChange={(value) => setPackField(setPack, "vessel_name", value)} />
+              <Field label="Place of Receipt" value={pack.place_receipt} onChange={(value) => setPackField(setPack, "place_receipt", value)} />
+              <Field label="Port of Loading" value={pack.port_code} onChange={(value) => setPackField(setPack, "port_code", value)} />
+              <Field label="Port of Discharge" value={pack.destination_port} onChange={(value) => setPackField(setPack, "destination_port", value)} />
+              <Field label="Place of Delivery" value={pack.place_delivery} onChange={(value) => setPackField(setPack, "place_delivery", value)} />
+              <Field label="Vessel Name" value={pack.vessel_name} onChange={(value) => setPackField(setPack, "vessel_name", value)} />
+              <Field label="Voyage No" value={pack.voyage_no} onChange={(value) => setPackField(setPack, "voyage_no", value)} />
+            </div>
+          </Panel>
+        )}
+
         {isAir && (
           <Panel className="lg:col-span-12" icon={Plane} title="Air Waybill Accounting" meta="PB AWB valuation, carrier and account fields">
             <div className="grid gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
@@ -451,13 +474,13 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
   );
 }
 
-function Header({ title, subtitle, icon: Icon, children }: { title: string; subtitle: string; icon: typeof Plane; children: React.ReactNode }) {
+function Header({ title, subtitle, icon: Icon, children, screenTitle = "Pack List" }: { title: string; subtitle: string; icon: typeof Plane; children: React.ReactNode; screenTitle?: string }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-card px-3 py-2 shadow-sm">
+    <div className="freight-form-header">
       <div className="flex min-w-0 items-center gap-2">
         <span className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary"><Icon size={18} /></span>
         <div>
-          <p className="eyebrow mb-0.5">Freight Job Sheet</p>
+          <p className="eyebrow mb-0.5">Freight {screenTitle}</p>
           <h1 className="m-0 text-lg font-semibold text-foreground">{title}</h1>
           <p className="m-0 text-xs text-muted-foreground">{subtitle}</p>
         </div>
@@ -469,12 +492,15 @@ function Header({ title, subtitle, icon: Icon, children }: { title: string; subt
 
 function Panel({ title, meta, icon: Icon, children, className = "" }: { title: string; meta: string; icon: typeof Plane; children: React.ReactNode; className?: string }) {
   return (
-    <section className={`overflow-hidden rounded-md border bg-card shadow-sm ${className}`}>
-      <div className="flex items-center gap-1.5 border-b bg-muted/35 px-2 py-1">
-        <span className="grid h-5 w-5 place-items-center rounded-md bg-primary/10 text-primary"><Icon size={12} /></span>
-        <div className="min-w-0"><h2 className="m-0 text-[11px] font-semibold uppercase text-foreground">{title}</h2><p className="m-0 truncate text-[10px] text-muted-foreground">{meta}</p></div>
+    <section className={`freight-info-section ${className}`}>
+      <div className="freight-info-title">
+        <div className="flex min-w-0 items-center gap-2">
+          <Icon size={15} />
+          <h2>{title}</h2>
+        </div>
+        <span>{meta}</span>
       </div>
-      <div className="p-1.5">{children}</div>
+      <div className="freight-info-body">{children}</div>
     </section>
   );
 }
@@ -514,6 +540,11 @@ function emptyPack(companyCode: string, userId: string, transportMode: string, j
     job_type: jobType,
     job_date: "",
     prin_name: "",
+    port_code: "",
+    destination_port: "",
+    place_receipt: "",
+    place_delivery: "",
+    doc_ref: "",
     cust_code: "",
     broker_code: "",
     shipper_name: "",
@@ -612,6 +643,11 @@ function toPackDraftFromJob(row: LookupRow, companyCode: string, userId: string,
     company_code: lookupText(row, "company_code") || base.company_code,
     prin_code: lookupText(row, "prin_code") || base.prin_code,
     prin_name: lookupText(row, "prin_name") || base.prin_name,
+    port_code: lookupText(row, "port_code") || base.port_code,
+    destination_port: lookupText(row, "destination_port") || base.destination_port,
+    place_receipt: lookupText(row, "place_receipt") || base.place_receipt,
+    place_delivery: lookupText(row, "place_delivery") || base.place_delivery,
+    doc_ref: lookupText(row, "doc_ref") || base.doc_ref,
     cust_code: lookupText(row, "cust_code") || lookupText(row, "prin_code") || base.cust_code,
     job_no: lookupText(row, "job_no") || base.job_no,
     job_date: normalizeDateInput(lookupText(row, "job_date")),

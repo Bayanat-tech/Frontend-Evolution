@@ -17,8 +17,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { api } from "../../api/client";
+import { freightSelect } from "../../api/freight";
 import type { LookupRow } from "../../api/lookups";
-import { executeWmsInboundSqlCached } from "../../api/wms";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Input } from "../../components/ui/Input";
@@ -436,7 +436,7 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
                       valueField="AIRLINE_CODE"
                       displayFields={["AIRLINE_CODE", "AIRLINE_NAME"]}
                       columns={[{ field: "AIRLINE_CODE", header: "Code" }, { field: "AIRLINE_NAME", header: "Airline" }]}
-                      loadOptions={() => loadLookup(`SELECT AIRLINE_CODE, AIRLINE_NAME FROM MS_AIRLINE WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY AIRLINE_CODE`)}
+                      loadOptions={() => loadLookup("freight_airline", companyCode)}
                       disabled={readOnly}
                       onChange={(value, row) => updateForm(setForm, {
                         airline_code: value,
@@ -457,7 +457,7 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
                       valueField="CURR_CODE"
                       displayFields={["CURR_CODE", "CURR_NAME"]}
                       columns={[{ field: "CURR_CODE", header: "Code" }, { field: "CURR_NAME", header: "Currency" }]}
-                      loadOptions={() => loadLookup(`SELECT CURR_CODE, CURR_NAME FROM MS_CURRENCY WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY CURR_CODE`)}
+                      loadOptions={() => loadLookup("freight_currency", companyCode)}
                       disabled={readOnly}
                       onChange={(value) => updateForm(setForm, { curr_code: value })}
                     />
@@ -588,7 +588,7 @@ function ReportFilters({
           valueField="AIRLINE_CODE"
           displayFields={["AIRLINE_CODE", "AIRLINE_NAME"]}
           columns={[{ field: "AIRLINE_CODE", header: "Code" }, { field: "AIRLINE_NAME", header: "Airline" }]}
-          loadOptions={() => loadLookup(`SELECT DISTINCT AIRLINE_CODE, AIRLINE_NAME FROM TF_AIRLINE_TARIFF WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY AIRLINE_CODE`)}
+          loadOptions={() => loadLookup("freight_airline_tariff_airline", companyCode)}
           onChange={(value, row) => update({ airline_code: value || "All", airline_name: text(row, "AIRLINE_NAME", "airline_name") })}
         />
         <LookupField
@@ -600,7 +600,7 @@ function ReportFilters({
           valueField="SOURCE"
           displayFields={["SOURCE"]}
           columns={[{ field: "SOURCE", header: "Source" }]}
-          loadOptions={() => loadLookup(`SELECT DISTINCT SOURCE FROM TF_AIRLINE_TARIFF WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' AND SOURCE IS NOT NULL ORDER BY SOURCE`)}
+          loadOptions={() => loadLookup("freight_airline_tariff_source", companyCode)}
           onChange={(value) => update({ source: value || "All" })}
         />
         <LookupField
@@ -612,7 +612,7 @@ function ReportFilters({
           valueField="DESTINATION"
           displayFields={["DESTINATION"]}
           columns={[{ field: "DESTINATION", header: "Destination" }]}
-          loadOptions={() => loadLookup(`SELECT DISTINCT DESTINATION FROM TF_AIRLINE_TARIFF WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' AND DESTINATION IS NOT NULL ORDER BY DESTINATION`)}
+          loadOptions={() => loadLookup("freight_airline_tariff_destination", companyCode)}
           onChange={(value) => update({ destination: value || "All" })}
         />
         <LookupField
@@ -624,7 +624,7 @@ function ReportFilters({
           valueField="IATA_CODE"
           displayFields={["IATA_CODE"]}
           columns={[{ field: "IATA_CODE", header: "IATA" }]}
-          loadOptions={() => loadLookup(`SELECT DISTINCT IATA_CODE FROM TF_AIRLINE_TARIFF WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' AND IATA_CODE IS NOT NULL ORDER BY IATA_CODE`)}
+          loadOptions={() => loadLookup("freight_airline_tariff_iata", companyCode)}
           onChange={(value) => update({ iata_code: value || "All" })}
         />
         <div className="flex items-end gap-2">
@@ -729,8 +729,8 @@ function updateForm(setForm: (updater: (current: TariffForm) => TariffForm) => v
   setForm((current) => ({ ...current, ...patch }));
 }
 
-async function loadLookup(sql: string) {
-  return (await executeWmsInboundSqlCached(sql)).map((row) => normalizeLookupRow(row));
+async function loadLookup(parameter: string, companyCode: string, query = "") {
+  return (await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 50 })).map((row) => normalizeLookupRow(row));
 }
 
 function normalizeLookupRow(row: LookupRow) {
@@ -744,10 +744,6 @@ function text(row: Record<string, unknown> | null | undefined, ...keys: string[]
     if (value !== undefined && value !== null) return String(value).trim();
   }
   return "";
-}
-
-function sqlEscape(value: string) {
-  return value.replace(/'/g, "''");
 }
 
 function exportCsv(rows: AirlineTariffRow[]) {

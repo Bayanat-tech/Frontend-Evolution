@@ -631,8 +631,33 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
   {
     name: "Freight Job Sheet",
+    match: (context) => isFreightJobSheetRoute(context),
+    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="jobsheet" />,
+  },
+  {
+    name: "Freight Pack List",
     match: (context) => isFreightPacklistRoute(context),
     element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="packlist" />,
+  },
+  {
+    name: "Freight Alerts",
+    match: (context) => isFreightJobFollowupRoute(context, "alerts"),
+    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="alerts" />,
+  },
+  {
+    name: "Freight Instructions",
+    match: (context) => isFreightJobFollowupRoute(context, "instructions"),
+    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="instructions" />,
+  },
+  {
+    name: "Freight Documents",
+    match: (context) => isFreightJobFollowupRoute(context, "documents"),
+    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="documents" />,
+  },
+  {
+    name: "Freight Deposits",
+    match: (context) => isFreightJobFollowupRoute(context, "deposits"),
+    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="deposits" />,
   },
   {
     name: "Freight Service Activities",
@@ -1675,7 +1700,23 @@ function isFreightAirlineTariffReportRoute(context: WorkspaceRouteContext) {
 function isFreightPacklistRoute(context: WorkspaceRouteContext) {
   const compact = getGenericMatchText(context).replace(/[^a-z0-9]/g, "");
   return (compact.includes("freightair") || compact.includes("freightsea") || compact.includes("freightroad"))
-    && (compact.includes("packlist") || compact.includes("packinglist") || compact.includes("jobsheet"));
+    && (compact.includes("packlist") || compact.includes("packinglist"))
+    && !compact.includes("jobsheet");
+}
+
+function isFreightJobSheetRoute(context: WorkspaceRouteContext) {
+  const compact = getGenericMatchText(context).replace(/[^a-z0-9]/g, "");
+  return (compact.includes("freightair") || compact.includes("freightsea") || compact.includes("freightroad"))
+    && compact.includes("jobsheet");
+}
+
+function isFreightJobFollowupRoute(context: WorkspaceRouteContext, kind: "alerts" | "instructions" | "documents" | "deposits") {
+  const compact = getGenericMatchText(context).replace(/[^a-z0-9]/g, "");
+  if (!(compact.includes("freightair") || compact.includes("freightsea") || compact.includes("freightroad"))) return false;
+  if (kind === "alerts") return compact.includes("alerts") || compact.includes("alert");
+  if (kind === "instructions") return compact.includes("instructions") || compact.includes("instruction");
+  if (kind === "documents") return compact.includes("documents") || compact.includes("document");
+  return compact.includes("deposits") || compact.includes("deposit");
 }
 
 function isFreightServiceActivitiesRoute(context: WorkspaceRouteContext) {
@@ -1685,7 +1726,21 @@ function isFreightServiceActivitiesRoute(context: WorkspaceRouteContext) {
 
 function isFreightOperationalJobRoute(context: WorkspaceRouteContext) {
   const compact = getGenericMatchText(context).replace(/[^a-z0-9]/g, "");
-  if (compact.includes("packlist") || compact.includes("packinglist") || compact.includes("serviceactivities") || compact.includes("costsheet") || compact.includes("jobsheet")) return false;
+  if (
+    compact.includes("packlist")
+    || compact.includes("packinglist")
+    || compact.includes("serviceactivities")
+    || compact.includes("costsheet")
+    || compact.includes("jobsheet")
+    || compact.includes("alerts")
+    || compact.includes("alert")
+    || compact.includes("instructions")
+    || compact.includes("instruction")
+    || compact.includes("documents")
+    || compact.includes("document")
+    || compact.includes("deposits")
+    || compact.includes("deposit")
+  ) return false;
   return (compact.includes("freightair") || compact.includes("freightsea") || compact.includes("freightroad"))
     && (compact.includes("import") || compact.includes("export") || compact.includes("reexport"));
 }

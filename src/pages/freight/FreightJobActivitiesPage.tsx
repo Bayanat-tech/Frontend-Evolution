@@ -2,8 +2,8 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Calculator, CheckCircle2, Edit2, Plus, RefreshCw, Save, Trash2, TrendingUp } from "lucide-react";
 import { api } from "../../api/client";
+import { freightSelect } from "../../api/freight";
 import type { LookupRow } from "../../api/lookups";
-import { executeWmsInboundSqlCached } from "../../api/wms";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Input } from "../../components/ui/Input";
@@ -293,7 +293,7 @@ function ActivityLookup({ companyCode, value, onChange }: { companyCode: string;
       valueField="ACT_CODE"
       displayFields={["ACT_CODE", "ACTIVITY"]}
       columns={[{ field: "ACT_CODE", header: "Code" }, { field: "ACTIVITY", header: "Activity" }, { field: "BILL", header: "Bill" }, { field: "COST", header: "Cost" }]}
-      loadOptions={() => loadFreightLookup(`SELECT ACTIVITY_CODE ACT_CODE, ACTIVITY, BILL, COST FROM MS_ACTIVITY WHERE COMPANY_CODE='${sqlEscape(companyCode)}' AND NVL(FREEZE_FLAG,'N') <> 'Y' ORDER BY ACTIVITY_CODE`)}
+      loadOptions={() => loadFreightLookup("freight_activity", companyCode)}
       onChange={onChange}
     />
   );
@@ -328,8 +328,8 @@ function calculateTotals(lines: ActivityLine[]) {
   }, { revenue: 0, expense: 0, profit: 0 });
 }
 
-async function loadFreightLookup(sql: string) {
-  return (await executeWmsInboundSqlCached(sql)).map(normalizeLookupRow);
+async function loadFreightLookup(parameter: string, companyCode: string, query = "") {
+  return (await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 50 })).map(normalizeLookupRow);
 }
 
 function normalizeLookupRow(row: LookupRow) {
@@ -368,6 +368,3 @@ function formatDate(value: string) {
   return date.toLocaleDateString("en-GB");
 }
 
-function sqlEscape(value: string) {
-  return value.replace(/'/g, "''");
-}

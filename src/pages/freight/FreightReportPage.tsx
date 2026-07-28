@@ -2,8 +2,8 @@ import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { BarChart3, Boxes, CalendarDays, Download, FileSpreadsheet, Filter, Loader2, Printer, RefreshCw, Search, Ship, UserRound, WalletCards } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
+import { freightSelect } from "../../api/freight";
 import type { LookupRow } from "../../api/lookups";
-import { executeWmsInboundSqlCached } from "../../api/wms";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
@@ -392,7 +392,7 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
                   setFilter(setFilters, "prin_code", value);
                   setPrincipalText(row ? `${lookupText(row, "PRIN_CODE")} - ${lookupText(row, "PRIN_NAME")}` : "");
                 }}
-                loadOptions={() => loadLookup(`SELECT PRIN_CODE, PRIN_NAME FROM MS_PRINCIPAL WHERE COMPANY_CODE='${sqlEscape(companyCode)}' ORDER BY PRIN_CODE`)}
+                loadOptions={() => loadLookup("freight_principal", companyCode)}
                 valueField="PRIN_CODE"
                 displayFields={["PRIN_CODE", "PRIN_NAME"]}
                 columns={[{ field: "PRIN_CODE", header: "Code" }, { field: "PRIN_NAME", header: "Principal" }]}
@@ -923,8 +923,8 @@ function setFilter<T extends Record<string, string>>(setter: Dispatch<SetStateAc
   setter((current) => ({ ...current, [key]: value }));
 }
 
-async function loadLookup(sql: string) {
-  const rows = await executeWmsInboundSqlCached(sql);
+async function loadLookup(parameter: string, companyCode: string, query = "") {
+  const rows = await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 50 });
   return (Array.isArray(rows) ? rows : []).map(normalizeLookupRow);
 }
 
@@ -948,10 +948,6 @@ function lookupText(row: LookupRow | null | undefined, key: string) {
   if (!row) return "";
   const value = firstExisting(row, key);
   return value === null || value === undefined ? "" : String(value).trim();
-}
-
-function sqlEscape(value: string) {
-  return value.replace(/'/g, "''");
 }
 
 function label(key: string) {

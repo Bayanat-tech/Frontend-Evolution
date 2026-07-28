@@ -21,7 +21,7 @@ import {
   CreditCard
 } from "lucide-react";
 import { api } from "../../api/client";
-import { executeWmsInboundSql, executeWmsInboundSqlCached } from "../../api/wms";
+import { freightSelect } from "../../api/freight";
 import type { LookupRow } from "../../api/lookups";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
@@ -346,18 +346,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       const response = await api.post<{ success?: boolean; data?: LookupRow[]; message?: string }>("/api/freight/quotation/list", { company_code: companyCode, search: query });
       if (response.data?.success === false) throw new Error(response.data.message || "Unable to load quotations");
       setRows((response.data?.data || []).map(normalizeLookupRow));
-    } catch {
-      const data = await executeWmsInboundSql(`
-        SELECT q.QUOTATION_NR, q.QUOTATION_DATE, q.COMPANY_CODE, q.PRIN_CODE, p.PRIN_NAME, q.JOB_TYPE,
-               q.TRANSPORT_MODE, q.DEPT_CODE, q.ORIGIN_PORT, q.DESTINATION_PORT, q.CURR_CODE,
-               q.EX_RATE, q.INDSTATUS, q.ENQUIRY_NO, q.ENQUIRY_TYPE
-        FROM TF_QUOTATION q
-        LEFT JOIN MS_PRINCIPAL p ON p.COMPANY_CODE = q.COMPANY_CODE AND p.PRIN_CODE = q.PRIN_CODE
-        WHERE q.COMPANY_CODE = '${sqlEscape(companyCode)}'
-          AND NVL(q.QUOTATION_TYPE, 'QTN') = 'QTN'
-        ORDER BY q.QUOTATION_DATE DESC, q.QUOTATION_NR DESC
-      `);
-      setRows(data.map(normalizeLookupRow));
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to load quotations" });
     } finally {
       setLoading(false);
     }
@@ -575,10 +565,10 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
 
   return (
     <>
-      <form className="grid gap-1.5" onSubmit={saveQuotation}>
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-card px-3 py-2 shadow-sm">
+      <form className="freight-dense-form" onSubmit={saveQuotation}>
+        <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={17} /></div>
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={15} /></div>
             <div className="min-w-0">
               <p className="eyebrow mb-0.5">Freight Quotation</p>
               <div className="flex flex-wrap items-center gap-1.5">
@@ -614,7 +604,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
         {assistOpen && <FreightAssistPanel checks={smartChecks} />}
 
         <fieldset disabled={isLocked} className="contents">
-        <section className="rounded-md border bg-card p-1.5 shadow-sm">
+        <section className="freight-form-card rounded-md border bg-card shadow-sm">
           <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-11">
             <FormInput label="Quotation No" value={header.quotation_nr} onChange={(value) => setHeaderField("quotation_nr", value)} placeholder="Auto" />
             <FormInput label="Date" type="date" value={header.quotation_date} onChange={(value) => setHeaderField("quotation_date", value)} required />
@@ -640,12 +630,12 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
         </section>
         </fieldset>
 
-        <div className="grid min-h-0 gap-0 rounded-md border bg-card shadow-sm">
-          <div className="flex gap-1 overflow-x-auto p-1">
+        <div className="freight-tabs-shell grid min-h-0 gap-0 rounded-md border bg-card shadow-sm">
+          <div className="freight-tabs-list flex overflow-x-auto">
             {tabs.map((tab) => <TabButton key={tab.key} tab={tab} active={activeTab === tab.key} onClick={() => setActiveTab(tab.key)} />)}
           </div>
           <fieldset disabled={isLocked} className="contents">
-          <div className="min-h-0 border-t p-1.5">
+          <div className="freight-tabs-panel min-h-0 border-t">
             {activeTab === "cargo" && (
                <section className="grid gap-1.5 xl:grid-cols-12">
           
@@ -849,14 +839,14 @@ function FreightAssistPanel({ checks }: { checks: SmartCheck[] }) {
 
 function SectionPanel({ title, meta, icon: Icon, children, className = "" }: { title: string; meta?: string; icon: typeof PackageCheck; children?: React.ReactNode; className?: string }) {
   return (
-    <section className={`overflow-hidden rounded-md border bg-background shadow-sm ${className}`}>
-      <div className="flex items-center justify-between gap-2 border-b bg-muted/35 px-2 py-0.5">
+    <section className={`freight-panel overflow-hidden rounded-md border bg-background shadow-sm ${className}`}>
+      <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35">
         <div className="flex min-w-0 items-center gap-1.5">
           <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><Icon size={12} /></span>
           <div className="min-w-0"><h3 className="m-0 truncate text-[11px] font-semibold uppercase text-foreground">{title}</h3>{meta && <p className="m-0 truncate text-[10px] text-muted-foreground">{meta}</p>}</div>
         </div>
       </div>
-      <div className="p-1">{children}</div>
+      <div className="freight-panel-body">{children}</div>
     </section>
   );
 }
@@ -1166,53 +1156,18 @@ function CellInput({ value, onChange, type = "text", className = "" }: { value: 
 const fieldClassName = "h-6 w-full rounded-md border border-input bg-background px-2 text-[11px] font-semibold text-foreground shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:bg-muted disabled:text-muted-foreground";
 const portColumns = [{ field: "port_code", header: "Code" }, { field: "port_name", header: "Port" }, { field: "country_name", header: "Country" }];
 
-async function loadPrincipalLookup(companyCode: string) { return loadFreightLookup(`SELECT p.PRIN_CODE, p.PRIN_NAME, p.PRIN_DEPT_CODE, p.CURR_CODE, c.EX_RATE FROM MS_PRINCIPAL p LEFT JOIN MS_CURRENCY c ON c.COMPANY_CODE = p.COMPANY_CODE AND c.CURR_CODE = p.CURR_CODE WHERE p.COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY p.PRIN_CODE`); }
-async function loadWalkinPrincipalLookup(companyCode: string) {return loadFreightLookup(` SELECT PRIN_CODE, PRIN_NAME, PRIN_CONTACT1, PRIN_EMAIL1, PRIN_TELNO1 FROM MS_PRINCIPAL_WALKIN WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'ORDER BY PRIN_CODE`);}
-async function loadEnquiryLookup(companyCode: string) {
-  return loadFreightLookup(`
-    SELECT ENQUIRY_NR, ENQUIRY_DATE, TO_CHAR(ENQUIRY_DATE, 'DD/MM/YYYY') AS ENQUIRY_DATE_DISPLAY,
-           ENQUIRY_TYPE, PRIN_CODE, JOB_TYPE, TRANSPORT_MODE, DEPT_CODE, CURR_CODE, COMPANY_CODE
-    FROM TF_ENQUIRY
-    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
-      AND ENQUIRY_TYPE IN ('EQI', 'RFQ')
-      AND NVL(INDSTATUS, 'N') = 'A'
-    ORDER BY ENQUIRY_DATE DESC, ENQUIRY_NR DESC
-  `);
-}
-async function loadCommodityLookup(companyCode: string) { return loadFreightLookup(`SELECT PRODTYPE_DESC, PRODTYPE_CODE FROM MS_PRODTYPE WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY PRODTYPE_DESC`); }
-async function loadPortLookup(companyCode: string) { return loadFreightLookup(`SELECT p.PORT_CODE, p.PORT_NAME, c.COUNTRY_NAME, p.COUNTRY_CODE FROM MS_PORT p LEFT JOIN MS_COUNTRY c ON c.COUNTRY_CODE = p.COUNTRY_CODE WHERE p.COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY p.PORT_CODE`); }
-async function loadCurrencyLookup(companyCode: string) { return loadFreightLookup(`SELECT CURR_CODE, CURR_NAME, EX_RATE FROM MS_CURRENCY WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY CURR_CODE`); }
-async function loadForwarderLookup(companyCode: string) { return loadFreightLookup(`SELECT FORWARDER_CODE, FORWARDER_NAME FROM MS_FORWARDER WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY FORWARDER_NAME`); }
-async function loadVehicleTypeLookup(companyCode: string) { return loadFreightLookup(`SELECT VTYPE_CODE, VTYPE_NAME FROM MS_VEHICLE_TYPE WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY VTYPE_CODE`); }
-async function loadDefaultQuotationTerms(companyCode: string) {
-  return loadFreightLookup(`
-    SELECT TYPE_IND, SRNO, QUOTE_DESC
-    FROM MS_QUOTE_TERMS
-    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
-    ORDER BY TYPE_IND, SRNO
-  `);
-}
-async function loadActivityLookup(companyCode: string) {
-  return loadFreightLookup(`
-    SELECT
-      ACTIVITY_CODE,
-      ACTIVITY,
-      NVL(QUANTITY, 1) QUANTITY,
-      UOM,
-      NVL(BILL, 0) BILL,
-      NVL(COST, 0) COST,
-      ACTIVITY_GROUP_CODE,
-      ACTIVITY_SUBGROUP_CODE,
-      MANDATORY_FLAG,
-      ACT_TYPE
-    FROM MS_ACTIVITY
-    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
-      AND NVL(FREEZE_FLAG, 'N') = 'N'
-    ORDER BY ACTIVITY_CODE
-  `);
-}
-function carrierLookupProps(mode: string, companyCode: string) { if (mode === "S") return { valueField: "vessel_code", displayFields: ["vessel_code", "vessel_name"], columns: [{ field: "vessel_code", header: "Code" }, { field: "vessel_name", header: "Vessel" }], loadOptions: () => loadFreightLookup(`SELECT VESSEL_CODE, VESSEL_NAME FROM MS_VESSEL WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY VESSEL_CODE`) }; if (mode === "R") return { valueField: "vehicle_no", displayFields: ["vehicle_no", "vehicle_desc"], columns: [{ field: "vehicle_no", header: "Vehicle" }, { field: "vehicle_desc", header: "Description" }], loadOptions: () => loadFreightLookup(`SELECT VEHICLE_NO, VEHICLE_DESC FROM MS_VEHICLE WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY VEHICLE_NO`) }; return { valueField: "airline_code", displayFields: ["airline_code", "airline_name"], columns: [{ field: "airline_code", header: "Code" }, { field: "airline_name", header: "Airline" }], loadOptions: () => loadFreightLookup(`SELECT AIRLINE_CODE, AIRLINE_NAME FROM MS_AIRLINE WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY AIRLINE_CODE`) }; }
-async function loadFreightLookup(sql: string) { return (await executeWmsInboundSqlCached(sql)).map(normalizeLookupRow); }
+async function loadPrincipalLookup(companyCode: string) { return loadFreightLookup("freight_principal", companyCode); }
+async function loadWalkinPrincipalLookup(companyCode: string) { return loadFreightLookup("freight_walkin_principal", companyCode); }
+async function loadEnquiryLookup(companyCode: string) { return loadFreightLookup("freight_quotation_source", companyCode); }
+async function loadCommodityLookup(companyCode: string) { return loadFreightLookup("freight_commodity", companyCode); }
+async function loadPortLookup(companyCode: string) { return loadFreightLookup("freight_port", companyCode); }
+async function loadCurrencyLookup(companyCode: string) { return loadFreightLookup("freight_currency", companyCode); }
+async function loadForwarderLookup(companyCode: string) { return loadFreightLookup("freight_forwarder", companyCode); }
+async function loadVehicleTypeLookup(companyCode: string) { return loadFreightLookup("freight_vehicle_type", companyCode); }
+async function loadDefaultQuotationTerms(companyCode: string) { return loadFreightLookup("freight_quote_terms", companyCode); }
+async function loadActivityLookup(companyCode: string) { return loadFreightLookup("freight_activity", companyCode); }
+function carrierLookupProps(mode: string, companyCode: string) { if (mode === "S") return { valueField: "vessel_code", displayFields: ["vessel_code", "vessel_name"], columns: [{ field: "vessel_code", header: "Code" }, { field: "vessel_name", header: "Vessel" }], loadOptions: () => loadFreightLookup("freight_vessel", companyCode) }; if (mode === "R") return { valueField: "vehicle_no", displayFields: ["vehicle_no", "vehicle_desc"], columns: [{ field: "vehicle_no", header: "Vehicle" }, { field: "vehicle_desc", header: "Description" }], loadOptions: () => loadFreightLookup("freight_vehicle", companyCode) }; return { valueField: "airline_code", displayFields: ["airline_code", "airline_name"], columns: [{ field: "airline_code", header: "Code" }, { field: "airline_name", header: "Airline" }], loadOptions: () => loadFreightLookup("freight_airline", companyCode) }; }
+async function loadFreightLookup(parameter: string, companyCode: string, query = "") { return (await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 50 })).map(normalizeLookupRow); }
 
 function normalizeLookupRow(row: LookupRow): LookupRow {
   return Object.entries(row || {}).reduce<LookupRow>((acc, [key, value]) => {
@@ -1221,7 +1176,6 @@ function normalizeLookupRow(row: LookupRow): LookupRow {
   }, {});
 }
 function lookupText(row: LookupRow | undefined, field: string) { const value = row?.[field] ?? row?.[field.toUpperCase()] ?? row?.[field.toLowerCase()]; return value === null || value === undefined ? "" : String(value); }
-function sqlEscape(input: string) { return String(input || "").replace(/'/g, "''"); }
 function toInputDate(value: Date) { return value.toISOString().slice(0, 10); }
 function toDateInputValue(input: string) { if (!input) return ""; const parsed = new Date(input); if (Number.isNaN(parsed.getTime())) return ""; return parsed.toISOString().slice(0, 10); }
 function formatDisplayDate(input: string) { const value = toDateInputValue(input); if (!value) return input || "-"; const [year, month, day] = value.split("-"); return `${day}/${month}/${year}`; }

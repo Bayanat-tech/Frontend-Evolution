@@ -17,7 +17,7 @@ type LookupFieldProps = {
   columns: LookupColumn[];
   valueField: string;
   displayFields: string[];
-  loadOptions: () => Promise<LookupRow[]>;
+  loadOptions: (query?: string) => Promise<LookupRow[]>;
   onChange: (value: string, row: LookupRow | null) => void;
   disabled?: boolean;
   compact?: boolean;
@@ -131,14 +131,30 @@ type LookupFieldProps = {
     const totalPages = Math.max(1, Math.ceil(filteredRows.length / rowsPerPage));
     const pagedRows = filteredRows.slice((page - 1) * rowsPerPage, page * rowsPerPage);
 
+    useEffect(() => {
+      if (!open) return;
+      const timer = window.setTimeout(async () => {
+        setLoading(true);
+        setError("");
+        try {
+          setRows(await loadOptions(query));
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Unable to load lookup");
+        } finally {
+          setLoading(false);
+        }
+      }, 250);
+
+      return () => window.clearTimeout(timer);
+    }, [loadOptions, open, query]);
+
     const openLookup = async () => {
       if (disabled) return;
       setOpen(true);
-      if (rows.length > 0) return;
       setLoading(true);
       setError("");
       try {
-        setRows(await loadOptions());
+        setRows(await loadOptions(query));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to load lookup");
       } finally {

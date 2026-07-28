@@ -13,7 +13,7 @@ import { FreightPacklistPage } from "./FreightPacklistPage";
 import { FreightJobActivitiesPage } from "./FreightJobActivitiesPage";
 import { FreightJobFollowupTab } from "./FreightJobFollowupTabs";
 
-type JobTab = "job" | "packlist" | "activities" | "documents" | "instructions" | "alerts" | "deposits";
+type JobTab = "job" | "packlist" | "jobsheet" | "alerts" | "instructions" | "documents" | "deposits" | "activities";
 type WorkspaceMode = "list" | "steps";
 
 const modeLabel = {
@@ -48,12 +48,13 @@ const modeIcon = {
 
 const tabs: { key: JobTab; label: string; icon: typeof ClipboardList; ready: boolean }[] = [
   { key: "job", label: "Job / File", icon: ClipboardList, ready: true },
-  { key: "packlist", label: "Job Sheet", icon: PackageCheck, ready: true },
-  { key: "activities", label: "Service & Activities", icon: ReceiptText, ready: true },
-  { key: "documents", label: "Documents", icon: FileText, ready: true },
-  { key: "instructions", label: "Instructions", icon: Info, ready: true },
+  { key: "packlist", label: "Pack List", icon: PackageCheck, ready: true },
+  { key: "jobsheet", label: "JOB Sheet", icon: FileText, ready: true },
   { key: "alerts", label: "Alerts", icon: Bell, ready: true },
+  { key: "instructions", label: "Instructions", icon: Info, ready: true },
+  { key: "documents", label: "Documents", icon: FileText, ready: true },
   { key: "deposits", label: "Deposits", icon: WalletCards, ready: true },
+  { key: "activities", label: "Service & Activities", icon: ReceiptText, ready: true },
 ];
 
 const listingTabs = [
@@ -224,14 +225,14 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   }
 
   return (
-    <section className="grid gap-2">
-      <div className="rounded-md border bg-card px-3 py-2 shadow-sm">
+    <section className="freight-module-surface">
+      <div className="freight-ops-toolbar">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <p className="eyebrow mb-0.5">Freight Job</p>
-            <h1 className="m-0 text-lg font-semibold text-foreground">{title}</h1>
+            <p className="m-0 text-sm font-semibold text-primary">Freight Job / {selectedJob ? text(selectedJob, "job_no") : "New"}</p>
+            <h1 className="m-0 text-xl font-semibold text-foreground">{title}</h1>
             <p className="m-0 text-xs text-muted-foreground">
-              {selectedJob ? `Job ${text(selectedJob, "job_no")} / ${text(selectedJob, "prin_name") || text(selectedJob, "prin_code")}` : "New job flow"}
+              {selectedJob ? `${text(selectedJob, "prin_name") || text(selectedJob, "prin_code")} | ${text(selectedJob, "doc_ref") || text(selectedJob, "hawb") || "Reference pending"}` : "New shipment operation"}
             </p>
           </div>
           <div className="flex flex-wrap gap-1">
@@ -266,12 +267,13 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
       </div>
 
       {activeTab === "job" && <FreightJobPage target={target} initialJob={selectedJob} startMode="editor" />}
-      {activeTab === "packlist" && <FreightPacklistPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} />}
-      {activeTab === "activities" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} />}
-      {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" initialJob={selectedJob} />}
-      {activeTab === "instructions" && <FreightJobFollowupTab target={target} kind="instructions" initialJob={selectedJob} />}
+      {activeTab === "packlist" && <FreightPacklistPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="packlist" />}
+      {activeTab === "jobsheet" && <FreightPacklistPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="jobsheet" />}
       {activeTab === "alerts" && <FreightJobFollowupTab target={target} kind="alerts" initialJob={selectedJob} />}
+      {activeTab === "instructions" && <FreightJobFollowupTab target={target} kind="instructions" initialJob={selectedJob} />}
+      {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" initialJob={selectedJob} />}
       {activeTab === "deposits" && <FreightJobFollowupTab target={target} kind="deposits" initialJob={selectedJob} />}
+      {activeTab === "activities" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} />}
     </section>
   );
 }

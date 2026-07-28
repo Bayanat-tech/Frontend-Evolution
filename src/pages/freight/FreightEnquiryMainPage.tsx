@@ -2,7 +2,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, ArrowLeft, Ban, CreditCard, Eye, MapPinned, PackageCheck, Paperclip, Plus, RefreshCw, RotateCcw, Save, ShieldCheck, ShipWheel, Sparkles, Trash2, X } from "lucide-react";
 import { api } from "../../api/client";
-import { executeWmsInboundSql, executeWmsInboundSqlCached } from "../../api/wms";
+import { freightSelect } from "../../api/freight";
 import { getLookupValue, type LookupRow } from "../../api/lookups";
 import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 import { Button } from "../../components/ui/Button";
@@ -360,47 +360,14 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
     setLoadingRecord(true);
     setNotice(null);
     try {
-      const [headerRows, detailRows] = await Promise.all([
-        executeWmsInboundSql(`
-          SELECT e.*,
-                 p.PRIN_NAME,
-                 wp.PRIN_NAME AS WALKIN_PRIN_NAME,
-                 d.DEPT_NAME,
-                 c.CURR_NAME,
-                 op.PORT_NAME AS ORIGIN_PORT_NAME,
-                 dp.PORT_NAME AS DESTINATION_PORT_NAME,
-                 s.SALESMAN_NAME,
-                 f.FORWARDER_NAME,
-                 v.VTYPE_NAME
-          FROM TF_ENQUIRY e
-          LEFT JOIN MS_PRINCIPAL p ON p.COMPANY_CODE = e.COMPANY_CODE AND p.PRIN_CODE = e.PRIN_CODE
-          LEFT JOIN MS_PRINCIPAL_WALKIN wp ON wp.COMPANY_CODE = e.COMPANY_CODE AND wp.PRIN_CODE = e.WALKIN_PRIN_CODE
-          LEFT JOIN MS_DEPARTMENT d ON d.COMPANY_CODE = e.COMPANY_CODE AND d.DEPT_CODE = e.DEPT_CODE
-          LEFT JOIN MS_CURRENCY c ON c.COMPANY_CODE = e.COMPANY_CODE AND c.CURR_CODE = e.CURR_CODE
-          LEFT JOIN MS_PORT op ON op.COMPANY_CODE = e.COMPANY_CODE AND op.PORT_CODE = e.ORIGIN_PORT
-          LEFT JOIN MS_PORT dp ON dp.COMPANY_CODE = e.COMPANY_CODE AND dp.PORT_CODE = e.DESTINATION_PORT
-          LEFT JOIN MS_SALESMAN s ON s.COMPANY_CODE = e.COMPANY_CODE AND s.SALESMAN_CODE = e.SALESMAN_CODE
-          LEFT JOIN MS_FORWARDER f ON f.COMPANY_CODE = e.COMPANY_CODE AND f.FORWARDER_CODE = e.FORWARDER_CODE
-          LEFT JOIN MS_VEHICLE_TYPE v ON v.COMPANY_CODE = e.COMPANY_CODE AND v.VTYPE_CODE = e.VEHICLE_TYPE
-          WHERE e.COMPANY_CODE = '${sqlEscape(companyCode)}'
-            AND e.ENQUIRY_NR = '${sqlEscape(value)}'
-            AND e.ENQUIRY_TYPE = '${sqlEscape(referenceType)}'
-        `),
-        executeWmsInboundSql(`
-          SELECT d.*, a.ACTIVITY
-          FROM TF_ENQUIRY_DET d
-          LEFT JOIN MS_ACTIVITY a
-            ON a.COMPANY_CODE = d.COMPANY_CODE
-           AND a.ACTIVITY_CODE = d.ACT_CODE
-          WHERE d.COMPANY_CODE = '${sqlEscape(companyCode)}'
-            AND d.ENQUIRY_NR = '${sqlEscape(value)}'
-            AND d.ENQUIRY_TYPE = '${sqlEscape(referenceType)}'
-          ORDER BY NVL(d.SRNO, d.SR_NO), d.SR_NO
-        `),
-      ]);
-
-      const sourceRow = normalizeLookupRow(headerRows[0] || {});
-      if (!headerRows.length) {
+      const response = await api.post<{ success?: boolean; data?: { header?: LookupRow | null; details?: LookupRow[] }; message?: string }>(
+        "/api/freight/enquiry/get",
+        { company_code: companyCode, enquiry_type: referenceType, enquiry_nr: value },
+      );
+      if (response.data?.success === false) throw new Error(response.data.message || "Reference enquiry not found");
+      const sourceRow = normalizeLookupRow(response.data?.data?.header || {});
+      const detailRows = response.data?.data?.details || [];
+      if (!response.data?.data?.header) {
         throw new Error("Reference enquiry not found");
       }
 
@@ -483,33 +450,12 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
     if (!companyCode) return;
     setLoadingList(true);
     try {
-      const rows = await executeWmsInboundSql(`
-        SELECT
-          e.ENQUIRY_NR,
-          e.ENQUIRY_DATE,
-          e.COMPANY_CODE,
-          e.PRIN_CODE,
-          p.PRIN_NAME,
-          e.JOB_TYPE,
-          e.TRANSPORT_MODE,
-          e.DEPT_CODE,
-          e.ORIGIN_PORT,
-          e.DESTINATION_PORT,
-          e.CURR_CODE,
-          e.EX_RATE,
-          e.INDSTATUS,
-          e.ENQUIRY_TYPE,
-          e.JOB_NUMBER,
-          e.SALESMAN_CODE
-        FROM TF_ENQUIRY e
-        LEFT JOIN MS_PRINCIPAL p
-          ON p.COMPANY_CODE = e.COMPANY_CODE
-         AND p.PRIN_CODE = e.PRIN_CODE
-        WHERE e.COMPANY_CODE = '${sqlEscape(companyCode)}'
-          AND e.ENQUIRY_TYPE = '${sqlEscape(screenType === "rfq" ? "RFQ" : "EQI")}'
-        ORDER BY e.ENQUIRY_DATE DESC, e.ENQUIRY_NR DESC
-      `);
-      setListRows(rows.map(normalizeLookupRow));
+      const response = await api.post<{ success?: boolean; data?: LookupRow[]; message?: string }>(
+        isRfq ? "/api/freight/rfq/list" : "/api/freight/enquiry/list",
+        { company_code: companyCode, enquiry_type: screenType === "rfq" ? "RFQ" : "EQI" },
+      );
+      if (response.data?.success === false) throw new Error(response.data.message || `Unable to load ${enquiryLabel} list`);
+      setListRows((response.data?.data || []).map(normalizeLookupRow));
     } catch (error) {
       setNotice({ type: "error", text: error instanceof Error ? error.message : `Unable to load ${enquiryLabel} list` });
     } finally {
@@ -820,11 +766,11 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
 
   return (
     <>
-    <form className="grid gap-2.5" onSubmit={saveEnquiry}>
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-card px-3 py-2 shadow-sm">
+    <form className="freight-dense-form" onSubmit={saveEnquiry}>
+      <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
         <div className="flex min-w-0 items-center gap-2.5">
-          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-            <ShipWheel size={16} />
+          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+            <ShipWheel size={15} />
           </div>
           <div className="min-w-0">
             <p className="eyebrow mb-0.5">{isRfq ? "Freight RFQ" : "Freight Enquiry"}</p>
@@ -835,7 +781,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
               </span>
               <span className={statusBadgeClass(header.indstatus)}>{statusLabel(header.indstatus)}</span>
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
               <span>{modeLabel(header.transport_mode)}</span>
               <span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
               <span>{header.job_type === "IMP" ? "Import" : "Export"}</span>
@@ -893,8 +839,8 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
       {assistOpen && <FreightAssistPanel checks={smartChecks} />}
 
       <fieldset disabled={isLocked} className="contents">
-      <section className="rounded-md border bg-card p-2.5 shadow-sm">
-        <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6 xl:grid-cols-8">
+      <section className="freight-form-card rounded-md border bg-card shadow-sm">
+        <div className="grid gap-1.5 sm:grid-cols-3 lg:grid-cols-6 xl:grid-cols-8">
           {/* <FormInput label="Company" value={header.company_code} onChange={(value) => setHeaderField("company_code", value)} required /> */}
           <FormInput label={`${enquiryLabel} No`} value={header.enquiry_nr} onChange={(value) => setHeaderField("enquiry_nr", value)} placeholder="Auto" disabled required inputClassName={header.enquiry_nr
             ? "bg-muted text-foreground"
@@ -933,21 +879,21 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
       </section>
       </fieldset>
 
-      <div className="grid gap-0 rounded-md border bg-card shadow-sm">
-        <div className="flex gap-2 overflow-x-auto p-2">
+      <div className="freight-tabs-shell grid gap-0 rounded-md border bg-card shadow-sm">
+        <div className="freight-tabs-list flex overflow-x-auto">
           {enquiryTabs.map((tab) => (
             <TabButton key={tab.key} tab={tab} active={activeTab === tab.key} onClick={() => setActiveTab(tab.key)} />
           ))}
         </div>
 
         <fieldset disabled={isLocked} className="contents">
-        <div className="border-t p-2.5">
+        <div className="freight-tabs-panel border-t">
           {activeTab === "cargo" && (
             <section>
               <SectionHeading title="Cargo And Parties" description="Commodity, measurement, shipper and consignee details" />
-              <div className="grid gap-2 xl:grid-cols-12">
+              <div className="grid gap-1.5 xl:grid-cols-12">
                 <SectionPanel className="xl:col-span-7" icon={PackageCheck} title="Cargo Profile" meta={`${header.commodity || "Commodity pending"} / ${header.gross_wt || header.weight || "0"} kgs`}>
-                  <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="grid gap-1 sm:grid-cols-2 xl:grid-cols-4">
                     <FormLookup label="Commodity" value={header.commodity} valueField="prodtype_desc" displayFields={["prodtype_desc", "prodtype_code"]} columns={[{ field: "prodtype_desc", header: "Commodity" }, { field: "prodtype_code", header: "Code" }]} loadOptions={() => loadCommodityLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("commodity", value, row)} className="xl:col-span-2" />
                     <FormInput label="Weight(kgs)" type="number" value={header.weight} onChange={(value) => setHeaderField("weight", value)} />
                     <FormInput label="Gross Weight(kgs)" type="number" value={header.gross_wt} onChange={(value) => setHeaderField("gross_wt", value)} />
@@ -960,7 +906,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
                 </SectionPanel>
 
                 <SectionPanel className="xl:col-span-5" icon={ShipWheel} title="Equipment" meta={`${header.no_of_contaners || "0"} containers`}>
-                  <div className="grid gap-1.5 sm:grid-cols-2">
+                  <div className="grid gap-1 sm:grid-cols-2">
                     <FormInput label="Container Type" value={header.container_type} onChange={(value) => setHeaderField("container_type", value)} />
                     <FormInput label="Containers" type="number" value={header.no_of_contaners} onChange={(value) => setHeaderField("no_of_contaners", value)} />
                     <FormLookup label="Vehicle Type" value={header.vehicle_type} valueField="vtype_code" displayFields={["vtype_code", "vtype_name"]} columns={[{ field: "vtype_code", header: "Code" }, { field: "vtype_name", header: "Vehicle Type" }]} loadOptions={() => loadVehicleTypeLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("vehicle_type", value, row)} />
@@ -969,14 +915,14 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
                 </SectionPanel>
 
                 <SectionPanel className="xl:col-span-5" icon={CreditCard} title="Cargo Notes" meta={header.remarks ? "Remarks added" : "No remarks"}>
-                  <div className="grid gap-1.5 sm:grid-cols-2">
+                  <div className="grid gap-1 sm:grid-cols-2">
                     <FormTextarea label="Cargo Detail" value={header.cargo_detail} onChange={(value) => setHeaderField("cargo_detail", value)} compact />
                     <FormTextarea label="Remarks" value={header.remarks} onChange={(value) => setHeaderField("remarks", value)} compact />
                   </div>
                 </SectionPanel>
 
                 <SectionPanel className="xl:col-span-7" icon={MapPinned} title="Parties" meta={`${header.shipper_name || "Shipper pending"} / ${header.consignee_name || "Consignee pending"}`}>
-                  <div className="grid gap-1.5 sm:grid-cols-4">
+                  <div className="grid gap-1 sm:grid-cols-4">
                     <FormTextarea label="Shipper" value={header.shipper_name} onChange={(value) => setHeaderField("shipper_name", value)} compact />
                     <FormTextarea label="Shipper Address" value={header.shipper_address} onChange={(value) => setHeaderField("shipper_address", value)} compact />
                     <FormTextarea label="Consignee" value={header.consignee_name} onChange={(value) => setHeaderField("consignee_name", value)} compact />
@@ -989,9 +935,9 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
           {activeTab === "journey" && (
             <section>
               <SectionHeading title="Journey" description="Port routing, country movement, and shipment reference" />
-              <div className="grid gap-2 lg:grid-cols-12">
+              <div className="grid gap-1.5 lg:grid-cols-12">
                 <SectionPanel className="lg:col-span-7" icon={MapPinned} title="Routing" meta={`${header.origin_port || "Origin"} -> ${header.destination_port || "Destination"}`}>
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-1 sm:grid-cols-2">
                     <FormLookup label="Port of Loading" value={header.origin_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("origin_port", value, row)} required />
                     <FormLookup label="Port of Destination" value={header.destination_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("destination_port", value, row)} />
                     <FormInput label="Country Origin" value={header.country_origin} onChange={(value) => setHeaderField("country_origin", value)} />
@@ -1000,7 +946,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
                 </SectionPanel>
 
                 <SectionPanel className="lg:col-span-5" icon={ShipWheel} title="Shipment Reference" meta={header.job_number || "Job pending"}>
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                  <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                     <FormInput label="Via" value={header.via} onChange={(value) => setHeaderField("via", value)} />
                     <FormInput label="Shipment Status" value={header.shipment_status} onChange={(value) => setHeaderField("shipment_status", value)} />
                     <FormInput label="Job No" value={header.job_number} onChange={(value) => setHeaderField("job_number", value)} />
@@ -1014,16 +960,16 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
           {activeTab === "carrier" && (
             <section>
               <SectionHeading title="Carrier Details" description="Carrier, forwarder, transit schedule, and sales owner" />
-              <div className="grid gap-2 lg:grid-cols-12">
+              <div className="grid gap-1.5 lg:grid-cols-12">
                 <SectionPanel className="lg:col-span-6" icon={ShipWheel} title="Carrier And Forwarder" meta={`${modeLabel(header.transport_mode)} / ${header.carrier || "Carrier pending"}`}>
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-1 sm:grid-cols-2">
                     <FormLookup key={`carrier-${header.transport_mode}`} label="Carrier" value={header.carrier} {...carrierLookupProps(header.transport_mode, header.company_code)} onChange={(value, row) => applyHeaderLookup("carrier", value, row)} />
                     <FormLookup label="Forwarder" value={header.forwarder_code} valueField="forwarder_code" displayFields={["forwarder_code", "forwarder_name"]} columns={[{ field: "forwarder_code", header: "Code" }, { field: "forwarder_name", header: "Forwarder" }]} loadOptions={() => loadForwarderLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("forwarder_code", value, row)} />
                   </div>
                 </SectionPanel>
 
                 <SectionPanel className="lg:col-span-6" icon={Activity} title="Schedule And Sales" meta={header.salesman_code || "Sales executive pending"}>
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-1 sm:grid-cols-2">
                     <FormInput label="Transit Time" value={header.transit_time} onChange={(value) => setHeaderField("transit_time", value)} />
                     <FormInput label="Frequency" value={header.frequency} onChange={(value) => setHeaderField("frequency", value)} />
                     <FormLookup label="Sales Executive" value={header.salesman_code} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Sales Executive" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} />
@@ -1037,9 +983,9 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
           {activeTab === "payment" && (
             <section>
               <SectionHeading title="Payment Terms" description="Commercial terms, currency, references, and instructions" />
-              <div className="grid gap-2 lg:grid-cols-12">
+              <div className="grid gap-1.5 lg:grid-cols-12">
                 <SectionPanel className="lg:col-span-5" icon={CreditCard} title="Terms And Currency" meta={`${header.payment_terms || "Terms"} / ${header.curr_code || "Currency"}`}>
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-1 sm:grid-cols-2">
                     <FormSelect label="INCO Terms" value={header.payment_terms} onChange={(value) => setHeaderField("payment_terms", value)} options={paymentTerms.map((value) => ({ value, label: value }))} />
                     <FormSelect label="Freight Payable At" value={header.tos} onChange={(value) => setHeaderField("tos", value)} options={tosOptions.map((value) => ({ value, label: value }))} />
                     <FormLookup label="Currency" value={header.curr_code} valueField="curr_code" displayFields={["curr_code", "curr_name"]} columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Currency" }, { field: "ex_rate", header: "Rate" }]} loadOptions={() => loadCurrencyLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("curr_code", value, row)} required />
@@ -1048,7 +994,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
                 </SectionPanel>
 
                 <SectionPanel className="lg:col-span-4" icon={PackageCheck} title="Classification" meta={`${header.sale_type || "Sale"} / ${header.job_category || "Category"}`}>
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                  <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                     <FormSelect label="Member Type" value={header.member_type} onChange={(value) => setHeaderField("member_type", value)} options={memberTypes.map((value) => ({ value, label: value || "Blank" }))} />
                     <FormSelect label="Sale Type" value={header.sale_type} onChange={(value) => setHeaderField("sale_type", value)} options={saleTypes.map((value) => ({ value, label: value }))} />
                     <FormSelect label="Job Category" value={header.job_category} onChange={(value) => setHeaderField("job_category", value)} options={jobCategories.map((value) => ({ value, label: value }))} />
@@ -1210,7 +1156,7 @@ function TabButton({
 
 function SectionHeading({ title, description }: { title: string; description: string }) {
   return (
-    <div className="mb-2">
+    <div className="freight-section-heading">
       <h2 className="m-0 text-xs font-semibold uppercase text-slate-700">{title}</h2>
       <p className="m-0 text-xs text-muted-foreground">{description}</p>
     </div>
@@ -1260,11 +1206,11 @@ function SectionPanel({
   className?: string;
 }) {
   return (
-    <section className={`overflow-hidden rounded-md border bg-background shadow-sm ${className}`}>
-      <div className="flex items-center justify-between gap-2 border-b bg-muted/35 px-2 py-1.5">
+    <section className={`freight-panel overflow-hidden rounded-md border bg-background shadow-sm ${className}`}>
+      <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-            <Icon size={13} />
+          <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+            <Icon size={12} />
           </span>
           <div className="min-w-0">
             <h3 className="m-0 truncate text-[11px] font-semibold uppercase text-foreground">{title}</h3>
@@ -1272,14 +1218,14 @@ function SectionPanel({
           </div>
         </div>
       </div>
-      <div className="p-2">{children}</div>
+      <div className="freight-panel-body">{children}</div>
     </section>
   );
 }
 
 function HeaderChip({ label, value }: { label: string; value: string }) {
   return (
-    <span className="inline-flex max-w-56 items-center gap-1.5 rounded-md border border-border bg-muted px-2.5 py-1 text-xs">
+    <span className="inline-flex max-w-52 items-center gap-1 rounded-md border border-border bg-muted px-2 py-0.5 text-[11px]">
       <span className="font-semibold uppercase text-muted-foreground">{label}</span>
       <span className="truncate font-semibold text-foreground">{value}</span>
     </span>
@@ -1567,7 +1513,7 @@ function FormInput({
   return (
     <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
       {label}
-      <Input className={`h-8 text-xs ${inputClassName}`} value={value} type={type} required={required} placeholder={placeholder} disabled={disabled} onChange={(event) => onChange(event.target.value)} />
+      <Input className={`h-7 text-[11px] ${inputClassName}`} value={value} type={type} required={required} placeholder={placeholder} disabled={disabled} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }
@@ -1576,7 +1522,7 @@ function StatusField({ status }: { status: string }) {
   return (
     <div className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
       Status
-      <div className="flex h-8 items-center rounded-md border border-input bg-muted/40 px-2">
+      <div className="flex h-7 items-center rounded-md border border-input bg-muted/40 px-2">
         <span className={statusBadgeClass(status)}>{statusLabel(status)}</span>
       </div>
     </div>
@@ -1587,7 +1533,7 @@ function TypeField({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
       {label}
-      <div className="flex h-8 items-center rounded-md border border-input bg-muted/40 px-2 text-xs font-semibold text-foreground">
+      <div className="flex h-7 items-center rounded-md border border-input bg-muted/40 px-2 text-[11px] font-semibold text-foreground">
         {value || "-"}
       </div>
     </div>
@@ -1682,7 +1628,7 @@ function FormTextarea({
   return (
     <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
       {label}
-      <textarea className={`${fieldClassName} ${compact ? "min-h-9" : "min-h-14"} resize-y py-1.5`} value={value} onChange={(event) => onChange(event.target.value)} />
+      <textarea className={`${fieldClassName} ${compact ? "min-h-8" : "min-h-10"} resize-y py-1`} value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }
@@ -1758,179 +1704,61 @@ function carrierLookupProps(mode: string, companyCode: string) {
 }
 
 async function loadPrincipalLookup(companyCode: string) {
-  return loadFreightLookup(`
-    SELECT
-      p.PRIN_CODE,
-      p.PRIN_NAME,
-      p.PRIN_DEPT_CODE,
-      p.CURR_CODE,
-      c.CURR_NAME,
-      c.EX_RATE,
-      d.DEPT_NAME
-    FROM MS_PRINCIPAL p
-    LEFT JOIN MS_CURRENCY c
-      ON c.COMPANY_CODE = p.COMPANY_CODE
-     AND c.CURR_CODE = p.CURR_CODE
-    LEFT JOIN MS_DEPARTMENT d
-      ON d.COMPANY_CODE = p.COMPANY_CODE
-     AND d.DEPT_CODE = p.PRIN_DEPT_CODE
-    WHERE p.COMPANY_CODE = '${sqlEscape(companyCode)}'
-    ORDER BY p.PRIN_CODE
-  `);
+  return loadFreightLookup("freight_principal", companyCode);
 }
 
 async function loadWalkinPrincipalLookup(companyCode: string) {
-  return loadFreightLookup(`
-    SELECT PRIN_CODE, PRIN_NAME, PRIN_CONTACT1, PRIN_EMAIL1, PRIN_TELNO1
-    FROM MS_PRINCIPAL_WALKIN
-    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
-    ORDER BY PRIN_CODE
-  `);
+  return loadFreightLookup("freight_walkin_principal", companyCode);
 }
 
 async function loadDepartmentLookup(companyCode: string) {
-  return loadFreightLookup(`
-    SELECT DEPT_CODE, DEPT_NAME
-    FROM MS_DEPARTMENT
-    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
-    ORDER BY DEPT_CODE
-  `);
+  return loadFreightLookup("freight_department", companyCode);
 }
 
 async function loadCommodityLookup(companyCode: string) {
-  return loadFreightLookup(`
-    SELECT PRODTYPE_DESC, PRODTYPE_CODE
-    FROM MS_PRODTYPE
-    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
-    ORDER BY PRODTYPE_DESC
-  `);
+  return loadFreightLookup("freight_commodity", companyCode);
 }
 
 async function loadPortLookup(companyCode: string) {
-  return loadFreightLookup(`
-    SELECT
-      p.PORT_CODE,
-      p.PORT_NAME,
-      p.COUNTRY_CODE,
-      c.COUNTRY_NAME
-    FROM MS_PORT p
-    LEFT JOIN MS_COUNTRY c
-      ON c.COUNTRY_CODE = p.COUNTRY_CODE
-    WHERE p.COMPANY_CODE = '${sqlEscape(companyCode)}'
-    ORDER BY p.PORT_NAME
-  `);
+  return loadFreightLookup("freight_port", companyCode);
 }
 
 async function loadCurrencyLookup(companyCode: string) {
-  return loadFreightLookup(`
-    SELECT CURR_CODE, CURR_NAME, EX_RATE
-    FROM MS_CURRENCY
-    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
-    ORDER BY CURR_CODE
-  `);
+  return loadFreightLookup("freight_currency", companyCode);
 }
 
 async function loadSalesmanLookup(companyCode: string) {
-  return loadFreightLookup(`
-    SELECT SALESMAN_CODE, SALESMAN_NAME
-    FROM MS_SALESMAN
-    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
-    ORDER BY SALESMAN_CODE
-  `);
+  return loadFreightLookup("freight_salesman", companyCode);
 }
 
 async function loadForwarderLookup(companyCode: string) {
-  return loadFreightLookup(`
-    SELECT FORWARDER_CODE, FORWARDER_NAME
-    FROM MS_FORWARDER
-    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
-    ORDER BY FORWARDER_CODE
-  `);
+  return loadFreightLookup("freight_forwarder", companyCode);
 }
 
 async function loadVehicleTypeLookup(companyCode: string) {
-  return loadFreightLookup(`
-    SELECT VTYPE_CODE, VTYPE_NAME
-    FROM MS_VEHICLE_TYPE
-    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
-    ORDER BY VTYPE_CODE
-  `);
+  return loadFreightLookup("freight_vehicle_type", companyCode);
 }
 
 async function loadCarrierLookup(companyCode: string, mode: string) {
   if (mode === "S") {
-    return loadFreightLookup(`
-      SELECT VESSEL_CODE, VESSEL_NAME
-      FROM MS_VESSEL
-      WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
-      ORDER BY VESSEL_CODE
-    `);
+    return loadFreightLookup("freight_vessel", companyCode);
   }
   if (mode === "R") {
-    return loadFreightLookup(`
-      SELECT VEHICLE_NO, VEHICLE_DESC
-      FROM MS_VEHICLE
-      WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
-      ORDER BY VEHICLE_NO
-    `);
+    return loadFreightLookup("freight_vehicle", companyCode);
   }
-  return loadFreightLookup(`
-    SELECT AIRLINE_CODE, AIRLINE_NAME
-    FROM MS_AIRLINE
-    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
-    ORDER BY AIRLINE_CODE
-  `);
+  return loadFreightLookup("freight_airline", companyCode);
 }
 
 async function loadActivityLookup(companyCode: string) {
-  return loadFreightLookup(`
-    SELECT
-      ACTIVITY_CODE,
-      ACTIVITY,
-      NVL(QUANTITY, 1) QUANTITY,
-      UOM,
-      NVL(BILL, 0) BILL,
-      NVL(COST, 0) COST,
-      ACTIVITY_GROUP_CODE,
-      ACTIVITY_SUBGROUP_CODE,
-      MANDATORY_FLAG,
-      ACT_TYPE
-    FROM MS_ACTIVITY
-    WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
-      AND NVL(FREEZE_FLAG, 'N') = 'N'
-    ORDER BY ACTIVITY_CODE
-  `);
+  return loadFreightLookup("freight_activity", companyCode);
 }
 
 async function loadReferenceEnquiryLookup(companyCode: string) {
-  return loadFreightLookup(`
-    SELECT
-      e.ENQUIRY_NR,
-      e.ENQUIRY_DATE,
-      TO_CHAR(e.ENQUIRY_DATE, 'DD/MM/YYYY') AS ENQUIRY_DATE_DISPLAY,
-      e.ENQUIRY_TYPE,
-      e.COMPANY_CODE,
-      e.PRIN_CODE,
-      p.PRIN_NAME,
-      e.JOB_TYPE,
-      e.TRANSPORT_MODE,
-      e.DEPT_CODE,
-      e.CURR_CODE,
-      e.ORIGIN_PORT,
-      e.DESTINATION_PORT
-    FROM TF_ENQUIRY e
-    LEFT JOIN MS_PRINCIPAL p
-      ON p.COMPANY_CODE = e.COMPANY_CODE
-     AND p.PRIN_CODE = e.PRIN_CODE
-    WHERE e.COMPANY_CODE = '${sqlEscape(companyCode)}'
-      AND e.ENQUIRY_TYPE = 'EQI'
-      AND NVL(e.INDSTATUS, 'N') = 'A'
-    ORDER BY e.ENQUIRY_DATE DESC, e.ENQUIRY_NR DESC
-  `);
+  return loadFreightLookup("freight_approved_enquiry", companyCode);
 }
 
-async function loadFreightLookup(sql: string) {
-  const rows = await executeWmsInboundSqlCached(sql);
+async function loadFreightLookup(parameter: string, companyCode: string, query = "") {
+  const rows = await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 50 });
   return Array.isArray(rows) ? rows.map(normalizeLookupRow) : [];
 }
 
@@ -1950,10 +1778,6 @@ function multiplyText(quantity: string, rate: string) {
   const total = Number(quantity || 0) * Number(rate || 0);
   if (!Number.isFinite(total)) return "0";
   return total.toFixed(3).replace(/\.?0+$/, "");
-}
-
-function sqlEscape(input: string) {
-  return String(input || "").replace(/'/g, "''");
 }
 
 function toInputDate(value: Date) {
@@ -1978,4 +1802,4 @@ function formatDisplayDate(input: string) {
 }
 
 const fieldClassName =
-  "flex h-8 w-full rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60";
+  "flex h-7 w-full rounded-md border border-input bg-background px-2 py-0.5 text-[11px] text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60";
