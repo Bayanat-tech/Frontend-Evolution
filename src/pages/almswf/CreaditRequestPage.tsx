@@ -12,8 +12,11 @@ import AddCRRequestPage from "./AddCRRequestPage";
 import { getDynamicLookup } from "../../api/lookups";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const TAB_STATUS = ["PENDING", "INPROGRESS", "REJECTED", "SENT BACK", "APPROVED", "PO GENERATED"] as const;
-const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Final Approved", "Po Generated"] as const;
+// NOTE: these must exactly match PROC_BUILD_DYNAMIC_CREDITREQUEST_ENTRY's P_CODE3
+// CASE values (PS_CREDITREQUEST_ENTRY_TAB_LIST). No spaces — "INPROGRESS" and
+// "SENDBACK" are single words on the backend, unlike the generic PR/PO tab set.
+const TAB_STATUS = ["PENDING", "INPROGRESS", "CLOSED", "CANCELED", "REJECTED", "SENDBACK"] as const;
+const TAB_LABELS = ["Pending", "In Progress", "Closed", "Canceled", "Rejected", "Send Back"] as const;
 
 type CRTab = (typeof TAB_STATUS)[number];
 
@@ -229,18 +232,20 @@ const Credit_Request_page = ({ initialTab = 0 }: CreditRequestPageProps) => {
             >
               <Eye size={14} />
             </Button>
-            <Button
-              size="sm" variant="ghost" title="Edit"
-              onClick={() => handleActions("edit", row.original)}
-              style={{ padding: "4px", height: "28px", width: "28px" }}
-            >
-              <Edit2 size={14} />
-            </Button>
+            {tab !== "INPROGRESS" && (
+              <Button
+                size="sm" variant="ghost" title="Edit"
+                onClick={() => handleActions("edit", row.original)}
+                style={{ padding: "4px", height: "28px", width: "28px" }}
+              >
+                <Edit2 size={14} />
+              </Button>
+            )}
           </div>
         ),
       },
     ],
-    []
+    [tab]
   );
 
   // ── Render ─────────────────────────────────────────────────────────────────
