@@ -1,6 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, Ban, Bell, BrainCircuit, CheckCircle2, ClipboardList, FileText, Info, PackageCheck, Plane, Plus, ReceiptText, RefreshCw, Search, Ship, Truck, WalletCards } from "lucide-react";
+import { ArrowLeft, ArrowRight, Ban, Bell, BrainCircuit, CheckCircle2, ClipboardList, FileText, Info, PackageCheck, Paperclip, Plane, Plus, ReceiptText, RefreshCw, Search, Ship, Truck, WalletCards } from "lucide-react";
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
@@ -12,6 +12,7 @@ import { FreightJobPage } from "./FreightJobPage";
 import { FreightPacklistPage } from "./FreightPacklistPage";
 import { FreightJobActivitiesPage } from "./FreightJobActivitiesPage";
 import { FreightJobFollowupTab } from "./FreightJobFollowupTabs";
+import { FreightAttachmentDialog } from "./FreightAttachmentDialog";
 
 type JobTab = "job" | "packlist" | "jobsheet" | "alerts" | "instructions" | "documents" | "deposits" | "activities";
 type WorkspaceMode = "list" | "steps";
@@ -77,6 +78,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   const [activeStatus, setActiveStatus] = useState("in_progress");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [attachmentOpen, setAttachmentOpen] = useState(false);
   const targetMode = target?.mode || "air";
   const targetDirection = target?.direction || "import";
   const title = useMemo(() => {
@@ -244,6 +246,15 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
               <ArrowLeft size={14} />
               Listing
             </button>
+            <button
+              type="button"
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-2.5 text-xs font-semibold text-muted-foreground transition hover:bg-muted/60 disabled:opacity-50"
+              disabled={!selectedJob}
+              onClick={() => setAttachmentOpen(true)}
+            >
+              <Paperclip size={14} />
+              Files
+            </button>
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const active = activeTab === tab.key;
@@ -268,12 +279,24 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
 
       {activeTab === "job" && <FreightJobPage target={target} initialJob={selectedJob} startMode="editor" />}
       {activeTab === "packlist" && <FreightPacklistPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="packlist" />}
-      {activeTab === "jobsheet" && <FreightPacklistPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="jobsheet" />}
+      {activeTab === "jobsheet" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="jobsheet" />}
       {activeTab === "alerts" && <FreightJobFollowupTab target={target} kind="alerts" initialJob={selectedJob} />}
       {activeTab === "instructions" && <FreightJobFollowupTab target={target} kind="instructions" initialJob={selectedJob} />}
       {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" initialJob={selectedJob} />}
       {activeTab === "deposits" && <FreightJobFollowupTab target={target} kind="deposits" initialJob={selectedJob} />}
-      {activeTab === "activities" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} />}
+      {activeTab === "activities" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="activities" />}
+
+      <FreightAttachmentDialog
+        open={attachmentOpen}
+        onClose={() => setAttachmentOpen(false)}
+        title="Job Attachments"
+        companyCode={text(selectedJob || undefined, "company_code") || companyCode}
+        prinCode={text(selectedJob || undefined, "prin_code")}
+        jobNo={text(selectedJob || undefined, "job_no")}
+        context="JOB"
+        loginId={String(userRecord.user_id || userRecord.USER_ID || userRecord.loginid || userRecord.LOGINID || "Admin")}
+        readOnly={!selectedJob}
+      />
     </section>
   );
 }

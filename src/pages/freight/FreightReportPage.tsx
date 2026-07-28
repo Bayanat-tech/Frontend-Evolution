@@ -983,7 +983,6 @@ function ReportPreview({
             <div className="grid min-h-56 place-items-center rounded border border-dashed border-slate-300 bg-slate-50 text-sm font-semibold text-slate-500">No report rows found for selected filters.</div>
           )}
           <div className="mt-4 border-t pt-2 text-center text-[11px] font-semibold text-slate-500">End of report</div>
-          <div className="mt-1 text-right text-[10px] font-semibold uppercase tracking-[0.22em] text-primary">powered by AWARE</div>
         </div>
       </div>
     </div>
@@ -1015,7 +1014,6 @@ function ReportHeader({
             <img src="/bayanat-logo.png" alt="Bayanat Technology" className="h-9 w-9 object-contain" />
             <div className="text-[12px] font-bold uppercase tracking-[0.28em] text-primary">Bayanat Technology</div>
           </div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Freight Management System</div>
         </div>
       </div>
       <div className="grid grid-cols-[1.35fr_1fr] gap-4 border-b border-slate-300 py-2">
@@ -1510,12 +1508,12 @@ function reportHtml(
     .excel-export{background:white}.excel-export .sheet{padding:0}.excel-export .paper{max-width:none;width:1600px;margin:0;padding:18px;border:0;box-shadow:none}.excel-export .logo{height:auto;display:block;padding-bottom:8px}.excel-export .brand-wrap{display:block}.excel-export .brand-wrap img{display:none}.excel-export .brand{font-size:18px;letter-spacing:.18em}.excel-export .system{font-size:12px;margin-top:4px}.excel-export .top{display:block;padding:10px 0}.excel-export .title{font-size:24px}.excel-export .sub,.excel-export .meta,.excel-export .params{font-size:12px}.excel-export .meta{text-align:left;margin-top:8px}.excel-export .params{display:block;padding:8px 0}.excel-export .params div{display:inline-block;min-width:300px;margin-right:18px}.excel-export .group-title{font-size:15px;padding:7px 8px}.excel-export table{width:1550px;font-size:12px;mso-displayed-decimal-separator:".";mso-displayed-thousand-separator:","}.excel-export th{font-size:11px;padding:7px 6px}.excel-export td{padding:6px 6px}.excel-export .footer{font-size:12px}.excel-export .aware{font-size:10px}
     @media print{body{background:white}.viewerbar{display:none}.sheet{padding:0}.paper{border:0;box-shadow:none;max-width:none}}
   </style></head><body>${interactive ? `<div class="viewerbar"><div><h1>${escapeHtml(config.title)}</h1><p>${rows.length} rows | ${escapeHtml(principalText || "All principals")} | ${escapeHtml(generatedAt)}</p></div><div class="actions"><button class="primary" onclick="window.print()">Print</button><button onclick="downloadExcel()">Excel</button><button onclick="window.close()">Close</button></div></div>` : ""}<div class="sheet"><div class="paper">
-    <div class="logo"><div class="brand-wrap"><img src="${escapeHtml(logoUrl)}" alt="Bayanat Technology"><div class="brand">Bayanat Technology</div></div><div class="system">Freight Management System</div></div>
+    <div class="logo"><div class="brand-wrap"><img src="${escapeHtml(logoUrl)}" alt="Bayanat Technology"><div class="brand">Bayanat Technology</div></div></div>
     <div class="top"><div><div class="title">${escapeHtml(config.title)}</div><div class="sub">${escapeHtml(config.family)} | Company ${escapeHtml(companyCode)} | ${rows.length} record${rows.length === 1 ? "" : "s"}${totals.map((item) => ` | ${item.label}: ${formatAmount(item.value)}`).join("")}</div></div>
     <div class="meta"><div><b>Date:</b> ${escapeHtml(generatedAt)}</div><div><b>User:</b> ${escapeHtml(userName)}</div><div><b>Report:</b> ${escapeHtml(config.title)}</div><div><b>Page:</b> 1 of 1</div></div></div>
     <div class="params"><div><b>Period:</b> ${escapeHtml(toDisplayDate(filters.from_date) || "Start")} - ${escapeHtml(toDisplayDate(filters.to_date) || "Today")}</div><div><b>Principal:</b> ${escapeHtml(principalText || "All")}</div><div><b>Movement:</b> ${escapeHtml(`${optionLabel(modeOptions, filters.transport_mode)} / ${optionLabel(jobTypeOptions, filters.job_type)}`)}</div><div><b>Status:</b> ${escapeHtml(optionLabel(statusOptions, filters.status))}</div></div>
     ${rows.length ? body : `<div class="empty">No report rows found for selected filters.</div>`}
-    <div class="footer">End of report</div><div class="aware">powered by AWARE</div>
+    <div class="footer">End of report</div><div class="aware"></div>
   </div></div><script>
     const csvText = ${JSON.stringify(csv)};
     function cleanHtmlForExcel(){

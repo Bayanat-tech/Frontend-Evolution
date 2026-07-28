@@ -1,5 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import type { Dispatch, FormEvent, SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   Edit2,
@@ -111,6 +112,21 @@ type PackForm = {
   user_id: string;
 };
 
+type DimensionLine = {
+  sr_no: string;
+  packlist_dim_no: string;
+  length: string;
+  breadth: string;
+  height: string;
+  qty: string;
+  gross_wt: string;
+  chargeable_wt: string;
+  volume: string;
+  total_qty: string;
+  cargo_details: string;
+  prod_description: string;
+};
+
 const modeMap = {
   air: { code: "A", label: "Air", icon: Plane },
   sea: { code: "S", label: "Sea", icon: Ship },
@@ -135,12 +151,13 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
   const direction = directionMap[directionKey];
   const Icon = mode.icon;
   const screenTitle = screen === "jobsheet" ? "JOB Sheet" : "Pack List";
-  const screenSubtitle = screen === "jobsheet" ? "PowerBuilder job sheet using pack list datawindow" : "Bill of lading and cargo packing details";
+  const screenSubtitle = screen === "jobsheet" ? "Shipment document and billing summary" : "Bill of lading and cargo packing details";
 
   const [view, setView] = useState<ViewMode>("list");
   const [rows, setRows] = useState<LookupRow[]>([]);
   const [query, setQuery] = useState("");
   const [pack, setPack] = useState<PackForm>(() => emptyPack(companyCode, userId, mode.code, direction.code));
+  const [dimensions, setDimensions] = useState<DimensionLine[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
@@ -179,6 +196,7 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
 
   useEffect(() => {
     setPack(emptyPack(companyCode, userId, mode.code, direction.code));
+    setDimensions([]);
     setView(startMode);
   }, [companyCode, direction.code, mode.code, startMode, userId]);
 
@@ -204,8 +222,18 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
 
   const openAdd = () => {
     setPack(emptyPack(companyCode, userId, mode.code, direction.code));
+    setDimensions([]);
     setNotice(null);
     setView("editor");
+  };
+
+  const loadDimensions = async (row: LookupRow) => {
+    const response = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/packlist/dimensions/list", {
+      company_code: companyCode,
+      prin_code: lookupText(row, "prin_code"),
+      job_no: lookupText(row, "job_no"),
+    });
+    setDimensions((response.data.data || []).map(toDimensionLine));
   };
 
   const openInitialJob = async (row: LookupRow) => {
@@ -232,9 +260,12 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
       }
 
       setPack(toPackDraftFromJob(normalized, companyCode, userId, mode.code, direction.code));
+      if (mode.code === "A") await loadDimensions(normalized);
+      else setDimensions([]);
       setView("editor");
     } catch (error: any) {
       setPack(toPackDraftFromJob(normalized, companyCode, userId, mode.code, direction.code));
+      setDimensions([]);
       setView("editor");
       setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to check existing pack list; opened new draft." });
     } finally {
@@ -253,6 +284,8 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
         packlist_no: lookupText(row, "packlist_no"),
       });
       setPack(toPackForm(normalizeLookupRow(response.data.data || row), companyCode, userId, mode.code, direction.code));
+      if (mode.code === "A") await loadDimensions(row);
+      else setDimensions([]);
       setView("editor");
     } catch (error: any) {
       setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to open pack list." });
@@ -286,6 +319,15 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
     setNotice(null);
     try {
       const response = await api.post<{ success?: boolean; data?: { packlist_no?: string | number; seq_number?: string }; message?: string }>("/api/freight/packlist/save", { packlist: pack });
+      if (isAir && pack.job_no && pack.prin_code) {
+        await api.post("/api/freight/packlist/dimensions/save", {
+          company_code: companyCode,
+          prin_code: pack.prin_code,
+          job_no: pack.job_no,
+          user_id: userId,
+          lines: dimensions,
+        });
+      }
       setNotice({ type: "success", text: response.data.message || "Pack list saved." });
       setPack((current) => ({
         ...current,
@@ -469,6 +511,12 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
             </div>
           </Panel>
         )}
+
+        {isAir && (
+          <Panel className="lg:col-span-12" icon={PackageCheck} title="Dimension Details" meta={`${dimensions.length} cargo dimension lines`}>
+            <DimensionGrid rows={dimensions} setRows={setDimensions} />
+          </Panel>
+        )}
       </div>
     </form>
   );
@@ -617,6 +665,62 @@ function emptyPack(companyCode: string, userId: string, transportMode: string, j
 function toPackForm(row: LookupRow, companyCode: string, userId: string, mode: string, jobType: string): PackForm {
   const base = emptyPack(companyCode, userId, mode, jobType);
   return Object.fromEntries(Object.keys(base).map((key) => [key, lookupText(row, key) || (base as any)[key]])) as PackForm;
+}
+
+function emptyDimension(srNo: number): DimensionLine {
+  return {
+    sr_no: String(srNo),
+    packlist_dim_no: "",
+    length: "",
+    breadth: "",
+    height: "",
+    qty: "1",
+    gross_wt: "",
+    chargeable_wt: "",
+    volume: "",
+    total_qty: "",
+    cargo_details: "",
+    prod_description: "",
+  };
+}
+
+function toDimensionLine(row: LookupRow, index: number): DimensionLine {
+  const base = emptyDimension(index + 1);
+  return Object.fromEntries(Object.keys(base).map((key) => [key, lookupText(row, key) || (base as any)[key]])) as DimensionLine;
+}
+
+function DimensionGrid({ rows, setRows }: { rows: DimensionLine[]; setRows: Dispatch<SetStateAction<DimensionLine[]>> }) {
+  const columns: Array<keyof DimensionLine> = ["sr_no", "length", "breadth", "height", "qty", "gross_wt", "chargeable_wt", "volume", "total_qty", "cargo_details", "prod_description"];
+  const numeric = new Set<keyof DimensionLine>(["length", "breadth", "height", "qty", "gross_wt", "chargeable_wt", "volume", "total_qty"]);
+  return (
+    <div className="overflow-hidden rounded-md border bg-background">
+      <div className="flex items-center justify-between border-b bg-muted/35 px-2 py-1.5">
+        <span className="text-xs font-semibold text-foreground">Air cargo dimensions</span>
+        <Button type="button" size="sm" variant="outline" onClick={() => setRows((current) => [...current, emptyDimension(current.length + 1)])}><Plus size={14} />Line</Button>
+      </div>
+      <div className="overflow-auto">
+        <div className="grid min-w-[1180px] grid-cols-[56px_repeat(8,minmax(86px,1fr))_minmax(170px,1.5fr)_minmax(190px,1.7fr)_44px] gap-1 border-b bg-muted/20 px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">
+          {columns.map((column) => <span key={column}>{column.replace(/_/g, " ")}</span>)}<span />
+        </div>
+        {rows.map((row, rowIndex) => (
+          <div key={rowIndex} className="grid min-w-[1180px] grid-cols-[56px_repeat(8,minmax(86px,1fr))_minmax(170px,1.5fr)_minmax(190px,1.7fr)_44px] gap-1 border-b px-2 py-1">
+            {columns.map((column) => (
+              <Input
+                key={column}
+                className={`h-7 text-xs ${numeric.has(column) ? "text-right" : ""}`}
+                type={numeric.has(column) ? "number" : "text"}
+                value={row[column]}
+                readOnly={column === "sr_no"}
+                onChange={(event) => setRows((current) => current.map((item, index) => index === rowIndex ? { ...item, [column]: event.target.value } : item))}
+              />
+            ))}
+            <Button type="button" size="icon" variant="ghost" title="Remove dimension" onClick={() => setRows((current) => current.filter((_, index) => index !== rowIndex).map((item, index) => ({ ...item, sr_no: String(index + 1) })))}><Trash2 size={14} /></Button>
+          </div>
+        ))}
+        {!rows.length && <div className="px-3 py-6 text-center text-sm text-muted-foreground">No air dimension lines. Add length, breadth, height and weight details when needed.</div>}
+      </div>
+    </div>
+  );
 }
 
 function selectJob(value: string, row: LookupRow | null, setPack: (updater: (current: PackForm) => PackForm) => void, companyCode: string, userId: string, mode: string, jobType: string) {

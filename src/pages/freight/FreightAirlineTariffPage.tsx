@@ -370,7 +370,7 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
                 {isReport ? "Airline Tariff Report" : "Airline Tariff"}
               </h1>
               <p className={`text-sm ${isReport ? "text-blue-50" : "text-muted-foreground"}`}>
-                {isReport ? "Filter airline rate slabs from PowerBuilder tariff data" : "Maintain airline source, destination and weight break rates"}
+                {isReport ? "Filter airline rate slabs by route, carrier and validity" : "Maintain airline source, destination and weight break rates"}
               </p>
             </div>
           </div>
@@ -574,7 +574,7 @@ function ReportFilters({
           </span>
           <div>
             <div className="text-sm font-bold uppercase text-slate-900">Report Filters</div>
-            <div className="text-xs text-slate-500">All values are allowed, same as PowerBuilder report filtering</div>
+            <div className="text-xs text-slate-500">All values are allowed for a broader tariff report.</div>
           </div>
         </div>
       </div>

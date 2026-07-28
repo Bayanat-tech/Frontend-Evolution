@@ -13,6 +13,7 @@ import { useAuth } from "../../state/AuthContext";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
 
 type ViewMode = "list" | "editor";
+type ActivityScreen = "jobsheet" | "activities";
 type Notice = { type: "success" | "error"; text: string } | null;
 
 type ActivityLine = {
@@ -34,6 +35,16 @@ type ActivityLine = {
   payment_mode: string;
   div_code: string;
   remarks: string;
+  tx_cat_code: string;
+  tx_compntcat_code_1: string;
+  tx_compnt_perc_1: string;
+  tx_compnt_amt_1: string;
+  tx_compnt_lcuramt_1: string;
+  tx_cat_code_cost: string;
+  tx_compntcat_code_1_cost: string;
+  tx_compnt_perc_1_cost: string;
+  tx_compnt_amt_1_cost: string;
+  tx_compnt_lcuramt_1_cost: string;
 };
 
 const modeMap = {
@@ -48,7 +59,7 @@ const directionMap = {
   reexport: { code: "IRE", label: "Import for Re-export" },
 };
 
-export function FreightJobActivitiesPage({ target, initialJob = null, startMode = "list" }: { target?: FreightWorkspaceTarget; initialJob?: LookupRow | null; startMode?: ViewMode }) {
+export function FreightJobActivitiesPage({ target, initialJob = null, startMode = "list", screen = "activities" }: { target?: FreightWorkspaceTarget; initialJob?: LookupRow | null; startMode?: ViewMode; screen?: ActivityScreen }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const userRecord = (user || {}) as Record<string, unknown>;
@@ -56,6 +67,9 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
   const userId = String(userRecord.user_id || userRecord.USER_ID || userRecord.loginid || userRecord.LOGINID || "");
   const mode = modeMap[target?.mode || "air"];
   const direction = directionMap[target?.direction || "import"];
+  const copy = screen === "jobsheet"
+    ? { eyebrow: "Freight Job Sheet", title: "JOB Sheet", subtitle: "Revenue, cost, profit and billing activity lines" }
+    : { eyebrow: "Freight Service", title: "Service & Activities", subtitle: "Operational services, vendor cost and customer billing lines" };
 
   const [view, setView] = useState<ViewMode>(startMode);
   const [rows, setRows] = useState<LookupRow[]>([]);
@@ -185,7 +199,7 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
   if (view === "list") {
     return (
       <section className="grid gap-3">
-        <Header title={`${mode.label} ${direction.label} Service Activities`} subtitle="Job cost sheet and profit lines">
+        <Header eyebrow={copy.eyebrow} title={`${mode.label} ${direction.label} ${copy.title}`} subtitle={copy.subtitle}>
           {notice && <NoticeChip notice={notice} />}
           <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}><RefreshCw size={14} />Refresh</Button>
         </Header>
@@ -213,7 +227,7 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
 
   return (
     <section className="grid gap-2">
-      <Header title="Service & Activities" subtitle={`${lookupText(header, "job_no")} / ${lookupText(header, "prin_name") || lookupText(header, "prin_code")}`}>
+      <Header eyebrow={copy.eyebrow} title={copy.title} subtitle={`${lookupText(header, "job_no")} / ${lookupText(header, "prin_name") || lookupText(header, "prin_code")}`}>
         {notice && <NoticeChip notice={notice} />}
         {!initialJob && <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>}
         <Button type="button" size="sm" variant="outline" onClick={addLine}><Plus size={14} />Line</Button>
@@ -234,19 +248,34 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
         </div>
         <div className="max-h-[calc(100vh-330px)] overflow-auto">
           {lines.map((line, index) => (
-            <div key={`${line.srno}-${index}`} className="grid grid-cols-[42px_90px_minmax(190px,1fr)_76px_94px_105px_105px_90px_105px_90px_105px_50px] items-center gap-1 border-b px-2 py-1">
-              <span className="text-xs font-semibold text-muted-foreground">{index + 1}</span>
-              <ActivityLookup value={line.act_code} companyCode={companyCode} onChange={(value, row) => updateLine(index, { act_code: value, activity: lookupText(row || undefined, "activity"), other_services: lookupText(row || undefined, "activity") || line.other_services, bill_rate: lookupText(row || undefined, "bill") || line.bill_rate, actual_cost: lookupText(row || undefined, "cost") || line.actual_cost })} />
-              <Input className="h-7 text-xs" value={line.other_services} onChange={(event) => updateLine(index, { other_services: event.target.value })} />
-              <MoneyInput value={line.quantity} onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))} />
-              <MoneyInput value={line.bill_rate} onChange={(value) => updateLine(index, recalc({ ...line, bill_rate: value }))} />
-              <MoneyInput value={line.bill} onChange={(value) => updateLine(index, { bill: value })} />
-              <MoneyInput value={line.actual_cost} onChange={(value) => updateLine(index, { actual_cost: value })} />
-              <Input className="h-7 text-xs" value={line.broker_code} onChange={(event) => updateLine(index, { broker_code: event.target.value })} />
-              <MoneyInput value={line.partners_price} onChange={(value) => updateLine(index, { partners_price: value })} />
-              <Input className="h-7 text-xs" value={line.transporter_code} onChange={(event) => updateLine(index, { transporter_code: event.target.value })} />
-              <MoneyInput value={line.transport_price} onChange={(value) => updateLine(index, { transport_price: value })} />
-              <Button type="button" size="icon" variant="ghost" title="Remove line" onClick={() => removeLine(index)}><Trash2 size={14} /></Button>
+            <div key={`${line.srno}-${index}`} className="border-b">
+              <div className="grid grid-cols-[42px_90px_minmax(190px,1fr)_76px_94px_105px_105px_90px_105px_90px_105px_50px] items-center gap-1 px-2 py-1">
+                <span className="text-xs font-semibold text-muted-foreground">{index + 1}</span>
+                <ActivityLookup value={line.act_code} companyCode={companyCode} onChange={(value, row) => updateLine(index, { act_code: value, activity: lookupText(row || undefined, "activity"), other_services: lookupText(row || undefined, "activity") || line.other_services, bill_rate: lookupText(row || undefined, "bill") || line.bill_rate, actual_cost: lookupText(row || undefined, "cost") || line.actual_cost })} />
+                <Input className="h-7 text-xs" value={line.other_services} onChange={(event) => updateLine(index, { other_services: event.target.value })} />
+                <MoneyInput value={line.quantity} onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))} />
+                <MoneyInput value={line.bill_rate} onChange={(value) => updateLine(index, recalc({ ...line, bill_rate: value }))} />
+                <MoneyInput value={line.bill} onChange={(value) => updateLine(index, { bill: value })} />
+                <MoneyInput value={line.actual_cost} onChange={(value) => updateLine(index, { actual_cost: value })} />
+                <Input className="h-7 text-xs" value={line.broker_code} onChange={(event) => updateLine(index, { broker_code: event.target.value })} />
+                <MoneyInput value={line.partners_price} onChange={(value) => updateLine(index, { partners_price: value })} />
+                <Input className="h-7 text-xs" value={line.transporter_code} onChange={(event) => updateLine(index, { transporter_code: event.target.value })} />
+                <MoneyInput value={line.transport_price} onChange={(value) => updateLine(index, { transport_price: value })} />
+                <Button type="button" size="icon" variant="ghost" title="Remove line" onClick={() => removeLine(index)}><Trash2 size={14} /></Button>
+              </div>
+              <div className="grid grid-cols-[42px_repeat(10,minmax(88px,1fr))] gap-1 bg-muted/10 px-2 pb-1">
+                <span className="self-center text-[10px] font-semibold uppercase text-muted-foreground">Tax</span>
+                <Input title="Sale tax category" placeholder="Sale Cat" className="h-7 text-xs" value={line.tx_cat_code} onChange={(event) => updateLine(index, { tx_cat_code: event.target.value })} />
+                <Input title="Sale tax component" placeholder="Sale Comp" className="h-7 text-xs" value={line.tx_compntcat_code_1} onChange={(event) => updateLine(index, { tx_compntcat_code_1: event.target.value })} />
+                <MoneyInput value={line.tx_compnt_perc_1} onChange={(value) => updateLine(index, { tx_compnt_perc_1: value })} />
+                <MoneyInput value={line.tx_compnt_amt_1} onChange={(value) => updateLine(index, { tx_compnt_amt_1: value })} />
+                <MoneyInput value={line.tx_compnt_lcuramt_1} onChange={(value) => updateLine(index, { tx_compnt_lcuramt_1: value })} />
+                <Input title="Cost tax category" placeholder="Cost Cat" className="h-7 text-xs" value={line.tx_cat_code_cost} onChange={(event) => updateLine(index, { tx_cat_code_cost: event.target.value })} />
+                <Input title="Cost tax component" placeholder="Cost Comp" className="h-7 text-xs" value={line.tx_compntcat_code_1_cost} onChange={(event) => updateLine(index, { tx_compntcat_code_1_cost: event.target.value })} />
+                <MoneyInput value={line.tx_compnt_perc_1_cost} onChange={(value) => updateLine(index, { tx_compnt_perc_1_cost: value })} />
+                <MoneyInput value={line.tx_compnt_amt_1_cost} onChange={(value) => updateLine(index, { tx_compnt_amt_1_cost: value })} />
+                <MoneyInput value={line.tx_compnt_lcuramt_1_cost} onChange={(value) => updateLine(index, { tx_compnt_lcuramt_1_cost: value })} />
+              </div>
             </div>
           ))}
           {!lines.length && <div className="px-3 py-8 text-center text-sm text-muted-foreground">No activity lines yet.</div>}
@@ -268,12 +297,12 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
   }
 }
 
-function Header({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+function Header({ eyebrow, title, subtitle, children }: { eyebrow: string; title: string; subtitle: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-card px-3 py-2 shadow-sm">
       <div className="flex min-w-0 items-center gap-2">
         <span className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary"><Calculator size={18} /></span>
-        <div><p className="eyebrow mb-0.5">Freight Cost Sheet</p><h1 className="m-0 text-lg font-semibold text-foreground">{title}</h1><p className="m-0 text-xs text-muted-foreground">{subtitle}</p></div>
+        <div><p className="eyebrow mb-0.5">{eyebrow}</p><h1 className="m-0 text-lg font-semibold text-foreground">{title}</h1><p className="m-0 text-xs text-muted-foreground">{subtitle}</p></div>
       </div>
       <div className="flex flex-wrap items-center gap-1.5">{children}</div>
     </div>
@@ -308,7 +337,7 @@ function NoticeChip({ notice }: { notice: Exclude<Notice, null> }) {
 }
 
 function emptyLine(srno: number): ActivityLine {
-  return { srno: String(srno), act_code: "", activity: "", other_services: "", quantity: "1", bill_rate: "0", bill: "0", actual_cost: "0", broker_code: "", partners_price: "0", transporter_code: "", vehicle_no: "", transport_price: "0", confirmed: "Y", print_flag: "Y", payment_mode: "", div_code: "", remarks: "" };
+  return { srno: String(srno), act_code: "", activity: "", other_services: "", quantity: "1", bill_rate: "0", bill: "0", actual_cost: "0", broker_code: "", partners_price: "0", transporter_code: "", vehicle_no: "", transport_price: "0", confirmed: "Y", print_flag: "Y", payment_mode: "", div_code: "", remarks: "", tx_cat_code: "", tx_compntcat_code_1: "", tx_compnt_perc_1: "", tx_compnt_amt_1: "", tx_compnt_lcuramt_1: "", tx_cat_code_cost: "", tx_compntcat_code_1_cost: "", tx_compnt_perc_1_cost: "", tx_compnt_amt_1_cost: "", tx_compnt_lcuramt_1_cost: "" };
 }
 
 function toLine(row: LookupRow, index: number): ActivityLine {

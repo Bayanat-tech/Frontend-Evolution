@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bell, CheckSquare, FileText, Info, Plus, RefreshCw, Save, Search, Trash2, WalletCards } from "lucide-react";
+import { Bell, CheckSquare, FileText, Info, Paperclip, Plus, RefreshCw, Save, Search, Trash2, WalletCards } from "lucide-react";
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
@@ -8,6 +8,7 @@ import { LookupField } from "../../components/ui/LookupField";
 import { useToast } from "../../components/ui/AlertToast";
 import { useAuth } from "../../state/AuthContext";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
+import { FreightAttachmentDialog } from "./FreightAttachmentDialog";
 
 type FollowupKind = "documents" | "instructions" | "alerts" | "deposits";
 type Notice = { type: "success" | "error"; text: string } | null;
@@ -31,6 +32,7 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null }: { tar
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  const [docAttachmentRow, setDocAttachmentRow] = useState<LookupRow | null>(null);
   const { user } = useAuth();
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
@@ -78,9 +80,9 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null }: { tar
     if (!job) return;
     setSaving(true);
     try {
-      await api.post(`/api/freight/${cfg.endpoint}/init`, { ...jobPayload(companyCode, job), user_id: userId });
+      await api.post(`/api/freight/${cfg.endpoint}/init`, { ...jobPayload(companyCode, job), user_id: userId, op_type: jobType === "EXP" ? "EXP" : "IMP", op_mode: mode });
       await loadRows(job);
-      setNotice({ type: "success", text: `${cfg.title} initialized from PowerBuilder masters.` });
+      setNotice({ type: "success", text: `${cfg.title} initialized from freight masters.` });
     } catch (error: any) {
       setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || `Unable to initialize ${cfg.title}.` });
     } finally {
@@ -124,7 +126,7 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null }: { tar
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary"><Icon size={18} /></span>
-            <div><p className="eyebrow mb-0.5">Job Follow-up</p><h2 className="m-0 text-lg font-semibold">{cfg.title}</h2><p className="m-0 text-xs text-muted-foreground">Select a freight job and maintain PowerBuilder-style job rows.</p></div>
+            <div><p className="eyebrow mb-0.5">Job Follow-up</p><h2 className="m-0 text-lg font-semibold">{cfg.title}</h2><p className="m-0 text-xs text-muted-foreground">Select a freight job and maintain operational follow-up rows.</p></div>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             {notice && <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>{notice.text}</span>}
@@ -161,16 +163,29 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null }: { tar
         <Metric label={cfg.summary} value={stats} />
       </div>
 
-      {kind === "documents" && <DocumentsGrid rows={rows} setRows={setRows} deleteRow={deleteRow} />}
+      {kind === "documents" && <DocumentsGrid rows={rows} setRows={setRows} deleteRow={deleteRow} onAttach={setDocAttachmentRow} />}
       {kind === "instructions" && <InstructionGrid rows={rows} setRows={setRows} deleteRow={deleteRow} />}
       {kind === "alerts" && <AlertGrid rows={rows} setRows={setRows} deleteRow={deleteRow} />}
       {kind === "deposits" && <DepositGrid rows={rows} setRows={setRows} deleteRow={deleteRow} />}
+
+      <FreightAttachmentDialog
+        open={Boolean(docAttachmentRow)}
+        onClose={() => setDocAttachmentRow(null)}
+        title="Document Attachments"
+        companyCode={companyCode}
+        prinCode={text(job || undefined, "prin_code")}
+        jobNo={text(job || undefined, "job_no")}
+        docNr={text(docAttachmentRow || undefined, "doc_nr")}
+        context="DOC"
+        loginId={userId}
+        readOnly={!job || !docAttachmentRow}
+      />
     </section>
   );
 }
 
-function DocumentsGrid({ rows, setRows, deleteRow }: GridProps) {
-  return <EditableGrid columns={["doc_nr", "doc_desc", "mandatory", "collected", "doc_received_dt", "doc_received_by", "document_type", "remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} />;
+function DocumentsGrid({ rows, setRows, deleteRow, onAttach }: GridProps & { onAttach: (row: LookupRow) => void }) {
+  return <EditableGrid columns={["doc_nr", "doc_desc", "mandatory", "collected", "doc_received_dt", "doc_received_by", "document_type", "remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} onAttach={onAttach} />;
 }
 
 function InstructionGrid({ rows, setRows, deleteRow }: GridProps) {
@@ -187,7 +202,7 @@ function DepositGrid({ rows, setRows, deleteRow }: GridProps) {
 
 type GridProps = { rows: LookupRow[]; setRows: (updater: (rows: LookupRow[]) => LookupRow[]) => void; deleteRow: (row: LookupRow) => void; addFactory?: () => LookupRow };
 
-function EditableGrid({ columns, rows, setRows, deleteRow, addFactory }: GridProps & { columns: string[] }) {
+function EditableGrid({ columns, rows, setRows, deleteRow, addFactory, onAttach }: GridProps & { columns: string[]; onAttach?: (row: LookupRow) => void }) {
   return (
     <div className="overflow-hidden rounded-md border bg-card shadow-sm">
       <div className="flex items-center justify-between border-b bg-muted/40 px-2 py-1.5">
@@ -195,12 +210,13 @@ function EditableGrid({ columns, rows, setRows, deleteRow, addFactory }: GridPro
         {addFactory && <Button type="button" size="sm" variant="outline" onClick={() => setRows((current) => [...current, normalizeLookupRow(addFactory())])}><Plus size={14} />Line</Button>}
       </div>
       <div className="max-h-[calc(100vh-330px)] overflow-auto">
-        <div className={`grid min-w-[1100px] gap-1 border-b bg-muted/25 px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground`} style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(105px, 1fr)) 44px` }}>
-          {columns.map((column) => <span key={column}>{label(column)}</span>)}<span />
+        <div className={`grid min-w-[1100px] gap-1 border-b bg-muted/25 px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground`} style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(105px, 1fr)) ${onAttach ? "44px " : ""}44px` }}>
+          {columns.map((column) => <span key={column}>{label(column)}</span>)}{onAttach && <span>Files</span>}<span />
         </div>
         {rows.map((row, rowIndex) => (
-          <div key={rowIndex} className="grid min-w-[1100px] gap-1 border-b px-2 py-1" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(105px, 1fr)) 44px` }}>
+          <div key={rowIndex} className="grid min-w-[1100px] gap-1 border-b px-2 py-1" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(105px, 1fr)) ${onAttach ? "44px " : ""}44px` }}>
             {columns.map((column) => <Cell key={column} row={row} column={column} onChange={(value) => setRows((current) => current.map((item, index) => index === rowIndex ? { ...item, [column.toUpperCase()]: value } : item))} />)}
+            {onAttach && <Button type="button" size="icon" variant="ghost" title="Document attachments" onClick={() => onAttach(row)}><Paperclip size={14} /></Button>}
             <Button type="button" size="icon" variant="ghost" title="Delete" onClick={() => deleteRow(row)}><Trash2 size={14} /></Button>
           </div>
         ))}
