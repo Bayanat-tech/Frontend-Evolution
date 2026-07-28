@@ -18,11 +18,17 @@ export type FreightReportKey =
   | "freight_expense"
   | "freight_revenue"
   | "freight_brokerage"
+  | "query_report"
   | "deposits"
-  | "container_deposit";
+  | "container_deposit"
+  | "freight_summary";
 
 type ReportColumn = { key: string; label: string; kind?: "date" | "amount" | "status" | "mode" | "type" };
 type FilterKey = "date" | "principal" | "job" | "mode" | "type" | "status" | "search";
+type AdvancedFilterKey =
+  | "principalRange" | "documentRange" | "jobRange" | "confirmDate" | "scheduleDate" | "collectionDate" | "depositDate" | "expiryDate" | "etaDate" | "ataDate"
+  | "division" | "departmentRange" | "portRange" | "brokerRange" | "periodMode" | "variant" | "invoice" | "vessel" | "voyage" | "container" | "bl" | "be"
+  | "claimExit" | "cleared" | "docRef" | "po" | "summaryParties" | "classification";
 type ReportConfig = {
   title: string;
   subtitle: string;
@@ -31,16 +37,66 @@ type ReportConfig = {
   columns: ReportColumn[];
   amountFields: string[];
   filters: FilterKey[];
+  advancedFilters?: AdvancedFilterKey[];
   primaryMetric: string;
 };
 type ReportFilters = {
   from_date: string;
   to_date: string;
   prin_code: string;
+  prin_code_from: string;
+  prin_code_to: string;
   job_no: string;
+  job_no_from: string;
+  job_no_to: string;
+  doc_no_from: string;
+  doc_no_to: string;
+  broker_code_from: string;
+  broker_code_to: string;
+  dept_code_from: string;
+  dept_code_to: string;
+  div_code: string;
+  origin_port: string;
+  destination_port: string;
+  schedule_from_date: string;
+  schedule_to_date: string;
+  confirm_from_date: string;
+  confirm_to_date: string;
+  collection_from_date: string;
+  collection_to_date: string;
+  deposit_from_date: string;
+  deposit_to_date: string;
+  expiry_from_date: string;
+  expiry_to_date: string;
+  eta_from_date: string;
+  eta_to_date: string;
+  ata_from_date: string;
+  ata_to_date: string;
   transport_mode: string;
   job_type: string;
   status: string;
+  report_period: string;
+  report_mode: string;
+  report_variant: string;
+  invoice_no: string;
+  vessel_name: string;
+  voyage_no: string;
+  container_no: string;
+  bl_no: string;
+  be_no: string;
+  claim_ref: string;
+  exit_bill1: string;
+  exit_bill2: string;
+  cleared_flag: string;
+  consignee_name: string;
+  shipper_name: string;
+  job_category: string;
+  member_type: string;
+  sale_type: string;
+  inco_terms: string;
+  forwarder_code: string;
+  doc_ref: string;
+  po_no: string;
   search: string;
 };
 
@@ -51,7 +107,8 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     family: "Commercial Register",
     icon: FileSpreadsheet,
     amountFields: [],
-    filters: ["date", "principal", "mode", "type", "status", "search"],
+    filters: ["date", "mode", "type", "status", "search"],
+    advancedFilters: ["principalRange", "documentRange", "portRange", "scheduleDate", "variant"],
     primaryMetric: "Enquiries",
     columns: [
       { key: "ENQUIRY_NR", label: "Enquiry No" },
@@ -73,7 +130,8 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     family: "Supplier Rate Request",
     icon: FileSpreadsheet,
     amountFields: [],
-    filters: ["date", "principal", "mode", "type", "status", "search"],
+    filters: ["date", "mode", "type", "status", "search"],
+    advancedFilters: ["principalRange", "documentRange", "portRange", "scheduleDate", "variant"],
     primaryMetric: "RFQs",
     columns: [
       { key: "RFQ_NO", label: "RFQ No" },
@@ -93,7 +151,8 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     family: "Commercial Offer",
     icon: BarChart3,
     amountFields: ["TOTAL_SELL", "TOTAL_COST", "PROFIT"],
-    filters: ["date", "principal", "mode", "type", "status", "search"],
+    filters: ["date", "mode", "type", "status", "search"],
+    advancedFilters: ["principalRange", "documentRange", "portRange", "scheduleDate", "variant"],
     primaryMetric: "Quotations",
     columns: [
       { key: "QUOTATION_NO", label: "Quotation No" },
@@ -115,7 +174,8 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     family: "Operations",
     icon: Ship,
     amountFields: [],
-    filters: ["date", "principal", "job", "mode", "type", "status", "search"],
+    filters: ["date", "mode", "type", "status", "search"],
+    advancedFilters: ["jobRange", "principalRange", "confirmDate", "departmentRange", "variant"],
     primaryMetric: "Jobs",
     columns: [
       { key: "JOB_NO", label: "Job No" },
@@ -137,7 +197,8 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     family: "Finance Control",
     icon: BarChart3,
     amountFields: ["REVENUE", "EXPENSE", "PROFIT"],
-    filters: ["date", "principal", "job", "mode", "type", "search"],
+    filters: ["date", "search"],
+    advancedFilters: ["principalRange", "division", "periodMode", "variant"],
     primaryMetric: "Profit",
     columns: [
       { key: "JOB_NO", label: "Job No" },
@@ -158,7 +219,8 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     family: "Cost Report",
     icon: BarChart3,
     amountFields: ["EXPENSE"],
-    filters: ["date", "principal", "job", "mode", "type", "search"],
+    filters: ["date", "search"],
+    advancedFilters: ["principalRange", "division", "periodMode"],
     primaryMetric: "Expense",
     columns: [
       { key: "JOB_NO", label: "Job No" },
@@ -179,7 +241,8 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     family: "Revenue Report",
     icon: BarChart3,
     amountFields: ["REVENUE"],
-    filters: ["date", "principal", "job", "mode", "type", "search"],
+    filters: ["date", "search"],
+    advancedFilters: ["principalRange", "division", "periodMode", "variant"],
     primaryMetric: "Revenue",
     columns: [
       { key: "JOB_NO", label: "Job No" },
@@ -200,7 +263,8 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     family: "Brokerage",
     icon: WalletCards,
     amountFields: ["BROKERAGE_BASE"],
-    filters: ["date", "principal", "job", "mode", "type", "search"],
+    filters: ["date", "search"],
+    advancedFilters: ["brokerRange", "division", "periodMode", "variant"],
     primaryMetric: "Brokerage",
     columns: [
       { key: "JOB_NO", label: "Job No" },
@@ -214,13 +278,36 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
       { key: "BROKERAGE_BASE", label: "Base", kind: "amount" },
     ],
   },
+  query_report: {
+    title: "Query Report",
+    subtitle: "PowerBuilder pack query report with shipment, invoice, vessel, BL and date filters.",
+    family: "Operations Query",
+    icon: FileSpreadsheet,
+    amountFields: [],
+    filters: ["date", "mode", "type", "search"],
+    advancedFilters: ["principalRange", "jobRange", "invoice", "vessel", "voyage", "container", "bl", "be", "etaDate", "ataDate", "scheduleDate", "portRange", "docRef", "po"],
+    primaryMetric: "Rows",
+    columns: [
+      { key: "JOB_NO", label: "Job No" },
+      { key: "JOB_DATE", label: "Job Date", kind: "date" },
+      { key: "PRIN_CODE", label: "Principal" },
+      { key: "PRIN_NAME", label: "Principal Name" },
+      { key: "INVOICE_NO", label: "Invoice No" },
+      { key: "VESSEL_NAME", label: "Vessel" },
+      { key: "VOYAGE_NO", label: "Voyage" },
+      { key: "CONTAINER_NO", label: "Container" },
+      { key: "BL_NO", label: "BL No" },
+      { key: "BE_NO", label: "BE No" },
+    ],
+  },
   deposits: {
     title: "Deposits",
     subtitle: "Shipment deposits and demurrage values by job.",
     family: "Settlement",
     icon: WalletCards,
     amountFields: ["AMOUNT", "DEMURAGE_AMOUNT"],
-    filters: ["date", "principal", "job", "mode", "type", "search"],
+    filters: ["date", "search"],
+    advancedFilters: ["principalRange", "be", "collectionDate", "variant"],
     primaryMetric: "Deposit",
     columns: [
       { key: "JOB_NO", label: "Job No" },
@@ -240,7 +327,8 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     family: "Settlement",
     icon: Boxes,
     amountFields: ["AMOUNT", "DEMURAGE_AMOUNT"],
-    filters: ["date", "principal", "job", "mode", "type", "search"],
+    filters: ["date", "type", "search"],
+    advancedFilters: ["jobRange", "depositDate", "expiryDate", "be", "claimExit", "cleared", "variant"],
     primaryMetric: "Container Deposit",
     columns: [
       { key: "JOB_NO", label: "Job No" },
@@ -252,6 +340,26 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
       { key: "AMOUNT", label: "Amount", kind: "amount" },
       { key: "DEMURAGE_AMOUNT", label: "Demurrage", kind: "amount" },
       { key: "REMARKS", label: "Remarks" },
+    ],
+  },
+  freight_summary: {
+    title: "Freight Summary Report",
+    subtitle: "Mode-wise summary/detail report with PB commercial filters.",
+    family: "Modewise Summary",
+    icon: BarChart3,
+    amountFields: ["REVENUE", "EXPENSE", "PROFIT"],
+    filters: ["date", "mode", "type", "search"],
+    advancedFilters: ["principalRange", "division", "summaryParties", "classification", "periodMode", "variant"],
+    primaryMetric: "Rows",
+    columns: [
+      { key: "TRANSPORT_MODE", label: "Mode", kind: "mode" },
+      { key: "JOB_TYPE", label: "Type", kind: "type" },
+      { key: "PRIN_CODE", label: "Principal" },
+      { key: "PRIN_NAME", label: "Principal Name" },
+      { key: "JOB_NO", label: "Job No" },
+      { key: "REVENUE", label: "Revenue", kind: "amount" },
+      { key: "EXPENSE", label: "Expense", kind: "amount" },
+      { key: "PROFIT", label: "Profit", kind: "amount" },
     ],
   },
 };
@@ -279,22 +387,104 @@ const statusOptions = [
   { label: "Closed", value: "Y" },
 ];
 
+const periodOptions = [
+  { label: "Daily", value: "D" },
+  { label: "Monthly", value: "M" },
+  { label: "Yearly", value: "Y" },
+];
+
+const reportModeOptions = [
+  { label: "Detail", value: "D" },
+  { label: "Grouped", value: "G" },
+];
+
+const reportVariantOptions = [
+  { label: "Standard", value: "" },
+  { label: "Analysis", value: "ANALYSIS" },
+  { label: "Summary", value: "SUMMARY" },
+  { label: "Ledger", value: "LEDGER" },
+  { label: "Pending", value: "PENDING" },
+  { label: "Collected", value: "COLLECTED" },
+  { label: "Confirmed", value: "CONFIRMED" },
+  { label: "Non Confirmed", value: "NONCONFIRMED" },
+  { label: "Cross Tab", value: "CROSSTAB" },
+  { label: "With Child Jobs", value: "WITH_CHILD" },
+  { label: "Non Invoiced", value: "NONINVOICED" },
+];
+
+const yesNoOptions = [
+  { label: "All", value: "" },
+  { label: "Yes", value: "Y" },
+  { label: "No", value: "N" },
+];
+
+const emptyFilters: ReportFilters = {
+  from_date: "",
+  to_date: "",
+  prin_code: "",
+  prin_code_from: "",
+  prin_code_to: "",
+  job_no: "",
+  job_no_from: "",
+  job_no_to: "",
+  doc_no_from: "",
+  doc_no_to: "",
+  broker_code_from: "",
+  broker_code_to: "",
+  dept_code_from: "",
+  dept_code_to: "",
+  div_code: "",
+  origin_port: "",
+  destination_port: "",
+  schedule_from_date: "",
+  schedule_to_date: "",
+  confirm_from_date: "",
+  confirm_to_date: "",
+  collection_from_date: "",
+  collection_to_date: "",
+  deposit_from_date: "",
+  deposit_to_date: "",
+  expiry_from_date: "",
+  expiry_to_date: "",
+  eta_from_date: "",
+  eta_to_date: "",
+  ata_from_date: "",
+  ata_to_date: "",
+  transport_mode: "",
+  job_type: "",
+  status: "",
+  report_period: "D",
+  report_mode: "D",
+  report_variant: "",
+  invoice_no: "",
+  vessel_name: "",
+  voyage_no: "",
+  container_no: "",
+  bl_no: "",
+  be_no: "",
+  claim_ref: "",
+  exit_bill1: "",
+  exit_bill2: "",
+  cleared_flag: "",
+  consignee_name: "",
+  shipper_name: "",
+  job_category: "",
+  member_type: "",
+  sale_type: "",
+  inco_terms: "",
+  forwarder_code: "",
+  doc_ref: "",
+  po_no: "",
+  search: "",
+};
+
 export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }) {
   const { user } = useAuth();
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
   const config = reportConfigs[reportKey];
   const Icon = config.icon;
-  const [filters, setFilters] = useState({
-    from_date: "",
-    to_date: "",
-    prin_code: "",
-    job_no: "",
-    transport_mode: "",
-    job_type: "",
-    status: "",
-    search: "",
-  });
+  const [filters, setFilters] = useState<ReportFilters>(emptyFilters);
   const [principalText, setPrincipalText] = useState("");
   const [rows, setRows] = useState<LookupRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -329,7 +519,7 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
   }
 
   function resetFilters() {
-    setFilters({ from_date: "", to_date: "", prin_code: "", job_no: "", transport_mode: "", job_type: "", status: "", search: "" });
+    setFilters(emptyFilters);
     setPrincipalText("");
     setRows([]);
     setMessage("Select filters and run the report.");
@@ -421,6 +611,10 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
             </Field>
           </div>
         )}
+
+        {!!config.advancedFilters?.length && (
+          <AdvancedReportFilters config={config} companyCode={companyCode} filters={filters} setFilters={setFilters} />
+        )}
       </div>
 
       <div className="grid gap-2 md:grid-cols-4">
@@ -448,6 +642,177 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function Select({ value, options, onChange }: { value: string; options: { label: string; value: string }[]; onChange: (value: string) => void }) {
   return <select className="h-8 rounded-md border bg-background px-2 text-sm font-medium text-foreground shadow-sm" value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option) => <option key={option.label} value={option.value}>{option.label}</option>)}</select>;
+}
+
+function AdvancedReportFilters({
+  config,
+  companyCode,
+  filters,
+  setFilters,
+}: {
+  config: ReportConfig;
+  companyCode: string;
+  filters: ReportFilters;
+  setFilters: Dispatch<SetStateAction<ReportFilters>>;
+}) {
+  const items = config.advancedFilters || [];
+  return (
+    <div className="border-t bg-background p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">PowerBuilder Parameters</div>
+          <div className="text-xs text-muted-foreground">Report-specific filters from the original Freight report screen.</div>
+        </div>
+      </div>
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+        {items.includes("principalRange") && (
+          <RangeLookup label="Principal" companyCode={companyCode} parameter="freight_principal" valueField="PRIN_CODE" displayFields={["PRIN_CODE", "PRIN_NAME"]} columns={[{ field: "PRIN_CODE", header: "Code" }, { field: "PRIN_NAME", header: "Principal" }]} fromKey="prin_code_from" toKey="prin_code_to" filters={filters} setFilters={setFilters} />
+        )}
+        {items.includes("brokerRange") && (
+          <RangeLookup label="Broker" companyCode={companyCode} parameter="freight_broker" valueField="BROKER_CODE" displayFields={["BROKER_CODE", "BROKER_NAME"]} columns={[{ field: "BROKER_CODE", header: "Code" }, { field: "BROKER_NAME", header: "Broker" }]} fromKey="broker_code_from" toKey="broker_code_to" filters={filters} setFilters={setFilters} />
+        )}
+        {items.includes("jobRange") && <RangeText label="Job No" fromKey="job_no_from" toKey="job_no_to" filters={filters} setFilters={setFilters} />}
+        {items.includes("documentRange") && <RangeText label={config.title === "Quotation List" ? "Quotation No" : config.title === "RFQ List" ? "RFQ No" : "Enquiry No"} fromKey="doc_no_from" toKey="doc_no_to" filters={filters} setFilters={setFilters} />}
+        {items.includes("departmentRange") && <RangeText label="Department" fromKey="dept_code_from" toKey="dept_code_to" filters={filters} setFilters={setFilters} />}
+        {items.includes("portRange") && (
+          <>
+            <LookupFilter label="Origin Port" companyCode={companyCode} parameter="freight_port" value={filters.origin_port} valueField="PORT_CODE" displayFields={["PORT_CODE", "PORT_NAME"]} columns={[{ field: "PORT_CODE", header: "Code" }, { field: "PORT_NAME", header: "Port" }]} onChange={(value) => setFilter(setFilters, "origin_port", value)} />
+            <LookupFilter label="Destination Port" companyCode={companyCode} parameter="freight_port" value={filters.destination_port} valueField="PORT_CODE" displayFields={["PORT_CODE", "PORT_NAME"]} columns={[{ field: "PORT_CODE", header: "Code" }, { field: "PORT_NAME", header: "Port" }]} onChange={(value) => setFilter(setFilters, "destination_port", value)} />
+          </>
+        )}
+        {items.includes("division") && <LookupFilter label="Division" companyCode={companyCode} parameter="freight_division" value={filters.div_code} valueField="DIV_CODE" displayFields={["DIV_CODE", "DIV_NAME"]} columns={[{ field: "DIV_CODE", header: "Code" }, { field: "DIV_NAME", header: "Division" }]} onChange={(value) => setFilter(setFilters, "div_code", value)} />}
+        {items.includes("scheduleDate") && <RangeDate label="Schedule" fromKey="schedule_from_date" toKey="schedule_to_date" filters={filters} setFilters={setFilters} />}
+        {items.includes("confirmDate") && <RangeDate label="Confirm" fromKey="confirm_from_date" toKey="confirm_to_date" filters={filters} setFilters={setFilters} />}
+        {items.includes("collectionDate") && <RangeDate label="Collection" fromKey="collection_from_date" toKey="collection_to_date" filters={filters} setFilters={setFilters} />}
+        {items.includes("depositDate") && <RangeDate label="Deposit" fromKey="deposit_from_date" toKey="deposit_to_date" filters={filters} setFilters={setFilters} />}
+        {items.includes("expiryDate") && <RangeDate label="Expiry" fromKey="expiry_from_date" toKey="expiry_to_date" filters={filters} setFilters={setFilters} />}
+        {items.includes("etaDate") && <RangeDate label="ETA" fromKey="eta_from_date" toKey="eta_to_date" filters={filters} setFilters={setFilters} />}
+        {items.includes("ataDate") && <RangeDate label="ATA" fromKey="ata_from_date" toKey="ata_to_date" filters={filters} setFilters={setFilters} />}
+        {items.includes("periodMode") && (
+          <>
+            <Field label="Period"><Select value={filters.report_period} options={periodOptions} onChange={(value) => setFilter(setFilters, "report_period", value)} /></Field>
+            <Field label="Report Mode"><Select value={filters.report_mode} options={reportModeOptions} onChange={(value) => setFilter(setFilters, "report_mode", value)} /></Field>
+          </>
+        )}
+        {items.includes("variant") && <Field label="Report Variant"><Select value={filters.report_variant} options={reportVariantOptions} onChange={(value) => setFilter(setFilters, "report_variant", value)} /></Field>}
+        {items.includes("invoice") && <TextFilter label="Invoice No" fieldKey="invoice_no" filters={filters} setFilters={setFilters} />}
+        {items.includes("vessel") && <TextFilter label="Vessel Name" fieldKey="vessel_name" filters={filters} setFilters={setFilters} />}
+        {items.includes("voyage") && <TextFilter label="Voyage No" fieldKey="voyage_no" filters={filters} setFilters={setFilters} />}
+        {items.includes("container") && <TextFilter label="Container No" fieldKey="container_no" filters={filters} setFilters={setFilters} />}
+        {items.includes("bl") && <TextFilter label="BL No" fieldKey="bl_no" filters={filters} setFilters={setFilters} />}
+        {items.includes("be") && <TextFilter label="BE No" fieldKey="be_no" filters={filters} setFilters={setFilters} />}
+        {items.includes("docRef") && <TextFilter label="Document Ref" fieldKey="doc_ref" filters={filters} setFilters={setFilters} />}
+        {items.includes("po") && <TextFilter label="PO No" fieldKey="po_no" filters={filters} setFilters={setFilters} />}
+        {items.includes("claimExit") && (
+          <>
+            <TextFilter label="Claim Ref" fieldKey="claim_ref" filters={filters} setFilters={setFilters} />
+            <TextFilter label="Exit Bill 1" fieldKey="exit_bill1" filters={filters} setFilters={setFilters} />
+            <TextFilter label="Exit Bill 2" fieldKey="exit_bill2" filters={filters} setFilters={setFilters} />
+          </>
+        )}
+        {items.includes("cleared") && <Field label="Show Cleared"><Select value={filters.cleared_flag} options={yesNoOptions} onChange={(value) => setFilter(setFilters, "cleared_flag", value)} /></Field>}
+        {items.includes("summaryParties") && (
+          <>
+            <TextFilter label="Consignee" fieldKey="consignee_name" filters={filters} setFilters={setFilters} />
+            <TextFilter label="Shipper" fieldKey="shipper_name" filters={filters} setFilters={setFilters} />
+            <LookupFilter label="Forwarder" companyCode={companyCode} parameter="freight_forwarder" value={filters.forwarder_code} valueField="FORWARDER_CODE" displayFields={["FORWARDER_CODE", "FORWARDER_NAME"]} columns={[{ field: "FORWARDER_CODE", header: "Code" }, { field: "FORWARDER_NAME", header: "Forwarder" }]} onChange={(value) => setFilter(setFilters, "forwarder_code", value)} />
+          </>
+        )}
+        {items.includes("classification") && (
+          <>
+            <Field label="Job Category"><Select value={filters.job_category} options={[{ label: "All", value: "" }, { label: "International", value: "International" }, { label: "Combined Services", value: "Combined services" }]} onChange={(value) => setFilter(setFilters, "job_category", value)} /></Field>
+            <Field label="Member Type"><Input className="h-8" value={filters.member_type} onChange={(event) => setFilter(setFilters, "member_type", event.target.value)} /></Field>
+            <Field label="Sale Type"><Input className="h-8" value={filters.sale_type} onChange={(event) => setFilter(setFilters, "sale_type", event.target.value)} /></Field>
+            <Field label="INCO Terms"><Input className="h-8" value={filters.inco_terms} onChange={(event) => setFilter(setFilters, "inco_terms", event.target.value)} /></Field>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RangeText({ label, fromKey, toKey, filters, setFilters }: { label: string; fromKey: keyof ReportFilters; toKey: keyof ReportFilters; filters: ReportFilters; setFilters: Dispatch<SetStateAction<ReportFilters>> }) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <TextFilter label={`${label} From`} fieldKey={fromKey} filters={filters} setFilters={setFilters} />
+      <TextFilter label={`${label} To`} fieldKey={toKey} filters={filters} setFilters={setFilters} />
+    </div>
+  );
+}
+
+function RangeDate({ label, fromKey, toKey, filters, setFilters }: { label: string; fromKey: keyof ReportFilters; toKey: keyof ReportFilters; filters: ReportFilters; setFilters: Dispatch<SetStateAction<ReportFilters>> }) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <Field label={`${label} From`}><DateField value={String(filters[fromKey] || "")} onChange={(value) => setFilter(setFilters, fromKey, value)} /></Field>
+      <Field label={`${label} To`}><DateField value={String(filters[toKey] || "")} onChange={(value) => setFilter(setFilters, toKey, value)} /></Field>
+    </div>
+  );
+}
+
+function TextFilter({ label, fieldKey, filters, setFilters }: { label: string; fieldKey: keyof ReportFilters; filters: ReportFilters; setFilters: Dispatch<SetStateAction<ReportFilters>> }) {
+  return <Field label={label}><Input className="h-8" value={String(filters[fieldKey] || "")} onChange={(event) => setFilter(setFilters, fieldKey, event.target.value)} /></Field>;
+}
+
+function RangeLookup({
+  label,
+  fromKey,
+  toKey,
+  filters,
+  setFilters,
+  ...lookup
+}: {
+  label: string;
+  fromKey: keyof ReportFilters;
+  toKey: keyof ReportFilters;
+  filters: ReportFilters;
+  setFilters: Dispatch<SetStateAction<ReportFilters>>;
+  companyCode: string;
+  parameter: string;
+  valueField: string;
+  displayFields: string[];
+  columns: { field: string; header: string }[];
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <LookupFilter label={`${label} From`} value={String(filters[fromKey] || "")} onChange={(value) => setFilter(setFilters, fromKey, value)} {...lookup} />
+      <LookupFilter label={`${label} To`} value={String(filters[toKey] || "")} onChange={(value) => setFilter(setFilters, toKey, value)} {...lookup} />
+    </div>
+  );
+}
+
+function LookupFilter({
+  label,
+  companyCode,
+  parameter,
+  value,
+  valueField,
+  displayFields,
+  columns,
+  onChange,
+}: {
+  label: string;
+  companyCode: string;
+  parameter: string;
+  value: string;
+  valueField: string;
+  displayFields: string[];
+  columns: { field: string; header: string }[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Field label={label}>
+      <LookupField
+        value={value}
+        displayValue={value}
+        onChange={(nextValue) => onChange(nextValue)}
+        loadOptions={(query) => loadLookup(parameter, companyCode, query)}
+        valueField={valueField}
+        displayFields={displayFields}
+        columns={columns}
+        compact
+      />
+    </Field>
+  );
 }
 
 function DateField({ value, onChange }: { value: string; onChange: (value: string) => void }) {

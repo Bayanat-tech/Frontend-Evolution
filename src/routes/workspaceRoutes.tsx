@@ -1635,6 +1635,8 @@ function getFreightReportKey(context: WorkspaceRouteContext): FreightReportKey |
   if (compact.includes("freightexpense") || compact.includes("expense")) return "freight_expense";
   if (compact.includes("freightrevenue") || compact.includes("revenue")) return "freight_revenue";
   if (compact.includes("freightbrokerage") || compact.includes("brokerage")) return "freight_brokerage";
+  if (compact.includes("queryreport") || compact.includes("packquery")) return "query_report";
+  if (compact.includes("freightsummaryreport") || compact.includes("summaryreport") || compact.includes("modewisesummary")) return "freight_summary";
   if (compact.includes("containerdeposit") || compact.includes("contrdeposit")) return "container_deposit";
   if (compact.includes("deposits") || compact.includes("deposit")) return "deposits";
   return null;

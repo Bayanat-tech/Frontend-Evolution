@@ -91,8 +91,10 @@ const reportItems = [
   { label: "Expense", route: "/workspace/fms/freight/freight_reports/freight_expense" },
   { label: "Revenue", route: "/workspace/fms/freight/freight_reports/freight_revenue" },
   { label: "Brokerage", route: "/workspace/fms/freight/freight_reports/freight_brokerage" },
+  { label: "Query Report", route: "/workspace/fms/freight/freight_reports/query_report" },
   { label: "Deposits", route: "/workspace/fms/freight/freight_reports/deposits" },
   { label: "Container Deposit", route: "/workspace/fms/freight/freight_reports/container_deposit" },
+  { label: "Freight Summary Report", route: "/workspace/fms/freight/freight_reports/freight_summary" },
 ];
 
 export function FreightWorkspacePage({ target }: { target?: FreightWorkspaceTarget }) {
