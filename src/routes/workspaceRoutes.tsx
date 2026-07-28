@@ -147,6 +147,7 @@ import Mytaskalmspage from "../pages/almswf/Mytaskalmspage";
 
 import { PurchaseOrderPage } from "../pages/purchase_sales/purchase/Purchaseorderpage";
 
+import { StockInquiryPage } from "../pages/purchase_sales/PS_StockInquiry";
 import { PurchaseSaleSetupPage } from "../pages/purchase_sales/Purchasesalesetuppage";
 import { FlowAssignmentPage } from "../pages/security/FlowAssignmentPage";import { PurchaseQuotationPage } from "../pages/purchase_sales/purchase/PurchaseQuatationPage";
  type WorkspaceRouteContext = {
@@ -945,20 +946,20 @@ export const workspaceRoutes: WorkspaceRoute[] = [
 
   {
   name: "Purchase Sales Product Type",
-  match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/purchase_sales/purchase_sales/masters/product%20type"),
+  match: ({ pathname }) => isProductTypeRoute(pathname),
   element: () => <ProductTypePage />,
   },
 
 
   {
   name: "Purchase Sales Product Category",
-  match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/purchase_sales/purchase_sales/masters/product%20category"),
+  match: ({ pathname }) => isProductCategoryRoute(pathname),
   element: () => <ProductCategoryPage />,
   },
 
    {
   name: "Purchase Sales Zone Master",
-  match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/purchase_sales/purchase_sales/masters/zone%20master"),
+  match: ({ pathname }) => isZoneMasterRoute(pathname),
   element: () => <ZoneMasterPage />,
   },
 
@@ -980,6 +981,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({pathname}) => isPurchaseSaleSetupRoute(pathname),
     element: () => <PurchaseSaleSetupPage/>
   },
+
+  {
+  name: "Purchase Sales Stock Inquiry",
+  match: ({ pathname }) => isStockInquiryRoute(pathname),
+  element: () => <StockInquiryPage />,
+  },
+  
 ];
 
 function isStorageComputationRoute(pathname: string) {
@@ -1891,4 +1899,41 @@ function isHrTrainingFeedbackRoute(context: WorkspaceRouteContext) {
   );
 }
 
+function isProductTypeRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
 
+  return (
+    normalized.includes("/purchase_sales/purchase_sales/masters/product%20type") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/product_type") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/product-type")
+  );
+}
+
+
+function isProductCategoryRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+    normalized.includes("/purchase_sales/purchase_sales/masters/product%20category") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/product_category") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/product-category")
+  );
+}
+
+
+function isZoneMasterRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+    normalized.includes("/purchase_sales/purchase_sales/masters/zone%20master") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/zone_master") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/zone-master")
+  );
+}
+
+function isStockInquiryRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/inquiry/stock%20inquiry"
+  );
+}

@@ -929,9 +929,41 @@ export async function getBalanceSheetReportHtml(params: ReportParams): Promise<s
   return response.data as string;
 }
 
+
 export async function getBalanceSheetReportExcelDownload(params: ReportParams): Promise<void> {
   const response = await api.post(
     `/api/finance/transactions/report/balancesheet/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "BalanceSheet.xlsx";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+// ---------Sales Order Report----------------
+
+export async function getSalesOrderReportHtml(params: ReportParams): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/report/salesorder/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+
+export async function getSalesOrderSheetReportExcelDownload(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/report/salesorder/excel`,
     params,
     { responseType: "blob" }
   );
