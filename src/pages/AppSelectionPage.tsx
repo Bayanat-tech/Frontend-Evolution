@@ -204,18 +204,6 @@ export const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta; external?:
       status: "completed",
     },
   },
-  {
-    keys: [],
-    meta: {
-      Icon: ScanFace,
-      accent: { gradient: "linear-gradient(135deg, #ec4899 0%, #f59e0b 100%)", light: "#fff0f6", border: "#f9a8d4", icon: "#be185d", text: "#831843", glow: "rgba(236, 72, 153, 0.18)" },
-      code: "AMS",
-      fullForm: "Attendance Management System",
-      description: "Biometric Attendances with geo location , shifts, OT , Integration , Reports.",
-      status: "completed",
-    },
-    external: { url: "https://ams-new.bayanattechnology.com" },
-  },
   
   {
     keys: ["security"],
