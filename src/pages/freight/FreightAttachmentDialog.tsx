@@ -1,5 +1,5 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
-import { Download, FileText, Paperclip, Pencil, Trash2, UploadCloud, X } from "lucide-react";
+import { Download, Eye, FileText, Paperclip, Pencil, Trash2, UploadCloud, X } from "lucide-react";
 import { api } from "../../api/client";
 import { uploadAccountFile } from "../../api/files";
 import { Button } from "../../components/ui/Button";
@@ -46,6 +46,7 @@ export function FreightAttachmentDialog({ open, onClose, title, companyCode, pri
   const [uploading, setUploading] = useState(false);
   const [editingKey, setEditingKey] = useState("");
   const [editName, setEditName] = useState("");
+  const [previewFile, setPreviewFile] = useState<FreightAttachment | null>(null);
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const canUpload = Boolean(companyCode && prinCode && jobNo && !readOnly);
 
@@ -158,94 +159,162 @@ export function FreightAttachmentDialog({ open, onClose, title, companyCode, pri
     }
   };
 
+  const openPreview = (file: FreightAttachment) => {
+    if (!fileUrl(file)) {
+      setNotice({ type: "error", text: "No preview URL available for this attachment." });
+      return;
+    }
+    setPreviewFile(file);
+  };
+
+  const closePreview = () => setPreviewFile(null);
+
   return (
-    <Dialog open={open} wide title={title} description={jobNo ? `${jobNo}${context === "DOC" && docNr ? ` / Document ${docNr}` : ""}` : "Select or save the freight job first."} onClose={onClose} footer={<Button variant="outline" onClick={onClose}>Close</Button>}>
-      <div className="grid gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-secondary/30 p-3">
-          <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-md bg-primary/10 text-primary"><Paperclip size={18} /></span>
-            <div>
-              <h3 className="m-0 text-sm font-semibold">Freight Files</h3>
-              <p className="m-0 text-xs text-muted-foreground">{files.length} file{files.length === 1 ? "" : "s"}</p>
+    <>
+      <Dialog
+        open={open}
+        title={title}
+        description={jobNo ? `${jobNo}${context === "DOC" && docNr ? ` / Document ${docNr}` : ""}` : "Select or save the freight job first."}
+        contentClassName="w-[min(94vw,760px)] max-h-[82vh]"
+        onClose={onClose}
+        footer={<Button variant="outline" onClick={onClose}>Close</Button>}
+      >
+        <div className="grid gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-secondary/30 p-2">
+            <div className="flex items-center gap-3">
+              <span className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary"><Paperclip size={17} /></span>
+              <div>
+                <h3 className="m-0 text-sm font-semibold">Freight Files</h3>
+                <p className="m-0 text-xs text-muted-foreground">{files.length} file{files.length === 1 ? "" : "s"}</p>
+              </div>
             </div>
+            <input ref={inputRef} className="hidden" multiple type="file" onChange={uploadFiles} />
+            <Button type="button" disabled={!canUpload || uploading} onClick={() => inputRef.current?.click()}>
+              <UploadCloud size={15} /> {uploading ? "Uploading..." : "Upload Files"}
+            </Button>
           </div>
-          <input ref={inputRef} className="hidden" multiple type="file" onChange={uploadFiles} />
-          <Button type="button" disabled={!canUpload || uploading} onClick={() => inputRef.current?.click()}>
-            <UploadCloud size={15} /> {uploading ? "Uploading..." : "Upload Files"}
-          </Button>
-        </div>
 
-        {notice && <div className={`rounded-md border px-3 py-2 text-sm ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>{notice.text}</div>}
+          {notice && <div className={`rounded-md border px-3 py-2 text-sm ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>{notice.text}</div>}
 
-        {!jobNo ? (
-          <EmptyState title="Job Required" message="Select or save a freight job before attaching files." />
-        ) : loading ? (
-          <div className="grid min-h-[240px] place-items-center text-sm text-muted-foreground">Loading attachments...</div>
-        ) : !files.length ? (
-          <EmptyState title="No Attachments" message="Upload supporting freight documents, scans, approvals, BL/AWB copies, or customs files." />
-        ) : (
-          <div className="max-h-[430px] overflow-auto rounded-md border">
-            <table className="w-full min-w-[760px] text-sm">
-              <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2 text-left">File</th>
-                  <th className="px-3 py-2 text-left">Display Name</th>
-                  <th className="px-3 py-2 text-left">Level</th>
-                  <th className="px-3 py-2 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {files.map((file) => {
-                  const key = fileKey(file);
-                  const editing = editingKey === key;
-                  return (
-                    <tr key={key} className="border-t">
-                      <td className="px-3 py-2">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={15} /></span>
-                          <div className="min-w-0">
-                            <p className="m-0 truncate font-medium">{text(file.ORG_FILE_NAME || file.FILE_NAME) || "Attachment"}</p>
-                            <p className="m-0 text-xs text-muted-foreground">{text(file.EXTENSIONS) || "file"}</p>
+          {!jobNo ? (
+            <EmptyState title="Job Required" message="Select or save a freight job before attaching files." />
+          ) : loading ? (
+            <div className="grid min-h-[150px] place-items-center text-sm text-muted-foreground">Loading attachments...</div>
+          ) : !files.length ? (
+            <EmptyState title="No Attachments" message="Upload supporting freight documents, scans, approvals, BL/AWB copies, or customs files." />
+          ) : (
+            <div className="max-h-[300px] overflow-auto rounded-md border">
+              <table className="w-full min-w-[760px] text-sm">
+                <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 text-left">File</th>
+                    <th className="px-3 py-2 text-left">Display Name</th>
+                    <th className="px-3 py-2 text-left">Level</th>
+                    <th className="px-3 py-2 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {files.map((file) => {
+                    const key = fileKey(file);
+                    const editing = editingKey === key;
+                    const url = fileUrl(file);
+                    return (
+                      <tr key={key} className="border-t">
+                        <td className="px-3 py-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={15} /></span>
+                            <div className="min-w-0">
+                              <p className="m-0 truncate font-medium">{attachmentName(file)}</p>
+                              <p className="m-0 text-xs text-muted-foreground">{fileTypeLabel(file)}</p>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2">
-                        {editing ? <Input className="h-8" value={editName} onChange={(event) => setEditName(event.target.value)} /> : <span>{text(file.USER_FILE_NAME || file.ORG_FILE_NAME)}</span>}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{text(file.CONTEXT) === "DOC" ? `Document ${text(file.DOC_NR)}` : "Job"}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex justify-end gap-1">
-                          {file.AWS_FILE_LOCN && <Button asChild size="icon" variant="ghost" title="Open file"><a href={file.AWS_FILE_LOCN} target="_blank" rel="noreferrer"><Download size={14} /></a></Button>}
-                          {editing ? (
-                            <>
-                              <Button size="sm" type="button" onClick={() => void renameFile(file)}>Save</Button>
-                              <Button size="icon" type="button" variant="ghost" onClick={() => setEditingKey("")}><X size={14} /></Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button size="icon" type="button" variant="ghost" onClick={() => { setEditingKey(key); setEditName(text(file.USER_FILE_NAME || file.ORG_FILE_NAME)); }} title="Rename"><Pencil size={14} /></Button>
-                              <Button size="icon" type="button" variant="ghost" onClick={() => void deleteFile(file)} title="Delete"><Trash2 size={14} /></Button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          {editing ? <Input className="h-8" value={editName} onChange={(event) => setEditName(event.target.value)} /> : <span>{text(file.USER_FILE_NAME || file.ORG_FILE_NAME)}</span>}
+                        </td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground">{text(file.CONTEXT) === "DOC" ? `Document ${text(file.DOC_NR)}` : "Job"}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex justify-end gap-1">
+                            <Button size="icon" variant="ghost" type="button" onClick={() => openPreview(file)} disabled={!url} title={url ? "Preview file" : "Preview unavailable"}>
+                              <Eye size={14} />
+                            </Button>
+                            <Button size="icon" variant="ghost" type="button" disabled={!url} title={url ? "Download file" : "Download unavailable"} onClick={() => url && window.open(url, "_blank", "noopener,noreferrer")}>
+                              <Download size={14} />
+                            </Button>
+                            {editing ? (
+                              <>
+                                <Button size="sm" type="button" onClick={() => void renameFile(file)}>Save</Button>
+                                <Button size="icon" type="button" variant="ghost" onClick={() => setEditingKey("")}><X size={14} /></Button>
+                              </>
+                            ) : (
+                              <>
+                                <Button size="icon" type="button" variant="ghost" onClick={() => { setEditingKey(key); setEditName(text(file.USER_FILE_NAME || file.ORG_FILE_NAME)); }} title="Rename"><Pencil size={14} /></Button>
+                                <Button size="icon" type="button" variant="ghost" onClick={() => void deleteFile(file)} title="Delete"><Trash2 size={14} /></Button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(previewFile)}
+        title={previewFile ? attachmentName(previewFile) : "Attachment Preview"}
+        description={previewFile ? fileTypeLabel(previewFile) : undefined}
+        contentClassName="w-[min(96vw,940px)] max-h-[90vh]"
+        onClose={closePreview}
+        footer={(
+          <>
+            {previewFile && fileUrl(previewFile) ? (
+              <Button type="button" onClick={() => window.open(fileUrl(previewFile), "_blank", "noopener,noreferrer")}>
+                <Download size={15} /> Download
+              </Button>
+            ) : null}
+            <Button variant="outline" onClick={closePreview}>Close</Button>
+          </>
         )}
-      </div>
-    </Dialog>
+      >
+        {previewFile ? <AttachmentPreview file={previewFile} /> : null}
+      </Dialog>
+    </>
+  );
+}
+
+function AttachmentPreview({ file }: { file: FreightAttachment }) {
+  const url = fileUrl(file);
+  const previewType = getPreviewType(file);
+
+  return (
+    <div className="min-h-[420px] max-h-[74vh] overflow-hidden rounded-md border bg-background text-sm">
+      {previewType === "pdf" ? (
+        <iframe title="freight-attachment-preview" src={url} className="h-[74vh] w-full" />
+      ) : previewType === "image" ? (
+        <img src={url} alt={attachmentName(file)} className="h-[74vh] w-full object-contain" />
+      ) : (
+        <div className="grid min-h-[260px] place-items-center p-6 text-center text-sm text-muted-foreground">
+          <div>
+            <FileText className="mx-auto mb-3 text-primary" size={34} />
+            <p className="m-0 font-medium text-foreground">Preview is not available for this file type.</p>
+            <p className="mx-auto mt-2 max-w-sm">Use Download to open the attachment in its native application.</p>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
 function EmptyState({ title, message }: { title: string; message: string }) {
   return (
-    <div className="grid min-h-[240px] place-items-center rounded-md border border-dashed bg-secondary/20 p-8 text-center">
+    <div className="grid min-h-[160px] place-items-center rounded-md border border-dashed bg-secondary/20 p-5 text-center">
       <div>
-        <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-md bg-primary/10 text-primary"><Paperclip size={20} /></div>
+        <div className="mx-auto mb-2 grid h-10 w-10 place-items-center rounded-md bg-primary/10 text-primary"><Paperclip size={18} /></div>
         <h3 className="m-0 text-base font-semibold">{title}</h3>
         <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">{message}</p>
       </div>
@@ -272,6 +341,26 @@ function fileKey(file: FreightAttachment) {
 function extensionFromFile(file: File) {
   const byName = file.name.includes(".") ? file.name.split(".").pop() : "";
   return byName || file.type.split("/").pop() || "";
+}
+
+function attachmentName(file: FreightAttachment) {
+  return text(file.USER_FILE_NAME || file.ORG_FILE_NAME || file.FILE_NAME) || "Attachment";
+}
+
+function fileUrl(file: FreightAttachment) {
+  return text(file.AWS_FILE_LOCN);
+}
+
+function fileTypeLabel(file: FreightAttachment) {
+  return text(file.FILE_TYPE || file.EXTENSIONS) || "file";
+}
+
+function getPreviewType(file: FreightAttachment) {
+  const url = fileUrl(file);
+  const type = fileTypeLabel(file).toLowerCase();
+  if (type.includes("pdf") || /\.pdf($|\?)/i.test(url)) return "pdf";
+  if (type.includes("image") || /\.(png|jpe?g|gif|bmp|webp|svg)($|\?)/i.test(url)) return "image";
+  return "other";
 }
 
 function text(value: unknown) {
