@@ -193,7 +193,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   },
   freight_profit: {
     title: "Freight Profit",
-    subtitle: "PowerBuilder-style job profitability: revenue minus expense.",
+    subtitle: "Job profitability with revenue, expense, and margin control.",
     family: "Finance Control",
     icon: BarChart3,
     amountFields: ["REVENUE", "EXPENSE", "PROFIT"],
@@ -280,7 +280,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   },
   query_report: {
     title: "Query Report",
-    subtitle: "PowerBuilder pack query report with shipment, invoice, vessel, BL and date filters.",
+    subtitle: "Shipment query with invoice, vessel, BL, container, and date filters.",
     family: "Operations Query",
     icon: FileSpreadsheet,
     amountFields: [],
@@ -660,8 +660,8 @@ function AdvancedReportFilters({
     <div className="border-t bg-background p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">PowerBuilder Parameters</div>
-          <div className="text-xs text-muted-foreground">Report-specific filters from the original Freight report screen.</div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Advanced Filters</div>
+          <div className="text-xs text-muted-foreground">Refine the report with shipment, commercial, and document criteria.</div>
         </div>
       </div>
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
@@ -920,7 +920,7 @@ function ReportLaunchPanel({
         <div className="rounded-md border bg-muted/20 p-4">
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">{config.family}</div>
           <div className="mt-2 text-2xl font-bold text-foreground">{config.title}</div>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">Run opens the formatted report in a separate viewer window, matching the PowerBuilder report flow.</p>
+          <p className="m-0 mt-1 text-sm text-muted-foreground">Run opens a formatted report viewer with print and Excel actions.</p>
         </div>
         <div className="rounded-md border bg-background p-4">
           <div className="text-[10px] font-semibold uppercase text-muted-foreground">{config.primaryMetric}</div>
@@ -1416,6 +1416,7 @@ function exportCsv(title: string, rows: LookupRow[]) {
 
 function exportReportExcel(title: string, html: string) {
   const excelHtml = html
+    .replace(/<body(.*?)>/i, '<body$1 class="excel-export">')
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<div class="viewerbar"[\s\S]*?<\/div><div class="sheet">/i, '<div class="sheet">');
   const blob = new Blob([excelHtml], { type: "application/vnd.ms-excel;charset=utf-8" });
@@ -1493,7 +1494,7 @@ function reportHtml(
   const csv = escapeHtml(exportRowsAsCsvString(rows));
   const logoUrl = `${window.location.origin}/bayanat-logo.png`;
   const generatedAt = formatReportDateTime(new Date());
-  return `<!doctype html><html><head><title>${escapeHtml(config.title)}</title><style>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(config.title)}</title><style>
     @page{size:landscape;margin:14mm}
     body{font-family:Arial,sans-serif;margin:0;color:#0f172a;background:${interactive ? "#eef3f9" : "#fff"}}
     .viewerbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff;border-bottom:1px solid #dbe3ef;padding:10px 18px;box-shadow:0 8px 22px rgba(15,23,42,.06)}
@@ -1506,6 +1507,7 @@ function reportHtml(
     table{border-collapse:collapse;width:100%;font-size:10.5px;margin-top:3px}th{background:#f1f5f9;color:#0f172a;font-size:10px;border-top:1px solid #475569;border-bottom:1px solid #475569;padding:6px 5px;text-align:center;font-weight:700}td{padding:4px 5px;vertical-align:top}
     .line2 td,.rowline{border-bottom:1px solid #64748b}.right{text-align:right}.center{text-align:center}.primary-text{color:#0b4ca1;font-weight:800}.profit{color:#047857;font-weight:700}.muted{color:#64748b}.empty{border:1px dashed #cbd5e1;background:#f8fafc;text-align:center;padding:56px;margin-top:14px;color:#64748b;font-weight:700}
     .footer{margin-top:14px;border-top:1px solid #94a3b8;padding-top:6px;text-align:center;font-size:11px;font-weight:700}.aware{text-align:right;font-size:9px;letter-spacing:.22em;color:#0b4ca1;text-transform:uppercase;font-weight:800}
+    .excel-export{background:white}.excel-export .sheet{padding:0}.excel-export .paper{max-width:none;width:1600px;margin:0;padding:18px;border:0;box-shadow:none}.excel-export .logo{height:auto;display:block;padding-bottom:8px}.excel-export .brand-wrap{display:block}.excel-export .brand-wrap img{display:none}.excel-export .brand{font-size:18px;letter-spacing:.18em}.excel-export .system{font-size:12px;margin-top:4px}.excel-export .top{display:block;padding:10px 0}.excel-export .title{font-size:24px}.excel-export .sub,.excel-export .meta,.excel-export .params{font-size:12px}.excel-export .meta{text-align:left;margin-top:8px}.excel-export .params{display:block;padding:8px 0}.excel-export .params div{display:inline-block;min-width:300px;margin-right:18px}.excel-export .group-title{font-size:15px;padding:7px 8px}.excel-export table{width:1550px;font-size:12px;mso-displayed-decimal-separator:".";mso-displayed-thousand-separator:","}.excel-export th{font-size:11px;padding:7px 6px}.excel-export td{padding:6px 6px}.excel-export .footer{font-size:12px}.excel-export .aware{font-size:10px}
     @media print{body{background:white}.viewerbar{display:none}.sheet{padding:0}.paper{border:0;box-shadow:none;max-width:none}}
   </style></head><body>${interactive ? `<div class="viewerbar"><div><h1>${escapeHtml(config.title)}</h1><p>${rows.length} rows | ${escapeHtml(principalText || "All principals")} | ${escapeHtml(generatedAt)}</p></div><div class="actions"><button class="primary" onclick="window.print()">Print</button><button onclick="downloadExcel()">Excel</button><button onclick="window.close()">Close</button></div></div>` : ""}<div class="sheet"><div class="paper">
     <div class="logo"><div class="brand-wrap"><img src="${escapeHtml(logoUrl)}" alt="Bayanat Technology"><div class="brand">Bayanat Technology</div></div><div class="system">Freight Management System</div></div>
@@ -1519,6 +1521,7 @@ function reportHtml(
     function cleanHtmlForExcel(){
       const clone = document.documentElement.cloneNode(true);
       clone.querySelectorAll('script,.viewerbar').forEach((node) => node.remove());
+      clone.querySelector('body')?.classList.add('excel-export');
       return '<!doctype html>' + clone.outerHTML;
     }
     function downloadExcel(){
