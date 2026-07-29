@@ -782,6 +782,45 @@ export async function openAcStatementReport(params: ReportParams) {
   );
 }
 
+// Capex Approval Report and Excel route
+export async function openCapexApprovalReport(params: ReportParams) {
+  await openReportInTab(
+    "/api/finance/transactions/reports/CapexApprovalReport/html", 
+    params
+  );
+}
+
+export async function exportCapexApprovalExcel(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/CapexApprovalReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `CapexApproval_${params.code2 || "Report"}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+export async function openPRPurchaseReport(params: ReportParams) {
+  await openReportInTab(
+    "/api/finance/transactions/reports/PRPurchaseReport/html",
+    params
+  );
+}
+
+
+
+
+
 
 // AC Statement Excel Export
 export async function exportAcStatementExcel(params: ReportParams): Promise<void> {
@@ -890,9 +929,41 @@ export async function getBalanceSheetReportHtml(params: ReportParams): Promise<s
   return response.data as string;
 }
 
+
 export async function getBalanceSheetReportExcelDownload(params: ReportParams): Promise<void> {
   const response = await api.post(
     `/api/finance/transactions/report/balancesheet/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "BalanceSheet.xlsx";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+// ---------Sales Order Report----------------
+
+export async function getSalesOrderReportHtml(params: ReportParams): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/report/salesorder/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+
+export async function getSalesOrderSheetReportExcelDownload(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/report/salesorder/excel`,
     params,
     { responseType: "blob" }
   );

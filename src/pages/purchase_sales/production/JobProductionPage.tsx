@@ -7,35 +7,70 @@ import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
 import { Dialog } from "../../../components/ui/Dialog";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
-import { BudgetEditorState, BudgetRequestEditor } from "./BudgetRequestEditor";
-import {  getDynamicLookup } from "../../../api/lookups";
+
+import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { TabStrip } from "../../vendor/components";
+import { PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchaseordereditor";
+import {  GRN_CONFIG } from "../../purchase_sales/purchase/Purchaseordertypes";
+import { ProductionJobOrderEditor } from "./ProductionJobOrdereditor";
+import { JobProductionOrderEditor } from "./JobProductioneditor";
 
-
-// TODO: replace with the real budget-request row shape once the backend contract is confirmed.
-export interface BudgetRequestRow {
-  request_number: string;
+// TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
+export interface PurchaseOrderRow {
+  doc_type: string;
+  doc_no: string;
+  doc_date: string;
+  quotn_no?: string;
+  quotn_date?: string;
   div_code: string;
   div_name?: string;
-  budget_year: string;
-  request_date: string;
+  ac_code: string;
+  ac_name?: string;
+  address?: string;
+  credit_period?: number;
+  dept_code?: string;
+  tel?: string;
+  fax?: string;
+  buyer?: string;
+  wo_no?: string;
   curr_code?: string;
-  description?: string;
+  curr_name?: string;
+  ex_rate?: number;
+  pay_terms?: string;
+  delivery_term?: string;
+  delivery_contact?: string;
+  delivery_tel?: string;
+  delivery_email?: string;
+  remarks?: string;
+  disc_amt?: number;
+  disc_pct?: number;
+  tax_category?: string;
+  tax_code?: string;
+  expense_ac_post?: string;
+  print_on_letterhead?: string;
+  project_name?: string;
+  pr_no?: string;
+  scope_of_work?: string;
   status?: string;
   canceled?: string;
   flow_level_running?: number;
   flow_level?: number;
+  sentback_reason?: string;
+  reject_reason?: string; // added for reject action
+  last_action?: "SENTBACK" | "REJECTED" | "APPROVED" | "CANCELED" | "PENDING" | string;
 }
 
-// TODO: swap for a real API call, e.g. cancelBudgetRequest(budgetNo)
-async function cancelBudgetRequestApi(_budgetNo: string): Promise<void> {
+// TODO: swap for a real API call, e.g. cancelPurchaseOrderApi(docNo)
+async function cancelPurchaseOrderApi(_docNo: string): Promise<void> {
   return;
 }
-type RequestTab = "PENDING" | "INPROGRESS"| "CLOSED" | "CANCELED" | "REJECTED" | "SENDBACK";
-export function BudgetRequestPage({ onClose }: { onClose?: () => void } = {}) {
+
+type RequestTab = "PENDING" | "INPROGRESS" | "CLOSED" | "CANCELED" | "REJECTED" | "SENDBACK";
+
+export function JobProductionOrderPage({ onClose }: { onClose?: () => void } = {}) {
   const { user } = useAuth();
-  const [rows, setRows] = useState<BudgetRequestRow[]>([]);
+  const [rows, setRows] = useState<PurchaseOrderRow[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -45,10 +80,10 @@ export function BudgetRequestPage({ onClose }: { onClose?: () => void } = {}) {
   const [totalRows, setTotalRows] = useState(0);
   const [approvalLevel, setApprovalLevel] = useState<number>(0);
   const isPendingTab = tab === "PENDING";
-  const canViewCanceledTab = approvalLevel === 1;
+  const canViewCanceledTab = approvalLevel <= 1;
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [editor, setEditor] = useState<BudgetEditorState>(null);
-  const [cancelTarget, setCancelTarget] = useState<BudgetRequestRow | null>(null);
+  const [editor, setEditor] = useState<PurchaseOrderEditorState>(null);
+  const [cancelTarget, setCancelTarget] = useState<PurchaseOrderRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
@@ -61,35 +96,34 @@ export function BudgetRequestPage({ onClose }: { onClose?: () => void } = {}) {
     setLoading(true);
     if (clearNotice) setNotice(null);
     try {
-      const response = await fetchBudgetRequests();
+      const response = await fetchPurchaseOrders();
       setRows(response);
       setTotalRows(response.length);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load budget requests" });
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load purchase orders" });
     } finally {
       setLoading(false);
     }
   };
 
-  // const fetchBudgetRequests = async () => {
-  //   const response = await getDynamicLookup({
-  //     parameter: "Account_Budget_PAGE",
-  //     code1: user?.company_code,
-  //     loginid: user?.loginid || user?.username || "ADMIN",
-  //   });
-  //   return response as unknown as BudgetRequestRow[];
-  // };
-const fetchBudgetRequests = async () => {
-  const response = await getDynamicLookup({
-    parameter: "MS_BUDGET_ACCOUNT_TAB_List",
-    code1: user?.company_code,
-    code2: user?.loginid || user?.username || "ADMIN",
-    code3: tab,
-    loginid: user?.loginid || user?.username || "ADMIN",
-  });
+  // TODO: confirm lookup parameter name against your Oracle package (mirrors MS_BUDGET_ACCOUNT_TAB__List).
+  const fetchPurchaseOrders = async () => {
+    const response = await getDynamicLookup({
+      parameter: "PS_JORDER_ENTRY_TAB_List",
+      code1: user?.company_code,
+      code2: user?.loginid || user?.username || "ADMIN",
+      code3: tab,
+    });
 
-  return response as unknown as BudgetRequestRow[];
-};
+    return response as unknown as PurchaseOrderRow[];
+  };
+
+  useEffect(() => {
+  if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
+    setTab("PENDING");
+  }
+}, [approvalLevel, tab]);
+
   useEffect(() => {
     void loadLookups().catch((error) => {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load lookups" });
@@ -100,10 +134,10 @@ const fetchBudgetRequests = async () => {
     (async () => {
       try {
         const rows = await getDynamicLookup({
-          parameter: "MS_BUDGET_FUN_CHECK_BUDGET_APPR_LEVEL",
+          parameter: "PS_POORDER_ENTRY_FUN_CHECK_GLOBAL_APPR_LEVEL",
           code1: user?.company_code,
           code2: user?.loginid || user?.username || "ADMIN",
-          loginid: user?.loginid || user?.username || "ADMIN",
+          code3: "purchase_order",
         });
         if (!mounted) return;
         const first = (rows || [])[0] as Record<string, unknown> | undefined;
@@ -119,33 +153,41 @@ const fetchBudgetRequests = async () => {
     };
   }, [user?.company_code, user?.loginid, user?.username]);
 
-useEffect(() => {
-  void loadRows();
-}, [tab, query, pageIndex, pageSize, columnFilters]);
+  useEffect(() => {
+    void loadRows();
+  }, [tab, query, pageIndex, pageSize, columnFilters]);
 
-  const columns = useMemo<ColumnDef<BudgetRequestRow>[]>(() => [
+  const columns = useMemo<ColumnDef<PurchaseOrderRow>[]>(() => [
     {
-      accessorKey: "request_number",
-      header: "Budget Number",
-      cell: ({ row }) => <span className="font-semibold">{row.original.request_number}</span>,
+      accessorKey: "doc_no",
+      header: "Doc No",
+      cell: ({ row }) => <span className="font-semibold">{row.original.doc_no}</span>,
     },
-    { accessorKey: "request_date", header: "Request Date", cell: ({ getValue }) => formatDate(getValue()) },
+    { accessorKey: "doc_date", header: "Doc Date", cell: ({ getValue }) => formatDate(getValue()) },
     { accessorKey: "div_code", header: "Div" },
-    { accessorKey: "div_name", header: "Division Name" },
+    { accessorKey: "ac_code", header: "A/c Code" },
+    { accessorKey: "ac_name", header: "A/c Name" },
     { accessorKey: "curr_code", header: "Currency" },
-    { accessorKey: "description", header: "Description" },
+    { accessorKey: "buyer", header: "Buyer" },
     {
       accessorKey: "canceled",
       header: "Status",
       cell: ({ getValue }) => String(getValue() || "N") === "Y" ? <Badge variant="outline" className="border-destructive text-destructive">Cancelled</Badge> : <Badge>Active</Badge>,
     },
+     {
+  id: "reason",
+  header: "Reason",
+  accessorFn: (row) =>
+    row.last_action === "SENTBACK" ? row.sentback_reason : row.reject_reason,
+},
+        { accessorKey: "last_action", header: "Last Action" },
     {
       id: "actions",
       header: "Actions",
       enableSorting: false,
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })} title="Edit">
+          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original as any })} title="Edit">
             <Edit2 size={15} />
           </Button>
           <Button size="icon" variant="ghost" title="Print / PDF">
@@ -168,55 +210,62 @@ useEffect(() => {
     <section className="finance-list-page grid gap-4">
       <div className="finance-list-heading">
         <div className="finance-list-title">
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">Budget Request</h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">Project budget request document</p>
+          <h1 className="m-0 text-2xl font-semibold tracking-tight">Purchase Order</h1>
+          <p className="m-0 mt-1 text-sm text-muted-foreground">Purchase order document</p>
         </div>
         <div className="finance-list-actions">
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
-          <Button title="Add Budget Request" onClick={() => setDivisionPicker(true)}>
+          <Button title="Add Purchase Order" onClick={() => setDivisionPicker(true)}>
             <Plus size={15} /> Add
           </Button>
         </div>
       </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-        <TabStrip
-        value={tab}
-        onChange={(value) => setTab(value as RequestTab)}
-        tabs={[
+     <TabStrip
+  value={tab}
+  onChange={(value) => setTab(value as RequestTab)}
+  tabs={
+    approvalLevel === 0
+      ? [
+          { label: "Pending", value: "PENDING", icon: "pending" },
+          { label: "Closed", value: "CLOSED", icon: "closed" },
+          { label: "Canceled", value: "CANCELED", icon: "canceled" as const },
+        ]
+      : [
           { label: "Pending", value: "PENDING", icon: "pending" },
           { label: "In Progress", value: "INPROGRESS", icon: "inProgress" },
           { label: "Closed", value: "CLOSED", icon: "closed" },
           ...(canViewCanceledTab ? [{ label: "Canceled", value: "CANCELED", icon: "canceled" as const }] : []),
           { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
-          { label: "Send Back", value: "SENDBACK", icon: "sentBack" as const },
-        ]}
-      />
+        ]
+  }
+/>
 
       <div className="min-h-[650px]">
         <DataTable
           columns={columns}
           data={rows}
-          title={loading ? "Loading" : `${totalRows.toLocaleString()} Budget Requests`}
-          subtitle="Budget Request List"
+          title={loading ? "Loading" : `${totalRows.toLocaleString()} Purchase Orders`}
+          subtitle="Purchase Order List"
           searchValue={query}
           onSearchChange={(value) => {
             setQuery(value);
             setPageIndex(0);
           }}
-          searchPlaceholder="Search budget no, division, description..."
+          searchPlaceholder="Search doc no, division, vendor..."
           loading={loading}
-          emptyText="No budget requests found"
+          emptyText="No purchase orders found"
           height={620}
           minWidth={1000}
           density="grid"
           enablePagination
           manualPagination
           enableExport
-          exportFilename="budget-requests.csv"
-          initialSorting={[{ id: "request_date", desc: true }]}
+          exportFilename="purchase-orders.csv"
+          initialSorting={[{ id: "doc_date", desc: true }]}
           pageIndex={pageIndex}
           pageSize={pageSize}
           totalRows={totalRows}
@@ -230,14 +279,15 @@ useEffect(() => {
             setPageSize(nextPageSize);
             setPageIndex(0);
           }}
-          getRowId={(row, index) => `${row.request_number}_${index}`}
+          getRowId={(row, index) => `${row.doc_no}_${index}`}
         />
       </div>
 
       {editor && (
         <div className="fixed inset-0 z-50 bg-background">
-          <BudgetRequestEditor
-            key={editor?.mode === "edit" ? editor.row.request_number : editor?.mode || "create"}
+          <JobProductionOrderEditor
+            key={editor?.mode === "edit" ? editor.row.doc_no : editor?.mode || "create"}
+            config={GRN_CONFIG}
             editor={editor}
             isPendingTab={isPendingTab}
             onClose={() => setEditor(null)}
@@ -253,7 +303,7 @@ useEffect(() => {
       <Dialog
         open={divisionPicker}
         title="Select Division"
-        description="Choose the division before opening the budget request form."
+        description="Choose the division before opening the purchase order form."
         onClose={() => setDivisionPicker(false)}
         footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}
       >
@@ -281,4 +331,3 @@ function formatDate(value: unknown) {
   if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
   return date.toISOString().slice(0, 10);
 }
-
