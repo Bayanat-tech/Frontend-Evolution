@@ -41,6 +41,8 @@ export interface PurchaseOrderForm {
   doc_date: string;
   quotn_no: string;
   quotn_date: string;
+  ref_no:string;
+  ref_date:string;
   div_code: string;
   div_name: string;
   ac_code: string;
@@ -48,6 +50,7 @@ export interface PurchaseOrderForm {
   address: string;
   credit_period: number;
   dept_code: string;
+  dept_name:string;
   tel: string;
   fax: string;
   buyer: string;
@@ -126,6 +129,35 @@ export interface TteJmiConsumType {
   uom_name?: string;
   uom_code?: string;
 }
+
+export interface ExpenseRow {
+    id: string;
+  company_code: string | null;
+  doc_type: string | null;
+  doc_no: string | null;
+  doc_date: Date | null;
+  div_code: string | null;
+  dept_code: string | null;
+  serial_no: number;
+  exp_code: string | null;
+  remarks: string | null;
+  amount: number;
+  curr_code: string | null;
+  ex_rate: number;
+  lcur_amount: number;
+  ref_doc_type: string | null;
+  ref_doc_no: number;
+  ref_doc_serial: number;
+  edit_user: string | null;
+  edit_date: Date | null;
+  user_id: string | null;
+  user_dt: Date | null;
+  zone_code: string | null;
+  ac_code: string | null;
+  wrk_type: string | null;
+  employee_id: string | null;
+  hourly_rate: number;
+}
 export interface SendBackUserOption {
   code: string;
   name: string;
@@ -146,6 +178,14 @@ export const PROCESSJO = 'production_joborder'
 export const PROCESSJP = 'job_production'
 export const EXPENSE_AC_OPTIONS = ["Inventory A/c", "Expense A/c", "Fixed Asset A/c"];
 export type PODocType = typeof PO_DOC_TYPE[keyof typeof PO_DOC_TYPE];
+
+export interface JobProductionConfig {
+  docType: PODocType;
+  headerParameter: string;
+  detailParameter: string;
+  jmiConsumDetails:string;
+  expenseDetails:string
+}
 
 export interface PurchaseConfig {
   docType: PODocType;
@@ -177,8 +217,10 @@ export const JO_CONFIG: PurchaseConfig = {
   detailParameter: "PS_JORDER_ENTRY_DETAIL_PAGE",
 };
 
-export const JP_CONFIG: PurchaseConfig = {
+export const JP_CONFIG: JobProductionConfig = {
   docType: PO_DOC_TYPE.FGP,
-  headerParameter: "PS_JORDER_ENTRY_HEADER_PAGE",
-  detailParameter: "PS_JORDER_ENTRY_DETAIL_PAGE",
+  headerParameter: "PS_GRN_ENTRY_HEADER_PAGE",
+  detailParameter: "PS_GRN_ENTRY_DETAIL_PAGE",
+  expenseDetails :"PS_GRN_ENTRY_VW_TTE_PGRN_EXP_DET",
+  jmiConsumDetails :"PS_GRN_ENTRY_VW_TTE_JMI_CONSUM"
 };
