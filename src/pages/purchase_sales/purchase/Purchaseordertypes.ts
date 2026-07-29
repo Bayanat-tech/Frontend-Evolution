@@ -33,7 +33,7 @@ export interface PurchaseOrderLineRow {
   zone_name?: string;
   uom_name?: string;
   uom_code?: string;
-  
+
 }
 
 export interface PurchaseOrderForm {
@@ -75,11 +75,57 @@ export interface PurchaseOrderForm {
   next_action_by?: string;
   sentback_reason?: string;
   reject_reason?: string;
-  zone_code?: string;
-  zone_name?: string;
-  
+
+
 }
 
+export interface TteJmiConsumType {
+  id: string;
+  company_code: string;
+  doc_type: string;
+  doc_no: number;
+
+  mi_doc_no: number;
+
+  prod_code: string;
+  prod_name: string;
+
+  quantity: number;
+  qty: number;
+
+  p_uom: string;
+  l_uom: string;
+
+  qty_puom: number;
+  qty_luom: number;
+
+  serial_no: number;
+
+  qty_consumd: number;
+  qty_scrapped: number;
+
+  cost_rate: number;
+  cost_amount: number;
+
+  scrap_amount: number;
+
+  div_code: string;
+
+  unit_price: number;
+  tax_pct: number;
+  tax_amount: number;
+  lcurr_amount: number;
+  req_date: string;
+  line_remarks: string;
+  tax_cat: string;
+  tax_lcurr_amount: number;
+  lcurr_amount_disc: number;
+
+  zone_code?: string;
+  zone_name?: string;
+  uom_name?: string;
+  uom_code?: string;
+}
 export interface SendBackUserOption {
   code: string;
   name: string;
@@ -90,12 +136,14 @@ export const PO_DOC_TYPE = {
   LPO: "LPO",
   PQA: "PQA",
   GRN: "GRN",
-  JO :"JO"
+  JO: "JO",
+  FGP: "FGP"
 } as const;
 export const PROCESS = "purchase_order";
 export const PROCESSQUOTATION = 'purchase_quotation'
-export const PROCESSGRN ='purchase_grn'
-export const PROCESSJO ='production_joborder'
+export const PROCESSGRN = 'purchase_grn'
+export const PROCESSJO = 'production_joborder'
+export const PROCESSJP = 'job_production'
 export const EXPENSE_AC_OPTIONS = ["Inventory A/c", "Expense A/c", "Fixed Asset A/c"];
 export type PODocType = typeof PO_DOC_TYPE[keyof typeof PO_DOC_TYPE];
 
@@ -125,6 +173,12 @@ export const GRN_CONFIG: PurchaseConfig = {
 
 export const JO_CONFIG: PurchaseConfig = {
   docType: PO_DOC_TYPE.JO,
+  headerParameter: "PS_JORDER_ENTRY_HEADER_PAGE",
+  detailParameter: "PS_JORDER_ENTRY_DETAIL_PAGE",
+};
+
+export const JP_CONFIG: PurchaseConfig = {
+  docType: PO_DOC_TYPE.FGP,
   headerParameter: "PS_JORDER_ENTRY_HEADER_PAGE",
   detailParameter: "PS_JORDER_ENTRY_DETAIL_PAGE",
 };

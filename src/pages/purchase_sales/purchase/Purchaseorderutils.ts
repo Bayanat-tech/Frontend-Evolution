@@ -8,6 +8,7 @@ import {
   PurchaseOrderEditorState,
   PurchaseOrderForm,
   PurchaseOrderLineRow,
+  TteJmiConsumType,
 } from "./Purchaseordertypes";
 
 export const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -247,6 +248,56 @@ export function buildDetailsPayload(rows: PurchaseOrderLineRow[]) {
   }));
 }
 
+export function buildTteJmiConsumPayload(rows: TteJmiConsumType[]) {
+  return rows.map((row) => ({
+  id: row.id,
+  company_code: row.company_code,
+  doc_type: row.doc_type,
+  doc_no: row.doc_no,
+
+  mi_doc_no: row.mi_doc_no,
+
+  prod_code: row.prod_code,
+  prod_name: row.prod_name,
+
+  quantity: row.quantity,
+  qty: row.qty,
+
+  p_uom: row.p_uom,
+  l_uom: row.l_uom,
+
+  qty_puom: row.qty_puom,
+  qty_luom: row.qty_luom,
+
+  serial_no: row.serial_no,
+
+  qty_consumd: row.qty_consumd,
+  qty_scrapped: row.qty_scrapped,
+
+  cost_rate: row.cost_rate,
+  cost_amount: row.cost_amount,
+
+  scrap_amount: row.scrap_amount,
+
+  div_code: row.div_code,
+
+  unit_price: row.unit_price,
+  tax_pct: row.tax_pct,
+  tax_amount: row.tax_amount,
+  lcurr_amount: row.lcurr_amount,
+  req_date: row.req_date,
+  line_remarks: row.line_remarks,
+  tax_cat: row.tax_cat,
+  tax_lcurr_amount: row.tax_lcurr_amount,
+  lcurr_amount_disc: row.lcurr_amount_disc,
+
+  zone_code: row.zone_code,
+  zone_name: row.zone_name,
+  uom_name: row.uom_name,
+  uom_code: row.uom_code,
+}));
+}
+
 export async function runWorkflow(
   status: "SAVEASDRAFT" | "SUBMITTED" | "REJECTED" | "CLOSED" | "CANCELED" | "SENTBACK",
     docType: PODocType,
@@ -259,6 +310,7 @@ export async function runWorkflow(
     {
       header: buildHeaderPayload(form, companyCode, loginid, docType),
       details: buildDetailsPayload(rows),
+
       company_code: companyCode || "",
       loginid: loginid || "ADMIN",
     },

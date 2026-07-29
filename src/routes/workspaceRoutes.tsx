@@ -156,6 +156,7 @@ import { SalesOrderPage } from "../pages/purchase_sales/sales/SalesorderPage";
 import { SalesDNPage } from "../pages/purchase_sales/sales/SalesDNPage";
 import { StocksTransferPage } from "../pages/purchase_sales/inventory/StockTransferPage";
 import { StocksAdjectmentPage } from "../pages/purchase_sales/inventory/StockadjustmentPage";
+import { JobProductionOrderPage } from "../pages/purchase_sales/production/JobProductionPage";
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -1045,6 +1046,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   match: ({ pathname }) => isStockInquiryRoute(pathname),
   element: () => <StockInquiryPage />,
   },
+
+    {
+  name: "Purchase Sales Stock Inquiry",
+  match: ({ pathname }) => isJobProductionSetupRoute(pathname),
+  element: () => <JobProductionOrderPage />,
+  },
   
 ];
 
@@ -1168,6 +1175,11 @@ function isStocksAdjectmentSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   
     return (normalized.includes("purchase_sales/inventory/stock_adjustment"))
+}
+function isJobProductionSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/production/job_production"))
 }
 
 function isExpenseTypeRoute(pathname: string) {

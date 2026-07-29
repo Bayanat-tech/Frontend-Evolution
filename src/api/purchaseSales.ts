@@ -158,3 +158,36 @@ const endpoint =
   return response.data;
 }
 
+export async function upsertBulkJobProductionEntryApi(
+  payload: {
+    header: Record<string, unknown>;
+    details: Record<string, unknown>[];
+     jmiConsumDetails:Record<string, unknown>[];
+    company_code: string;
+    loginid: string;
+  },
+  action: "SAVEASDRAFT" | "SUBMITTED" | "REJECTED" | "SENTBACK" | "CLOSED" | "CANCELED",
+  docType: PODocType
+) {
+const endpoint =
+  docType === PO_DOC_TYPE.FGP
+    ? "/api/purchase-sales/insUpdJobProduction"
+    :""
+    
+
+  const response = await api.post<ApiResponse<unknown>>(endpoint, {
+    ...payload,
+    header: {
+      ...payload.header,
+      last_action: action,
+    },
+  });
+
+  if (!response.data.success) {
+    throw new Error(
+      response.data.message || "Unable to perform purchase/sales entry action"
+    );
+  }
+
+  return response.data;
+}
