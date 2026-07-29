@@ -238,7 +238,7 @@ export function getLookupValue(row: LookupRow, field: string) {
   const match = Object.keys(row).find((key) => key.toLowerCase() === lower || key.toUpperCase() === upper);
   return match ? row[match] : "";
 }
-
+ 
 export function getLookupText(row: LookupRow, fields: string[]) {
   return fields
     .map((field) => formatLookupDisplayValue(field, getLookupValue(row, field)))

@@ -67,6 +67,17 @@ type EnquiryHeader = {
   no_of_contaners: string;
   vehicle_type: string;
   t_f: string;
+  flow_level_running: string;
+  flow_level_initial: string;
+  flow_level_final: string;
+  final_approved: string;
+  last_action: string;
+  history_serial: string;
+  next_action_by: string;
+  sentback_reason: string;
+  reject_reason: string;
+  submitted_by: string;
+  submitted_date: string;
 };
 
 type EnquiryDetail = {
@@ -160,11 +171,14 @@ type FreightEnquiryMainPageProps = {
   screenType?: "enquiry" | "rfq";
 };
 
-type ListStatusTab = "in_progress" | "approved" | "cancelled" | "all";
+type ListStatusTab = "draft" | "in_progress" | "approved" | "sentback" | "rejected" | "cancelled" | "all";
 
 const listStatusTabs: { key: ListStatusTab; label: string }[] = [
+  { key: "draft", label: "Draft" },
   { key: "in_progress", label: "In Progress" },
   { key: "approved", label: "Approved" },
+  { key: "sentback", label: "Sent Back" },
+  { key: "rejected", label: "Rejected" },
   { key: "cancelled", label: "Cancelled" },
   { key: "all", label: "All" },
 ];
@@ -203,10 +217,13 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
 
   const enquiryLabel = isRfq ? "RFQ" : "Enquiry";
   const loginId = String(userInfo?.loginid || userInfo?.USERID || userInfo?.user_id || userInfo?.username || "");
-  const isApproved = header.indstatus === "A";
+  const isApproved = header.indstatus === "A" || header.final_approved === "Y";
   const isCancelled = header.indstatus === "C";
-  const isLocked = isApproved || isCancelled;
-  const canApprove = Boolean(header.enquiry_nr) && !isApproved && !isCancelled;
+  const isRejected = header.indstatus === "R" || header.last_action === "REJECTED";
+  const isSentBack = header.last_action === "SENTBACK";
+  const isLocked = isApproved || isCancelled || isRejected;
+  const canSubmit = Boolean(header.enquiry_nr) && !isApproved && !isCancelled && !isRejected;
+  const canApprove = Boolean(header.enquiry_nr) && !isApproved && !isCancelled && !isRejected;
   const attachmentRequestNumber = header.enquiry_nr ? `${header.company_code}-${header.enquiry_type}-${header.enquiry_nr}` : "";
   const sourceAttachmentRequestNumbers = useMemo(() => {
     if (!isRfq || !header.ref_enquiry_nr) return [];
@@ -250,7 +267,11 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
         size: 130,
         cell: ({ row }) => {
           const status = lookupText(row.original, "indstatus");
-          return <span className={statusBadgeClass(status)}>{statusLabel(status)}</span>;
+          return (
+            <span className={statusBadgeClass(status, lookupText(row.original, "last_action"), lookupText(row.original, "final_approved"))}>
+              {statusLabel(status, lookupText(row.original, "last_action"), lookupText(row.original, "final_approved"))}
+            </span>
+          );
         },
       },
       {
@@ -522,44 +543,87 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
     }
   };
 
-  const approveEnquiry = async () => {
+  const applyWorkflowResult = (row: LookupRow | null | undefined) => {
+    if (!row) return;
+    const normalized = normalizeLookupRow(row);
+    setHeader((current) => ({
+      ...current,
+      indstatus: lookupText(normalized, "indstatus") || current.indstatus,
+      flow_level_running: lookupText(normalized, "flow_level_running") || current.flow_level_running,
+      flow_level_final: lookupText(normalized, "flow_level_final") || current.flow_level_final,
+      final_approved: lookupText(normalized, "final_approved") || current.final_approved,
+      last_action: lookupText(normalized, "last_action") || current.last_action,
+      next_action_by: lookupText(normalized, "next_action_by") || current.next_action_by,
+      sentback_reason: lookupText(normalized, "sentback_reason") || current.sentback_reason,
+      reject_reason: lookupText(normalized, "reject_reason") || current.reject_reason,
+    }));
+  };
+
+  const runWorkflowAction = async (action: "SUBMITTED" | "APPROVED" | "SENTBACK" | "REJECTED", remarks = "", sentbackTo = "") => {
     if (!header.enquiry_nr) {
-      setNotice({ type: "error", text: `Save ${enquiryLabel.toLowerCase()} before approval` });
+      setNotice({ type: "error", text: `Save ${enquiryLabel.toLowerCase()} before workflow action` });
       return;
     }
-    if (isApproved) {
-      setNotice({ type: "error", text: `${enquiryLabel} is already approved` });
+    if (isLocked && action !== "SENTBACK") {
+      setNotice({ type: "error", text: `${statusLabel(header.indstatus, header.last_action, header.final_approved)} ${enquiryLabel.toLowerCase()} is read-only` });
       return;
     }
-    if (isCancelled) {
-      setNotice({ type: "error", text: `Cancelled ${enquiryLabel.toLowerCase()} cannot be approved` });
+    if (action === "SENTBACK" && !sentbackTo.trim()) {
+      setNotice({ type: "error", text: "Send back user is required" });
       return;
     }
 
     setApproving(true);
     setNotice(null);
     try {
-      const response = await api.post<{ success?: boolean; message?: string }>(
-        isRfq ? "/api/freight/rfq/approve" : "/api/freight/enquiry/approve",
+      const response = await api.post<{ success?: boolean; message?: string; data?: LookupRow | null }>(
+        isRfq ? "/api/freight/rfq/workflow-action" : "/api/freight/enquiry/workflow-action",
         {
           company_code: header.company_code,
           enquiry_type: header.enquiry_type,
           enquiry_nr: header.enquiry_nr,
-          approved_by: loginId,
-          approval_remarks: "",
+          action,
+          action_by: loginId,
+          action_remarks: remarks,
+          sentback_to: sentbackTo,
         },
       );
       if (response.data?.success === false) {
-        throw new Error(response.data.message || `Unable to approve ${enquiryLabel}`);
+        throw new Error(response.data.message || `Unable to update ${enquiryLabel} workflow`);
       }
-      setHeaderField("indstatus", "A");
-      setNotice({ type: "success", text: response.data?.message || `${enquiryLabel} approved` });
+      applyWorkflowResult(response.data?.data);
+      setNotice({ type: "success", text: response.data?.message || `${enquiryLabel} workflow updated` });
       await loadEnquiries();
     } catch (error) {
-      setNotice({ type: "error", text: error instanceof Error ? error.message : `Unable to approve ${enquiryLabel}` });
+      setNotice({ type: "error", text: error instanceof Error ? error.message : `Unable to update ${enquiryLabel} workflow` });
     } finally {
       setApproving(false);
     }
+  };
+
+  const submitForApproval = () => {
+    void runWorkflowAction("SUBMITTED");
+  };
+
+  const approveEnquiry = () => {
+    const remarks = window.prompt("Approval remarks", "") || "";
+    void runWorkflowAction("APPROVED", remarks);
+  };
+
+  const sendBackEnquiry = () => {
+    const sentbackTo = window.prompt("Send back to user/employee id", header.submitted_by || "") || "";
+    if (!sentbackTo.trim()) return;
+    const remarks = window.prompt("Send back remarks", "") || "";
+    void runWorkflowAction("SENTBACK", remarks, sentbackTo);
+  };
+
+  const rejectEnquiry = () => {
+    const remarks = window.prompt("Reject reason", "") || "";
+    if (!remarks.trim()) {
+      setNotice({ type: "error", text: "Reject reason is required" });
+      return;
+    }
+    void runWorkflowAction("REJECTED", remarks);
   };
 
   const openEnquiry = async (row: EnquiryListRow) => {
@@ -779,7 +843,9 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
               <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">
                 {header.enquiry_nr || (isRfq ? "New RFQ" : "New enquiry")}
               </span>
-              <span className={statusBadgeClass(header.indstatus)}>{statusLabel(header.indstatus)}</span>
+              <span className={statusBadgeClass(header.indstatus, header.last_action, header.final_approved)}>
+                {statusLabel(header.indstatus, header.last_action, header.final_approved)}
+              </span>
             </div>
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
               <span>{modeLabel(header.transport_mode)}</span>
@@ -815,6 +881,28 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
             <Paperclip size={14} />
             Files
           </Button>
+          {canSubmit && (
+            <Button type="button" size="sm" variant="outline" onClick={submitForApproval} disabled={approving || saving}>
+              <ShieldCheck size={14} />
+              {isSentBack ? "Resubmit" : "Submit"}
+            </Button>
+          )}
+          {canApprove && (
+            <>
+              <Button type="button" size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={approveEnquiry} disabled={approving || saving}>
+                <ShieldCheck size={14} />
+                {approving ? "Working" : "Approve"}
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={sendBackEnquiry} disabled={approving || saving}>
+                <RotateCcw size={14} />
+                Send Back
+              </Button>
+              <Button type="button" size="sm" variant="outline" className="text-red-600 hover:text-red-700" onClick={rejectEnquiry} disabled={approving || saving}>
+                <Ban size={14} />
+                Reject
+              </Button>
+            </>
+          )}
           <Button type="button" size="sm" variant="outline" onClick={requestCancel} disabled={isLocked}>
             {header.enquiry_nr ? <Ban size={14} /> : <X size={14} />}
             {header.enquiry_nr ? "Cancel" : "Close"}
@@ -823,15 +911,9 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
             <RotateCcw size={14} />
             Reset
           </Button>
-          {canApprove && (
-            <Button type="button" size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={approveEnquiry} disabled={approving || saving}>
-              <ShieldCheck size={14} />
-              {approving ? "Approving" : "Approve"}
-            </Button>
-          )}
           <Button type="submit" size="sm" disabled={saving || isLocked}>
             <Save size={14} />
-            {saving ? "Saving" : "Save"}
+            {saving ? "Saving" : "Save Draft"}
           </Button>
         </div>
       </div>
@@ -854,7 +936,8 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
           <FormLookup label="Principal" value={header.prin_code} displayValue={headerNames.prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required className="sm:col-span-2 xl:col-span-1.5" />
           <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayValue={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }, { field: "prin_telno1", header: "Phone" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} className="sm:col-span-2 xl:col-span-1.5" />
           <FormLookup label="Salesman" value={header.salesman_code} displayValue={headerNames.salesman_name} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Salesman" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} className="sm:col-span-2 xl:col-span-1.5" />
-          <StatusField status={header.indstatus} />
+          <StatusField status={header.indstatus} action={header.last_action} finalApproved={header.final_approved} />
+          <TypeField label="Approval Level" value={workflowLevelText(header)} />
           <FormInput label="Offer Validity" type="date" value={header.offer_validity} onChange={(value) => setHeaderField("offer_validity", value)} />
           <TypeField label="Type" value={header.enquiry_type} />
           {isRfq && !header.enquiry_nr && (
@@ -1232,35 +1315,67 @@ function HeaderChip({ label, value }: { label: string; value: string }) {
   );
 }
 
-function statusBadgeClass(status: string) {
-  if (status === "A") {
+function statusBadgeClass(status: string, action = "", finalApproved = "") {
+  if (status === "A" || finalApproved === "Y") {
     return "inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700";
   }
   if (status === "C") {
     return "inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-700";
   }
+  if (status === "R" || action === "REJECTED") {
+    return "inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-700";
+  }
+  if (action === "SENTBACK") {
+    return "inline-flex items-center rounded-md border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-[11px] font-semibold text-orange-700";
+  }
+  if (action === "SUBMITTED" || action === "APPROVED") {
+    return "inline-flex items-center rounded-md border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-[11px] font-semibold text-sky-700";
+  }
   return "inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700";
 }
 
-function statusLabel(status: string) {
-  if (status === "A") return "Approved";
+function statusLabel(status: string, action = "", finalApproved = "") {
+  if (status === "A" || finalApproved === "Y") return "Approved";
   if (status === "C") return "Cancelled";
-  return "Not Approved";
+  if (status === "R" || action === "REJECTED") return "Rejected";
+  if (action === "SENTBACK") return "Sent Back";
+  if (action === "SUBMITTED" || action === "APPROVED") return "In Approval";
+  return "Draft";
 }
 
 function matchesListStatusTab(row: EnquiryListRow, tab: ListStatusTab) {
   const status = lookupText(row, "indstatus");
-  if (tab === "approved") return status === "A";
+  const action = lookupText(row, "last_action");
+  const finalApproved = lookupText(row, "final_approved");
+  if (tab === "approved") return status === "A" || finalApproved === "Y";
   if (tab === "cancelled") return status === "C";
-  if (tab === "in_progress") return status !== "A" && status !== "C";
+  if (tab === "rejected") return status === "R" || action === "REJECTED";
+  if (tab === "sentback") return action === "SENTBACK";
+  if (tab === "draft") return status !== "A" && status !== "C" && status !== "R" && (!action || action === "SAVEASDRAFT");
+  if (tab === "in_progress") return status !== "A" && status !== "C" && status !== "R" && action !== "SENTBACK" && action !== "SAVEASDRAFT";
   return true;
 }
 
 function statusRowClassName(row: EnquiryListRow) {
   const status = lookupText(row, "indstatus");
+  const action = lookupText(row, "last_action");
   if (status === "A") return "bg-emerald-50/60";
-  if (status === "C") return "bg-red-50/50";
+  if (status === "C" || status === "R") return "bg-red-50/50";
+  if (action === "SENTBACK") return "bg-orange-50/50";
+  if (action === "SUBMITTED" || action === "APPROVED") return "bg-sky-50/50";
   return "bg-amber-50/50";
+}
+
+function workflowLevelText(header: EnquiryHeader) {
+  if (header.indstatus === "C") return "Cancelled";
+  if (header.indstatus === "R" || header.last_action === "REJECTED") return "Rejected";
+  if (header.indstatus === "A" || header.final_approved === "Y") return "Final approved";
+  if (header.last_action === "SENTBACK") return header.next_action_by ? `Sent back to ${header.next_action_by}` : "Sent back";
+  if (header.last_action === "SUBMITTED" || header.last_action === "APPROVED") {
+    const level = header.flow_level_running || "";
+    return header.next_action_by ? `Level ${level} - ${header.next_action_by}` : `Level ${level || "-"} pending`;
+  }
+  return "Draft";
 }
 
 function buildSmartChecks(header: EnquiryHeader, details: EnquiryDetail[], isRfq: boolean): SmartCheck[] {
@@ -1359,6 +1474,17 @@ function buildInitialHeader(user: Record<string, unknown> | null, target?: Freig
     no_of_contaners: "",
     vehicle_type: "",
     t_f: "T",
+    flow_level_running: "0",
+    flow_level_initial: "0",
+    flow_level_final: "0",
+    final_approved: "N",
+    last_action: "SAVEASDRAFT",
+    history_serial: "0",
+    next_action_by: "",
+    sentback_reason: "",
+    reject_reason: "",
+    submitted_by: "",
+    submitted_date: "",
   };
 }
 
@@ -1451,6 +1577,17 @@ function toHeaderFromRow(row: LookupRow, user: Record<string, unknown> | null, t
     no_of_contaners: lookupText(row, "no_of_contaners"),
     vehicle_type: lookupText(row, "vehicle_type"),
     t_f: lookupText(row, "t_f") || fallback.t_f,
+    flow_level_running: lookupText(row, "flow_level_running") || fallback.flow_level_running,
+    flow_level_initial: lookupText(row, "flow_level_initial") || fallback.flow_level_initial,
+    flow_level_final: lookupText(row, "flow_level_final") || fallback.flow_level_final,
+    final_approved: lookupText(row, "final_approved") || fallback.final_approved,
+    last_action: lookupText(row, "last_action") || fallback.last_action,
+    history_serial: lookupText(row, "history_serial") || fallback.history_serial,
+    next_action_by: lookupText(row, "next_action_by"),
+    sentback_reason: lookupText(row, "sentback_reason"),
+    reject_reason: lookupText(row, "reject_reason"),
+    submitted_by: lookupText(row, "submitted_by"),
+    submitted_date: toDateInputValue(lookupText(row, "submitted_date")),
   };
 }
 
@@ -1518,12 +1655,12 @@ function FormInput({
   );
 }
 
-function StatusField({ status }: { status: string }) {
+function StatusField({ status, action = "", finalApproved = "" }: { status: string; action?: string; finalApproved?: string }) {
   return (
     <div className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
       Status
       <div className="flex h-7 items-center rounded-md border border-input bg-muted/40 px-2">
-        <span className={statusBadgeClass(status)}>{statusLabel(status)}</span>
+        <span className={statusBadgeClass(status, action, finalApproved)}>{statusLabel(status, action, finalApproved)}</span>
       </div>
     </div>
   );
