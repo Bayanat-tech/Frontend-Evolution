@@ -142,6 +142,7 @@ import {ProductTypePage} from "../pages/purchase_sales/PS_ProductTypePage";
 import { ProductCategoryPage } from "../pages/purchase_sales/PS_ProductCategory";
 
 import { ZoneMasterPage } from "../pages/purchase_sales/PS_ZoneMasterPage";
+import PamsDashboard from "../pages/pams/PamsDashboard";
 
 
 type WorkspaceRouteContext = {
@@ -347,7 +348,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   match: ({ pathname }) => isOutstandingStatementRoute(pathname),
   element: () => <OutstandingStatementPage />,
 },
-
+{
+  name: "Pams Dashboard",
+  match: ({ pathname }) => pathname.toLowerCase().includes("/ems/masters/kpi%20masters/pms_dashboard"),
+  element: () => <PamsDashboard />
+},
   
   {
     name: "Finance Ageing Report",
