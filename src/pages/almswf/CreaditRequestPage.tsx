@@ -30,7 +30,7 @@ function fmtDate(val: unknown): string {
 }
 
 function statusOf(row: TPurchaseSummaryTxn): string {
-  return String((row as any).PURCH_STATUS ?? (row as any).purch_status ?? "").toUpperCase();
+  return String((row as any).LAST_ACTION ?? (row as any).LAST_ACTION ?? "").toUpperCase();
 }
 
 // getDynamicLookup returns raw lowercase keys from Oracle (unlike almsCommonSelect,
@@ -188,8 +188,8 @@ const Credit_Request_page = ({ initialTab = 0 }: CreditRequestPageProps) => {
         cell: ({ row }) => fmtDate((row.original as any).CREATE_DATE),
       },
       {
-        accessorKey: "purch_status",
-        header: "Status",
+        accessorKey: "LAST_ACTION",
+        header: "Last Action",
         size: 130,
         cell: ({ row }) => {
           const val = statusOf(row.original);
@@ -198,7 +198,7 @@ const Credit_Request_page = ({ initialTab = 0 }: CreditRequestPageProps) => {
           else if (val === "PENDING") { bg = "#fff4e5"; color = "#92400e"; border = "#fcd38a"; }
           else if (val === "IN PROGRESS") { bg = "#dbeafe"; color = "#1e40af"; border = "#93c5fd"; }
           else if (val === "REJECTED") { bg = "#fdecea"; color = "#a01a1a"; border = "#f5b3b3"; }
-          else if (val === "SENT BACK") { bg = "#f3e8fe"; color = "#6b21a8"; border = "#d9b3f5"; }
+          else if (val === "SENTBACK") { bg = "#f3e8fe"; color = "#6b21a8"; border = "#d9b3f5"; }
           else if (val === "PO GENERATED") { bg = "#d1fae5"; color = "#065f46"; border = "#6ee7b7"; }
           return (
             <span
@@ -208,7 +208,7 @@ const Credit_Request_page = ({ initialTab = 0 }: CreditRequestPageProps) => {
                 background: bg, color, border: `1px solid ${border}`,
               }}
             >
-              {(row.original as any).PURCH_STATUS || (row.original as any).purch_status || "—"}
+              {(row.original as any).LAST_ACTION || (row.original as any).last_action || "—"}
             </span>
           );
         },

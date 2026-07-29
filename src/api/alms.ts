@@ -70,6 +70,11 @@ val1s11?: string;
  val1s40?: string;
  val1s41?: string;
  val1s42?: string;
+ val1s43?: string;
+  val1s44?: string;
+  val1s45?: string;
+  val1s46?: string;
+  val1s47?: string;
 
   val1n1?: number;
   val1n2?: number;

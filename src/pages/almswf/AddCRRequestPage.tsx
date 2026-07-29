@@ -26,6 +26,7 @@ export type TCRHeader = {
   CREATE_DATE?: string | Date;
   LAST_ACTION?: string;
   HISTORY_SERIAL?: number;
+  NEXT_ACTION_BY?: string;
 
   COMPANY_NAME?: string;
   AWARE_CUSTOMER_CODE?: string;
@@ -125,7 +126,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     setHeader((prev) => ({ ...prev, [field]: value }));
 
   // ── Save (matches PROC_BUILD_DYNAMIC_INS_UPD_COLUMN90 -> 'capex_req_ins_upd') ──
-  const saveHeader = async (status: string) =>
+ const saveHeader = async (status: string, extra: Record<string, unknown> = {}) =>
     almsSave({
       parameter: "capex_req_ins_upd",
       loginid,
@@ -172,6 +173,11 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       val1s40: header.ACCOUNT_ENV_WMS === "Y" ? "Y" : "N",
       val1s41: header.ACCOUNT_ENV_FREIGHT === "Y" ? "Y" : "N",
       val1s42: header.ACCOUNT_NO || "",
+      val1s43: loginid,
+      val1s44: loginid,
+      val1s45: header.NEXT_ACTION_BY || "",
+      val1s46: "",
+      val1s47: "",
 
       val1n1: header.FLOW_LEVEL_INITIAL || 1,
       val1n2: header.FLOW_LEVEL_RUNNING || 1,
@@ -181,7 +187,12 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       val1n7: header.CREDIT_LIMIT || 0,
       val1n8: header.REQUESTED_CREDIT_PERIOD || 0,
       val1n9: header.SANCTIONED_CREDIT_LIMIT_AMT || 0,
+      // val1n10: header.SANCTIONED_CREDIT_PERIOD || 0,
+
       val1n10: header.SANCTIONED_CREDIT_PERIOD || 0,
+
+      ...extra,
+  
     });
 
   const runAction = async (status: string, successMsg: string) => {
@@ -204,50 +215,42 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const handleSubmit = () => runAction("SUBMITTED", "CR submitted successfully!");
 
   const handleRejectConfirm = async () => {
-    if (!remarkText.trim()) return setNotice({ type: "error", message: "Please enter a reject remark" });
-    setSaving(true);
-    setNotice(null);
-    try {
-      await almsSave({
-        parameter: "Amlspf_RejectCR",
-        loginid,
-        code1: companyCode,
-        code2: requestNumber,
-        code3: remarkText,
-      });
+  if (!remarkText.trim()) return setNotice({ type: "error", message: "Please enter a reject remark" });
+  setSaving(true);
+  setNotice(null);
+  try {
+    const result = await saveHeader("REJECTED", { val1s47: remarkText });
+    if (result.success) {
       setNotice({ type: "success", message: "CR rejected successfully!" });
       setRejectOpen(false);
       setRemarkText("");
       onClose(true);
-    } catch (err) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to reject" });
-    } finally {
-      setSaving(false);
     }
-  };
+  } catch (err) {
+    setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to reject" });
+  } finally {
+    setSaving(false);
+  }
+};
 
   const handleSendBackConfirm = async () => {
-    if (!remarkText.trim()) return setNotice({ type: "error", message: "Please enter a send back reason" });
-    setSaving(true);
-    setNotice(null);
-    try {
-      await almsSave({
-        parameter: "Amlspf_SendBackCR",
-        loginid,
-        code1: companyCode,
-        code2: requestNumber,
-        code3: remarkText,
-      });
+  if (!remarkText.trim()) return setNotice({ type: "error", message: "Please enter a send back reason" });
+  setSaving(true);
+  setNotice(null);
+  try {
+    const result = await saveHeader("SENTBACK", { val1s46: remarkText });
+    if (result.success) {
       setNotice({ type: "success", message: "CR sent back successfully!" });
       setSendBackOpen(false);
       setRemarkText("");
       onClose(true);
-    } catch (err) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to send back" });
-    } finally {
-      setSaving(false);
     }
-  };
+  } catch (err) {
+    setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to send back" });
+  } finally {
+    setSaving(false);
+  }
+};
 
   return (
     <div className="fixed inset-0 z-50 bg-background">
