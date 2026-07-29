@@ -2649,6 +2649,122 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.045);
 }
 
+.freight-job-focus-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 7px 10px;
+  box-shadow: var(--shadow-sm);
+}
+
+.freight-job-number {
+  display: inline-flex;
+  align-items: center;
+  color: #111827;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.05;
+}
+
+.freight-job-route {
+  margin-left: 10px;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.freight-job-mode-badge {
+  border-radius: 999px;
+  border: 1px solid #dbe4ef;
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.freight-job-mode-badge.viewing {
+  background: #f8fafc;
+  color: #475467;
+}
+
+.freight-job-mode-badge.editing {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: var(--primary);
+}
+
+.freight-job-subtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 5px;
+  box-shadow: var(--shadow-sm);
+}
+
+.freight-job-subtabs button {
+  display: inline-flex;
+  min-height: 29px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #667085;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.freight-job-subtabs button.active {
+  border-color: #bfdbfe;
+  background: var(--primary);
+  color: #ffffff;
+  box-shadow: 0 5px 12px rgba(0, 74, 173, 0.18);
+}
+
+.freight-read-field {
+  display: grid;
+  grid-template-columns: minmax(112px, 0.55fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  min-height: 27px;
+  color: var(--text);
+}
+
+.freight-read-field > span {
+  border-right: 1px solid #e2e8f0;
+  color: #111827;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.freight-read-field > strong {
+  min-width: 0;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.freight-read-field > strong.is-strong {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.freight-read-field.multiline {
+  min-height: 42px;
+}
+
 .freight-info-section {
   overflow: hidden;
   border: 1px solid #dbe4ef;
