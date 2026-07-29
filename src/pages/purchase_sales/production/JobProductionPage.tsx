@@ -11,8 +11,10 @@ import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { TabStrip } from "../../vendor/components";
-import {  PurchaseOrderEditorState, PurchaseQuotationEditor } from "./PurchaseQuotationeditor";
-import { PQA_CONFIG } from "./Purchaseordertypes";
+import { PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchaseordereditor";
+import {  GRN_CONFIG } from "../../purchase_sales/purchase/Purchaseordertypes";
+import { ProductionJobOrderEditor } from "./ProductionJobOrdereditor";
+import { JobProductionOrderEditor } from "./JobProductioneditor";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface PurchaseOrderRow {
@@ -66,7 +68,7 @@ async function cancelPurchaseOrderApi(_docNo: string): Promise<void> {
 
 type RequestTab = "PENDING" | "INPROGRESS" | "CLOSED" | "CANCELED" | "REJECTED" | "SENDBACK";
 
-export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}) {
+export function JobProductionOrderPage({ onClose }: { onClose?: () => void } = {}) {
   const { user } = useAuth();
   const [rows, setRows] = useState<PurchaseOrderRow[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
@@ -107,7 +109,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
   // TODO: confirm lookup parameter name against your Oracle package (mirrors MS_BUDGET_ACCOUNT_TAB__List).
   const fetchPurchaseOrders = async () => {
     const response = await getDynamicLookup({
-      parameter: "PS_QUOTATION_ENTRY_TAB_List",
+      parameter: "PS_JORDER_ENTRY_TAB_List",
       code1: user?.company_code,
       code2: user?.loginid || user?.username || "ADMIN",
       code3: tab,
@@ -135,7 +137,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
           parameter: "PS_POORDER_ENTRY_FUN_CHECK_GLOBAL_APPR_LEVEL",
           code1: user?.company_code,
           code2: user?.loginid || user?.username || "ADMIN",
-          code3: "purchase_quotation",
+          code3: "purchase_order",
         });
         if (!mounted) return;
         const first = (rows || [])[0] as Record<string, unknown> | undefined;
@@ -208,14 +210,14 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
     <section className="finance-list-page grid gap-4">
       <div className="finance-list-heading">
         <div className="finance-list-title">
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">Purchase Quotation</h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">Purchase quotation document</p>
+          <h1 className="m-0 text-2xl font-semibold tracking-tight">Purchase Order</h1>
+          <p className="m-0 mt-1 text-sm text-muted-foreground">Purchase order document</p>
         </div>
         <div className="finance-list-actions">
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
-          <Button title="Add Purchase Quotation" onClick={() => setDivisionPicker(true)}>
+          <Button title="Add Purchase Order" onClick={() => setDivisionPicker(true)}>
             <Plus size={15} /> Add
           </Button>
         </div>
@@ -246,8 +248,8 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
         <DataTable
           columns={columns}
           data={rows}
-          title={loading ? "Loading" : `${totalRows.toLocaleString()} Purchase Quotations`}
-          subtitle="Purchase Quotation List"
+          title={loading ? "Loading" : `${totalRows.toLocaleString()} Purchase Orders`}
+          subtitle="Purchase Order List"
           searchValue={query}
           onSearchChange={(value) => {
             setQuery(value);
@@ -255,14 +257,14 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
           }}
           searchPlaceholder="Search doc no, division, vendor..."
           loading={loading}
-          emptyText="No purchase quotations found"
+          emptyText="No purchase orders found"
           height={620}
           minWidth={1000}
           density="grid"
           enablePagination
           manualPagination
           enableExport
-          exportFilename="purchase-quotations.csv"
+          exportFilename="purchase-orders.csv"
           initialSorting={[{ id: "doc_date", desc: true }]}
           pageIndex={pageIndex}
           pageSize={pageSize}
@@ -283,9 +285,9 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
 
       {editor && (
         <div className="fixed inset-0 z-50 bg-background">
-          <PurchaseQuotationEditor
+          <JobProductionOrderEditor
             key={editor?.mode === "edit" ? editor.row.doc_no : editor?.mode || "create"}
-            config={PQA_CONFIG}
+            config={GRN_CONFIG}
             editor={editor}
             isPendingTab={isPendingTab}
             onClose={() => setEditor(null)}

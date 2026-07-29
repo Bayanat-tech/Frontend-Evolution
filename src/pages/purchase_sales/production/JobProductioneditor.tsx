@@ -11,13 +11,14 @@ import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 import {
   ActionKey,
   PO_DOC_TYPE,
-  PROCESS,
+  PROCESSJO,
   PurchaseConfig,
   PurchaseOrderEditorState,
   PurchaseOrderForm,
   PurchaseOrderLineRow,
   SendBackUserOption,
-} from "./Purchaseordertypes";
+  TteJmiConsumType,
+} from "../../purchase_sales/purchase/Purchaseordertypes";
 import {
   emptyForm,
   emptyLineRow,
@@ -33,16 +34,38 @@ import {
   numberOrZero,
   runWorkflow,
   text,
-} from "./Purchaseorderutils";
-import { PurchaseOrderHeaderForm } from "./Purchaseorderheaderform";
-import { PurchaseOrderLinesTable } from "./Purchaseorderlinestable";
-import { SendBackDialog } from "./Sendbackdialog";
-import { RejectDialog } from "./Rejectdialog";
+} from "../../purchase_sales/purchase/Purchaseorderutils";
+import { PurchaseOrderHeaderForm } from "../../purchase_sales/purchase/Purchaseorderheaderform";
+import { PurchaseOrderLinesTable } from "../../purchase_sales/purchase/Purchaseorderlinestable";
+import { SendBackDialog } from "../../purchase_sales/purchase/Sendbackdialog";
+import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
+import { JobconsumLinesTable } from "./JobConsumdetails";
 
 
 export type { PurchaseOrderEditorState };
 
-export function PurchaseOrderEditor({
+// TODO: if TteJmiConsumType picks up more required fields, extend this default.
+function emptyJobConsumRow(divCode?: string): TteJmiConsumType {
+  return {
+    id: newId(),
+    div_code: divCode || "",
+    prod_code: "",
+    prod_name: "",
+    uom_code: "",
+    uom_name: "",
+    qty_puom: 0,
+    qty_luom: 0,
+    unit_price: 0,
+    qty: 0,
+    req_date: "",
+    line_remarks: "",
+    tax_cat: "",
+    tax_lcurr_amount: 0,
+    lcurr_amount_disc: 0,
+  } as TteJmiConsumType;
+}
+
+export function JobProductionOrderEditor({
   config,
   editor,
   isPendingTab,
@@ -59,6 +82,7 @@ export function PurchaseOrderEditor({
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
   const [rows, setRows] = useState<PurchaseOrderLineRow[]>(() => (editMode ? [] : [emptyLineRow(form.div_code)]));
+  const [jobConsumRows, setJobConsumRows] = useState<TteJmiConsumType[]>(() => (editMode ? [] : [emptyJobConsumRow(form.div_code)]));
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -85,6 +109,7 @@ export function PurchaseOrderEditor({
     const initialForm = emptyForm(editor);
     setForm(initialForm);
     setRows(editor.mode === "edit" ? [] : [emptyLineRow(initialForm.div_code)]);
+    setJobConsumRows(editor.mode === "edit" ? [] : [emptyJobConsumRow(initialForm.div_code)]);
     setError("");
     setLoading(editor.mode === "edit");
   }, [editor]);
@@ -142,6 +167,10 @@ export function PurchaseOrderEditor({
           canceled: text(headerRaw.canceled || current.canceled || "N"),
         }));
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
+        // NOTE: no dedicated fetch for job-consumption detail rows is wired up yet.
+        // Seeding one empty row so the section is usable in edit mode; replace with a
+        // real fetchJobConsumDetail(...) call once that endpoint exists.
+        setJobConsumRows((current) => (current.length ? current : [emptyJobConsumRow(text(headerRaw.div_code) || "")]));
       } catch (loadError) {
         if (!mounted) return;
         setError(loadError instanceof Error ? loadError.message : "Unable to load purchase order");
@@ -162,7 +191,7 @@ export function PurchaseOrderEditor({
           parameter: "PS_POORDER_ENTRY_FUN_CHECK_GLOBAL_APPR_LEVEL",
           code1: user?.company_code,
           code2: user?.loginid || user?.username || "ADMIN",
-          code3: PROCESS,
+          code3: PROCESSJO,
         });
         if (!mounted) return;
         const first = (rows || [])[0] as Record<string, unknown> | undefined;
@@ -201,6 +230,14 @@ export function PurchaseOrderEditor({
   const addRow = () => setRows((current) => [...current, emptyLineRow(form.div_code)]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
 
+  // ---- Job consumption row handlers (separate array/state from the PO lines above) ----
+  const updateJobConsumRow = (id: string, patch: Partial<TteJmiConsumType>) => {
+    setJobConsumRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  };
+
+  const addJobConsumRow = () => setJobConsumRows((current) => [...current, emptyJobConsumRow(form.div_code)]);
+  const removeJobConsumRow = (id: string) => setJobConsumRows((current) => current.filter((row) => row.id !== id));
+
   const runAction = async (key: ActionKey, action: () => Promise<void> | void, successMessage?: string) => {
     setActionLoading(key);
     setSaving(true);
@@ -216,22 +253,23 @@ export function PurchaseOrderEditor({
     }
   };
 
-  const handleSaveAsDraft = () =>
-    runAction("draft", async () => {
-    }, "Purchase order saved as draft");
+ const handleSaveAsDraft = () =>
+  runAction("draft", async () => {
+    await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.FGP, form, rows, user?.company_code, user?.loginid || user?.username);
+  }, "Purchase order saved as draft");
 
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
     return runAction("submit", async () => {
-      await runWorkflow("SUBMITTED", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("SUBMITTED",PO_DOC_TYPE.FGP, form, rows, user?.company_code, user?.loginid || user?.username);
     }, editMode ? "Purchase order updated successfully" : "Purchase order created successfully");
   };
 
   const handleCancel = () =>
     runAction("cancel", async () => {
-      await runWorkflow("CANCELED", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("CANCELED",PO_DOC_TYPE.FGP, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Purchase order cancelled");
 
   // ---- Reject handlers ----
@@ -252,7 +290,7 @@ export function PurchaseOrderEditor({
     setRejectError("");
     return runAction("reject", async () => {
       const payloadForm: PurchaseOrderForm = { ...form, reject_reason: rejectReason.trim() };
-      await runWorkflow("REJECTED", PO_DOC_TYPE.LPO, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("REJECTED",PO_DOC_TYPE.FGP, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setRejectDialogOpen(false);
     }, "Purchase order rejected");
   };
@@ -271,7 +309,7 @@ export function PurchaseOrderEditor({
         parameter: "PS_POORDER_ENTRY_SENTBACK_USER_LIST",
         code1: user?.company_code,
         number1: flowLevelRunning,
-        code2: PROCESS,
+        code2: PROCESSJO,
       });
       const options: SendBackUserOption[] = (rows || []).map((raw) => {
         const row = lowerRecord(raw as Record<string, unknown>);
@@ -309,7 +347,7 @@ export function PurchaseOrderEditor({
         sentback_reason: sendBackReason.trim(),
         flow_level_running: sendBackUserLevel,
       };
-      await runWorkflow("SENTBACK", PO_DOC_TYPE.LPO, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("SENTBACK",PO_DOC_TYPE.FGP, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setSendBackDialogOpen(false);
     }, "Purchase order sent back");
   };
@@ -398,7 +436,20 @@ export function PurchaseOrderEditor({
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
               />
+
+              <JobconsumLinesTable
+                rows={jobConsumRows}
+                updateRow={updateJobConsumRow}
+                addRow={addJobConsumRow}
+                removeRow={removeJobConsumRow}
+                headerAndLineDisabled={headerAndLineDisabled}
+                discAmt={form.disc_amt}
+                companyCode={user?.company_code}
+                loginid={user?.loginid || user?.username}
+              />
+
             </div>
+            
           )}
         </CardContent>
 

@@ -183,6 +183,71 @@ export async function getWmsMaster(master: string, options: WmsPagination & Reco
   return response.data.data || { tableData: [], count: 0 };
 }
 
+// ---------Sales Order Report----------------
+
+
+export async function getSalesOrderReportHtml(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/salesorder/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+ 
+export async function getSalesOrderSheetReportExcelDownload(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/salesorder/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `sales_order_report_${jobNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+/*
+export async function getSalesOrderReportHtml(params: ReportParams): Promise<string> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/salesorder/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+*/
+
+/*
+
+export async function getSalesOrderSheetReportExcelDownload(params: ReportParams): Promise<void> {
+  const response = await api.get(
+     `/api/wms/outbound/reports/salesorder/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "SalesOrderSheet.xlsx";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+*/
 
 export async function procBuildDynamicSqlSecurity(params: DynamicSqlSecurityParams) {
   const response = await api.post<ApiResponse<LookupRow[]>>(

@@ -1,8 +1,8 @@
-import { PurchaseOrderRow } from "./Purchaseorderpage";
+import { SalesOrderRow } from "./SalesorderPage";
 
 export type PurchaseOrderEditorState =
   | { mode: "create"; divCode?: string; divName?: string }
-  | { mode: "edit"; row: PurchaseOrderRow }
+  | { mode: "edit"; row: SalesOrderRow }
   | null;
 
 export type ActionKey = "draft" | "submit" | "sendBack" | "reject" | "cancel" | "close";
@@ -33,7 +33,7 @@ export interface PurchaseOrderLineRow {
   zone_name?: string;
   uom_name?: string;
   uom_code?: string;
-
+  
 }
 
 export interface PurchaseOrderForm {
@@ -75,110 +75,51 @@ export interface PurchaseOrderForm {
   next_action_by?: string;
   sentback_reason?: string;
   reject_reason?: string;
-
-
 }
 
-export interface TteJmiConsumType {
-  id: string;
-  company_code: string;
-  doc_type: string;
-  doc_no: number;
-
-  mi_doc_no: number;
-
-  prod_code: string;
-  prod_name: string;
-
-  quantity: number;
-  qty: number;
-
-  p_uom: string;
-  l_uom: string;
-
-  qty_puom: number;
-  qty_luom: number;
-
-  serial_no: number;
-
-  qty_consumd: number;
-  qty_scrapped: number;
-
-  cost_rate: number;
-  cost_amount: number;
-
-  scrap_amount: number;
-
-  div_code: string;
-
-  unit_price: number;
-  tax_pct: number;
-  tax_amount: number;
-  lcurr_amount: number;
-  req_date: string;
-  line_remarks: string;
-  tax_cat: string;
-  tax_lcurr_amount: number;
-  lcurr_amount_disc: number;
-
-  zone_code?: string;
-  zone_name?: string;
-  uom_name?: string;
-  uom_code?: string;
-}
 export interface SendBackUserOption {
   code: string;
   name: string;
   level_no: number;
 }
 
-export const PO_DOC_TYPE = {
-  LPO: "LPO",
-  PQA: "PQA",
-  GRN: "GRN",
-  JO: "JO",
-  FGP: "FGP"
+export const SO_DOC_TYPE = {
+  SO: "SO",
+  SDN: "SDN",
+  STR: "STR",
+  SAJ :"SAJ"
 } as const;
-export const PROCESS = "purchase_order";
-export const PROCESSQUOTATION = 'purchase_quotation'
-export const PROCESSGRN = 'purchase_grn'
-export const PROCESSJO = 'production_joborder'
-export const PROCESSJP = 'job_production'
+export const PROCESSSO ='sales_order'
+export const PROCESSSDN ='sales_dn'
 export const EXPENSE_AC_OPTIONS = ["Inventory A/c", "Expense A/c", "Fixed Asset A/c"];
-export type PODocType = typeof PO_DOC_TYPE[keyof typeof PO_DOC_TYPE];
+export type SODocType = typeof SO_DOC_TYPE[keyof typeof SO_DOC_TYPE];
 
-export interface PurchaseConfig {
-  docType: PODocType;
+export interface SalesConfig {
+  docType: SODocType;
   headerParameter: string;
   detailParameter: string;
 }
 
-export const LPO_CONFIG: PurchaseConfig = {
-  docType: PO_DOC_TYPE.LPO,
-  headerParameter: "PS_POORDER_ENTRY_HEADER_PAGE",
-  detailParameter: "PS_POORDER_ENTRY_DETAIL_PAGE",
+export const SO_CONFIG: SalesConfig = {
+  docType: SO_DOC_TYPE.SO,
+  headerParameter: "PS_SORDER_ENTRY_HEADER_PAGE",
+  detailParameter: "PS_SORDER_ENTRY_DETAIL_PAGE",
 };
 
-export const PQA_CONFIG: PurchaseConfig = {
-  docType: PO_DOC_TYPE.PQA,
-  headerParameter: "PS_QUOTATION_ENTRY_HEADER_PAGE",
-  detailParameter: "PS_QUOTATION_ENTRY_DETAIL_PAGE",
+export const SDN_CONFIG: SalesConfig = {
+  docType: SO_DOC_TYPE.SDN,
+  headerParameter: "PS_SDN_ENTRY_HEADER_PAGE",
+  detailParameter: "PS_SDN_ENTRY_DETAIL_PAGE",
 };
 
-export const GRN_CONFIG: PurchaseConfig = {
-  docType: PO_DOC_TYPE.GRN,
+export const STR_CONFIG: SalesConfig = {
+  docType: SO_DOC_TYPE.STR,
   headerParameter: "PS_GRN_ENTRY_HEADER_PAGE",
   detailParameter: "PS_GRN_ENTRY_DETAIL_PAGE",
 };
 
-export const JO_CONFIG: PurchaseConfig = {
-  docType: PO_DOC_TYPE.JO,
-  headerParameter: "PS_JORDER_ENTRY_HEADER_PAGE",
-  detailParameter: "PS_JORDER_ENTRY_DETAIL_PAGE",
-};
-
-export const JP_CONFIG: PurchaseConfig = {
-  docType: PO_DOC_TYPE.FGP,
+export const SAJ_CONFIG: SalesConfig = {
+  docType: SO_DOC_TYPE.SAJ,
   headerParameter: "PS_JORDER_ENTRY_HEADER_PAGE",
   detailParameter: "PS_JORDER_ENTRY_DETAIL_PAGE",
 };

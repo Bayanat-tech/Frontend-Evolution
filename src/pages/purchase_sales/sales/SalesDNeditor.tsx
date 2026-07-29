@@ -10,14 +10,12 @@ import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
 import {
   ActionKey,
-  PO_DOC_TYPE,
-  PROCESS,
   PurchaseConfig,
   PurchaseOrderEditorState,
   PurchaseOrderForm,
   PurchaseOrderLineRow,
   SendBackUserOption,
-} from "./Purchaseordertypes";
+} from "../../purchase_sales/purchase/Purchaseordertypes";
 import {
   emptyForm,
   emptyLineRow,
@@ -31,18 +29,19 @@ import {
   lowerRecord,
   newId,
   numberOrZero,
-  runWorkflow,
   text,
-} from "./Purchaseorderutils";
-import { PurchaseOrderHeaderForm } from "./Purchaseorderheaderform";
-import { PurchaseOrderLinesTable } from "./Purchaseorderlinestable";
-import { SendBackDialog } from "./Sendbackdialog";
-import { RejectDialog } from "./Rejectdialog";
+} from "../../purchase_sales/purchase/Purchaseorderutils";
+import { PurchaseOrderHeaderForm } from "../../purchase_sales/purchase/Purchaseorderheaderform";
+import { PurchaseOrderLinesTable } from "../../purchase_sales/purchase/Purchaseorderlinestable";
+import { SendBackDialog } from "../../purchase_sales/purchase/Sendbackdialog";
+import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
+import { PROCESSSDN, PROCESSSO, SO_DOC_TYPE } from "./SalesOrdertypes";
+import { runWorkflow } from "./SalesOrderutils";
 
 
 export type { PurchaseOrderEditorState };
 
-export function PurchaseOrderEditor({
+export function SalesDNEditor({
   config,
   editor,
   isPendingTab,
@@ -144,7 +143,7 @@ export function PurchaseOrderEditor({
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
         if (!mounted) return;
-        setError(loadError instanceof Error ? loadError.message : "Unable to load purchase order");
+        setError(loadError instanceof Error ? loadError.message : "Unable to load Sales Order");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -162,7 +161,7 @@ export function PurchaseOrderEditor({
           parameter: "PS_POORDER_ENTRY_FUN_CHECK_GLOBAL_APPR_LEVEL",
           code1: user?.company_code,
           code2: user?.loginid || user?.username || "ADMIN",
-          code3: PROCESS,
+          code3: PROCESSSDN,
         });
         if (!mounted) return;
         const first = (rows || [])[0] as Record<string, unknown> | undefined;
@@ -216,23 +215,24 @@ export function PurchaseOrderEditor({
     }
   };
 
-  const handleSaveAsDraft = () =>
-    runAction("draft", async () => {
-    }, "Purchase order saved as draft");
+ const handleSaveAsDraft = () =>
+  runAction("draft", async () => {
+    await runWorkflow("SAVEASDRAFT",  SO_DOC_TYPE.SDN, form, rows, user?.company_code, user?.loginid || user?.username);
+  }, "Sales Order saved as draft");
 
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
     return runAction("submit", async () => {
-      await runWorkflow("SUBMITTED", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, editMode ? "Purchase order updated successfully" : "Purchase order created successfully");
+      await runWorkflow("SUBMITTED", SO_DOC_TYPE.SDN, form, rows, user?.company_code, user?.loginid || user?.username);
+    }, editMode ? "Sales Order updated successfully" : "Sales Order created successfully");
   };
 
   const handleCancel = () =>
     runAction("cancel", async () => {
-      await runWorkflow("CANCELED", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, "Purchase order cancelled");
+      await runWorkflow("CANCELED", SO_DOC_TYPE.SDN, form, rows, user?.company_code, user?.loginid || user?.username);
+    }, "Sales Order cancelled");
 
   // ---- Reject handlers ----
   const openRejectDialog = () => {
@@ -252,9 +252,9 @@ export function PurchaseOrderEditor({
     setRejectError("");
     return runAction("reject", async () => {
       const payloadForm: PurchaseOrderForm = { ...form, reject_reason: rejectReason.trim() };
-      await runWorkflow("REJECTED", PO_DOC_TYPE.LPO, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("REJECTED", SO_DOC_TYPE.SDN, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setRejectDialogOpen(false);
-    }, "Purchase order rejected");
+    }, "Sales Order rejected");
   };
 
   // ---- Send Back handlers ----
@@ -271,7 +271,7 @@ export function PurchaseOrderEditor({
         parameter: "PS_POORDER_ENTRY_SENTBACK_USER_LIST",
         code1: user?.company_code,
         number1: flowLevelRunning,
-        code2: PROCESS,
+        code2: PROCESSSO,
       });
       const options: SendBackUserOption[] = (rows || []).map((raw) => {
         const row = lowerRecord(raw as Record<string, unknown>);
@@ -309,9 +309,9 @@ export function PurchaseOrderEditor({
         sentback_reason: sendBackReason.trim(),
         flow_level_running: sendBackUserLevel,
       };
-      await runWorkflow("SENTBACK", PO_DOC_TYPE.LPO, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("SENTBACK", SO_DOC_TYPE.SDN, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setSendBackDialogOpen(false);
-    }, "Purchase order sent back");
+    }, "Sales Order sent back");
   };
 
   const actionBarBusy = actionLoading !== null || saving;
@@ -327,9 +327,9 @@ export function PurchaseOrderEditor({
             <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
               <div>
                 <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                  {editMode ? "Edit Purchase Order" : "New Purchase Order"}
+                  {editMode ? "Edit Sales Order" : "New Sales Order"}
                 </p>
-                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Purchase Order</h2>
+                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Sales Order</h2>
               </div>
               <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
@@ -364,15 +364,15 @@ export function PurchaseOrderEditor({
           <div className="cancelled-document-banner" role="status">
             <div>
               <span className="cancelled-document-kicker">Cancelled Document</span>
-              <strong>{form.doc_no || "Purchase Order"}</strong>
+              <strong>{form.doc_no || "Sales Order"}</strong>
             </div>
-            <p>This purchase order is cancelled and opened in read-only mode.</p>
+            <p>This Sales Order is cancelled and opened in read-only mode.</p>
           </div>
         )}
 
         <CardContent className="min-h-0 overflow-auto p-3">
           {loading ? (
-            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading purchase order...</div>
+            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Sales Order...</div>
           ) : (
             <div className="grid gap-3">
               <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />

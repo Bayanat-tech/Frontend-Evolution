@@ -142,6 +142,7 @@ import {ProductTypePage} from "../pages/purchase_sales/PS_ProductTypePage";
 import { ProductCategoryPage } from "../pages/purchase_sales/PS_ProductCategory";
 
 import { ZoneMasterPage } from "../pages/purchase_sales/PS_ZoneMasterPage";
+import PamsDashboard from "../pages/pams/PamsDashboard";
 
 import Mytaskalmspage from "../pages/almswf/Mytaskalmspage";
 import Credit_Request_page from "../pages/almswf/CreaditRequestPage";
@@ -150,8 +151,16 @@ import Purchase_Request_page from "../pages/almswf/PurchaseRequestPage";
 
 import { PurchaseOrderPage } from "../pages/purchase_sales/purchase/Purchaseorderpage";
 
+import { StockInquiryPage } from "../pages/purchase_sales/PS_StockInquiry";
 import { PurchaseSaleSetupPage } from "../pages/purchase_sales/Purchasesalesetuppage";
 import { FlowAssignmentPage } from "../pages/security/FlowAssignmentPage";import { PurchaseQuotationPage } from "../pages/purchase_sales/purchase/PurchaseQuatationPage";
+import { PurchaseGRNPage } from "../pages/purchase_sales/purchase/PurchaseGRNPage";
+import { ProductionJobOrderPage } from "../pages/purchase_sales/production/ProductionJobOrderPage";
+import { SalesOrderPage } from "../pages/purchase_sales/sales/SalesorderPage";
+import { SalesDNPage } from "../pages/purchase_sales/sales/SalesDNPage";
+import { StocksTransferPage } from "../pages/purchase_sales/inventory/StockTransferPage";
+import { StocksAdjectmentPage } from "../pages/purchase_sales/inventory/StockadjustmentPage";
+import { JobProductionOrderPage } from "../pages/purchase_sales/production/JobProductionPage";
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -359,7 +368,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   match: ({ pathname }) => isOutstandingStatementRoute(pathname),
   element: () => <OutstandingStatementPage />,
 },
-
+{
+  name: "Pams Dashboard",
+  match: ({ pathname }) => pathname.toLowerCase().includes("/ems/masters/kpi%20masters/pms_dashboard"),
+  element: () => <PamsDashboard />
+},
   
   {
     name: "Finance Ageing Report",
@@ -693,6 +706,58 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <PurchaseQuotationPage onClose={function (): void {
       throw new Error("Function not implemented.");
     } }  />,
+
+    
+  },
+     {
+    name: "Purchase Quotation Setup",
+    match: ({ pathname }) => isPurchaseGRNSetupRoute(pathname),
+    element: () => <PurchaseGRNPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
+
+       {
+    name: "Purchase Quotation Setup",
+    match: ({ pathname }) => isPProductionJoborderSetupRoute(pathname),
+    element: () => <ProductionJobOrderPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
+
+         {
+    name: "Sales Order Setup",
+    match: ({ pathname }) => isSalesorderSetupRoute(pathname),
+    element: () => <SalesOrderPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
+           {
+    name: "Sales Order Setup",
+    match: ({ pathname }) => isSalesDNSetupRoute(pathname),
+    element: () => <SalesDNPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+
+    
+  },
+             {
+    name: "Inventory Setup",
+    match: ({ pathname }) => isStocksTransferSetupRoute(pathname),
+    element: () => <StocksTransferPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+
+    
+  },
+               {
+    name: "Inventory Setup",
+    match: ({ pathname }) => isStocksAdjectmentSetupRoute(pathname),
+    element: () => <StocksAdjectmentPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+
+    
   },
   // ── PAMS My Task Routes (Specific tabs first, then default) ──
   {
@@ -970,20 +1035,20 @@ export const workspaceRoutes: WorkspaceRoute[] = [
 
   {
   name: "Purchase Sales Product Type",
-  match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/purchase_sales/purchase_sales/masters/product%20type"),
+  match: ({ pathname }) => isProductTypeRoute(pathname),
   element: () => <ProductTypePage />,
   },
 
 
   {
   name: "Purchase Sales Product Category",
-  match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/purchase_sales/purchase_sales/masters/product%20category"),
+  match: ({ pathname }) => isProductCategoryRoute(pathname),
   element: () => <ProductCategoryPage />,
   },
 
    {
   name: "Purchase Sales Zone Master",
-  match: ({ pathname }) => pathname.toLocaleLowerCase().includes("/purchase_sales/purchase_sales/masters/zone%20master"),
+  match: ({ pathname }) => isZoneMasterRoute(pathname),
   element: () => <ZoneMasterPage />,
   },
 
@@ -1005,6 +1070,19 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({pathname}) => isPurchaseSaleSetupRoute(pathname),
     element: () => <PurchaseSaleSetupPage/>
   },
+
+  {
+  name: "Purchase Sales Stock Inquiry",
+  match: ({ pathname }) => isStockInquiryRoute(pathname),
+  element: () => <StockInquiryPage />,
+  },
+
+    {
+  name: "Purchase Sales Stock Inquiry",
+  match: ({ pathname }) => isJobProductionSetupRoute(pathname),
+  element: () => <JobProductionOrderPage />,
+  },
+  
 ];
 
 function isStorageComputationRoute(pathname: string) {
@@ -1095,6 +1173,43 @@ function isPurchaseQuotationSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   
     return (normalized.includes("purchase_sales/purchase/purchase_quotation"))
+}
+function isPurchaseGRNSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/purchase/purchase_grn"))
+}
+
+function isPProductionJoborderSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/production/job_order"))
+}
+
+function isSalesorderSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/sales/sales_order"))
+}
+function isSalesDNSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/sales/sales_dn"))
+}
+function isStocksTransferSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/inventory/stock_transfer"))
+}
+function isStocksAdjectmentSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/inventory/stock_adjustment"))
+}
+function isJobProductionSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/production/job_production"))
 }
 
 function isExpenseTypeRoute(pathname: string) {
@@ -1959,4 +2074,41 @@ function isHrTrainingFeedbackRoute(context: WorkspaceRouteContext) {
   );
 }
 
+function isProductTypeRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
 
+  return (
+    normalized.includes("/purchase_sales/purchase_sales/masters/product%20type") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/product_type") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/product-type")
+  );
+}
+
+
+function isProductCategoryRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+    normalized.includes("/purchase_sales/purchase_sales/masters/product%20category") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/product_category") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/product-category")
+  );
+}
+
+
+function isZoneMasterRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+    normalized.includes("/purchase_sales/purchase_sales/masters/zone%20master") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/zone_master") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/zone-master")
+  );
+}
+
+function isStockInquiryRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/inquiry/stock%20inquiry"
+  );
+}

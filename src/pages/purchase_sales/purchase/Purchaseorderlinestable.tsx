@@ -118,7 +118,7 @@ export function PurchaseOrderLinesTable({
                    <LookupField
                     label=""
                     value={row.zone_code || ""}
-                    displayValue={row.zone_name ? `${row.zone_code} - ${row.zone_name}` : row.zone_code}
+                    displayValue={ row.zone_code}
                     columns={[{ field: "zone_code", header: "Code" }, { field: "zone_name", header: "Name" }]}
                     valueField="zone_code"
                     displayFields={["zone_code", "zone_name"]}
@@ -126,7 +126,7 @@ export function PurchaseOrderLinesTable({
                     disabled={headerAndLineDisabled}
                     onChange={(value, selectedRow) => updateRow(row.id, {
                       zone_code: value,
-                      zone_name: text(getLookupValue(selectedRow || {}, "zone_name")),
+                      
                     })}
                   />
                 </td>

@@ -1,15 +1,13 @@
 import { getDynamicLookup } from "../../../api/lookups";
-import { upsertBulkPurchaseEntryApi } from "../../../api/purchaseSales";
+import { upsertBulkPurchaseEntryApi, upsertBulkSaleseEntryApi } from "../../../api/purchaseSales";
 import {
   EXPENSE_AC_OPTIONS,
-  PO_DOC_TYPE,
-  PODocType,
-  PurchaseConfig,
+  SODocType,
+  SalesConfig,
   PurchaseOrderEditorState,
   PurchaseOrderForm,
   PurchaseOrderLineRow,
-  TteJmiConsumType,
-} from "./Purchaseordertypes";
+} from "./SalesOrdertypes";
 
 export const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
@@ -100,9 +98,9 @@ export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
   };
 }
 
-export async function fetchPurchaseOrderHeader(
+export async function fetchSalesOrderHeader(
   docNo: string,
-  config: PurchaseConfig,
+  config: SalesConfig,
   companyCode?: string,
   loginid?: string,
 ): Promise<Record<string, unknown>> {
@@ -119,9 +117,9 @@ export async function fetchPurchaseOrderHeader(
   return row ? lowerRecord(row) : {};
 }
 
-export async function fetchPurchaseOrderDetail(
+export async function fetchSalesOrderDetail(
   docNo: string,
-  config: PurchaseConfig,
+  config: SalesConfig,
   companyCode?: string,
   loginid?: string,
 ): Promise<PurchaseOrderLineRow[]> {
@@ -161,7 +159,7 @@ export async function fetchPurchaseOrderDetail(
   });
 }
 
-export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: PODocType) {
+export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: SODocType) {
   return {
     doc_no: form.doc_no || undefined,
     doc_type: docType,
@@ -248,69 +246,18 @@ export function buildDetailsPayload(rows: PurchaseOrderLineRow[]) {
   }));
 }
 
-export function buildTteJmiConsumPayload(rows: TteJmiConsumType[]) {
-  return rows.map((row) => ({
-  id: row.id,
-  company_code: row.company_code,
-  doc_type: row.doc_type,
-  doc_no: row.doc_no,
-
-  mi_doc_no: row.mi_doc_no,
-
-  prod_code: row.prod_code,
-  prod_name: row.prod_name,
-
-  quantity: row.quantity,
-  qty: row.qty,
-
-  p_uom: row.p_uom,
-  l_uom: row.l_uom,
-
-  qty_puom: row.qty_puom,
-  qty_luom: row.qty_luom,
-
-  serial_no: row.serial_no,
-
-  qty_consumd: row.qty_consumd,
-  qty_scrapped: row.qty_scrapped,
-
-  cost_rate: row.cost_rate,
-  cost_amount: row.cost_amount,
-
-  scrap_amount: row.scrap_amount,
-
-  div_code: row.div_code,
-
-  unit_price: row.unit_price,
-  tax_pct: row.tax_pct,
-  tax_amount: row.tax_amount,
-  lcurr_amount: row.lcurr_amount,
-  req_date: row.req_date,
-  line_remarks: row.line_remarks,
-  tax_cat: row.tax_cat,
-  tax_lcurr_amount: row.tax_lcurr_amount,
-  lcurr_amount_disc: row.lcurr_amount_disc,
-
-  zone_code: row.zone_code,
-  zone_name: row.zone_name,
-  uom_name: row.uom_name,
-  uom_code: row.uom_code,
-}));
-}
-
 export async function runWorkflow(
   status: "SAVEASDRAFT" | "SUBMITTED" | "REJECTED" | "CLOSED" | "CANCELED" | "SENTBACK",
-    docType: PODocType,
+    docType: SODocType,
   form: PurchaseOrderForm,
   rows: PurchaseOrderLineRow[],
   companyCode?: string,
   loginid?: string,
 ) {
-  return upsertBulkPurchaseEntryApi(
+  return upsertBulkSaleseEntryApi(
     {
       header: buildHeaderPayload(form, companyCode, loginid, docType),
       details: buildDetailsPayload(rows),
-
       company_code: companyCode || "",
       loginid: loginid || "ADMIN",
     },

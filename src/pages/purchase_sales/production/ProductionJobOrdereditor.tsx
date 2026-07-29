@@ -11,13 +11,13 @@ import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 import {
   ActionKey,
   PO_DOC_TYPE,
-  PROCESS,
+  PROCESSJO,
   PurchaseConfig,
   PurchaseOrderEditorState,
   PurchaseOrderForm,
   PurchaseOrderLineRow,
   SendBackUserOption,
-} from "./Purchaseordertypes";
+} from "../../purchase_sales/purchase/Purchaseordertypes";
 import {
   emptyForm,
   emptyLineRow,
@@ -33,16 +33,16 @@ import {
   numberOrZero,
   runWorkflow,
   text,
-} from "./Purchaseorderutils";
-import { PurchaseOrderHeaderForm } from "./Purchaseorderheaderform";
-import { PurchaseOrderLinesTable } from "./Purchaseorderlinestable";
-import { SendBackDialog } from "./Sendbackdialog";
-import { RejectDialog } from "./Rejectdialog";
+} from "../../purchase_sales/purchase/Purchaseorderutils";
+import { PurchaseOrderHeaderForm } from "../../purchase_sales/purchase/Purchaseorderheaderform";
+import { PurchaseOrderLinesTable } from "../../purchase_sales/purchase/Purchaseorderlinestable";
+import { SendBackDialog } from "../../purchase_sales/purchase/Sendbackdialog";
+import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
 
 
 export type { PurchaseOrderEditorState };
 
-export function PurchaseOrderEditor({
+export function ProductionJobOrderEditor({
   config,
   editor,
   isPendingTab,
@@ -162,7 +162,7 @@ export function PurchaseOrderEditor({
           parameter: "PS_POORDER_ENTRY_FUN_CHECK_GLOBAL_APPR_LEVEL",
           code1: user?.company_code,
           code2: user?.loginid || user?.username || "ADMIN",
-          code3: PROCESS,
+          code3: PROCESSJO,
         });
         if (!mounted) return;
         const first = (rows || [])[0] as Record<string, unknown> | undefined;
@@ -216,22 +216,23 @@ export function PurchaseOrderEditor({
     }
   };
 
-  const handleSaveAsDraft = () =>
-    runAction("draft", async () => {
-    }, "Purchase order saved as draft");
+ const handleSaveAsDraft = () =>
+  runAction("draft", async () => {
+    await runWorkflow("SAVEASDRAFT",  PO_DOC_TYPE.JO, form, rows, user?.company_code, user?.loginid || user?.username);
+  }, "Purchase order saved as draft");
 
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
     return runAction("submit", async () => {
-      await runWorkflow("SUBMITTED", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("SUBMITTED", PO_DOC_TYPE.JO, form, rows, user?.company_code, user?.loginid || user?.username);
     }, editMode ? "Purchase order updated successfully" : "Purchase order created successfully");
   };
 
   const handleCancel = () =>
     runAction("cancel", async () => {
-      await runWorkflow("CANCELED", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("CANCELED", PO_DOC_TYPE.JO, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Purchase order cancelled");
 
   // ---- Reject handlers ----
@@ -252,7 +253,7 @@ export function PurchaseOrderEditor({
     setRejectError("");
     return runAction("reject", async () => {
       const payloadForm: PurchaseOrderForm = { ...form, reject_reason: rejectReason.trim() };
-      await runWorkflow("REJECTED", PO_DOC_TYPE.LPO, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("REJECTED", PO_DOC_TYPE.JO, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setRejectDialogOpen(false);
     }, "Purchase order rejected");
   };
@@ -271,7 +272,7 @@ export function PurchaseOrderEditor({
         parameter: "PS_POORDER_ENTRY_SENTBACK_USER_LIST",
         code1: user?.company_code,
         number1: flowLevelRunning,
-        code2: PROCESS,
+        code2: PROCESSJO,
       });
       const options: SendBackUserOption[] = (rows || []).map((raw) => {
         const row = lowerRecord(raw as Record<string, unknown>);
@@ -309,7 +310,7 @@ export function PurchaseOrderEditor({
         sentback_reason: sendBackReason.trim(),
         flow_level_running: sendBackUserLevel,
       };
-      await runWorkflow("SENTBACK", PO_DOC_TYPE.LPO, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("SENTBACK", PO_DOC_TYPE.JO, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setSendBackDialogOpen(false);
     }, "Purchase order sent back");
   };
