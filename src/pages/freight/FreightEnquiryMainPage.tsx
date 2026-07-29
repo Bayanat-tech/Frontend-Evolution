@@ -197,7 +197,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   const [loadingRecord, setLoadingRecord] = useState(false);
   const [listRows, setListRows] = useState<EnquiryListRow[]>([]);
   const [listQuery, setListQuery] = useState("");
-  const [activeListTab, setActiveListTab] = useState<ListStatusTab>("in_progress");
+  const [activeListTab, setActiveListTab] = useState<ListStatusTab>("draft");
   const [view, setView] = useState<EnquiryView>("list");
   const [notice, setNotice] = useState<Notice>(null);
   const [activeTab, setActiveTab] = useState<EnquiryTab>("cargo");
@@ -207,6 +207,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   const [cancelling, setCancelling] = useState(false);
   const [cancelRemarks, setCancelRemarks] = useState("");
   const [headerNames, setHeaderNames] = useState<EnquiryHeaderNames>(emptyHeaderNames);
+  const [approvalEnabled, setApprovalEnabled] = useState(false);
 
   useEffect(() => {
     if (!notice) return;
@@ -215,6 +216,25 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
     setNotice(null);
   }, [notice, toast]);
 
+  useEffect(() => {
+    let alive = true;
+    const loadApprovalConfig = async () => {
+      try {
+        const response = await api.post<{ success?: boolean; data?: { approval_enabled?: boolean } }>("/api/freight/approval/config", {
+          company_code: initialHeader.company_code,
+          process: isRfq ? "frt_rfq" : "frt_enquiry",
+        });
+        if (alive) setApprovalEnabled(Boolean(response.data?.data?.approval_enabled));
+      } catch {
+        if (alive) setApprovalEnabled(false);
+      }
+    };
+    void loadApprovalConfig();
+    return () => {
+      alive = false;
+    };
+  }, [initialHeader.company_code, isRfq]);
+
   const enquiryLabel = isRfq ? "RFQ" : "Enquiry";
   const loginId = String(userInfo?.loginid || userInfo?.USERID || userInfo?.user_id || userInfo?.username || "");
   const isApproved = header.indstatus === "A" || header.final_approved === "Y";
@@ -222,8 +242,25 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   const isRejected = header.indstatus === "R" || header.last_action === "REJECTED";
   const isSentBack = header.last_action === "SENTBACK";
   const isLocked = isApproved || isCancelled || isRejected;
-  const canSubmit = Boolean(header.enquiry_nr) && !isApproved && !isCancelled && !isRejected;
-  const canApprove = Boolean(header.enquiry_nr) && !isApproved && !isCancelled && !isRejected;
+  const isApprovalInProgress =
+    approvalEnabled &&
+    !isLocked &&
+    ["SUBMITTED", "APPROVED"].includes(header.last_action) &&
+    header.final_approved !== "Y";
+  const isReadOnly = isLocked || isApprovalInProgress;
+  const canSubmit =
+    approvalEnabled &&
+    Boolean(header.enquiry_nr) &&
+    !isReadOnly &&
+    (!header.last_action || header.last_action === "SAVEASDRAFT" || header.last_action === "SENTBACK");
+  const canApprove =
+    approvalEnabled &&
+    Boolean(header.enquiry_nr) &&
+    !isApproved &&
+    !isCancelled &&
+    !isRejected &&
+    isApprovalInProgress &&
+    (!header.next_action_by || header.next_action_by === loginId);
   const attachmentRequestNumber = header.enquiry_nr ? `${header.company_code}-${header.enquiry_type}-${header.enquiry_nr}` : "";
   const sourceAttachmentRequestNumbers = useMemo(() => {
     if (!isRfq || !header.ref_enquiry_nr) return [];
@@ -233,6 +270,10 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   const smartChecks = useMemo(() => buildSmartChecks(header, details, isRfq), [details, header, isRfq]);
   const urgentChecks = smartChecks.filter((item) => item.tone === "danger").length;
   const warningChecks = smartChecks.filter((item) => item.tone === "warn").length;
+  const visibleListStatusTabs = useMemo(
+    () => listStatusTabs.filter((tab) => approvalEnabled || !["in_progress", "sentback", "rejected"].includes(tab.key)),
+    [approvalEnabled]
+  );
   const filteredListRows = useMemo(
     () => listRows.filter((row) => matchesListStatusTab(row, activeListTab)),
     [activeListTab, listRows]
@@ -503,8 +544,8 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
       setView("list");
       return;
     }
-    if (isCancelled) {
-      setNotice({ type: "error", text: `${enquiryLabel} is already cancelled` });
+    if (isReadOnly) {
+      setNotice({ type: "error", text: `${statusLabel(header.indstatus, header.last_action, header.final_approved)} ${enquiryLabel.toLowerCase()} cannot be cancelled` });
       return;
     }
     setCancelOpen(true);
@@ -699,8 +740,8 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
 
   const saveEnquiry = async (event: FormEvent) => {
     event.preventDefault();
-    if (isLocked) {
-      setNotice({ type: "error", text: `${statusLabel(header.indstatus)} ${enquiryLabel.toLowerCase()} is read-only` });
+    if (isReadOnly) {
+      setNotice({ type: "error", text: `${statusLabel(header.indstatus, header.last_action, header.final_approved)} ${enquiryLabel.toLowerCase()} is read-only` });
       return;
     }
     setSaving(true);
@@ -783,7 +824,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
         </div>
 
         <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card p-2 shadow-sm">
-          {listStatusTabs.map((tab) => {
+          {visibleListStatusTabs.map((tab) => {
             const count = listRows.filter((row) => matchesListStatusTab(row, tab.key)).length;
             const active = activeListTab === tab.key;
             return (
@@ -877,7 +918,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
               <span className="rounded bg-amber-100 px-1.5 text-[10px] font-bold text-amber-700">{urgentChecks + warningChecks}</span>
             )}
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => setAttachmentOpen(true)} disabled={isCancelled}>
+          <Button type="button" size="sm" variant="outline" onClick={() => setAttachmentOpen(true)}>
             <Paperclip size={14} />
             Files
           </Button>
@@ -903,24 +944,30 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
               </Button>
             </>
           )}
-          <Button type="button" size="sm" variant="outline" onClick={requestCancel} disabled={isLocked}>
-            {header.enquiry_nr ? <Ban size={14} /> : <X size={14} />}
-            {header.enquiry_nr ? "Cancel" : "Close"}
-          </Button>
-          <Button type="button" size="sm" variant="outline" onClick={resetForm} disabled={isLocked}>
-            <RotateCcw size={14} />
-            Reset
-          </Button>
-          <Button type="submit" size="sm" disabled={saving || isLocked}>
-            <Save size={14} />
-            {saving ? "Saving" : "Save Draft"}
-          </Button>
+          {!isApprovalInProgress && (
+            <Button type="button" size="sm" variant="outline" onClick={requestCancel} disabled={isReadOnly}>
+              {header.enquiry_nr ? <Ban size={14} /> : <X size={14} />}
+              {header.enquiry_nr ? "Cancel" : "Close"}
+            </Button>
+          )}
+          {!isApprovalInProgress && (
+            <Button type="button" size="sm" variant="outline" onClick={resetForm} disabled={isReadOnly}>
+              <RotateCcw size={14} />
+              Reset
+            </Button>
+          )}
+          {!isApprovalInProgress && (
+            <Button type="submit" size="sm" disabled={saving || isReadOnly}>
+              <Save size={14} />
+              {saving ? "Saving" : "Save Draft"}
+            </Button>
+          )}
         </div>
       </div>
 
       {assistOpen && <FreightAssistPanel checks={smartChecks} />}
 
-      <fieldset disabled={isLocked} className="contents">
+      <fieldset disabled={isReadOnly} className="contents">
       <section className="freight-form-card rounded-md border bg-card shadow-sm">
         <div className="grid gap-1.5 sm:grid-cols-3 lg:grid-cols-6 xl:grid-cols-8">
           {/* <FormInput label="Company" value={header.company_code} onChange={(value) => setHeaderField("company_code", value)} required /> */}
@@ -969,7 +1016,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
           ))}
         </div>
 
-        <fieldset disabled={isLocked} className="contents">
+        <fieldset disabled={isReadOnly} className="contents">
         <div className="freight-tabs-panel border-t">
           {activeTab === "cargo" && (
             <section>
@@ -1095,7 +1142,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
             <section>
               <div className="mb-2 flex items-center justify-between gap-2">
                 <h2 className="m-0 text-sm font-semibold uppercase text-muted-foreground">Activities</h2>
-                <Button type="button" size="sm" variant="outline" onClick={addDetail} disabled={isLocked}>
+                <Button type="button" size="sm" variant="outline" onClick={addDetail} disabled={isReadOnly}>
                   <Plus size={14} />
                   Add Line
                 </Button>
@@ -1152,7 +1199,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
                         <CellInput value={row.curr_code} onChange={(value) => setDetailField(index, "curr_code", value)} className="w-24" />
                         <CellInput value={row.remarks} onChange={(value) => setDetailField(index, "remarks", value)} className="min-w-56" />
                         <td className="px-2 py-2 text-right">
-                          <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={isLocked || details.length === 1} onClick={() => removeDetail(index)}>
+                          <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={isReadOnly || details.length === 1} onClick={() => removeDetail(index)}>
                             <Trash2 size={14} />
                           </Button>
                         </td>
@@ -1352,7 +1399,7 @@ function matchesListStatusTab(row: EnquiryListRow, tab: ListStatusTab) {
   if (tab === "rejected") return status === "R" || action === "REJECTED";
   if (tab === "sentback") return action === "SENTBACK";
   if (tab === "draft") return status !== "A" && status !== "C" && status !== "R" && (!action || action === "SAVEASDRAFT");
-  if (tab === "in_progress") return status !== "A" && status !== "C" && status !== "R" && action !== "SENTBACK" && action !== "SAVEASDRAFT";
+  if (tab === "in_progress") return status !== "A" && status !== "C" && status !== "R" && ["SUBMITTED", "APPROVED"].includes(action) && finalApproved !== "Y";
   return true;
 }
 
