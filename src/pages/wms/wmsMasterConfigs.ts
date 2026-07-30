@@ -235,7 +235,6 @@ export const wmsSimpleMasterConfigs: Record<string, WmsSimpleMasterConfig> = {
     fields: [
       { name: "broker_code", label: "Partner Code", required: true, disabledOnEdit: true, width: 150 },
       { name: "broker_name", label: "Partner Name", required: true, width: 260 },
-      { name: "country_code", label: "Country Code", width: 140 },
       { name: "broker_city", label: "City", width: 150 },
       { name: "broker_contact1", label: "Contact", width: 180 },
       { name: "broker_telno1", label: "Telephone", width: 150 },
