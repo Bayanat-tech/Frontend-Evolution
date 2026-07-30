@@ -163,6 +163,7 @@ export async function upsertBulkJobProductionEntryApi(
     header: Record<string, unknown>;
     details: Record<string, unknown>[];
      jmiConsumDetails:Record<string, unknown>[];
+     expenseDetails:Record<string, unknown>[];
     company_code: string;
     loginid: string;
   },

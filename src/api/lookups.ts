@@ -238,11 +238,25 @@ export function getLookupValue(row: LookupRow, field: string) {
   const match = Object.keys(row).find((key) => key.toLowerCase() === lower || key.toUpperCase() === upper);
   return match ? row[match] : "";
 }
-
+ 
 export function getLookupText(row: LookupRow, fields: string[]) {
   return fields
-    .map((field) => getLookupValue(row, field))
+    .map((field) => formatLookupDisplayValue(field, getLookupValue(row, field)))
     .filter((value) => value !== null && value !== undefined && String(value).trim() !== "")
     .map(String)
     .join(" - ");
+}
+
+export function formatLookupDisplayValue(field: string, value: unknown) {
+  if (value === null || value === undefined) return "";
+  const text = String(value);
+  if (!/date/i.test(field)) return text;
+
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
+  if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+
+  const oracleMatch = text.match(/^(\d{2})-([A-Z]{3})-(\d{2,4})(?:\s.*)?$/i);
+  if (oracleMatch) return `${oracleMatch[1]}-${oracleMatch[2].toUpperCase()}-${oracleMatch[3]}`;
+
+  return text;
 }

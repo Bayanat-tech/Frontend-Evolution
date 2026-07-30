@@ -1,7 +1,7 @@
   import { Search, X } from "lucide-react";
   import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
   import { createPortal } from "react-dom";
-  import { getLookupText, getLookupValue, LookupRow } from "../../api/lookups";
+  import { formatLookupDisplayValue, getLookupText, getLookupValue, LookupRow } from "../../api/lookups";
   import { Input } from "./Input";
   import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./Table";
 
@@ -17,7 +17,7 @@ type LookupFieldProps = {
   columns: LookupColumn[];
   valueField: string;
   displayFields: string[];
-  loadOptions: () => Promise<LookupRow[]>;
+  loadOptions: (query?: string) => Promise<LookupRow[]>;
   onChange: (value: string, row: LookupRow | null) => void;
   disabled?: boolean;
   compact?: boolean;
@@ -71,8 +71,9 @@ type LookupFieldProps = {
         );
         const belowSpace = viewportHeight - rect.bottom - 10;
         const aboveSpace = rect.top - 10;
-        const maxHeight = Math.max(260, Math.min(430, Math.max(belowSpace, aboveSpace)));
-        const opensAbove = belowSpace < 300 && aboveSpace > belowSpace;
+        const preferredSpace = belowSpace >= 180 ? belowSpace : Math.max(belowSpace, aboveSpace);
+        const maxHeight = Math.max(220, Math.min(380, preferredSpace));
+        const opensAbove = belowSpace < 180 && aboveSpace > belowSpace;
         const left = Math.min(Math.max(12, rect.left), viewportWidth - width - 12);
         const top = opensAbove
           ? Math.max(10, rect.top - maxHeight - 8)
@@ -130,14 +131,30 @@ type LookupFieldProps = {
     const totalPages = Math.max(1, Math.ceil(filteredRows.length / rowsPerPage));
     const pagedRows = filteredRows.slice((page - 1) * rowsPerPage, page * rowsPerPage);
 
+    useEffect(() => {
+      if (!open) return;
+      const timer = window.setTimeout(async () => {
+        setLoading(true);
+        setError("");
+        try {
+          setRows(await loadOptions(query));
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Unable to load lookup");
+        } finally {
+          setLoading(false);
+        }
+      }, 250);
+
+      return () => window.clearTimeout(timer);
+    }, [loadOptions, open, query]);
+
     const openLookup = async () => {
       if (disabled) return;
       setOpen(true);
-      if (rows.length > 0) return;
       setLoading(true);
       setError("");
       try {
-        setRows(await loadOptions());
+        setRows(await loadOptions(query));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to load lookup");
       } finally {
@@ -180,12 +197,12 @@ type LookupFieldProps = {
 
     return (
       <>
-        <label className={compact ? "block" : "field"}>
+        <label className={compact ? "block w-full min-w-0" : "field"}>
           {!compact && <span>{label} {required && ( <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span>)}
         </span>}
-          <div ref={triggerRef} className="flex h-9 overflow-hidden rounded-md border bg-background">
+          <div ref={triggerRef} className={`flex w-full min-w-0 overflow-hidden rounded-md border bg-background ${compact ? "h-7" : "h-9"}`}>
             <button
-              className="min-w-0 flex-1 border-0 bg-transparent px-3 text-left text-sm text-foreground disabled:opacity-60"
+              className={`min-w-0 flex-1 border-0 bg-transparent text-left text-foreground disabled:opacity-60 ${compact ? "px-2 text-xs" : "px-3 text-sm"}`}
               type="button"
               onClick={openLookup}
               disabled={disabled}
@@ -196,7 +213,7 @@ type LookupFieldProps = {
             </button>
             {value && !disabled && (
               <button
-                className="grid w-8 place-items-center text-muted-foreground hover:bg-accent"
+                className={`${compact ? "w-7" : "w-8"} grid place-items-center text-muted-foreground hover:bg-accent`}
                 type="button"
                 onClick={() => onChange("", null)}
               >
@@ -204,7 +221,7 @@ type LookupFieldProps = {
               </button>
             )}
             <button
-              className="grid w-9 place-items-center border-l text-muted-foreground hover:bg-accent"
+              className={`${compact ? "w-7" : "w-9"} grid place-items-center border-l text-muted-foreground hover:bg-accent`}
               type="button"
               onClick={openLookup}
               disabled={disabled}
@@ -294,7 +311,7 @@ type LookupFieldProps = {
                           >
                             {columns.map((column) => (
                               <TableCell className="px-3 py-1.5 text-xs" key={column.field}>
-                                {String(getLookupValue(row, column.field) || "")}
+                                {formatLookupDisplayValue(column.field, getLookupValue(row, column.field))}
                               </TableCell>
                             ))}
                           </TableRow>

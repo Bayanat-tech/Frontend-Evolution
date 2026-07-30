@@ -378,11 +378,16 @@ function MenuItem({
 function MenuIcon({ item, level, className }: { item: MenuNode; level: number; className?: string }) {
   if (level >= 3) return <span className={cn("nav-dot", className)} aria-hidden="true" />;
   const Icon = getMenuIcon(item);
-  return <Icon className={className} size={level === 1 ? 16 : 15} aria-hidden="true" />;
+  return <Icon className={className} size={level === 1 ? 15 : 13} aria-hidden="true" />;
 }
 
 function getMenuIcon(item: MenuNode): LucideIcon {
   const text = `${item.title || ""} ${item.url_path || ""}`.toLowerCase();
+  if (text.includes("freight report")) return FileBarChart;
+  if (text.includes("freight air") || text.includes("airline") || text.includes("tariff")) return Plane;
+  if (text.includes("freight sea") || text.includes("vessel")) return Ship;
+  if (text.includes("freight road")) return Truck;
+  if (text.includes("freight") || text.includes("rfq") || text.includes("quotation")) return Ship;
   if (text.includes("country")) return Globe2;
   if (text.includes("division")) return Building2;
   if (text.includes("department") || text.includes("section")) return Archive;
