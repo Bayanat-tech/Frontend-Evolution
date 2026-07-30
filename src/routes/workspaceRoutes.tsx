@@ -164,15 +164,7 @@ import { PurchaseOrderPage } from "../pages/purchase_sales/purchase/Purchaseorde
 
 import { StockInquiryPage } from "../pages/purchase_sales/PS_StockInquiry";
 import { PurchaseSaleSetupPage } from "../pages/purchase_sales/Purchasesalesetuppage";
-import { FlowAssignmentPage } from "../pages/security/FlowAssignmentPage";import { PurchaseQuotationPage } from "../pages/purchase_sales/purchase/PurchaseQuatationPage";
-import { PurchaseGRNPage } from "../pages/purchase_sales/purchase/PurchaseGRNPage";
-import { ProductionJobOrderPage } from "../pages/purchase_sales/production/ProductionJobOrderPage";
-import { SalesOrderPage } from "../pages/purchase_sales/sales/SalesorderPage";
-import { SalesDNPage } from "../pages/purchase_sales/sales/SalesDNPage";
-import { StocksTransferPage } from "../pages/purchase_sales/inventory/StockTransferPage";
-import { StocksAdjectmentPage } from "../pages/purchase_sales/inventory/StockadjustmentPage";
-import { JobProductionOrderPage } from "../pages/purchase_sales/production/JobProductionPage";
- type WorkspaceRouteContext = {
+import { FlowAssignmentPage } from "../pages/security/FlowAssignmentPage"; type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
   activeMenu?: MenuNode;
@@ -1129,6 +1121,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => isHrRoute(context) && isHrPayrollAccountSetupRoute(context),
     element: () => <HrPayrollAccountSetupPage />,
   },
+
+    {
+    name: "HR Leave Types",
+    match: ({ pathname }) => isHrLeaveTypeRoute(pathname),
+    element: () => <LeaveTypesPage />,
+  },
+  
   {
     name: "HR Master",
     match: (context) => Boolean(getHrMasterConfig(context)),
@@ -1172,19 +1171,6 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({pathname}) => isPurchaseSaleSetupRoute(pathname),
     element: () => <PurchaseSaleSetupPage/>
   },
-
-  {
-  name: "Purchase Sales Stock Inquiry",
-  match: ({ pathname }) => isStockInquiryRoute(pathname),
-  element: () => <StockInquiryPage />,
-  },
-
-    {
-  name: "Purchase Sales Stock Inquiry",
-  match: ({ pathname }) => isJobProductionSetupRoute(pathname),
-  element: () => <JobProductionOrderPage />,
-  },
-  
 ];
 
 function isStorageComputationRoute(pathname: string) {
@@ -1215,6 +1201,15 @@ function isPurchaseSaleSetupRoute(pathname: string) {
   );
 }
 
+function isHrLeaveTypeRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  // const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/pay components/leave_types1") ||
+    normalized.includes("/hcm/hcm/pay%20components/leave_types1")
+    // compact.includes("paycomponentsleavetype")
+  );
+}
 
 function isStockAdjViewRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
