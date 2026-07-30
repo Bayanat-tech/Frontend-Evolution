@@ -105,6 +105,7 @@ export function StockHeaderForm({
                                     getDynamicLookup({
                                         parameter: "DROP_DOWN_DEPT_BASED_ON_DIV",
                                         code1: companyCode,
+                                        code2: form.div_code,
                                         loginid: loginid || "ADMIN",
                                     })
                                 }
