@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState, useRef } from "react";
 import { Activity, AlertTriangle, ArrowLeft, Ban, CreditCard, Eye, MapPinned, PackageCheck, Paperclip, Plus, RefreshCw, RotateCcw, Save, ShieldCheck, ShipWheel, Sparkles, Trash2, X } from "lucide-react";
 import { api } from "../../api/client";
 import { freightSelect } from "../../api/freight";
@@ -208,6 +208,8 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   const [cancelRemarks, setCancelRemarks] = useState("");
   const [headerNames, setHeaderNames] = useState<EnquiryHeaderNames>(emptyHeaderNames);
   const [approvalEnabled, setApprovalEnabled] = useState(false);
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const [pendingValidateTab, setPendingValidateTab] = useState<EnquiryTab | null>(null);
 
   useEffect(() => {
     if (!notice) return;
@@ -285,6 +287,13 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
     () => listRows.filter((row) => matchesListStatusTab(row, activeListTab)),
     [activeListTab, listRows]
   );
+
+  const requiredFieldChecks: { tab: EnquiryTab; test: () => boolean; label: string }[] = [
+  { tab: "journey", test: () => Boolean(header.origin_port), label: "Port of Loading" },
+  { tab: "payment", test: () => Boolean(header.curr_code), label: "Currency" },
+  { tab: "payment", test: () => Number(header.ex_rate || 0) > 0, label: "Exchange Rate" },
+ ];
+
   const listColumns = useMemo<ColumnDef<EnquiryListRow>[]>(
     () => [
       {
@@ -1067,8 +1076,8 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
             <section>
               <SectionHeading title="Cargo And Parties" description="Commodity, measurement, shipper and consignee details" />
               <div className="grid gap-1.5 xl:grid-cols-12">
-                <SectionPanel className="xl:col-span-7" icon={PackageCheck} title="Cargo Profile" meta={`${header.commodity || "Commodity pending"} / ${header.gross_wt || header.weight || "0"} kgs`}>
-                  <div className="grid gap-1 sm:grid-cols-2 xl:grid-cols-4">
+                <SectionPanel className="xl:col-span-12" icon={PackageCheck} title="Cargo Profile" meta={`${header.commodity || "Commodity pending"} / ${header.gross_wt || header.weight || "0"} kgs`}>
+                  <div className="grid gap-1 sm:grid-cols-3 xl:grid-cols-7">
                     <FormLookup label="Commodity" value={header.commodity} valueField="prodtype_desc" displayFields={["prodtype_desc", "prodtype_code"]} columns={[{ field: "prodtype_desc", header: "Commodity" }, { field: "prodtype_code", header: "Code" }]} loadOptions={() => loadCommodityLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("commodity", value, row)} className="xl:col-span-2" />
                     <FormInput label="Weight(kgs)" type="number" value={header.weight} onChange={(value) => setHeaderField("weight", value)} />
                     <FormInput label="Gross Weight(kgs)" type="number" value={header.gross_wt} onChange={(value) => setHeaderField("gross_wt", value)} />
@@ -1077,26 +1086,30 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
                     <FormInput label="Breadth(cm)" type="number" value={header.b} onChange={(value) => setHeaderField("b", value)} />
                     <FormInput label="Height(cm)" type="number" value={header.h} onChange={(value) => setHeaderField("h", value)} />
                     <FormInput label="Dimension" value={header.dimension} onChange={(value) => setHeaderField("dimension", value)} />
+                    {header.transport_mode === "S" && (
+                    <>
+                    <FormInput label="Container Type" value={header.container_type} onChange={(value) => setHeaderField("container_type", value)} />
+                    <FormInput label="Containers" type="number" value={header.no_of_contaners} onChange={(value) => setHeaderField("no_of_contaners", value)} />
+                    <FormInput label="T/F" value={header.t_f} onChange={(value) => setHeaderField("t_f", value)} />
+                    </>)}
+                    {header.transport_mode === "R" && (
+                    <>
+                    <FormLookup label="Vehicle Type" value={header.vehicle_type} valueField="vtype_code" displayFields={["vtype_code", "vtype_name"]} columns={[{ field: "vtype_code", header: "Code" }, { field: "vtype_name", header: "Vehicle Type" }]} loadOptions={() => loadVehicleTypeLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("vehicle_type", value, row)} className="xl:col-span-2" />
+                    </>)}
+                    <FormTextarea label="Cargo Detail" value={header.cargo_detail} onChange={(value) => setHeaderField("cargo_detail", value)} compact className="xl:col-span-2" />
                   </div>
                 </SectionPanel>
 
-                <SectionPanel className="xl:col-span-5" icon={ShipWheel} title="Equipment" meta={`${header.no_of_contaners || "0"} containers`}>
+                {/* <SectionPanel className="xl:col-span-5" icon={ShipWheel} title="Equipment" meta={`${header.no_of_contaners || "0"} containers`}>
                   <div className="grid gap-1 sm:grid-cols-2">
                     <FormInput label="Container Type" value={header.container_type} onChange={(value) => setHeaderField("container_type", value)} />
                     <FormInput label="Containers" type="number" value={header.no_of_contaners} onChange={(value) => setHeaderField("no_of_contaners", value)} />
                     <FormLookup label="Vehicle Type" value={header.vehicle_type} valueField="vtype_code" displayFields={["vtype_code", "vtype_name"]} columns={[{ field: "vtype_code", header: "Code" }, { field: "vtype_name", header: "Vehicle Type" }]} loadOptions={() => loadVehicleTypeLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("vehicle_type", value, row)} />
                     <FormInput label="T/F" value={header.t_f} onChange={(value) => setHeaderField("t_f", value)} />
                   </div>
-                </SectionPanel>
+                </SectionPanel> */}
 
-                <SectionPanel className="xl:col-span-5" icon={CreditCard} title="Cargo Notes" meta={header.remarks ? "Remarks added" : "No remarks"}>
-                  <div className="grid gap-1 sm:grid-cols-2">
-                    <FormTextarea label="Cargo Detail" value={header.cargo_detail} onChange={(value) => setHeaderField("cargo_detail", value)} compact />
-                    <FormTextarea label="Remarks" value={header.remarks} onChange={(value) => setHeaderField("remarks", value)} compact />
-                  </div>
-                </SectionPanel>
-
-                <SectionPanel className="xl:col-span-7" icon={MapPinned} title="Parties" meta={`${header.shipper_name || "Shipper pending"} / ${header.consignee_name || "Consignee pending"}`}>
+                <SectionPanel className="xl:col-span-12" icon={MapPinned} title="Parties" meta={`${header.shipper_name || "Shipper pending"} / ${header.consignee_name || "Consignee pending"}`}>
                   <div className="grid gap-1 sm:grid-cols-4">
                     <FormTextarea label="Shipper" value={header.shipper_name} onChange={(value) => setHeaderField("shipper_name", value)} compact />
                     <FormTextarea label="Shipper Address" value={header.shipper_address} onChange={(value) => setHeaderField("shipper_address", value)} compact />
@@ -1104,6 +1117,13 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
                     <FormTextarea label="Consignee Address" value={header.consignee_address} onChange={(value) => setHeaderField("consignee_address", value)} compact />
                   </div>
                 </SectionPanel>
+
+                <SectionPanel className="xl:col-span-12" icon={CreditCard} title="Cargo Notes" meta={header.remarks ? "Remarks added" : "No remarks"}>
+                  <div className="grid grid-cols-1">
+                    <FormTextarea label="Remarks" value={header.remarks} onChange={(value) => setHeaderField("remarks", value)} compact />
+                  </div>
+                </SectionPanel>
+
               </div>
             </section>
           )}
@@ -1126,6 +1146,10 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
                     <FormInput label="Shipment Status" value={header.shipment_status} onChange={(value) => setHeaderField("shipment_status", value)} />
                     <FormInput label="Job No" value={header.job_number} onChange={(value) => setHeaderField("job_number", value)} />
                     <FormInput label="Ready Date" type="date" value={header.schedule_date} onChange={(value) => setHeaderField("schedule_date", value)} />
+                    {header.transport_mode === "S" && (
+                    <>
+                    <FormInput label="Shipment Status" value={header.shipment_status} onChange={(value) => setHeaderField("shipment_status", value)} />
+                    </>)}
                   </div>
                 </SectionPanel>
               </div>
@@ -1159,8 +1183,8 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
             <section>
               <SectionHeading title="Payment Terms" description="Commercial terms, currency, references, and instructions" />
               <div className="grid gap-1.5 lg:grid-cols-12">
-                <SectionPanel className="lg:col-span-5" icon={CreditCard} title="Terms And Currency" meta={`${header.payment_terms || "Terms"} / ${header.curr_code || "Currency"}`}>
-                  <div className="grid gap-1 sm:grid-cols-2">
+                <SectionPanel className="lg:col-span-6" icon={CreditCard} title="Terms And Currency" meta={`${header.payment_terms || "Terms"} / ${header.curr_code || "Currency"}`}>
+                  <div className="grid gap-2 sm:grid-cols-2">
                     <FormSelect label="INCO Terms" value={header.payment_terms} onChange={(value) => setHeaderField("payment_terms", value)} options={paymentTerms.map((value) => ({ value, label: value }))} />
                     <FormSelect label="Freight Payable At" value={header.tos} onChange={(value) => setHeaderField("tos", value)} options={tosOptions.map((value) => ({ value, label: value }))} />
                     <FormLookup label="Currency" value={header.curr_code} valueField="curr_code" displayFields={["curr_code", "curr_name"]} columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Currency" }, { field: "ex_rate", header: "Rate" }]} loadOptions={() => loadCurrencyLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("curr_code", value, row)} required />
@@ -1168,15 +1192,15 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
                   </div>
                 </SectionPanel>
 
-                <SectionPanel className="lg:col-span-4" icon={PackageCheck} title="Classification" meta={`${header.sale_type || "Sale"} / ${header.job_category || "Category"}`}>
-                  <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                <SectionPanel className="lg:col-span-6" icon={PackageCheck} title="Classification" meta={`${header.sale_type || "Sale"} / ${header.job_category || "Category"}`}>
+                  <div className="grid gap-1.5 sm:grid-cols-2">
                     <FormSelect label="Member Type" value={header.member_type} onChange={(value) => setHeaderField("member_type", value)} options={memberTypes.map((value) => ({ value, label: value || "Blank" }))} />
                     <FormSelect label="Sale Type" value={header.sale_type} onChange={(value) => setHeaderField("sale_type", value)} options={saleTypes.map((value) => ({ value, label: value }))} />
                     <FormSelect label="Job Category" value={header.job_category} onChange={(value) => setHeaderField("job_category", value)} options={jobCategories.map((value) => ({ value, label: value }))} />
                   </div>
                 </SectionPanel>
 
-                <SectionPanel className="lg:col-span-3" icon={Activity} title="Instructions" meta={header.spl_instructions ? "Added" : "Pending"}>
+                <SectionPanel className="lg:col-span-12" icon={Activity} title="Instructions" meta={header.spl_instructions ? "Added" : "Pending"}>
                   <FormTextarea label="Special Instructions" value={header.spl_instructions} onChange={(value) => setHeaderField("spl_instructions", value)} />
                 </SectionPanel>
               </div>
