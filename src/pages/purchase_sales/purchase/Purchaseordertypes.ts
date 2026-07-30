@@ -33,6 +33,13 @@ export interface PurchaseOrderLineRow {
   zone_name?: string;
   uom_name?: string;
   uom_code?: string;
+  job_no?:string;
+  dept?:string;
+  sign_ind?:number
+  uppp?:number,
+  quantity:number,
+  ex_rate:number
+
 
 }
 

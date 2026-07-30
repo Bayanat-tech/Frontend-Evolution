@@ -7,7 +7,7 @@ export type PurchaseOrderEditorState =
 
 export type ActionKey = "draft" | "submit" | "sendBack" | "reject" | "cancel" | "close";
 
-export interface PurchaseOrderLineRow {
+export interface InventoryLineRow {
   id: string;
   div_code: string;
   zone: string;
@@ -33,6 +33,18 @@ export interface PurchaseOrderLineRow {
   zone_name?: string;
   uom_name?: string;
   uom_code?: string;
+  // STR (Stock Transfer) only
+  remarks?: string;
+  dept?: string;
+  job_no?: string;
+ 
+  // SAJ (Stock Adjustment) only
+  sign_ind?: number; // '+' Increase / '-' Decrease
+  sale_price?:number;
+  quantity?:number;
+  uppp?:number;
+  ex_rate?: number
+  
   
 }
 

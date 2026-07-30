@@ -54,6 +54,9 @@ export const emptyLineRow = (divCode: string): PurchaseOrderLineRow => ({
   tax_code: "",
   tax_lcurr_amount: 0,
   lcurr_amount_disc: 0,
+  uppp:0,
+  quantity:0,
+  ex_rate:1
 });
 
 export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
@@ -161,6 +164,9 @@ export async function fetchPurchaseOrderDetail(
       tax_code: text(row.tax_code),
       tax_lcurr_amount: numberOrZero(row.tax_lcurr_amount),
       lcurr_amount_disc: numberOrZero(row.lcurr_amount_disc ?? row.lcurr_amount_discount),
+      uppp:numberOrZero(row.uppp),
+      quantity:numberOrZero(row.quantity),
+      ex_rate:numberOrZero(row.ex_rate),
     } satisfies PurchaseOrderLineRow;
   });
 }
@@ -211,17 +217,18 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
   };
 }
 
-export function lineAmount(row: PurchaseOrderLineRow) {
-  return row.qty_puom * row.unit_price;
-}
+
 export function lineDiscPrice(row: PurchaseOrderLineRow) {
-  return lineAmount(row) * (row.disc_pct / 100);
+  return row.unit_price * (row.disc_pct / 100);
 }
 export function lineNetAmount(row: PurchaseOrderLineRow) {
   return lineAmount(row) - lineDiscPrice(row);
 }
 export function lineTaxAmount(row: PurchaseOrderLineRow) {
   return lineNetAmount(row) * (row.tax_pct / 100);
+}
+export function lineAmount(row: PurchaseOrderLineRow) {
+  return (row.unit_price - lineDiscPrice(row) ) * row.quantity
 }
 
 export function buildDetailsPayload(rows: PurchaseOrderLineRow[]) {
