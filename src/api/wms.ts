@@ -346,7 +346,7 @@ export async function getFlowAssignRoleUsers(companyCode: string, roleId: string
     ],
   };
 
-  const res = await api.post("/insUpdMsApproverLevels", payload);
+  const res = await api.post("/api/security/insUpdMsApproverLevels", payload);
   return res.data;
 };
 // ─── Add / Remove user from role ──────────────────────────────────────────
@@ -357,22 +357,22 @@ export async function getFlowAssignRoleUsers(companyCode: string, roleId: string
 // parameter/endpoint below once they exist — everything else on the page
 // will keep working unchanged.
  
-export async function addUserToRole(companyCode: string, roleId: string, loginid: string, actorLoginId: string) {
-  const response = await api.post<ApiResponse<unknown>>(
-    "/api/wms/common/proc_build_dynamic_ins_upd_common", // TODO: confirm route + parameter name with backend
+export async function addUserToRole(companyCode: string, roleId: string, loginidToAdd: string, actorLoginId: string) {
+  const res = await insSecRoleFunctionAccessUser([
     {
-      parameter: "PROC_FUN_ASSIGN_ADD_ROLE_USER", // TODO: backend needs to add this branch
-      loginid: actorLoginId,
-      wval1s1: companyCode,
-      wval1s2: roleId,
-      wval1s3: loginid,
-    }
-  );
-  if (!response.data.success) throw new Error(response.data.message || "Unable to add user to role");
-  return response.data;
+      company_code: companyCode,
+      loginid: loginidToAdd,
+      serial_no_or_role_id: roleId,
+      userid: loginidToAdd,
+      create_user: actorLoginId,
+    },
+  ]);
+  if (!res?.success) throw new Error(res?.message || "Unable to add user to role");
+  return res;
 }
+
  export const insSecRoleFunctionAccessUser = async (rows: any[]) => {
-  const res = await api.post("/insSecRoleFunctionAccessUser", { rows });
+  const res = await api.post("/api/security/insSecRoleFunctionAccessUser", { rows });
   return res.data;
 };
 export async function removeUserFromRole(companyCode: string, roleId: string, loginid: string, actorLoginId: string) {
