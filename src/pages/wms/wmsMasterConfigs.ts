@@ -425,6 +425,19 @@ saveEndpoint: (form, { editMode, original }) => {
         loginid: typedUser.loginid,
       });
     },
+    customLoad: async (user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      const data = await executeWmsInboundSql(`
+        SELECT *
+        FROM MS_PRINCIPAL
+        WHERE COMPANY_CODE = '${typedUser.company_code}'
+        ORDER BY NVL(updated_at, created_at)
+      `);
+      return {
+        tableData: data as Record<string, unknown>[],
+        count: data.length,
+      };
+    },
     deleteConfig: { mode: "disabled", payload: () => null, reason: "Delete endpoint is not registered in the existing backend" },
   },
 
