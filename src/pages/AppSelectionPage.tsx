@@ -17,6 +17,7 @@ import {
   PackageCheck,
   Settings2,
   ShieldCheck,
+  ShoppingCart,
   Sparkles,
   Truck,
   UserRoundCheck,
@@ -90,7 +91,7 @@ export const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta; external?:
       code: "FMS",
       fullForm: "Freight Management System",
       description: "Enquiry, quotation, BL/AWB, tracking, costing and invoicing.",
-      status: "in-progress",
+      status: "completed",
     },
   },
   {
@@ -160,6 +161,17 @@ export const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta; external?:
     },
   },
   {
+    keys: ["purchase_sales", "purchase", "sales"],
+    meta: {
+      Icon: ShoppingCart,
+      accent: { gradient: "linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)", light: "#f3e8ff", border: "#d8b4fe", icon: "#6d28d9", text: "#4c1d95", glow: "rgba(139, 92, 246, 0.14)" },
+      code: "PURCHASE_SALES",
+      fullForm: "Purchase Sales Management System",
+      description: "Operational workflows, integrations and reports.",
+      status: "completed",
+    },
+  },
+  {
     keys: ["pams", "performance"],
     meta: {
       Icon: BarChart3,
@@ -204,7 +216,18 @@ export const moduleCatalog: Array<{ keys: string[]; meta: ModuleMeta; external?:
       status: "completed",
     },
   },
-  
+  {
+    keys: [],
+    meta: {
+      Icon: ScanFace,
+      accent: { gradient: "linear-gradient(135deg, #ec4899 0%, #f59e0b 100%)", light: "#fff0f6", border: "#f9a8d4", icon: "#be185d", text: "#831843", glow: "rgba(236, 72, 153, 0.18)" },
+      code: "AMS",
+      fullForm: "Attendance Management System",
+      description: "Biometric Attendances with geo location , shifts, OT , Integration , Reports.",
+      status: "completed",
+    },
+    external: { url: "https://ams-new.bayanattechnology.com" },
+  },
   {
     keys: ["security"],
     meta: {
@@ -252,14 +275,14 @@ const appLaunchGroups = [
     key: "business",
     title: "Business Suite",
     subtitle: "Finance, vendor and customer management workflows",
-    codes: ["FINANCE", "VMS", "CMS"],
+    codes: ["FINANCE", "VMS", "CMS", "PURCHASE_SALES"],
     tone: "business",
   },
   {
     key: "people",
     title: "Workforce Suite",
     subtitle: "Employee, HR and attendance applications",
-    codes: ["EMS", "HCM", "AMS"],
+    codes: ["EMS", "HCM", "AMS", "LMS"],
     tone: "people",
   },
 ];
