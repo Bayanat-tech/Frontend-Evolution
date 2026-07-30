@@ -80,6 +80,17 @@ type QuotationHeader = {
   contact_person: string;
   subject: string;
   quotation_type: string;
+  flow_level_running: string;
+  flow_level_initial: string;
+  flow_level_final: string;
+  final_approved: string;
+  last_action: string;
+  history_serial: string;
+  next_action_by: string;
+  sentback_reason: string;
+  reject_reason: string;
+  submitted_by: string;
+  submitted_date: string;
 };
 
 type QuotationDetail = {
@@ -146,11 +157,14 @@ const tabs: { key: FreightQuotationInitialTab; label: string; icon: typeof Packa
   { key: "terms", label: "Terms", icon: FileText },
 ];
 
-type ListStatusTab = "in_progress" | "approved" | "cancelled" | "all";
+type ListStatusTab = "draft" | "in_progress" | "approved" | "sentback" | "rejected" | "cancelled" | "all";
 
 const listStatusTabs: { key: ListStatusTab; label: string }[] = [
+  { key: "draft", label: "Draft" },
   { key: "in_progress", label: "In Progress" },
   { key: "approved", label: "Approved" },
+  { key: "sentback", label: "Sent Back" },
+  { key: "rejected", label: "Rejected" },
   { key: "cancelled", label: "Cancelled" },
   { key: "all", label: "All" },
 ];
@@ -165,7 +179,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   const [terms, setTerms] = useState<QuotationTerm[]>([]);
   const [rows, setRows] = useState<LookupRow[]>([]);
   const [query, setQuery] = useState("");
-  const [activeListTab, setActiveListTab] = useState<ListStatusTab>("in_progress");
+  const [activeListTab, setActiveListTab] = useState<ListStatusTab>("draft");
   const [view, setView] = useState<ViewMode>("list");
   const [activeTab, setActiveTab] = useState<FreightQuotationInitialTab>(initialTab);
   const [loading, setLoading] = useState(false);
@@ -176,6 +190,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
   const [pendingValidateTab, setPendingValidateTab] = useState<FreightQuotationInitialTab | null>(null);
+  const [approvalEnabled, setApprovalEnabled] = useState(false);
 
   useEffect(() => {
     if (!notice) return;
@@ -195,6 +210,25 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
  }, [activeTab, pendingValidateTab]);
 
   const loginId = String(userInfo?.loginid || userInfo?.USERID || userInfo?.user_id || userInfo?.username || "");
+  useEffect(() => {
+    let alive = true;
+    const loadApprovalConfig = async () => {
+      try {
+        const response = await api.post<{ success?: boolean; data?: { approval_enabled?: boolean } }>("/api/freight/approval/config", {
+          company_code: initialHeader.company_code,
+          process: "frt_quotation",
+        });
+        if (alive) setApprovalEnabled(Boolean(response.data?.data?.approval_enabled));
+      } catch {
+        if (alive) setApprovalEnabled(false);
+      }
+    };
+    void loadApprovalConfig();
+    return () => {
+      alive = false;
+    };
+  }, [initialHeader.company_code]);
+
   const attachmentRequestNumber = header.quotation_nr ? `${header.company_code}-QTN-${header.quotation_nr}` : "";
   const sourceAttachmentRequestNumbers = useMemo(() => {
     if (!header.enquiry_no) return [];
@@ -208,9 +242,36 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
     () => rows.filter((row) => matchesListStatusTab(row, activeListTab)),
     [activeListTab, rows]
   );
-  const isApproved = header.indstatus === "A";
-  const isLocked = isApproved;
-  const canApprove = Boolean(header.quotation_nr) && !isApproved;
+  const isApproved = header.indstatus === "A" || header.final_approved === "Y";
+  const isCancelled = header.indstatus === "C";
+  const isRejected = header.indstatus === "R" || header.last_action === "REJECTED";
+  const isSentBack = header.last_action === "SENTBACK";
+  const isLocked = isApproved || isCancelled || isRejected;
+  const isApprovalInProgress =
+    approvalEnabled &&
+    !isLocked &&
+    ["SUBMITTED", "APPROVED"].includes(header.last_action) &&
+    header.final_approved !== "Y";
+  const isReadOnly = isLocked || isApprovalInProgress;
+  const isAssignedWorkflowUser = !header.next_action_by || header.next_action_by === loginId;
+  const canSubmit =
+    approvalEnabled &&
+    Boolean(header.quotation_nr) &&
+    !isReadOnly &&
+    (!header.last_action || header.last_action === "SAVEASDRAFT" || (header.last_action === "SENTBACK" && isAssignedWorkflowUser));
+  const canApprove =
+    approvalEnabled &&
+    Boolean(header.quotation_nr) &&
+    !isApproved &&
+    !isCancelled &&
+    !isRejected &&
+    isApprovalInProgress &&
+    isAssignedWorkflowUser;
+  const canDirectApprove = !approvalEnabled && Boolean(header.quotation_nr) && !isApproved && !isCancelled && !isRejected;
+  const visibleListStatusTabs = useMemo(
+    () => listStatusTabs.filter((tab) => approvalEnabled || !["in_progress", "sentback", "rejected"].includes(tab.key)),
+    [approvalEnabled]
+  );
 
   const requiredFieldChecks: { tab: FreightQuotationInitialTab; test: () => boolean; label: string }[] = [
   { tab: "cargo", test: () => Boolean(header.prin_code), label: "Principal" },
@@ -244,7 +305,11 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       size: 130,
       cell: ({ row }) => {
         const status = lookupText(row.original, "indstatus");
-        return <span className={statusBadgeClass(status)}>{statusLabel(status)}</span>;
+        return (
+          <span className={statusBadgeClass(status, lookupText(row.original, "last_action"), lookupText(row.original, "final_approved"))}>
+            {statusLabel(status, lookupText(row.original, "last_action"), lookupText(row.original, "final_approved"))}
+          </span>
+        );
       },
     },
     {
@@ -387,7 +452,23 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   };
 
   const copyAsNew = () => {
-    setHeader((current) => ({ ...current, quotation_nr: "", quotation_date: toInputDate(new Date()), indstatus: "N" }));
+    setHeader((current) => ({
+      ...current,
+      quotation_nr: "",
+      quotation_date: toInputDate(new Date()),
+      indstatus: "N",
+      flow_level_running: "0",
+      flow_level_initial: "0",
+      flow_level_final: "0",
+      final_approved: "N",
+      history_serial: "0",
+      last_action: "SAVEASDRAFT",
+      next_action_by: "",
+      sentback_reason: "",
+      reject_reason: "",
+      submitted_by: "",
+      submitted_date: "",
+    }));
     setNotice({ type: "success", text: "Quotation copied as a new draft" });
   };
 
@@ -448,7 +529,89 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
     }
   };
 
-  const approveQuotation = async () => {
+  const applyWorkflowResult = (row: LookupRow | null | undefined) => {
+    if (!row) return;
+    const normalized = normalizeLookupRow(row);
+    setHeader((current) => ({
+      ...current,
+      indstatus: lookupText(normalized, "indstatus") || current.indstatus,
+      flow_level_running: lookupText(normalized, "flow_level_running") || current.flow_level_running,
+      flow_level_final: lookupText(normalized, "flow_level_final") || current.flow_level_final,
+      final_approved: lookupText(normalized, "final_approved") || current.final_approved,
+      last_action: lookupText(normalized, "last_action") || current.last_action,
+      next_action_by: lookupText(normalized, "next_action_by") || current.next_action_by,
+      sentback_reason: lookupText(normalized, "sentback_reason") || current.sentback_reason,
+      reject_reason: lookupText(normalized, "reject_reason") || current.reject_reason,
+      submitted_by: lookupText(normalized, "submitted_by") || current.submitted_by,
+      submitted_date: toDateInputValue(lookupText(normalized, "submitted_date")) || current.submitted_date,
+    }));
+  };
+
+  const runWorkflowAction = async (action: "SUBMITTED" | "APPROVED" | "SENTBACK" | "REJECTED", remarks = "", sentbackTo = "") => {
+    if (!header.quotation_nr) {
+      setNotice({ type: "error", text: "Save quotation before workflow action" });
+      return;
+    }
+    if (isLocked && action !== "SENTBACK") {
+      setNotice({ type: "error", text: `${statusLabel(header.indstatus, header.last_action, header.final_approved)} quotation is read-only` });
+      return;
+    }
+    if (action === "SENTBACK" && !sentbackTo.trim()) {
+      setNotice({ type: "error", text: "Send back user is required" });
+      return;
+    }
+
+    setApproving(true);
+    setNotice(null);
+    try {
+      const response = await api.post<{ success?: boolean; message?: string; data?: LookupRow | null }>("/api/freight/quotation/workflow-action", {
+        company_code: header.company_code,
+        prin_code: header.prin_code,
+        quotation_nr: header.quotation_nr,
+        action,
+        action_by: loginId,
+        action_remarks: remarks,
+        sentback_to: sentbackTo,
+      });
+      if (response.data?.success === false) {
+        throw new Error(response.data.message || "Unable to update quotation workflow");
+      }
+      applyWorkflowResult(response.data?.data);
+      setNotice({ type: "success", text: response.data?.message || "Quotation workflow updated" });
+      await loadRows();
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to update quotation workflow" });
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  const submitQuotation = () => {
+    void runWorkflowAction("SUBMITTED");
+  };
+
+  const approveQuotation = () => {
+    const remarks = window.prompt("Approval remarks", "") || "";
+    void runWorkflowAction("APPROVED", remarks);
+  };
+
+  const sendBackQuotation = () => {
+    const sentbackTo = window.prompt("Send back to user/employee id", header.submitted_by || "") || "";
+    if (!sentbackTo.trim()) return;
+    const remarks = window.prompt("Send back remarks", "") || "";
+    void runWorkflowAction("SENTBACK", remarks, sentbackTo);
+  };
+
+  const rejectQuotation = () => {
+    const remarks = window.prompt("Reject reason", "") || "";
+    if (!remarks.trim()) {
+      setNotice({ type: "error", text: "Reject reason is required" });
+      return;
+    }
+    void runWorkflowAction("REJECTED", remarks);
+  };
+
+  const directApproveQuotation = async () => {
     if (!header.quotation_nr) {
       setNotice({ type: "error", text: "Save quotation before approval" });
       return;
@@ -464,7 +627,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
         approval_remarks: "",
       });
       if (response.data?.success === false) throw new Error(response.data.message || "Unable to approve quotation");
-      setHeaderField("indstatus", "A");
+      setHeader((current) => ({ ...current, indstatus: "A", final_approved: "Y", last_action: "APPROVED" }));
       setNotice({ type: "success", text: response.data?.message || "Quotation approved" });
       await loadRows();
     } catch (error) {
@@ -481,8 +644,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
 
   const saveQuotation = async (event: FormEvent) => {
     event.preventDefault();
-    if (isLocked) {
-      setNotice({ type: "error", text: "Approved quotation is read-only" });
+    if (isReadOnly) {
+      setNotice({ type: "error", text: `${statusLabel(header.indstatus, header.last_action, header.final_approved)} quotation is read-only` });
       return;
     }
 
@@ -549,7 +712,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card p-2 shadow-sm">
-          {listStatusTabs.map((tab) => {
+          {visibleListStatusTabs.map((tab) => {
             const count = rows.filter((row) => matchesListStatusTab(row, tab.key)).length;
             const active = activeListTab === tab.key;
             return (
@@ -603,9 +766,9 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
             <div className="min-w-0">
               <p className="eyebrow m-0 text-lg">Freight Quotation</p>
               <div className="flex flex-wrap items-center gap-1.5">
-                {/* <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Quotation</h1> */}
-                {/* <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">{header.quotation_nr || "New quotation"}</span> */}
-                <span className={statusBadgeClass(header.indstatus)}>{statusLabel(header.indstatus)}</span>
+                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Quotation</h1>
+                <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">{header.quotation_nr || "New quotation"}</span>
+                <span className={statusBadgeClass(header.indstatus, header.last_action, header.final_approved)}>{statusLabel(header.indstatus, header.last_action, header.final_approved)}</span>
               </div>
               <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
                 {/* <span>{modeLabel(header.transport_mode)}</span><span className="h-1 w-1 rounded-full bg-muted-foreground/50" /> */}
@@ -621,20 +784,44 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
             {notice && <NoticeChip notice={notice} />}
             <Button type="button" size="sm" variant="outline" onClick={() => setAssistOpen((open) => !open)}><Sparkles size={14} />Check{checkCount > 0 && <span className="rounded bg-amber-100 px-1.5 text-[10px] font-bold text-amber-700">{checkCount}</span>}</Button>
             <Button type="button" size="sm" variant="outline" onClick={() => setAttachmentOpen(true)}><Paperclip size={14} />Files</Button>
-            <Button type="button" size="sm" variant="outline" onClick={copyAsNew} disabled={isLocked || (!header.prin_code && !header.quotation_nr)}><Copy size={14} />Copy</Button>
-            <Button type="button" size="sm" variant="outline" onClick={resetForm} disabled={isLocked}><RotateCcw size={14} />Reset</Button>
-            {canApprove && (
-              <Button type="button" size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={approveQuotation} disabled={approving || saving}>
-                <ShieldCheck size={14} />{approving ? "Approving" : "Approve"}
+            {!isApprovalInProgress && (
+              <Button type="button" size="sm" variant="outline" onClick={copyAsNew} disabled={isReadOnly || (!header.prin_code && !header.quotation_nr)}><Copy size={14} />Copy</Button>
+            )}
+            {!isApprovalInProgress && (
+              <Button type="button" size="sm" variant="outline" onClick={resetForm} disabled={isReadOnly}><RotateCcw size={14} />Reset</Button>
+            )}
+            {canSubmit && (
+              <Button type="button" size="sm" variant="outline" onClick={submitQuotation} disabled={approving || saving}>
+                <ShieldCheck size={14} />{isSentBack ? "Resubmit" : "Submit"}
               </Button>
             )}
-            <Button type="submit" size="sm" disabled={saving || isLocked}><Save size={14} />{saving ? "Saving" : "Save"}</Button>
+            {canDirectApprove && (
+              <Button type="button" size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={directApproveQuotation} disabled={approving || saving}>
+                <ShieldCheck size={14} />{approving ? "Working" : "Approve"}
+              </Button>
+            )}
+            {canApprove && (
+              <>
+                <Button type="button" size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={approveQuotation} disabled={approving || saving}>
+                  <ShieldCheck size={14} />{approving ? "Working" : "Approve"}
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={sendBackQuotation} disabled={approving || saving}>
+                  <RotateCcw size={14} />Send Back
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="text-red-600 hover:text-red-700" onClick={rejectQuotation} disabled={approving || saving}>
+                  <AlertTriangle size={14} />Reject
+                </Button>
+              </>
+            )}
+            {!isApprovalInProgress && (
+              <Button type="submit" size="sm" disabled={saving || isReadOnly}><Save size={14} />{saving ? "Saving" : "Save Draft"}</Button>
+            )}
           </div>
         </div>
 
         {assistOpen && <FreightAssistPanel checks={smartChecks} />}
 
-        <fieldset disabled={isLocked} className="contents">
+        <fieldset disabled={isReadOnly} className="contents">
         <section className="freight-form-card rounded-md border bg-card shadow-sm">
           <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-11">
             <FormInput label="Quotation No" value={header.quotation_nr} onChange={(value) => setHeaderField("quotation_nr", value)} placeholder="Auto" disabled />
@@ -649,7 +836,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
             )}
             <FormSelect label="Job Type" value={header.job_type} onChange={(value) => setHeaderField("job_type", value)} options={jobTypes} />
             <FormSelect label="Mode" value={header.transport_mode} onChange={(value) => setHeaderField("transport_mode", value)} options={transportModes} />
-            <StatusField status={header.indstatus} />
+            <StatusField status={header.indstatus} action={header.last_action} finalApproved={header.final_approved} />
+            <ReadOnlyField label="Approval Level" value={workflowLevelText(header)} />
             <FormInput label="Offer Validity" type="date" value={header.offer_validity} onChange={(value) => setHeaderField("offer_validity", value)} />
             <FormSelect label="Member Type" value={header.member_type} onChange={(value) => setHeaderField("member_type", value)} options={memberTypes.map((value) => ({ value, label: value || "Blank" }))} />
             <FormSelect label="Sale Type" value={header.sale_type} onChange={(value) => setHeaderField("sale_type", value)} options={saleTypes.map((value) => ({ value, label: value }))} />
@@ -664,7 +852,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
           <div className="freight-tabs-list flex overflow-x-auto">
             {tabs.map((tab) => <TabButton key={tab.key} tab={tab} active={activeTab === tab.key} onClick={() => setActiveTab(tab.key)} />)}
           </div>
-          <fieldset disabled={isLocked} className="contents">
+          <fieldset disabled={isReadOnly} className="contents">
           <div className="freight-tabs-panel min-h-0 border-t">
             {activeTab === "cargo" && (
                <section className="grid gap-1.5 xl:grid-cols-12">
@@ -894,46 +1082,78 @@ function HeaderChip({ label, value }: { label: string; value: string }) {
   return <span className="inline-flex max-w-52 items-center gap-1 rounded-md border border-border bg-muted px-2 py-0.5 text-[11px]"><span className="font-semibold uppercase text-muted-foreground">{label}</span><span className="truncate font-semibold text-foreground">{value}</span></span>;
 }
 
-function statusBadgeClass(status: string) {
-  if (status === "A") {
+function statusBadgeClass(status: string, action = "", finalApproved = "") {
+  if (status === "A" || finalApproved === "Y") {
     return "inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700";
   }
   if (status === "C") {
     return "inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-700";
   }
+  if (status === "R" || action === "REJECTED") {
+    return "inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-700";
+  }
+  if (action === "SENTBACK") {
+    return "inline-flex items-center rounded-md border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-[11px] font-semibold text-orange-700";
+  }
+  if (action === "SUBMITTED" || action === "APPROVED") {
+    return "inline-flex items-center rounded-md border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-[11px] font-semibold text-sky-700";
+  }
   return "inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700";
 }
 
-function statusLabel(status: string) {
-  if (status === "A") return "Approved";
+function statusLabel(status: string, action = "", finalApproved = "") {
+  if (status === "A" || finalApproved === "Y") return "Approved";
   if (status === "C") return "Cancelled";
-  return "Not Approved";
+  if (status === "R" || action === "REJECTED") return "Rejected";
+  if (action === "SENTBACK") return "Sent Back";
+  if (action === "SUBMITTED" || action === "APPROVED") return "In Approval";
+  return "Draft";
 }
 
 function matchesListStatusTab(row: LookupRow, tab: ListStatusTab) {
   const status = lookupText(row, "indstatus");
-  if (tab === "approved") return status === "A";
+  const action = lookupText(row, "last_action");
+  const finalApproved = lookupText(row, "final_approved");
+  if (tab === "approved") return status === "A" || finalApproved === "Y";
   if (tab === "cancelled") return status === "C";
-  if (tab === "in_progress") return status !== "A" && status !== "C";
+  if (tab === "rejected") return status === "R" || action === "REJECTED";
+  if (tab === "sentback") return action === "SENTBACK";
+  if (tab === "draft") return status !== "A" && status !== "C" && status !== "R" && (!action || action === "SAVEASDRAFT");
+  if (tab === "in_progress") return status !== "A" && status !== "C" && status !== "R" && ["SUBMITTED", "APPROVED"].includes(action) && finalApproved !== "Y";
   return true;
 }
 
 function statusRowClassName(row: LookupRow) {
   const status = lookupText(row, "indstatus");
+  const action = lookupText(row, "last_action");
   if (status === "A") return "bg-emerald-50/60";
-  if (status === "C") return "bg-red-50/50";
+  if (status === "C" || status === "R") return "bg-red-50/50";
+  if (action === "SENTBACK") return "bg-orange-50/50";
+  if (action === "SUBMITTED" || action === "APPROVED") return "bg-sky-50/50";
   return "bg-amber-50/50";
 }
 
-function StatusField({ status }: { status: string }) {
+function StatusField({ status, action = "", finalApproved = "" }: { status: string; action?: string; finalApproved?: string }) {
   return (
     <div className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
       Status
       <div className="flex h-6 items-center rounded-md border border-input bg-muted/40 px-2">
-        <span className={statusBadgeClass(status)}>{statusLabel(status)}</span>
+        <span className={statusBadgeClass(status, action, finalApproved)}>{statusLabel(status, action, finalApproved)}</span>
       </div>
     </div>
   );
+}
+
+function workflowLevelText(header: QuotationHeader) {
+  if (header.indstatus === "C") return "Cancelled";
+  if (header.indstatus === "R" || header.last_action === "REJECTED") return "Rejected";
+  if (header.indstatus === "A" || header.final_approved === "Y") return "Final approved";
+  if (header.last_action === "SENTBACK") return header.next_action_by ? `Sent back to ${header.next_action_by}` : "Sent back";
+  if (header.last_action === "SUBMITTED" || header.last_action === "APPROVED") {
+    const level = header.flow_level_running || "";
+    return header.next_action_by ? `Level ${level} - ${header.next_action_by}` : `Level ${level || "-"} pending`;
+  }
+  return "Draft";
 }
 
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
@@ -959,7 +1179,9 @@ function buildInitialHeader(user: Record<string, unknown> | null, target?: Freig
     volume: "0", weight: "0", gross_wt: "", container_type: "STANDARD", no_of_contaners: "", vehicle_type: "", t_f: "T",
     shipment_status: "", payment_terms: "CIF", tos: "ORIGIN", curr_code: "OMR", ex_rate: "1", member_type: "",
     sale_type: "Normal", job_category: "International", spl_instructions: "", walkin_prin_code: "", contact_person: "",
-    subject: "", quotation_type: "QTN",
+    subject: "", quotation_type: "QTN", flow_level_running: "0", flow_level_initial: "0", flow_level_final: "0",
+    final_approved: "N", last_action: "SAVEASDRAFT", history_serial: "0", next_action_by: "", sentback_reason: "",
+    reject_reason: "", submitted_by: "", submitted_date: "",
   };
 }
 
@@ -1024,6 +1246,17 @@ function toHeaderFromRow(row: LookupRow, user: Record<string, unknown> | null, t
     contact_person: lookupText(row, "contact_person"),
     subject: lookupText(row, "subject"),
     quotation_type: lookupText(row, "quotation_type") || fallback.quotation_type,
+    flow_level_running: lookupText(row, "flow_level_running") || fallback.flow_level_running,
+    flow_level_initial: lookupText(row, "flow_level_initial") || fallback.flow_level_initial,
+    flow_level_final: lookupText(row, "flow_level_final") || fallback.flow_level_final,
+    final_approved: lookupText(row, "final_approved") || fallback.final_approved,
+    last_action: lookupText(row, "last_action") || fallback.last_action,
+    history_serial: lookupText(row, "history_serial") || fallback.history_serial,
+    next_action_by: lookupText(row, "next_action_by"),
+    sentback_reason: lookupText(row, "sentback_reason"),
+    reject_reason: lookupText(row, "reject_reason"),
+    submitted_by: lookupText(row, "submitted_by"),
+    submitted_date: toDateInputValue(lookupText(row, "submitted_date")),
   };
 }
 
