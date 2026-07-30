@@ -176,7 +176,10 @@ export const PROCESSQUOTATION = 'purchase_quotation'
 export const PROCESSGRN = 'purchase_grn'
 export const PROCESSJO = 'production_joborder'
 export const PROCESSJP = 'job_production'
-export const EXPENSE_AC_OPTIONS = ["Inventory A/c", "Expense A/c", "Fixed Asset A/c"];
+export const EXPENSE_AC_OPTIONS = [
+  { label: "Inventory A/c", value: "I" },
+  { label: "Direct Expense A/c", value: "D" },
+];
 export type PODocType = typeof PO_DOC_TYPE[keyof typeof PO_DOC_TYPE];
 
 export interface JobProductionConfig {

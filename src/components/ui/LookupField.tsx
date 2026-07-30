@@ -201,7 +201,7 @@ type LookupFieldProps = {
           {!compact && <span>{label} {required && ( <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span>)}
         </span>}
           <div ref={triggerRef} className="flex h-9 overflow-hidden rounded-md border border-gray-400  bg-background">
-          {/* </div><div ref={triggerRef} className={`flex w-full min-w-0 overflow-hidden rounded-md border bg-background ${compact ? "h-7" : "h-9"}`}> */}
+          {/* <div ref={triggerRef} className={`flex w-full min-w-0 overflow-hidden rounded-md border bg-background ${compact ? "h-7" : "h-9"}`}> */}
             <button
               className={`min-w-0 flex-1 border-0 bg-transparent text-left text-foreground disabled:opacity-60 ${compact ? "px-2 text-xs" : "px-3 text-sm"}`}
               type="button"

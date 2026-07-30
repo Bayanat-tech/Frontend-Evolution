@@ -206,7 +206,7 @@ export function PurchaseOrderHeaderForm({
             value={form.tax_category || ""}
             displayValue={form.tax_category || ""}
             columns={[{ field: "tx_compntcat_code", header: "Code" }, { field: "tx_compntcat_name", header: "Name" }]}
-            valueField="tx_compntcat_name"
+            valueField="tx_compntcat_code"
             displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
             loadOptions={() => getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE", code1: companyCode, loginid: loginIdOrAdmin })}
             disabled={disabled}
@@ -236,12 +236,12 @@ export function PurchaseOrderHeaderForm({
           <Input disabled={headerAndLineDisabled} value={form.delivery_term} onChange={(event) => updateField("delivery_term", event.target.value)} />
         </CField>
         <CField label="Expense A/c Post">
-          <Select disabled={headerAndLineDisabled} value={form.expense_ac_post} onChange={(event) => updateField("expense_ac_post", event.target.value)}>
-            {EXPENSE_AC_OPTIONS.map((option) => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </Select>
-        </CField>
+  <Select disabled={headerAndLineDisabled} value={form.expense_ac_post} onChange={(event) => updateField("expense_ac_post", event.target.value)}>
+    {EXPENSE_AC_OPTIONS.map((option) => (
+      <option key={option.value} value={option.value}>{option.label}</option>
+    ))}
+  </Select>
+</CField>
       </CompactSection>
 
       <CompactSection label="Project, Scope & Delivery" className="border-b-0">
