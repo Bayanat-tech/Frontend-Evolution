@@ -172,6 +172,7 @@ import { SalesDNPage } from "../pages/purchase_sales/sales/SalesDNPage";
 import { StocksTransferPage } from "../pages/purchase_sales/inventory/StockTransferPage";
 import { StocksAdjectmentPage } from "../pages/purchase_sales/inventory/StockadjustmentPage";
 import { JobProductionOrderPage } from "../pages/purchase_sales/production/JobProductionPage";
+import { LeaveTypesPage } from "../pages/hr/Leavetypespage";
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -1130,6 +1131,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <HrPayrollAccountSetupPage />,
   },
   {
+    name: "HR Leave Types",
+    match: ({ pathname }) => isHrLeaveTypeRoute(pathname),
+    element: () => <LeaveTypesPage />,
+  },
+  {
     name: "HR Master",
     match: (context) => Boolean(getHrMasterConfig(context)),
     element: (context) => <HrMasterPage config={getHrMasterConfig(context)!} />,
@@ -1191,6 +1197,16 @@ function isStorageComputationRoute(pathname: string) {
   return pathname.toLowerCase().includes("wms/activity/request/storage_computation");
 }
 
+
+function isHrLeaveTypeRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  // const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/pay components/leave_types1") ||
+    normalized.includes("/hcm/hcm/pay%20components/leave_types1")
+    // compact.includes("paycomponentsleavetype")
+  );
+}
 
 
 //--------PURCHASE SALE-------
