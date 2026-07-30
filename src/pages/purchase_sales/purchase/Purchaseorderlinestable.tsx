@@ -31,7 +31,7 @@ function stickyHeaderStyle(col: keyof typeof STICKY_COLS): React.CSSProperties {
   return { position: "sticky", top: 0, left, width, minWidth: width, maxWidth: width, zIndex: 3, backgroundColor: "var(--primary, #1d4ed8)" };
 }
 
-const plainHeaderStyle: React.CSSProperties = { position: "sticky", top: 0, zIndex: 1, backgroundColor: "var(--primary, #1d4ed8)",width: "100%" };
+const plainHeaderStyle: React.CSSProperties = { position: "sticky", top: 0, zIndex: 1, backgroundColor: "var(--primary, #1d4ed8)", width: "100%" };
 
 const TABLE_COLUMN_COUNT = 24;
 
@@ -83,9 +83,9 @@ export function PurchaseOrderLinesTable({
               <th className="finance-sticky-col px-2 py-2 text-left" style={stickyHeaderStyle("div")}>Div</th>
               <th className="finance-sticky-col px-2 py-2 text-left w-32" style={stickyHeaderStyle("zone")}>Zone</th>
               <th className="finance-sticky-col px-2 py-2 text-left" style={stickyHeaderStyle("product")}>Product Code</th>
-              <th className="px-2 py-2 text-left w-64" style={plainHeaderStyle}>P Uom</th>
+              <th className="finance-amount-cell px-2 py-2 text-left w-64" style={plainHeaderStyle}>P Uom</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Qty Puom</th>
-              <th className="px-2 py-2 text-left w-24" style={plainHeaderStyle}>L Uom</th>
+              <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>L Uom</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-20" style={plainHeaderStyle}>Qty Luom</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Unit Price</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Amount</th>
@@ -97,9 +97,9 @@ export function PurchaseOrderLinesTable({
               <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Tax Amount</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Lcurr Amount</th>
               <th className="px-2 py-2 text-left w-32" style={plainHeaderStyle}>Req Date</th>
-              <th className="px-2 py-2 text-left w-40" style={plainHeaderStyle}>Remarks</th>
-              <th className="px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax Cat</th>
-              <th className="px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax code</th>
+              <th className="finance-amount-cell px-2 py-2 text-left w-40" style={plainHeaderStyle}>Remarks</th>
+              <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax Cat</th>
+              <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax code</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Tax Lcurr amount</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Lcurr amount Discount</th>
               <th className="px-2 py-2 text-left w-16" style={plainHeaderStyle}>Action</th>
@@ -115,10 +115,10 @@ export function PurchaseOrderLinesTable({
                   <Input disabled={headerAndLineDisabled} value={row.div_code} onChange={(event) => updateRow(row.id, { div_code: event.target.value })} />
                 </td>
                 <td className="finance-sticky-col bg-card px-2 py-1 text-xs w-32" style={stickyStyle("zone")}>
-                   <LookupField
+                  <LookupField
                     label=""
                     value={row.zone_code || ""}
-                    displayValue={ row.zone_code}
+                    displayValue={row.zone_code}
                     columns={[{ field: "zone_code", header: "Code" }, { field: "zone_name", header: "Name" }]}
                     valueField="zone_code"
                     displayFields={["zone_code", "zone_name"]}
@@ -126,7 +126,7 @@ export function PurchaseOrderLinesTable({
                     disabled={headerAndLineDisabled}
                     onChange={(value, selectedRow) => updateRow(row.id, {
                       zone_code: value,
-                      
+
                     })}
                   />
                 </td>
@@ -149,20 +149,35 @@ export function PurchaseOrderLinesTable({
                   />
                 </td>
 
-                <td className="w-28 px-2 py-1">
-                   <LookupField
+                <td className="w-64 px-2 py-1">
+                  <LookupField
                     label=""
-                    value={row.uom_code || ""}
-                    displayValue={row.uom_name ? `${row.uom_code} - ${row.uom_name}` : row.uom_code}
-                    columns={[{ field: "uom_code", header: "Code" }, { field: "uom_name", header: "Name" }, { field: "p_uom", header: "P Uom" }, { field: "unit_price", header: "Unit Price" }]}
+                    value={row.p_uom || ""}
+                    displayValue={
+                      row.p_uom
+                    }
+                    columns={[
+                      { field: "uom_code", header: "Code" },
+                      { field: "uom_name", header: "Name" },
+                      { field: "unit_price", header: "Unit Price" },
+                    ]}
                     valueField="uom_code"
                     displayFields={["uom_code", "uom_name"]}
-                    loadOptions={() => getDynamicLookup({ parameter: "PS_POORDER_ENTRY_UOM_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
+                    loadOptions={() =>
+                      getDynamicLookup({
+                        parameter: "PS_POORDER_ENTRY_UOM_LIST",
+                        code1: companyCode,
+                        loginid: loginid || "ADMIN",
+                      })
+                    }
                     disabled={headerAndLineDisabled}
-                    onChange={(value, selectedRow) => updateRow(row.id, {
-                      uom_code: value,
-                      uom_name: text(getLookupValue(selectedRow || {}, "uom_name")),
-                    })}
+                    onChange={(value, selectedRow) =>
+                      updateRow(row.id, {
+                        p_uom: value,
+                        uom_name: text(getLookupValue(selectedRow || {}, "uom_name")) || row.uom_name,
+
+                      })
+                    }
                   />
                 </td>
                 <td className="finance-amount-cell w-24 px-2 py-1">
@@ -171,18 +186,32 @@ export function PurchaseOrderLinesTable({
                 <td className="w-64 px-2 py-1">
                   <LookupField
                     label=""
-                    value={row.uom_code || ""}
-                    displayValue={row.uom_name ? `${row.uom_code} - ${row.uom_name}` : row.uom_code}
-                    columns={[{ field: "uom_code", header: "Code" }, { field: "uom_name", header: "Name" }, { field: "p_uom", header: "P Uom" }, { field: "unit_price", header: "Unit Price" }]}
+                    value={row.l_uom || ""}
+                    displayValue={
+                      row.l_uom
+                    }
+                    columns={[
+                      { field: "uom_code", header: "Code" },
+                      { field: "uom_name", header: "Name" },
+                      { field: "unit_price", header: "Unit Price" },
+                    ]}
                     valueField="uom_code"
                     displayFields={["uom_code", "uom_name"]}
-                    loadOptions={() => getDynamicLookup({ parameter: "PS_POORDER_ENTRY_UOM_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
+                    loadOptions={() =>
+                      getDynamicLookup({
+                        parameter: "PS_POORDER_ENTRY_UOM_LIST",
+                        code1: companyCode,
+                        loginid: loginid || "ADMIN",
+                      })
+                    }
                     disabled={headerAndLineDisabled}
-                    onChange={(value, selectedRow) => updateRow(row.id, {
-                      uom_code: value,
-                      uom_name: text(getLookupValue(selectedRow || {}, "uom_name")),
-                     
-                    })}
+                    onChange={(value, selectedRow) =>
+                      updateRow(row.id, {
+                        l_uom: value,
+                        uom_name: text(getLookupValue(selectedRow || {}, "uom_name")) || row.uom_name,
+
+                      })
+                    }
                   />
                 </td>
                 <td className="finance-amount-cell w-24 px-2 py-1">
@@ -210,8 +239,8 @@ export function PurchaseOrderLinesTable({
                 <td className="w-32 px-2 py-1">
                   <Input type="date" disabled={headerAndLineDisabled} value={row.req_date} onChange={(event) => updateRow(row.id, { req_date: event.target.value })} />
                 </td>
-                <td className="w-40 px-2 py-1">
-                  <Input disabled={headerAndLineDisabled} value={row.line_remarks} onChange={(event) => updateRow(row.id, { line_remarks: event.target.value })} />
+                <td className="w-40 px-2 py-1 border border-gray-300 rounded-md">
+                  <textarea disabled={headerAndLineDisabled} value={row.line_remarks} onChange={(event) => updateRow(row.id, { line_remarks: event.target.value })} />
                 </td>
                 <td className="w-32 px-2 py-1">
                   <Input disabled={headerAndLineDisabled} value={row.tax_cat} onChange={(event) => updateRow(row.id, { tax_cat: event.target.value })} />
