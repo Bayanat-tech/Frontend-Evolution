@@ -392,8 +392,8 @@ saveEndpoint: (form, { editMode, original }) => {
       { name: "rcpt_exp_limit", label: "Inbound Exp Limit (days)", type: "number", tab: "settings", section: "PRODUCT AND SHIPMENT SETTINGS" },
       // Storage Info Tab - Location
       { name: "pref_site", label: "Preferred Site", dropdownParam: "DROP_DOWN_SITE", dropdownDisplayFields: ["site_code", "site_name"], dropdownValueKey: "site_code", tab: "storage-info", section: "LOCATION" },
-      { name: "pref_loc_from", label: "Location From", dropdownParam: "DROP_DOWN_LOCATION", dropdownCodeMap: { preferred_site: "code1" }, dropdownDisplayFields: ["location_code", "location_name"], dropdownValueKey: "location_code", tab: "storage-info", section: "LOCATION" },
-      { name: "pref_loc_to", label: "Location To", dropdownParam: "DROP_DOWN_LOCATION", dropdownCodeMap: { preferred_site: "code1", location_from: "code2" }, dropdownDisplayFields: ["location_code", "location_name"], dropdownValueKey: "location_code", tab: "storage-info", section: "LOCATION" },
+      { name: "pref_loc_from", label: "Location From", dropdownParam: "DROP_DOWN_LOCATION", dropdownCodeMap: { pref_site: "code1" }, dropdownDisplayFields: ["location_code", "location_name"], dropdownValueKey: "location_code", tab: "storage-info", section: "LOCATION" },
+      { name: "pref_loc_to", label: "Location To", dropdownParam: "DROP_DOWN_LOCATION", dropdownCodeMap: { pref_site: "code1", pref_loc_from: "code2" }, dropdownDisplayFields: ["location_code", "location_name"], dropdownValueKey: "location_code", tab: "storage-info", section: "LOCATION" },
       { name: "pref_aisle_from", label: "Aisle From", type: "text", tab: "storage-info", section: "LOCATION" },
       { name: "pref_aisle_to", label: "Aisle To", type: "text", tab: "storage-info", section: "LOCATION" },
       { name: "pref_col_from", label: "Column From", type: "number", tab: "storage-info", section: "LOCATION" },
