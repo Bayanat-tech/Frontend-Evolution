@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Plus, Edit2, Save, Send, X, CheckCircle,
   ChevronLeft, Paperclip, FileText, Trash2,
+  Printer,
 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
@@ -16,6 +17,7 @@ import { Select } from "../../components/ui/Select";
 
 import type { TPRHeader, TPRItem } from "./PurchaseSummary-types";
 import { almsSave, almsCommonSelect } from "../../api/alms";
+import { openPRPurchaseReport } from "../../api/transactions";
 
 type AddPRRequestPageProps = {
   isEditMode: boolean;
@@ -216,7 +218,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const [headerExpanded, setHeaderExpanded] = useState(true);
 
   // ─── Save Functions ───────────────────────────────────────────────
- const saveHeader = async (status: string) => almsSave({
+  const saveHeader = async (status: string) => almsSave({
     parameter: "purchase_request_header_ins_upd",
     loginid,
     val1s1: requestNumber || "",
@@ -225,7 +227,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     val1s4: header.DESCRIPTION || "",
     val1s5: header.REMARKS || "",
     val1s6: (header as any).DEPARTMENT_CODE || "",
-    val1s7: "101", 
+    val1s7: "101",
     val1s8: status,
     val1s9: header.CURR_CODE || "",
     val1s10: header.TX_CAT_CODE || "",
@@ -308,6 +310,19 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const handleSaveDraft = () => runAction("DRAFT", "Draft saved successfully!");
   const handleSubmit = () => runAction("SUBMITTED", "PR submitted successfully!");
 
+  const handlePrint = () => {
+    if (!requestNumber) {
+      setNotice({ type: "error", message: "Please save the request before printing." });
+      return;
+    }
+    openPRPurchaseReport({
+      parameter: "Amlspf_PRReport",
+      loginid,
+      code1: companyCode,
+      code2: requestNumber,
+    });
+  };
+
   const handleApprove = async () => {
     if (!requestNumber) return setNotice({ type: "error", message: "No PR to approve" });
     setSaving(true); setNotice(null);
@@ -377,7 +392,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
         BASE_AMOUNT: num(item.AMOUNT) * num(hdr.CURRENCY_RATE || item.CURRENCY_RATE || 1),
         TX_COMPNT_AMT_1: (num(item.AMOUNT) * num(hdr.TX_COMPNT_PERC_1 || item.TX_COMPNT_PERC_1 || 0)) / 100,
         FINAL_AMOUNT: (num(item.AMOUNT) * num(hdr.CURRENCY_RATE || item.CURRENCY_RATE || 1)) +
-                     ((num(item.AMOUNT) * num(hdr.TX_COMPNT_PERC_1 || item.TX_COMPNT_PERC_1 || 0)) / 100),
+          ((num(item.AMOUNT) * num(hdr.TX_COMPNT_PERC_1 || item.TX_COMPNT_PERC_1 || 0)) / 100),
       }))
     );
   };
@@ -648,13 +663,13 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                           <label className="field">
                             <span>Request Date</span>
                             <Input
-  disabled={disabled}
-  type="date"
-  min={new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}
-  value={header.REQUEST_DATE ? String(header.REQUEST_DATE).slice(0, 10) : ""}
-  onChange={(e) => setHdr("REQUEST_DATE", e.target.value)}
-  className="w-full"
-/>
+                              disabled={disabled}
+                              type="date"
+                              min={new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}
+                              value={header.REQUEST_DATE ? String(header.REQUEST_DATE).slice(0, 10) : ""}
+                              onChange={(e) => setHdr("REQUEST_DATE", e.target.value)}
+                              className="w-full"
+                            />
                           </label>
                         </div>
                         <div className="col-span-1">
@@ -1326,24 +1341,24 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                               />
                             </td>
                             <td className="px-2 py-1 w-[220px] min-w-[220px]">
-  <Input
-    value={term.USER_DT ? formatDateToDDMMYYYY(term.USER_DT) : ""}
-    onChange={(e) => {
-      // Parse dd-mm-yyyy back to ISO format for storage
-      const formattedDate = e.target.value;
-      if (formattedDate) {
-        const [day, month, year] = formattedDate.split('-');
-        const isoDate = `${year}-${month}-${day}T00:00:00.000Z`;
-        updateTermField(term.id, "user_dt", isoDate);
-      } else {
-        updateTermField(term.id, "user_dt", "");
-      }
-    }}
-    disabled={disabled}
-    className="h-9 text-sm"
-    placeholder="DD-MM-YYYY"
-  />
-</td>
+                              <Input
+                                value={term.USER_DT ? formatDateToDDMMYYYY(term.USER_DT) : ""}
+                                onChange={(e) => {
+                                  // Parse dd-mm-yyyy back to ISO format for storage
+                                  const formattedDate = e.target.value;
+                                  if (formattedDate) {
+                                    const [day, month, year] = formattedDate.split('-');
+                                    const isoDate = `${year}-${month}-${day}T00:00:00.000Z`;
+                                    updateTermField(term.id, "user_dt", isoDate);
+                                  } else {
+                                    updateTermField(term.id, "user_dt", "");
+                                  }
+                                }}
+                                disabled={disabled}
+                                className="h-9 text-sm"
+                                placeholder="DD-MM-YYYY"
+                              />
+                            </td>
                             <td className="px-2 py-1 text-center w-[55px] min-w-[55px]">
                               {!isViewMode && (
                                 <Button
@@ -1370,7 +1385,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
         </div>
 
         {/* ─── Footer ─── */}
-       <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
+        <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
           <div className="text-sm text-muted-foreground">
             Net Amount <strong className="text-primary">{fmt3(totalFinalAmount)}</strong>
           </div>
@@ -1381,6 +1396,15 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
               <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-emerald-600 hover:bg-emerald-700" onClick={handleApprove}><CheckCircle size={15} /> Approve</Button>
               <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-destructive hover:bg-destructive/90" onClick={() => { setRemarkText(""); setRejectOpen(true); }}><X size={15} /> Reject</Button>
               <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-purple-600 hover:bg-purple-700" onClick={() => { setRemarkText(""); setSendBackOpen(true); }}><ChevronLeft size={15} /> Send Back</Button>
+              <Button
+                disabled={saving}
+                type="button"
+                variant="default"
+                className="min-w-[110px] justify-center bg-gray-600 hover:bg-gray-700"
+                onClick={handlePrint}
+              >
+                <Printer size={15} /> Print
+              </Button>
               <Button disabled={saving || !requestNumber} type="button" variant="default" className="min-w-[110px] justify-center bg-indigo-600 hover:bg-indigo-700" onClick={handleGeneratePO}>Generate PO</Button>
             </div>
           )}

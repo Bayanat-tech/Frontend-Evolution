@@ -21,6 +21,9 @@ export interface PurchaseOrderRow {
   doc_date: string;
   quotn_no?: string;
   quotn_date?: string;
+   ref_no?: string;
+  ref_date?: string;
+  dept_name?: string;
   div_code: string;
   div_name?: string;
   ac_code: string;

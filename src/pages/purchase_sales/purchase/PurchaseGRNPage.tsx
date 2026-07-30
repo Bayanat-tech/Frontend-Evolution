@@ -12,7 +12,7 @@ import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { TabStrip } from "../../vendor/components";
 import { PurchaseOrderEditorState } from "./Purchaseordereditor";
-import { GRN_CONFIG } from "./Purchaseordertypes";
+import { GRN_CONFIG, PO_DOC_TYPE } from "./Purchaseordertypes";
 import { PurchaseGRNEditor } from "./PurchaseGRNeditor";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
@@ -112,6 +112,7 @@ export function PurchaseGRNPage({ onClose }: { onClose?: () => void } = {}) {
       code1: user?.company_code,
       code2: user?.loginid || user?.username || "ADMIN",
       code3: tab,
+      code4: PO_DOC_TYPE.GRN
     });
 
     return response as unknown as PurchaseOrderRow[];

@@ -12,7 +12,7 @@ import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { TabStrip } from "../../vendor/components";
 import { PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchaseordereditor";
-import {  GRN_CONFIG } from "../../purchase_sales/purchase/Purchaseordertypes";
+import {  GRN_CONFIG, JP_CONFIG, PO_DOC_TYPE } from "../../purchase_sales/purchase/Purchaseordertypes";
 import { ProductionJobOrderEditor } from "./ProductionJobOrdereditor";
 import { JobProductionOrderEditor } from "./JobProductioneditor";
 
@@ -109,10 +109,11 @@ export function JobProductionOrderPage({ onClose }: { onClose?: () => void } = {
   // TODO: confirm lookup parameter name against your Oracle package (mirrors MS_BUDGET_ACCOUNT_TAB__List).
   const fetchPurchaseOrders = async () => {
     const response = await getDynamicLookup({
-      parameter: "PS_JORDER_ENTRY_TAB_List",
+      parameter: "PS_GRN_ENTRY_TAB_List",
       code1: user?.company_code,
       code2: user?.loginid || user?.username || "ADMIN",
       code3: tab,
+       code4: PO_DOC_TYPE.FGP
     });
 
     return response as unknown as PurchaseOrderRow[];
@@ -287,7 +288,7 @@ export function JobProductionOrderPage({ onClose }: { onClose?: () => void } = {
         <div className="fixed inset-0 z-50 bg-background">
           <JobProductionOrderEditor
             key={editor?.mode === "edit" ? editor.row.doc_no : editor?.mode || "create"}
-            config={GRN_CONFIG}
+            config={JP_CONFIG}
             editor={editor}
             isPendingTab={isPendingTab}
             onClose={() => setEditor(null)}

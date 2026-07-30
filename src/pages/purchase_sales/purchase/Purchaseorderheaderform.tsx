@@ -65,10 +65,10 @@ export function PurchaseOrderHeaderForm({
           <Input type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(event) => updateField("doc_date", event.target.value)} />
         </CField>
         <CField label="Quotn No">
-          <Input disabled={headerAndLineDisabled} value={form.quotn_no} onChange={(event) => updateField("quotn_no", event.target.value)} />
+          <Input disabled={headerAndLineDisabled} value={form.ref_no} onChange={(event) => updateField("ref_no", event.target.value)} />
         </CField>
         <CField label="Quotn Date">
-          <Input type="date" disabled={headerAndLineDisabled} value={form.quotn_date} onChange={(event) => updateField("quotn_date", event.target.value)} />
+          <Input type="date" disabled={headerAndLineDisabled} value={form.ref_date} onChange={(event) => updateField("ref_date", event.target.value)} />
         </CField>
 
         <div className="col-span-1">
@@ -113,9 +113,38 @@ export function PurchaseOrderHeaderForm({
         <CField label="Credit Period">
           <Input disabled={headerAndLineDisabled} type="number" step="1" value={form.credit_period} onChange={(event) => updateField("credit_period", Number(event.target.value || 0))} />
         </CField>
-        <CField label="Dept Code">
-          <Input disabled={headerAndLineDisabled} value={form.dept_code} onChange={(event) => updateField("dept_code", event.target.value)} />
-        </CField>
+        <div className="col-span-1">
+          <LookupField
+            label="Department"
+            value={form.dept_code || ""}
+            displayValue={
+              form.dept_name
+                ? `${form.dept_code} - ${form.dept_name}`
+                : form.dept_code
+            }
+            columns={[
+              { field: "dept_code", header: "Code" },
+              { field: "dept_name", header: "Name" },
+            ]}
+            valueField="dept_code"
+            displayFields={["dept_code", "dept_name"]}
+            loadOptions={() =>
+              getDynamicLookup({
+                parameter: "DROP_DOWN_DEPT_BASED_ON_DIV",
+                code1: companyCode,
+                loginid: loginid || "ADMIN",
+              })
+            }
+            disabled={headerAndLineDisabled}
+            onChange={(value, row) =>
+              setForm((current) => ({
+                ...current,
+                dept_code: value,
+                dept_name: text(getLookupValue(row || {}, "dept_name")),
+              }))
+            }
+          />
+        </div>
         <CField label="Address" className="col-span-2">
           <Input disabled={headerAndLineDisabled} value={form.address} onChange={(event) => updateField("address", event.target.value)} />
         </CField>
