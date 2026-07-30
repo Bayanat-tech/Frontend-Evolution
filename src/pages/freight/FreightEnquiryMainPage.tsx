@@ -248,11 +248,12 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
     ["SUBMITTED", "APPROVED"].includes(header.last_action) &&
     header.final_approved !== "Y";
   const isReadOnly = isLocked || isApprovalInProgress;
+  const isAssignedWorkflowUser = !header.next_action_by || header.next_action_by === loginId;
   const canSubmit =
     approvalEnabled &&
     Boolean(header.enquiry_nr) &&
     !isReadOnly &&
-    (!header.last_action || header.last_action === "SAVEASDRAFT" || header.last_action === "SENTBACK");
+    (!header.last_action || header.last_action === "SAVEASDRAFT" || (header.last_action === "SENTBACK" && isAssignedWorkflowUser));
   const canApprove =
     approvalEnabled &&
     Boolean(header.enquiry_nr) &&
@@ -260,7 +261,13 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
     !isCancelled &&
     !isRejected &&
     isApprovalInProgress &&
-    (!header.next_action_by || header.next_action_by === loginId);
+    isAssignedWorkflowUser;
+  const canDirectApprove =
+    !approvalEnabled &&
+    Boolean(header.enquiry_nr) &&
+    !isApproved &&
+    !isCancelled &&
+    !isRejected;
   const attachmentRequestNumber = header.enquiry_nr ? `${header.company_code}-${header.enquiry_type}-${header.enquiry_nr}` : "";
   const sourceAttachmentRequestNumbers = useMemo(() => {
     if (!isRfq || !header.ref_enquiry_nr) return [];
@@ -651,6 +658,38 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
     void runWorkflowAction("APPROVED", remarks);
   };
 
+  const directApproveEnquiry = async () => {
+    if (!header.enquiry_nr) {
+      setNotice({ type: "error", text: `Save ${enquiryLabel.toLowerCase()} before approval` });
+      return;
+    }
+    const remarks = window.prompt("Approval remarks", "") || "";
+    setApproving(true);
+    setNotice(null);
+    try {
+      const response = await api.post<{ success?: boolean; message?: string }>(
+        isRfq ? "/api/freight/rfq/approve" : "/api/freight/enquiry/approve",
+        {
+          company_code: header.company_code,
+          enquiry_type: header.enquiry_type,
+          enquiry_nr: header.enquiry_nr,
+          approved_by: loginId,
+          approval_remarks: remarks,
+        },
+      );
+      if (response.data?.success === false) {
+        throw new Error(response.data.message || `Unable to approve ${enquiryLabel}`);
+      }
+      setHeader((current) => ({ ...current, indstatus: "A", final_approved: "Y", last_action: "APPROVED" }));
+      setNotice({ type: "success", text: response.data?.message || `${enquiryLabel} approved` });
+      await loadEnquiries();
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : `Unable to approve ${enquiryLabel}` });
+    } finally {
+      setApproving(false);
+    }
+  };
+
   const sendBackEnquiry = () => {
     const sentbackTo = window.prompt("Send back to user/employee id", header.submitted_by || "") || "";
     if (!sentbackTo.trim()) return;
@@ -926,6 +965,12 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
             <Button type="button" size="sm" variant="outline" onClick={submitForApproval} disabled={approving || saving}>
               <ShieldCheck size={14} />
               {isSentBack ? "Resubmit" : "Submit"}
+            </Button>
+          )}
+          {canDirectApprove && (
+            <Button type="button" size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={directApproveEnquiry} disabled={approving || saving}>
+              <ShieldCheck size={14} />
+              {approving ? "Working" : "Approve"}
             </Button>
           )}
           {canApprove && (
