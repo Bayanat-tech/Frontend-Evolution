@@ -20,6 +20,7 @@ type LookupFieldProps = {
   loadOptions: (query?: string) => Promise<LookupRow[]>;
   onChange: (value: string, row: LookupRow | null) => void;
   disabled?: boolean;
+  enforceRequired?: boolean;
   compact?: boolean;
   placeholder?: string;
   required?: boolean;
@@ -39,6 +40,7 @@ type LookupFieldProps = {
     compact,
     placeholder,
     required,
+    enforceRequired,
     multiSelect,
   }: LookupFieldProps) {
     const [open, setOpen] = useState(false);
@@ -51,6 +53,11 @@ type LookupFieldProps = {
     const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({});
     const triggerRef = useRef<HTMLDivElement | null>(null);
     const popoverRef = useRef<HTMLDivElement | null>(null);
+    const validityRef = useRef<HTMLInputElement | null>(null);
+
+    useEffect(() => {
+       validityRef.current?.setCustomValidity("");
+    }, [value]);
 
     useEffect(() => {
       setPage(1);
@@ -200,7 +207,20 @@ type LookupFieldProps = {
         <label className={compact ? "block w-full min-w-0" : "field"}>
           {!compact && <span>{label} {required && ( <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span>)}
         </span>}
-          <div ref={triggerRef} className={`flex w-full min-w-0 overflow-hidden rounded-md border bg-background ${compact ? "h-7" : "h-9"}`}>
+          {/* <div ref={triggerRef} className={`flex w-full min-w-0 overflow-hidden rounded-md border bg-background ${compact ? "h-7" : "h-9"}`}> */}
+          <div ref={triggerRef} className={`relative flex w-full min-w-0 overflow-hidden rounded-md border bg-background ${compact ? "h-7" : "h-9"}`}> 
+             {enforceRequired && (
+             <input
+              ref={validityRef}
+              tabIndex={-1}
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 h-full w-full border-0 bg-transparent p-0 opacity-0"
+              value={value}
+              required
+              onChange={() => {}}
+              onInvalid={(e) => (e.target as HTMLInputElement).setCustomValidity(`${label || "This field"} is required`)}
+             />
+           )}
             <button
               className={`min-w-0 flex-1 border-0 bg-transparent text-left text-foreground disabled:opacity-60 ${compact ? "px-2 text-xs" : "px-3 text-sm"}`}
               type="button"

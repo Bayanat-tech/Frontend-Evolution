@@ -2814,7 +2814,8 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 }
 
 .freight-info-body label {
-  color: var(--muted);
+  /* color: var(--muted); */
+  color: #334155;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -2825,8 +2826,8 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .freight-info-body select {
   min-height: 25px;
   border-radius: 6px;
-  border-color: #d8e0ec;
-  background: #ffffff;
+  border-color: #94a3b8;
+  background: #f1f5f9;
   color: var(--text);
   font-size: 11px;
   font-weight: 600;
@@ -2860,8 +2861,8 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   gap: 5px;
 }
 
-.freight-dense-form .freight-tabs-shell > .freight-tabs-panel {
-  padding: 6px;
+.freight-dense-form .freight-tabs-shell .freight-tabs-panel {
+  padding: 6.5px;
 }
 
 .freight-dense-form .freight-section-heading {
@@ -2886,6 +2887,45 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 
 .freight-dense-form .freight-panel-body {
   padding: 5px;
+}
+
+/* Equalize field heights + darken labels/border in the quotation header form */
+.freight-dense-form .freight-form-card {
+  border-color: #94a3b8; /* darker outer box border */
+}
+
+.freight-dense-form .freight-form-card label > span:first-child {
+  color: #111827; /* darker column/label text (was muted-foreground) */
+}
+
+/* .freight-dense-form .freight-form-card :where(
+  .ui-input,
+  .ui-select,
+  .ui-textarea,
+  input,
+  select,
+  textarea,
+  .lookup-field-trigger,
+  button[role="combobox"]
+) {
+  height: 28px !important;
+  min-height: 28px !important;
+} */
+
+.freight-dense-form .freight-form-card :where(
+  .ui-input,
+  .ui-select,
+  .ui-textarea,
+  input,
+  select,
+  textarea,
+  .lookup-field-trigger,
+  button[role="combobox"]
+) {
+  height: 28px !important;
+  min-height: 28px !important;
+  border-color: #94a3b8 !important;
+  background-color: #f1f5f9 !important;
 }
 
 @media (max-width: 1024px) {

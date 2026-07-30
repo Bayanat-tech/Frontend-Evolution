@@ -792,6 +792,17 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
       setNotice({ type: "error", text: `${statusLabel(header.indstatus, header.last_action, header.final_approved)} ${enquiryLabel.toLowerCase()} is read-only` });
       return;
     }
+
+  const failedCheck = requiredFieldChecks.find((check) => !check.test());
+  if (failedCheck) {
+    if (activeTab !== failedCheck.tab) {
+      setActiveTab(failedCheck.tab);
+      setPendingValidateTab(failedCheck.tab);
+    } else {
+      formRef.current?.reportValidity();
+    }
+    return;
+  }
     setSaving(true);
     setNotice(null);
     try {
@@ -929,19 +940,19 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
             <p className="eyebrow mb-0.5">{isRfq ? "Freight RFQ" : "Freight Enquiry"}</p>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{isRfq ? "Request For Quote" : "Freight Enquiry"}</h1>
-              <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">
+              {/* <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">
                 {header.enquiry_nr || (isRfq ? "New RFQ" : "New enquiry")}
-              </span>
+              </span> */}
               <span className={statusBadgeClass(header.indstatus, header.last_action, header.final_approved)}>
                 {statusLabel(header.indstatus, header.last_action, header.final_approved)}
               </span>
             </div>
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-              <span>{modeLabel(header.transport_mode)}</span>
+              {/* <span>{modeLabel(header.transport_mode)}</span> */}
               <span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
-              <span>{header.job_type === "IMP" ? "Import" : "Export"}</span>
+              {/* <span>{header.job_type === "IMP" ? "Import" : "Export"}</span> */}
               <span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
-              <span>{header.prin_code || "Principal pending"}</span>
+              <span>{header.enquiry_nr}</span>
             </div>
           </div>
         </div>
@@ -1766,7 +1777,17 @@ function FormInput({
   return (
     <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
       {label}
-      <Input className={`h-7 text-[11px] ${inputClassName}`} value={value} type={type} required={required} placeholder={placeholder} disabled={disabled} onChange={(event) => onChange(event.target.value)} />
+      <Input
+        className={`h-7 text-[11px] ${inputClassName}`}
+        value={value}
+        type={type}
+        required={required}
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
+        onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")}
+      />
     </label>
   );
 }
@@ -1832,6 +1853,7 @@ function FormLookup({
         loadOptions={loadOptions}
         onChange={onChange}
         required={required}
+        enforceRequired={required}
         placeholder={`Select ${label}`}
       />
     </div>
@@ -1852,16 +1874,33 @@ function FormSelect({
    required?: boolean;
 }) {
   return (
-    <label className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
+    // <label className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
+    //   <span> {label} {required && <span style={{ color: "#E24B4A" }}>*</span>} </span>
+    //   <select className={fieldClassName} value={value} required={required} onChange={(event) => onChange(event.target.value)}>
+    //     {options.map((option) => (
+    //       <option key={option.value} value={option.value}>
+    //         {option.label}
+    //       </option>
+    //     ))}
+    //   </select>
+    // </label>
+
+     <label className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
       <span> {label} {required && <span style={{ color: "#E24B4A" }}>*</span>} </span>
-      <select className={fieldClassName} value={value} required={required} onChange={(event) => onChange(event.target.value)}>
+      <select
+        className={fieldClassName}
+        value={value}
+        required={required}
+        onChange={(event) => onChange(event.target.value)}
+        onInvalid={(event) => (event.target as HTMLSelectElement).setCustomValidity(`${label} is required`)}
+        onInput={(event) => (event.target as HTMLSelectElement).setCustomValidity("")}
+      >
         {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
+          <option key={option.value} value={option.value}>{option.label}</option>
         ))}
       </select>
     </label>
+
   );
 }
 

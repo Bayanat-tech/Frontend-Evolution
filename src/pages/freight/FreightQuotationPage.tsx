@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -174,6 +174,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   const [notice, setNotice] = useState<Notice>(null);
   const [assistOpen, setAssistOpen] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const [pendingValidateTab, setPendingValidateTab] = useState<FreightQuotationInitialTab | null>(null);
 
   useEffect(() => {
     if (!notice) return;
@@ -181,6 +183,16 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
     else toast.error(notice.text);
     setNotice(null);
   }, [notice, toast]);
+
+  useEffect(() => {
+  if (pendingValidateTab && activeTab === pendingValidateTab) {
+    const frame = requestAnimationFrame(() => {
+      formRef.current?.reportValidity();
+      setPendingValidateTab(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }
+ }, [activeTab, pendingValidateTab]);
 
   const loginId = String(userInfo?.loginid || userInfo?.USERID || userInfo?.user_id || userInfo?.username || "");
   const attachmentRequestNumber = header.quotation_nr ? `${header.company_code}-QTN-${header.quotation_nr}` : "";
@@ -199,6 +211,13 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   const isApproved = header.indstatus === "A";
   const isLocked = isApproved;
   const canApprove = Boolean(header.quotation_nr) && !isApproved;
+
+  const requiredFieldChecks: { tab: FreightQuotationInitialTab; test: () => boolean; label: string }[] = [
+  { tab: "cargo", test: () => Boolean(header.prin_code), label: "Principal" },
+  { tab: "cargo", test: () => Boolean(header.origin_port), label: "Port of Loading" },
+  { tab: "payment", test: () => Boolean(header.curr_code), label: "Currency" },
+  { tab: "payment", test: () => Number(header.ex_rate || 0) > 0, label: "Exchange Rate" },
+ ];
 
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
     {
@@ -466,6 +485,17 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       setNotice({ type: "error", text: "Approved quotation is read-only" });
       return;
     }
+
+  const failedCheck = requiredFieldChecks.find((check) => !check.test());
+  if (failedCheck) {
+    if (activeTab !== failedCheck.tab) {
+      setActiveTab(failedCheck.tab);
+      setPendingValidateTab(failedCheck.tab);
+    } else {
+      formRef.current?.reportValidity();
+    }
+    return;
+  }
     setSaving(true);
     setNotice(null);
     try {
@@ -565,21 +595,22 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
 
   return (
     <>
-      <form className="freight-dense-form" onSubmit={saveQuotation}>
+      {/* <form className="freight-dense-form" onSubmit={saveQuotation}> */}
+      <form ref={formRef} className="freight-dense-form" onSubmit={saveQuotation}>
         <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={15} /></div>
             <div className="min-w-0">
-              <p className="eyebrow mb-0.5">Freight Quotation</p>
+              <p className="eyebrow m-0 text-lg">Freight Quotation</p>
               <div className="flex flex-wrap items-center gap-1.5">
-                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Quotation</h1>
-                <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">{header.quotation_nr || "New quotation"}</span>
+                {/* <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Quotation</h1> */}
+                {/* <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">{header.quotation_nr || "New quotation"}</span> */}
                 <span className={statusBadgeClass(header.indstatus)}>{statusLabel(header.indstatus)}</span>
               </div>
               <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-                <span>{modeLabel(header.transport_mode)}</span><span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
-                <span>{jobTypeLabel(header.job_type)}</span><span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
-                <span>{header.prin_code || "Principal pending"}</span>
+                {/* <span>{modeLabel(header.transport_mode)}</span><span className="h-1 w-1 rounded-full bg-muted-foreground/50" /> */}
+                {/* <span>{jobTypeLabel(header.job_type)}</span><span className="h-1 w-1 rounded-full bg-muted-foreground/50" /> */}
+                <h1>{header.quotation_nr}</h1>
               </div>
             </div>
           </div>
@@ -606,14 +637,13 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
         <fieldset disabled={isLocked} className="contents">
         <section className="freight-form-card rounded-md border bg-card shadow-sm">
           <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-11">
-            <FormInput label="Quotation No" value={header.quotation_nr} onChange={(value) => setHeaderField("quotation_nr", value)} placeholder="Auto" />
+            <FormInput label="Quotation No" value={header.quotation_nr} onChange={(value) => setHeaderField("quotation_nr", value)} placeholder="Auto" disabled />
             <FormInput label="Date" type="date" value={header.quotation_date} onChange={(value) => setHeaderField("quotation_date", value)} required />
-            <FormLookup label="Principal" value={header.prin_code} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required />
+            <FormLookup label="Principal" value={header.prin_code} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required className="sm:col-span-2 xl:col-span-2"/>
             <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }, { field: "prin_telno1", header: "Phone" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} className="sm:col-span-2 xl:col-span-2" />
-            {/* <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayFields={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }, { field: "prin_telno1", header: "Phone" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} className="sm:col-span-2 xl:col-span-1.5" /> */}
-            <FormInput label="Department" value={header.dept_code} onChange={(value) => setHeaderField("dept_code", value)} required />
+            <FormInput label="Department" value={header.dept_code} onChange={(value) => setHeaderField("dept_code", value)} required className="sm:col-span-2 xl:col-span-2" />
             {!header.quotation_nr ? (
-              <FormLookup label="Source Enquiry/RFQ" value={header.enquiry_no} valueField="enquiry_nr" displayFields={["enquiry_nr", "enquiry_date_display"]} columns={[{ field: "enquiry_nr", header: "Enquiry" }, { field: "enquiry_date_display", header: "Date" }, { field: "enquiry_type", header: "Type" }, { field: "prin_code", header: "Principal" }]} loadOptions={() => loadEnquiryLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("enquiry_no", value, row)} />
+              <FormLookup label="Source Enquiry/RFQ" value={header.enquiry_no} valueField="enquiry_nr" displayFields={["enquiry_nr", "enquiry_date_display"]} columns={[{ field: "enquiry_nr", header: "Enquiry" }, { field: "enquiry_date_display", header: "Date" }, { field: "enquiry_type", header: "Type" }, { field: "prin_code", header: "Principal" }]} loadOptions={() => loadEnquiryLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("enquiry_no", value, row)} className="sm:col-span-2 xl:col-span-2" />
             ) : (
               <ReadOnlyField label="Source Enquiry/RFQ" value={header.enquiry_no || "-"} />
             )}
@@ -624,8 +654,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
             <FormSelect label="Member Type" value={header.member_type} onChange={(value) => setHeaderField("member_type", value)} options={memberTypes.map((value) => ({ value, label: value || "Blank" }))} />
             <FormSelect label="Sale Type" value={header.sale_type} onChange={(value) => setHeaderField("sale_type", value)} options={saleTypes.map((value) => ({ value, label: value }))} />
             <FormSelect label="Job Category" value={header.job_category} onChange={(value) => setHeaderField("job_category", value)} options={jobCategories.map((value) => ({ value, label: value }))} />
-            <FormInput label="Contact Person" value={header.contact_person} onChange={(value) => setHeaderField("contact_person", value)} />
-            <FormInput label="Subject" value={header.subject} onChange={(value) => setHeaderField("subject", value)} />
+            <FormInput label="Contact Person" value={header.contact_person} onChange={(value) => setHeaderField("contact_person", value)} className="sm:col-span-2 xl:col-span-2" />
+            <FormInput label="Subject" value={header.subject} onChange={(value) => setHeaderField("subject", value)} className="sm:col-span-2 xl:col-span-2" />
           </div>
         </section>
         </fieldset>
@@ -652,7 +682,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                 </SectionPanel>
                 <SectionPanel className="xl:col-span-6" icon={MapPinned} title="Journey" meta={`${header.origin_port || "Origin"} -> ${header.destination_port || "Destination"}`}>
                   <div className="grid gap-1 sm:grid-cols-2">
-                    <FormLookup label="Port of Loading" value={header.origin_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("origin_port", value, row)} />
+                    <FormLookup label="Port of Loading" value={header.origin_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("origin_port", value, row)} required />
                     <FormLookup label="Port of Destination" value={header.destination_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("destination_port", value, row)} />
                     <FormInput label="Country Origin" value={header.country_origin} onChange={(value) => setHeaderField("country_origin", value)} />
                     <FormInput label="Country Destn" value={header.country_destination} onChange={(value) => setHeaderField("country_destination", value)} />
@@ -665,10 +695,15 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                     <FormLookup label="Forwarder" value={header.forwarder_code} valueField="forwarder_code" displayFields={["forwarder_code", "forwarder_name"]} columns={[{ field: "forwarder_code", header: "Code" }, { field: "forwarder_name", header: "Forwarder" }]} loadOptions={() => loadForwarderLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("forwarder_code", value, row)} />
                     <FormInput label="Transit" value={header.transit_time} onChange={(value) => setHeaderField("transit_time", value)} />
                     <FormInput label="Frequency" value={header.frequency} onChange={(value) => setHeaderField("frequency", value)} />
+                    {header.transport_mode === "S" && (
+                    <>
                     <FormInput label="Container Type" value={header.container_type} onChange={(value) => setHeaderField("container_type", value)} />
                     <FormInput label="No of Containers" type="number" value={header.no_of_contaners} onChange={(value) => setHeaderField("no_of_contaners", value)} />
-                    <FormLookup label="Vehicle Type" value={header.vehicle_type} valueField="vtype_code" displayFields={["vtype_code", "vtype_name"]} columns={[{ field: "vtype_code", header: "Code" }, { field: "vtype_name", header: "Vehicle Type" }]} loadOptions={() => loadVehicleTypeLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("vehicle_type", value, row)} />
                     <FormInput label="T/F" value={header.t_f} onChange={(value) => setHeaderField("t_f", value)} />
+                    </>)}
+                    {header.transport_mode === "R" && (
+                    <><FormLookup label="Vehicle Type" value={header.vehicle_type} valueField="vtype_code" displayFields={["vtype_code", "vtype_name"]} columns={[{ field: "vtype_code", header: "Code" }, { field: "vtype_name", header: "Vehicle Type" }]} loadOptions={() => loadVehicleTypeLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("vehicle_type", value, row)} />
+                    </>)}
                     <FormTextarea label="Cargo Detail" value={header.cargo_detail} onChange={(value) => setHeaderField("cargo_detail", value)} compact />
                   </div>
                 </SectionPanel>
@@ -1133,12 +1168,42 @@ function buildSmartChecks(header: QuotationHeader, details: QuotationDetail[], t
   ];
 }
 
-function FormInput({ label, value, onChange, type = "text", required, placeholder, className = "" }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean; placeholder?: string; className?: string }) {
-  return <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground ${className}`}>{label}{required && <span className="sr-only">required</span>}<Input className={fieldClassName} type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} /></label>;
+function FormInput({ label, value, onChange, type = "text", required, placeholder, className = "",disabled }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean; placeholder?: string; className?: string; disabled?: boolean }) {
+  return (
+    <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground ${className}`}>
+      <span>{label} {required && <span style={{ color: "#E24B4A" }}>*</span>}</span>
+      <Input
+        className={fieldClassName}
+        type={type}
+        value={value}
+        required={required}
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
+        onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")}
+      />
+    </label>
+  );
 }
 
 function FormLookup({ label, value, valueField, displayFields, columns, loadOptions, onChange, required, className = "" }: { label: string; value: string; valueField: string; displayFields: string[]; columns: { field: string; header: string }[]; loadOptions: () => Promise<LookupRow[]>; onChange: (value: string, row: LookupRow | null) => void; required?: boolean; className?: string }) {
-  return <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground ${className}`}>{label}{required && <span className="sr-only">required</span>}<LookupField value={value} valueField={valueField} displayFields={displayFields} columns={columns} loadOptions={loadOptions} onChange={onChange} compact /></label>;
+  return (
+    <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground ${className}`}>
+      <span>{label}{required && <span style={{ color: "#E24B4A" }}>*</span>}</span>
+      <LookupField
+        value={value}
+        valueField={valueField}
+        displayFields={displayFields}
+        columns={columns}
+        loadOptions={loadOptions}
+        onChange={onChange}
+        required={required}
+        enforceRequired={required}
+        compact
+      />
+    </label>
+  );
 }
 
 function FormSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) {
@@ -1153,7 +1218,8 @@ function CellInput({ value, onChange, type = "text", className = "" }: { value: 
   return <td className="px-1 py-0.5"><Input className={`h-6 text-[11px] ${className}`} type={type} value={value} onChange={(event) => onChange(event.target.value)} /></td>;
 }
 
-const fieldClassName = "h-6 w-full rounded-md border border-input bg-background px-2 text-[11px] font-semibold text-foreground shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:bg-muted disabled:text-muted-foreground";
+// const fieldClassName = "h-6 w-full rounded-md border border-input bg-background px-2 text-[11px] font-semibold text-foreground shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:bg-muted disabled:text-muted-foreground";
+const fieldClassName = "h-6 w-full rounded-md border border-slate-400 bg-slate-100 px-2 text-[11px] font-semibold text-foreground shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:bg-muted disabled:text-muted-foreground";
 const portColumns = [{ field: "port_code", header: "Code" }, { field: "port_name", header: "Port" }, { field: "country_name", header: "Country" }];
 
 async function loadPrincipalLookup(companyCode: string) { return loadFreightLookup("freight_principal", companyCode); }
