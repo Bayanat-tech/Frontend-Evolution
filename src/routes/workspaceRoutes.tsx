@@ -135,6 +135,7 @@ import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation
 import StockCountPage from "../pages/wms/stock count/StockCountPage";
 import{ExpenseMasterPage} from "../pages/purchase_sales/Expensemasterpage";
 import MseProdGroup from "../pages/purchase_sales/MseProdGroup";
+import ProductPurchaseSales from "../pages/purchase_sales/ProductPurchaseSales";
 
 type WorkspaceRouteContext = {
   pathname: string;
@@ -154,12 +155,17 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
-
   {
     name: 'MSE Prod Group',
     match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_group"),
     element: () => <MseProdGroup />,
   },
+  {
+    name: 'Purchase Sales Product',
+    match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product"),
+    element: () => <ProductPurchaseSales />,
+  },
+
   {
     name: 'mms inspection report',
     match: ({pathname}) => pathname.toLowerCase().includes("/mms/mms/inspection/inspection-report"),

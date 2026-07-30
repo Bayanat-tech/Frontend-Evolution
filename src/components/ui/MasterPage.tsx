@@ -1,17 +1,18 @@
-import { CloudUpload, Edit2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { CloudUpload, Edit2, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { useToast } from "../../components/ui/AlertToast";
 import { Button } from "../../components/ui/Button";
 import { WmsDataTable } from "../../components/ui/WmsDataTable";
-import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../state/AuthContext";
-import { WmsMasterForm } from "../../components/WmsMasterForm";
+import { MasterForm } from "./MasterForm";
+import { cn } from "../../lib/utils";
+import { Dialog } from "./Dialog";
 
 
-export type WmsMasterField = {
+export type MasterField = {
   name: string;
   label: string;
   required?: boolean;
@@ -40,9 +41,10 @@ export type WmsMasterField = {
   colSpan?: number;
   align?: "left" | "center" | "right";
   maxLength?: number;
+  populateFields?: Record<string, string>;
 };
 
-export type WmsMasterFormTab = {
+export type MasterFormTab = {
   key: string;
   label: string;
 };
@@ -54,11 +56,14 @@ export type MasterPageConfig = {
   routeKeys?: string[];
   keyField?: string; // Single key field (fallback if keyFields not provided)
   keyFields?: string[]; // Multiple fields to compose unique row ID
-  fields: WmsMasterField[];
+  fields: MasterField[];
   defaults?: Record<string, unknown>;
   fieldsPerRow?: number; // Number of fields per row (default: 2)
+  sectionsPerRow?: number; // Number of sections per row (default: 1)
+  compact? : boolean; // Compact form layout
+  wide? : boolean; // Wide form layout
   mapAfterLoad?: (data: Record<string, unknown>) => Record<string, unknown>;
-  formTabs?: WmsMasterFormTab[];
+  formTabs?: MasterFormTab[];
 
   // Only supported data path now: caller supplies its own load/save/delete implementations.
   customLoad: (user: unknown) => Promise<{ tableData: Record<string, unknown>[]; count?: number }>;
@@ -70,6 +75,18 @@ export type MasterPageConfig = {
     open: boolean;
     name: "location" | "product" | "site";
   };
+};
+
+type DialogProps = {
+  open: boolean;
+  title: string;
+  description?: string;
+  tone?: "default" | "danger";
+  compact?: boolean;
+  wide?: boolean;
+  contentClassName?: string;
+  children: ReactNode;
+  onClose: () => void;
 };
 
 function generateRowId(row: Record<string, unknown>, config: MasterPageConfig, index: number): string {
@@ -375,20 +392,21 @@ export function MasterPage({ config }: { config: MasterPageConfig }) {
         getRowId={(row, index) => generateRowId(row, config, index)}
       />
 
-      <Dialog
+      <MainPageDialog
         open={formOpen}
         title={editMode ? `Edit ${config.title}` : `Add ${config.title}`}
         description="Master details"
-        compact
-        wide
+        compact={config.compact ?? false}
+        wide={config.wide ?? false}
         onClose={() => setFormOpen(false)}
       >
-        <div style={{ maxHeight: "calc(90vh - 180px)", overflowY: "auto", width: "100%" }}>
-          <WmsMasterForm
+        <div style={{ maxHeight: "100%", overflowY: "auto", width: "100%" }}>
+          <MasterForm
             fields={editableFields}
             key={formOpen ? (editMode ? `edit-${getRowDisplayKey(original || {}, config)}` : "add") : "closed"}
             tabs={config.formTabs}
             fieldsPerRow={config.fieldsPerRow}
+            sectionsPerRow={config.sectionsPerRow}
             form={form}
             editMode={editMode}
             saving={saving}
@@ -404,7 +422,7 @@ export function MasterPage({ config }: { config: MasterPageConfig }) {
             onCancel={() => setFormOpen(false)}
           />
         </div>
-      </Dialog>
+      </MainPageDialog>
 
       <Dialog
         open={Boolean(deleteTarget)}
@@ -442,7 +460,7 @@ function Field({ label, required, children }: { label: string; required?: boolea
   );
 }
 
-function renderInput(field: WmsMasterField, value: unknown, disabled: boolean, onChange: (value: unknown) => void) {
+function renderInput(field: MasterField, value: unknown, disabled: boolean, onChange: (value: unknown) => void) {
   if (field.type === "select") {
     return (
       <Select disabled={disabled} value={String(value ?? "")} onChange={(event) => onChange(event.target.value)}>
@@ -477,3 +495,137 @@ function formatValue(value: unknown) {
   if (value instanceof Date) return value.toISOString().slice(0, 10);
   return String(value);
 }
+
+// function MainPageDialog({
+//   open,
+//   title,
+//   description,
+//   tone = "default",
+//   compact,
+//   wide,
+//   contentClassName,
+//   children,
+//   onClose,
+// }: DialogProps) {
+//   if (!open) return null;
+//   const editorDialog = wide || /^(add|edit|new|view)\b/i.test(title);
+
+//   return (
+//     <div
+//       className={cn(
+//         "fixed inset-0 z-50 grid place-items-center p-5 backdrop-blur-[1px]",
+//         editorDialog ? "bg-background/95" : "bg-slate-950/50",
+//       )}
+//       onClick={onClose}
+//     >
+//       <div
+//         className={cn(
+//           // ← restored: rounded, border, bg, shadow, max-h, overflow-hidden
+//           "grid max-h-[94vh] w-[min(96vw,560px)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg border bg-card text-card-foreground shadow-2xl",
+//           compact && "w-[min(94vw,460px)]",
+//           wide && "max-h-[min(96vh,920px)] w-[min(98vw,1440px)]",
+//           editorDialog && !compact && !wide && "w-[min(96vw,920px)]",
+//           contentClassName,
+//         )}
+//         onClick={(e) => e.stopPropagation()}
+//       >
+//         {/* Header */}
+//         <div
+//           className={cn(
+//             "flex items-start justify-between gap-4 border-b bg-secondary/70 p-4",
+//             tone === "danger" && "[&_h2]:text-destructive",
+//           )}
+//         >
+//           <div>
+//             <h2 className="text-lg font-semibold leading-none tracking-tight">{title}</h2>
+//             {description && (
+//               <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+//             )}
+//           </div>
+//           <Button aria-label="Close" type="button" variant="ghost" size="icon" onClick={onClose}>
+//             <X size={16} />
+//           </Button>
+//         </div>
+
+// {/* Body — scrollable so content never bleeds outside the modal */}
+// <div className="min-h-0 overflow-y-auto p-4" onClick={(e) => e.stopPropagation()}>
+//   {children}
+// </div>
+//       </div>
+//     </div>
+//   );
+// }
+
+function MainPageDialog({
+  open,
+  title,
+  description,
+  tone = "default",
+  compact,
+  wide,
+  contentClassName,
+  children,
+  onClose,
+}: DialogProps) {
+  if (!open) return null;
+
+  const editorDialog = wide || /^(add|edit|new|view)\b/i.test(title);
+
+  return (
+    <div
+      className={cn(
+        "fixed inset-0 z-50 grid place-items-center backdrop-blur-[1px]",
+        wide ? "p-0" : "p-5",
+        editorDialog ? "bg-background/95" : "bg-slate-950/50",
+      )}
+      onClick={onClose}
+    >
+      <div
+        className={cn(
+          "grid max-h-[94vh] w-[min(96vw,560px)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg border bg-card text-card-foreground shadow-2xl",
+          compact && "w-[min(94vw,460px)]",
+          wide &&
+            "h-[100dvh] max-h-[100dvh] w-screen max-w-none rounded-none border-0 shadow-none",
+          editorDialog && !compact && !wide && "w-[min(96vw,920px)]",
+          contentClassName,
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div
+          className={cn(
+            "flex items-start justify-between gap-4 border-b bg-secondary/70 p-2",
+            tone === "danger" && "[&_h2]:text-destructive",
+          )}
+        >
+          <div>
+            <h2 className="text-lg font-semibold leading-none tracking-tight">
+              {title}
+            </h2>
+            {description && (
+              <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+            )}
+          </div>
+          <Button
+            aria-label="Close"
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+          >
+            <X size={16} />
+          </Button>
+        </div>
+
+        {/* Body — scrollable so content never bleeds outside the modal */}
+        <div
+          className={cn("min-h-0 overflow-y-auto p-1")}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="w-full h-full">{children}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
