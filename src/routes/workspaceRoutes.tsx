@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import type { MenuNode } from "../types/auth";
 import { AccountWiseBudgetPage } from "../pages/finance/AccountWiseBudgetPage";
 import { AccountTreePage } from "../pages/finance/AccountTreePage";
@@ -23,6 +23,17 @@ import { WmsInboundPage } from "../pages/wms/inbound/WmsInboundPage";
 import { WmsOutboundPage } from "../pages/wms/outbound/WmsOutboundPage";
 import { WmsSimpleMasterPage } from "../pages/wms/WmsSimpleMasterPage";
 import { wmsSimpleMasterConfigs } from "../pages/wms/wmsMasterConfigs";
+import { FreightMasterPage } from "../pages/freight/FreightMasterPage";
+import { freightMasterConfigs } from "../pages/freight/freightMasterConfigs";
+import { FreightEnquiryMainPage } from "../pages/freight/FreightEnquiryMainPage";
+import { FreightQuotationPage } from "../pages/freight/FreightQuotationPage";
+import { FreightWorkspacePage } from "../pages/freight/FreightWorkspacePage";
+import { FreightAirlineTariffPage } from "../pages/freight/FreightAirlineTariffPage";
+import { FreightJobPage } from "../pages/freight/FreightJobPage";
+import { FreightPacklistPage } from "../pages/freight/FreightPacklistPage";
+import { FreightJobActivitiesPage } from "../pages/freight/FreightJobActivitiesPage";
+import { FreightJobWorkspacePage } from "../pages/freight/FreightJobWorkspacePage";
+import { FreightReportPage, type FreightReportKey } from "../pages/freight/FreightReportPage";
 import { SecurityAssignmentPage, securityAssignmentConfigs } from "../pages/security/SecurityAssignmentPage";
 import { SecurityMasterPage, securityMasterConfigs } from "../pages/security/SecurityMasterPage";
 import { SecurityOperationAccessPage } from "../pages/security/SecurityOperationAccessPage";
@@ -127,6 +138,7 @@ import InspectionReportMainPage from "../pages/oxmaint/inspection-report-tailwin
 
 import { GradeMasterPage } from "../pages/hr/Grademasterpage";
 import InvoicePage from "../pages/wms/invoice/InvoicePage";
+import FreightInvoicePage from "../pages/freight/FreightInvoicePage";
 import InspectionFormPage from "../pages/oxmaint/inspection-form-tailwind/inspection_form/InspectionFormMainPage";
 import GrnSummaryReportPage from "../pages/wms/Reports/Grnsummaryreport";
 import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/AssetInventoryMainPage";
@@ -142,12 +154,27 @@ import {ProductTypePage} from "../pages/purchase_sales/PS_ProductTypePage";
 import { ProductCategoryPage } from "../pages/purchase_sales/PS_ProductCategory";
 
 import { ZoneMasterPage } from "../pages/purchase_sales/PS_ZoneMasterPage";
+import PamsDashboard from "../pages/pams/PamsDashboard";
 
 import Mytaskalmspage from "../pages/almswf/Mytaskalmspage";
+import Credit_Request_page from "../pages/almswf/CreaditRequestPage";
+import Capex_Request_page from "../pages/almswf/CapexRequestPage";
+import Purchase_Request_page from "../pages/almswf/PurchaseRequestPage";
+
+import { PurchaseOrderPage } from "../pages/purchase_sales/purchase/Purchaseorderpage";
 
 import { StockInquiryPage } from "../pages/purchase_sales/PS_StockInquiry";
 import { PurchaseSaleSetupPage } from "../pages/purchase_sales/Purchasesalesetuppage";
-import { FlowAssignmentPage } from "../pages/security/FlowAssignmentPage"; type WorkspaceRouteContext = {
+import { FlowAssignmentPage } from "../pages/security/FlowAssignmentPage";import { PurchaseQuotationPage } from "../pages/purchase_sales/purchase/PurchaseQuatationPage";
+import { PurchaseGRNPage } from "../pages/purchase_sales/purchase/PurchaseGRNPage";
+import { ProductionJobOrderPage } from "../pages/purchase_sales/production/ProductionJobOrderPage";
+import { SalesOrderPage } from "../pages/purchase_sales/sales/SalesorderPage";
+import { SalesDNPage } from "../pages/purchase_sales/sales/SalesDNPage";
+import { StocksTransferPage } from "../pages/purchase_sales/inventory/StockTransferPage";
+import { StocksAdjectmentPage } from "../pages/purchase_sales/inventory/StockadjustmentPage";
+import { JobProductionOrderPage } from "../pages/purchase_sales/production/JobProductionPage";
+import { LeaveTypesPage } from "../pages/hr/Leavetypespage";
+ type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
   activeMenu?: MenuNode;
@@ -161,7 +188,8 @@ type WorkspaceRoute = {
 
 export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
   const route = workspaceRoutes.find((item) => item.match(context));
-  return route?.element(context) || null;
+  const element = route?.element(context);
+  return element ? <Fragment key={getWorkspaceRouteKey(context)}>{element}</Fragment> : null;
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
@@ -354,7 +382,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   match: ({ pathname }) => isOutstandingStatementRoute(pathname),
   element: () => <OutstandingStatementPage />,
 },
-
+{
+  name: "Pams Dashboard",
+  match: ({ pathname }) => pathname.toLowerCase().includes("/ems/masters/kpi%20masters/pms_dashboard"),
+  element: () => <PamsDashboard />
+},
   
   {
     name: "Finance Ageing Report",
@@ -430,6 +462,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   name: "WMS Invoice",
   match: ({ pathname }) => isInvoiceRoute(pathname),
   element: () => <InvoicePage />,
+},
+{
+  name: "Freight Invoice",
+  match: ({ pathname }) => isFreightInvoiceRoute(pathname),
+  element: () => <FreightInvoicePage />,
 },
   {
     name: "WMS Stock Transaction Report",
@@ -582,6 +619,96 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => Boolean(getWmsSimpleMasterConfig(pathname)),
     element: ({ pathname }) => <WmsSimpleMasterPage config={getWmsSimpleMasterConfig(pathname)!} />,
   },
+  {
+    name: "Freight Reports",
+    match: (context) => Boolean(getFreightReportKey(context)),
+    element: (context) => <FreightReportPage reportKey={getFreightReportKey(context)!} />,
+  },
+  {
+    name: "Freight RFQ Activities",
+    match: (context) => isFreightRfqActivitiesRoute(context),
+    element: (context) => <FreightEnquiryMainPage target={getFreightWorkspaceTarget(context)} screenType="rfq" />,
+  },
+  {
+    name: "Freight RFQ",
+    match: (context) => isFreightRfqRoute(context),
+    element: (context) => <FreightEnquiryMainPage target={getFreightWorkspaceTarget(context)} screenType="rfq" />,
+  },
+  {
+    name: "Freight Enquiry Activities",
+    match: (context) => isFreightEnquiryActivitiesRoute(context),
+    element: (context) => <FreightEnquiryMainPage target={getFreightWorkspaceTarget(context)} />,
+  },
+  {
+    name: "Freight Enquiry",
+    match: (context) => isFreightEnquiryRoute(context),
+    element: (context) => <FreightEnquiryMainPage target={getFreightWorkspaceTarget(context)} />,
+  },
+  {
+    name: "Freight Quotation",
+    match: (context) => isFreightQuotationRoute(context),
+    element: (context) => <FreightQuotationPage target={getFreightWorkspaceTarget(context)} initialTab={getFreightQuotationInitialTab(context)} />,
+  },
+  {
+    name: "Freight Airline Tariff Report",
+    match: (context) => isFreightAirlineTariffReportRoute(context),
+    element: () => <FreightAirlineTariffPage mode="report" />,
+  },
+  {
+    name: "Freight Airline Tariff",
+    match: (context) => isFreightAirlineTariffRoute(context),
+    element: () => <FreightAirlineTariffPage mode="entry" />,
+  },
+  {
+    name: "Freight Job Sheet",
+    match: (context) => isFreightJobSheetRoute(context),
+    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="jobsheet" />,
+  },
+  {
+    name: "Freight Pack List",
+    match: (context) => isFreightPacklistRoute(context),
+    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="packlist" />,
+  },
+  {
+    name: "Freight Alerts",
+    match: (context) => isFreightJobFollowupRoute(context, "alerts"),
+    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="alerts" />,
+  },
+  {
+    name: "Freight Instructions",
+    match: (context) => isFreightJobFollowupRoute(context, "instructions"),
+    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="instructions" />,
+  },
+  {
+    name: "Freight Documents",
+    match: (context) => isFreightJobFollowupRoute(context, "documents"),
+    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="documents" />,
+  },
+  {
+    name: "Freight Deposits",
+    match: (context) => isFreightJobFollowupRoute(context, "deposits"),
+    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="deposits" />,
+  },
+  {
+    name: "Freight Service Activities",
+    match: (context) => isFreightServiceActivitiesRoute(context),
+    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="activities" />,
+  },
+  {
+    name: "Freight Job",
+    match: (context) => isFreightOperationalJobRoute(context),
+    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} />,
+  },
+  {
+    name: "Freight Master",
+    match: (context) => Boolean(getFreightMasterConfig(context)),
+    element: (context) => <FreightMasterPage config={getFreightMasterConfig(context)!} />,
+  },
+  {
+    name: "Freight Workspace",
+    match: (context) => isFreightWorkspaceRoute(context),
+    element: (context) => <FreightWorkspacePage target={getFreightWorkspaceTarget(context)} />,
+  },
     {
     name: "ALMS Simple Master",
     match: ({ pathname }) => Boolean(getAlmsSimpleMasterConfig(pathname)),
@@ -639,6 +766,28 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match:(context) => isMyTaskRoute(context),
     element: () => <Mytaskalmspage initialTab={0} />
   },
+  
+
+  {
+    name: 'Credit Request page',
+    match:(context) => isCreditRequestTaskRoute(context),
+    element: () => <Credit_Request_page initialTab={0} />
+  },
+
+  {
+    name: 'Capex Request page',
+    match:(context) => isCapexRequestTaskRoute(context),
+    element: () => <Capex_Request_page initialTab={0} />
+  },
+
+
+  {
+    name: 'Purchase Request page',
+    match:(context) => isPurchaseRequestTaskRoute(context),
+    element: () => <Purchase_Request_page initialTab={0} />
+  },
+
+
 
   //// PAMS Routes
   {
@@ -650,6 +799,74 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "PAMS Bulk Appraisal",
     match: ({ pathname }) => isPamsRoute(pathname) && isPamsBulkAppraisalRoute(pathname),
     element: () => <PamsBulkAppraisalPage />,
+  },
+
+  {
+    name: "Purchase Sales Setup",
+    match: ({ pathname }) => isPurchaseSalesSetupRoute(pathname),
+    element: () => <PurchaseOrderPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
+
+    {
+    name: "Purchase Quotation Setup",
+    match: ({ pathname }) => isPurchaseQuotationSetupRoute(pathname),
+    element: () => <PurchaseQuotationPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+
+    
+  },
+     {
+    name: "Purchase Quotation Setup",
+    match: ({ pathname }) => isPurchaseGRNSetupRoute(pathname),
+    element: () => <PurchaseGRNPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
+
+       {
+    name: "Purchase Quotation Setup",
+    match: ({ pathname }) => isPProductionJoborderSetupRoute(pathname),
+    element: () => <ProductionJobOrderPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
+
+         {
+    name: "Sales Order Setup",
+    match: ({ pathname }) => isSalesorderSetupRoute(pathname),
+    element: () => <SalesOrderPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
+           {
+    name: "Sales Order Setup",
+    match: ({ pathname }) => isSalesDNSetupRoute(pathname),
+    element: () => <SalesDNPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+
+    
+  },
+             {
+    name: "Inventory Setup",
+    match: ({ pathname }) => isStocksTransferSetupRoute(pathname),
+    element: () => <StocksTransferPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+
+    
+  },
+               {
+    name: "Inventory Setup",
+    match: ({ pathname }) => isStocksAdjectmentSetupRoute(pathname),
+    element: () => <StocksAdjectmentPage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+
+    
   },
   // ── PAMS My Task Routes (Specific tabs first, then default) ──
   {
@@ -920,6 +1137,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <HrPayrollAccountSetupPage />,
   },
   {
+    name: "HR Leave Types",
+    match: ({ pathname }) => isHrLeaveTypeRoute(pathname),
+    element: () => <LeaveTypesPage />,
+  },
+  {
     name: "HR Master",
     match: (context) => Boolean(getHrMasterConfig(context)),
     element: (context) => <HrMasterPage config={getHrMasterConfig(context)!} />,
@@ -968,6 +1190,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   match: ({ pathname }) => isStockInquiryRoute(pathname),
   element: () => <StockInquiryPage />,
   },
+
+    {
+  name: "Purchase Sales Stock Inquiry",
+  match: ({ pathname }) => isJobProductionSetupRoute(pathname),
+  element: () => <JobProductionOrderPage />,
+  },
   
 ];
 
@@ -975,6 +1203,16 @@ function isStorageComputationRoute(pathname: string) {
   return pathname.toLowerCase().includes("wms/activity/request/storage_computation");
 }
 
+
+function isHrLeaveTypeRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  // const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hcm/pay components/leave_types1") ||
+    normalized.includes("/hcm/hcm/pay%20components/leave_types1")
+    // compact.includes("paycomponentsleavetype")
+  );
+}
 
 
 //--------PURCHASE SALE-------
@@ -1046,6 +1284,56 @@ function isBudgetSetupRoute(pathname: string) {
   return (
     normalized.includes("/finance/budget/budget_allocation")
   );
+}
+
+
+function isPurchaseSalesSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/purchase/purchase_order"))
+}
+
+function isPurchaseQuotationSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/purchase/purchase_quotation"))
+}
+function isPurchaseGRNSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/purchase/purchase_grn"))
+}
+
+function isPProductionJoborderSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/production/job_order"))
+}
+
+function isSalesorderSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/sales/sales_order"))
+}
+function isSalesDNSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/sales/sales_dn"))
+}
+function isStocksTransferSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/inventory/stock_transfer"))
+}
+function isStocksAdjectmentSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/inventory/stock_adjustment"))
+}
+function isJobProductionSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/production/job_production"))
 }
 
 function isExpenseTypeRoute(pathname: string) {
@@ -1325,6 +1613,10 @@ function isInvoiceRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("wms/activity/request/invoice");
 }
+function isFreightInvoiceRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/freight_invoice/invoice");
+}
 function isStockAdjustmentRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("wms/activity/request/stock_adj") && !normalized.includes("/view/");
@@ -1489,6 +1781,214 @@ function getWmsSimpleMasterConfig(pathname: string) {
   return matches.find(({ key }) => normalized.includes(`/${key}`) || normalized.includes(`/${key.replace(/_/g, "-")}`))?.config || null;
 }
 
+function getFreightMasterConfig(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  const isFreight =
+    matchText.includes("/freight") ||
+    compact.includes("freight") ||
+    compact.includes("frieght");
+
+  if (!isFreight) return null;
+
+  const matches = Object.values(freightMasterConfigs)
+    .flatMap((config) => (config.routeKeys || [config.master]).map((key) => ({ config, key: key.toLowerCase() })))
+    .sort((a, b) => b.key.length - a.key.length);
+
+  return matches.find(({ key }) => {
+    const hyphenKey = key.replace(/_/g, "-");
+    const keyCompact = key.replace(/[^a-z0-9]/g, "");
+    return matchText.includes(`/${key}`) || matchText.includes(`/${hyphenKey}`) || matchText.includes(key) || compact.includes(keyCompact);
+  })?.config || null;
+}
+
+function getWorkspaceRouteKey(context: WorkspaceRouteContext) {
+  const activeLeaf = getActiveLeaf(context);
+  const leafRecord = (activeLeaf || {}) as Record<string, unknown>;
+  const appRecord = (context.activeApp || {}) as Record<string, unknown>;
+  return [
+    context.pathname.toLowerCase(),
+    String(leafRecord.menu_id || leafRecord.MENU_ID || leafRecord.menu_code || leafRecord.MENU_CODE || leafRecord.route || leafRecord.path || leafRecord.name || ""),
+    String(appRecord.app_code || appRecord.APP_CODE || appRecord.name || ""),
+  ].join("|");
+}
+
+function isFreightWorkspaceRoute(context: WorkspaceRouteContext) {
+  const pathname = context.pathname.toLowerCase();
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return (
+    pathname === "/workspace/fms/fms" ||
+    pathname === "/workspace/fms/fms/" ||
+    matchText.includes("/freight") ||
+    compact.includes("freight") ||
+    compact.includes("frieght") ||
+    compact.includes("freightenquirymainpage")
+  );
+}
+
+function getFreightReportKey(context: WorkspaceRouteContext): FreightReportKey | null {
+  const compact = getGenericMatchText(context).replace(/[^a-z0-9]/g, "");
+  if (!compact.includes("freightreports")) return null;
+  if (compact.includes("enquirylist") || compact.includes("equirylist")) return "enquiry_list";
+  if (compact.includes("rfqlist")) return "rfq_list";
+  if (compact.includes("quotationlist") || compact.includes("quotationtable")) return "quotation_list";
+  if (compact.includes("freightjoblist") || compact.includes("joblist")) return "freight_job_list";
+  if (compact.includes("freightprofit") || compact.includes("profit")) return "freight_profit";
+  if (compact.includes("freightexpense") || compact.includes("expense")) return "freight_expense";
+  if (compact.includes("freightrevenue") || compact.includes("revenue")) return "freight_revenue";
+  if (compact.includes("freightbrokerage") || compact.includes("brokerage")) return "freight_brokerage";
+  if (compact.includes("queryreport") || compact.includes("packquery")) return "query_report";
+  if (compact.includes("freightsummaryreport") || compact.includes("summaryreport") || compact.includes("modewisesummary")) return "freight_summary";
+  if (compact.includes("containerdeposit") || compact.includes("contrdeposit")) return "container_deposit";
+  if (compact.includes("deposits") || compact.includes("deposit")) return "deposits";
+  return null;
+}
+
+function isFreightEnquiryRoute(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  if (compact.includes("enquiryactivities") || compact.includes("enquirylist")) return false;
+  return (
+    compact.includes("freightenquirymainpage") ||
+    compact.includes("freightfreightenquiryenquiry") ||
+    compact.includes("freightfreightenquiryenquir") ||
+    (compact.includes("freightenquiry") && !compact.includes("requestquote") && !compact.includes("quotation"))
+  );
+}
+
+function isFreightEnquiryActivitiesRoute(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return compact.includes("freightfreightenquiryenquiryactivities") || compact.includes("freightenquiryactivities");
+}
+
+function isFreightRfqRoute(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  if (compact.includes("rfqactivities") || compact.includes("rfqlist")) return false;
+  return compact.includes("freightrequestquoterfq") || compact.includes("requestquoterfq") || compact.includes("rfqtest");
+}
+
+function isFreightRfqActivitiesRoute(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return compact.includes("freightrequestquoterfqactivities") || compact.includes("requestquoterfqactivities") || compact.includes("rfqactivities");
+}
+
+function isFreightQuotationRoute(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  if (compact.includes("airlinetarriff") || compact.includes("airlinetariff") || compact.includes("quotationlist")) return false;
+  return compact.includes("freightfreightquotationquotation")
+    || compact.includes("freightquotationquotation")
+    || compact.includes("freightfreightquotationactivities")
+    || compact.includes("freightquotationactivities")
+    || compact.includes("freightfreightquotationtermscondition")
+    || compact.includes("freightquotationtermscondition")
+    || compact.includes("termscondition");
+}
+
+function isFreightAirlineTariffRoute(context: WorkspaceRouteContext) {
+  const compact = getGenericMatchText(context).replace(/[^a-z0-9]/g, "");
+  if (compact.includes("report")) return false;
+  return compact.includes("freightfreightquotationairlinetarriff")
+    || compact.includes("freightfreightquotationairlinetariff")
+    || compact.includes("airlinetarriff");
+}
+
+function isFreightAirlineTariffReportRoute(context: WorkspaceRouteContext) {
+  const compact = getGenericMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("airlinetarriffreport") || compact.includes("airlinetariffreport");
+}
+
+function isFreightPacklistRoute(context: WorkspaceRouteContext) {
+  const compact = getGenericMatchText(context).replace(/[^a-z0-9]/g, "");
+  return (compact.includes("freightair") || compact.includes("freightsea") || compact.includes("freightroad"))
+    && (compact.includes("packlist") || compact.includes("packinglist"))
+    && !compact.includes("jobsheet");
+}
+
+function isFreightJobSheetRoute(context: WorkspaceRouteContext) {
+  const compact = getGenericMatchText(context).replace(/[^a-z0-9]/g, "");
+  return (compact.includes("freightair") || compact.includes("freightsea") || compact.includes("freightroad"))
+    && compact.includes("jobsheet");
+}
+
+function isFreightJobFollowupRoute(context: WorkspaceRouteContext, kind: "alerts" | "instructions" | "documents" | "deposits") {
+  const compact = getGenericMatchText(context).replace(/[^a-z0-9]/g, "");
+  if (!(compact.includes("freightair") || compact.includes("freightsea") || compact.includes("freightroad"))) return false;
+  if (kind === "alerts") return compact.includes("alerts") || compact.includes("alert");
+  if (kind === "instructions") return compact.includes("instructions") || compact.includes("instruction");
+  if (kind === "documents") return compact.includes("documents") || compact.includes("document");
+  return compact.includes("deposits") || compact.includes("deposit");
+}
+
+function isFreightServiceActivitiesRoute(context: WorkspaceRouteContext) {
+  const compact = getGenericMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("serviceactivities") || compact.includes("costsheet");
+}
+
+function isFreightOperationalJobRoute(context: WorkspaceRouteContext) {
+  const compact = getGenericMatchText(context).replace(/[^a-z0-9]/g, "");
+  if (
+    compact.includes("packlist")
+    || compact.includes("packinglist")
+    || compact.includes("serviceactivities")
+    || compact.includes("costsheet")
+    || compact.includes("jobsheet")
+    || compact.includes("alerts")
+    || compact.includes("alert")
+    || compact.includes("instructions")
+    || compact.includes("instruction")
+    || compact.includes("documents")
+    || compact.includes("document")
+    || compact.includes("deposits")
+    || compact.includes("deposit")
+  ) return false;
+  return (compact.includes("freightair") || compact.includes("freightsea") || compact.includes("freightroad"))
+    && (compact.includes("import") || compact.includes("export") || compact.includes("reexport"));
+}
+
+function getFreightQuotationInitialTab(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  if (compact.includes("activities")) return "charges" as const;
+  if (compact.includes("termscondition") || compact.includes("terms")) return "terms" as const;
+  return "cargo" as const;
+}
+
+function getFreightWorkspaceTarget(context: WorkspaceRouteContext) {
+  const matchText = getGenericMatchText(context);
+  const compact = matchText.replace(/[^a-z0-9]/g, "");
+  return {
+    process: compact.includes("rfq") || compact.includes("requestquote") || compact.includes("requestforquote")
+      ? "rfq" as const
+      : compact.includes("quotation") || compact.includes("freightquotation") || compact.includes("airlinetarriff")
+        ? "quotation" as const
+        : "enquiry" as const,
+    direction: compact.includes("reexport") || compact.includes("importforreexport")
+      ? "reexport" as const
+      : compact.includes("export")
+        ? "export" as const
+        : "import" as const,
+    mode: compact.includes("sea")
+      ? "sea" as const
+      : compact.includes("road") || compact.includes("land")
+        ? "land" as const
+        : "air" as const,
+    action: compact.includes("freightreports") || compact.includes("enquirylist") || compact.includes("rfqlist") || compact.includes("quotationlist")
+      ? "reports"
+      : compact.includes("costsheet")
+      ? "cost-sheet"
+      : compact.includes("jobsheet")
+        ? "job-sheet"
+        : compact.includes("document")
+          ? "documents"
+          : "job",
+  };
+}
+
 function getAlmsSimpleMasterConfig(pathname: string) {
   const normalized = pathname.toLowerCase();
   if (!normalized.includes("/almswf/")) return null;
@@ -1510,6 +2010,49 @@ function isMyTaskRoute(context: WorkspaceRouteContext) {
     (normalized.includes("/my_task") ||
       normalized.includes("/my-task") ||
       compact.includes("mytask")) &&
+    !normalized.includes("/view/") &&
+    !normalized.includes("/edit/")
+  );
+}
+
+function isCreditRequestTaskRoute(context: WorkspaceRouteContext) {
+  const normalized = getGenericMatchText(context);
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    isAlmsRoute(context.pathname) &&
+    (normalized.includes("/credit_request") ||
+      normalized.includes("/credit-request") ||
+      compact.includes("creditrequest")) &&
+    !normalized.includes("/view/") &&
+    !normalized.includes("/edit/")
+  );
+}
+
+
+
+function isCapexRequestTaskRoute(context: WorkspaceRouteContext) {
+  const normalized = getGenericMatchText(context);
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    isAlmsRoute(context.pathname) &&
+    (normalized.includes("/capex") ||
+      normalized.includes("/capex-request") ||
+      compact.includes("capexrequest")) &&
+    !normalized.includes("/view/") &&
+    !normalized.includes("/edit/")
+  );
+}
+
+
+
+function isPurchaseRequestTaskRoute(context: WorkspaceRouteContext) {
+  const normalized = getGenericMatchText(context);
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    isAlmsRoute(context.pathname) &&
+    (normalized.includes("/purchase_request") ||
+      normalized.includes("/purchase-request") ||
+      compact.includes("purchaserequest")) &&
     !normalized.includes("/view/") &&
     !normalized.includes("/edit/")
   );
