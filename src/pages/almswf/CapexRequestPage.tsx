@@ -179,9 +179,9 @@ const Capex_Request_page = ({ initialTab = 0 }: CapexRequestPageProps) => {
           let bg = "#f4f4f5", color = "#52525b", border = "#d4d4d8";
           if (val === "APPROVED" || val === "A/C POSTED") { bg = "#e8f0fe"; color = "#1a4fa0"; border = "#b3caf5"; }
           else if (val === "PENDING") { bg = "#fff4e5"; color = "#92400e"; border = "#fcd38a"; }
-          else if (val === "IN PROGRESS") { bg = "#dbeafe"; color = "#1e40af"; border = "#93c5fd"; }
+          else if (val === "INPROGRESS") { bg = "#dbeafe"; color = "#1e40af"; border = "#93c5fd"; }
           else if (val === "REJECTED") { bg = "#fdecea"; color = "#a01a1a"; border = "#f5b3b3"; }
-          else if (val === "SENT BACK") { bg = "#f3e8fe"; color = "#6b21a8"; border = "#d9b3f5"; }
+          else if (val === "SENTBACK") { bg = "#f3e8fe"; color = "#6b21a8"; border = "#d9b3f5"; }
           else if (val === "PO GENERATED") { bg = "#d1fae5"; color = "#065f46"; border = "#6ee7b7"; }
           return (
             <span

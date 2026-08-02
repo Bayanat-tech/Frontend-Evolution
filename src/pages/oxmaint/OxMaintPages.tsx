@@ -29,6 +29,9 @@ type SimpleConfig = {
   codeField: string;
   nameField: string;
   searchPlaceholder: string;
+  // Which P_CODEn slot PROC_BUILD_DYNAMIC_DEL_OX_MASTER reads for this master's
+  // delete branch. ASSET_TYPE_CODE -> code2, STATUS_CODE -> code1, SITE_PROJECT_CODE -> code1.
+  deleteCodeParam: "code1" | "code2" | "code3" | "code4" | "code5";
 };
 
 export const oxMaintMasterConfigs = {
@@ -41,6 +44,7 @@ export const oxMaintMasterConfigs = {
     codeField: "asset_type_code",
     nameField: "asset_type_name",
     searchPlaceholder: "Search asset type...",
+    deleteCodeParam: "code2",
   },
   status: {
     title: "Status",
@@ -51,6 +55,7 @@ export const oxMaintMasterConfigs = {
     codeField: "status_code",
     nameField: "status_name",
     searchPlaceholder: "Search status...",
+    deleteCodeParam: "code1",
   },
   siteProject: {
     title: "Site Project",
@@ -61,6 +66,7 @@ export const oxMaintMasterConfigs = {
     codeField: "site_project_code",
     nameField: "site_project_name",
     searchPlaceholder: "Search site project...",
+    deleteCodeParam: "code1",
   },
 } satisfies Record<string, SimpleConfig>;
 
@@ -152,10 +158,11 @@ export function OxSimpleMasterPage({ config }: { config: SimpleConfig }) {
 
   const deleteRow = async (row: OxRow) => {
     try {
+      const codeValue = text(row, [config.codeField]);
       await executeDynamicDelete({
         parameter: config.deleteParameter,
         loginid,
-        number1: numberValue(row[config.codeField]),
+        [config.deleteCodeParam]: codeValue,
       });
       setNotice({ type: "success", message: `${config.noun} deleted successfully` });
       await loadRows(false);
@@ -451,56 +458,6 @@ function AssetInventoryEditor({ editor, onClose, onSaved }: { editor: EditorStat
     </Dialog>
   );
 }
-
-// export function OxInspectionFormPage() {
-//   const { user } = useAuth();
-//   const loginid = user?.loginid || "";
-//   const [rows, setRows] = useState<OxRow[]>([]);
-//   const [query, setQuery] = useState("");
-//   const [loading, setLoading] = useState(false);
-//   const [notice, setNotice] = useState<ToastNotice>(null);
-//   const [editor, setEditor] = useState<EditorState<OxRow>>(null);
-//   const [selectedForm, setSelectedForm] = useState<OxRow | null>(null);
-
-//   const loadRows = async (clearNotice = true) => {
-//     setLoading(true);
-//     if (clearNotice) setNotice(null);
-//     try {
-//       setRows(await getDynamicLookup({ parameter: "OX_INSPECTION_FORM_MAIN_PAGE", loginid }));
-//     } catch (error) {
-//       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load inspection forms" });
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-//   useEffect(() => { if (loginid) void loadRows(); }, [loginid]);
-//   const deleteRow = async (row: OxRow) => {
-//     try {
-//       await executeDynamicDelete({ parameter: "OX_DEL_INSPECTION_FORM_MAIN_FORM", loginid, number1: numberValue(row.inspection_form_code) });
-//       setNotice({ type: "success", message: "Inspection form deleted successfully" });
-//       await loadRows(false);
-//     } catch (error) {
-//       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to delete inspection form" });
-//     }
-//   };
-//   const columns = useMemo<ColumnDef<OxRow>[]>(() => [
-//     { accessorKey: "inspection_form_code", header: "Code" },
-//     { accessorKey: "inspection_form_name", header: "Inspection Form" },
-//     { accessorKey: "description", header: "Description" },
-//     { id: "actions", header: "Actions", cell: ({ row }) => <div className="flex gap-1"><Button size="icon" variant="ghost" onClick={() => setSelectedForm(row.original)}><ChevronRight size={14} /></Button><Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })}><Edit2 size={14} /></Button><Button size="icon" variant="ghost" onClick={() => void deleteRow(row.original)}><Trash2 size={14} /></Button></div> },
-//   ], []);
-//   return (
-//     <section className="grid gap-4">
-//       <PageHeader title="Inspection Form" eyebrow="Oxmaint Asset"><Button variant="outline" onClick={() => void loadRows()}><RefreshCw size={15} /> Refresh</Button><Button onClick={() => setEditor({ mode: "create" })}><Plus size={15} /> Add Form</Button></PageHeader>
-//       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
-//       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_520px]">
-//         <DataTable columns={columns} data={rows} searchValue={query} onSearchChange={setQuery} searchPlaceholder="Search inspection form..." loading={loading} height="calc(100vh - 260px)" density="grid" enablePagination pageSize={100} />
-//         <InspectionSectionsPanel form={selectedForm} onNotice={setNotice} />
-//       </div>
-//       <InspectionFormEditor editor={editor} onClose={() => setEditor(null)} onSaved={async () => { setEditor(null); setNotice({ type: "success", message: "Inspection form saved successfully" }); await loadRows(false); }} />
-//     </section>
-//   );
-// }
 
 function InspectionFormEditor({ editor, onClose, onSaved }: { editor: EditorState<OxRow>; onClose: () => void; onSaved: () => Promise<void> }) {
   const { user } = useAuth();

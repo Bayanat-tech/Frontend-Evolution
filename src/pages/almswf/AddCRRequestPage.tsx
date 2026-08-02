@@ -11,7 +11,6 @@ import { useAuth } from "../../state/AuthContext";
 import { almsSave, almsCommonSelect } from "../../api/alms";
 
 // ─── Type ─────────────────────────────────────────────────────────────────
-// TODO: move this into PurchaseSummary-types.ts (or a CreditRequest-types.ts) if you prefer
 export type TCRHeader = {
   REQUEST_NUMBER?: string;
   REQUEST_DATE?: string | Date;
@@ -27,6 +26,7 @@ export type TCRHeader = {
   CREATE_DATE?: string | Date;
   LAST_ACTION?: string;
   HISTORY_SERIAL?: number;
+  NEXT_ACTION_BY?: string;
 
   COMPANY_NAME?: string;
   AWARE_CUSTOMER_CODE?: string;
@@ -37,7 +37,7 @@ export type TCRHeader = {
   PO_BOX?: string;
   POSTAL_CODE?: number;
   CITY?: string;
-  TEL_NO?: string; // OFFICE_TEL_NO
+  TEL_NO?: string;
   FAX_NO?: string;
   WEBSITE?: string;
   EMAIL?: string;
@@ -45,16 +45,14 @@ export type TCRHeader = {
   CREDIT_LIMIT?: number;
   REQUESTED_CREDIT_PERIOD?: number;
 
-  // Finance Details section on the UI
-  FIN_CONTACT_PERSON?: string;   // -> maps to REMARKS_CONTACT_PERSON column in SP
-  FIN_CONTACT_NUMBER?: string;   // -> maps to FINANCE_TEL_NO column in SP
-  FIN_CONTACT_EMAIL?: string;    // -> maps to FINANCE_EMAIL column in SP
+  FIN_CONTACT_PERSON?: string;
+  FIN_CONTACT_NUMBER?: string;
+  FIN_CONTACT_EMAIL?: string;
 
   COMMERCIAL_REG_NO?: string;
   BUSINESS_SECTOR?: string;
 
-  // Remarks section on the UI
-  REMARKS_CONTACT_PERSON?: string; // -> maps to CONTACT_PERSON column in SP
+  REMARKS_CONTACT_PERSON?: string;
   AUTHORIZED_SIGNATORY?: string;
 
   CREDIT_FORM_SIGNATURE_DATE?: string | Date;
@@ -90,99 +88,111 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const [rejectOpen, setRejectOpen] = useState(false);
   const [sendBackOpen, setSendBackOpen] = useState(false);
   const [remarkText, setRemarkText] = useState("");
-    const [attachOpen, setAttachOpen] = useState(false);
-    const [logOpen, setLogOpen] = useState(false);
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
 
   const disabled = isViewMode || saving;
   const Required = () => <span className="text-destructive ml-0.5">*</span>;
 
   // ── Fetch existing CR (edit/view mode) ────────────────────────────────────
+  // FIX: was `enabled: isEditMode && !!requestNumber` — this meant View mode
+  // (isEditMode=false, isViewMode=true) never fetched, so the form always
+  // rendered blank even though a valid requestNumber was passed in.
   const { data: hdrList = [] } = useQuery<TCRHeader[]>({
     queryKey: ["cr-header", requestNumber, companyCode],
     queryFn: () =>
       almsCommonSelect<TCRHeader>({
-        parameter: "Amlspf_TabCRHeader", // TODO: confirm actual select parameter name
+        parameter: "Amlspf_VW_CR_PAGE",
         loginid,
         code1: companyCode,
         code2: requestNumber,
       }),
-    enabled: isEditMode && !!requestNumber,
+    enabled: (isEditMode || isViewMode) && !!requestNumber,
   });
 
   useEffect(() => {
     if (hdrList.length > 0) {
       setHeader(hdrList[0]);
       setLoading(false);
-    } else if (!isEditMode) {
+    } else if (!isEditMode && !isViewMode) {
+      // FIX: genuinely a new/create form only when NEITHER edit NOR view —
+      // previously `!isEditMode` alone also matched View mode and cleared
+      // loading before the fetch above ever had a chance to run/resolve.
       setLoading(false);
     }
-  }, [hdrList, isEditMode]);
+  }, [hdrList, isEditMode, isViewMode]);
 
   const setHdr = (field: keyof TCRHeader, value: unknown) =>
     setHeader((prev) => ({ ...prev, [field]: value }));
 
   // ── Save (matches PROC_BUILD_DYNAMIC_INS_UPD_COLUMN90 -> 'capex_req_ins_upd') ──
-  const saveHeader = async (status: string) =>
+ const saveHeader = async (status: string, extra: Record<string, unknown> = {}) =>
     almsSave({
-      parameter: "capex_req_ins_upd", // TODO: confirm exact wrapper "parameter" value you call
+      parameter: "capex_req_ins_upd",
       loginid,
-      // ── Strings ──────────────────────────────────────────────
-      val1s1: requestNumber || "",                      // REQUEST_NUMBER
-      val1s2: companyCode,                               // COMPANY_CODE
-      val1s3: header.REQUEST_DATE
-        ? String(header.REQUEST_DATE).slice(0, 10)
-        : "",                                            // REQUEST_DATE (YYYY-MM-DD)
-      val1s4: header.DESCRIPTION || "",                  // DESCRIPTION
-      val1s5: header.REMARKS || "",                      // REMARKS
-      val1s6: header.DEPARTMENT_CODE || "",               // DEPARTMENT_CODE
-      val1s7: header.FLOW_CODE || "CR",               // FLOW_CODE
-      val1s8: loginid,                                    // USER_ID
-      val1s9: header.FINAL_APPROVED || "",               // FINAL_APPROVED
-      val1s10: header.CREATE_USER || loginid,             // CREATE_USER
-      val1s11: loginid,                                   // LAST_UPDATED
-      val1s12: status,                                    // LAST_ACTION ("DRAFT" / "SUBMITTED")
+      val1s1: requestNumber || "",
+      val1s2: companyCode,
+      val1s3: header.REQUEST_DATE ? String(header.REQUEST_DATE).slice(0, 10) : "",
+      val1s4: header.DESCRIPTION || "",
+      val1s5: header.REMARKS || "",
+      val1s6: header.DEPARTMENT_CODE || "",
+      val1s7: header.FLOW_CODE || "CR",
+      val1s8: loginid,
+      val1s9: header.FINAL_APPROVED || "",
+      val1s10: header.CREATE_USER || loginid,
+      val1s11: loginid,
+      val1s12: status,
 
-      val1s18: header.COMPANY_NAME || "",                 // COMPANY_NAME
-      val1s19: header.AWARE_CUSTOMER_CODE || "",          // AWARE_CUSTOMER_CODE
-      val1s20: header.WAY_NO || "",                       // WAY_NO
-      val1s21: header.BLDG_NO || "",                      // BLDG_NO
-      val1s22: header.FLAT_NO || "",                      // FLAT_NO
-      val1s23: header.LOCATION || "",                     // LOCATION
-      val1s24: header.PO_BOX || "",                       // PO_BOX
-      val1s25: header.CITY || "",                         // CITY
-      val1s26: header.TEL_NO || "",                       // OFFICE_TEL_NO
-      val1s27: header.WEBSITE || "",                      // WEBSITE
-      val1s28: header.EMAIL || "",                        // EMAIL
+      val1s18: header.COMPANY_NAME || "",
+      val1s19: header.AWARE_CUSTOMER_CODE || "",
+      val1s20: header.WAY_NO || "",
+      val1s21: header.BLDG_NO || "",
+      val1s22: header.FLAT_NO || "",
+      val1s23: header.LOCATION || "",
+      val1s24: header.PO_BOX || "",
+      val1s25: header.CITY || "",
+      val1s26: header.TEL_NO || "",
+      val1s27: header.WEBSITE || "",
+      val1s28: header.EMAIL || "",
 
-      val1s29: header.REMARKS_CONTACT_PERSON || "",       // CONTACT_PERSON
-      val1s30: header.FIN_CONTACT_NUMBER || "",           // FINANCE_TEL_NO
-      val1s31: header.FIN_CONTACT_EMAIL || "",            // FINANCE_EMAIL
-      val1s32: header.COMMERCIAL_REG_NO || "",            // COMMERCIAL_REG_NO
-      val1s33: header.BUSINESS_SECTOR || "",              // BUSINESS_SECTOR
-      val1s34: header.FIN_CONTACT_PERSON || "",           // REMARKS_CONTACT_PERSON
-      val1s35: header.AUTHORIZED_SIGNATORY || "",         // AUTHORIZED_SIGNATORY
+      val1s29: header.REMARKS_CONTACT_PERSON || "",
+      val1s30: header.FIN_CONTACT_NUMBER || "",
+      val1s31: header.FIN_CONTACT_EMAIL || "",
+      val1s32: header.COMMERCIAL_REG_NO || "",
+      val1s33: header.BUSINESS_SECTOR || "",
+      val1s34: header.FIN_CONTACT_PERSON || "",
+      val1s35: header.AUTHORIZED_SIGNATORY || "",
       val1s36: header.CREDIT_FORM_SIGNATURE_DATE
         ? String(header.CREDIT_FORM_SIGNATURE_DATE).slice(0, 10)
-        : "",                                             // CREDIT_FORM_SIGNATURE_DATE
+        : "",
 
-      val1s37: header.COMMENTS || "",                     // COMMENTS
-      val1s38: header.ATTACHMENT || "",                   // ATTACHMENT
+      val1s37: header.COMMENTS || "",
+      val1s38: header.ATTACHMENT || "",
 
-      val1s39: header.ACCOUNT_ENV_TMS === "Y" ? "Y" : "N",     // ACCOUNT_ENV_TMS
-      val1s40: header.ACCOUNT_ENV_WMS === "Y" ? "Y" : "N",     // ACCOUNT_ENV_WMS
-      val1s41: header.ACCOUNT_ENV_FREIGHT === "Y" ? "Y" : "N", // ACCOUNT_ENV_FREIGHT
-      val1s42: header.ACCOUNT_NO || "",                   // ACCOUNT_NO
+      val1s39: header.ACCOUNT_ENV_TMS === "Y" ? "Y" : "N",
+      val1s40: header.ACCOUNT_ENV_WMS === "Y" ? "Y" : "N",
+      val1s41: header.ACCOUNT_ENV_FREIGHT === "Y" ? "Y" : "N",
+      val1s42: header.ACCOUNT_NO || "",
+      val1s43: loginid,
+      val1s44: loginid,
+      val1s45: header.NEXT_ACTION_BY || "",
+      val1s46: "",
+      val1s47: "",
 
-      // ── Numbers ──────────────────────────────────────────────
-      val1n1: header.FLOW_LEVEL_INITIAL || 1,             // FLOW_LEVEL_INITIAL
-      val1n2: header.FLOW_LEVEL_RUNNING || 1,             // FLOW_LEVEL_RUNNING
-      val1n3: header.FLOW_LEVEL_FINAL || 3,               // FLOW_LEVEL_FINAL
-      val1n4: header.HISTORY_SERIAL || 0,                 // HISTORY_SERIAL
-      val1n6: header.POSTAL_CODE || 0,                    // POSTAL_CODE
-      val1n7: header.CREDIT_LIMIT || 0,                   // CREDIT_LIMIT
-      val1n8: header.REQUESTED_CREDIT_PERIOD || 0,        // REQUESTED_CREDIT_PERIOD
-      val1n9: header.SANCTIONED_CREDIT_LIMIT_AMT || 0,    // SANCTIONED_CREDIT_LIMIT_AMT
-      val1n10: header.SANCTIONED_CREDIT_PERIOD || 0,      // SANCTIONED_CREDIT_PERIOD
+      val1n1: header.FLOW_LEVEL_INITIAL || 1,
+      val1n2: header.FLOW_LEVEL_RUNNING || 1,
+      val1n3: header.FLOW_LEVEL_FINAL || 3,
+      val1n4: header.HISTORY_SERIAL || 0,
+      val1n6: header.POSTAL_CODE || 0,
+      val1n7: header.CREDIT_LIMIT || 0,
+      val1n8: header.REQUESTED_CREDIT_PERIOD || 0,
+      val1n9: header.SANCTIONED_CREDIT_LIMIT_AMT || 0,
+      // val1n10: header.SANCTIONED_CREDIT_PERIOD || 0,
+
+      val1n10: header.SANCTIONED_CREDIT_PERIOD || 0,
+
+      ...extra,
+  
     });
 
   const runAction = async (status: string, successMsg: string) => {
@@ -205,50 +215,42 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const handleSubmit = () => runAction("SUBMITTED", "CR submitted successfully!");
 
   const handleRejectConfirm = async () => {
-    if (!remarkText.trim()) return setNotice({ type: "error", message: "Please enter a reject remark" });
-    setSaving(true);
-    setNotice(null);
-    try {
-      await almsSave({
-        parameter: "Amlspf_RejectCR", // TODO: confirm actual SP name
-        loginid,
-        code1: companyCode,
-        code2: requestNumber,
-        code3: remarkText,
-      });
+  if (!remarkText.trim()) return setNotice({ type: "error", message: "Please enter a reject remark" });
+  setSaving(true);
+  setNotice(null);
+  try {
+    const result = await saveHeader("REJECTED", { val1s47: remarkText });
+    if (result.success) {
       setNotice({ type: "success", message: "CR rejected successfully!" });
       setRejectOpen(false);
       setRemarkText("");
       onClose(true);
-    } catch (err) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to reject" });
-    } finally {
-      setSaving(false);
     }
-  };
+  } catch (err) {
+    setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to reject" });
+  } finally {
+    setSaving(false);
+  }
+};
 
   const handleSendBackConfirm = async () => {
-    if (!remarkText.trim()) return setNotice({ type: "error", message: "Please enter a send back reason" });
-    setSaving(true);
-    setNotice(null);
-    try {
-      await almsSave({
-        parameter: "Amlspf_SendBackCR", // TODO: confirm actual SP name
-        loginid,
-        code1: companyCode,
-        code2: requestNumber,
-        code3: remarkText,
-      });
+  if (!remarkText.trim()) return setNotice({ type: "error", message: "Please enter a send back reason" });
+  setSaving(true);
+  setNotice(null);
+  try {
+    const result = await saveHeader("SENTBACK", { val1s46: remarkText });
+    if (result.success) {
       setNotice({ type: "success", message: "CR sent back successfully!" });
       setSendBackOpen(false);
       setRemarkText("");
       onClose(true);
-    } catch (err) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to send back" });
-    } finally {
-      setSaving(false);
     }
-  };
+  } catch (err) {
+    setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to send back" });
+  } finally {
+    setSaving(false);
+  }
+};
 
   return (
     <div className="fixed inset-0 z-50 bg-background">
@@ -257,24 +259,16 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
           <div className="flex min-h-10 items-center justify-between gap-3">
             <div>
               <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                {isEditMode ? "Edit Document" : "New Document"}
+                {isViewMode ? "View Document" : isEditMode ? "Edit Document" : "New Document"}
               </p>
               <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">
                 Credit Request {requestNumber ? `— ${requestNumber}` : ""}
               </h2>
             </div>
-             {/* <Button type="button" variant="secondary" onClick={() => setAttachOpen(true)}><Paperclip size={15} /> Files</Button>
-            <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={() => onClose()}>
-              <X size={16} />
-            </Button> */}
 
-             <div className="flex items-center gap-2">
-          
-                <>
-                  <Button type="button" variant="secondary" onClick={() => setAttachOpen(true)}><Paperclip size={15} /> Files</Button>
-                  <Button type="button" variant="secondary" onClick={() => setLogOpen(true)}><FileText size={15} /> Log</Button>
-                </>
-              
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="secondary" onClick={() => setAttachOpen(true)}><Paperclip size={15} /> Files</Button>
+              <Button type="button" variant="secondary" onClick={() => setLogOpen(true)}><FileText size={15} /> Log</Button>
               <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={() => onClose()}><X size={16} /></Button>
             </div>
           </div>
@@ -295,7 +289,6 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                 </div>
                 <div className="grid grid-cols-1 gap-2 p-2 md:grid-cols-2 lg:grid-cols-6">
                   <label className="field">
-                    {/* <span>Request Number</span> */}
                     <span>Request Number <Required /></span>
                     <Input disabled value={requestNumber || "New"} />
                   </label>
@@ -350,12 +343,32 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                   <label className="field"><span>Business Sector<Required /></span><Input disabled={disabled} value={header.BUSINESS_SECTOR || ""} onChange={(e) => setHdr("BUSINESS_SECTOR", e.target.value)} /></label>
                   <label className="field"><span>Contact Person<Required /></span><Input disabled={disabled} value={header.REMARKS_CONTACT_PERSON || ""} onChange={(e) => setHdr("REMARKS_CONTACT_PERSON", e.target.value)} /></label>
                   <label className="field"><span>Authorized Signatory<Required /></span><Input disabled={disabled} value={header.AUTHORIZED_SIGNATORY || ""} onChange={(e) => setHdr("AUTHORIZED_SIGNATORY", e.target.value)} /></label>
+                  <label className="field">
+                    <span>Comments<Required /></span>
+                    <textarea
+                      disabled={disabled}
+                      rows={2}
+                      value={header.COMMENTS || ""}
+                      onChange={(e) => setHdr("COMMENTS", e.target.value)}
+                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                    />
+                  </label>
+
+                  <label className="field">
+                    <span>Remarks<Required /></span>
+                    <textarea
+                      disabled={disabled}
+                      rows={1}
+                      value={header.REMARKS || ""}
+                      onChange={(e) => setHdr("REMARKS", e.target.value)}
+                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                    />
+                  </label>
                 </div>
               </div>
 
-              
               {/* Comments */}
-              <div className="rounded-md border bg-card">
+              {/* <div className="rounded-md border bg-card">
                 <div className="border-b bg-secondary/40 px-3 py-1">
                   <h3 className="m-0 text-sm font-semibold leading-tight">Comments</h3>
                 </div>
@@ -381,7 +394,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                     />
                   </label>
                 </div>
-              </div>
+              </div> */}
 
               {/* Credit Requested */}
               <div className="rounded-md border bg-card">
@@ -404,17 +417,6 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                   <label className="field"><span>Sanctioned Credit Period<Required /></span><Input disabled={disabled} type="number" value={header.SANCTIONED_CREDIT_PERIOD ?? ""} onChange={(e) => setHdr("SANCTIONED_CREDIT_PERIOD", Number(e.target.value))} /></label>
                 </div>
               </div>
-
-              {/* Credit Sanctioned */}
-              {/* <div className="rounded-md border bg-card">
-                <div className="border-b bg-secondary/40 px-3 py-1.5">
-                  <h3 className="m-0 text-sm font-semibold leading-tight">Credit Sanctioned</h3>
-                </div>
-                <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2">
-                  <label className="field"><span>Sanctioned Credit Limit Amt</span><Input disabled={disabled} type="number" step="0.001" value={header.SANCTIONED_CREDIT_LIMIT_AMT ?? ""} onChange={(e) => setHdr("SANCTIONED_CREDIT_LIMIT_AMT", Number(e.target.value))} /></label>
-                  <label className="field"><span>Sanctioned Credit Period</span><Input disabled={disabled} type="number" value={header.SANCTIONED_CREDIT_PERIOD ?? ""} onChange={(e) => setHdr("SANCTIONED_CREDIT_PERIOD", Number(e.target.value))} /></label>
-                </div>
-              </div> */}
 
               {/* Account Environment */}
               <div className="rounded-md border bg-card">
@@ -449,11 +451,6 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                     />
                     FREIGHT
                   </label>
-                  {/* <label className=" flex-1 min-w-[50px]"> */}
-                  {/* <label className="flex flex-wrap items-center gap-2 p-1">
-                    <span >Account No</span>
-                    <Input disabled={disabled} value={header.ACCOUNT_NO || ""} onChange={(e) => setHdr("ACCOUNT_NO", e.target.value)} />
-                  </label> */}
 
                   <label className="field  min-w-[200px]">
                     <span>Account No<Required /></span>

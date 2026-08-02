@@ -1,6 +1,5 @@
 // src/pages/almswf/Credit_Request_page.tsx
-import { useState, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../state/AuthContext";
 import { Plus, Eye, Edit2 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
@@ -10,20 +9,16 @@ import { NoticeToast } from "../../components/ui/NoticeToast";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { TPurchaseSummaryTxn } from "./PurchaseSummary-types";
 import AddCRRequestPage from "./AddCRRequestPage";
-import { almsCommonSelect } from "../../api/alms";
+import { getDynamicLookup } from "../../api/lookups";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const TAB_STATUS = ["PENDING", "IN PROGRESS", "REJECTED", "SENT BACK", "APPROVED", "PO GENERATED"] as const;
-const TAB_LABELS = ["Pending", "In Progress", "Rejected", "Sent Back", "Final Approved", "Po Generated"] as const;
+// NOTE: these must exactly match PROC_BUILD_DYNAMIC_CREDITREQUEST_ENTRY's P_CODE3
+// CASE values (PS_CREDITREQUEST_ENTRY_TAB_LIST). No spaces — "INPROGRESS" and
+// "SENDBACK" are single words on the backend, unlike the generic PR/PO tab set.
+const TAB_STATUS = ["PENDING", "INPROGRESS", "CLOSED", "CANCELED", "REJECTED", "SENDBACK"] as const;
+const TAB_LABELS = ["Pending", "In Progress", "Closed", "Canceled", "Rejected", "Send Back"] as const;
 
-const STATUS_MATCH: Record<(typeof TAB_STATUS)[number], string[]> = {
-  PENDING: ["PENDING"],
-  "IN PROGRESS": ["IN PROGRESS"],
-  REJECTED: ["REJECTED"],
-  "SENT BACK": ["SENT BACK"],
-  APPROVED: ["APPROVED", "A/C POSTED"],
-  "PO GENERATED": ["PO GENERATED"],
-};
+type CRTab = (typeof TAB_STATUS)[number];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtDate(val: unknown): string {
@@ -35,24 +30,34 @@ function fmtDate(val: unknown): string {
 }
 
 function statusOf(row: TPurchaseSummaryTxn): string {
-  return String((row as any).PURCH_STATUS ?? (row as any).purch_status ?? "").toUpperCase();
+  return String((row as any).LAST_ACTION ?? (row as any).LAST_ACTION ?? "").toUpperCase();
+}
+
+// getDynamicLookup returns raw lowercase keys from Oracle (unlike almsCommonSelect,
+// which auto-uppercases). Normalize here so columns/cells (which read UPPERCASE keys
+// like REQUEST_NUMBER, DESCRIPTION, AMOUNT) resolve correctly instead of showing NA/blank.
+function uppercaseKeys<T extends Record<string, unknown>>(row: T): T {
+  const out: Record<string, unknown> = {};
+  for (const key in row) {
+    out[key.toUpperCase()] = row[key];
+  }
+  return out as T;
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface CreditRequestPageProps {
-  initialTab?: number;
+  initialTab?: number; // index into TAB_STATUS, kept for backward-compat with existing routing
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const Credit_Request_page = ({ initialTab = 0 }: CreditRequestPageProps) => {
   const { user } = useAuth();
-  const loginid = user?.loginid || user?.username || "";
-  const companyCode = user?.company_code || "";
-  const queryClient = useQueryClient();
 
-  // ── Tabs ───────────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState(initialTab);
-  const statusFilter = TAB_STATUS[activeTab];
+  const [rows, setRows] = useState<TPurchaseSummaryTxn[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [totalRows, setTotalRows] = useState(0);
+  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [tab, setTab] = useState<CRTab>(TAB_STATUS[initialTab] ?? "PENDING");
   const [query, setQuery] = useState("");
 
   // ── Popup state (Add / Edit / View) ─────────────────────────────────────────
@@ -66,36 +71,48 @@ const Credit_Request_page = ({ initialTab = 0 }: CreditRequestPageProps) => {
     },
   });
 
-  // ── Fetch (VW_CR_PAGE view — CR records only) ───────────────────────────────
-  const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["credit-request-page", loginid, companyCode],
-    queryFn: () =>
-      almsCommonSelect<TPurchaseSummaryTxn>({
-        parameter: "Amlspf_VW_CR_PAGE",
-        loginid,
-        code1: companyCode,
-        code2: "", // blank = fetch all CR records for this company; backend should NVL/skip filter when blank
-      }),
-    enabled: !!loginid && !!companyCode,
-  });
+  // ── Fetch (server-side, tab-driven — mirrors PS_POORDER_ENTRY_TAB_List pattern) ──
+  const fetchCreditRequest = async () => {
+    const response = await getDynamicLookup({
+      parameter: "PS_CREDITREQUEST_ENTRY_TAB_LIST",
+      code1: user?.company_code,
+      code2: user?.loginid || user?.username || "ADMIN",
+      code3: tab,
+    });
 
-  const rows = useMemo(() => data ?? [], [data]);
+    const rawRows = (response ?? []) as unknown as Record<string, unknown>[];
+    return rawRows.map(uppercaseKeys) as TPurchaseSummaryTxn[];
+  };
 
-  // ── Client-side status filter ──────────────────────────────────────────────
-  const statusFilteredRows = useMemo(() => {
-    const allowed = STATUS_MATCH[statusFilter];
-    return rows.filter((row) => allowed.includes(statusOf(row)));
-  }, [rows, statusFilter]);
+  const loadRows = async (clearNotice = true) => {
+    setLoading(true);
+    if (clearNotice) setNotice(null);
+    try {
+      const response = await fetchCreditRequest();
+      setRows(response);
+      setTotalRows(response.length);
+    } catch (error) {
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load credit requests" });
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
+    void loadRows();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, user?.company_code, user?.loginid, user?.username]);
+
+  // ── Client-side search filter (tab filtering is already done server-side) ───
   const filteredRows = useMemo(() => {
-    if (!query.trim()) return statusFilteredRows;
+    if (!query.trim()) return rows;
     const q = query.toLowerCase();
-    return statusFilteredRows.filter((row) =>
+    return rows.filter((row) =>
       [row.REQUEST_NUMBER, (row as any).DESCRIPTION, (row as any).CREATE_USER, (row as any).PURCH_STATUS]
         .filter(Boolean)
         .some((field) => String(field).toLowerCase().includes(q))
     );
-  }, [statusFilteredRows, query]);
+  }, [rows, query]);
 
   // ── Popup handlers ──────────────────────────────────────────────────────────
   const openAddPopup = () => {
@@ -121,7 +138,7 @@ const Credit_Request_page = ({ initialTab = 0 }: CreditRequestPageProps) => {
   const closePopup = (refresh?: boolean) => {
     setTaskPopup((prev) => ({ ...prev, open: false }));
     if (refresh) {
-      queryClient.invalidateQueries({ queryKey: ["credit-request-page", loginid, companyCode] });
+      void loadRows(false);
     }
   };
 
@@ -171,8 +188,8 @@ const Credit_Request_page = ({ initialTab = 0 }: CreditRequestPageProps) => {
         cell: ({ row }) => fmtDate((row.original as any).CREATE_DATE),
       },
       {
-        accessorKey: "purch_status",
-        header: "Status",
+        accessorKey: "LAST_ACTION",
+        header: "Last Action",
         size: 130,
         cell: ({ row }) => {
           const val = statusOf(row.original);
@@ -181,7 +198,7 @@ const Credit_Request_page = ({ initialTab = 0 }: CreditRequestPageProps) => {
           else if (val === "PENDING") { bg = "#fff4e5"; color = "#92400e"; border = "#fcd38a"; }
           else if (val === "IN PROGRESS") { bg = "#dbeafe"; color = "#1e40af"; border = "#93c5fd"; }
           else if (val === "REJECTED") { bg = "#fdecea"; color = "#a01a1a"; border = "#f5b3b3"; }
-          else if (val === "SENT BACK") { bg = "#f3e8fe"; color = "#6b21a8"; border = "#d9b3f5"; }
+          else if (val === "SENTBACK") { bg = "#f3e8fe"; color = "#6b21a8"; border = "#d9b3f5"; }
           else if (val === "PO GENERATED") { bg = "#d1fae5"; color = "#065f46"; border = "#6ee7b7"; }
           return (
             <span
@@ -191,7 +208,7 @@ const Credit_Request_page = ({ initialTab = 0 }: CreditRequestPageProps) => {
                 background: bg, color, border: `1px solid ${border}`,
               }}
             >
-              {(row.original as any).PURCH_STATUS || (row.original as any).purch_status || "—"}
+              {(row.original as any).LAST_ACTION || (row.original as any).last_action || "—"}
             </span>
           );
         },
@@ -215,18 +232,20 @@ const Credit_Request_page = ({ initialTab = 0 }: CreditRequestPageProps) => {
             >
               <Eye size={14} />
             </Button>
-            <Button
-              size="sm" variant="ghost" title="Edit"
-              onClick={() => handleActions("edit", row.original)}
-              style={{ padding: "4px", height: "28px", width: "28px" }}
-            >
-              <Edit2 size={14} />
-            </Button>
+            {tab !== "INPROGRESS" && (
+              <Button
+                size="sm" variant="ghost" title="Edit"
+                onClick={() => handleActions("edit", row.original)}
+                style={{ padding: "4px", height: "28px", width: "28px" }}
+              >
+                <Edit2 size={14} />
+              </Button>
+            )}
           </div>
         ),
       },
     ],
-    []
+    [tab]
   );
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -242,12 +261,7 @@ const Credit_Request_page = ({ initialTab = 0 }: CreditRequestPageProps) => {
       </div>
 
       {/* Notice */}
-      {isError && (
-        <NoticeToast
-          notice={{ type: "error", message: error instanceof Error ? error.message : "Failed to load tasks" }}
-          onClose={() => { }}
-        />
-      )}
+      <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
         <div className="flex flex-wrap gap-2 rounded-md">
@@ -255,14 +269,14 @@ const Credit_Request_page = ({ initialTab = 0 }: CreditRequestPageProps) => {
             <Button
               key={index}
               size="default"
-              variant={activeTab === index ? "default" : "outline"}
-              onClick={() => setActiveTab(index)}
+              variant={tab === TAB_STATUS[index] ? "default" : "outline"}
+              onClick={() => setTab(TAB_STATUS[index])}
               className="px-6 py-2.5 min-w-[120px]"
               style={{
                 fontSize: "15px",
-                fontWeight: activeTab === index ? 600 : 500,
+                fontWeight: tab === TAB_STATUS[index] ? 600 : 500,
                 transition: "all 0.2s ease",
-                ...(activeTab === index && {
+                ...(tab === TAB_STATUS[index] && {
                   boxShadow: "0 2px 8px rgba(8, 42, 137, 0.2)",
                 })
               }}
@@ -283,12 +297,12 @@ const Credit_Request_page = ({ initialTab = 0 }: CreditRequestPageProps) => {
       <DataTable
         columns={columns}
         data={filteredRows}
-        title={`${filteredRows.length.toLocaleString()} Records`}
-        subtitle={`${TAB_LABELS[activeTab]} Requests`}
+        title={loading ? "Loading" : `${totalRows.toLocaleString()} Records`}
+        subtitle={`${TAB_LABELS[TAB_STATUS.indexOf(tab)]} Requests`}
         searchValue={query}
         onSearchChange={setQuery}
         searchPlaceholder="Search request..."
-        loading={isLoading}
+        loading={loading}
         height={500}
         density="compact"
         enablePagination
