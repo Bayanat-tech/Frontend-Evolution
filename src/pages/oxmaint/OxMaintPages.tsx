@@ -157,19 +157,23 @@ export function OxSimpleMasterPage({ config }: { config: SimpleConfig }) {
   };
 
   const deleteRow = async (row: OxRow) => {
-    try {
-      const codeValue = text(row, [config.codeField]);
-      await executeDynamicDelete({
-        parameter: config.deleteParameter,
-        loginid,
-        [config.deleteCodeParam]: codeValue,
-      });
-      setNotice({ type: "success", message: `${config.noun} deleted successfully` });
-      await loadRows(false);
-    } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to delete ${config.noun}` });
-    }
-  };
+  try {
+    const codeValue = text(row, [config.codeField]);
+    await executeDynamicDelete({
+      parameter: config.deleteParameter,
+      loginid,
+      [config.deleteCodeParam]: codeValue,
+    });
+    setNotice({ type: "success", message: `${config.noun} deleted successfully` });
+    await loadRows(false);
+  } catch (error) {
+    const raw = error instanceof Error ? error.message : `Unable to delete ${config.noun}`;
+    const friendly = /ORA-02292/.test(raw)
+      ? `This ${config.noun.toLowerCase()} is linked to existing records and cannot be deleted. Remove or reassign those records first.`
+      : raw;
+    setNotice({ type: "error", message: friendly });
+  }
+};
 
   const columns = useMemo<ColumnDef<OxRow>[]>(
     () => [
