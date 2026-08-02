@@ -12,29 +12,26 @@ import {
   ActionKey,
   PurchaseConfig,
   PurchaseOrderEditorState,
-  PurchaseOrderLineRow,
   SendBackUserOption,
 } from "../purchase/Purchaseordertypes";
 import {
   emptyForm,
-  emptyLineRow,
+
   formatAmount,
-  lineAmount,
-  lineDiscPrice,
-  lineNetAmount,
-  lineTaxAmount,
+
+
+
   lowerRecord,
   newId,
   numberOrZero,
   text,
 } from "../purchase/Purchaseorderutils";
-import { PurchaseOrderHeaderForm } from "../purchase/Purchaseorderheaderform";
-import { PurchaseOrderLinesTable } from "../purchase/Purchaseorderlinestable";
 import { SendBackDialog } from "../purchase/Sendbackdialog";
 import { RejectDialog } from "../purchase/Rejectdialog";
-import {  PROCESSST, InventoryConfig, IV_DOC_TYPE, PurchaseOrderForm } from "./Inventorytypes";
-import { fetchSalesOrderDetail, fetchSalesOrderHeader, runWorkflow } from "./Inventoryutils";
+import {  PROCESSST, InventoryConfig, IV_DOC_TYPE, PurchaseOrderForm, InventoryLineRow } from "./Inventorytypes";
+import { emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, lineAmount, lineDiscPrice, lineTaxAmount, runWorkflow } from "./Inventoryutils";
 import { StockHeaderForm } from "./StockHeaderForm";
+import { StockDetail } from "./StockDetail";
 
 
 export type { PurchaseOrderEditorState };
@@ -55,7 +52,7 @@ export function StockTransferEditor({
   const { user } = useAuth();
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
-  const [rows, setRows] = useState<PurchaseOrderLineRow[]>(() => (editMode ? [] : [emptyLineRow(form.div_code)]));
+  const [rows, setRows] = useState<InventoryLineRow[]>(() => (editMode ? [] : [emptyLineRow(form.div_code)]));
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -195,7 +192,7 @@ export function StockTransferEditor({
     setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const updateRow = (id: string, patch: Partial<PurchaseOrderLineRow>) => {
+  const updateRow = (id: string, patch: Partial<InventoryLineRow>) => {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
 
@@ -390,15 +387,15 @@ export function StockTransferEditor({
                 loginid={user?.loginid || user?.username}
               />
 
-              <PurchaseOrderLinesTable
+              <StockDetail
                 rows={rows}
                 updateRow={updateRow}
                 addRow={addRow}
                 removeRow={removeRow}
                 headerAndLineDisabled={headerAndLineDisabled}
-                discAmt={form.disc_amt}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
+                docType={config.docType}
               />
             </div>
           )}

@@ -216,10 +216,10 @@ export function PurchaseOrderEditor({
     }
   };
 
-  const handleSaveAsDraft = () =>
-    runAction("draft", async () => {
-    }, "Purchase order saved as draft");
-
+ const handleSaveAsDraft = () =>
+  runAction("draft", async () => {
+    await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
+  }, "Sales Order saved as draft");
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");

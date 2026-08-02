@@ -67,7 +67,7 @@ export function StockHeaderForm({
                     <Input type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(event) => updateField("doc_date", event.target.value)} />
                 </CField>
 
-                <div className="col-span-1">
+                <div className="col-span-2">
                     <LookupField
                         label="Division *"
                         value={form.div_code}
@@ -105,6 +105,7 @@ export function StockHeaderForm({
                                     getDynamicLookup({
                                         parameter: "DROP_DOWN_DEPT_BASED_ON_DIV",
                                         code1: companyCode,
+                                        code2: form.div_code,
                                         loginid: loginid || "ADMIN",
                                     })
                                 }
@@ -221,22 +222,19 @@ export function StockHeaderForm({
                         </div>
                     </>
                 )}
-
-            </CompactSection>
-
-            <CompactSection label="Remarks">
-
-               {docType === IV_DOC_TYPE.STR && <CField label="Issued By" className="col-span-2">
+                  {docType !== IV_DOC_TYPE.STR &&  docType !== IV_DOC_TYPE.SAJ &&<CField label="Issued By" className="col-span-1">
                     <Input disabled={headerAndLineDisabled} value={form.issued_by} onChange={(event) => updateField("issued_by", event.target.value)} />
                 </CField>}
-                {docType === IV_DOC_TYPE.STR && <CField label="Received By" className="col-span-2">
+                {docType !== IV_DOC_TYPE.STR  &&  docType !== IV_DOC_TYPE.SAJ && <CField label="Received By" className="col-span-1">
                     <Input disabled={headerAndLineDisabled} value={form.received_by} onChange={(event) => updateField("received_by", event.target.value)} />
                 </CField>}
-                <CField label="Remarks" className="col-span-2">
+                <CField label="Remarks" className="col-span-3">
                     <Input disabled={headerAndLineDisabled} value={form.remarks} onChange={(event) => updateField("remarks", event.target.value)} />
                 </CField>
 
+
             </CompactSection>
+             
         </div>
     );
 }

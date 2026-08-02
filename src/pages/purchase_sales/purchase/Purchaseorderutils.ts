@@ -54,6 +54,9 @@ export const emptyLineRow = (divCode: string): PurchaseOrderLineRow => ({
   tax_code: "",
   tax_lcurr_amount: 0,
   lcurr_amount_disc: 0,
+  uppp:0,
+  quantity:0,
+  ex_rate:1
 });
 
 export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
@@ -89,7 +92,8 @@ export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
     disc_pct: editor?.mode === "edit" ? Number(editor.row.disc_pct || 0) : 0,
     tax_category: editor?.mode === "edit" ? editor.row.tax_category || "" : "",
     tax_code: editor?.mode === "edit" ? editor.row.tax_code || "" : "",
-    expense_ac_post: editor?.mode === "edit" ? editor.row.expense_ac_post || EXPENSE_AC_OPTIONS[0] : EXPENSE_AC_OPTIONS[0],
+    // expense_ac_post: editor?.mode === "edit" ? editor.row.expense_ac_post || EXPENSE_AC_OPTIONS[0] : EXPENSE_AC_OPTIONS[0],
+    expense_ac_post: editor?.mode === "edit" ? editor.row.expense_ac_post || EXPENSE_AC_OPTIONS[0].value : EXPENSE_AC_OPTIONS[0].value,
     print_on_letterhead: editor?.mode === "edit" ? editor.row.print_on_letterhead || "N" : "N",
     project_name: editor?.mode === "edit" ? editor.row.project_name || "" : "",
     pr_no: editor?.mode === "edit" ? editor.row.pr_no || "" : "",
@@ -160,6 +164,9 @@ export async function fetchPurchaseOrderDetail(
       tax_code: text(row.tax_code),
       tax_lcurr_amount: numberOrZero(row.tax_lcurr_amount),
       lcurr_amount_disc: numberOrZero(row.lcurr_amount_disc ?? row.lcurr_amount_discount),
+      uppp:numberOrZero(row.uppp),
+      quantity:numberOrZero(row.quantity),
+      ex_rate:numberOrZero(row.ex_rate),
     } satisfies PurchaseOrderLineRow;
   });
 }
@@ -169,38 +176,38 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     doc_no: form.doc_no || undefined,
     doc_type: docType,
     doc_date: form.doc_date,
-    quotn_no: form.quotn_no,
-    quotn_date: form.quotn_date,
+    ref_no: form.quotn_no,
+    ref_date: form.quotn_date,
     div_code: form.div_code,
     div_name: form.div_name,
     ac_code: form.ac_code,
     ac_name: form.ac_name,
-    address: form.address,
+    party_name: form.ac_name,
+    party_address: form.address,
     credit_period: form.credit_period,
     dept_code: form.dept_code,
-    tel: form.tel,
-    fax: form.fax,
+    party_phone: form.tel,
+    party_fax: form.fax,
     buyer: form.buyer,
-    wo_no: form.wo_no,
+    wo_number: form.wo_no,
     curr_code: form.curr_code,
     curr_name: form.curr_name,
     ex_rate: form.ex_rate,
-    pay_terms: form.pay_terms,
-    delivery_term: form.delivery_term,
-    delivery_contact: form.delivery_contact,
-    delivery_tel: form.delivery_tel,
-    delivery_email: form.delivery_email,
+    payment_terms: form.pay_terms,
+    dlvr_term: form.delivery_term,
+    dlvr_contact: form.delivery_contact,
+    dlvr_mobile: form.delivery_tel,
+    dlvr_email: form.delivery_email,
     remarks: form.remarks,
-    disc_amt: form.disc_amt,
-    disc_pct: form.disc_pct,
-    tax_category: form.tax_category,
-    tax_code: form.tax_code,
-    expense_ac_post: form.expense_ac_post,
-    print_on_letterhead: form.print_on_letterhead,
+    disc_hdr_price: form.disc_amt,
+    disc_hdr_percent: form.disc_pct,
+    tx_cat_code: form.tax_category,
+    tx_compntcat_code_1: form.tax_code,
+    purchase_actype: form.expense_ac_post,
     project_name: form.project_name,
     pr_no: form.pr_no,
     scope_of_work: form.scope_of_work,
-    canceled: form.canceled || "N",
+    cancelled: form.canceled || "N",
     company_code: companyCode,
     user_id: loginid,
     next_action_by: form.next_action_by || undefined,
@@ -210,17 +217,18 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
   };
 }
 
-export function lineAmount(row: PurchaseOrderLineRow) {
-  return row.qty_puom * row.unit_price;
-}
+
 export function lineDiscPrice(row: PurchaseOrderLineRow) {
-  return lineAmount(row) * (row.disc_pct / 100);
+  return row.unit_price * (row.disc_pct / 100);
 }
 export function lineNetAmount(row: PurchaseOrderLineRow) {
   return lineAmount(row) - lineDiscPrice(row);
 }
 export function lineTaxAmount(row: PurchaseOrderLineRow) {
   return lineNetAmount(row) * (row.tax_pct / 100);
+}
+export function lineAmount(row: PurchaseOrderLineRow) {
+  return (row.unit_price - lineDiscPrice(row) ) * row.quantity
 }
 
 export function buildDetailsPayload(rows: PurchaseOrderLineRow[]) {
