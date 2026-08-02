@@ -277,7 +277,7 @@ export const wmsSimpleMasterConfigs: Record<string, WmsSimpleMasterConfig> = {
       { name: "mandatory_flag", label: "Mandatory", type: "select", options: yesNo, width: 120 },
       { name: "validate_flag", label: "Validate", type: "select", options: yesNo, width: 120 },
       { name: "act_group_type", label: "Group Type", width: 140, maxLength: 2 },
-      { name: "account_code", label: "Account Code", dropdownParam: "Account_AC_CODE_Serach", dropdownDisplayFields:["ac_code","ac_name"],dropdownValueKey: "ac_code", width: 150 },
+      { name: "account_code", label: "Account Code", dropdownParam: "Account_AC_CODE_Serach", dropdownDisplayFields:["ac_code","ac_name"],dropdownValueKey: "ac_code", width: 150, required: true },
       { name: "alternate_accode", label: "Alternate Account", width: 160 },
       { name: "exp_account_code", label: "Expense Account", width: 160 },
       { name: "freight_flag", label: "Freight", type: "select", options: yesNo, width: 110 },
