@@ -346,7 +346,7 @@ export async function getFlowAssignRoleUsers(companyCode: string, roleId: string
     ],
   };
 
-  const res = await api.post("/api/security/insUpdMsApproverLevels", payload);
+  const res = await api.post("/api/finance/insUpdMsApproverLevels", payload);
   return res.data;
 };
 // ─── Add / Remove user from role ──────────────────────────────────────────
@@ -372,7 +372,7 @@ export async function addUserToRole(companyCode: string, roleId: string, loginid
 }
 
  export const insSecRoleFunctionAccessUser = async (rows: any[]) => {
-  const res = await api.post("/api/security/insSecRoleFunctionAccessUser", { rows });
+  const res = await api.post("/api/finance/insSecRoleFunctionAccessUser", { rows });
   return res.data;
 };
 export async function removeUserFromRole(companyCode: string, roleId: string, loginid: string, actorLoginId: string) {
