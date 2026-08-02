@@ -1,16 +1,30 @@
 import type { MenuNode } from "../types/auth";
 
+const masterSignals = [
+  "master",
+  "masters",
+  "general master",
+];
+
+const excludedUtilitySignals = [
+  "dashboard",
+  "report",
+  "reports",
+  "transaction",
+  "transactions",
+  "inbound",
+  "outbound",
+  "request",
+  "approval",
+  "task",
+  "process",
+];
+
 export function buildWorkspaceApps(menuTree: MenuNode[]): MenuNode[] {
   const mastersApp = buildBtMastersApp(menuTree);
-  const normalizedApps = menuTree.map(normalizeApplicationRoutes);
-  if (!mastersApp) return normalizedApps;
-
-  // APP_CODE=MASTERS is represented by the BT Masters utility only. Do not
-  // expose it again as a standalone core application.
-  const visibleApps = normalizedApps.filter(
-    (item) => !isDedicatedMastersApp(item) && !isBtMastersApp(item),
-  );
-  return [...visibleApps, mastersApp];
+  if (!mastersApp) return menuTree;
+  const hasBtMasters = menuTree.some((item) => isBtMastersApp(item));
+  return hasBtMasters ? menuTree : [...menuTree, mastersApp];
 }
 
 export function cleanAppCode(value: string) {
@@ -26,88 +40,65 @@ export function isBtMastersApp(node?: MenuNode | null) {
   return normalizeTitle(node?.title || "") === "bt masters";
 }
 
-const securityRoutes: Record<string, string> = {
-  "masters/general master/company": "security/masters/gm/company",
-  "masters/general_master/company": "security/masters/gm/company",
-  "masters/general master/flow assignment": "security/masters/gm/flow_assignment",
-  "masters/general_master/flow_assignment": "security/masters/gm/flow_assignment",
-  "users/sec login": "security/masters/gm/sec_login",
-  "roles/role master": "security/masters/gm/role_master",
-  "user access/company": "security/masters/gm/sec_company",
-  "user access/modules": "security/masters/gm/sec_module_data",
-  "user access/project": "security/masters/gm/project_access",
-  "user access/roles": "security/masters/gm/access_assign_role",
-  "user access/division": "security/masters/gm/user_division_access",
-  "user access/screens": "security/masters/gm/access_assign_user",
-  "tenants/users": "security/masters/tenant_masters/tenant_user",
-  "tenants/registry": "security/masters/tenant_masters/tenant_registry",
-  "tenants/mapping": "security/masters/tenant_masters/tenant_mapping",
-};
-
-function normalizeApplicationRoutes(app: MenuNode): MenuNode {
-  if (normalizeTitle(app.title) !== "security") return app;
-
-  const walk = (nodes: MenuNode[], trail: string[]): MenuNode[] => nodes.map((node) => {
-    const nextTrail = [...trail, normalizeTitle(node.title)];
-    const children = walk(node.children || [], nextTrail);
-    const route = children.length === 0 ? securityRoutes[nextTrail.join("/")] : undefined;
-    return {
-      ...node,
-      ...(route ? { url_path: route, type: "item" as const } : {}),
-      ...(children.length > 0 ? { children } : { children: undefined }),
-    };
-  });
-
-  return { ...app, children: walk(app.children || [], []) };
-}
-
 export function buildBtMastersApp(menuTree: MenuNode[]): MenuNode | null {
-  const sourceApp = menuTree.find((app) => isDedicatedMastersApp(app));
-  const existingBtMasters = menuTree.find((app) => isBtMastersApp(app));
+  const groups = menuTree
+    .map((app) => {
+      if (isUtilitiesApp(app)) return null;
+      const masterLeaves = collectMasterLeaves(app);
+      if (!masterLeaves.length) return null;
+      return {
+        id: `bt-masters-${cleanAppCode(app.title)}`,
+        title: app.title,
+        type: "collapse" as const,
+        children: masterLeaves,
+      };
+    })
+    .filter(Boolean) as MenuNode[];
 
-  if (!sourceApp) return existingBtMasters || null;
+  if (!groups.length) return null;
 
   return {
     id: "virtual-bt-masters",
     title: "BT MASTERS",
     type: "group",
-    children: normalizeBtMasterRoutes(sourceApp.children || []),
+    children: groups,
   };
 }
 
-const btMasterRoutes: Record<string, string> = {
-  company: "security/masters/gm/company",
-  division: "wms/masters/gm/division",
-  department: "wms/masters/gm/department",
-  salesman: "wms/masters/gm/salesman",
-  supplier: "wms/masters/gm/supplier",
-  partner: "wms/masters/gm/partner",
-  country: "wms/masters/gm/country",
-  ports: "wms/masters/gm/port",
-  port: "wms/masters/gm/port",
-  currency: "wms/masters/gm/currency",
-  airline: "wms/masters/gm/airline",
-  vessels: "wms/masters/gm/vessel",
-  vessel: "wms/masters/gm/vessel",
-  line: "wms/masters/gm/line",
-  "hs codes": "wms/masters/gm/harmonize",
-  "hs code": "wms/masters/gm/harmonize",
-};
+function collectMasterLeaves(app: MenuNode): MenuNode[] {
+  const leaves: MenuNode[] = [];
 
-function normalizeBtMasterRoutes(nodes: MenuNode[]): MenuNode[] {
-  return nodes.map((node) => {
-    const children = normalizeBtMasterRoutes(node.children || []);
-    const route = children.length === 0 ? btMasterRoutes[normalizeTitle(node.title)] : undefined;
-    return {
-      ...node,
-      ...(route ? { url_path: route, type: "item" as const } : {}),
-      ...(children.length > 0 ? { children } : { children: undefined }),
-    };
-  });
+  const walk = (node: MenuNode, ancestry: string[]) => {
+    const children = node.children || [];
+    const trail = [...ancestry, node.title || "", node.url_path || ""];
+    if ((node.type === "item" || node.url_path) && isMasterTrail(trail)) {
+      leaves.push({
+        ...node,
+        id: `bt-masters-${cleanAppCode(app.title)}-${node.id || cleanAppCode(node.title)}`,
+      });
+    }
+    children.forEach((child) => walk(child, trail));
+  };
+
+  (app.children || []).forEach((child) => walk(child, [app.title || ""]));
+  return dedupeLeaves(leaves);
 }
 
-function isDedicatedMastersApp(node?: MenuNode | null) {
-  return normalizeTitle(node?.title || "") === "masters";
+function isMasterTrail(parts: string[]) {
+  const text = parts.join(" ").toLowerCase();
+  if (excludedUtilitySignals.some((signal) => text.includes(signal))) return false;
+  if (masterSignals.some((signal) => text.includes(signal))) return true;
+  return /(^|[^a-z0-9])gm([^a-z0-9]|$)/.test(text);
+}
+
+function dedupeLeaves(leaves: MenuNode[]) {
+  const seen = new Set<string>();
+  return leaves.filter((leaf) => {
+    const key = `${leaf.title}|${leaf.url_path || ""}`.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function normalizeTitle(value: string) {

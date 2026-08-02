@@ -235,7 +235,7 @@ export const wmsSimpleMasterConfigs: Record<string, WmsSimpleMasterConfig> = {
     fields: [
       { name: "broker_code", label: "Partner Code", required: true, disabledOnEdit: true, width: 150 },
       { name: "broker_name", label: "Partner Name", required: true, width: 260 },
-      { name: "curr_code", label: "Country", dropdownParam: "DROP_DOWN_COUNTRY", dropdownDisplayFields: ["country_code", "country_name"], dropdownValueKey: "country_code", width: 150, dropdownDisplaySeparator: " - " },
+      { name: "country_code", label: "Country Code", width: 140 },
       { name: "broker_city", label: "City", width: 150 },
       { name: "broker_contact1", label: "Contact", width: 180 },
       { name: "broker_telno1", label: "Telephone", width: 150 },
@@ -327,10 +327,10 @@ saveEndpoint: (form, { editMode, original }) => {
       { name: "prin_city", label: "City", width: 280, tab: "basic-info", section: "COMPANY DETAILS" },
       { name: "country_code", label: "Country", required: true, dropdownParam: "DROP_DOWN_COUNTRY",dropdownDisplayFields: ["country_code", "country_name"], dropdownValueKey: "country_code",
       dropdownDisplaySeparator: " - ", tab: "basic-info", section: "COMPANY DETAILS" },
-      { name: "prin_addr1", label: "Address 1", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS", colSpan: 2, maxLength: 50 },
-      { name: "prin_addr2", label: "Address 2", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS", colSpan: 2, maxLength: 50 },
-      { name: "prin_addr3", label: "Address 3", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS", maxLength: 50 },
-      { name: "prin_addr4", label: "Address 4", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS", maxLength: 50 },
+      { name: "prin_addr1", label: "Address 1", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS", colSpan: 2 },
+      { name: "prin_addr2", label: "Address 2", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS", colSpan: 2 },
+      { name: "prin_addr3", label: "Address 3", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS" },
+      { name: "prin_addr4", label: "Address 4", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS" },
       { name: "territory_code", label: "Territory", dropdownParam: "DROP_DOWN_TERRITORY", dropdownCodeMap: { country_code: "code1" },dropdownDisplayFields: ["territory_code", "territory_name"], dropdownValueKey: "territory_code", tab: "basic-info", section: "COMPANY DETAILS" },
       { name: "sector_code", label: "Sector", tab: "basic-info", section: "COMPANY DETAILS" },
       // Basic Info Tab - Contact Information
@@ -392,8 +392,8 @@ saveEndpoint: (form, { editMode, original }) => {
       { name: "rcpt_exp_limit", label: "Inbound Exp Limit (days)", type: "number", tab: "settings", section: "PRODUCT AND SHIPMENT SETTINGS" },
       // Storage Info Tab - Location
       { name: "pref_site", label: "Preferred Site", dropdownParam: "DROP_DOWN_SITE", dropdownDisplayFields: ["site_code", "site_name"], dropdownValueKey: "site_code", tab: "storage-info", section: "LOCATION" },
-      { name: "pref_loc_from", label: "Location From", dropdownParam: "DROP_DOWN_LOCATION", dropdownCodeMap: { pref_site: "code1" }, dropdownDisplayFields: ["location_code", "location_name"], dropdownValueKey: "location_code", tab: "storage-info", section: "LOCATION" },
-      { name: "pref_loc_to", label: "Location To", dropdownParam: "DROP_DOWN_LOCATION", dropdownCodeMap: { pref_site: "code1", pref_loc_from: "code2" }, dropdownDisplayFields: ["location_code", "location_name"], dropdownValueKey: "location_code", tab: "storage-info", section: "LOCATION" },
+      { name: "pref_loc_from", label: "Location From", dropdownParam: "DROP_DOWN_LOCATION", dropdownCodeMap: { preferred_site: "code1" }, dropdownDisplayFields: ["location_code", "location_name"], dropdownValueKey: "location_code", tab: "storage-info", section: "LOCATION" },
+      { name: "pref_loc_to", label: "Location To", dropdownParam: "DROP_DOWN_LOCATION", dropdownCodeMap: { preferred_site: "code1", location_from: "code2" }, dropdownDisplayFields: ["location_code", "location_name"], dropdownValueKey: "location_code", tab: "storage-info", section: "LOCATION" },
       { name: "pref_aisle_from", label: "Aisle From", type: "text", tab: "storage-info", section: "LOCATION" },
       { name: "pref_aisle_to", label: "Aisle To", type: "text", tab: "storage-info", section: "LOCATION" },
       { name: "pref_col_from", label: "Column From", type: "number", tab: "storage-info", section: "LOCATION" },
@@ -424,19 +424,6 @@ saveEndpoint: (form, { editMode, original }) => {
         data: form as any,
         loginid: typedUser.loginid,
       });
-    },
-    customLoad: async (user) => {
-      const typedUser = user as { loginid: string; company_code: string };
-      const data = await executeWmsInboundSql(`
-        SELECT *
-        FROM MS_PRINCIPAL
-        WHERE COMPANY_CODE = '${typedUser.company_code}'
-        ORDER BY NVL(updated_at, created_at)
-      `);
-      return {
-        tableData: data as Record<string, unknown>[],
-        count: data.length,
-      };
     },
     deleteConfig: { mode: "disabled", payload: () => null, reason: "Delete endpoint is not registered in the existing backend" },
   },

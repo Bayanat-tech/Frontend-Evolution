@@ -12,7 +12,7 @@ import { Badge } from "../../components/ui/Badge";
 import { CardHeader } from "../../components/ui/Card";
 import { useAuth } from "../../state/AuthContext";
 import { almsSave, almsCommonSelect } from "../../api/alms";
-import { printCapexApprovalReport } from "./CapexApprovalReport";
+import { exportCapexApprovalExcel, openCapexApprovalReport } from "../../api/transactions";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 // TODO: move into CapexRequest-types.ts if you keep a shared types file
@@ -141,48 +141,47 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const totalTax = items.reduce((s, r) => s + num(r.TX_COMPNT_AMT_1), 0);
 
   // ── Print ──────────────────────────────────────────────────────────────────
-  const handlePrint = () => {
-    printCapexApprovalReport({
-      companyName: "AL MADINA LOGISTIC SERVICES CO SAOC",
-      requestNumber: header.REQUEST_NUMBER,
-      requestDate: header.REQUEST_DATE,
-      supplierCode: header.SUPPLIER,
-      budgeted: header.BUDGETED,
-      boardApproval: header.BOARD_APPROVAL,
-      justification: header.DESCRIPTION,
-      items: items.map((it) => ({
-        itemCode: it.ITEM_CODE,
-        itemDesp: it.ITEM_DESP,
-        rate: it.ITEM_RATE,
-        qty: it.ITEM_QTY,
-        amount: it.AMOUNT,
-        vatAmount: it.TX_COMPNT_AMT_1,
-      })),
+  // ── Print ──────────────────────────────────────────────────────────────────
+const handlePrint = async () => {
+  if (!requestNumber) return;
+  setSaving(true);
+  setNotice(null);
+  try {
+    await openCapexApprovalReport({
+      parameter: "CapexApprovalReport",
+      loginid,
+      code1: companyCode,
+      code2: requestNumber,
     });
-  };
+  } catch (err) {
+    setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to open report" });
+  } finally {
+    setSaving(false);
+  }
+};
 
   // ── Generate Excel ──────────────────────────────────────────────────────────
   // TODO: wire this to your actual export endpoint/util. Left as a clear stub
   // so it's easy to plug in (e.g. an XLSX export util, or a backend endpoint
   // that streams a file back).
   const handleGenerateExcel = async () => {
-    setSaving(true);
-    setNotice(null);
-    try {
-      await almsSave({
-        parameter: "Amlspf_GenerateCPExcel", // TODO: confirm actual SP / export endpoint name
-        loginid,
-        code1: companyCode,
-        code2: requestNumber,
-      });
-      setNotice({ type: "success", message: "Excel generated successfully!" });
-    } catch (err) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to generate Excel" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
+  if (!requestNumber) return;
+  setSaving(true);
+  setNotice(null);
+  try {
+    await exportCapexApprovalExcel({
+      parameter: "CapexApprovalReport",
+      loginid,
+      code1: companyCode,
+      code2: requestNumber,
+    });
+    setNotice({ type: "success", message: "Excel generated successfully!" });
+  } catch (err) {
+    setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to generate Excel" });
+  } finally {
+    setSaving(false);
+  }
+};
   // ── Details grid columns (read-only) ───────────────────────────────────────
   const itemColumns = useMemo<ColumnDef<TCPItem>[]>(
     () => [
@@ -250,10 +249,10 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                     <h3 className="m-0 text-sm font-semibold leading-tight">Request Information</h3>
                   </div>
                   <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                    <label className="field">
+                    {/* <label className="field">
                       <span>Request Number</span>
                       <Input disabled value={header.REQUEST_NUMBER || ""} />
-                    </label>
+                    </label> */}
                     <label className="field">
                       <span>Request Date</span>
                       <Input disabled type="date" value={header.REQUEST_DATE ? String(header.REQUEST_DATE).slice(0, 10) : ""} />
@@ -305,21 +304,21 @@ const AddCPRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                       </select>
                     </label>
 
-                    <label className="field col-span-3 max-lg:col-span-2 max-md:col-span-1">
+                    <label className="field col-span-2 max-lg:col-span-1 max-md:col-span-1">
                       <span>Description</span>
                       <textarea
                         disabled={disabled}
-                        rows={4}
+                        rows={3}
                         value={header.DESCRIPTION || ""}
                         onChange={(e) => setHdr("DESCRIPTION", e.target.value)}
                         className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                       />
                     </label>
-                    <label className="field col-span-3 max-lg:col-span-2 max-md:col-span-1">
+                    <label className="field col-span-2 max-lg:col-span-1 max-md:col-span-1">
                       <span>Remarks</span>
                       <textarea
                         disabled={disabled}
-                        rows={4}
+                        rows={3}
                         value={header.REMARKS || ""}
                         onChange={(e) => setHdr("REMARKS", e.target.value)}
                         className="w-full rounded-md border bg-background px-3 py-2 text-sm"
