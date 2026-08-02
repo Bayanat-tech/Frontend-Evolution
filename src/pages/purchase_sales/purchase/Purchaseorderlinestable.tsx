@@ -15,6 +15,7 @@ import {
   lineLcurrAmount,   // add
   computeQuantity,   // add
   isSameUom,
+  taxLcurrAmount,
 } from "./Purchaseorderutils";
 
 const STICKY_COLS = {
@@ -41,7 +42,7 @@ const TABLE_COLUMN_COUNT = 24;
 // Final Rate = Unit Price - (Unit Price * Disc % / 100)  [matches lineNetAmount / "Final Rate" in the sheet]
 function finalRate(row: PurchaseOrderLineRow): number {
   const price = numberOrZero(row.unit_price);
-  const discPct = numberOrZero(row.disc_pct);
+  const discPct = numberOrZero(row.disc_percent);
   return price - (price * discPct) / 100;
 }
 
@@ -120,9 +121,9 @@ export function PurchaseOrderLinesTable({
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Disc Price</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Unit price Net Amt</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Amount</th>
+              <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Lcurr Amount</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax %</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Tax Amount</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Lcurr Amount</th>
               <th className="px-2 py-2 text-left w-32" style={plainHeaderStyle}>Req Date</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-40" style={plainHeaderStyle}>Remarks</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax Cat</th>
@@ -143,6 +144,7 @@ export function PurchaseOrderLinesTable({
               const sameUom = isSameUom(row);
               const quantity = computeQuantity(row);
               const lcurrAmountValue = lineLcurrAmount(row,ex_rate);
+              const taxLcurrAmountValue = taxLcurrAmount(row,ex_rate);
 
               return (
                 <tr className="border-t odd:bg-muted/20" key={row.id}>
@@ -178,7 +180,7 @@ export function PurchaseOrderLinesTable({
                       disabled={headerAndLineDisabled}
                       onChange={(value, selectedRow) => {
                         const newPUom = text(getLookupValue(selectedRow || {}, "p_uom")) || row.p_uom;
-                        const newLUom = text(getLookupValue(selectedRow || {}, "p_uom")) || row.l_uom;
+                        const newLUom = text(getLookupValue(selectedRow || {}, "l_uom")) || row.l_uom;
                         const newUppp = numberOrZero(getLookupValue(selectedRow || {}, "uppp")) || row.uppp;
                         const patch: Partial<PurchaseOrderLineRow> = {
                           prod_code: value,
@@ -281,7 +283,7 @@ export function PurchaseOrderLinesTable({
                         };
                         const merged = { ...row, ...patch };
                         if (isSameUom(merged)) {
-                          patch.qty_puom = qtyLuomNum;
+                          patch.qty_luom = qtyLuomNum;
                         }
                         patch.quantity = computeQuantity({ ...row, ...patch });
                         updateRow(row.id, patch);
@@ -326,20 +328,21 @@ export function PurchaseOrderLinesTable({
                   </td>
 
                   <td className="finance-amount-cell w-24 px-2 py-1">
-                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.disc_pct} onChange={(event) => updateRow(row.id, { disc_pct: Number(event.target.value || 0) })} />
+                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.disc_percent} onChange={(event) => updateRow(row.id, { disc_percent: Number(event.target.value || 0) })} />
                   </td>
                   <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineDiscPrice(row))}</td>
-                  <td className="finance-amount-cell px-2 py-1 text-right">{formatAmount(lineNetAmount(row))}</td>
+                  <td className="finance-amount-cell px-2 py-1 text-right">{formatAmount(finalRate(row))}</td>
                   <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineAmount(row))}</td>
+                    <td className="finance-amount-cell w-32 px-2 py-1 text-right">
+                    {formatAmount(lcurrAmountValue)}
+                  </td>
                   <td className="finance-amount-cell w-24 px-2 py-1">
                     <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.tax_pct} onChange={(event) => updateRow(row.id, { tax_pct: Number(event.target.value || 0) })} />
                   </td>
                   <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineTaxAmount(row))}</td>
-                  <td className="finance-amount-cell w-32 px-2 py-1 text-right">
-                    {formatAmount(lcurrAmountValue)}
-                  </td>
+                
                   <td className="w-32 px-2 py-1">
-                    <Input type="date" disabled={headerAndLineDisabled} value={row.req_date} onChange={(event) => updateRow(row.id, { req_date: event.target.value })} />
+                    <Input type="date" disabled={headerAndLineDisabled} value={row.required_dt} onChange={(event) => updateRow(row.id, { required_dt: event.target.value })} />
                   </td>
                   <td className="w-40 px-2 py-1 border border-gray-300 rounded-md">
                     <textarea disabled={headerAndLineDisabled} value={row.line_remarks} onChange={(event) => updateRow(row.id, { line_remarks: event.target.value })} />
@@ -350,11 +353,11 @@ export function PurchaseOrderLinesTable({
                   <td className="w-32 px-2 py-1">
                     <Input disabled={headerAndLineDisabled} value={row.tax_code} onChange={(event) => updateRow(row.id, { tax_code: event.target.value })} />
                   </td>
-                  <td className="finance-amount-cell w-28 px-2 py-1">
-                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.tax_lcurr_amount} onChange={(event) => updateRow(row.id, { tax_lcurr_amount: Number(event.target.value || 0) })} />
+                      <td className="finance-amount-cell w-32 px-2 py-1 text-right">
+                    {formatAmount(taxLcurrAmountValue)}
                   </td>
                   <td className="finance-amount-cell w-32 px-2 py-1">
-                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.lcurr_amount_disc} onChange={(event) => updateRow(row.id, { lcurr_amount_disc: Number(event.target.value || 0) })} />
+                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.lcur_amount_disc} onChange={(event) => updateRow(row.id, { lcur_amount_disc: Number(event.target.value || 0) })} />
                   </td>
                   <td className="px-2 py-1">
                     <Button disabled={headerAndLineDisabled} size="icon" type="button" variant="ghost" onClick={() => removeRow(row.id)}><X size={14} /></Button>
