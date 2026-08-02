@@ -38,38 +38,38 @@ export type AlmsProcedureParams = {
   val1s8?: string;
   val1s9?: string;
   val1s10?: string;
-val1s11?: string;
- val1s12?: string;
- val1s13?: string;
- val1s14?: string;
- val1s15?: string;
- val1s16?: string;
- val1s17?: string;
- val1s18?: string;
- val1s19?: string;
- val1s20?: string;
- val1s21?: string;
- val1s22?: string;
- val1s23?: string;
- val1s24?: string;
- val1s25?: string;
- val1s26?: string;
- val1s27?: string;
- val1s28?: string;
- val1s29?: string;
- val1s30?: string;
- val1s31?: string;
- val1s32?: string;
- val1s33?: string;
- val1s34?: string;
- val1s35?: string;
- val1s36?: string;
- val1s37?: string;
- val1s38?: string;
- val1s39?: string;
- val1s40?: string;
- val1s41?: string;
- val1s42?: string;
+  val1s11?: string;
+  val1s12?: string;
+  val1s13?: string;
+  val1s14?: string;
+  val1s15?: string;
+  val1s16?: string;
+  val1s17?: string;
+  val1s18?: string;
+  val1s19?: string;
+  val1s20?: string;
+  val1s21?: string;
+  val1s22?: string;
+  val1s23?: string;
+  val1s24?: string;
+  val1s25?: string;
+  val1s26?: string;
+  val1s27?: string;
+  val1s28?: string;
+  val1s29?: string;
+  val1s30?: string;
+  val1s31?: string;
+  val1s32?: string;
+  val1s33?: string;
+  val1s34?: string;
+  val1s35?: string;
+  val1s36?: string;
+  val1s37?: string;
+  val1s38?: string;
+  val1s39?: string;
+  val1s40?: string;
+  val1s41?: string;
+  val1s42?: string;
 
   val1n1?: number;
   val1n2?: number;
@@ -82,10 +82,10 @@ val1s11?: string;
   val1d4?: string | Date | null;
   val1d5?: string | Date | null;
   val1n6?: number;
- val1n7?: number;
- val1n8?: number;
+  val1n7?: number;
+  val1n8?: number;
   val1n9?: number;
- val1n10?: number;
+  val1n10?: number;
   wval1s1?: string;
   wval1s2?: string;
   wval1s3?: string;
@@ -101,19 +101,9 @@ val1s11?: string;
   wval1d3?: string | Date | null;
   wval1d4?: string | Date | null;
   wval1d5?: string | Date | null;
+  val2s1?: string;  // Details JSON
+  val2s2?: string;  // Terms JSON
 };
-
-// export async function almsSelect<T = Record<string, unknown>>(
-//   params: AlmsProcedureParams
-// ): Promise<T[]> {
-//   const response = await api.post<ApiResponse<T[]>>(
-//     "/api/alms/gm/proc_build_dynamic_sql_amlspf",
-//     normalizeParams(params)
-//   );
-//   if (!response.data.success)
-//     throw new Error(response.data.message || "Unable to load ALMS data");
-//   return Array.isArray(response.data.data) ? response.data.data : [];
-// }
 
 export async function almsCommonSelect<T = Record<string, unknown>>(
   params: AlmsProcedureParams
@@ -136,9 +126,27 @@ export async function almsCommonSelect<T = Record<string, unknown>>(
   }
 }
 
+export async function almsSavePrequestBulk(payload: {
+  header: Record<string, any>;
+  details: Record<string, any>[];
+  terms: Record<string, any>[];
+}) {
+  const response = await api.post<ApiResponse<unknown>>(
+    "/api/ALMS/gm/insUpdTtePRequestBulk",
+    payload
+  );
+  if (!response.data.success)
+    throw new Error(response.data.message || "Unable to save ALMS record");
+  return {                            
+    ...response.data,
+    data: uppercaseData([response.data.data])[0],
+  };
+}
+
+
 export async function almsSave(params: AlmsProcedureParams) {
   const response = await api.post<ApiResponse<unknown>>(
-    "/api/wms/common/proc_build_dynamic_ins_upd_column90",
+    "/api/ALMS/gm/insUpdTtePRequestBulk",
     normalizeParams(params)
   );
   if (!response.data.success)
@@ -148,7 +156,6 @@ export async function almsSave(params: AlmsProcedureParams) {
     data: uppercaseData([response.data.data])[0],
   };
 }
-
 
 export async function almsDelete(params: AlmsProcedureParams) {
   const response = await api.post<ApiResponse<unknown>>(
@@ -176,8 +183,10 @@ export async function almsCommonProcedure(params: AlmsProcedureParams) {
   };
 }
 
+// FIXED: normalizeParams should preserve Date objects
 function normalizeParams(params: AlmsProcedureParams) {
-  return {
+  // Create a new object with defaults
+  const normalized: Record<string, any> = {
     code2: "NULL",
     code3: "NULL",
     code4: "NULL",
@@ -189,8 +198,18 @@ function normalizeParams(params: AlmsProcedureParams) {
     date2: null,
     date3: null,
     date4: null,
-    ...params,
   };
+
+  // Copy all properties from params (including Date objects)
+  // Using Object.keys with type assertion
+  (Object.keys(params) as Array<keyof AlmsProcedureParams>).forEach((key) => {
+    const value = params[key];
+    if (value !== undefined) {
+      normalized[key as string] = value;
+    }
+  });
+
+  return normalized;
 }
 
 // Recursively uppercase all keys AND string values (frontend-only transform)
