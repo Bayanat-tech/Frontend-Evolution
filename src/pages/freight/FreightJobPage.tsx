@@ -26,7 +26,6 @@ import { useAuth } from "../../state/AuthContext";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
 
 type ViewMode = "list" | "editor";
-type JobSection = "identity" | "movement" | "commercial" | "customs" | "progress";
 type Notice = { type: "success" | "error"; text: string } | null;
 
 type JobForm = {
@@ -114,13 +113,28 @@ const directionMap = {
 
 const JobEditContext = createContext(true);
 
-const jobSections: Array<{ key: JobSection; label: string; icon: typeof BriefcaseBusiness }> = [
-  { key: "identity", label: "Identity", icon: BriefcaseBusiness },
-  { key: "movement", label: "Movement", icon: MapPinned },
-  { key: "commercial", label: "Commercial", icon: BriefcaseBusiness },
-  { key: "customs", label: "Customs", icon: FileText },
-  { key: "progress", label: "Progress", icon: BriefcaseBusiness },
-];
+function isTruthyFlag(value: string | undefined) {
+  const normalized = String(value || "").trim().toUpperCase();
+  return normalized === "Y" || normalized === "YES" || normalized === "1" || normalized === "TRUE";
+}
+
+function isJobCancelLocked(job: JobForm) {
+  return Boolean(
+    isTruthyFlag(job.confirmed) ||
+    isTruthyFlag(job.invoiced) ||
+    isTruthyFlag(job.completed) ||
+    job.confirm_date ||
+    job.invoice_date ||
+    job.complete_date
+  );
+}
+
+function getJobCancelLockMessage(job: JobForm) {
+  if (isTruthyFlag(job.invoiced) || job.invoice_date) return "Invoiced jobs cannot be cancelled.";
+  if (isTruthyFlag(job.completed) || job.complete_date) return "Completed jobs cannot be cancelled.";
+  if (isTruthyFlag(job.confirmed) || job.confirm_date) return "Confirmed jobs cannot be cancelled.";
+  return "This job cannot be cancelled.";
+}
 
 export function FreightJobPage({ target, initialJob, startMode = "list" }: { target?: FreightWorkspaceTarget; initialJob?: LookupRow | null; startMode?: ViewMode }) {
   const { user } = useAuth();
@@ -142,7 +156,7 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [editing, setEditing] = useState(false);
-  const [activeSection, setActiveSection] = useState<JobSection>("identity");
+  const embeddedInWorkspace = startMode === "editor";
 
   useEffect(() => {
     if (!notice) return;
@@ -152,6 +166,8 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
   }, [notice, toast]);
 
   const isCanceled = job.canceled === "Y";
+  const isCancelLocked = isJobCancelLocked(job);
+  const cancelLockMessage = getJobCancelLockMessage(job);
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -199,7 +215,6 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
     setJob(emptyJob(companyCode, userId, mode.code, direction.code));
     setNotice(null);
     setEditing(true);
-    setActiveSection("identity");
     setView("editor");
   };
 
@@ -217,7 +232,6 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
       });
       setJob(toJobForm(normalizeLookupRow(response.data.data?.header || row), companyCode, userId, mode.code, direction.code));
       setEditing(false);
-      setActiveSection("identity");
       setView("editor");
     } catch (error: any) {
       setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to open freight job." });
@@ -234,7 +248,6 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
     }
     setJob(emptyJob(companyCode, userId, mode.code, direction.code));
     setEditing(true);
-    setActiveSection("identity");
     setView("editor");
   }, [initialJob, startMode]);
 
@@ -257,6 +270,10 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
 
   const cancelJob = async () => {
     if (!job.job_no) return;
+    if (isCancelLocked) {
+      setNotice({ type: "error", text: cancelLockMessage });
+      return;
+    }
     setSaving(true);
     setNotice(null);
     try {
@@ -326,37 +343,57 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
 
   return (
     <form className="freight-document-form" onSubmit={saveJob}>
-      <Header title={`${mode.label} ${direction.label} Job`} subtitle={job.job_no || "New job"} icon={Icon}>
+      {!embeddedInWorkspace && <Header title={`${mode.label} ${direction.label} Job`} subtitle={job.job_no || "New job"} icon={Icon}>
         {notice && <NoticeChip notice={notice} />}
         <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>
         {!editing && !isCanceled && <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}><Edit2 size={14} />Edit</Button>}
-        <Button type="button" size="sm" variant="outline" onClick={cancelJob} disabled={saving || !job.job_no || isCanceled}><Ban size={14} />Cancel</Button>
+        <Button type="button" size="sm" variant="outline" onClick={cancelJob} disabled={saving || !job.job_no || isCanceled || isCancelLocked} title={isCancelLocked ? cancelLockMessage : "Cancel job"}><Ban size={14} />Cancel</Button>
         {editing && <Button type="submit" size="sm" disabled={saving || isCanceled}><Save size={14} />Save</Button>}
-      </Header>
-      <div className="freight-job-focus-bar">
-        <div>
-          <span className="freight-job-number">{job.job_no || "New Job"}</span>
-          <span className="freight-job-route">{mode.label} / {direction.label} / {job.prin_code || "Principal pending"}</span>
+      </Header>}
+      <div className="freight-job-focus-bar freight-job-focus-compact">
+        <div className="freight-job-progress">
+          <span className="done">Job</span>
+          <span className={job.packdet === "Y" || job.packdet_date ? "done" : ""}>Pack List</span>
+          <span className={job.confirmed === "Y" || job.confirm_date ? "done" : ""}>Confirmed</span>
+          <span className={job.invoiced === "Y" || job.invoice_date ? "done" : ""}>Invoiced</span>
+          <span className={job.completed === "Y" || job.complete_date ? "done" : ""}>Completed</span>
         </div>
-        <span className={`freight-job-mode-badge ${editing ? "editing" : "viewing"}`}>{editing ? "Edit Mode" : "View Mode"}</span>
+        <div className="freight-job-inline-actions">
+          {notice && <NoticeChip notice={notice} />}
+          {embeddedInWorkspace && <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>}
+          {!editing && !isCanceled && <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}><Edit2 size={14} />Edit</Button>}
+          <Button type="button" size="sm" variant="outline" onClick={cancelJob} disabled={saving || !job.job_no || isCanceled || isCancelLocked} title={isCancelLocked ? cancelLockMessage : "Cancel job"}><Ban size={14} />Cancel</Button>
+          {editing && <Button type="submit" size="sm" disabled={saving || isCanceled}><Save size={14} />Save</Button>}
+          <span className={`freight-job-mode-badge ${editing ? "editing" : "viewing"}`}>{editing ? "Edit" : "View"}</span>
+        </div>
       </div>
-      <div className="freight-job-subtabs">
-        {jobSections.map((section) => {
-          const SectionIcon = section.icon;
-          const active = activeSection === section.key;
-          return (
-            <button key={section.key} type="button" className={active ? "active" : ""} onClick={() => setActiveSection(section.key)}>
-              <SectionIcon size={14} />
-              {section.label}
-            </button>
-          );
-        })}
-      </div>
-      <fieldset disabled={isCanceled || !editing} className="freight-document-paper">
+      <fieldset disabled={isCanceled || !editing} className={`freight-document-paper freight-shipment-paper ${editing ? "is-editing" : "is-viewing"}`}>
         <JobEditContext.Provider value={editing && !isCanceled}>
-        <div className="grid gap-2 lg:grid-cols-12">
-          {activeSection === "identity" && <Panel className="lg:col-span-12" icon={BriefcaseBusiness} title="Job Identity" meta={`${job.job_no || "Auto"} / ${mode.label} / ${direction.label}`}>
-            <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-8">
+        <div className="freight-shipment-hero">
+          <div className="freight-shipment-hero-item">
+            <span>Booking Ref / Job No</span>
+            <strong>{job.job_no || "New Job"}</strong>
+          </div>
+          <div className="freight-shipment-hero-item">
+            <span>{mode.code === "A" ? "HAWB Number" : "House / BL Number"}</span>
+            {editing && !isCanceled ? (
+              <Input className="freight-shipment-hero-input" value={job.hawb} onChange={(event) => setJobField(setJob, "hawb", event.target.value)} />
+            ) : (
+              <strong>{job.hawb || job.doc_ref || "-"}</strong>
+            )}
+          </div>
+        </div>
+        <div className="freight-shipment-quickfacts">
+          <DisplayField label="Shipment Date" value={toDisplayDate(job.job_date)} />
+          <DisplayField label="Shipment Type" value={direction.label} />
+          <DisplayField label="Transport Mode" value={`${mode.label} Freight`} />
+          <DisplayField label="From Quote" value={job.quotation_ref || "-"} />
+          <DisplayField label="Sales Rep" value={job.salesman_code || "-"} />
+          <DisplayField label="Principal" value={job.prin_code || "-"} />
+        </div>
+        <div className="freight-job-section-grid">
+          <Panel className="lg:col-span-12" icon={BriefcaseBusiness} title="Job Identity" meta={`${job.job_no || "Auto"} / ${mode.label} / ${direction.label}`}>
+            <div className="freight-job-field-grid freight-job-field-grid-8">
               <ReadOnlyField label="Job No" value={job.job_no || "Auto"} />
               <DateField label="Job Date" value={job.job_date} onChange={(value) => setJobField(setJob, "job_date", value)} />
               <Lookup label="Principal" value={job.prin_code} valueField="PRIN_CODE" displayFields={["PRIN_CODE", "PRIN_NAME"]} columns={[{ field: "PRIN_CODE", header: "Code" }, { field: "PRIN_NAME", header: "Principal" }]} loadOptions={(search) => lookup("freight_principal", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "prin_code", value)} />
@@ -369,10 +406,10 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
               <Lookup label="Sale Type" value={job.sale_type} valueField="SALE_TYPE" displayFields={["SALE_TYPE", "SALE_TYPE_NAME"]} columns={[{ field: "SALE_TYPE", header: "Code" }, { field: "SALE_TYPE_NAME", header: "Sale Type" }]} loadOptions={(search) => lookup("freight_sale_type", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "sale_type", value)} />
               <Field label="Job Class" value={job.job_class} onChange={(value) => setJobField(setJob, "job_class", value)} />
             </div>
-          </Panel>}
+          </Panel>
 
-          {activeSection === "movement" && <Panel className="lg:col-span-7" icon={MapPinned} title="Journey" meta={`${job.port_code || "Origin"} -> ${job.destination_port || "Destination"}`}>
-            <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
+          <Panel className="lg:col-span-4 freight-job-compact-panel" icon={MapPinned} title="Journey" meta={`${job.port_code || "Origin"} -> ${job.destination_port || "Destination"}`}>
+            <div className="freight-job-field-grid freight-job-field-grid-4">
               <Lookup label={direction.code === "EXP" ? "Port of Loading" : "Origin Port"} value={job.port_code} valueField="PORT_CODE" displayFields={["PORT_CODE", "PORT_NAME"]} columns={portColumns} loadOptions={(search) => lookup("freight_port", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "port_code", value)} />
               <Lookup label={direction.code === "EXP" ? "Port of Destination" : "Destination Port"} value={job.destination_port} valueField="PORT_CODE" displayFields={["PORT_CODE", "PORT_NAME"]} columns={portColumns} loadOptions={(search) => lookup("freight_port", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "destination_port", value)} />
               <Field label="Place of Receipt" value={job.place_receipt} onChange={(value) => setJobField(setJob, "place_receipt", value)} />
@@ -382,21 +419,21 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
               <Field label={mode.code === "R" ? "Trip / Route No" : mode.code === "A" ? "Flight No" : "Voyage No"} value={job.voyage_no} onChange={(value) => setJobField(setJob, "voyage_no", value)} />
               <Field label="Carrier" value={job.carrier} onChange={(value) => setJobField(setJob, "carrier", value)} />
             </div>
-          </Panel>}
+          </Panel>
 
-          {activeSection === "movement" && <Panel className="lg:col-span-5" icon={FileText} title="Bill Of Lading Details" meta={job.doc_ref || job.hawb || "Document refs"}>
-            <div className="grid gap-1.5 sm:grid-cols-2">
-              <Field label={mode.code === "A" ? "MAWB" : "Master BL No"} value={job.doc_ref} onChange={(value) => setJobField(setJob, "doc_ref", value)} />
-              <Field label={mode.code === "A" ? "HAWB" : "HBL"} value={job.hawb} onChange={(value) => setJobField(setJob, "hawb", value)} />
-              <Field label="Doc Ref 2" value={job.doc_ref2} onChange={(value) => setJobField(setJob, "doc_ref2", value)} />
-              <Field label="No of Orig Docs" type="number" value={job.no_of_original_bl} onChange={(value) => setJobField(setJob, "no_of_original_bl", value)} />
+          <Panel className="lg:col-span-4 freight-job-compact-panel" icon={FileText} title="Bill Of Lading Details" meta={job.doc_ref || job.hawb || "Document refs"}>
+            <div className="freight-job-field-grid freight-job-field-grid-2">
+              <Field className="sm:col-span-2" label={mode.code === "A" ? "MAWB" : "Master BL No"} value={job.doc_ref} onChange={(value) => setJobField(setJob, "doc_ref", value)} />
+              <Field className="sm:col-span-2" label="Doc Ref 2" value={job.doc_ref2} onChange={(value) => setJobField(setJob, "doc_ref2", value)} />
               <Textarea className="sm:col-span-2" label="Cargo Description" value={job.description1} onChange={(value) => setJobField(setJob, "description1", value)} />
               <Textarea className="sm:col-span-2" label="Remarks" value={job.remarks} onChange={(value) => setJobField(setJob, "remarks", value)} />
+              <Field label={mode.code === "A" ? "HAWB" : "HBL"} value={job.hawb} onChange={(value) => setJobField(setJob, "hawb", value)} />
+              <Field label="No of Orig Docs" type="number" value={job.no_of_original_bl} onChange={(value) => setJobField(setJob, "no_of_original_bl", value)} />
             </div>
-          </Panel>}
+          </Panel>
 
-          {activeSection === "movement" && <Panel className="lg:col-span-12" icon={BriefcaseBusiness} title="Events" meta={job.job_start_date || "Job start pending"}>
-            <div className="grid gap-1.5 sm:grid-cols-2">
+          <Panel className="lg:col-span-4 freight-job-compact-panel" icon={BriefcaseBusiness} title="Events" meta={job.job_start_date || "Job start pending"}>
+            <div className="freight-job-field-grid freight-job-field-grid-2">
               <DateField label="Job Start Date" value={job.job_start_date} onChange={(value) => setJobField(setJob, "job_start_date", value)} />
               <DateField label="Date of Departure" value={job.etd} onChange={(value) => setJobField(setJob, "etd", value)} />
               <DateField label="ETA" value={job.eta} onChange={(value) => setJobField(setJob, "eta", value)} />
@@ -404,10 +441,10 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
               <DateField label="Schedule Date" value={job.schedule_date} onChange={(value) => setJobField(setJob, "schedule_date", value)} />
               <Field label="Transit Time" value={job.transit_time} onChange={(value) => setJobField(setJob, "transit_time", value)} />
             </div>
-          </Panel>}
+          </Panel>
 
-          {activeSection === "commercial" && <Panel className="lg:col-span-6" icon={BriefcaseBusiness} title="Payment Terms" meta={`${job.payment_terms || "Terms"} / ${job.payableat || "Payable"}`}>
-            <div className="grid gap-1.5 sm:grid-cols-2">
+          <Panel className="lg:col-span-4" icon={BriefcaseBusiness} title="Payment Terms" meta={`${job.payment_terms || "Terms"} / ${job.payableat || "Payable"}`}>
+            <div className="freight-job-field-grid freight-job-field-grid-2">
               <Lookup label="INCO Terms" value={job.payment_terms} valueField="PAYMENT_TERMS" displayFields={["PAYMENT_TERMS", "PAYMENT_TERMS_NAME"]} columns={[{ field: "PAYMENT_TERMS", header: "Code" }, { field: "PAYMENT_TERMS_NAME", header: "Terms" }]} loadOptions={(search) => lookup("freight_payment_terms", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "payment_terms", value)} />
               <Lookup label="Currency" value={job.curr_code} valueField="CURR_CODE" displayFields={["CURR_CODE", "CURR_NAME"]} columns={[{ field: "CURR_CODE", header: "Code" }, { field: "CURR_NAME", header: "Currency" }, { field: "EX_RATE", header: "Rate" }]} loadOptions={(search) => lookup("freight_currency", companyCode, "NULL", "NULL", search)} onChange={(value, row) => setJob((current) => ({ ...current, curr_code: value, ex_rate: lookupText(row || undefined, "EX_RATE") || current.ex_rate }))} />
               <Field label="Exchange Rate" type="number" value={job.ex_rate} onChange={(value) => setJobField(setJob, "ex_rate", value)} />
@@ -415,10 +452,10 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
               <Field label="Freight Value" type="number" value={job.frieght_value} onChange={(value) => setJobField(setJob, "frieght_value", value)} />
               <Field label="Insurance Value" type="number" value={job.insurance_value} onChange={(value) => setJobField(setJob, "insurance_value", value)} />
             </div>
-          </Panel>}
+          </Panel>
 
-          {activeSection === "commercial" && <Panel className="lg:col-span-6" icon={BriefcaseBusiness} title="References" meta={job.forwarder_code || job.salesman_code || "Forwarder / sales"}>
-            <div className="grid gap-1.5 sm:grid-cols-2">
+          <Panel className="lg:col-span-4" icon={BriefcaseBusiness} title="References" meta={job.forwarder_code || job.salesman_code || "Forwarder / sales"}>
+            <div className="freight-job-field-grid freight-job-field-grid-2">
               <Lookup label="Forwarder" value={job.forwarder_code} valueField="FORWARDER_CODE" displayFields={["FORWARDER_CODE", "FORWARDER_NAME"]} columns={[{ field: "FORWARDER_CODE", header: "Code" }, { field: "FORWARDER_NAME", header: "Forwarder" }]} loadOptions={(search) => lookup("freight_forwarder", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "forwarder_code", value)} />
               <Lookup label="Sales Rep" value={job.salesman_code} valueField="SALESMAN_CODE" displayFields={["SALESMAN_CODE", "SALESMAN_NAME"]} columns={[{ field: "SALESMAN_CODE", header: "Code" }, { field: "SALESMAN_NAME", header: "Salesman" }]} loadOptions={(search) => lookup("freight_salesman", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "salesman_code", value)} />
               <Field label="Principal Ref 1" value={job.prin_ref1} onChange={(value) => setJobField(setJob, "prin_ref1", value)} />
@@ -426,10 +463,10 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
               <Lookup label="Customer" value={job.cust_code} valueField="CUSTOMER_CODE" displayFields={["CUSTOMER_CODE", "CUSTOMER_NAME"]} columns={[{ field: "CUSTOMER_CODE", header: "Code" }, { field: "CUSTOMER_NAME", header: "Customer" }]} loadOptions={(search) => lookup("freight_customer", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "cust_code", value)} />
               <Lookup label="Broker" value={job.broker_code} valueField="BROKER_CODE" displayFields={["BROKER_CODE", "BROKER_NAME"]} columns={[{ field: "BROKER_CODE", header: "Code" }, { field: "BROKER_NAME", header: "Broker" }]} loadOptions={(search) => lookup("freight_broker", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "broker_code", value)} />
             </div>
-          </Panel>}
+          </Panel>
 
-          {activeSection === "customs" && <Panel className="lg:col-span-12" icon={FileText} title="Customs And Operational References" meta={job.be_no || job.custom_recno || "Customs"}>
-            <div className="grid gap-1.5 sm:grid-cols-3">
+          <Panel className="lg:col-span-4" icon={FileText} title="Customs And Operational References" meta={job.be_no || job.custom_recno || "Customs"}>
+            <div className="freight-job-field-grid freight-job-field-grid-3">
               <Field label="BE No" value={job.be_no} onChange={(value) => setJobField(setJob, "be_no", value)} />
               <DateField label="BE Date" value={job.be_date} onChange={(value) => setJobField(setJob, "be_date", value)} />
               <Field label="Custom Ref" value={job.custom_recno} onChange={(value) => setJobField(setJob, "custom_recno", value)} />
@@ -440,20 +477,8 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
               <Field label="Import Job No(s)" value={job.ref_jobno} onChange={(value) => setJobField(setJob, "ref_jobno", value)} />
               <Field label="Parent Job No" value={job.combined_jobno} onChange={(value) => setJobField(setJob, "combined_jobno", value)} />
             </div>
-          </Panel>}
+          </Panel>
 
-          {activeSection === "progress" && <Panel className="lg:col-span-12" icon={BriefcaseBusiness} title="Job Progress" meta={`${job.packdet || "N"} / ${job.confirmed || "N"} / ${job.completed || "N"}`}>
-            <div className="grid gap-1.5 sm:grid-cols-4">
-              <SelectField label="Job Indicator" value={job.job_flag} options={[["M", "Master"], ["H", "House"]]} onChange={(value) => setJobField(setJob, "job_flag", value)} />
-              <SelectField label="Pack List" value={job.packdet} options={[["Y", "Yes"], ["N", "No"]]} onChange={(value) => setJobField(setJob, "packdet", value)} />
-              <DateField label="Pack Date" value={job.packdet_date} onChange={(value) => setJobField(setJob, "packdet_date", value)} />
-              <SelectField label="Confirmed" value={job.confirmed} options={[["Y", "Yes"], ["N", "No"]]} onChange={(value) => setJobField(setJob, "confirmed", value)} />
-              <DateField label="Confirm Date" value={job.confirm_date} onChange={(value) => setJobField(setJob, "confirm_date", value)} />
-              <SelectField label="Completed" value={job.completed} options={[["Y", "Yes"], ["N", "No"]]} onChange={(value) => setJobField(setJob, "completed", value)} />
-              <DateField label="Complete Date" value={job.complete_date} onChange={(value) => setJobField(setJob, "complete_date", value)} />
-              <DateField label="Invoice Date" value={job.invoice_date} onChange={(value) => setJobField(setJob, "invoice_date", value)} />
-            </div>
-          </Panel>}
         </div>
         </JobEditContext.Provider>
       </fieldset>
@@ -492,11 +517,11 @@ function Panel({ title, meta, icon: Icon, children, className = "" }: { title: s
   );
 }
 
-function Field({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
+function Field({ label, value, onChange, type = "text", className = "" }: { label: string; value: string; onChange: (value: string) => void; type?: string; className?: string }) {
   const editable = useContext(JobEditContext);
-  if (!editable) return <DisplayField label={label} value={type === "date" ? toDisplayDate(value) : value} />;
+  if (!editable) return <DisplayField className={className} label={label} value={type === "date" ? toDisplayDate(value) : value} />;
   const safeValue = type === "date" ? dateInputValue(value) : value;
-  return <label className="grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground">{label}<Input className="h-7 text-xs font-semibold" type={type} value={safeValue} onChange={(event) => onChange(event.target.value)} /></label>;
+  return <label className={`freight-compact-label ${className}`}>{label}<Input className="h-7 text-xs font-semibold" type={type} value={safeValue} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
 function SelectField({ label, value, options, onChange }: { label: string; value: string; options: Array<string | [string, string]>; onChange: (value: string) => void }) {
@@ -507,7 +532,7 @@ function SelectField({ label, value, options, onChange }: { label: string; value
     return <DisplayField label={label} value={display} />;
   }
   return (
-    <label className="grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
+    <label className="freight-compact-label">
       {label}
       <select className="h-7 rounded-md border bg-background px-2 text-xs font-semibold" value={value} onChange={(event) => onChange(event.target.value)}>
         <option value="">Blank</option>
@@ -537,7 +562,7 @@ function DateField({ label, value, onChange }: { label: string; value: string; o
   if (!editable) return <DisplayField label={label} value={toDisplayDate(value)} />;
 
   return (
-    <label className="grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
+    <label className="freight-compact-label">
       {label}
       <Input
         className="h-7 text-xs font-semibold"
@@ -556,19 +581,19 @@ function DateField({ label, value, onChange }: { label: string; value: string; o
 function Textarea({ label, value, onChange, className = "" }: { label: string; value: string; onChange: (value: string) => void; className?: string }) {
   const editable = useContext(JobEditContext);
   if (!editable) return <DisplayField className={className} label={label} value={value} multiline />;
-  return <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground ${className}`}>{label}<textarea className="min-h-8 rounded-md border border-input bg-background px-2 py-1 text-xs font-semibold text-foreground shadow-sm" value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+  return <label className={`freight-compact-label ${className}`}>{label}<textarea className="min-h-8 rounded-md border border-input bg-background px-2 py-1 text-xs font-semibold text-foreground shadow-sm" value={value} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
   const editable = useContext(JobEditContext);
   if (!editable) return <DisplayField label={label} value={value} strong />;
-  return <div className="grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground">{label}<div className="flex h-7 items-center rounded-md border bg-muted/40 px-2 text-xs font-semibold normal-case text-foreground">{value}</div></div>;
+  return <div className="freight-compact-label">{label}<div className="flex h-7 items-center rounded-md border bg-muted/40 px-2 text-xs font-semibold normal-case text-foreground">{value}</div></div>;
 }
 
 function Lookup({ label, value, valueField, displayFields, columns, loadOptions, onChange }: { label: string; value: string; valueField: string; displayFields: string[]; columns: { field: string; header: string }[]; loadOptions: (query?: string) => Promise<LookupRow[]>; onChange: (value: string, row: LookupRow | null) => void }) {
   const editable = useContext(JobEditContext);
   if (!editable) return <DisplayField label={label} value={value} />;
-  return <label className="grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground">{label}<LookupField value={value} compact valueField={valueField} displayFields={displayFields} columns={columns} loadOptions={loadOptions} onChange={onChange} /></label>;
+  return <label className="freight-compact-label">{label}<LookupField value={value} compact valueField={valueField} displayFields={displayFields} columns={columns} loadOptions={loadOptions} onChange={onChange} /></label>;
 }
 
 function DisplayField({ label, value, strong, multiline, className = "" }: { label: string; value: string; strong?: boolean; multiline?: boolean; className?: string }) {
