@@ -158,26 +158,24 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
 
   if (mode === "list") {
     return (
-      <section className="grid gap-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+      <section className="grid gap-2">
+        <div className="freight-job-list-hero">
           <div>
             <p className="eyebrow">Freight Operations</p>
-            <h1 className="m-0 text-2xl font-semibold text-foreground">{title}</h1>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Manage freight jobs, cargo packing, service costing, documents, instructions, alerts, deposits, and closure.
-            </p>
+            <h1 className="m-0 text-xl font-semibold text-foreground">{title}</h1>
+            <p className="mt-0.5 max-w-3xl text-xs text-muted-foreground">Create jobs, complete shipment steps, and close billing follow-up from one compact workspace.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" onClick={() => void loadRows()} disabled={loading}>
+            <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}>
               <RefreshCw size={15} /> Refresh
             </Button>
-            <Button type="button" onClick={() => openSteps(null, "job")}>
+            <Button type="button" size="sm" onClick={() => openSteps(null, "job")}>
               <Plus size={15} /> Add Job
             </Button>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-card p-2">
+        <div className="freight-job-list-filterbar">
           <div className="flex flex-wrap gap-2">
             {listingTabs.map((tab) => (
               <Button key={tab.value} size="sm" variant={activeStatus === tab.value ? "default" : "outline"} onClick={() => setActiveStatus(tab.value)}>
@@ -186,13 +184,13 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
             ))}
           </div>
           <div className="flex min-w-[280px] flex-1 items-center justify-end gap-2">
-            <div className="flex items-center gap-1 rounded-md border bg-muted/40 px-2 py-1 text-xs text-muted-foreground">
+            <div className="freight-job-smart-note">
               <BrainCircuit size={14} className="text-primary" />
               <span>{message || smartAdvice(health)}</span>
             </div>
             <div className="relative w-80 max-w-full">
               <Search className="pointer-events-none absolute left-3 top-2.5 text-muted-foreground" size={15} />
-              <Input className="h-9 pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search job, principal, reference..." />
+              <Input className="h-8 pl-9 text-xs" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search job, principal, reference..." />
             </div>
           </div>
         </div>
@@ -206,7 +204,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           searchValue={query}
           onSearchChange={setQuery}
           searchPlaceholder="Filter visible jobs..."
-          height="calc(100vh - 310px)"
+          height="calc(100vh - 258px)"
           minWidth={1320}
           density="grid"
           enablePagination
@@ -226,19 +224,19 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
 
   return (
     <section className="freight-module-surface">
-      <div className="freight-ops-toolbar">
+      <div className="freight-ops-toolbar freight-ops-toolbar-compact freight-ops-toolbar-document">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <p className="m-0 text-sm font-semibold text-primary">Freight Job / {selectedJob ? text(selectedJob, "job_no") : "New"}</p>
-            <h1 className="m-0 text-xl font-semibold text-foreground">{title}</h1>
-            <p className="m-0 text-xs text-muted-foreground">
+            <p className="m-0 text-xs font-semibold text-primary">Freight Job / {selectedJob ? text(selectedJob, "job_no") : "New"}</p>
+            <h1 className="m-0 text-[22px] font-semibold leading-tight text-foreground">{title}</h1>
+            <p className="m-0 text-xs font-medium text-muted-foreground">
               {selectedJob ? `${text(selectedJob, "prin_name") || text(selectedJob, "prin_code")} | ${text(selectedJob, "doc_ref") || text(selectedJob, "hawb") || "Reference pending"}` : "New shipment operation"}
             </p>
           </div>
-          <div className="flex flex-wrap gap-1">
+          <div className="freight-workspace-tabs">
             <button
               type="button"
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-2.5 text-xs font-semibold text-muted-foreground transition hover:bg-muted/60"
+              className="freight-workspace-tab"
               onClick={() => setMode("list")}
             >
               <ArrowLeft size={14} />
@@ -251,9 +249,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
                 <button
                   key={tab.key}
                   type="button"
-                  className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold transition ${
-                    active ? "border-primary bg-primary text-primary-foreground shadow-sm" : "bg-background text-muted-foreground hover:bg-muted/60"
-                  }`}
+                  className={`freight-workspace-tab ${active ? "active" : ""}`}
                   onClick={() => setActiveTab(tab.key)}
                 >
                   <Icon size={14} />
