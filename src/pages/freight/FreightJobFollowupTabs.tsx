@@ -121,9 +121,9 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null }: { tar
   }
 
   return (
-    <section className="grid gap-2">
-      <div className="rounded-md border bg-card px-3 py-2 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+    <section className="grid gap-2 freight-job-ops-screen">
+      <div className="freight-form-header">
+        <div className="flex flex-wrap items-center justify-between gap-2 w-full">
           <div className="flex items-center gap-2">
             <span className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary"><Icon size={18} /></span>
             <div><p className="eyebrow mb-0.5">Job Follow-up</p><h2 className="m-0 text-lg font-semibold">{cfg.title}</h2><p className="m-0 text-xs text-muted-foreground">Select a freight job and maintain operational follow-up rows.</p></div>
@@ -138,9 +138,12 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null }: { tar
       </div>
 
       <div className="grid gap-2 lg:grid-cols-[minmax(360px,520px)_1fr_1fr]">
-        <div className="rounded-md border bg-card p-2 shadow-sm">
+        <div className="freight-job-metric-card freight-job-selector-card">
           {initialJob ? (
-            <Metric label="Selected Freight Job" value={`${text(job || undefined, "job_no") || "-"} / ${text(job || undefined, "prin_name") || text(job || undefined, "prin_code") || "-"}`} />
+            <>
+              <div>Selected Freight Job</div>
+              <strong>{`${text(job || undefined, "job_no") || "-"} / ${text(job || undefined, "prin_name") || text(job || undefined, "prin_code") || "-"}`}</strong>
+            </>
           ) : (
             <label className="grid gap-1 text-[10px] font-semibold uppercase text-muted-foreground">Freight Job
               <LookupField
@@ -204,17 +207,17 @@ type GridProps = { rows: LookupRow[]; setRows: (updater: (rows: LookupRow[]) => 
 
 function EditableGrid({ columns, rows, setRows, deleteRow, addFactory, onAttach }: GridProps & { columns: string[]; onAttach?: (row: LookupRow) => void }) {
   return (
-    <div className="overflow-hidden rounded-md border bg-card shadow-sm">
-      <div className="flex items-center justify-between border-b bg-muted/40 px-2 py-1.5">
+    <div className="freight-job-table-shell">
+      <div className="flex items-center justify-between border-b bg-[#f8fbff] px-2 py-1.5">
         <div className="text-xs font-semibold text-foreground">{rows.length} lines</div>
         {addFactory && <Button type="button" size="sm" variant="outline" onClick={() => setRows((current) => [...current, normalizeLookupRow(addFactory())])}><Plus size={14} />Line</Button>}
       </div>
       <div className="max-h-[calc(100vh-330px)] overflow-auto">
-        <div className={`grid min-w-[1100px] gap-1 border-b bg-muted/25 px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground`} style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(105px, 1fr)) ${onAttach ? "44px " : ""}44px` }}>
+        <div className="freight-job-table-head grid min-w-[1100px] gap-1 px-2 py-1" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(105px, 1fr)) ${onAttach ? "44px " : ""}44px` }}>
           {columns.map((column) => <span key={column}>{label(column)}</span>)}{onAttach && <span>Files</span>}<span />
         </div>
         {rows.map((row, rowIndex) => (
-          <div key={rowIndex} className="grid min-w-[1100px] gap-1 border-b px-2 py-1" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(105px, 1fr)) ${onAttach ? "44px " : ""}44px` }}>
+          <div key={rowIndex} className="freight-job-table-row grid min-w-[1100px] gap-1 px-2 py-1" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(105px, 1fr)) ${onAttach ? "44px " : ""}44px` }}>
             {columns.map((column) => <Cell key={column} row={row} column={column} onChange={(value) => setRows((current) => current.map((item, index) => index === rowIndex ? { ...item, [column.toUpperCase()]: value } : item))} />)}
             {onAttach && <Button type="button" size="icon" variant="ghost" title="Document attachments" onClick={() => onAttach(row)}><Paperclip size={14} /></Button>}
             <Button type="button" size="icon" variant="ghost" title="Delete" onClick={() => deleteRow(row)}><Trash2 size={14} /></Button>
@@ -236,7 +239,7 @@ function Cell({ row, column, onChange }: { row: LookupRow; column: string; onCha
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-md border bg-card px-3 py-2 shadow-sm"><div className="text-[10px] font-semibold uppercase text-muted-foreground">{label}</div><div className="truncate text-lg font-semibold text-foreground">{value}</div></div>;
+  return <div className="freight-job-metric-card"><div>{label}</div><strong>{value}</strong></div>;
 }
 
 async function loadJobs(companyCode: string, mode: string, jobType: string) {
