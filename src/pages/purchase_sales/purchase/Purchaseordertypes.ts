@@ -18,7 +18,7 @@ export interface PurchaseOrderLineRow {
   l_uom: string;
   qty_luom: number;
   unit_price: number;
-  disc_pct: number;
+  disc_hdr_percent: number;
   qty: number;
   tax_pct: number;
   tax_amount: number;
@@ -54,27 +54,34 @@ export interface PurchaseOrderForm {
   div_name: string;
   ac_code: string;
   ac_name: string;
-  address: string;
+  party_address: string;
   credit_period: number;
   dept_code: string;
   dept_name:string;
-  tel: string;
-  fax: string;
+  party_phone: string;
+  party_fax: string;
   buyer: string;
   wo_no: string;
   curr_code: string;
   curr_name: string;
+   tax_code: string;
+tax_code_name: string;
+tx_cat_name: string;
+tx_cat_code: string;
+
+
+
   ex_rate: number;
-  pay_terms: string;
-  delivery_term: string;
-  delivery_contact: string;
-  delivery_tel: string;
-  delivery_email: string;
+  payment_terms: string;
+  dlvr_term: string;
+  dlvr_contact: string;
+  dlvr_mobile: string;
+  dlvr_email: string;
   remarks: string;
-  disc_amt: number;
-  disc_pct: number;
-  tax_category: string;
-  tax_code: string;
+  disc_hdr_price: number;
+  disc_hdr_percent: number;
+  
+ 
   expense_ac_post: string;
   print_on_letterhead: string;
   project_name: string;

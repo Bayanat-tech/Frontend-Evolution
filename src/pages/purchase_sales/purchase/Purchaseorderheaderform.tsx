@@ -105,9 +105,9 @@ export function PurchaseOrderHeaderForm({
               ...current,
               ac_code: value,
               ac_name: text(getLookupValue(row || {}, "ac_name")),
-              address: text(getLookupValue(row || {}, "address")) || current.address,
-              tel: text(getLookupValue(row || {}, "tel")) || current.tel,
-              fax: text(getLookupValue(row || {}, "fax")) || current.fax,
+              party_address: text(getLookupValue(row || {}, "address")) || current.party_address,
+              party_phone: text(getLookupValue(row || {}, "tel")) || current.party_phone,
+              party_fax: text(getLookupValue(row || {}, "fax")) || current.party_fax,
             }))}
           />
         </div>
@@ -149,14 +149,14 @@ export function PurchaseOrderHeaderForm({
           />
         </div>
         <CField label="Tel">
-          <Input disabled={headerAndLineDisabled} value={form.tel} onChange={(event) => updateField("tel", event.target.value)} />
+          <Input disabled={headerAndLineDisabled} value={form.party_phone} onChange={(event) => updateField("party_phone", event.target.value)} />
         </CField>
         <CField label="Address" className="col-span-2">
-          <Input disabled={headerAndLineDisabled} value={form.address} onChange={(event) => updateField("address", event.target.value)} />
+          <Input disabled={headerAndLineDisabled} value={form.party_address} onChange={(event) => updateField("party_address", event.target.value)} />
         </CField>
 
         <CField label="Fax">
-          <Input disabled={headerAndLineDisabled} value={form.fax} onChange={(event) => updateField("fax", event.target.value)} />
+          <Input disabled={headerAndLineDisabled} value={form.party_fax} onChange={(event) => updateField("party_fax", event.target.value)} />
         </CField>
       </CompactSection>
 
@@ -192,40 +192,56 @@ export function PurchaseOrderHeaderForm({
           <Input disabled={headerAndLineDisabled} type="number" step="0.000001" value={form.ex_rate} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} />
         </CField>
         <CField label="Disc Amt">
-          <Input disabled={headerAndLineDisabled} type="number" step="0.01" value={form.disc_amt} onChange={(event) => updateField("disc_amt", Number(event.target.value || 0))} />
+          <Input disabled={headerAndLineDisabled} type="number" step="0.01" value={form.disc_hdr_price} onChange={(event) => updateField("disc_hdr_price", Number(event.target.value || 0))} />
         </CField>
         <CField label="Disc %">
-          <Input disabled={headerAndLineDisabled} type="number" step="0.01" value={form.disc_pct} onChange={(event) => updateField("disc_pct", Number(event.target.value || 0))} />
+          <Input disabled={headerAndLineDisabled} type="number" step="0.01" value={form.disc_hdr_percent} onChange={(event) => updateField("disc_hdr_percent", Number(event.target.value || 0))} />
         </CField>
         <div>
-          <label className="mb-1 block text-xs font-semibold text-primary-foreground/80">Tax Category</label>
-          <LookupField
-            label="Tax Category"
-            compact
-            placeholder="Tax code"
-            value={form.tax_category || ""}
-            displayValue={form.tax_category || ""}
-            columns={[{ field: "tx_compntcat_code", header: "Code" }, { field: "tx_compntcat_name", header: "Name" }]}
-            valueField="tx_compntcat_code"
-            displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
-            loadOptions={() => getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE", code1: companyCode, loginid: loginIdOrAdmin })}
-            disabled={disabled}
-            // onChange={(value) => setForm((current) => ({ ...current, tax_category: value }))}
-            onChange={(value, row) => setForm((current) => ({
-              ...current,
-              tax_category: value,
-              tax_code: text(getLookupValue(row || {}, "tx_compntcat_code")),
-            }))}
-          />
-        </div>
+  <label className="mb-1 block text-xs font-semibold text-primary-foreground/80">Tax Category</label>
+  <LookupField
+    label="Tax Category"
+    compact
+    placeholder="Tax code"
+    value={form.tx_cat_code || ""}
+    displayValue={form.tx_cat_name ? `${form.tx_cat_code} - ${form.tx_cat_name}` : form.tx_cat_code}
+    columns={[{ field: "tx_cat_code", header: "Code" }, { field: "tx_cat_name", header: "Name" }]}
+    valueField="tx_cat_code"
+    displayFields={["tx_cat_code", "tx_cat_name"]}
+    loadOptions={() => getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CATEGORY", code1: companyCode, loginid: loginIdOrAdmin })}
+    disabled={disabled}
+    onChange={(value, row) => setForm((current) => ({
+      ...current,
+      tx_cat_code: value,
+      tx_cat_name: text(getLookupValue(row || {}, "tx_cat_name")),
+    }))}
+  />
+</div>
 
-        <CField label="TAX Code">
-          <Input disabled={headerAndLineDisabled} value={form.tax_code} onChange={(event) => updateField("tax_code", event.target.value)} />
-        </CField>
+        <div>
+  <label className="mb-1 block text-xs font-semibold text-primary-foreground/80">Tax Code</label>
+  <LookupField
+    label="Tax Code"
+    compact
+    placeholder="Tax code"
+    value={form.tax_code || ""}
+    displayValue={form.tax_code_name ? `${form.tax_code} - ${form.tax_code_name}` : form.tax_code}
+    columns={[{ field: "tx_compntcat_code", header: "Code" }, { field: "tx_compntcat_name", header: "Name" }]}
+    valueField="tx_compntcat_code"
+    displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
+    loadOptions={() => getDynamicLookup({ parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE", code1: companyCode, loginid: loginIdOrAdmin })}
+    disabled={headerAndLineDisabled}
+    onChange={(value, row) => setForm((current) => ({
+      ...current,
+      tax_code: value,
+      tax_code_name: text(getLookupValue(row || {}, "tx_compntcat_name")),
+    }))}
+  />
+</div>
 
 
         <CField label="Pay Terms" className="col-span-2">
-          <Input disabled={headerAndLineDisabled} value={form.pay_terms} onChange={(event) => updateField("pay_terms", event.target.value)} />
+          <Input disabled={headerAndLineDisabled} value={form.payment_terms} onChange={(event) => updateField("payment_terms", event.target.value)} />
         </CField>
 
         <CField label="Remarks" className="col-span-2">
@@ -233,15 +249,15 @@ export function PurchaseOrderHeaderForm({
         </CField>
 
         <CField label="Delivery Term" className="col-span-1">
-          <Input disabled={headerAndLineDisabled} value={form.delivery_term} onChange={(event) => updateField("delivery_term", event.target.value)} />
+          <Input disabled={headerAndLineDisabled} value={form.dlvr_term} onChange={(event) => updateField("dlvr_term", event.target.value)} />
         </CField>
         <CField label="Expense A/c Post">
-  <Select disabled={headerAndLineDisabled} value={form.expense_ac_post} onChange={(event) => updateField("expense_ac_post", event.target.value)}>
-    {EXPENSE_AC_OPTIONS.map((option) => (
-      <option key={option.value} value={option.value}>{option.label}</option>
-    ))}
-  </Select>
-</CField>
+          <Select disabled={headerAndLineDisabled} value={form.expense_ac_post} onChange={(event) => updateField("expense_ac_post", event.target.value)}>
+            {EXPENSE_AC_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </Select>
+        </CField>
       </CompactSection>
 
       <CompactSection label="Project, Scope & Delivery" className="border-b-0">
@@ -269,13 +285,13 @@ export function PurchaseOrderHeaderForm({
           <Input disabled={headerAndLineDisabled} value={form.scope_of_work} onChange={(event) => updateField("scope_of_work", event.target.value)} />
         </CField>
         <CField label="Delivery Contact">
-          <Input disabled={headerAndLineDisabled} value={form.delivery_contact} onChange={(event) => updateField("delivery_contact", event.target.value)} />
+          <Input disabled={headerAndLineDisabled} value={form.dlvr_contact} onChange={(event) => updateField("dlvr_contact", event.target.value)} />
         </CField>
         <CField label="Delivery Tel">
-          <Input disabled={headerAndLineDisabled} value={form.delivery_tel} onChange={(event) => updateField("delivery_tel", event.target.value)} />
+          <Input disabled={headerAndLineDisabled} value={form.dlvr_mobile} onChange={(event) => updateField("dlvr_mobile", event.target.value)} />
         </CField>
         <CField label="Delivery Email" className="col-span-1">
-          <Input disabled={headerAndLineDisabled} type="email" value={form.delivery_email} onChange={(event) => updateField("delivery_email", event.target.value)} />
+          <Input disabled={headerAndLineDisabled} type="email" value={form.dlvr_email} onChange={(event) => updateField("dlvr_email", event.target.value)} />
         </CField>
       </CompactSection>
     </div>

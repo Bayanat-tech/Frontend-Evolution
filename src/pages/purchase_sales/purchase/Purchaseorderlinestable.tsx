@@ -41,7 +41,7 @@ const TABLE_COLUMN_COUNT = 24;
 // Final Rate = Unit Price - (Unit Price * Disc % / 100)  [matches lineNetAmount / "Final Rate" in the sheet]
 function finalRate(row: PurchaseOrderLineRow): number {
   const price = numberOrZero(row.unit_price);
-  const discPct = numberOrZero(row.disc_pct);
+  const discPct = numberOrZero(row.disc_hdr_percent);
   return price - (price * discPct) / 100;
 }
 
@@ -326,7 +326,7 @@ export function PurchaseOrderLinesTable({
                   </td>
 
                   <td className="finance-amount-cell w-24 px-2 py-1">
-                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.disc_pct} onChange={(event) => updateRow(row.id, { disc_pct: Number(event.target.value || 0) })} />
+                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.disc_hdr_percent} onChange={(event) => updateRow(row.id, { disc_hdr_percent: Number(event.target.value || 0) })} />
                   </td>
                   <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineDiscPrice(row))}</td>
                   <td className="finance-amount-cell px-2 py-1 text-right">{formatAmount(lineNetAmount(row))}</td>
