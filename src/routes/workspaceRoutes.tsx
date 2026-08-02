@@ -138,6 +138,7 @@ import InspectionReportMainPage from "../pages/oxmaint/inspection-report-tailwin
 
 import { GradeMasterPage } from "../pages/hr/Grademasterpage";
 import InvoicePage from "../pages/wms/invoice/InvoicePage";
+import FreightInvoicePage from "../pages/freight/FreightInvoicePage";
 import InspectionFormPage from "../pages/oxmaint/inspection-form-tailwind/inspection_form/InspectionFormMainPage";
 import GrnSummaryReportPage from "../pages/wms/Reports/Grnsummaryreport";
 import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/AssetInventoryMainPage";
@@ -192,6 +193,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: "Activity WMS Master",
+    match: ({pathname}) => pathname.toLowerCase().includes("/wms/wms/master/gm/activity"),
+    element: () => <WmsSimpleMasterPage config={wmsSimpleMasterConfigs.activity} />,
+  },
 
   {
     name: 'mms inspection report',
@@ -461,6 +467,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   name: "WMS Invoice",
   match: ({ pathname }) => isInvoiceRoute(pathname),
   element: () => <InvoicePage />,
+},
+{
+  name: "Freight Invoice",
+  match: ({ pathname }) => isFreightInvoiceRoute(pathname),
+  element: () => <FreightInvoicePage />,
 },
   {
     name: "WMS Stock Transaction Report",
@@ -1606,6 +1617,10 @@ function isStockTransferRoute(pathname: string) {
 function isInvoiceRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes("wms/activity/request/invoice");
+}
+function isFreightInvoiceRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes("/freight_invoice/invoice");
 }
 function isStockAdjustmentRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
