@@ -43,7 +43,8 @@ export const emptyLineRow = (divCode: string): InventoryLineRow => ({
   l_uom: "",
   qty_luom: 0,
   unit_price: 0,
-  disc_pct: 0,
+  disc_precent: 0,
+  disc_price: 0,
   qty: 0,
   tax_pct: 0,
   tax_amount: 0,
@@ -85,8 +86,8 @@ export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
     delivery_tel: editor?.mode === "edit" ? editor.row.delivery_tel || "" : "",
     delivery_email: editor?.mode === "edit" ? editor.row.delivery_email || "" : "",
     remarks: editor?.mode === "edit" ? editor.row.remarks || "" : "",
-    disc_amt: editor?.mode === "edit" ? Number(editor.row.disc_amt || 0) : 0,
-    disc_pct: editor?.mode === "edit" ? Number(editor.row.disc_pct || 0) : 0,
+    disc_price: editor?.mode === "edit" ? Number(editor.row.disc_price || 0) : 0,
+    disc_precent: editor?.mode === "edit" ? Number(editor.row.disc_precent || 0) : 0,
     tax_category: editor?.mode === "edit" ? editor.row.tax_category || "" : "",
     tax_code: editor?.mode === "edit" ? editor.row.tax_code || "" : "",
     expense_ac_post: editor?.mode === "edit" ? editor.row.expense_ac_post || EXPENSE_AC_OPTIONS[0] : EXPENSE_AC_OPTIONS[0],
@@ -151,7 +152,7 @@ export async function fetchSalesOrderDetail(
       l_uom: text(row.l_uom),
       qty_luom: numberOrZero(row.qty_luom),
       unit_price: numberOrZero(row.unit_price),
-      disc_pct: numberOrZero(row.disc_pct),
+      disc_precent: numberOrZero(row.disc_precent),
       qty: numberOrZero(row.qty ?? row.quantity),
       tax_pct: numberOrZero(row.tax_pct ?? row.tax_percent),
       tax_amount: numberOrZero(row.tax_amount),
@@ -196,8 +197,8 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     delivery_tel: form.delivery_tel,
     delivery_email: form.delivery_email,
     remarks: form.remarks,
-    disc_amt: form.disc_amt,
-    disc_pct: form.disc_pct,
+    disc_price: form.disc_price,
+    disc_precent: form.disc_precent,
     tax_category: form.tax_category,
     tax_code: form.tax_code,
     expense_ac_post: form.expense_ac_post,
@@ -224,7 +225,7 @@ export function lineAmount(row: InventoryLineRow) {
   return row.qty_puom * row.unit_price;
 }
 export function lineDiscPrice(row: InventoryLineRow) {
-  return lineAmount(row) * (row.disc_pct / 100);
+  return lineAmount(row) * (row.disc_precent / 100);
 }
 export function lineNetAmount(row: InventoryLineRow) {
   return lineAmount(row) - lineDiscPrice(row);
@@ -249,7 +250,7 @@ export function buildDetailsPayload(rows: InventoryLineRow[]) {
     qty_luom: row.qty_luom,
     unit_price: row.unit_price,
     amount: lineAmount(row),
-    disc_pct: row.disc_pct,
+    disc_precent: row.disc_precent,
     disc_price: lineDiscPrice(row),
     net_amount: lineNetAmount(row),
     qty: row.qty,

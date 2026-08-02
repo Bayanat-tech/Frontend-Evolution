@@ -17,8 +17,6 @@ import {
   SendBackUserOption,
 } from "../../purchase_sales/purchase/Purchaseordertypes";
 import {
-  emptyForm,
-  emptyLineRow,
   formatAmount,
   lineAmount,
   lineDiscPrice,
@@ -34,7 +32,7 @@ import { PurchaseOrderLinesTable } from "../../purchase_sales/purchase/Purchaseo
 import { SendBackDialog } from "../../purchase_sales/purchase/Sendbackdialog";
 import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
 import {  PROCESSSO, SalesConfig, SO_DOC_TYPE } from "./SalesOrdertypes";
-import { fetchSalesOrderDetail, fetchSalesOrderHeader, runWorkflow } from "./SalesOrderutils";
+import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, runWorkflow } from "./SalesOrderutils";
 
 
 export type { PurchaseOrderEditorState };
@@ -184,7 +182,7 @@ export function SalesOrderEditor({
     const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
     const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-    return totalAmount - totalDiscPrice - form.disc_amt + totalTaxAmount;
+    return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
   })();
 
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
@@ -392,7 +390,7 @@ export function SalesOrderEditor({
                 addRow={addRow}
                 removeRow={removeRow}
                 headerAndLineDisabled={headerAndLineDisabled}
-                discAmt={form.disc_amt}
+                discAmt={form.disc_price}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
               />

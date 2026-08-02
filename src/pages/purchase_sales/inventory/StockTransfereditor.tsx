@@ -15,7 +15,6 @@ import {
   SendBackUserOption,
 } from "../purchase/Purchaseordertypes";
 import {
-  emptyForm,
 
   formatAmount,
 
@@ -29,7 +28,7 @@ import {
 import { SendBackDialog } from "../purchase/Sendbackdialog";
 import { RejectDialog } from "../purchase/Rejectdialog";
 import {  PROCESSST, InventoryConfig, IV_DOC_TYPE, PurchaseOrderForm, InventoryLineRow } from "./Inventorytypes";
-import { emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, lineAmount, lineDiscPrice, lineTaxAmount, runWorkflow } from "./Inventoryutils";
+import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, lineAmount, lineDiscPrice, lineTaxAmount, runWorkflow } from "./Inventoryutils";
 import { StockHeaderForm } from "./StockHeaderForm";
 import { StockDetail } from "./StockDetail";
 
@@ -185,7 +184,7 @@ export function StockTransferEditor({
     const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
     const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-    return totalAmount - totalDiscPrice - form.disc_amt + totalTaxAmount;
+    return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
   })();
 
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {

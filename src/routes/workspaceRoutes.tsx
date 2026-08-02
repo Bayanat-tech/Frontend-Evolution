@@ -193,6 +193,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: "Activity WMS Master",
+    match: ({pathname}) => pathname.toLowerCase().includes("/wms/wms/master/gm/activity"),
+    element: () => <WmsSimpleMasterPage config={wmsSimpleMasterConfigs.activity} />,
+  },
 
   {
     name: 'mms inspection report',

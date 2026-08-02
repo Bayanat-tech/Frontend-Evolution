@@ -44,7 +44,7 @@ export interface PurchaseOrderRow {
   delivery_tel?: string;
   delivery_email?: string;
   remarks?: string;
-  disc_amt?: number;
+  disc_price?: number;
   disc_pct?: number;
   tax_category?: string;
   tax_code?: string;
@@ -53,6 +53,7 @@ export interface PurchaseOrderRow {
   project_name?: string;
   pr_no?: string;
   scope_of_work?: string;
+  disc_percent?: number;
   status?: string;
   canceled?: string;
   flow_level_running?: number;
