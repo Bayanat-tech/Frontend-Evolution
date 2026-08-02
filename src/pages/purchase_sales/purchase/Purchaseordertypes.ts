@@ -46,8 +46,8 @@ export interface PurchaseOrderLineRow {
 export interface PurchaseOrderForm {
   doc_no: string;
   doc_date: string;
-  quotn_no: string;
-  quotn_date: string;
+  //quotn_no: string;
+  //quotn_date: string;
   ref_no:string;
   ref_date:string;
   div_code: string;
