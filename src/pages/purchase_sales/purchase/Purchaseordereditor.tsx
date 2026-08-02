@@ -33,6 +33,7 @@ import {
   numberOrZero,
   runWorkflow,
   text,
+  
 } from "./Purchaseorderutils";
 import { PurchaseOrderHeaderForm } from "./Purchaseorderheaderform";
 import { PurchaseOrderLinesTable } from "./Purchaseorderlinestable";
@@ -393,6 +394,7 @@ export function PurchaseOrderEditor({
                 updateRow={updateRow}
                 addRow={addRow}
                 removeRow={removeRow}
+                ex_rate={form.ex_rate}
                 headerAndLineDisabled={headerAndLineDisabled}
                 discAmt={form.disc_amt}
                 companyCode={user?.company_code}

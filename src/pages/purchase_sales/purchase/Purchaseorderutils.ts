@@ -218,20 +218,51 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
 }
 
 
-export function lineDiscPrice(row: PurchaseOrderLineRow) {
-  return row.unit_price * (row.disc_pct / 100);
+// Purchaseorderutils.ts
+
+export function isSameUom(row: PurchaseOrderLineRow): boolean {
+  return !!row.p_uom && !!row.l_uom && row.p_uom === row.l_uom;
 }
+
+export function computeQuantity(row: PurchaseOrderLineRow): number {
+  const qtyPuom = numberOrZero(row.qty_puom);
+  const qtyLuom = numberOrZero(row.qty_luom);
+  const uppp = numberOrZero(row.uppp);
+  return isSameUom(row) ? qtyLuom : qtyPuom * uppp + qtyLuom;
+}
+
+// Gross amount = unit price * quantity (no discount applied yet)
+
+
+
+// Total discount for the whole line (was missing * quantity before)
+export function lineDiscPrice(row: PurchaseOrderLineRow) {
+  return row.unit_price * (row.disc_pct / 100) ;
+}
+export function finalRate(row: PurchaseOrderLineRow) {
+  return Math.abs(lineDiscPrice(row) -row.unit_price) ;
+}
+
+export function lineAmount(row: PurchaseOrderLineRow) {
+  return finalRate(row) * computeQuantity(row);
+}
+
+// Net = gross - discount (single subtraction, no double-counting)
 export function lineNetAmount(row: PurchaseOrderLineRow) {
   return lineAmount(row) - lineDiscPrice(row);
 }
+
 export function lineTaxAmount(row: PurchaseOrderLineRow) {
   return lineNetAmount(row) * (row.tax_pct / 100);
 }
-export function lineAmount(row: PurchaseOrderLineRow) {
-  return (row.unit_price - lineDiscPrice(row) ) * row.quantity
+
+// Lcurr = net amount converted at ex_rate (was net * finalRate * ex_rate — double rate applied)
+export function lineLcurrAmount(row: PurchaseOrderLineRow , ex_rate?:number) {
+  return lineAmount(row) *  finalRate(row) *(ex_rate || 1);
 }
 
-export function buildDetailsPayload(rows: PurchaseOrderLineRow[]) {
+// buildDetailsPayload — use computed values instead of stale row.qty / row.lcurr_amount
+export function buildDetailsPayload(rows: PurchaseOrderLineRow[], ex_rate?: number) {
   return rows.map((row) => ({
     div_code: row.div_code,
     zone: row.zone,
@@ -246,10 +277,10 @@ export function buildDetailsPayload(rows: PurchaseOrderLineRow[]) {
     disc_pct: row.disc_pct,
     disc_price: lineDiscPrice(row),
     net_amount: lineNetAmount(row),
-    qty: row.qty,
+    quantity: computeQuantity(row),          // <-- fixed, was row.qty (always 0)
     tax_pct: row.tax_pct,
     tax_amount: lineTaxAmount(row),
-    lcurr_amount: row.lcurr_amount,
+    lcurr_amount: lineLcurrAmount(row,ex_rate), // <-- fixed, was row.lcurr_amount (always 0)
     req_date: row.req_date,
     remarks: row.line_remarks,
     tax_cat: row.tax_cat,
@@ -258,7 +289,6 @@ export function buildDetailsPayload(rows: PurchaseOrderLineRow[]) {
     lcurr_amount_disc: row.lcurr_amount_disc,
   }));
 }
-
 
 export async function runWorkflow(
   status: "SAVEASDRAFT" | "SUBMITTED" | "REJECTED" | "CLOSED" | "CANCELED" | "SENTBACK",
@@ -271,7 +301,7 @@ export async function runWorkflow(
   return upsertBulkPurchaseEntryApi(
     {
       header: buildHeaderPayload(form, companyCode, loginid, docType),
-      details: buildDetailsPayload(rows),
+      details: buildDetailsPayload(rows,form.ex_rate),
 
       company_code: companyCode || "",
       loginid: loginid || "ADMIN",

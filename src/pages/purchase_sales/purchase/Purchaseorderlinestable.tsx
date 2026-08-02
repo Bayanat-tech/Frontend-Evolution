@@ -12,6 +12,9 @@ import {
   lineTaxAmount,
   numberOrZero,
   text,
+  lineLcurrAmount,   // add
+  computeQuantity,   // add
+  isSameUom,
 } from "./Purchaseorderutils";
 
 const STICKY_COLS = {
@@ -49,7 +52,7 @@ function netTotalAmount(quantity: number, row: PurchaseOrderLineRow): number {
 
 // Lcurr Amount = Total Amount * Final Rate  (=L2*K2 in the sheet)
 function computeLcurrAmount(quantity: number, row: PurchaseOrderLineRow): number {
-  return netTotalAmount(quantity, row) * finalRate(row ) * row.ex_rate;
+  return netTotalAmount(quantity, row) * finalRate(row) * row.ex_rate;
 }
 
 export function PurchaseOrderLinesTable({
@@ -61,6 +64,7 @@ export function PurchaseOrderLinesTable({
   discAmt,
   companyCode,
   loginid,
+  ex_rate,
 }: {
   rows: PurchaseOrderLineRow[];
   updateRow: (id: string, patch: Partial<PurchaseOrderLineRow>) => void;
@@ -70,6 +74,7 @@ export function PurchaseOrderLinesTable({
   discAmt: number;
   companyCode?: string;
   loginid?: string;
+  ex_rate?: number;
 }) {
   const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
   const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
@@ -79,17 +84,9 @@ export function PurchaseOrderLinesTable({
   const grandTotal = totalAmount - totalDiscPrice - discAmt;
   const finalTotal = grandTotal + totalTaxAmount;
 
-  function isSameUom(row: PurchaseOrderLineRow): boolean {
-    return !!row.p_uom && !!row.l_uom && row.p_uom === row.l_uom;
-  }
-
   // Quantity is always derived, never typed directly:
   // - same UOM: quantity mirrors qty_luom
   // - different UOM: quantity = (qty_puom * uppp) + qty_luom
-  function computeQuantity(qtyPuom: number, uppp: number, qtyLuom: number, sameUom: boolean): number {
-    if (sameUom) return qtyLuom;
-    return qtyPuom * uppp + qtyLuom;
-  }
 
   return (
     <div className="commercial-lines-card rounded-md border bg-card">
@@ -122,7 +119,7 @@ export function PurchaseOrderLinesTable({
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Disc %</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Disc Price</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Unit price Net Amt</th>
-                <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Amount</th>
+              <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Amount</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax %</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Tax Amount</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Lcurr Amount</th>
@@ -139,12 +136,13 @@ export function PurchaseOrderLinesTable({
             {rows.length === 0 ? (
               <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={TABLE_COLUMN_COUNT}>No lines yet</td></tr>
             ) : rows.map((row, index) => {
-              const sameUom = isSameUom(row);
               const qtyPuomNum = numberOrZero(row.qty_puom);
               const qtyLuomNum = numberOrZero(row.qty_luom);
               const upppNum = numberOrZero(row.uppp);
-              const quantity = computeQuantity(qtyPuomNum, upppNum, qtyLuomNum, sameUom);
-              const lcurrAmountValue = computeLcurrAmount(quantity, row);
+
+              const sameUom = isSameUom(row);
+              const quantity = computeQuantity(row);
+              const lcurrAmountValue = lineLcurrAmount(row,ex_rate);
 
               return (
                 <tr className="border-t odd:bg-muted/20" key={row.id}>
@@ -181,7 +179,6 @@ export function PurchaseOrderLinesTable({
                       onChange={(value, selectedRow) => {
                         const newPUom = text(getLookupValue(selectedRow || {}, "p_uom")) || row.p_uom;
                         const newLUom = text(getLookupValue(selectedRow || {}, "p_uom")) || row.l_uom;
-                        const newSameUom = !!newPUom && !!newLUom && newPUom === newLUom;
                         const newUppp = numberOrZero(getLookupValue(selectedRow || {}, "uppp")) || row.uppp;
                         const patch: Partial<PurchaseOrderLineRow> = {
                           prod_code: value,
@@ -191,15 +188,11 @@ export function PurchaseOrderLinesTable({
                           uppp: newUppp,
                           unit_price: numberOrZero(getLookupValue(selectedRow || {}, "unit_price")) || row.unit_price,
                         };
-                        if (newSameUom) {
+                        const merged = { ...row, ...patch };
+                        if (isSameUom(merged)) {
                           patch.qty_puom = row.qty_luom;
                         }
-                        patch.quantity = computeQuantity(
-                          numberOrZero(newSameUom ? row.qty_luom : row.qty_puom),
-                          numberOrZero(newUppp),
-                          qtyLuomNum,
-                          newSameUom
-                        );
+                        patch.quantity = computeQuantity({ ...row, ...patch });
                         updateRow(row.id, patch);
                       }}
                     />
@@ -228,16 +221,15 @@ export function PurchaseOrderLinesTable({
                       }
                       disabled={headerAndLineDisabled}
                       onChange={(value, selectedRow) => {
-                        const newSameUom = !!value && !!row.l_uom && value === row.l_uom;
                         const patch: Partial<PurchaseOrderLineRow> = {
                           p_uom: value,
                           uom_name: text(getLookupValue(selectedRow || {}, "uom_name")) || row.uom_name,
                         };
-                        const effectiveQtyPuom = newSameUom ? qtyLuomNum : qtyPuomNum;
-                        if (newSameUom) {
+                        const merged = { ...row, ...patch };
+                        if (isSameUom(merged)) {
                           patch.qty_puom = qtyLuomNum;
                         }
-                        patch.quantity = computeQuantity(effectiveQtyPuom, upppNum, qtyLuomNum, newSameUom);
+                        patch.quantity = computeQuantity({ ...row, ...patch });
                         updateRow(row.id, patch);
                       }}
                     />
@@ -252,9 +244,10 @@ export function PurchaseOrderLinesTable({
                       value={sameUom ? qtyLuomNum : row.qty_puom}
                       onChange={(event) => {
                         const newQtyPuom = Number(event.target.value || 0);
+                        const patch = { qty_puom: newQtyPuom };
                         updateRow(row.id, {
-                          qty_puom: newQtyPuom,
-                          quantity: computeQuantity(newQtyPuom, upppNum, qtyLuomNum, sameUom),
+                          ...patch,
+                          quantity: computeQuantity({ ...row, ...patch }),
                         });
                       }}
                     />
@@ -282,16 +275,15 @@ export function PurchaseOrderLinesTable({
                       }
                       disabled={headerAndLineDisabled}
                       onChange={(value, selectedRow) => {
-                        const newSameUom = !!value && !!row.p_uom && value === row.p_uom;
                         const patch: Partial<PurchaseOrderLineRow> = {
                           l_uom: value,
                           uom_name: text(getLookupValue(selectedRow || {}, "uom_name")) || row.uom_name,
                         };
-                        const effectiveQtyPuom = newSameUom ? qtyLuomNum : qtyPuomNum;
-                        if (newSameUom) {
+                        const merged = { ...row, ...patch };
+                        if (isSameUom(merged)) {
                           patch.qty_puom = qtyLuomNum;
                         }
-                        patch.quantity = computeQuantity(effectiveQtyPuom, upppNum, qtyLuomNum, newSameUom);
+                        patch.quantity = computeQuantity({ ...row, ...patch });
                         updateRow(row.id, patch);
                       }}
                     />
@@ -304,7 +296,7 @@ export function PurchaseOrderLinesTable({
                         patch.qty_puom = newQtyLuom;
                         patch.quantity = newQtyLuom;
                       } else {
-                        patch.quantity = computeQuantity(qtyPuomNum, upppNum, newQtyLuom, sameUom);
+                        patch.quantity = computeQuantity({ ...row, ...patch });
                       }
                       updateRow(row.id, patch);
                     }} />
@@ -321,7 +313,7 @@ export function PurchaseOrderLinesTable({
                         const newUppp = Number(event.target.value || 0);
                         updateRow(row.id, {
                           uppp: Number(newUppp),
-                          quantity: computeQuantity(qtyPuomNum, newUppp, qtyLuomNum, sameUom),
+                          quantity: computeQuantity({ ...row, ...{ uppp: Number(newUppp) } }),
                         });
                       }}
                     />
@@ -329,16 +321,16 @@ export function PurchaseOrderLinesTable({
                   <td className="finance-amount-cell w-28 px-2 py-1">
                     <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.0001" value={row.unit_price} onChange={(event) => updateRow(row.id, { unit_price: Number(event.target.value || 0) })} />
                   </td>
-                         <td className="finance-amount-cell px-2 py-1 text-right">
+                  <td className="finance-amount-cell px-2 py-1 text-right">
                     {formatAmount(quantity)}
                   </td>
-                
+
                   <td className="finance-amount-cell w-24 px-2 py-1">
                     <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.disc_pct} onChange={(event) => updateRow(row.id, { disc_pct: Number(event.target.value || 0) })} />
                   </td>
                   <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineDiscPrice(row))}</td>
                   <td className="finance-amount-cell px-2 py-1 text-right">{formatAmount(lineNetAmount(row))}</td>
-             <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineAmount(row))}</td>
+                  <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineAmount(row))}</td>
                   <td className="finance-amount-cell w-24 px-2 py-1">
                     <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.tax_pct} onChange={(event) => updateRow(row.id, { tax_pct: Number(event.target.value || 0) })} />
                   </td>
