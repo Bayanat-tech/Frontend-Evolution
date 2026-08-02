@@ -391,6 +391,7 @@ export function ProductionJobOrderEditor({
 
               <PurchaseOrderLinesTable
                 rows={rows}
+                ex_rate={form.ex_rate}
                 updateRow={updateRow}
                 addRow={addRow}
                 removeRow={removeRow}
