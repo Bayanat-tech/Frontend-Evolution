@@ -25,6 +25,14 @@ type InvoiceFormProps = {
 };
 
 const getValue = (obj: any, key: string) => obj?.[key.toLowerCase()] ?? obj?.[key.toUpperCase()];
+const toDateInputValue = (value: unknown): string => {
+  if (!value) return "";
+  const str = String(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str; // already correct
+  const parsed = new Date(str);
+  if (isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
+};
 
 type FieldDef = { label: string; key: string; type?: "text" | "date" };
 
@@ -87,7 +95,7 @@ function FieldGrid({ fields, invoice, onChange, disabled }: {
           <Input
             className="h-8 text-sm"
             type={type === "date" ? "date" : "text"}
-            value={getValue(invoice, key) ?? ""}
+            value={type === "date" ? toDateInputValue(getValue(invoice, key)) : getValue(invoice, key) ?? ""}
             onChange={(e) => onChange(key, e.target.value)}
             disabled={disabled}
           />
@@ -99,6 +107,7 @@ function FieldGrid({ fields, invoice, onChange, disabled }: {
 
 export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProps) {
   const { user } = useAuth();
+  console.log("InvoiceForm existingData:", existingData);
 
   /* ================= STATE ================= */
   const [tab, setTab] = useState<0 | 1>(0);
@@ -124,6 +133,8 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
   const toDate = getValue(invoice, "to_date");
   const hasExistingData = !!existingData && Object.keys(existingData).length > 0;
   const consolidatedInvNo = getValue(invoice, "consolidated_invno") || invoiceNo;
+
+  
 
   /* ================= EFFECTS ================= */
   useEffect(() => {
@@ -417,7 +428,7 @@ const closeReportDialog = () => {
                     <Input
                       className="h-8 text-sm"
                       type={type === "date" ? "date" : "text"}
-                      value={getValue(invoice, key) ?? ""}
+                      value={type === "date" ? toDateInputValue(getValue(invoice, key)) : getValue(invoice, key) ?? ""}
                       onChange={(e) => setField(key, e.target.value)}
                       disabled={viewMode}
                     />
