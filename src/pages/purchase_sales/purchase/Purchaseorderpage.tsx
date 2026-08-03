@@ -49,6 +49,7 @@ export interface PurchaseOrderRow {
   tx_cat_code?: string;
   tx_cat_name?: string;
   tax_code?: string;
+  tx_compntcat_code_1?: string;
   tax_code_name?: string;
   expense_ac_post?: string;
   print_on_letterhead?: string;

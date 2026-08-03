@@ -65,12 +65,10 @@ export interface PurchaseOrderForm {
   curr_code: string;
   curr_name: string;
    tax_code: string;
+   tx_compntcat_code_1: string;
 tax_code_name: string;
 tx_cat_name: string;
 tx_cat_code: string;
-
-
-
   ex_rate: number;
   payment_terms: string;
   dlvr_term: string;

@@ -92,6 +92,7 @@ export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
     disc_hdr_percent: editor?.mode === "edit" ? Number(editor.row.disc_hdr_percent || 0) : 0,
     tx_cat_code: editor?.mode === "edit" ? editor.row.tx_cat_code || "" : "",
     tax_code: editor?.mode === "edit" ? editor.row.tax_code || "" : "",
+tx_compntcat_code_1: editor?.mode === "edit" ? editor.row.tx_compntcat_code_1 || "" : "",
     tax_code_name: editor?.mode === "edit" ? editor.row.tax_code_name || "" : "",
     tx_cat_name: editor?.mode === "edit" ? editor.row.tx_cat_name || "" : "",
     // expense_ac_post: editor?.mode === "edit" ? editor.row.expense_ac_post || EXPENSE_AC_OPTIONS[0] : EXPENSE_AC_OPTIONS[0],
