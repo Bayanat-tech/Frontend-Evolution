@@ -3,11 +3,14 @@ import type { MenuNode } from "../types/auth";
 export function buildWorkspaceApps(menuTree: MenuNode[]): MenuNode[] {
   const mastersApp = buildBtMastersApp(menuTree);
   const normalizedApps = menuTree.map(normalizeApplicationRoutes);
-  if (!mastersApp) return normalizedApps;
+  const withSupport = normalizedApps.some((item) => isBtSupportApp(item))
+    ? normalizedApps
+    : [...normalizedApps, buildBtSupportApp()];
+  if (!mastersApp) return withSupport;
 
   // APP_CODE=MASTERS is represented by the BT Masters utility only. Do not
   // expose it again as a standalone core application.
-  const visibleApps = normalizedApps.filter(
+  const visibleApps = withSupport.filter(
     (item) => !isDedicatedMastersApp(item) && !isBtMastersApp(item),
   );
   return [...visibleApps, mastersApp];
@@ -24,6 +27,45 @@ export function isUtilitiesApp(node?: MenuNode | null) {
 
 export function isBtMastersApp(node?: MenuNode | null) {
   return normalizeTitle(node?.title || "") === "bt masters";
+}
+
+export function isBtSupportApp(node?: MenuNode | null) {
+  return normalizeTitle(node?.title || "") === "bt support";
+}
+
+export function buildBtSupportApp(): MenuNode {
+  return {
+    id: "virtual-bt-support",
+    title: "BT SUPPORT",
+    type: "group",
+    children: [
+      {
+        id: "bt-support-center",
+        title: "Support Center",
+        type: "collapse",
+        children: [
+          {
+            id: "bt-support-admin-dashboard",
+            title: "Admin Dashboard",
+            type: "item",
+            url_path: "support/admin",
+          },
+          {
+            id: "bt-support-developer-assignment",
+            title: "Developer Assignment",
+            type: "item",
+            url_path: "support/developer-assignment",
+          },
+          {
+            id: "bt-support-developer-workbench",
+            title: "Developer Workbench",
+            type: "item",
+            url_path: "support/developer-workbench",
+          },
+        ],
+      },
+    ],
+  };
 }
 
 const securityRoutes: Record<string, string> = {
