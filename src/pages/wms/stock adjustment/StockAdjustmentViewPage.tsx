@@ -20,6 +20,8 @@ import {
   getStockAdjustmentData,
   getAdjConfirmReport,
   downloadAdjConfirmReportExcel,
+  getStockAdjusmentReportHtml,
+  getStockAdjusmentReportExcelDownload
 } from "../../../api/wms";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -123,6 +125,14 @@ const REPORTS: TReport[] = [
     apiFn:       getAdjConfirmReport,
     excelFn:     downloadAdjConfirmReportExcel,
   },
+
+  {
+
+     id:          2,
+    reportTitle: "Stock Adjustment Report",
+    apiFn:       getStockAdjusmentReportHtml,
+    excelFn:     getStockAdjusmentReportExcelDownload,
+  }
 ];
 
 // ─── Main component ───────────────────────────────────────────────────────────
