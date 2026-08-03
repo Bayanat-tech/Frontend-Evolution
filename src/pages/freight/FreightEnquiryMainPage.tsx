@@ -1,6 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { createContext, FormEvent, useContext, useEffect, useMemo, useState, useRef } from "react";
-import { Activity, AlertTriangle, ArrowLeft, Ban, CreditCard, Edit2, Eye, MapPinned, PackageCheck, Paperclip, Plus, RefreshCw, RotateCcw, Save, ShieldCheck, ShipWheel, Sparkles, Trash2, X } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState, useRef } from "react";
+import { Activity, AlertTriangle, ArrowLeft, Ban, CreditCard, Eye, MapPinned, PackageCheck, Paperclip, Plus, RefreshCw, RotateCcw, Save, ShieldCheck, ShipWheel, Sparkles, Trash2, X } from "lucide-react";
 import { api } from "../../api/client";
 import { freightSelect } from "../../api/freight";
 import { getLookupValue, type LookupRow } from "../../api/lookups";
@@ -171,8 +171,6 @@ type FreightEnquiryMainPageProps = {
   screenType?: "enquiry" | "rfq";
 };
 
-const FreightCommercialEditContext = createContext(true);
-
 type ListStatusTab = "draft" | "in_progress" | "approved" | "sentback" | "rejected" | "cancelled" | "all";
 
 const listStatusTabs: { key: ListStatusTab; label: string }[] = [
@@ -204,7 +202,6 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   const [notice, setNotice] = useState<Notice>(null);
   const [activeTab, setActiveTab] = useState<EnquiryTab>("cargo");
   const [attachmentOpen, setAttachmentOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
   const [assistOpen, setAssistOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -561,7 +558,6 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
     setHeaderNames(emptyHeaderNames);
     setDetails([buildInitialDetail(freshHeader, 1)]);
     setNotice(null);
-    setEditing(true);
   };
 
   const startNew = () => {
@@ -784,7 +780,6 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
       setDetails(detailRows.length ? detailRows.map((detail, index) => toDetailFromRow(detail, loadedHeader, index + 1)) : [buildInitialDetail(loadedHeader, 1)]);
       setActiveTab("cargo");
       setView("editor");
-      setEditing(false);
     } catch (error) {
       setNotice({ type: "error", text: error instanceof Error ? error.message : `Unable to open ${enquiryLabel}` });
     } finally {
@@ -857,7 +852,6 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
       if (response.data?.data?.enquiry_nr) {
         setHeaderField("enquiry_nr", response.data.data.enquiry_nr);
       }
-      setEditing(false);
       setNotice({ type: "success", text: response.data?.message || "Enquiry saved" });
       await loadEnquiries();
     } catch (error) {
@@ -947,8 +941,8 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
 
   return (
     <>
-    <form className="freight-dense-form freight-document-form" onSubmit={saveEnquiry}>
-      <div className="freight-form-header">
+    <form className="freight-dense-form" onSubmit={saveEnquiry}>
+      <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
             <ShipWheel size={15} />
@@ -998,18 +992,6 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
             <Paperclip size={14} />
             Files
           </Button>
-          {!editing && !isReadOnly && (
-            <Button type="button" size="sm" onClick={() => setEditing(true)}>
-              <Edit2 size={14} />
-              Edit
-            </Button>
-          )}
-          {editing && header.enquiry_nr && (
-            <Button type="button" size="sm" variant="outline" onClick={() => setEditing(false)}>
-              <Eye size={14} />
-              View
-            </Button>
-          )}
           {canSubmit && (
             <Button type="button" size="sm" variant="outline" onClick={submitForApproval} disabled={approving || saving}>
               <ShieldCheck size={14} />
@@ -1038,19 +1020,19 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
               </Button>
             </>
           )}
-          {!isApprovalInProgress && editing && (
+          {!isApprovalInProgress && (
             <Button type="button" size="sm" variant="outline" onClick={requestCancel} disabled={isReadOnly}>
               {header.enquiry_nr ? <Ban size={14} /> : <X size={14} />}
               {header.enquiry_nr ? "Cancel" : "Close"}
             </Button>
           )}
-          {!isApprovalInProgress && editing && (
+          {!isApprovalInProgress && (
             <Button type="button" size="sm" variant="outline" onClick={resetForm} disabled={isReadOnly}>
               <RotateCcw size={14} />
               Reset
             </Button>
           )}
-          {!isApprovalInProgress && editing && (
+          {!isApprovalInProgress && (
             <Button type="submit" size="sm" disabled={saving || isReadOnly}>
               <Save size={14} />
               {saving ? "Saving" : "Save Draft"}
@@ -1061,10 +1043,8 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
 
       {assistOpen && <FreightAssistPanel checks={smartChecks} />}
 
-      <FreightCommercialEditContext.Provider value={editing}>
-      <div className={`freight-document-paper freight-shipment-paper ${editing ? "is-editing" : "is-viewing"}`}>
-      <fieldset disabled={isReadOnly || !editing} className="contents">
-      <section className="freight-info-section">
+      <fieldset disabled={isReadOnly} className="contents">
+      <section className="freight-form-card rounded-md border bg-card shadow-sm">
         <div className="grid gap-1.5 sm:grid-cols-3 lg:grid-cols-6 xl:grid-cols-8">
           {/* <FormInput label="Company" value={header.company_code} onChange={(value) => setHeaderField("company_code", value)} required /> */}
           <FormInput label={`${enquiryLabel} No`} value={header.enquiry_nr} onChange={(value) => setHeaderField("enquiry_nr", value)} placeholder="Auto" disabled required inputClassName={header.enquiry_nr
@@ -1112,7 +1092,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
           ))}
         </div>
 
-        <fieldset disabled={isReadOnly || !editing} className="contents">
+        <fieldset disabled={isReadOnly} className="contents">
         <div className="freight-tabs-panel border-t">
           {activeTab === "cargo" && (
             <section>
@@ -1328,8 +1308,6 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
         </div>
         </fieldset>
       </div>
-      </div>
-      </FreightCommercialEditContext.Provider>
     </form>
     <AttachmentDialog
       open={attachmentOpen}
@@ -1807,10 +1785,6 @@ function FormInput({
   disabled?: boolean;
   inputClassName?: string;
 }) {
-  const editing = useContext(FreightCommercialEditContext);
-  if (!editing) {
-    return <DisplayField label={label} value={type === "date" ? formatDisplayDate(value) : value} className={className} />;
-  }
   return (
     <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
       {label}
@@ -1841,23 +1815,12 @@ function StatusField({ status, action = "", finalApproved = "" }: { status: stri
 }
 
 function TypeField({ label, value }: { label: string; value: string }) {
-  const editing = useContext(FreightCommercialEditContext);
-  if (!editing) return <DisplayField label={label} value={value} />;
   return (
     <div className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
       {label}
       <div className="flex h-7 items-center rounded-md border border-input bg-muted/40 px-2 text-[11px] font-semibold text-foreground">
         {value || "-"}
       </div>
-    </div>
-  );
-}
-
-function DisplayField({ label, value, className = "", multiline = false }: { label: string; value: string; className?: string; multiline?: boolean }) {
-  return (
-    <div className={`freight-read-field ${multiline ? "multiline" : ""} ${className}`}>
-      <span>{label}</span>
-      <strong className={value ? "" : "text-muted-foreground"}>{value || "-"}</strong>
     </div>
   );
 }
@@ -1885,10 +1848,6 @@ function FormLookup({
   required?: boolean;
   className?: string;
 }) {
-  const editing = useContext(FreightCommercialEditContext);
-  if (!editing) {
-    return <DisplayField label={label} value={displayValue ? `${value || "-"} - ${displayValue}` : value} className={className} />;
-  }
   return (
     <div className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
     <span>
@@ -1925,10 +1884,6 @@ function FormSelect({
   options: Array<{ value: string; label: string }>;
    required?: boolean;
 }) {
-  const editing = useContext(FreightCommercialEditContext);
-  if (!editing) {
-    return <DisplayField label={label} value={options.find((option) => option.value === value)?.label || value} />;
-  }
   return (
     // <label className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
     //   <span> {label} {required && <span style={{ color: "#E24B4A" }}>*</span>} </span>
@@ -1973,10 +1928,6 @@ function FormTextarea({
   compact?: boolean;
   className?: string;
 }) {
-  const editing = useContext(FreightCommercialEditContext);
-  if (!editing) {
-    return <DisplayField label={label} value={value} className={className} multiline />;
-  }
   return (
     <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
       {label}
@@ -1996,10 +1947,6 @@ function CellInput({
   type?: string;
   className?: string;
 }) {
-  const editing = useContext(FreightCommercialEditContext);
-  if (!editing) {
-    return <td className="px-1.5 py-1.5 text-xs font-medium text-slate-700">{value || "-"}</td>;
-  }
   return (
     <td className="px-1.5 py-1.5">
       <Input className={`h-7 text-xs ${className}`} type={type} value={value} onChange={(event) => onChange(event.target.value)} />
