@@ -43,7 +43,7 @@ export interface PurchaseOrderLineRow {
 }
 
 export interface PurchaseOrderForm {
-  doc_no: string;
+  doc_no: number | string;
   doc_date: string;
   quotn_no: string;
   quotn_date: string;
@@ -93,7 +93,7 @@ export interface TteJmiConsumType {
   company_code: string;
   doc_type: string;
   doc_no: number;
-
+  uppp:number;
   mi_doc_no: number;
 
   prod_code: string;
@@ -101,9 +101,12 @@ export interface TteJmiConsumType {
 
   quantity: number;
   qty: number;
-
+  disc_percent: number;
+  disc_price: number;
   p_uom: string;
   l_uom: string;
+  tax_code: string;
+  ex_rate: number;
 
   qty_puom: number;
   qty_luom: number;

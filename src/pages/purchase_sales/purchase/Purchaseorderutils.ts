@@ -274,6 +274,7 @@ export function buildDetailsPayload(rows: PurchaseOrderLineRow[], ex_rate?: numb
     prod_code: row.prod_code,
     prod_name: row.prod_name,
     p_uom: row.p_uom,
+    uppp : row.uppp,
     qty_puom: row.qty_puom,
     l_uom: row.l_uom,
     qty_luom: row.qty_luom,

@@ -24,6 +24,7 @@ export interface PurchaseOrderRow {
    ref_no?: string;
   ref_date?: string;
   dept_name?: string;
+  uppp?: number;
   div_code: string;
   div_name?: string;
   ac_code: string;
@@ -170,7 +171,6 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
     { accessorKey: "ac_code", header: "A/c Code" },
     { accessorKey: "ac_name", header: "A/c Name" },
     { accessorKey: "curr_code", header: "Currency" },
-    { accessorKey: "buyer", header: "Buyer" },
     {
       accessorKey: "canceled",
       header: "Status",
@@ -219,9 +219,11 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
+        { tab === "PENDING" && (
           <Button title="Add Purchase Order" onClick={() => setDivisionPicker(true)}>
             <Plus size={15} /> Add
           </Button>
+        )}
         </div>
       </div>
 
