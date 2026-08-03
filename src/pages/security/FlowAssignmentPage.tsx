@@ -1,10 +1,11 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { ChevronDown, Plus, Save, Trash2 } from "lucide-react";
+import { Plus, Save, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { NoticeToast } from "../../components/ui/NoticeToast";
 import { LookupField } from "../../components/ui/LookupField";
+import { Dialog } from "../../components/ui/Dialog";
 import type { LookupRow } from "../../api/lookups";
 import {
   getFlowAssignProcesses,
@@ -24,12 +25,12 @@ function val(row: Record<string, unknown>, key: string) {
 
 type LevelKey = "level1_role" | "level2_role" | "level3_role" | "level4_role" | "level5_role";
 
-const LEVEL_FIELDS: { key: LevelKey; label: string; required: boolean }[] = [
-  { key: "level1_role", label: "Level 1", required: true },
-  { key: "level2_role", label: "Level 2", required: true },
-  { key: "level3_role", label: "Level 3", required: false },
-  { key: "level4_role", label: "Level 4", required: false },
-  { key: "level5_role", label: "Level 5", required: false },
+const LEVEL_FIELDS: { key: LevelKey; label: string; required: boolean; descField: string }[] = [
+  { key: "level1_role", label: "Level 1", required: true, descField: "level1_role_desc" },
+  { key: "level2_role", label: "Level 2", required: true, descField: "level2_role_desc" },
+  { key: "level3_role", label: "Level 3", required: false, descField: "level3_role_desc" },
+  { key: "level4_role", label: "Level 4", required: false, descField: "level4_role_desc" },
+  { key: "level5_role", label: "Level 5", required: false, descField: "level5_role_desc" },
 ];
 
 const EMPTY_LEVEL_VALUES: Record<LevelKey, string> = {
@@ -40,15 +41,22 @@ const EMPTY_LEVEL_VALUES: Record<LevelKey, string> = {
   level5_role: "",
 };
 
-// ─── A small, properly-styled custom dropdown for the Level cells ─────────
-// Replaces the raw native <select>, whose browser-drawn popup can't be
-// restyled and was rendering as a full-height unstyled overlay.
+const EMPTY_LEVEL_DESCS: Record<LevelKey, string> = {
+  level1_role: "",
+  level2_role: "",
+  level3_role: "",
+  level4_role: "",
+  level5_role: "",
+};
+
+// ─── A small, properly-styled custom dropdown for the Level rows ──────────
 type DropdownOption = { label: string; value: string };
 
 function LevelDropdown({
   label,
   required,
   value,
+  descValue,
   options,
   disabled,
   onSelect,
@@ -57,6 +65,7 @@ function LevelDropdown({
   label: string;
   required: boolean;
   value: string;
+  descValue?: string;
   options: DropdownOption[];
   disabled?: boolean;
   onSelect: (value: string) => void;
@@ -76,15 +85,26 @@ function LevelDropdown({
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [open]);
 
-  const currentLabel = options.find((option) => option.value === value)?.label || value;
+  const formatOption = (option: DropdownOption) =>
+    option.label && option.label !== option.value ? `${option.value} — ${option.label}` : option.value;
+
+  const currentOption = options.find((option) => option.value === value);
+  const currentLabel = value
+    ? descValue
+      ? `${value} — ${descValue}`
+      : currentOption
+      ? formatOption(currentOption)
+      : value
+    : "";
 
   return (
-    <div ref={containerRef} className="relative">
-      <label className="grid gap-1 text-xs">
-        <span className="font-medium text-muted-foreground">
-          {label}
-          {required && <span className="ml-0.5 text-red-500">*</span>}
-        </span>
+    <div ref={containerRef} className="relative flex items-center gap-3">
+      <span className="w-16 shrink-0 text-xs font-medium text-muted-foreground sm:w-20">
+        {label}
+        {required && <span className="ml-0.5 text-red-500">*</span>}
+      </span>
+
+      <div className="relative min-w-0 flex-1">
         <button
           type="button"
           disabled={disabled}
@@ -98,39 +118,39 @@ function LevelDropdown({
           }}
         >
           <span className="truncate">{currentLabel || (required ? "Select (required)" : "None")}</span>
-          <ChevronDown size={14} className="shrink-0 text-muted-foreground" />
+          <span className="shrink-0 text-muted-foreground">▾</span>
         </button>
-      </label>
 
-      {open && (
-        <div className="absolute z-20 mt-1 max-h-48 w-full min-w-[140px] overflow-auto rounded-md border bg-card shadow-lg">
-          <button
-            type="button"
-            className="block w-full px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent"
-            onClick={() => {
-              onSelect("");
-              setOpen(false);
-            }}
-          >
-            {required ? "Select (required)" : "None"}
-          </button>
-          {options.map((option) => (
+        {open && (
+          <div className="absolute z-20 mt-1 max-h-48 w-full min-w-[220px] overflow-auto rounded-md border bg-card shadow-lg">
             <button
-              key={option.value}
               type="button"
-              className={`block w-full truncate px-2 py-1.5 text-left text-sm hover:bg-accent ${
-                option.value === value ? "bg-primary/10 font-medium" : ""
-              }`}
+              className="block w-full px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent"
               onClick={() => {
-                onSelect(option.value);
+                onSelect("");
                 setOpen(false);
               }}
             >
-              {option.label}
+              {required ? "Select (required)" : "None"}
             </button>
-          ))}
-        </div>
-      )}
+            {options.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={`block w-full truncate px-2 py-1.5 text-left text-sm hover:bg-accent ${
+                  option.value === value ? "bg-primary/10 font-medium" : ""
+                }`}
+                onClick={() => {
+                  onSelect(option.value);
+                  setOpen(false);
+                }}
+              >
+                {formatOption(option)}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -144,6 +164,7 @@ export function FlowAssignmentPage() {
   const [selectedRole, setSelectedRole] = useState<string>("");
 
   const [levelValues, setLevelValues] = useState<Record<LevelKey, string>>(EMPTY_LEVEL_VALUES);
+  const [levelDescs, setLevelDescs] = useState<Record<LevelKey, string>>(EMPTY_LEVEL_DESCS);
   const [levelLoading, setLevelLoading] = useState(false);
   const [savingLevels, setSavingLevels] = useState(false);
   const [levelDirty, setLevelDirty] = useState(false);
@@ -153,11 +174,19 @@ export function FlowAssignmentPage() {
   const [userRows, setUserRows] = useState<TFlowRoleUser[]>([]);
   const [userLoading, setUserLoading] = useState(false);
 
-  // What the right grid is currently showing — drives the "Assigned Users — ..." heading.
   const [rightPanelContext, setRightPanelContext] = useState<string>("");
 
   const [selectedUserRow, setSelectedUserRow] = useState<TFlowRoleUser | null>(null);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  // ── Add User modal state ──────────────────────────────────────────────
+  // modalRole is independent from the page's selectedRole, so the modal
+  // can be opened even when nothing (or a null Level 5) is selected yet —
+  // the person picks the role right here via LookupField.
+  const [addUserOpen, setAddUserOpen] = useState(false);
+  const [modalRole, setModalRole] = useState("");
+  const [addUserLoginId, setAddUserLoginId] = useState("");
+  const [addingUser, setAddingUser] = useState(false);
 
   useEffect(() => {
     if (!companyCode) return;
@@ -212,6 +241,7 @@ export function FlowAssignmentPage() {
   const loadLevelDetails = async (process: string) => {
     if (!process) {
       setLevelValues(EMPTY_LEVEL_VALUES);
+      setLevelDescs(EMPTY_LEVEL_DESCS);
       setLevelDirty(false);
       setUserRows([]);
       setRightPanelContext("");
@@ -229,8 +259,16 @@ export function FlowAssignmentPage() {
         level4_role: first ? val(first, "level4_role") : "",
         level5_role: first ? val(first, "level5_role") : "",
       };
+      const nextDescs: Record<LevelKey, string> = {
+        level1_role: first ? val(first, "level1_role_desc") : "",
+        level2_role: first ? val(first, "level2_role_desc") : "",
+        level3_role: first ? val(first, "level3_role_desc") : "",
+        level4_role: first ? val(first, "level4_role_desc") : "",
+        level5_role: first ? val(first, "level5_role_desc") : "",
+      };
 
       setLevelValues(next);
+      setLevelDescs(nextDescs);
       setLevelDirty(false);
       setSelectedRole("");
       setSelectedUserRow(null);
@@ -245,7 +283,6 @@ export function FlowAssignmentPage() {
     }
   };
 
-  // Clicking/opening a level cell shows THAT level's current role in the right grid.
   const handleLevelCellOpen = (key: LevelKey) => {
     const roleCode = levelValues[key];
     const levelLabel = LEVEL_FIELDS.find((field) => field.key === key)?.label || key;
@@ -259,10 +296,13 @@ export function FlowAssignmentPage() {
     }
   };
 
-  // Picking a new role for a level updates the value AND shows that new role's users.
   const updateLevelValue = (key: LevelKey, newValue: string) => {
     const next = { ...levelValues, [key]: newValue };
     setLevelValues(next);
+    setLevelDescs((prev) => ({
+      ...prev,
+      [key]: approverOptions.find((option) => option.value === newValue)?.label || "",
+    }));
     setLevelDirty(true);
 
     const levelLabel = LEVEL_FIELDS.find((field) => field.key === key)?.label || key;
@@ -317,6 +357,7 @@ export function FlowAssignmentPage() {
       if (result?.success) {
         setLevelDirty(false);
         setNotice({ type: "success", message: "Approver levels saved successfully." });
+        await loadLevelDetails(selectedProcess);
       } else {
         throw new Error(result?.message || "Save failed");
       }
@@ -345,20 +386,32 @@ export function FlowAssignmentPage() {
     { accessorKey: "username", header: "User Name", size: 200, cell: ({ row }) => val(row.original, "username") || "-" },
   ], []);
 
-  const handleAddUser = async () => {
-    if (!selectedRole) {
-      setNotice({ type: "error", message: "Select a role first (click a level cell, or use Role Name)." });
-      return;
-    }
-    const newLoginId = window.prompt("Enter the user code (loginid) to add to this role:");
-    if (!newLoginId) return;
+  // Add is always openable now — even with no role/level selected (e.g. a
+  // null Level 5) — because the role itself is picked inside the modal.
+  const handleAddUser = () => {
+    setModalRole(selectedRole || "");
+    setAddUserLoginId("");
+    setAddUserOpen(true);
+  };
 
+  const handleConfirmAddUser = async () => {
+    if (!modalRole || !addUserLoginId) return;
+    setAddingUser(true);
     try {
-      await addUserToRole(companyCode, selectedRole, newLoginId, loginid);
+      await addUserToRole(companyCode, modalRole, addUserLoginId, loginid);
       setNotice({ type: "success", message: "User added to role." });
-      await loadRoleUsers(selectedRole);
+      setAddUserOpen(false);
+      setAddUserLoginId("");
+
+      // Reflect the role picked in the modal back onto the page so the
+      // grid below shows the role that was just updated.
+      setSelectedRole(modalRole);
+      setRightPanelContext(`Role ${modalRole}`);
+      await loadRoleUsers(modalRole);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to add user." });
+    } finally {
+      setAddingUser(false);
     }
   };
 
@@ -388,61 +441,62 @@ export function FlowAssignmentPage() {
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        {/* LEFT: Process -> Approver Levels */}
-        <div className="grid gap-3 rounded-lg border bg-card p-4 shadow-sm">
-          <label className="grid gap-1 text-sm">
-            <span className="font-medium text-foreground">Process</span>
-            <LookupField
-              value={selectedProcess}
-              placeholder="Select process"
-              columns={[{ field: "PROCESS", header: "Process" }]}
-              valueField="PROCESS"
-              displayFields={["PROCESS"]}
-              loadOptions={loadProcessOptions}
-              onChange={(v) => {
-                setSelectedProcess(v);
-                void loadLevelDetails(v);
-              }}
+      {/* TOP: Process -> Approver Levels */}
+      <div className="grid gap-3 rounded-lg border bg-card p-4 shadow-sm">
+        <label className="grid max-w-md gap-1 text-sm">
+          <span className="font-medium text-foreground">Process</span>
+          <LookupField
+            value={selectedProcess}
+            placeholder="Select process"
+            columns={[{ field: "PROCESS", header: "Process" }]}
+            valueField="PROCESS"
+            displayFields={["PROCESS"]}
+            loadOptions={loadProcessOptions}
+            onChange={(v) => {
+              setSelectedProcess(v);
+              void loadLevelDetails(v);
+            }}
+          />
+        </label>
+
+        <h2 className="m-0 text-sm font-semibold text-foreground">Approver Levels</h2>
+
+        <div className="grid max-w-md grid-cols-1 gap-2.5">
+          {LEVEL_FIELDS.map(({ key, label, required }) => (
+            <LevelDropdown
+              key={key}
+              label={label}
+              required={required}
+              value={levelValues[key]}
+              descValue={levelDescs[key]}
+              options={optionsWithFallback(levelValues[key])}
+              disabled={!selectedProcess || levelLoading}
+              onOpen={() => handleLevelCellOpen(key)}
+              onSelect={(v) => updateLevelValue(key, v)}
             />
-          </label>
-
-          <h2 className="m-0 text-sm font-semibold text-foreground">Approver Levels</h2>
-
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
-            {LEVEL_FIELDS.map(({ key, label, required }) => (
-              <LevelDropdown
-                key={key}
-                label={label}
-                required={required}
-                value={levelValues[key]}
-                options={optionsWithFallback(levelValues[key])}
-                disabled={!selectedProcess || levelLoading}
-                onOpen={() => handleLevelCellOpen(key)}
-                onSelect={(v) => updateLevelValue(key, v)}
-              />
-            ))}
-          </div>
-
-          <div className="flex items-center justify-between border-t pt-3">
-            <span className="text-sm font-medium text-foreground">
-              Total Level Count: <span className="tabular-nums">{totalLevelCount}</span>
-            </span>
-            <Button
-              size="sm"
-              onClick={handleSaveLevels}
-              disabled={!selectedProcess || !levelDirty || savingLevels}
-            >
-              <Save size={14} />
-              {savingLevels ? "Saving..." : "Save Levels"}
-            </Button>
-          </div>
+          ))}
         </div>
 
-        {/* RIGHT: users for whichever level cell was last clicked/edited,
-            or a single role explicitly picked via Role Name */}
-        <div className="grid gap-3 rounded-lg border bg-card p-4 shadow-sm">
-          <label className="grid gap-1 text-sm">
+        <div className="flex items-center justify-between border-t pt-3">
+          <span className="text-sm font-medium text-foreground">
+            Total Level Count: <span className="tabular-nums">{totalLevelCount}</span>
+          </span>
+          <Button
+            size="sm"
+            onClick={handleSaveLevels}
+            disabled={!selectedProcess || !levelDirty || savingLevels}
+          >
+            <Save size={14} />
+            {savingLevels ? "Saving..." : "Save Levels"}
+          </Button>
+        </div>
+      </div>
+
+      {/* BOTTOM: users for whichever level cell was last clicked/edited,
+          or a single role explicitly picked via Role Name */}
+      <div className="grid gap-3 rounded-lg border bg-card p-4 shadow-sm">
+        <div className="flex items-end justify-between gap-3">
+          <label className="grid max-w-md flex-1 gap-1 text-sm">
             <span className="font-medium text-foreground">Role Name</span>
             <LookupField
               value={selectedRole}
@@ -469,30 +523,92 @@ export function FlowAssignmentPage() {
             />
           </label>
 
-          <h2 className="m-0 text-sm font-semibold text-foreground">
-            Assigned Users{rightPanelContext ? ` — ${rightPanelContext}` : ""}
-          </h2>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleSaveLevels}
+            disabled={!selectedProcess || !levelDirty || savingLevels}
+          >
+            <Save size={14} />
+            {savingLevels ? "Saving..." : "Save Levels"}
+          </Button>
+        </div>
 
-          <DataTable
-            columns={userColumns}
-            data={userRows}
-            loading={userLoading}
-            height="280px"
-            minWidth={420}
-            density="grid"
-            getRowId={(row: any, index: any) => val(row, "loginid") + "_" + val(row, "serial_no_or_role_id") + "_" + index}
-          />
+        <h2 className="m-0 text-sm font-semibold text-foreground">
+          Assigned Users{rightPanelContext ? ` — ${rightPanelContext}` : ""}
+        </h2>
 
-          <div className="flex justify-end gap-2 border-t pt-3">
-            <Button variant="outline" onClick={handleDeleteUser} disabled={!selectedRole || !selectedUserRow}>
-              <Trash2 size={15} /> Delete
-            </Button>
-            <Button onClick={handleAddUser} disabled={!selectedRole}>
-              <Plus size={15} /> Add
-            </Button>
-          </div>
+        <DataTable
+          columns={userColumns}
+          data={userRows}
+          loading={userLoading}
+          height="320px"
+          minWidth={420}
+          density="grid"
+          getRowId={(row: any, index: any) => val(row, "loginid") + "_" + val(row, "serial_no_or_role_id") + "_" + index}
+        />
+
+        <div className="flex justify-end gap-2 border-t pt-3">
+          <Button variant="outline" onClick={handleDeleteUser} disabled={!selectedRole || !selectedUserRow}>
+            <Trash2 size={15} /> Delete
+          </Button>
+          {/* No longer gated on selectedRole — Level 5 (or any unpicked level) can open this and choose the role right inside the modal. */}
+          <Button onClick={handleAddUser}>
+            <Plus size={15} /> Add
+          </Button>
         </div>
       </div>
+
+      {/* Add User modal */}
+      <Dialog
+        open={addUserOpen}
+        title="Add User to Role"
+        description="Pick the role, then enter the user code to assign."
+        compact
+        onClose={() => setAddUserOpen(false)}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setAddUserOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmAddUser} disabled={!modalRole || !addUserLoginId || addingUser}>
+              <Plus size={14} />
+              {addingUser ? "Adding..." : "Add"}
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3">
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium text-foreground">Role</span>
+            <LookupField
+              value={modalRole}
+              placeholder="Search code, name, description..."
+              columns={[
+                { field: "ROLE_ID", header: "Role Code" },
+                { field: "ROLE_DESC", header: "Role Description" },
+              ]}
+              valueField="ROLE_ID"
+              displayFields={["ROLE_DESC"]}
+              loadOptions={loadRoleOptions}
+              onChange={setModalRole}
+            />
+          </label>
+
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium text-foreground">User Code</span>
+            <input
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+              placeholder="Enter loginid"
+              value={addUserLoginId}
+              onChange={(e) => setAddUserLoginId(e.target.value)}
+            />
+            {/* TODO: swap this input for a LookupField (User Code / User Name
+                columns) the moment a "list all users for company" API exists —
+                same pattern as the Role field above, just no endpoint yet. */}
+          </label>
+        </div>
+      </Dialog>
     </section>
   );
 }
