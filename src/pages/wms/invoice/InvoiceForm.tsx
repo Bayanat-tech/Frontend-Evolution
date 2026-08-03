@@ -16,7 +16,7 @@ import {
 } from "../../../api/billing";
 import JobSelectionModal from "./JobSelectionModal";
 import StorageSelectionModal from "./StorageSelectionModal";
-import { getInvocieDetailReport } from "../../../api/wms";
+import { executeWmsInboundSql, getInvocieDetailReport } from "../../../api/wms";
 
 type InvoiceFormProps = {
   existingData?: Record<string, unknown>;
@@ -34,7 +34,7 @@ const toDateInputValue = (value: unknown): string => {
   return parsed.toISOString().slice(0, 10);
 };
 
-type FieldDef = { label: string; key: string; type?: "text" | "date" };
+type FieldDef = { label: string; key: string; type?: "text" | "date", disabled?: boolean };
 
 const HEADER_FIELDS: FieldDef[] = [
   { label: "Invoice No", key: "invoice_no" },
@@ -65,8 +65,8 @@ const DESCRIPTION_FIELDS: FieldDef[] = [
 ];
 
 const CURRENCY_FIELDS: FieldDef[] = [
-  { label: "Currency Code", key: "curr_code" },
-  { label: "Exchange Rate", key: "ex_rate" },
+  { label: "Currency Code", key: "curr_code", disabled: true },
+  { label: "Exchange Rate", key: "ex_rate", disabled: true },
 ];
 
 function SectionHeader({ icon: Icon, title, subtitle }: { icon: any; title: string; subtitle: string }) {
@@ -89,7 +89,7 @@ function FieldGrid({ fields, invoice, onChange, disabled }: {
 }) {
   return (
     <div className="grid grid-cols-2 gap-2">
-      {fields.map(({ label, key, type }) => (
+      {fields.map(({ label, key, type, disabled: fieldDisabled }) => (
         <label key={key} className="field">
           <span className="text-xs">{label}</span>
           <Input
@@ -97,7 +97,7 @@ function FieldGrid({ fields, invoice, onChange, disabled }: {
             type={type === "date" ? "date" : "text"}
             value={type === "date" ? toDateInputValue(getValue(invoice, key)) : getValue(invoice, key) ?? ""}
             onChange={(e) => onChange(key, e.target.value)}
-            disabled={disabled}
+            disabled={disabled || fieldDisabled}
           />
         </label>
       ))}
@@ -243,112 +243,135 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
     setStorageLines((prev) => [...prev, ...selectedRows]);
   };
 
-const handleSave = async () => {
-  setSaving(true);
-  setWarning("");
-  try {
-    const invoiceHeader: TInvoice[] = [{ ...invoice, USER_ID: user?.loginid, COMPANY_CODE: user?.company_code }];
+  const handleSave = async () => {
+    setSaving(true);
+    setWarning("");
+    try {
+      const invoiceHeader: TInvoice[] = [{ ...invoice, USER_ID: user?.loginid, COMPANY_CODE: user?.company_code }];
 
-    const jobLineRows: TInvoiceDetail[] = lines.map((row, index) => {
-      const quantity = Number(row.quantity || 0);
-      const billRate = Number(row.bill_rate || 0);
-      const costRate = Number(row.cost_rate || 0);
-      return {
+      const jobLineRows: TInvoiceDetail[] = lines.map((row, index) => {
+        const quantity = Number(row.quantity || 0);
+        const billRate = Number(row.bill_rate || 0);
+        const costRate = Number(row.cost_rate || 0);
+        return {
+          ...row,
+          srno: index + 1,
+          invoice_no: invoiceNo,
+          prin_code: prinCode,
+          job_no: row.job_no ?? "",
+          quantity,
+          bill_rate: billRate,
+          cost_rate: costRate,
+          bill_amount: quantity * billRate,
+          cost_amount: quantity * costRate,
+        };
+      });
+
+      const jobSelection = jobSelectionRows.map((row) => ({
+        job_no: row.job_no,
+        act_code: row.act_code,
+        activity: row.activity,
+        invoice_no: row.invoice_no,
+        prin_code: prinCode,
+        quantity: row.quantity,
+        bill: row.bill,
+        job_date: row.job_date,
+        srno: row.srno,
+        selected: "Y",
+      }));
+
+      const storageSelection = storageLines.map((row) => ({
         ...row,
-        srno: index + 1,
+        act_code: "9001",
+          SELECTED: "Y",
+      }));
+
+      const storageDetailRows: TInvoiceDetail[] = storageLines.map((row: any) => ({
         invoice_no: invoiceNo,
         prin_code: prinCode,
-        job_no: row.job_no ?? "",
-        quantity,
-        bill_rate: billRate,
-        cost_rate: costRate,
-        bill_amount: quantity * billRate,
-        cost_amount: quantity * costRate,
-      };
-    });
+        act_code: "9001",
+        activity: row.ACTIVITY,
+        bill: row.AMOUNT,
+        cost: 0,
+        quantity: row.QTY,
+        bill_rate: row.QTY ? row.AMOUNT / row.QTY : 0,
+        cost_rate: 0,
+        job_no: "",
+      }));
 
-    const jobSelection = jobSelectionRows.map((row) => ({
-      job_no: row.job_no,
-      act_code: row.act_code,
-      activity: row.activity,
-      invoice_no: row.invoice_no,
-      prin_code: prinCode,
-      quantity: row.quantity,
-      bill: row.bill,
-      job_date: row.job_date,
-      srno: row.srno,
-      selected: "Y",
-    }));
+      const invoiceDetails: TInvoiceDetail[] = [
+        ...jobLineRows,
+        ...jobSelection,
+        ...storageDetailRows,
+      ].map((row, index) => ({
+        ...row,
+        srno: index + 1,
+      }));
 
-    const storageSelection = storageLines.map((row) => ({
-      ...row,
-      act_code: "9001",
-        SELECTED: "Y",
-    }));
+      const result = await updateBillingApi({
+        invoiceHeader,
+        invoiceDetails,
+        storageSelection,
+        jobSelection,
+      });
+      if (result.success) onClose(true);
+      else setWarning(result.message);
+    } catch (err) {
+      setWarning(err instanceof Error ? err.message : "Error while saving invoice.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
-    const storageDetailRows: TInvoiceDetail[] = storageLines.map((row: any) => ({
-      invoice_no: invoiceNo,
-      prin_code: prinCode,
-      act_code: "9001",
-      activity: row.ACTIVITY,
-      bill: row.AMOUNT,
-      cost: 0,
-      quantity: row.QTY,
-      bill_rate: row.QTY ? row.AMOUNT / row.QTY : 0,
-      cost_rate: 0,
-      job_no: "",
-    }));
+  const handlePrint = async () => {
+    if (!prinCode || !invoiceNo) return;
+    setReportOpen(true);
+    setReportHtml("");
+    setReportError("");
+    setReportLoading(true);
+    try {
+      const html = await getInvocieDetailReport(String(prinCode), String(invoiceNo));
+      setReportHtml(html);
+    } catch (err) {
+      console.error("Invoice report error:", err);
+      setReportError("Failed to load report. Please try again.");
+    } finally {
+      setReportLoading(false);
+    }
+  };
 
-    const invoiceDetails: TInvoiceDetail[] = [
-      ...jobLineRows,
-      ...jobSelection,
-      ...storageDetailRows,
-    ].map((row, index) => ({
-      ...row,
-      srno: index + 1,
-    }));
+  const handleIframePrint = () => {
+    iframeRef.current?.contentWindow?.postMessage("print", "*");
+  };
 
-    const result = await updateBillingApi({
-      invoiceHeader,
-      invoiceDetails,
-      storageSelection,
-      jobSelection,
-    });
-    if (result.success) onClose(true);
-    else setWarning(result.message);
-  } catch (err) {
-    setWarning(err instanceof Error ? err.message : "Error while saving invoice.");
-  } finally {
-    setSaving(false);
-  }
-};
+  const closeReportDialog = () => {
+    setReportOpen(false);
+    setReportHtml("");
+    setReportError("");
+  };
 
-const handlePrint = async () => {
-  if (!prinCode || !invoiceNo) return;
-  setReportOpen(true);
-  setReportHtml("");
-  setReportError("");
-  setReportLoading(true);
-  try {
-    const html = await getInvocieDetailReport(String(prinCode), String(invoiceNo));
-    setReportHtml(html);
-  } catch (err) {
-    console.error("Invoice report error:", err);
-    setReportError("Failed to load report. Please try again.");
-  } finally {
-    setReportLoading(false);
-  }
-};
-
-const handleIframePrint = () => {
-  iframeRef.current?.contentWindow?.postMessage("print", "*");
-};
-
-const closeReportDialog = () => {
-  setReportOpen(false);
-  setReportHtml("");
-  setReportError("");
-};
+  useEffect(() => {
+    if (!invoice.curr_code) return;
+    let cancelled = false;
+    const fetchExRate = async () => {
+      try {
+        const ex_rate_sql = `SELECT EX_RATE FROM MS_CURRENCY WHERE CURR_CODE = '${invoice.curr_code}'`;
+        const response = await executeWmsInboundSql(ex_rate_sql);
+        const rate = response?.[0]?.ex_rate ?? response?.[0]?.EX_RATE ?? "";
+        if (!cancelled) {
+          setField("ex_rate", String(rate));
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setField("ex_rate", "");
+        }
+      }
+    };
+    fetchExRate();
+    return () => {
+      cancelled = true;
+    };
+  }, [invoice.curr_code]);
 
   /* ================= RENDER ================= */
   return (
@@ -418,7 +441,13 @@ const closeReportDialog = () => {
                     valueField="prin_code"
                     displayFields={["prin_code", "prin_name"]}
                     loadOptions={() => getPrincipalDropdown(user?.company_code ?? "", user?.loginid ?? "")}
-                    onChange={(value) => setField("prin_code", value)}
+                    onChange={(value, row) => {
+                      setInvoice((prev: any) => ({
+                        ...prev,
+                        prin_code: value,
+                        curr_code: row ? (getValue(row, "curr_code") ?? "") : "",
+                      }));
+                    }}
                     disabled={viewMode}
                   />
                 </div>
