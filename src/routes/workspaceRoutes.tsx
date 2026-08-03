@@ -164,6 +164,7 @@ import Purchase_Request_page from "../pages/almswf/PurchaseRequestPage";
 import { PurchaseOrderPage } from "../pages/purchase_sales/purchase/Purchaseorderpage";
 
 import { StockInquiryPage } from "../pages/purchase_sales/PS_StockInquiry";
+import { PS_ProductBomPage } from "../pages/purchase_sales/PS_ProductBomPage";
 import { PurchaseSaleSetupPage } from "../pages/purchase_sales/Purchasesalesetuppage";
 import { FlowAssignmentPage } from "../pages/security/FlowAssignmentPage";import { PurchaseQuotationPage } from "../pages/purchase_sales/purchase/PurchaseQuatationPage";
 import { PurchaseGRNPage } from "../pages/purchase_sales/purchase/PurchaseGRNPage";
@@ -1196,6 +1197,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   match: ({ pathname }) => isJobProductionSetupRoute(pathname),
   element: () => <JobProductionOrderPage />,
   },
+
+  {
+  name: "Product BOM",
+  match: ({ pathname }) => isProductBomRoute(pathname),
+  element: () => <PS_ProductBomPage />,
+},
   
 ];
 
@@ -2446,5 +2453,15 @@ function isStockInquiryRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes(
     "/workspace/purchase_sales/purchase_sales/inquiry/stock%20inquiry"
+  );
+}
+
+function isProductBomRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return (
+    normalized.includes("/purchase_sales/purchase_sales/masters/product_bom") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/product%20bom") ||
+    normalized.includes("/purchase_sales/purchase_sales/masters/product-bom")
   );
 }
