@@ -15,7 +15,7 @@ import {
   SendBackUserOption,
 } from "../purchase/Purchaseordertypes";
 import {
-  emptyForm,
+
   formatAmount,
   lineNetAmount,
 
@@ -27,7 +27,7 @@ import {
 import { SendBackDialog } from "../purchase/Sendbackdialog";
 import { RejectDialog } from "../purchase/Rejectdialog";
 import {  PROCESSSA, InventoryConfig, IV_DOC_TYPE, PurchaseOrderForm, InventoryLineRow } from "./Inventorytypes";
-import { emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, lineAmount, lineDiscPrice, lineTaxAmount, runWorkflow } from "./Inventoryutils";
+import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, lineAmount, lineDiscPrice, lineTaxAmount, runWorkflow } from "./Inventoryutils";
 import { StockHeaderForm } from "./StockHeaderForm";
 import { StockDetail } from "./StockDetail";
 
@@ -123,7 +123,7 @@ export function StockadjustmentEditor({
           remarks: text(headerRaw.remarks || current.remarks),
           issued_by: text(headerRaw.issued_by || current.issued_by),
            received_by: text(headerRaw.received_by || current.received_by),
-          disc_amt: Number(headerRaw.disc_amt || 0),
+          disc_price: Number(headerRaw.disc_price || 0),
           disc_pct: Number(headerRaw.disc_pct || 0),
           tax_category: text(headerRaw.tax_category || current.tax_category),
           tax_code: text(headerRaw.tax_code || current.tax_code),
@@ -185,7 +185,7 @@ export function StockadjustmentEditor({
     const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
     const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-    return totalAmount - totalDiscPrice - form.disc_amt + totalTaxAmount;
+    return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
   })();
 
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {

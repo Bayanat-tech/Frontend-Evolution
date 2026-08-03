@@ -192,10 +192,10 @@ export function PurchaseOrderHeaderForm({
           <Input disabled={headerAndLineDisabled} type="number" step="0.000001" value={form.ex_rate} onChange={(event) => updateField("ex_rate", Number(event.target.value || 1))} />
         </CField>
         <CField label="Disc Amt">
-          <Input disabled={headerAndLineDisabled} type="number" step="0.01" value={form.disc_amt} onChange={(event) => updateField("disc_amt", Number(event.target.value || 0))} />
+          <Input disabled={headerAndLineDisabled} type="number" step="0.01" value={form.disc_price} onChange={(event) => updateField("disc_price", Number(event.target.value || 0))} />
         </CField>
         <CField label="Disc %">
-          <Input disabled={headerAndLineDisabled} type="number" step="0.01" value={form.disc_pct} onChange={(event) => updateField("disc_pct", Number(event.target.value || 0))} />
+          <Input disabled={headerAndLineDisabled} type="number" step="0.01" value={form.disc_percent} onChange={(event) => updateField("disc_percent", Number(event.target.value || 0))} />
         </CField>
         <div>
           <label className="mb-1 block text-xs font-semibold text-primary-foreground/80">Tax Category</label>

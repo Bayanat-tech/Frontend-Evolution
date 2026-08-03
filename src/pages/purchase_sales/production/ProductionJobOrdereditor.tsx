@@ -129,7 +129,7 @@ export function ProductionJobOrderEditor({
           delivery_tel: text(headerRaw.delivery_tel || current.delivery_tel),
           delivery_email: text(headerRaw.delivery_email || current.delivery_email),
           remarks: text(headerRaw.remarks || current.remarks),
-          disc_amt: Number(headerRaw.disc_amt || 0),
+          disc_price: Number(headerRaw.disc_price || 0),
           disc_pct: Number(headerRaw.disc_pct || 0),
           tax_category: text(headerRaw.tax_category || current.tax_category),
           tax_code: text(headerRaw.tax_code || current.tax_code),
@@ -187,7 +187,7 @@ export function ProductionJobOrderEditor({
     const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
     const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-    return totalAmount - totalDiscPrice - form.disc_amt + totalTaxAmount;
+    return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
   })();
 
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
@@ -395,7 +395,7 @@ export function ProductionJobOrderEditor({
                 addRow={addRow}
                 removeRow={removeRow}
                 headerAndLineDisabled={headerAndLineDisabled}
-                discAmt={form.disc_amt}
+                discAmt={form.disc_price}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
               />
