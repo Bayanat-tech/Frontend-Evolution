@@ -133,58 +133,102 @@ export type DynamicDeleteParams = {
   date4?: string | null;
 };
 
+function extractApiErrorMessage(error: unknown, fallback: string) {
+  const anyErr = error as any;
+  const backendMessage = anyErr?.response?.data?.message || anyErr?.response?.data?.details;
+  if (backendMessage && typeof backendMessage === "string") return backendMessage;
+  if (error instanceof Error) return error.message;
+  return fallback;
+}
+
 export async function getMasterLookup(appCode: string, master: string) {
-  const response = await api.get<ApiResponse<{ tableData: LookupRow[]; count: number }>>(`/api/${appCode}/${master}`);
-  if (!response.data.success) throw new Error(response.data.message || `Unable to load ${master}`);
-  return response.data.data?.tableData || [];
+  try {
+    const response = await api.get<ApiResponse<{ tableData: LookupRow[]; count: number }>>(`/api/${appCode}/${master}`);
+    if (!response.data.success) throw new Error(response.data.message || `Unable to load ${master}`);
+    return response.data.data?.tableData || [];
+  } catch (error) {
+    throw new Error(extractApiErrorMessage(error, `Unable to load ${master}`));
+  }
 }
 
 export async function getDynamicLookup(params: DynamicQueryParams) {
-  const response = await api.post<ApiResponse<LookupRow[]>>("/api/wms/common/proc_build_dynamic_sql_common", params);
-  if (!response.data.success) throw new Error(response.data.message || "Unable to load lookup data");
-  return response.data.data || [];
+  try {
+    const response = await api.post<ApiResponse<LookupRow[]>>("/api/wms/common/proc_build_dynamic_sql_common", params);
+    if (!response.data.success) throw new Error(response.data.message || "Unable to load lookup data");
+    return response.data.data || [];
+  } catch (error) {
+    throw new Error(extractApiErrorMessage(error, "Unable to load lookup data"));
+  }
 }
 
 export async function getDynamicLookupaccount(params: DynamicQueryParams) {
-  const response = await api.post<ApiResponse<LookupRow[]>>("/api/wms/common/proc_build_dynamic_sql_common20", params);
-  if (!response.data.success) throw new Error(response.data.message || "Unable to load lookup data");
-  return response.data.data || [];
+  try {
+    const response = await api.post<ApiResponse<LookupRow[]>>("/api/wms/common/proc_build_dynamic_sql_common20", params);
+    if (!response.data.success) throw new Error(response.data.message || "Unable to load lookup data");
+    return response.data.data || [];
+  } catch (error) {
+    throw new Error(extractApiErrorMessage(error, "Unable to load lookup data"));
+  }
 }
 
 export async function getDynamicFinanceLookup(params: DynamicQueryParams) {
-  const response = await api.post<ApiResponse<LookupRow[]>>("api/finance/proc_common_sql_finance", params);
-  if (!response.data.success) throw new Error(response.data.message || "Unable to load Financelookup data");
-  return response.data.data || [];
+  try {
+    const response = await api.post<ApiResponse<LookupRow[]>>("api/finance/proc_common_sql_finance", params);
+    if (!response.data.success) throw new Error(response.data.message || "Unable to load Financelookup data");
+    return response.data.data || [];
+  } catch (error) {
+    throw new Error(extractApiErrorMessage(error, "Unable to load Financelookup data"));
+  }
 }
 
 export async function executeDynamicMutation(params: DynamicMutationParams) {
-  const response = await api.post<ApiResponse<unknown>>("/api/wms/common/proc_build_dynamic_ins_upd_common", params);
-  if (!response.data.success) throw new Error(response.data.message || "Unable to save record");
-  return response.data;
+  try {
+    const response = await api.post<ApiResponse<unknown>>("/api/wms/common/proc_build_dynamic_ins_upd_common", params);
+    if (!response.data.success) throw new Error(response.data.message || "Unable to save record");
+    return response.data;
+  } catch (error) {
+    throw new Error(extractApiErrorMessage(error, "Unable to save record"));
+  }
 }
 
 export async function executeDynamicMutationColumn90(params: DynamicMutationParams) {
-  const response = await api.post<ApiResponse<unknown>>("/api/wms/common/proc_build_dynamic_ins_upd_column90", params);
-  if (!response.data.success) throw new Error(response.data.message || "Unable to save record");
-  return response.data;
+  try {
+    const response = await api.post<ApiResponse<unknown>>("/api/wms/common/proc_build_dynamic_ins_upd_column90", params);
+    if (!response.data.success) throw new Error(response.data.message || "Unable to save record");
+    return response.data;
+  } catch (error) {
+    throw new Error(extractApiErrorMessage(error, "Unable to save record"));
+  }
 }
 
 export async function executeDynamicDelete(params: DynamicDeleteParams) {
-  const response = await api.post<ApiResponse<unknown>>("/api/wms/common/proc_build_dynamic_del_common", params);
-  if (!response.data.success) throw new Error(response.data.message || "Unable to delete record");
-  return response.data;
+  try {
+    const response = await api.post<ApiResponse<unknown>>("/api/wms/common/proc_build_dynamic_del_common", params);
+    if (!response.data.success) throw new Error(response.data.message || "Unable to delete record");
+    return response.data;
+  } catch (error) {
+    throw new Error(extractApiErrorMessage(error, "Unable to delete record"));
+  }
 }
 
 export async function executeCommonProcedure(params: Record<string, unknown>) {
-  const response = await api.post<ApiResponse<unknown>>("/api/wms/common/procBuildCommonProcedurewmc", params);
-  if (!response.data.success) throw new Error(response.data.message || "Unable to execute procedure");
-  return response.data;
+  try {
+    const response = await api.post<ApiResponse<unknown>>("/api/wms/common/procBuildCommonProcedurewmc", params);
+    if (!response.data.success) throw new Error(response.data.message || "Unable to execute procedure");
+    return response.data;
+  } catch (error) {
+    throw new Error(extractApiErrorMessage(error, "Unable to execute procedure"));
+  }
 }
 
 export async function postFinance<TPayload extends Record<string, unknown>>(endpoint: string, payload: TPayload) {
-  const response = await api.post<ApiResponse<unknown>>(`/api/finance/${endpoint}`, payload);
-  if (!response.data.success) throw new Error(response.data.details || response.data.message || "Unable to save finance data");
-  return response.data;
+  try {
+    const response = await api.post<ApiResponse<unknown>>(`/api/finance/${endpoint}`, payload);
+    if (!response.data.success) throw new Error(response.data.details || response.data.message || "Unable to save finance data");
+    return response.data;
+  } catch (error) {
+    throw new Error(extractApiErrorMessage(error, "Unable to save finance data"));
+  }
 }
 
 export function getLookupValue(row: LookupRow, field: string) {
@@ -194,11 +238,25 @@ export function getLookupValue(row: LookupRow, field: string) {
   const match = Object.keys(row).find((key) => key.toLowerCase() === lower || key.toUpperCase() === upper);
   return match ? row[match] : "";
 }
-
+ 
 export function getLookupText(row: LookupRow, fields: string[]) {
   return fields
-    .map((field) => getLookupValue(row, field))
+    .map((field) => formatLookupDisplayValue(field, getLookupValue(row, field)))
     .filter((value) => value !== null && value !== undefined && String(value).trim() !== "")
     .map(String)
     .join(" - ");
+}
+
+export function formatLookupDisplayValue(field: string, value: unknown) {
+  if (value === null || value === undefined) return "";
+  const text = String(value);
+  if (!/date/i.test(field)) return text;
+
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
+  if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+
+  const oracleMatch = text.match(/^(\d{2})-([A-Z]{3})-(\d{2,4})(?:\s.*)?$/i);
+  if (oracleMatch) return `${oracleMatch[1]}-${oracleMatch[2].toUpperCase()}-${oracleMatch[3]}`;
+
+  return text;
 }

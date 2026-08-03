@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 import { loginRequest, meRequest } from "../api/auth";
 import { setAuthToken } from "../api/client";
 import type { MenuNode, UserProfile } from "../types/auth";
+import { normalizePermissionMenuTree } from "../utils/menu";
 
 type AuthState = {
   isBooting: boolean;
@@ -57,7 +58,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const me = await meRequest();
       if (me.success) {
         setUser(normalizeUser(me.data.user, me.data.tenantId));
-        setMenuTree(Array.isArray(me.data.permissionBasedMenuTree) ? me.data.permissionBasedMenuTree : []);
+        setMenuTree(
+          normalizePermissionMenuTree(
+            Array.isArray(me.data.permissionBasedMenuTree) ? me.data.permissionBasedMenuTree : [],
+          ),
+        );
         setTenantId(me.data.tenantId || "");
       }
     } catch {
@@ -90,7 +95,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setUser(normalizeUser(me.data.user, me.data.tenantId || result.data.tenantId));
-    setMenuTree(Array.isArray(me.data.permissionBasedMenuTree) ? me.data.permissionBasedMenuTree : []);
+    setMenuTree(
+      normalizePermissionMenuTree(
+        Array.isArray(me.data.permissionBasedMenuTree) ? me.data.permissionBasedMenuTree : [],
+      ),
+    );
     setTenantId(me.data.tenantId || result.data.tenantId || "");
   }, []);
 
