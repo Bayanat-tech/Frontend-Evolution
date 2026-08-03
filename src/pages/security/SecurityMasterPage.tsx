@@ -941,13 +941,9 @@ function getPositionImpact(
     direction = "up by one";
   }
 
-  const screenName = String(form.level3 || form.level2 || form.level1 || "This screen");
-  const affectedNames = affected
-    .slice(0, 5)
-    .map((row) => String(row.level3 || row.level2 || row.level1 || `#${row.serial_no}`));
-  const extra = Math.max(affected.length - affectedNames.length, 0);
-  const detail = affectedNames.length
-    ? ` ${affectedNames.join(", ")}${extra ? ` and ${extra} more` : ""} will move ${direction}.`
+  const screenName = getMenuScreenName(form) || "This screen";
+  const detail = affected.length
+    ? ` ${affected.length} existing ${appCode} screen${affected.length === 1 ? "" : "s"} will move ${direction}.`
     : " No existing screen will move.";
 
   return {
@@ -955,6 +951,12 @@ function getPositionImpact(
     summary: `${screenName} will be position ${finalPosition} of ${targetRows.length + 1}.${detail}`,
     confirmation: `Change ${screenName} to position ${finalPosition} in ${appCode}?${detail}`,
   };
+}
+
+function getMenuScreenName(row: Record<string, unknown>) {
+  return [row.level3, row.level2, row.level1]
+    .map((value) => String(value ?? "").trim())
+    .find((value) => value && value.toLowerCase() !== "null") || "";
 }
 
 function buildModuleUrlPath(form: Record<string, unknown>) {
