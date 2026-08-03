@@ -10,7 +10,6 @@ export type ActionKey = "draft" | "submit" | "sendBack" | "reject" | "cancel" | 
 export interface PurchaseOrderLineRow {
   id: string;
   div_code: string;
-  zone: string;
   prod_code: string;
   prod_name: string;
   p_uom: string;
@@ -18,21 +17,28 @@ export interface PurchaseOrderLineRow {
   l_uom: string;
   qty_luom: number;
   unit_price: number;
-  disc_pct: number;
-  qty: number;
+  disc_percent: number;
+  disc_price: number;
   tax_pct: number;
   tax_amount: number;
-  lcurr_amount: number;
-  req_date: string;
+  lcur_amount: number;
+  required_dt: string;
   line_remarks: string;
   tax_cat: string;
   tax_code: string;
-  tax_lcurr_amount: number;
-  lcurr_amount_disc: number;
+  tax_lcur_amount: number;
+  lcur_amount_disc: number;
   zone_code?: string;
   zone_name?: string;
   uom_name?: string;
   uom_code?: string;
+  job_no?:string;
+  dept?:string;
+  sign_ind?:number
+  uppp?:number,
+  quantity:number,
+  ex_rate:number
+
 
 }
 
@@ -64,8 +70,8 @@ export interface PurchaseOrderForm {
   delivery_tel: string;
   delivery_email: string;
   remarks: string;
-  disc_amt: number;
-  disc_pct: number;
+  disc_price: number;
+  disc_percent: number;
   tax_category: string;
   tax_code: string;
   expense_ac_post: string;
@@ -117,12 +123,12 @@ export interface TteJmiConsumType {
   unit_price: number;
   tax_pct: number;
   tax_amount: number;
-  lcurr_amount: number;
-  req_date: string;
+  lcur_amount: number;
+  required_dt: string;
   line_remarks: string;
   tax_cat: string;
-  tax_lcurr_amount: number;
-  lcurr_amount_disc: number;
+  tax_lcur_amount: number;
+  lcur_amount_disc: number;
 
   zone_code?: string;
   zone_name?: string;
@@ -176,7 +182,10 @@ export const PROCESSQUOTATION = 'purchase_quotation'
 export const PROCESSGRN = 'purchase_grn'
 export const PROCESSJO = 'production_joborder'
 export const PROCESSJP = 'job_production'
-export const EXPENSE_AC_OPTIONS = ["Inventory A/c", "Expense A/c", "Fixed Asset A/c"];
+export const EXPENSE_AC_OPTIONS = [
+  { label: "Inventory A/c", value: "I" },
+  { label: "Direct Expense A/c", value: "D" },
+];
 export type PODocType = typeof PO_DOC_TYPE[keyof typeof PO_DOC_TYPE];
 
 export interface JobProductionConfig {

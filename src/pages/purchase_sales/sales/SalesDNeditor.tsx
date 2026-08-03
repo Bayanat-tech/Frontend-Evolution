@@ -17,10 +17,7 @@ import {
   SendBackUserOption,
 } from "../../purchase_sales/purchase/Purchaseordertypes";
 import {
-  emptyForm,
-  emptyLineRow,
-  fetchPurchaseOrderDetail,
-  fetchPurchaseOrderHeader,
+
   formatAmount,
   lineAmount,
   lineDiscPrice,
@@ -35,8 +32,8 @@ import { PurchaseOrderHeaderForm } from "../../purchase_sales/purchase/Purchaseo
 import { PurchaseOrderLinesTable } from "../../purchase_sales/purchase/Purchaseorderlinestable";
 import { SendBackDialog } from "../../purchase_sales/purchase/Sendbackdialog";
 import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
-import { PROCESSSDN, PROCESSSO, SO_DOC_TYPE } from "./SalesOrdertypes";
-import { runWorkflow } from "./SalesOrderutils";
+import { PROCESSSDN, PROCESSSO, SalesConfig, SO_DOC_TYPE } from "./SalesOrdertypes";
+import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, runWorkflow } from "./SalesOrderutils";
 
 
 export type { PurchaseOrderEditorState };
@@ -48,7 +45,7 @@ export function SalesDNEditor({
   onClose,
   onSaved,
 }: {
-  config: PurchaseConfig;
+  config: SalesConfig;
   editor: PurchaseOrderEditorState;
   isPendingTab: boolean;
   onClose: () => void;
@@ -97,8 +94,8 @@ export function SalesDNEditor({
       try {
         const docNo = editor.row.doc_no;
         const [headerRaw, detailRows] = await Promise.all([
-          fetchPurchaseOrderHeader(docNo,config, user?.company_code, user?.loginid || user?.username),
-          fetchPurchaseOrderDetail(docNo,config, user?.company_code, user?.loginid || user?.username),
+          fetchSalesOrderHeader(docNo,config, user?.company_code, user?.loginid || user?.username),
+          fetchSalesOrderDetail(docNo,config, user?.company_code, user?.loginid || user?.username),
         ]);
         if (!mounted) return;
 
@@ -186,7 +183,7 @@ export function SalesDNEditor({
     const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
     const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-    return totalAmount - totalDiscPrice - form.disc_amt + totalTaxAmount;
+    return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
   })();
 
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
@@ -394,7 +391,7 @@ export function SalesDNEditor({
                 addRow={addRow}
                 removeRow={removeRow}
                 headerAndLineDisabled={headerAndLineDisabled}
-                discAmt={form.disc_amt}
+                discAmt={form.disc_price}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
               />

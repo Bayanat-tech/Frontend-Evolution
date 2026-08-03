@@ -33,6 +33,7 @@ export type TPurchaseSummaryTxn = {
   REQ_DIV_CODE?: string;
   CANCEL_FLAG?: string;
   REQUEST_HOD_USER?: string;
+  
 };
 
 export interface TPRHeader {
@@ -50,7 +51,8 @@ export interface TPRHeader {
   FLOW_LEVEL_INITIAL: number | null;
   FLOW_LEVEL_RUNNING: number | null;
   FLOW_LEVEL_FINAL: number | null;
-
+  COST_CODE: string | null;
+  FLOW_DESCRIPTION?: string;
   COMPANY_CODE: string;
   CURRENCY_RATE: number | null;
 

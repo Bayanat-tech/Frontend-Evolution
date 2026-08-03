@@ -226,7 +226,7 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
   }
 
   return (
-    <section className="grid gap-2">
+    <section className="grid gap-2 freight-job-ops-screen">
       <Header eyebrow={copy.eyebrow} title={copy.title} subtitle={`${lookupText(header, "job_no")} / ${lookupText(header, "prin_name") || lookupText(header, "prin_code")}`}>
         {notice && <NoticeChip notice={notice} />}
         {!initialJob && <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>}
@@ -242,13 +242,13 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
         <Metric label="Lines" value={String(lines.length)} />
       </div>
 
-      <div className="overflow-hidden rounded-md border bg-card shadow-sm">
-        <div className="grid grid-cols-[42px_90px_minmax(190px,1fr)_76px_94px_105px_105px_90px_105px_90px_105px_50px] items-center gap-1 border-b bg-muted/40 px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">
+      <div className="freight-job-table-shell">
+        <div className="freight-job-table-head grid grid-cols-[42px_90px_minmax(190px,1fr)_76px_94px_105px_105px_90px_105px_90px_105px_50px] items-center gap-1 px-2 py-1">
           <span>No</span><span>Activity</span><span>Description</span><span>Qty</span><span>Rate</span><span>Revenue</span><span>Other Cost</span><span>Agent</span><span>Agent Cost</span><span>Transp.</span><span>Transp. Cost</span><span />
         </div>
         <div className="max-h-[calc(100vh-330px)] overflow-auto">
           {lines.map((line, index) => (
-            <div key={`${line.srno}-${index}`} className="border-b">
+            <div key={`${line.srno}-${index}`} className="freight-job-table-row">
               <div className="grid grid-cols-[42px_90px_minmax(190px,1fr)_76px_94px_105px_105px_90px_105px_90px_105px_50px] items-center gap-1 px-2 py-1">
                 <span className="text-xs font-semibold text-muted-foreground">{index + 1}</span>
                 <ActivityLookup value={line.act_code} companyCode={companyCode} onChange={(value, row) => updateLine(index, { act_code: value, activity: lookupText(row || undefined, "activity"), other_services: lookupText(row || undefined, "activity") || line.other_services, bill_rate: lookupText(row || undefined, "bill") || line.bill_rate, actual_cost: lookupText(row || undefined, "cost") || line.actual_cost })} />
@@ -263,7 +263,7 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
                 <MoneyInput value={line.transport_price} onChange={(value) => updateLine(index, { transport_price: value })} />
                 <Button type="button" size="icon" variant="ghost" title="Remove line" onClick={() => removeLine(index)}><Trash2 size={14} /></Button>
               </div>
-              <div className="grid grid-cols-[42px_repeat(10,minmax(88px,1fr))] gap-1 bg-muted/10 px-2 pb-1">
+              <div className="freight-job-table-subrow grid grid-cols-[42px_repeat(10,minmax(88px,1fr))] gap-1 px-2 pb-1">
                 <span className="self-center text-[10px] font-semibold uppercase text-muted-foreground">Tax</span>
                 <Input title="Sale tax category" placeholder="Sale Cat" className="h-7 text-xs" value={line.tx_cat_code} onChange={(event) => updateLine(index, { tx_cat_code: event.target.value })} />
                 <Input title="Sale tax component" placeholder="Sale Comp" className="h-7 text-xs" value={line.tx_compntcat_code_1} onChange={(event) => updateLine(index, { tx_compntcat_code_1: event.target.value })} />
@@ -299,7 +299,7 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
 
 function Header({ eyebrow, title, subtitle, children }: { eyebrow: string; title: string; subtitle: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-card px-3 py-2 shadow-sm">
+    <div className="freight-form-header">
       <div className="flex min-w-0 items-center gap-2">
         <span className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary"><Calculator size={18} /></span>
         <div><p className="eyebrow mb-0.5">{eyebrow}</p><h1 className="m-0 text-lg font-semibold text-foreground">{title}</h1><p className="m-0 text-xs text-muted-foreground">{subtitle}</p></div>
@@ -310,8 +310,8 @@ function Header({ eyebrow, title, subtitle, children }: { eyebrow: string; title
 }
 
 function Metric({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "neutral" | "good" | "bad" }) {
-  const toneClass = tone === "good" ? "text-emerald-700" : tone === "bad" ? "text-red-600" : "text-foreground";
-  return <div className="rounded-md border bg-card px-3 py-2 shadow-sm"><div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase text-muted-foreground"><TrendingUp size={12} />{label}</div><div className={`text-lg font-semibold ${toneClass}`}>{value}</div></div>;
+  const toneClass = tone === "good" ? " good" : tone === "bad" ? " bad" : "";
+  return <div className={`freight-job-metric-card${toneClass}`}><div><TrendingUp size={12} />{label}</div><strong>{value}</strong></div>;
 }
 
 function ActivityLookup({ companyCode, value, onChange }: { companyCode: string; value: string; onChange: (value: string, row: LookupRow | null) => void }) {

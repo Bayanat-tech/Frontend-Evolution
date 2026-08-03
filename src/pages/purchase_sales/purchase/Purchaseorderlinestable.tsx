@@ -12,6 +12,10 @@ import {
   lineTaxAmount,
   numberOrZero,
   text,
+  lineLcurrAmount,   // add
+  computeQuantity,   // add
+  isSameUom,
+  taxLcurrAmount,
 } from "./Purchaseorderutils";
 
 const STICKY_COLS = {
@@ -31,9 +35,26 @@ function stickyHeaderStyle(col: keyof typeof STICKY_COLS): React.CSSProperties {
   return { position: "sticky", top: 0, left, width, minWidth: width, maxWidth: width, zIndex: 3, backgroundColor: "var(--primary, #1d4ed8)" };
 }
 
-const plainHeaderStyle: React.CSSProperties = { position: "sticky", top: 0, zIndex: 1, backgroundColor: "var(--primary, #1d4ed8)",width: "100%" };
+const plainHeaderStyle: React.CSSProperties = { position: "sticky", top: 0, zIndex: 1, backgroundColor: "var(--primary, #1d4ed8)", width: "100%" };
 
 const TABLE_COLUMN_COUNT = 24;
+
+// Final Rate = Unit Price - (Unit Price * Disc % / 100)  [matches lineNetAmount / "Final Rate" in the sheet]
+function finalRate(row: PurchaseOrderLineRow): number {
+  const price = numberOrZero(row.unit_price);
+  const discPct = numberOrZero(row.disc_percent);
+  return price - (price * discPct) / 100;
+}
+
+// Total Amount (net, post-discount) = Net Qty * Final Rate  [sheet's "Total Amout" column]
+function netTotalAmount(quantity: number, row: PurchaseOrderLineRow): number {
+  return quantity * finalRate(row);
+}
+
+// Lcurr Amount = Total Amount * Final Rate  (=L2*K2 in the sheet)
+function computeLcurrAmount(quantity: number, row: PurchaseOrderLineRow): number {
+  return netTotalAmount(quantity, row) * finalRate(row) * row.ex_rate;
+}
 
 export function PurchaseOrderLinesTable({
   rows,
@@ -44,6 +65,7 @@ export function PurchaseOrderLinesTable({
   discAmt,
   companyCode,
   loginid,
+  ex_rate,
 }: {
   rows: PurchaseOrderLineRow[];
   updateRow: (id: string, patch: Partial<PurchaseOrderLineRow>) => void;
@@ -53,6 +75,7 @@ export function PurchaseOrderLinesTable({
   discAmt: number;
   companyCode?: string;
   loginid?: string;
+  ex_rate?: number;
 }) {
   const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
   const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
@@ -61,6 +84,10 @@ export function PurchaseOrderLinesTable({
   const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const grandTotal = totalAmount - totalDiscPrice - discAmt;
   const finalTotal = grandTotal + totalTaxAmount;
+
+  // Quantity is always derived, never typed directly:
+  // - same UOM: quantity mirrors qty_luom
+  // - different UOM: quantity = (qty_puom * uppp) + qty_luom
 
   return (
     <div className="commercial-lines-card rounded-md border bg-card">
@@ -83,23 +110,24 @@ export function PurchaseOrderLinesTable({
               <th className="finance-sticky-col px-2 py-2 text-left" style={stickyHeaderStyle("div")}>Div</th>
               <th className="finance-sticky-col px-2 py-2 text-left w-32" style={stickyHeaderStyle("zone")}>Zone</th>
               <th className="finance-sticky-col px-2 py-2 text-left" style={stickyHeaderStyle("product")}>Product Code</th>
-              <th className="px-2 py-2 text-left w-64" style={plainHeaderStyle}>P Uom</th>
+              <th className="finance-amount-cell px-2 py-2 text-left w-64" style={plainHeaderStyle}>P Uom</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Qty Puom</th>
-              <th className="px-2 py-2 text-left w-24" style={plainHeaderStyle}>L Uom</th>
+              <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>L Uom</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-20" style={plainHeaderStyle}>Qty Luom</th>
+              <th className="px-2 py-2 text-left w-24 sticky top-0 z-[3] bg-primary">Uppp</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Unit Price</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Amount</th>
+              <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Quantity</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Disc %</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Disc Price</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Unit price Net Amt</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Quantity</th>
+              <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Amount</th>
+              <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Lcurr Amount</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax %</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Tax Amount</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Lcurr Amount</th>
               <th className="px-2 py-2 text-left w-32" style={plainHeaderStyle}>Req Date</th>
-              <th className="px-2 py-2 text-left w-40" style={plainHeaderStyle}>Remarks</th>
-              <th className="px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax Cat</th>
-              <th className="px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax code</th>
+              <th className="finance-amount-cell px-2 py-2 text-left w-40" style={plainHeaderStyle}>Remarks</th>
+              <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax Cat</th>
+              <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax code</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Tax Lcurr amount</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Lcurr amount Discount</th>
               <th className="px-2 py-2 text-left w-16" style={plainHeaderStyle}>Action</th>
@@ -108,128 +136,235 @@ export function PurchaseOrderLinesTable({
           <tbody>
             {rows.length === 0 ? (
               <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={TABLE_COLUMN_COUNT}>No lines yet</td></tr>
-            ) : rows.map((row, index) => (
-              <tr className="border-t odd:bg-muted/20" key={row.id}>
-                <td className="finance-sticky-col bg-card px-2 py-1 text-xs" style={stickyStyle("sno")}>{index + 1}</td>
-                <td className="finance-sticky-col bg-card px-2 py-1 text-xs" style={stickyStyle("div")}>
-                  <Input disabled={headerAndLineDisabled} value={row.div_code} onChange={(event) => updateRow(row.id, { div_code: event.target.value })} />
-                </td>
-                <td className="finance-sticky-col bg-card px-2 py-1 text-xs w-32" style={stickyStyle("zone")}>
-                   <LookupField
-                    label=""
-                    value={row.zone_code || ""}
-                    displayValue={ row.zone_code}
-                    columns={[{ field: "zone_code", header: "Code" }, { field: "zone_name", header: "Name" }]}
-                    valueField="zone_code"
-                    displayFields={["zone_code", "zone_name"]}
-                    loadOptions={() => getDynamicLookup({ parameter: "PS_POORDER_ENTRY_ZONE_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
-                    disabled={headerAndLineDisabled}
-                    onChange={(value, selectedRow) => updateRow(row.id, {
-                      zone_code: value,
-                      
-                    })}
-                  />
-                </td>
-                <td className="finance-sticky-col finance-account-cell bg-card px-2 py-1" style={stickyStyle("product")}>
-                  <LookupField
-                    label=""
-                    value={row.prod_code || ""}
-                    displayValue={row.prod_name ? `${row.prod_code} - ${row.prod_name}` : row.prod_code}
-                    columns={[{ field: "prod_code", header: "Code" }, { field: "prod_name", header: "Name" }, { field: "p_uom", header: "P Uom" }, { field: "unit_price", header: "Unit Price" }]}
-                    valueField="prod_code"
-                    displayFields={["prod_code", "prod_name"]}
-                    loadOptions={() => getDynamicLookup({ parameter: "PS_POORDER_ENTRY_PRODUCT_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
-                    disabled={headerAndLineDisabled}
-                    onChange={(value, selectedRow) => updateRow(row.id, {
-                      prod_code: value,
-                      prod_name: text(getLookupValue(selectedRow || {}, "prod_name")),
-                      p_uom: text(getLookupValue(selectedRow || {}, "p_uom")) || row.p_uom,
-                      unit_price: numberOrZero(getLookupValue(selectedRow || {}, "unit_price")) || row.unit_price,
-                    })}
-                  />
-                </td>
+            ) : rows.map((row, index) => {
+              const qtyPuomNum = numberOrZero(row.qty_puom);
+              const qtyLuomNum = numberOrZero(row.qty_luom);
+              const upppNum = numberOrZero(row.uppp);
 
-                <td className="w-28 px-2 py-1">
-                   <LookupField
-                    label=""
-                    value={row.uom_code || ""}
-                    displayValue={row.uom_name ? `${row.uom_code} - ${row.uom_name}` : row.uom_code}
-                    columns={[{ field: "uom_code", header: "Code" }, { field: "uom_name", header: "Name" }, { field: "p_uom", header: "P Uom" }, { field: "unit_price", header: "Unit Price" }]}
-                    valueField="uom_code"
-                    displayFields={["uom_code", "uom_name"]}
-                    loadOptions={() => getDynamicLookup({ parameter: "PS_POORDER_ENTRY_UOM_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
-                    disabled={headerAndLineDisabled}
-                    onChange={(value, selectedRow) => updateRow(row.id, {
-                      uom_code: value,
-                      uom_name: text(getLookupValue(selectedRow || {}, "uom_name")),
-                    })}
-                  />
-                </td>
-                <td className="finance-amount-cell w-24 px-2 py-1">
-                  <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.001" value={row.qty_puom} onChange={(event) => updateRow(row.id, { qty_puom: Number(event.target.value || 0) })} />
-                </td>
-                <td className="w-64 px-2 py-1">
-                  <LookupField
-                    label=""
-                    value={row.uom_code || ""}
-                    displayValue={row.uom_name ? `${row.uom_code} - ${row.uom_name}` : row.uom_code}
-                    columns={[{ field: "uom_code", header: "Code" }, { field: "uom_name", header: "Name" }, { field: "p_uom", header: "P Uom" }, { field: "unit_price", header: "Unit Price" }]}
-                    valueField="uom_code"
-                    displayFields={["uom_code", "uom_name"]}
-                    loadOptions={() => getDynamicLookup({ parameter: "PS_POORDER_ENTRY_UOM_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
-                    disabled={headerAndLineDisabled}
-                    onChange={(value, selectedRow) => updateRow(row.id, {
-                      uom_code: value,
-                      uom_name: text(getLookupValue(selectedRow || {}, "uom_name")),
-                     
-                    })}
-                  />
-                </td>
-                <td className="finance-amount-cell w-24 px-2 py-1">
-                  <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.001" value={row.qty_luom} onChange={(event) => updateRow(row.id, { qty_luom: Number(event.target.value || 0) })} />
-                </td>
-                <td className="finance-amount-cell w-28 px-2 py-1">
-                  <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.0001" value={row.unit_price} onChange={(event) => updateRow(row.id, { unit_price: Number(event.target.value || 0) })} />
-                </td>
-                <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineAmount(row))}</td>
-                <td className="finance-amount-cell w-24 px-2 py-1">
-                  <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.disc_pct} onChange={(event) => updateRow(row.id, { disc_pct: Number(event.target.value || 0) })} />
-                </td>
-                <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineDiscPrice(row))}</td>
-                <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineNetAmount(row))}</td>
-                <td className="finance-amount-cell w-28 px-2 py-1">
-                  <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.qty} onChange={(event) => updateRow(row.id, { qty: Number(event.target.value || 0) })} />
-                </td>
-                <td className="finance-amount-cell w-24 px-2 py-1">
-                  <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.tax_pct} onChange={(event) => updateRow(row.id, { tax_pct: Number(event.target.value || 0) })} />
-                </td>
-                <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineTaxAmount(row))}</td>
-                <td className="finance-amount-cell w-28 px-2 py-1">
-                  <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.lcurr_amount} onChange={(event) => updateRow(row.id, { lcurr_amount: Number(event.target.value || 0) })} />
-                </td>
-                <td className="w-32 px-2 py-1">
-                  <Input type="date" disabled={headerAndLineDisabled} value={row.req_date} onChange={(event) => updateRow(row.id, { req_date: event.target.value })} />
-                </td>
-                <td className="w-40 px-2 py-1">
-                  <Input disabled={headerAndLineDisabled} value={row.line_remarks} onChange={(event) => updateRow(row.id, { line_remarks: event.target.value })} />
-                </td>
-                <td className="w-32 px-2 py-1">
-                  <Input disabled={headerAndLineDisabled} value={row.tax_cat} onChange={(event) => updateRow(row.id, { tax_cat: event.target.value })} />
-                </td>
-                <td className="w-32 px-2 py-1">
-                  <Input disabled={headerAndLineDisabled} value={row.tax_code} onChange={(event) => updateRow(row.id, { tax_code: event.target.value })} />
-                </td>
-                <td className="finance-amount-cell w-28 px-2 py-1">
-                  <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.tax_lcurr_amount} onChange={(event) => updateRow(row.id, { tax_lcurr_amount: Number(event.target.value || 0) })} />
-                </td>
-                <td className="finance-amount-cell w-32 px-2 py-1">
-                  <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.lcurr_amount_disc} onChange={(event) => updateRow(row.id, { lcurr_amount_disc: Number(event.target.value || 0) })} />
-                </td>
-                <td className="px-2 py-1">
-                  <Button disabled={headerAndLineDisabled} size="icon" type="button" variant="ghost" onClick={() => removeRow(row.id)}><X size={14} /></Button>
-                </td>
-              </tr>
-            ))}
+              const sameUom = isSameUom(row);
+              const quantity = computeQuantity(row);
+              const lcurrAmountValue = lineLcurrAmount(row,ex_rate);
+              const taxLcurrAmountValue = taxLcurrAmount(row,ex_rate);
+
+              return (
+                <tr className="border-t odd:bg-muted/20" key={row.id}>
+                  <td className="finance-sticky-col bg-card px-2 py-1 text-xs" style={stickyStyle("sno")}>{index + 1}</td>
+                  <td className="finance-sticky-col bg-card px-2 py-1 text-xs" style={stickyStyle("div")}>
+                    <Input disabled={headerAndLineDisabled} value={row.div_code} onChange={(event) => updateRow(row.id, { div_code: event.target.value })} />
+                  </td>
+                  <td className="finance-sticky-col bg-card px-2 py-1 text-xs w-32" style={stickyStyle("zone")}>
+                    <LookupField
+                      label=""
+                      value={row.zone_code || ""}
+                      displayValue={row.zone_code}
+                      columns={[{ field: "zone_code", header: "Code" }, { field: "zone_name", header: "Name" }]}
+                      valueField="zone_code"
+                      displayFields={["zone_code", "zone_name"]}
+                      loadOptions={() => getDynamicLookup({ parameter: "PS_POORDER_ENTRY_ZONE_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
+                      disabled={headerAndLineDisabled}
+                      onChange={(value, selectedRow) => updateRow(row.id, {
+                        zone_code: value,
+
+                      })}
+                    />
+                  </td>
+                  <td className="finance-sticky-col finance-account-cell bg-card px-2 py-1" style={stickyStyle("product")}>
+                    <LookupField
+                      label=""
+                      value={row.prod_code || ""}
+                      displayValue={row.prod_name ? `${row.prod_code} - ${row.prod_name}` : row.prod_code}
+                      columns={[{ field: "prod_code", header: "Code" }, { field: "prod_name", header: "Name" }, { field: "p_uom", header: "P Uom" }, { field: "unit_price", header: "Unit Price" }]}
+                      valueField="prod_code"
+                      displayFields={["prod_code", "prod_name"]}
+                      loadOptions={() => getDynamicLookup({ parameter: "PS_POORDER_ENTRY_PRODUCT_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
+                      disabled={headerAndLineDisabled}
+                      onChange={(value, selectedRow) => {
+                        const newPUom = text(getLookupValue(selectedRow || {}, "p_uom")) || row.p_uom;
+                        const newLUom = text(getLookupValue(selectedRow || {}, "l_uom")) || row.l_uom;
+                        const newUppp = numberOrZero(getLookupValue(selectedRow || {}, "uppp")) || row.uppp;
+                        const patch: Partial<PurchaseOrderLineRow> = {
+                          prod_code: value,
+                          prod_name: text(getLookupValue(selectedRow || {}, "prod_name")),
+                          p_uom: newPUom,
+                          l_uom: newLUom,
+                          uppp: newUppp,
+                          unit_price: numberOrZero(getLookupValue(selectedRow || {}, "unit_price")) || row.unit_price,
+                        };
+                        const merged = { ...row, ...patch };
+                        if (isSameUom(merged)) {
+                          patch.qty_puom = row.qty_luom;
+                        }
+                        patch.quantity = computeQuantity({ ...row, ...patch });
+                        updateRow(row.id, patch);
+                      }}
+                    />
+                  </td>
+
+                  <td className="w-64 px-2 py-1">
+                    <LookupField
+                      label=""
+                      value={row.p_uom || ""}
+                      displayValue={
+                        row.p_uom
+                      }
+                      columns={[
+                        { field: "uom_code", header: "Code" },
+                        { field: "uom_name", header: "Name" },
+                        { field: "unit_price", header: "Unit Price" },
+                      ]}
+                      valueField="uom_code"
+                      displayFields={["uom_code", "uom_name"]}
+                      loadOptions={() =>
+                        getDynamicLookup({
+                          parameter: "PS_POORDER_ENTRY_UOM_LIST",
+                          code1: companyCode,
+                          loginid: loginid || "ADMIN",
+                        })
+                      }
+                      disabled={headerAndLineDisabled}
+                      onChange={(value, selectedRow) => {
+                        const patch: Partial<PurchaseOrderLineRow> = {
+                          p_uom: value,
+                          uom_name: text(getLookupValue(selectedRow || {}, "uom_name")) || row.uom_name,
+                        };
+                        const merged = { ...row, ...patch };
+                        if (isSameUom(merged)) {
+                          patch.qty_puom = qtyLuomNum;
+                        }
+                        patch.quantity = computeQuantity({ ...row, ...patch });
+                        updateRow(row.id, patch);
+                      }}
+                    />
+                  </td>
+                  <td className="finance-amount-cell px-2 py-1">
+                    <Input
+                      className="finance-money-input"
+                      disabled={headerAndLineDisabled || sameUom}
+                      type="number"
+                      style={{ textAlign: "right" }}
+                      step="0.001"
+                      value={sameUom ? qtyLuomNum : row.qty_puom}
+                      onChange={(event) => {
+                        const newQtyPuom = Number(event.target.value || 0);
+                        const patch = { qty_puom: newQtyPuom };
+                        updateRow(row.id, {
+                          ...patch,
+                          quantity: computeQuantity({ ...row, ...patch }),
+                        });
+                      }}
+                    />
+                  </td>
+                  <td className="w-64 px-2 py-1">
+                    <LookupField
+                      label=""
+                      value={row.l_uom || ""}
+                      displayValue={
+                        row.l_uom
+                      }
+                      columns={[
+                        { field: "uom_code", header: "Code" },
+                        { field: "uom_name", header: "Name" },
+                        { field: "unit_price", header: "Unit Price" },
+                      ]}
+                      valueField="uom_code"
+                      displayFields={["uom_code", "uom_name"]}
+                      loadOptions={() =>
+                        getDynamicLookup({
+                          parameter: "PS_POORDER_ENTRY_UOM_LIST",
+                          code1: companyCode,
+                          loginid: loginid || "ADMIN",
+                        })
+                      }
+                      disabled={headerAndLineDisabled}
+                      onChange={(value, selectedRow) => {
+                        const patch: Partial<PurchaseOrderLineRow> = {
+                          l_uom: value,
+                          uom_name: text(getLookupValue(selectedRow || {}, "uom_name")) || row.uom_name,
+                        };
+                        const merged = { ...row, ...patch };
+                        if (isSameUom(merged)) {
+                          patch.qty_luom = qtyLuomNum;
+                        }
+                        patch.quantity = computeQuantity({ ...row, ...patch });
+                        updateRow(row.id, patch);
+                      }}
+                    />
+                  </td>
+                  <td className="finance-amount-cell w-24 px-2 py-1">
+                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.001" value={row.qty_luom} onChange={(event) => {
+                      const newQtyLuom = Number(event.target.value || 0);
+                      const patch: Partial<PurchaseOrderLineRow> = { qty_luom: newQtyLuom };
+                      if (sameUom) {
+                        patch.qty_puom = newQtyLuom;
+                        patch.quantity = newQtyLuom;
+                      } else {
+                        patch.quantity = computeQuantity({ ...row, ...patch });
+                      }
+                      updateRow(row.id, patch);
+                    }} />
+                  </td>
+                  <td className="finance-amount-cell px-2 py-1">
+                    <Input
+                      className="finance-money-input"
+                      disabled={headerAndLineDisabled}
+                      type="number"
+                      style={{ textAlign: "right" }}
+                      step="0.001"
+                      value={row.uppp}
+                      onChange={(event) => {
+                        const newUppp = Number(event.target.value || 0);
+                        updateRow(row.id, {
+                          uppp: Number(newUppp),
+                          quantity: computeQuantity({ ...row, ...{ uppp: Number(newUppp) } }),
+                        });
+                      }}
+                    />
+                  </td>
+                  <td className="finance-amount-cell w-28 px-2 py-1">
+                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.0001" value={row.unit_price} onChange={(event) => updateRow(row.id, { unit_price: Number(event.target.value || 0) })} />
+                  </td>
+                  <td className="finance-amount-cell px-2 py-1 text-right">
+                    {formatAmount(quantity)}
+                  </td>
+
+                  <td className="finance-amount-cell w-24 px-2 py-1">
+                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.disc_percent} onChange={(event) => updateRow(row.id, { disc_percent: Number(event.target.value || 0) })} />
+                  </td>
+                  <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineDiscPrice(row))}</td>
+                  <td className="finance-amount-cell px-2 py-1 text-right">{formatAmount(finalRate(row))}</td>
+                  <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineAmount(row))}</td>
+                    <td className="finance-amount-cell w-32 px-2 py-1 text-right">
+                    {formatAmount(lcurrAmountValue)}
+                  </td>
+                  <td className="finance-amount-cell w-24 px-2 py-1">
+                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.tax_pct} onChange={(event) => updateRow(row.id, { tax_pct: Number(event.target.value || 0) })} />
+                  </td>
+                  <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineTaxAmount(row))}</td>
+                
+                  <td className="w-32 px-2 py-1">
+                    <Input type="date" disabled={headerAndLineDisabled} value={row.required_dt} onChange={(event) => updateRow(row.id, { required_dt: event.target.value })} />
+                  </td>
+                  <td className="w-40 px-2 py-1 border border-gray-300 rounded-md">
+                    <textarea disabled={headerAndLineDisabled} value={row.line_remarks} onChange={(event) => updateRow(row.id, { line_remarks: event.target.value })} />
+                  </td>
+                  <td className="w-32 px-2 py-1">
+                    <Input disabled={headerAndLineDisabled} value={row.tax_cat} onChange={(event) => updateRow(row.id, { tax_cat: event.target.value })} />
+                  </td>
+                  <td className="w-32 px-2 py-1">
+                    <Input disabled={headerAndLineDisabled} value={row.tax_code} onChange={(event) => updateRow(row.id, { tax_code: event.target.value })} />
+                  </td>
+                      <td className="finance-amount-cell w-32 px-2 py-1 text-right">
+                    {formatAmount(taxLcurrAmountValue)}
+                  </td>
+                  <td className="finance-amount-cell w-32 px-2 py-1">
+                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.lcur_amount_disc} onChange={(event) => updateRow(row.id, { lcur_amount_disc: Number(event.target.value || 0) })} />
+                  </td>
+                  <td className="px-2 py-1">
+                    <Button disabled={headerAndLineDisabled} size="icon" type="button" variant="ghost" onClick={() => removeRow(row.id)}><X size={14} /></Button>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

@@ -33,6 +33,7 @@ import {
   numberOrZero,
   runWorkflow,
   text,
+  
 } from "./Purchaseorderutils";
 import { PurchaseOrderHeaderForm } from "./Purchaseorderheaderform";
 import { PurchaseOrderLinesTable } from "./Purchaseorderlinestable";
@@ -90,6 +91,17 @@ export function PurchaseOrderEditor({
   }, [editor]);
 
   useEffect(() => {
+    if (!form.tax_code && !form.tax_category) return;
+    setRows((current) =>
+      current.map((row) => ({
+        ...row,
+        tax_code: form.tax_code || row.tax_code,
+        tax_cat: form.tax_category || row.tax_cat,
+      }))
+    );
+  }, [form.tax_code, form.tax_category]);
+
+  useEffect(() => {
     let mounted = true;
     async function loadExisting() {
       if (!editMode || editor?.mode !== "edit") return;
@@ -129,7 +141,7 @@ export function PurchaseOrderEditor({
           delivery_tel: text(headerRaw.delivery_tel || current.delivery_tel),
           delivery_email: text(headerRaw.delivery_email || current.delivery_email),
           remarks: text(headerRaw.remarks || current.remarks),
-          disc_amt: Number(headerRaw.disc_amt || 0),
+          disc_price: Number(headerRaw.disc_price || 0),
           disc_pct: Number(headerRaw.disc_pct || 0),
           tax_category: text(headerRaw.tax_category || current.tax_category),
           tax_code: text(headerRaw.tax_code || current.tax_code),
@@ -187,7 +199,7 @@ export function PurchaseOrderEditor({
     const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
     const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-    return totalAmount - totalDiscPrice - form.disc_amt + totalTaxAmount;
+    return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
   })();
 
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
@@ -198,7 +210,15 @@ export function PurchaseOrderEditor({
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
 
-  const addRow = () => setRows((current) => [...current, emptyLineRow(form.div_code)]);
+  const addRow = () =>
+    setRows((current) => [
+      ...current,
+      {
+        ...emptyLineRow(form.div_code),
+        tax_code: form.tax_code,
+        tax_cat: form.tax_category,
+      },
+    ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
 
   const runAction = async (key: ActionKey, action: () => Promise<void> | void, successMessage?: string) => {
@@ -216,10 +236,10 @@ export function PurchaseOrderEditor({
     }
   };
 
-  const handleSaveAsDraft = () =>
-    runAction("draft", async () => {
-    }, "Purchase order saved as draft");
-
+ const handleSaveAsDraft = () =>
+  runAction("draft", async () => {
+    await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
+  }, "Sales Order saved as draft");
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
@@ -393,8 +413,9 @@ export function PurchaseOrderEditor({
                 updateRow={updateRow}
                 addRow={addRow}
                 removeRow={removeRow}
+                ex_rate={form.ex_rate}
                 headerAndLineDisabled={headerAndLineDisabled}
-                discAmt={form.disc_amt}
+                discAmt={form.disc_price}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
               />

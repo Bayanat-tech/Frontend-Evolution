@@ -6,6 +6,7 @@ import {
   Edit2,
   FileSignature,
   FileText,
+  MapPinned,
   PackageCheck,
   Plane,
   Plus,
@@ -381,9 +382,22 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
         <Button type="submit" size="sm" disabled={saving || !pack.job_no}><Save size={14} />Save</Button>
       </Header>
 
-      <div className="freight-document-paper grid gap-2 lg:grid-cols-12">
+      <div className="freight-job-focus-bar freight-job-focus-compact">
+        <div>
+          <span className="freight-job-number">{pack.seq_number || pack.packlist_no || "New Pack List"}</span>
+          <span className="freight-job-route">{pack.job_no || "Job pending"} / {mode.label} / {direction.label}</span>
+        </div>
+        <div className="freight-job-status-strip">
+          <span>BL <strong>{pack.bl_no || "-"}</strong></span>
+          <span>Cargo <strong>{pack.quantity || "0"} {pack.puom}</strong></span>
+          <span>Gross <strong>{pack.gross_wt || "0"}</strong></span>
+        </div>
+      </div>
+
+      <div className="freight-document-paper freight-shipment-paper is-editing">
+        <div className="freight-job-section-grid">
         <Panel className="lg:col-span-12" icon={FileSignature} title="Document Reference" meta={`${pack.seq_number || "Auto"} / ${pack.job_no || "Select job"}`}>
-          <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-8">
+          <div className="freight-job-field-grid freight-job-field-grid-8">
             <Lookup label="Freight Job" value={pack.job_no} valueField="JOB_NO" displayFields={["JOB_NO", "PRIN_CODE", "PRIN_NAME"]} columns={jobColumns} loadOptions={() => lookupJobs(companyCode, mode.code, direction.code, pack.job_no)} onChange={(value, row) => selectJob(value, row, setPack, companyCode, userId, mode.code, direction.code)} />
             <ReadOnlyField label="Pack No" value={pack.packlist_no || "Auto"} />
             <ReadOnlyField label="Seq No" value={pack.seq_number || "Auto"} />
@@ -397,8 +411,8 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
           </div>
         </Panel>
 
-        <Panel className="lg:col-span-5" icon={UserRound} title="Parties" meta="Shipper / Consignee / Notify">
-          <div className="grid gap-1.5 sm:grid-cols-3">
+        <Panel className="lg:col-span-12" icon={UserRound} title="Parties" meta="Shipper / Consignee / Notify">
+          <div className="freight-job-field-grid freight-job-field-grid-3">
             <Textarea label="Shipper" value={pack.shipper_name} onChange={(value) => setPackField(setPack, "shipper_name", value)} />
             <Textarea label="Consignee" value={pack.consignee_name} onChange={(value) => setPackField(setPack, "consignee_name", value)} />
             <Textarea label="Notify" value={pack.notify_name} onChange={(value) => setPackField(setPack, "notify_name", value)} />
@@ -408,8 +422,8 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
           </div>
         </Panel>
 
-        <Panel className="lg:col-span-4" icon={PackageCheck} title="Cargo And Measures" meta={`${pack.quantity || "0"} ${pack.puom || ""} / ${pack.gross_wt || "0"} kgs`}>
-          <div className="grid gap-1.5 sm:grid-cols-3">
+        <Panel className="lg:col-span-6" icon={PackageCheck} title="Cargo And Measures" meta={`${pack.quantity || "0"} ${pack.puom || ""} / ${pack.gross_wt || "0"} kgs`}>
+          <div className="freight-job-field-grid freight-job-field-grid-3">
             <Field label="Packages" type="number" value={pack.no_of_packings} onChange={(value) => setPackField(setPack, "no_of_packings", value)} />
             <Field label="Quantity" type="number" value={pack.quantity} onChange={(value) => setPackField(setPack, "quantity", value)} />
             <Field label="UOM" value={pack.puom} onChange={(value) => setPackField(setPack, "puom", value)} />
@@ -425,8 +439,17 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
           </div>
         </Panel>
 
-        <Panel className="lg:col-span-3" icon={mode.icon} title={isAir ? "Air Waybill" : "Container / Carrier"} meta={isAir ? pack.flight_info || "Flight pending" : pack.container_no || "Container pending"}>
-          <div className="grid gap-1.5 sm:grid-cols-2">
+        <Panel className="lg:col-span-6" icon={FileText} title="Description And Marks" meta={pack.prod_description || "Cargo description pending"}>
+          <div className="freight-job-field-grid freight-job-field-grid-2">
+            <Textarea label="Marks & Nos" value={pack.marksnos} onChange={(value) => setPackField(setPack, "marksnos", value)} />
+            <Textarea label="Product Description" value={pack.prod_description} onChange={(value) => setPackField(setPack, "prod_description", value)} />
+            <Textarea label="Cargo Details" value={pack.cargo_details} onChange={(value) => setPackField(setPack, "cargo_details", value)} />
+            <Textarea label="Remarks" value={pack.remarks} onChange={(value) => setPackField(setPack, "remarks", value)} />
+          </div>
+        </Panel>
+
+        <Panel className="lg:col-span-12" icon={mode.icon} title={isAir ? "Air Waybill" : "Container / Carrier"} meta={isAir ? pack.flight_info || "Flight pending" : pack.container_no || "Container pending"}>
+          <div className="freight-job-field-grid freight-job-field-grid-4">
             {isAir ? (
               <>
                 <Field label="HAWB" value={pack.hawb} onChange={(value) => setPackField(setPack, "hawb", value)} />
@@ -452,17 +475,8 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
           </div>
         </Panel>
 
-        <Panel className="lg:col-span-6" icon={FileText} title="Description And Marks" meta={pack.prod_description || "Cargo description pending"}>
-          <div className="grid gap-1.5 sm:grid-cols-2">
-            <Textarea label="Marks & Nos" value={pack.marksnos} onChange={(value) => setPackField(setPack, "marksnos", value)} />
-            <Textarea label="Product Description" value={pack.prod_description} onChange={(value) => setPackField(setPack, "prod_description", value)} />
-            <Textarea label="Cargo Details" value={pack.cargo_details} onChange={(value) => setPackField(setPack, "cargo_details", value)} />
-            <Textarea label="Remarks" value={pack.remarks} onChange={(value) => setPackField(setPack, "remarks", value)} />
-          </div>
-        </Panel>
-
-        <Panel className="lg:col-span-6" icon={FileSignature} title="Terms And Handling" meta={pack.terms_of_delivery || "Delivery terms pending"}>
-          <div className="grid gap-1.5 sm:grid-cols-4">
+        <Panel className="lg:col-span-12" icon={FileSignature} title="Terms And Handling" meta={pack.terms_of_delivery || "Delivery terms pending"}>
+          <div className="freight-job-field-grid freight-job-field-grid-4">
             <Field label="Terms" value={pack.terms_of_delivery} onChange={(value) => setPackField(setPack, "terms_of_delivery", value)} />
             <Field label="Ex Rate" type="number" value={pack.ex_rate} onChange={(value) => setPackField(setPack, "ex_rate", value)} />
             <Field label="PO No" value={pack.po_no} onChange={(value) => setPackField(setPack, "po_no", value)} />
@@ -474,7 +488,7 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
 
         {!isAir && (
           <Panel className="lg:col-span-12" icon={Ship} title="Bill Of Lading Route" meta={`${pack.port_code || "Loading"} -> ${pack.destination_port || "Discharge"}`}>
-            <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-6">
+            <div className="freight-job-field-grid freight-job-field-grid-4">
               <Field label="MSWB / Master BL" value={pack.doc_ref} onChange={(value) => setPackField(setPack, "doc_ref", value)} />
               <Field label="PO No" value={pack.po_no} onChange={(value) => setPackField(setPack, "po_no", value)} />
               <Field label="Pre-Carriage By" value={pack.vessel_name} onChange={(value) => setPackField(setPack, "vessel_name", value)} />
@@ -489,8 +503,21 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
         )}
 
         {isAir && (
+          <Panel className="lg:col-span-12" icon={MapPinned} title="Air Routing" meta={pack.routing || `${pack.port_code || "Origin"} -> ${pack.destination_port || "Destination"}`}>
+            <div className="freight-job-field-grid freight-job-field-grid-4">
+              <Field label="Origin" value={pack.port_code} onChange={(value) => setPackField(setPack, "port_code", value)} />
+              <Field label="Destination" value={pack.destination_port} onChange={(value) => setPackField(setPack, "destination_port", value)} />
+              <Field label="Place of Receipt" value={pack.place_receipt} onChange={(value) => setPackField(setPack, "place_receipt", value)} />
+              <Field label="Place of Delivery" value={pack.place_delivery} onChange={(value) => setPackField(setPack, "place_delivery", value)} />
+              <Field label="Routing" value={pack.routing} onChange={(value) => setPackField(setPack, "routing", value)} />
+              <Field label="Flight Info" value={pack.flight_info} onChange={(value) => setPackField(setPack, "flight_info", value)} />
+            </div>
+          </Panel>
+        )}
+
+        {isAir && (
           <Panel className="lg:col-span-12" icon={Plane} title="Air Waybill Accounting" meta="PB AWB valuation, carrier and account fields">
-            <div className="grid gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
+            <div className="freight-job-field-grid freight-job-field-grid-4">
               <Field label="Airline Address" value={pack.airline_address} onChange={(value) => setPackField(setPack, "airline_address", value)} />
               <Field label="Issuing Carrier" value={pack.issuing_carrier} onChange={(value) => setPackField(setPack, "issuing_carrier", value)} />
               <Field label="Carrier Address" value={pack.issuing_carrier_add} onChange={(value) => setPackField(setPack, "issuing_carrier_add", value)} />
@@ -517,6 +544,7 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
             <DimensionGrid rows={dimensions} setRows={setDimensions} />
           </Panel>
         )}
+        </div>
       </div>
     </form>
   );
@@ -554,23 +582,23 @@ function Panel({ title, meta, icon: Icon, children, className = "" }: { title: s
 }
 
 function Field({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
-  return <label className="grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground">{label}<Input className="h-7 text-xs font-semibold" type={type} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+  return <label className="freight-compact-label">{label}<Input className="h-7 text-xs font-semibold" type={type} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
 function SelectField({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
-  return <label className="grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground">{label}<select className="h-7 rounded-md border bg-background px-2 text-xs font-semibold" value={value} onChange={(event) => onChange(event.target.value)}><option value="">Blank</option>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>;
+  return <label className="freight-compact-label">{label}<select className="h-7 rounded-md border bg-background px-2 text-xs font-semibold" value={value} onChange={(event) => onChange(event.target.value)}><option value="">Blank</option>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>;
 }
 
 function Textarea({ label, value, onChange, className = "" }: { label: string; value: string; onChange: (value: string) => void; className?: string }) {
-  return <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground ${className}`}>{label}<textarea className="min-h-8 rounded-md border border-input bg-background px-2 py-1 text-xs font-semibold text-foreground shadow-sm" value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+  return <label className={`freight-compact-label ${className}`}>{label}<textarea className="min-h-8 rounded-md border border-input bg-background px-2 py-1 text-xs font-semibold text-foreground shadow-sm" value={value} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
-  return <div className="grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground">{label}<div className="flex h-7 items-center rounded-md border bg-muted/40 px-2 text-xs font-semibold normal-case text-foreground">{value}</div></div>;
+  return <div className="freight-compact-label">{label}<div className="flex h-7 items-center rounded-md border bg-muted/40 px-2 text-xs font-semibold normal-case text-foreground">{value}</div></div>;
 }
 
 function Lookup({ label, value, valueField, displayFields, columns, loadOptions, onChange }: { label: string; value: string; valueField: string; displayFields: string[]; columns: { field: string; header: string }[]; loadOptions: () => Promise<LookupRow[]>; onChange: (value: string, row: LookupRow | null) => void }) {
-  return <label className="grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground">{label}<LookupField value={value} compact valueField={valueField} displayFields={displayFields} columns={columns} loadOptions={loadOptions} onChange={onChange} /></label>;
+  return <label className="freight-compact-label">{label}<LookupField value={value} compact valueField={valueField} displayFields={displayFields} columns={columns} loadOptions={loadOptions} onChange={onChange} /></label>;
 }
 
 function NoticeChip({ notice }: { notice: Exclude<Notice, null> }) {

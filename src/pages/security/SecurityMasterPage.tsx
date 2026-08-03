@@ -124,9 +124,8 @@ export const securityMasterConfigs: Record<string, SecurityMasterConfig> = {
       { name: "level1", label: "Level 1", required: true, table: true, width: 170 },
       { name: "level2", label: "Level 2", table: true, width: 180 },
       { name: "level3", label: "Level 3", table: true, width: 220 },
-      { name: "position", label: "Position", type: "number", table: true, width: 110 },
-      { name: "url_path", label: "Screen Key", placeholder: "Stable technical route path", table: true, width: 320 },
-      { name: "component_name", label: "Component Name", placeholder: "Frontend component key for new screens", table: true, width: 220 },
+      { name: "position", label: "Position", type: "number", required: true, placeholder: "Sequence within this app", table: true, width: 110 },
+      { name: "url_path", label: "Route Path", placeholder: "Auto built from App Code and levels", table: true, width: 320 },
       { name: "icon", label: "Icon", table: true, width: 120 },
       { name: "company_code", label: "Company", disabledOnEdit: true, table: true, width: 110 },
     ],
@@ -303,6 +302,9 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
   const tableFields = config.fields.filter((field) => field.table !== false);
   const hasSearch = Boolean(query.trim() || columnFilters.some((filter) => String(filter.value ?? "").trim()));
   const isModuleData = config.gmEndpoint === "secmoduledata";
+  const positionImpact = isModuleData
+    ? getPositionImpact(form, moduleDropdownRows, editMode)
+    : null;
 
   const makeEmpty = () => ({
     ...Object.fromEntries(config.fields.map((field) => [field.name, field.disabledOnAdd ? "" : field.type === "number" ? 0 : ""])),
@@ -436,6 +438,14 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
       setNotice({ type: "error", message: `${missing.label} is required` });
       return;
     }
+    if (isModuleData && (!Number.isInteger(Number(form.position)) || Number(form.position) < 1)) {
+      setNotice({ type: "error", message: "Position must be a whole number starting from 1" });
+      return;
+    }
+    if (positionImpact?.affected.length) {
+      const confirmed = window.confirm(positionImpact.confirmation);
+      if (!confirmed) return;
+    }
     setSaving(true);
     setNotice(null);
     try {
@@ -445,6 +455,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
       setFormOpen(false);
       setNotice({ type: "success", message: `${config.title} ${editMode ? "updated" : "added"} successfully` });
       await loadRows(pageIndex, pageSize, false);
+      if (isModuleData) await loadModuleDropdownRows();
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to save ${config.title}` });
     } finally {
@@ -461,6 +472,7 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
           next.level1 = "";
           next.level2 = "";
           next.level3 = "";
+          next.position = getNextModulePosition(next.app_code, moduleDropdownRows, editMode ? form.serial_no : undefined);
         }
         if (field.name === "level1") {
           next.level2 = "";
@@ -566,33 +578,34 @@ export function SecurityMasterPage({ config }: { config: SecurityMasterConfig })
               </div>
             </CardHeader>
             <CardContent className="grid gap-3 pt-4 md:grid-cols-2 xl:grid-cols-3">
-              {config.fields.map((field) => {
-                const lockedScreenKey = isModuleData && editMode && field.name === "url_path";
-                return (
-                  <Field label={field.label} required={isRequiredField(field, editMode)} key={field.name}>
-                    <div className="relative" onMouseDown={lockedScreenKey ? showLockedScreenKeyNotice : undefined}>
-                      {renderInput(
-                        field,
-                        form[field.name],
-                        Boolean((editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd) || lockedScreenKey),
-                        editMode,
-                        showPassword,
-                        getFieldOptions(field.name, form, moduleDropdownRows, isModuleData),
-                        getSelectOptions(field, masterOptionRows, form[field.name]),
-                        selectSearch[field.name] || "",
-                        openOptionField === field.name,
-                        (open) => {
-                          setOpenOptionField(open ? field.name : null);
-                          if (!open) setSelectSearch((current) => ({ ...current, [field.name]: "" }));
-                        },
-                        (nextSearch) => setSelectSearch((current) => ({ ...current, [field.name]: nextSearch })),
-                        () => setShowPassword((current) => !current),
-                        (value) => updateFormField(field, value),
-                      )}
-                    </div>
-                  </Field>
-                );
-              })}
+              {config.fields.map((field) => (
+                <Field label={field.label} required={isRequiredField(field, editMode)} key={field.name}>
+                  {renderInput(
+                    field,
+                    form[field.name],
+                    Boolean((editMode && field.disabledOnEdit) || (!editMode && field.disabledOnAdd) || (isModuleData && field.name === "url_path")),
+                    editMode,
+                    showPassword,
+                    getFieldOptions(field.name, form, moduleDropdownRows, isModuleData),
+                    getSelectOptions(field, masterOptionRows, form[field.name]),
+                    selectSearch[field.name] || "",
+                    openOptionField === field.name,
+                    (open) => {
+                      setOpenOptionField(open ? field.name : null);
+                      if (!open) setSelectSearch((current) => ({ ...current, [field.name]: "" }));
+                    },
+                    (nextSearch) => setSelectSearch((current) => ({ ...current, [field.name]: nextSearch })),
+                    () => setShowPassword((current) => !current),
+                    (value) => updateFormField(field, value),
+                  )}
+                </Field>
+              ))}
+              {positionImpact ? (
+                <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground md:col-span-2 xl:col-span-3">
+                  <strong className="text-foreground">Position preview:</strong>{" "}
+                  {positionImpact.summary}
+                </div>
+              ) : null}
             </CardContent>
           </Card>
           <div className="flex justify-end gap-2">
@@ -892,6 +905,71 @@ function matchesOptionFilter(row: Record<string, unknown>, optionFilter?: Record
 
 function uniqueStrings(values: unknown[]) {
   return Array.from(new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+}
+
+function getNextModulePosition(appCode: unknown, rows: Record<string, unknown>[], excludeSerial?: unknown) {
+  const app = String(appCode ?? "").trim().toUpperCase();
+  if (!app) return 1;
+  const moduleRows = rows
+    .filter((row) =>
+      String(row.app_code ?? "").trim().toUpperCase() === app &&
+      Number(row.serial_no) !== Number(excludeSerial),
+    );
+  // Positions are maintained as a compact 1..N sequence. Count-based next
+  // position stays correct even while legacy data still contains gaps.
+  return moduleRows.length + 1;
+}
+
+function getPositionImpact(
+  form: Record<string, unknown>,
+  rows: Record<string, unknown>[],
+  editMode: boolean,
+) {
+  const appCode = String(form.app_code ?? "").trim().toUpperCase();
+  const requested = Math.trunc(Number(form.position));
+  if (!appCode || !Number.isFinite(requested) || requested < 1) return null;
+
+  const serialNo = Number(form.serial_no);
+  const current = editMode ? rows.find((row) => Number(row.serial_no) === serialNo) : undefined;
+  const oldAppCode = String(current?.app_code ?? "").trim().toUpperCase();
+  const currentAppRows = rows
+    .filter((row) => String(row.app_code ?? "").trim().toUpperCase() === oldAppCode)
+    .sort((left, right) => Number(left.position) - Number(right.position));
+  const oldOrdinal = currentAppRows.findIndex((row) => Number(row.serial_no) === serialNo) + 1;
+  const targetRows = rows
+    .filter((row) => String(row.app_code ?? "").trim().toUpperCase() === appCode && Number(row.serial_no) !== serialNo)
+    .sort((left, right) => Number(left.position) - Number(right.position));
+  const finalPosition = Math.min(requested, targetRows.length + 1);
+
+  let affected: Record<string, unknown>[] = [];
+  let direction = "";
+  if (!current || oldAppCode !== appCode) {
+    affected = targetRows.slice(finalPosition - 1);
+    direction = "down by one";
+  } else if (finalPosition < oldOrdinal) {
+    affected = targetRows.slice(finalPosition - 1, oldOrdinal - 1);
+    direction = "down by one";
+  } else if (finalPosition > oldOrdinal) {
+    affected = targetRows.slice(oldOrdinal - 1, finalPosition - 1);
+    direction = "up by one";
+  }
+
+  const screenName = getMenuScreenName(form) || "This screen";
+  const detail = affected.length
+    ? ` ${affected.length} existing ${appCode} screen${affected.length === 1 ? "" : "s"} will move ${direction}.`
+    : " No existing screen will move.";
+
+  return {
+    affected,
+    summary: `${screenName} will be position ${finalPosition} of ${targetRows.length + 1}.${detail}`,
+    confirmation: `Change ${screenName} to position ${finalPosition} in ${appCode}?${detail}`,
+  };
+}
+
+function getMenuScreenName(row: Record<string, unknown>) {
+  return [row.level3, row.level2, row.level1]
+    .map((value) => String(value ?? "").trim())
+    .find((value) => value && value.toLowerCase() !== "null") || "";
 }
 
 function buildModuleUrlPath(form: Record<string, unknown>) {

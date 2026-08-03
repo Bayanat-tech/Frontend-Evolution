@@ -1,12 +1,14 @@
 import { getDynamicLookup } from "../../../api/lookups";
 import { upsertBulkInventoryEntryApi, upsertBulkPurchaseEntryApi, upsertBulkSaleseEntryApi } from "../../../api/purchaseSales";
+import { PurchaseOrderLineRow } from "../purchase/Purchaseordertypes";
 import {
   EXPENSE_AC_OPTIONS,
   InventoryDocType,
   InventoryConfig,
   PurchaseOrderEditorState,
   PurchaseOrderForm,
-  PurchaseOrderLineRow,
+  InventoryLineRow,
+  
 } from "./Inventorytypes";
 
 export const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -30,7 +32,7 @@ export function formatAmount(value: number) {
   return value < 0 ? `(${amount})` : amount;
 }
 
-export const emptyLineRow = (divCode: string): PurchaseOrderLineRow => ({
+export const emptyLineRow = (divCode: string): InventoryLineRow => ({
   id: newId(),
   div_code: divCode,
   zone: "",
@@ -41,7 +43,8 @@ export const emptyLineRow = (divCode: string): PurchaseOrderLineRow => ({
   l_uom: "",
   qty_luom: 0,
   unit_price: 0,
-  disc_pct: 0,
+  disc_precent: 0,
+  disc_price: 0,
   qty: 0,
   tax_pct: 0,
   tax_amount: 0,
@@ -52,6 +55,9 @@ export const emptyLineRow = (divCode: string): PurchaseOrderLineRow => ({
   tax_code: "",
   tax_lcurr_amount: 0,
   lcurr_amount_disc: 0,
+  sign_ind:0,
+  sale_price:0,
+  uppp : 0
 });
 
 export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
@@ -80,8 +86,8 @@ export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
     delivery_tel: editor?.mode === "edit" ? editor.row.delivery_tel || "" : "",
     delivery_email: editor?.mode === "edit" ? editor.row.delivery_email || "" : "",
     remarks: editor?.mode === "edit" ? editor.row.remarks || "" : "",
-    disc_amt: editor?.mode === "edit" ? Number(editor.row.disc_amt || 0) : 0,
-    disc_pct: editor?.mode === "edit" ? Number(editor.row.disc_pct || 0) : 0,
+    disc_price: editor?.mode === "edit" ? Number(editor.row.disc_price || 0) : 0,
+    disc_precent: editor?.mode === "edit" ? Number(editor.row.disc_precent || 0) : 0,
     tax_category: editor?.mode === "edit" ? editor.row.tax_category || "" : "",
     tax_code: editor?.mode === "edit" ? editor.row.tax_code || "" : "",
     expense_ac_post: editor?.mode === "edit" ? editor.row.expense_ac_post || EXPENSE_AC_OPTIONS[0] : EXPENSE_AC_OPTIONS[0],
@@ -124,7 +130,7 @@ export async function fetchSalesOrderDetail(
   config: InventoryConfig,
   companyCode?: string,
   loginid?: string,
-): Promise<PurchaseOrderLineRow[]> {
+): Promise<InventoryLineRow[]> {
   const rows = await getDynamicLookup({
     parameter: config.detailParameter,
     code1: companyCode,
@@ -146,7 +152,7 @@ export async function fetchSalesOrderDetail(
       l_uom: text(row.l_uom),
       qty_luom: numberOrZero(row.qty_luom),
       unit_price: numberOrZero(row.unit_price),
-      disc_pct: numberOrZero(row.disc_pct),
+      disc_precent: numberOrZero(row.disc_precent),
       qty: numberOrZero(row.qty ?? row.quantity),
       tax_pct: numberOrZero(row.tax_pct ?? row.tax_percent),
       tax_amount: numberOrZero(row.tax_amount),
@@ -157,7 +163,10 @@ export async function fetchSalesOrderDetail(
       tax_code: text(row.tax_code),
       tax_lcurr_amount: numberOrZero(row.tax_lcurr_amount),
       lcurr_amount_disc: numberOrZero(row.lcurr_amount_disc ?? row.lcurr_amount_discount),
-    } satisfies PurchaseOrderLineRow;
+      sign_ind : numberOrZero(row.sign_ind),
+       sale_price: numberOrZero(row.sale_price),
+       uppp:numberOrZero(row.uppp),
+    } satisfies InventoryLineRow;
   });
 }
 
@@ -188,8 +197,8 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     delivery_tel: form.delivery_tel,
     delivery_email: form.delivery_email,
     remarks: form.remarks,
-    disc_amt: form.disc_amt,
-    disc_pct: form.disc_pct,
+    disc_price: form.disc_price,
+    disc_precent: form.disc_precent,
     tax_category: form.tax_category,
     tax_code: form.tax_code,
     expense_ac_post: form.expense_ac_post,
@@ -212,20 +221,24 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
   };
 }
 
-export function lineAmount(row: PurchaseOrderLineRow) {
+export function lineAmount(row: InventoryLineRow) {
   return row.qty_puom * row.unit_price;
 }
-export function lineDiscPrice(row: PurchaseOrderLineRow) {
-  return lineAmount(row) * (row.disc_pct / 100);
+export function lineDiscPrice(row: InventoryLineRow) {
+  return lineAmount(row) * (row.disc_precent / 100);
 }
-export function lineNetAmount(row: PurchaseOrderLineRow) {
+export function lineNetAmount(row: InventoryLineRow) {
   return lineAmount(row) - lineDiscPrice(row);
 }
-export function lineTaxAmount(row: PurchaseOrderLineRow) {
+export function lineTaxAmount(row: InventoryLineRow) {
   return lineNetAmount(row) * (row.tax_pct / 100);
 }
 
-export function buildDetailsPayload(rows: PurchaseOrderLineRow[]) {
+
+
+
+
+export function buildDetailsPayload(rows: InventoryLineRow[]) {
   return rows.map((row) => ({
     div_code: row.div_code,
     zone_code: row.zone_code,
@@ -237,7 +250,7 @@ export function buildDetailsPayload(rows: PurchaseOrderLineRow[]) {
     qty_luom: row.qty_luom,
     unit_price: row.unit_price,
     amount: lineAmount(row),
-    disc_pct: row.disc_pct,
+    disc_precent: row.disc_precent,
     disc_price: lineDiscPrice(row),
     net_amount: lineNetAmount(row),
     qty: row.qty,
@@ -250,6 +263,11 @@ export function buildDetailsPayload(rows: PurchaseOrderLineRow[]) {
     tax_code: row.tax_code,
     tax_lcurr_amount: row.tax_lcurr_amount,
     lcurr_amount_disc: row.lcurr_amount_disc,
+    sign_ind : row.sign_ind,
+    sale_price: row.sale_price,
+    uppp: row.uppp,
+    quantity:row.quantity
+    
   }));
 }
 
@@ -257,7 +275,7 @@ export async function runWorkflow(
   status: "SAVEASDRAFT" | "SUBMITTED" | "REJECTED" | "CLOSED" | "CANCELED" | "SENTBACK",
     docType: InventoryDocType,
   form: PurchaseOrderForm,
-  rows: PurchaseOrderLineRow[],
+  rows: InventoryLineRow[],
   companyCode?: string,
   loginid?: string,
 ) {

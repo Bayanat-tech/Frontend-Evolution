@@ -22,6 +22,213 @@ const transportMode = [
 ];
 
 export const wmsSimpleMasterConfigs: Record<string, WmsSimpleMasterConfig> = {
+  activity: {
+    title: "Activity Master",
+    subtitle: "Maintain WMS activity codes, group/subgroup links, cost & billing components.",
+    master: "activity",
+    gmEndpoint: "activity",
+    routeKeys: ["activity"],
+    keyField: "activity_code",
+    fieldsPerRow: 4,
+    fields: [
+      // General
+      { name: "activity_code", label: "Activity Code", required: true, disabledOnEdit: true, width: 150, maxLength: 5, section: "General" },
+      { name: "activity", label: "Activity Name", required: true, width: 280, section: "General" },
+      { name: "activity_group_code", label: "Activity Group", dropdownParam: "DROP_DOWN_ACTIVITY_GROUP", dropdownDisplayFields: ["activity_group_code", "act_group_name"], dropdownLabelKey: "act_group_name", dropdownValueKey: "activity_group_code", width: 170, section: "General" },
+      { name: "activity_subgroup_code", label: "Activity Sub Group", dropdownParam: "DROP_DOWN_ACTIVITY_SUBGROUP", 
+        // dropdownCodeMap: { activity_group_code: "code1" }, 
+        dropdownDisplayFields: ["activity_subgroup_code", "act_subgroup_name"], dropdownLabelKey: "act_subgroup_name", dropdownValueKey: "activity_subgroup_code", width: 180, section: "General" },
+      { name: "wip_code", label: "WIP Code", width: 140, maxLength: 5, section: "General" },
+      { name: "income_code", label: "Income Code", width: 150, maxLength: 10, section: "General" },
+      { name: "site_ind", label: "Site Indicator", dropdownParam: "DROP_DOWN_SITE_IND", dropdownDisplayFields: ["site_ind", "ind_desc"], dropdownDisplaySeparator: " - ", dropdownValueKey: "site_ind", width: 150, maxLength: 5, section: "General" },
+      { name: "act_type", label: "Activity Type", width: 120, maxLength: 1, section: "General" },
+      { name: "mandatory_flag", label: "Mandatory", type: "select", options: yesNo, width: 120, section: "General" },
+      { name: "freeze_flag", label: "Freeze", type: "select", options: yesNo, width: 120, section: "General" },
+
+      // Movement / UOM
+      { name: "start_point", label: "Start Point", width: 150, maxLength: 10, section: "Movement" },
+      { name: "end_point", label: "End Point", width: 150, maxLength: 10, section: "Movement" },
+      { name: "vtype", label: "Vehicle Type", width: 140, maxLength: 10, section: "Movement" },
+      { name: "quantity", label: "Quantity", type: "number", width: 130, section: "Movement" },
+      { name: "uom", label: "UOM", width: 130, maxLength: 20, section: "Movement" },
+
+      // Cost / Billing
+      { name: "cost", label: "Cost", type: "number", width: 130, section: "Billing" },
+      { name: "bill", label: "Bill", type: "number", width: 130, section: "Billing" },
+      { name: "budget_cost", label: "Budget Cost", type: "number", width: 140, section: "Billing" },
+      { name: "exp_code", label: "Expense Code", width: 150, maxLength: 15, section: "Billing" },
+      { name: "exp_sub_type", label: "Expense Sub Type", width: 160, maxLength: 10, section: "Billing" },
+
+      // Tax components
+      { name: "tx_compnt_1_perc", label: "Tax Comp 1 %", type: "number", width: 130, section: "Tax Components" },
+      { name: "tx_compnt_1_expmt", label: "Tax Comp 1 Exempt", type: "select", options: yesNo, width: 150, section: "Tax Components" },
+      { name: "tx_compnt_2_perc", label: "Tax Comp 2 %", type: "number", width: 130, section: "Tax Components" },
+      { name: "tx_compnt_2_expmt", label: "Tax Comp 2 Exempt", type: "select", options: yesNo, width: 150, section: "Tax Components" },
+      { name: "tx_compnt_3_perc", label: "Tax Comp 3 %", type: "number", width: 130, section: "Tax Components" },
+      { name: "tx_compnt_3_expmt", label: "Tax Comp 3 Exempt", type: "select", options: yesNo, width: 150, section: "Tax Components" },
+      { name: "tx_compnt_4_perc", label: "Tax Comp 4 %", type: "number", width: 130, section: "Tax Components" },
+      { name: "tx_compnt_4_expmt", label: "Tax Comp 4 Exempt", type: "select", options: yesNo, width: 150, section: "Tax Components" },
+    ],
+    defaults: {
+      freeze_flag: "N",
+      mandatory_flag: "N",
+      act_type: "V",
+      tx_compnt_1_perc: 0,
+      tx_compnt_2_perc: 0,
+      tx_compnt_3_perc: 0,
+      tx_compnt_4_perc: 0,
+      tx_compnt_1_expmt: "N",
+      tx_compnt_2_expmt: "N",
+      tx_compnt_3_expmt: "N",
+      tx_compnt_4_expmt: "N",
+    },
+
+    customLoad: async (user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      const data = await executeWmsInboundSql(`
+        SELECT
+          ACTIVITY_CODE          AS "activity_code",
+          ACTIVITY                AS "activity",
+          WIP_CODE                AS "wip_code",
+          INCOME_CODE              AS "income_code",
+          COST                     AS "cost",
+          BILL                     AS "bill",
+          COMPANY_CODE             AS "company_code",
+          ACTIVITY_GROUP_CODE      AS "activity_group_code",
+          ACTIVITY_SUBGROUP_CODE   AS "activity_subgroup_code",
+          START_POINT              AS "start_point",
+          END_POINT                AS "end_point",
+          VTYPE                    AS "vtype",
+          FREEZE_FLAG              AS "freeze_flag",
+          QUANTITY                 AS "quantity",
+          UOM                      AS "uom",
+          MANDATORY_FLAG           AS "mandatory_flag",
+          ACT_TYPE                 AS "act_type",
+          SITE_IND                 AS "site_ind",
+          TX_COMPNT_1_PERC         AS "tx_compnt_1_perc",
+          TX_COMPNT_2_PERC         AS "tx_compnt_2_perc",
+          TX_COMPNT_3_PERC         AS "tx_compnt_3_perc",
+          TX_COMPNT_4_PERC         AS "tx_compnt_4_perc",
+          TX_COMPNT_1_EXPMT        AS "tx_compnt_1_expmt",
+          TX_COMPNT_2_EXPMT        AS "tx_compnt_2_expmt",
+          TX_COMPNT_3_EXPMT        AS "tx_compnt_3_expmt",
+          TX_COMPNT_4_EXPMT        AS "tx_compnt_4_expmt",
+          EXP_CODE                 AS "exp_code",
+          EXP_SUB_TYPE              AS "exp_sub_type",
+          BUDGET_COST               AS "budget_cost"
+        FROM MS_ACTIVITY
+        WHERE COMPANY_CODE = '${typedUser.company_code}'
+        ORDER BY ACTIVITY_CODE
+      `);
+      return {
+        tableData: data as Record<string, unknown>[],
+        count: data.length,
+      };
+    },
+
+    customSave: async (form, context) => {
+      const { editMode, original, user } = context;
+      const typedUser = user as { loginid: string; company_code: string };
+      const companyCode = typedUser.company_code;
+
+      // Key used to look up an existing row: on edit, prefer the original code
+      // (in case the code field itself is somehow being changed), otherwise use the form value.
+      const activityCode = (editMode ? (original?.activity_code ?? form.activity_code) : form.activity_code) as string;
+
+      if (!activityCode) {
+        throw new Error("Activity Code is required.");
+      }
+
+      // --- helpers for safe literal building (this endpoint takes raw SQL, so we build defensively) ---
+      const strLit = (v: unknown) =>
+        v === undefined || v === null || v === "" ? "NULL" : `'${String(v).replace(/'/g, "''")}'`;
+      const numLit = (v: unknown) =>
+        v === undefined || v === null || v === "" ? "NULL" : Number(v);
+
+      // Check whether the record already exists for this company + activity code
+      const existing = await executeWmsInboundSql(`
+        SELECT ACTIVITY_CODE AS "activity_code"
+        FROM MS_ACTIVITY
+        WHERE COMPANY_CODE = ${strLit(companyCode)}
+        AND ACTIVITY_CODE = ${strLit(activityCode)}
+      `);
+
+      const recordExists = Array.isArray(existing) && existing.length > 0;
+
+      if (recordExists) {
+        // UPDATE existing record
+        await executeWmsInboundSql(`
+          UPDATE MS_ACTIVITY SET
+            ACTIVITY               = ${strLit(form.activity)},
+            WIP_CODE                = ${strLit(form.wip_code)},
+            INCOME_CODE              = ${strLit(form.income_code)},
+            COST                     = ${numLit(form.cost)},
+            BILL                     = ${numLit(form.bill)},
+            ACTIVITY_GROUP_CODE      = ${strLit(form.activity_group_code)},
+            ACTIVITY_SUBGROUP_CODE   = ${strLit(form.activity_subgroup_code)},
+            START_POINT              = ${strLit(form.start_point)},
+            END_POINT                = ${strLit(form.end_point)},
+            VTYPE                    = ${strLit(form.vtype)},
+            FREEZE_FLAG              = ${strLit(form.freeze_flag ?? "N")},
+            QUANTITY                 = ${numLit(form.quantity)},
+            UOM                      = ${strLit(form.uom)},
+            MANDATORY_FLAG           = ${strLit(form.mandatory_flag ?? "N")},
+            ACT_TYPE                 = ${strLit(form.act_type ?? "V")},
+            SITE_IND                 = ${strLit(form.site_ind)},
+            TX_COMPNT_1_PERC         = ${numLit(form.tx_compnt_1_perc ?? 0)},
+            TX_COMPNT_2_PERC         = ${numLit(form.tx_compnt_2_perc ?? 0)},
+            TX_COMPNT_3_PERC         = ${numLit(form.tx_compnt_3_perc ?? 0)},
+            TX_COMPNT_4_PERC         = ${numLit(form.tx_compnt_4_perc ?? 0)},
+            TX_COMPNT_1_EXPMT        = ${strLit(form.tx_compnt_1_expmt ?? "N")},
+            TX_COMPNT_2_EXPMT        = ${strLit(form.tx_compnt_2_expmt ?? "N")},
+            TX_COMPNT_3_EXPMT        = ${strLit(form.tx_compnt_3_expmt ?? "N")},
+            TX_COMPNT_4_EXPMT        = ${strLit(form.tx_compnt_4_expmt ?? "N")},
+            EXP_CODE                 = ${strLit(form.exp_code)},
+            EXP_SUB_TYPE             = ${strLit(form.exp_sub_type)},
+            BUDGET_COST              = ${numLit(form.budget_cost)}
+          WHERE COMPANY_CODE = ${strLit(companyCode)}
+          AND ACTIVITY_CODE = ${strLit(activityCode)}
+        `);
+      } else {
+        // INSERT new record
+        await executeWmsInboundSql(`
+          INSERT INTO MS_ACTIVITY (
+            COMPANY_CODE, ACTIVITY_CODE, ACTIVITY, WIP_CODE, INCOME_CODE, COST, BILL,
+            ACTIVITY_GROUP_CODE, ACTIVITY_SUBGROUP_CODE, START_POINT, END_POINT, VTYPE,
+            FREEZE_FLAG, QUANTITY, UOM, MANDATORY_FLAG, ACT_TYPE, SITE_IND,
+            TX_COMPNT_1_PERC, TX_COMPNT_2_PERC, TX_COMPNT_3_PERC, TX_COMPNT_4_PERC,
+            TX_COMPNT_1_EXPMT, TX_COMPNT_2_EXPMT, TX_COMPNT_3_EXPMT, TX_COMPNT_4_EXPMT,
+            EXP_CODE, EXP_SUB_TYPE, BUDGET_COST
+          ) VALUES (
+            ${strLit(companyCode)}, ${strLit(activityCode)}, ${strLit(form.activity)}, ${strLit(form.wip_code)},
+            ${strLit(form.income_code)}, ${numLit(form.cost)}, ${numLit(form.bill)},
+            ${strLit(form.activity_group_code)}, ${strLit(form.activity_subgroup_code)},
+            ${strLit(form.start_point)}, ${strLit(form.end_point)}, ${strLit(form.vtype)},
+            ${strLit(form.freeze_flag ?? "N")}, ${numLit(form.quantity)}, ${strLit(form.uom)},
+            ${strLit(form.mandatory_flag ?? "N")}, ${strLit(form.act_type ?? "V")}, ${strLit(form.site_ind)},
+            ${numLit(form.tx_compnt_1_perc ?? 0)}, ${numLit(form.tx_compnt_2_perc ?? 0)},
+            ${numLit(form.tx_compnt_3_perc ?? 0)}, ${numLit(form.tx_compnt_4_perc ?? 0)},
+            ${strLit(form.tx_compnt_1_expmt ?? "N")}, ${strLit(form.tx_compnt_2_expmt ?? "N")},
+            ${strLit(form.tx_compnt_3_expmt ?? "N")}, ${strLit(form.tx_compnt_4_expmt ?? "N")},
+            ${strLit(form.exp_code)}, ${strLit(form.exp_sub_type)}, ${numLit(form.budget_cost)}
+          )
+        `);
+      }
+    },
+
+    // NOTE: MS_ACTIVITY has a BEFORE DELETE trigger (TRG_MS_ACTIVITY_BD) that always
+    // raises ORA-20001 and blocks deletion at the DB level. This function will run,
+    // but the DELETE statement itself will be rejected by the trigger unless that
+    // trigger is dropped or altered.
+    customDelete: async (row, user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      await executeWmsInboundSql(`
+        DELETE FROM MS_ACTIVITY
+        WHERE COMPANY_CODE = '${typedUser.company_code}'
+        AND ACTIVITY_CODE = '${row.activity_code}'
+      `);
+    },
+  },
   producttype: {
     title: "Product Type Master",
     subtitle: "Maintain product type codes used by product and inbound setup.",
@@ -70,7 +277,7 @@ export const wmsSimpleMasterConfigs: Record<string, WmsSimpleMasterConfig> = {
       { name: "mandatory_flag", label: "Mandatory", type: "select", options: yesNo, width: 120 },
       { name: "validate_flag", label: "Validate", type: "select", options: yesNo, width: 120 },
       { name: "act_group_type", label: "Group Type", width: 140, maxLength: 2 },
-      { name: "account_code", label: "Account Code", dropdownParam: "Account_AC_CODE_Serach", dropdownDisplayFields:["ac_code","ac_name"],dropdownValueKey: "ac_code", width: 150 },
+      { name: "account_code", label: "Account Code", dropdownParam: "Account_AC_CODE_Serach", dropdownDisplayFields:["ac_code","ac_name"],dropdownValueKey: "ac_code", width: 150, required: true },
       { name: "alternate_accode", label: "Alternate Account", width: 160 },
       { name: "exp_account_code", label: "Expense Account", width: 160 },
       { name: "freight_flag", label: "Freight", type: "select", options: yesNo, width: 110 },
@@ -235,7 +442,7 @@ export const wmsSimpleMasterConfigs: Record<string, WmsSimpleMasterConfig> = {
     fields: [
       { name: "broker_code", label: "Partner Code", required: true, disabledOnEdit: true, width: 150 },
       { name: "broker_name", label: "Partner Name", required: true, width: 260 },
-      { name: "country_code", label: "Country Code", width: 140 },
+      { name: "curr_code", label: "Country", dropdownParam: "DROP_DOWN_COUNTRY", dropdownDisplayFields: ["country_code", "country_name"], dropdownValueKey: "country_code", width: 150, dropdownDisplaySeparator: " - " },
       { name: "broker_city", label: "City", width: 150 },
       { name: "broker_contact1", label: "Contact", width: 180 },
       { name: "broker_telno1", label: "Telephone", width: 150 },
@@ -327,10 +534,10 @@ saveEndpoint: (form, { editMode, original }) => {
       { name: "prin_city", label: "City", width: 280, tab: "basic-info", section: "COMPANY DETAILS" },
       { name: "country_code", label: "Country", required: true, dropdownParam: "DROP_DOWN_COUNTRY",dropdownDisplayFields: ["country_code", "country_name"], dropdownValueKey: "country_code",
       dropdownDisplaySeparator: " - ", tab: "basic-info", section: "COMPANY DETAILS" },
-      { name: "prin_addr1", label: "Address 1", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS", colSpan: 2 },
-      { name: "prin_addr2", label: "Address 2", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS", colSpan: 2 },
-      { name: "prin_addr3", label: "Address 3", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS" },
-      { name: "prin_addr4", label: "Address 4", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS" },
+      { name: "prin_addr1", label: "Address 1", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS", colSpan: 2, maxLength: 50 },
+      { name: "prin_addr2", label: "Address 2", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS", colSpan: 2, maxLength: 50 },
+      { name: "prin_addr3", label: "Address 3", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS", maxLength: 50 },
+      { name: "prin_addr4", label: "Address 4", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS", maxLength: 50 },
       { name: "territory_code", label: "Territory", dropdownParam: "DROP_DOWN_TERRITORY", dropdownCodeMap: { country_code: "code1" },dropdownDisplayFields: ["territory_code", "territory_name"], dropdownValueKey: "territory_code", tab: "basic-info", section: "COMPANY DETAILS" },
       { name: "sector_code", label: "Sector", tab: "basic-info", section: "COMPANY DETAILS" },
       // Basic Info Tab - Contact Information
@@ -392,8 +599,8 @@ saveEndpoint: (form, { editMode, original }) => {
       { name: "rcpt_exp_limit", label: "Inbound Exp Limit (days)", type: "number", tab: "settings", section: "PRODUCT AND SHIPMENT SETTINGS" },
       // Storage Info Tab - Location
       { name: "pref_site", label: "Preferred Site", dropdownParam: "DROP_DOWN_SITE", dropdownDisplayFields: ["site_code", "site_name"], dropdownValueKey: "site_code", tab: "storage-info", section: "LOCATION" },
-      { name: "pref_loc_from", label: "Location From", dropdownParam: "DROP_DOWN_LOCATION", dropdownCodeMap: { preferred_site: "code1" }, dropdownDisplayFields: ["location_code", "location_name"], dropdownValueKey: "location_code", tab: "storage-info", section: "LOCATION" },
-      { name: "pref_loc_to", label: "Location To", dropdownParam: "DROP_DOWN_LOCATION", dropdownCodeMap: { preferred_site: "code1", location_from: "code2" }, dropdownDisplayFields: ["location_code", "location_name"], dropdownValueKey: "location_code", tab: "storage-info", section: "LOCATION" },
+      { name: "pref_loc_from", label: "Location From", dropdownParam: "DROP_DOWN_LOCATION", dropdownCodeMap: { pref_site: "code1" }, dropdownDisplayFields: ["location_code", "location_name"], dropdownValueKey: "location_code", tab: "storage-info", section: "LOCATION" },
+      { name: "pref_loc_to", label: "Location To", dropdownParam: "DROP_DOWN_LOCATION", dropdownCodeMap: { pref_site: "code1", pref_loc_from: "code2" }, dropdownDisplayFields: ["location_code", "location_name"], dropdownValueKey: "location_code", tab: "storage-info", section: "LOCATION" },
       { name: "pref_aisle_from", label: "Aisle From", type: "text", tab: "storage-info", section: "LOCATION" },
       { name: "pref_aisle_to", label: "Aisle To", type: "text", tab: "storage-info", section: "LOCATION" },
       { name: "pref_col_from", label: "Column From", type: "number", tab: "storage-info", section: "LOCATION" },
@@ -424,6 +631,19 @@ saveEndpoint: (form, { editMode, original }) => {
         data: form as any,
         loginid: typedUser.loginid,
       });
+    },
+    customLoad: async (user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      const data = await executeWmsInboundSql(`
+        SELECT *
+        FROM MS_PRINCIPAL
+        WHERE COMPANY_CODE = '${typedUser.company_code}'
+        ORDER BY NVL(updated_at, created_at)
+      `);
+      return {
+        tableData: data as Record<string, unknown>[],
+        count: data.length,
+      };
     },
     deleteConfig: { mode: "disabled", payload: () => null, reason: "Delete endpoint is not registered in the existing backend" },
   },

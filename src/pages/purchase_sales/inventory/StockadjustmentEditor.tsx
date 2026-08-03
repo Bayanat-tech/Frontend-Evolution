@@ -12,29 +12,24 @@ import {
   ActionKey,
   PurchaseConfig,
   PurchaseOrderEditorState,
-  PurchaseOrderLineRow,
   SendBackUserOption,
 } from "../purchase/Purchaseordertypes";
 import {
-  emptyForm,
-  emptyLineRow,
+
   formatAmount,
-  lineAmount,
-  lineDiscPrice,
   lineNetAmount,
-  lineTaxAmount,
+
   lowerRecord,
   newId,
   numberOrZero,
   text,
 } from "../purchase/Purchaseorderutils";
-import { PurchaseOrderHeaderForm } from "../purchase/Purchaseorderheaderform";
-import { PurchaseOrderLinesTable } from "../purchase/Purchaseorderlinestable";
 import { SendBackDialog } from "../purchase/Sendbackdialog";
 import { RejectDialog } from "../purchase/Rejectdialog";
-import {  PROCESSSA, InventoryConfig, IV_DOC_TYPE, PurchaseOrderForm } from "./Inventorytypes";
-import { fetchSalesOrderDetail, fetchSalesOrderHeader, runWorkflow } from "./Inventoryutils";
+import {  PROCESSSA, InventoryConfig, IV_DOC_TYPE, PurchaseOrderForm, InventoryLineRow } from "./Inventorytypes";
+import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, lineAmount, lineDiscPrice, lineTaxAmount, runWorkflow } from "./Inventoryutils";
 import { StockHeaderForm } from "./StockHeaderForm";
+import { StockDetail } from "./StockDetail";
 
 
 export type { PurchaseOrderEditorState };
@@ -55,7 +50,7 @@ export function StockadjustmentEditor({
   const { user } = useAuth();
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
-  const [rows, setRows] = useState<PurchaseOrderLineRow[]>(() => (editMode ? [] : [emptyLineRow(form.div_code)]));
+  const [rows, setRows] = useState<InventoryLineRow[]>(() => (editMode ? [] : [emptyLineRow(form.div_code)]));
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -128,7 +123,7 @@ export function StockadjustmentEditor({
           remarks: text(headerRaw.remarks || current.remarks),
           issued_by: text(headerRaw.issued_by || current.issued_by),
            received_by: text(headerRaw.received_by || current.received_by),
-          disc_amt: Number(headerRaw.disc_amt || 0),
+          disc_price: Number(headerRaw.disc_price || 0),
           disc_pct: Number(headerRaw.disc_pct || 0),
           tax_category: text(headerRaw.tax_category || current.tax_category),
           tax_code: text(headerRaw.tax_code || current.tax_code),
@@ -190,14 +185,14 @@ export function StockadjustmentEditor({
     const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
     const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-    return totalAmount - totalDiscPrice - form.disc_amt + totalTaxAmount;
+    return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
   })();
 
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const updateRow = (id: string, patch: Partial<PurchaseOrderLineRow>) => {
+  const updateRow = (id: string, patch: Partial<InventoryLineRow>) => {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
 
@@ -393,15 +388,15 @@ export function StockadjustmentEditor({
                 docType={config.docType}
               />
 
-              <PurchaseOrderLinesTable
+              <StockDetail
                 rows={rows}
                 updateRow={updateRow}
                 addRow={addRow}
                 removeRow={removeRow}
                 headerAndLineDisabled={headerAndLineDisabled}
-                discAmt={form.disc_amt}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
+                docType={config.docType}
               />
             </div>
           )}

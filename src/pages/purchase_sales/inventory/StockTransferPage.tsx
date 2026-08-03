@@ -42,8 +42,8 @@ export interface InventoryOrderRow {
   delivery_tel?: string;
   delivery_email?: string;
   remarks?: string;
-  disc_amt?: number;
-  disc_pct?: number;
+  disc_price?: number;
+  disc_precent?: number;
   tax_category?: string;
   tax_code?: string;
   expense_ac_post?: string;

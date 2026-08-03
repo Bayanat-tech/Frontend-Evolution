@@ -9,6 +9,7 @@ export type MenuNode = {
   url_path?: string;
   component_name?: string;
   componentName?: string;
+  position?: number;
   children?: MenuNode[];
 };
 
