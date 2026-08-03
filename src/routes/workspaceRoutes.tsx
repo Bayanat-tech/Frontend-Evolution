@@ -1213,8 +1213,8 @@ function isHrLeaveTypeRoute(pathname: string) {
   const normalized = decodeRouteText(pathname).toLowerCase();
   // const compact = normalized.replace(/[^a-z0-9]/g, "");
   return (
-    normalized.includes("/hcm/hcm/pay components/leave_types1") ||
-    normalized.includes("/hcm/hcm/pay%20components/leave_types1")
+    normalized.includes("/hcm/hcm/pay components/leave_types") ||
+    normalized.includes("/hcm/hcm/pay%20components/leave_types")
     // compact.includes("paycomponentsleavetype")
   );
 }
