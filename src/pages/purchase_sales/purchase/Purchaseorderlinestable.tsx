@@ -54,7 +54,7 @@ function netTotalAmount(quantity: number, row: PurchaseOrderLineRow): number {
 
 // Lcurr Amount = Total Amount * Final Rate  (=L2*K2 in the sheet)
 function computeLcurrAmount(quantity: number, row: PurchaseOrderLineRow): number {
-  return netTotalAmount(quantity, row) * finalRate(row) * row.ex_rate;
+  return netTotalAmount(quantity, row) * finalRate(row) * numberOrZero(row.ex_rate);
 }
 
 export function PurchaseOrderLinesTable({

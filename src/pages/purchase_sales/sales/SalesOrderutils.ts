@@ -10,7 +10,7 @@ import {
   PurchaseOrderLineRow,
   TteJmiConsumType,
 } from "../purchase/Purchaseordertypes";
-import { SalesConfig, SODocType } from "./SalesOrdertypes";
+import { SalesConfig, SalesOrderLineRow, SODocType } from "./SalesOrdertypes";
 
 export const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
@@ -45,7 +45,6 @@ export const emptyLineRow = (divCode: string): PurchaseOrderLineRow => ({
   qty_luom: 0,
   unit_price: 0,
   disc_hdr_percent: 0,
-  qty: 0,
   disc_percent: 0,
   disc_price: 0,
   tax_pct: 0,
@@ -133,12 +132,12 @@ export async function fetchSalesOrderHeader(
   return row ? lowerRecord(row) : {};
 }
 
-export async function fetchPurchaseOrderDetail(
+export async function fetchSalesOrderDetail(
   docNo: string,
-  config: PurchaseConfig,
+  config: SalesConfig,
   companyCode?: string,
   loginid?: string,
-): Promise<PurchaseOrderLineRow[]> {
+): Promise<SalesOrderLineRow[]> {
   const rows = await getDynamicLookup({
     parameter: config.detailParameter,
     code1: companyCode,
@@ -161,7 +160,6 @@ export async function fetchPurchaseOrderDetail(
       qty_luom: numberOrZero(row.qty_luom),
       unit_price: numberOrZero(row.unit_price),
       disc_hdr_percent: numberOrZero(row.disc_hdr_percent),
-      qty: numberOrZero(row.qty ?? row.quantity),
       disc_percent: numberOrZero(row.disc_percent),
        disc_price: numberOrZero(row.disc_price),
       tax_pct: numberOrZero(row.tax_pct ?? row.tax_percent),
@@ -176,7 +174,7 @@ export async function fetchPurchaseOrderDetail(
       uppp:numberOrZero(row.uppp),
       quantity:numberOrZero(row.quantity),
       ex_rate:numberOrZero(row.ex_rate),
-    } satisfies PurchaseOrderLineRow;
+    } satisfies SalesOrderLineRow;
   });
 }
 
@@ -231,11 +229,11 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
 
 // Purchaseorderutils.ts
 
-export function isSameUom(row: PurchaseOrderLineRow): boolean {
+export function isSameUom(row: SalesOrderLineRow): boolean {
   return !!row.p_uom && !!row.l_uom && row.p_uom === row.l_uom;
 }
 
-export function computeQuantity(row: PurchaseOrderLineRow): number {
+export function computeQuantity(row: SalesOrderLineRow): number {
   const qtyPuom = numberOrZero(row.qty_puom);
   const qtyLuom = numberOrZero(row.qty_luom);
   const uppp = numberOrZero(row.uppp);
@@ -247,38 +245,38 @@ export function computeQuantity(row: PurchaseOrderLineRow): number {
 
 
 // Total discount for the whole line (was missing * quantity before)
-export function lineDiscPrice(row: PurchaseOrderLineRow) {
+export function lineDiscPrice(row: SalesOrderLineRow) {
   return row.unit_price * (row.disc_percent / 100) ;
 }
-export function finalRate(row: PurchaseOrderLineRow) {
+export function finalRate(row: SalesOrderLineRow) {
   return Math.abs(lineDiscPrice(row) -row.unit_price) ;
 }
 
-export function lineAmount(row: PurchaseOrderLineRow) {
+export function lineAmount(row: SalesOrderLineRow) {
   return finalRate(row) * computeQuantity(row);
 }
 
 // Net = gross - discount (single subtraction, no double-counting)
-export function lineNetAmount(row: PurchaseOrderLineRow) {
+export function lineNetAmount(row: SalesOrderLineRow) {
   return lineAmount(row) - lineDiscPrice(row);
 }
 
-export function lineTaxAmount(row: PurchaseOrderLineRow) {
+export function lineTaxAmount(row: SalesOrderLineRow) {
   return lineNetAmount(row) * (row.tax_pct / 100);
 }
 
 // Lcurr = net amount converted at ex_rate (was net * finalRate * ex_rate — double rate applied)
-export function lineLcurrAmount(row: PurchaseOrderLineRow , ex_rate?:number) {
+export function lineLcurrAmount(row: SalesOrderLineRow , ex_rate?:number) {
   return lineAmount(row) *(ex_rate || 1);
 }
 
-export function taxLcurrAmount(row: PurchaseOrderLineRow,ex_rate?:number) {
+export function taxLcurrAmount(row: SalesOrderLineRow,ex_rate?:number) {
    return lineTaxAmount(row) *(ex_rate || 1);
 
 }
 
 // buildDetailsPayload — use computed values instead of stale row.qty / row.lcur_amount
-export function buildDetailsPayload(rows: PurchaseOrderLineRow[], ex_rate?: number) {
+export function buildDetailsPayload(rows: SalesOrderLineRow[], ex_rate?: number) {
   return rows.map((row) => ({
     div_code: row.div_code,
     zone_code: row.zone_code,
@@ -311,7 +309,7 @@ export async function runWorkflow(
   status: "SAVEASDRAFT" | "SUBMITTED" | "REJECTED" | "CLOSED" | "CANCELED" | "SENTBACK",
     docType: SODocType,
   form: PurchaseOrderForm,
-  rows: PurchaseOrderLineRow[],
+  rows: SalesOrderLineRow[],
   companyCode?: string,
   loginid?: string,
 ) {

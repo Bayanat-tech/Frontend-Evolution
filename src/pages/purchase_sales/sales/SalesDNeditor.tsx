@@ -19,10 +19,7 @@ import {
 import {
 
   formatAmount,
-  lineAmount,
-  lineDiscPrice,
-  lineNetAmount,
-  lineTaxAmount,
+ 
   lowerRecord,
   newId,
   numberOrZero,
@@ -32,8 +29,8 @@ import { PurchaseOrderHeaderForm } from "../../purchase_sales/purchase/Purchaseo
 import { PurchaseOrderLinesTable } from "../../purchase_sales/purchase/Purchaseorderlinestable";
 import { SendBackDialog } from "../../purchase_sales/purchase/Sendbackdialog";
 import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
-import { PROCESSSDN, PROCESSSO, SalesConfig, SO_DOC_TYPE } from "./SalesOrdertypes";
-import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, runWorkflow } from "./SalesOrderutils";
+import { PROCESSSDN, PROCESSSO, SalesConfig, SalesOrderLineRow, SO_DOC_TYPE } from "./SalesOrdertypes";
+import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, lineAmount, lineDiscPrice, lineTaxAmount, runWorkflow } from "./SalesOrderutils";
 
 
 export type { PurchaseOrderEditorState };
@@ -103,29 +100,29 @@ export function SalesDNEditor({
           ...current,
           doc_no: text(headerRaw.doc_no || docNo),
           doc_date: toDateInputValue(headerRaw.doc_date) || current.doc_date,
-          quotn_no: text(headerRaw.quotn_no || current.quotn_no),
-          quotn_date: toDateInputValue(headerRaw.quotn_date) || current.quotn_date,
+          ref_no: text(headerRaw.quotn_no || current.ref_no),
+          ref_date: toDateInputValue(headerRaw.quotn_date) || current.ref_date,
           div_code: text(headerRaw.div_code || current.div_code),
           div_name: text(headerRaw.div_name || current.div_name),
           ac_code: text(headerRaw.ac_code || current.ac_code),
           ac_name: text(headerRaw.ac_name || current.ac_name),
-          address: text(headerRaw.address || current.address),
+          party_address: text(headerRaw.address || current.party_address),
           credit_period: Number(headerRaw.credit_period || current.credit_period || 0),
           dept_code: text(headerRaw.dept_code || current.dept_code),
-          tel: text(headerRaw.tel || current.tel),
-          fax: text(headerRaw.fax || current.fax),
+          party_phone: text(headerRaw.tel || current.party_phone),
+          party_fax: text(headerRaw.fax || current.party_fax),
           buyer: text(headerRaw.buyer || current.buyer),
           wo_no: text(headerRaw.wo_no || current.wo_no),
           curr_code: text(headerRaw.curr_code || current.curr_code),
           curr_name: text(headerRaw.curr_name || current.curr_name),
           ex_rate: Number(headerRaw.ex_rate || current.ex_rate || 1),
-          pay_terms: text(headerRaw.pay_terms || current.pay_terms),
-          delivery_term: text(headerRaw.delivery_term || current.delivery_term),
-          delivery_contact: text(headerRaw.delivery_contact || current.delivery_contact),
-          delivery_tel: text(headerRaw.delivery_tel || current.delivery_tel),
-          delivery_email: text(headerRaw.delivery_email || current.delivery_email),
+          payment_terms: text(headerRaw.pay_terms || current.payment_terms),
+          dlvr_term: text(headerRaw.delivery_term || current.dlvr_term),
+          dlvr_contact: text(headerRaw.delivery_contact || current.dlvr_contact),
+          dlvr_mobile: text(headerRaw.delivery_tel || current.dlvr_mobile),
+          dlvr_email: text(headerRaw.delivery_email || current.dlvr_email),
           remarks: text(headerRaw.remarks || current.remarks),
-          disc_amt: Number(headerRaw.disc_amt || 0),
+          disc_price: Number(headerRaw.disc_price || 0),
           disc_pct: Number(headerRaw.disc_pct || 0),
           tax_category: text(headerRaw.tax_category || current.tax_category),
           tax_code: text(headerRaw.tax_code || current.tax_code),
@@ -137,6 +134,8 @@ export function SalesDNEditor({
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
         }));
+
+
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
         if (!mounted) return;
@@ -190,7 +189,7 @@ export function SalesDNEditor({
     setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const updateRow = (id: string, patch: Partial<PurchaseOrderLineRow>) => {
+  const updateRow = (id: string, patch: Partial<SalesOrderLineRow>) => {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
 
