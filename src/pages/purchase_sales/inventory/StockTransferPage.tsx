@@ -42,8 +42,8 @@ export interface InventoryOrderRow {
   delivery_tel?: string;
   delivery_email?: string;
   remarks?: string;
-  disc_amt?: number;
-  disc_pct?: number;
+  disc_price?: number;
+  disc_precent?: number;
   tax_category?: string;
   tax_code?: string;
   expense_ac_post?: string;
@@ -216,9 +216,11 @@ export function StocksTransferPage({ onClose }: { onClose?: () => void } = {}) {
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
-          <Button title="Add Sales Order" onClick={() => setDivisionPicker(true)}>
+            { tab === "PENDING" && (
+          <Button title="Add Purchase Order" onClick={() => setDivisionPicker(true)}>
             <Plus size={15} /> Add
           </Button>
+        )}
         </div>
       </div>
 

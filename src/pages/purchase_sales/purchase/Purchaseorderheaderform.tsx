@@ -195,6 +195,10 @@ export function PurchaseOrderHeaderForm({
         </CField>
         <CField label="Disc %">
           <Input  className="text-right" type="number" step="0.01" disabled={headerAndLineDisabled} value={form.disc_hdr_percent} onChange={(event) => updateField("disc_hdr_percent", Number(event.target.value || 0))} />
+          <Input disabled={headerAndLineDisabled} type="number" step="0.01" value={form.disc_price} onChange={(event) => updateField("disc_price", Number(event.target.value || 0))} />
+        </CField>
+        <CField label="Disc %">
+          <Input disabled={headerAndLineDisabled} type="number" step="0.01" value={form.disc_percent} onChange={(event) => updateField("disc_percent", Number(event.target.value || 0))} />
         </CField>
         <div>
   <label className="mb-1 block text-xs font-semibold text-primary-foreground/80">Tax Category</label>

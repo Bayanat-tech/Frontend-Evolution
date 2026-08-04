@@ -14,11 +14,11 @@ import {
   PROCESSJO,
   JobProductionConfig,
   PurchaseOrderEditorState,
-  PurchaseOrderForm,
-  PurchaseOrderLineRow,
   SendBackUserOption,
   TteJmiConsumType,
   ExpenseRow,
+  PurchaseOrderForm,
+  PurchaseOrderLineRow,
 } from "../../purchase_sales/purchase/Purchaseordertypes";
 import {
   emptyForm,
@@ -51,6 +51,7 @@ type LineTab = "lines" | "expenses";
 function emptyJobConsumRow(divCode?: string): TteJmiConsumType {
   return {
     id: newId(),
+    
     div_code: divCode || "",
     prod_code: "",
     prod_name: "",
@@ -65,7 +66,8 @@ function emptyJobConsumRow(divCode?: string): TteJmiConsumType {
     tax_cat: "",
     tax_lcurr_amount: 0,
     lcurr_amount_disc: 0,
-  } as TteJmiConsumType;
+
+  } as unknown as TteJmiConsumType;
 }
 
 function emptyExpenseRow(divCode?: string): ExpenseRow {
@@ -186,7 +188,7 @@ export function JobProductionOrderEditor({
 
         setForm((current) => ({
           ...current,
-          doc_no: text(headerRaw.doc_no || docNo),
+          doc_no: numberOrZero(headerRaw.doc_no || docNo),
           doc_date: toDateInputValue(headerRaw.doc_date) || current.doc_date,
           quotn_no: text(headerRaw.quotn_no || current.quotn_no),
           quotn_date: toDateInputValue(headerRaw.quotn_date) || current.quotn_date,
@@ -210,7 +212,7 @@ export function JobProductionOrderEditor({
           delivery_tel: text(headerRaw.delivery_tel || current.delivery_tel),
           delivery_email: text(headerRaw.delivery_email || current.delivery_email),
           remarks: text(headerRaw.remarks || current.remarks),
-          disc_amt: Number(headerRaw.disc_amt || 0),
+          disc_price: Number(headerRaw.disc_price || 0),
           disc_pct: Number(headerRaw.disc_pct || 0),
           tax_category: text(headerRaw.tax_category || current.tax_category),
           tax_code: text(headerRaw.tax_code || current.tax_code),
@@ -270,7 +272,7 @@ export function JobProductionOrderEditor({
     const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
     const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-    return totalAmount - totalDiscPrice - form.disc_amt + totalTaxAmount;
+    return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
   })();
 
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
@@ -516,11 +518,12 @@ export function JobProductionOrderEditor({
 
             <PurchaseOrderLinesTable
               rows={rows}
+              ex_rate={form.ex_rate}
               updateRow={updateRow}
               addRow={addRow}
               removeRow={removeRow}
               headerAndLineDisabled={headerAndLineDisabled}
-              discAmt={form.disc_amt}
+              discAmt={form.disc_price}
               companyCode={user?.company_code}
               loginid={user?.loginid || user?.username}
             />
@@ -531,7 +534,7 @@ export function JobProductionOrderEditor({
               addRow={addJobConsumRow}
               removeRow={removeJobConsumRow}
               headerAndLineDisabled={headerAndLineDisabled}
-              discAmt={form.disc_amt}
+              discAmt={form.disc_price}
               companyCode={user?.company_code}
               loginid={user?.loginid || user?.username}
             />
@@ -556,33 +559,35 @@ export function JobProductionOrderEditor({
   )}
 </CardContent>
 
+      
         <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
           <div className="flex flex-wrap gap-3 rounded-2xl bg-gray-50 p-5 shadow-inner">
-            <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
-              {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              {actionLoading === "draft" ? "Saving..." : "Save Draft"}
-            </Button>
-
-            <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
+           { isPendingTab && (
+             <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
+                {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                {actionLoading === "draft" ? "Saving..." : "Save Draft"}
+              </Button>
+            )}
+          { isPendingTab && <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
               {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
               {actionLoading === "submit" ? "Submitting..." : "Submit"}
-            </Button>
+            </Button>}
 
-            {canSendBackOrReject && (
+            {isPendingTab && canSendBackOrReject && (
               <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
                 {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
               </Button>
             )}
 
-            {canSendBackOrReject && (
+            {isPendingTab && canSendBackOrReject && (
               <Button type="button" onClick={openRejectDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60">
                 {actionLoading === "reject" ? "Rejecting..." : "Reject"}
               </Button>
             )}
-
+{isPendingTab &&
             <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
               {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
-            </Button>
+            </Button>}
           </div>
           <div className="flex items-center gap-2">
             <Button aria-label="Print" type="button" variant="outline" size="icon" disabled={actionDisabled}><Printer size={15} /></Button>

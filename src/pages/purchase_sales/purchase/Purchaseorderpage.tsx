@@ -24,6 +24,7 @@ export interface PurchaseOrderRow {
    ref_no?: string;
   ref_date?: string;
   dept_name?: string;
+  uppp?: number;
   div_code: string;
   div_name?: string;
   ac_code: string;
@@ -48,6 +49,9 @@ export interface PurchaseOrderRow {
   disc_hdr_percent?: number;
   tx_cat_code?: string;
   tx_cat_name?: string;
+  disc_price?: number;
+  disc_pct?: number;
+  tax_category?: string;
   tax_code?: string;
   tx_compntcat_code_1?: string;
   tax_code_name?: string;
@@ -56,6 +60,7 @@ export interface PurchaseOrderRow {
   project_name?: string;
   pr_no?: string;
   scope_of_work?: string;
+  disc_percent?: number;
   status?: string;
   canceled?: string;
   flow_level_running?: number;
@@ -172,7 +177,6 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
     { accessorKey: "ac_code", header: "A/c Code" },
     { accessorKey: "ac_name", header: "A/c Name" },
     { accessorKey: "curr_code", header: "Currency" },
-    { accessorKey: "buyer", header: "Buyer" },
     {
       accessorKey: "canceled",
       header: "Status",
@@ -221,9 +225,11 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
+        { tab === "PENDING" && (
           <Button title="Add Purchase Order" onClick={() => setDivisionPicker(true)}>
             <Plus size={15} /> Add
           </Button>
+        )}
         </div>
       </div>
 

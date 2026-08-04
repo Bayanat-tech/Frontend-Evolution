@@ -10,7 +10,6 @@ export type ActionKey = "draft" | "submit" | "sendBack" | "reject" | "cancel" | 
 export interface PurchaseOrderLineRow {
   id: string;
   div_code: string;
-  zone: string;
   prod_code: string;
   prod_name: string;
   p_uom: string;
@@ -20,15 +19,17 @@ export interface PurchaseOrderLineRow {
   unit_price: number;
   disc_hdr_percent: number;
   qty: number;
+  disc_percent: number;
+  disc_price: number;
   tax_pct: number;
   tax_amount: number;
-  lcurr_amount: number;
-  req_date: string;
+  lcur_amount: number;
+  required_dt: string;
   line_remarks: string;
   tax_cat: string;
   tax_code: string;
-  tax_lcurr_amount: number;
-  lcurr_amount_disc: number;
+  tax_lcur_amount: number;
+  lcur_amount_disc: number;
   zone_code?: string;
   zone_name?: string;
   uom_name?: string;
@@ -44,7 +45,7 @@ export interface PurchaseOrderLineRow {
 }
 
 export interface PurchaseOrderForm {
-  doc_no: string;
+  doc_no: number | string;
   doc_date: string;
   //quotn_no: string;
   //quotn_date: string;
@@ -80,6 +81,10 @@ tx_cat_code: string;
   disc_hdr_percent: number;
   
  
+  disc_price: number;
+  disc_percent: number;
+  tax_category: string;
+ 
   expense_ac_post: string;
   print_on_letterhead: string;
   project_name: string;
@@ -99,7 +104,7 @@ export interface TteJmiConsumType {
   company_code: string;
   doc_type: string;
   doc_no: number;
-
+  uppp:number;
   mi_doc_no: number;
 
   prod_code: string;
@@ -107,9 +112,12 @@ export interface TteJmiConsumType {
 
   quantity: number;
   qty: number;
-
+  disc_percent: number;
+  disc_price: number;
   p_uom: string;
   l_uom: string;
+  tax_code: string;
+  ex_rate: number;
 
   qty_puom: number;
   qty_luom: number;
@@ -129,12 +137,12 @@ export interface TteJmiConsumType {
   unit_price: number;
   tax_pct: number;
   tax_amount: number;
-  lcurr_amount: number;
-  req_date: string;
+  lcur_amount: number;
+  required_dt: string;
   line_remarks: string;
   tax_cat: string;
-  tax_lcurr_amount: number;
-  lcurr_amount_disc: number;
+  tax_lcur_amount: number;
+  lcur_amount_disc: number;
 
   zone_code?: string;
   zone_name?: string;

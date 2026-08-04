@@ -35,7 +35,7 @@ export function formatAmount(value: number) {
 export const emptyLineRow = (divCode: string): PurchaseOrderLineRow => ({
   id: newId(),
   div_code: divCode,
-  zone: "",
+  zone_code: "",
   prod_code: "",
   prod_name: "",
   p_uom: "",
@@ -45,15 +45,17 @@ export const emptyLineRow = (divCode: string): PurchaseOrderLineRow => ({
   unit_price: 0,
   disc_hdr_percent: 0,
   qty: 0,
+  disc_percent: 0,
+  disc_price: 0,
   tax_pct: 0,
   tax_amount: 0,
-  lcurr_amount: 0,
-  req_date: "",
+  lcur_amount: 0,
+  required_dt: "",
   line_remarks: "",
   tax_cat: "",
   tax_code: "",
-  tax_lcurr_amount: 0,
-  lcurr_amount_disc: 0,
+  tax_lcur_amount: 0,
+  lcur_amount_disc: 0,
   uppp:0,
   quantity:0,
   ex_rate:1
@@ -91,6 +93,9 @@ export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
     disc_hdr_price: editor?.mode === "edit" ? Number(editor.row.disc_hdr_price || 0) : 0,
     disc_hdr_percent: editor?.mode === "edit" ? Number(editor.row.disc_hdr_percent || 0) : 0,
     tx_cat_code: editor?.mode === "edit" ? editor.row.tx_cat_code || "" : "",
+    disc_price: editor?.mode === "edit" ? Number(editor.row.disc_price || 0) : 0,
+    disc_percent: editor?.mode === "edit" ? Number(editor.row.disc_percent || 0) : 0,
+    tax_category: editor?.mode === "edit" ? editor.row.tax_category || "" : "",
     tax_code: editor?.mode === "edit" ? editor.row.tax_code || "" : "",
 tx_compntcat_code_1: editor?.mode === "edit" ? editor.row.tx_compntcat_code_1 || "" : "",
     tax_code_name: editor?.mode === "edit" ? editor.row.tax_code_name || "" : "",
@@ -148,7 +153,7 @@ export async function fetchPurchaseOrderDetail(
     return {
       id: newId(),
       div_code: text(row.div_code),
-      zone: text(row.zone),
+      zone_code: text(row.zone_code),
       prod_code: text(row.prod_code),
       prod_name: text(row.prod_name),
       p_uom: text(row.p_uom),
@@ -158,15 +163,17 @@ export async function fetchPurchaseOrderDetail(
       unit_price: numberOrZero(row.unit_price),
       disc_hdr_percent: numberOrZero(row.disc_hdr_percent),
       qty: numberOrZero(row.qty ?? row.quantity),
+      disc_percent: numberOrZero(row.disc_percent),
+       disc_price: numberOrZero(row.disc_price),
       tax_pct: numberOrZero(row.tax_pct ?? row.tax_percent),
       tax_amount: numberOrZero(row.tax_amount),
-      lcurr_amount: numberOrZero(row.lcurr_amount),
-      req_date: text(row.req_date),
+      lcur_amount: numberOrZero(row.lcur_amount),
+      required_dt: text(row.required_dt),
       line_remarks: text(row.remarks ?? row.line_remarks),
       tax_cat: text(row.tax_cat ?? row.tax_category),
       tax_code: text(row.tax_code),
-      tax_lcurr_amount: numberOrZero(row.tax_lcurr_amount),
-      lcurr_amount_disc: numberOrZero(row.lcurr_amount_disc ?? row.lcurr_amount_discount),
+      tax_lcur_amount: numberOrZero(row.tax_lcur_amount),
+      lcur_amount_disc: numberOrZero(row.lcur_amount_disc ?? row.lcur_amount_discount),
       uppp:numberOrZero(row.uppp),
       quantity:numberOrZero(row.quantity),
       ex_rate:numberOrZero(row.ex_rate),
@@ -205,6 +212,8 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     disc_hdr_price: form.disc_hdr_price,
     disc_hdr_percent: form.disc_hdr_percent,
     tx_cat_code: form.tx_cat_code,
+    
+  
     tx_compntcat_code_1: form.tax_code,
     purchase_actype: form.expense_ac_post,
     project_name: form.project_name,
@@ -241,6 +250,7 @@ export function computeQuantity(row: PurchaseOrderLineRow): number {
 // Total discount for the whole line (was missing * quantity before)
 export function lineDiscPrice(row: PurchaseOrderLineRow) {
   return row.unit_price * (row.disc_hdr_percent / 100) ;
+  return row.unit_price * (row.disc_percent / 100) ;
 }
 export function finalRate(row: PurchaseOrderLineRow) {
   return Math.abs(lineDiscPrice(row) -row.unit_price) ;
@@ -261,35 +271,44 @@ export function lineTaxAmount(row: PurchaseOrderLineRow) {
 
 // Lcurr = net amount converted at ex_rate (was net * finalRate * ex_rate — double rate applied)
 export function lineLcurrAmount(row: PurchaseOrderLineRow , ex_rate?:number) {
-  return lineAmount(row) *  finalRate(row) *(ex_rate || 1);
+  return lineAmount(row) *(ex_rate || 1);
 }
 
-// buildDetailsPayload — use computed values instead of stale row.qty / row.lcurr_amount
+export function taxLcurrAmount(row: PurchaseOrderLineRow,ex_rate?:number) {
+   return lineTaxAmount(row) *(ex_rate || 1);
+
+}
+
+// buildDetailsPayload — use computed values instead of stale row.qty / row.lcur_amount
 export function buildDetailsPayload(rows: PurchaseOrderLineRow[], ex_rate?: number) {
   return rows.map((row) => ({
     div_code: row.div_code,
-    zone: row.zone,
+    zone_code: row.zone_code,
     prod_code: row.prod_code,
     prod_name: row.prod_name,
     p_uom: row.p_uom,
+    uppp : row.uppp,
     qty_puom: row.qty_puom,
     l_uom: row.l_uom,
     qty_luom: row.qty_luom,
     unit_price: row.unit_price,
+    unit_price_net: finalRate(row),
     amount: lineAmount(row),
     disc_hdr_percent: row.disc_hdr_percent,
     disc_hdr_price: lineDiscPrice(row),
+    disc_percent: row.disc_percent,
+    disc_price: lineDiscPrice(row),
     net_amount: lineNetAmount(row),
     quantity: computeQuantity(row),          // <-- fixed, was row.qty (always 0)
     tax_pct: row.tax_pct,
     tax_amount: lineTaxAmount(row),
-    lcurr_amount: lineLcurrAmount(row,ex_rate), // <-- fixed, was row.lcurr_amount (always 0)
-    req_date: row.req_date,
+    lcur_amount: lineLcurrAmount(row,ex_rate), // <-- fixed, was row.lcur_amount (always 0)
+    required_dt: row.required_dt,
     remarks: row.line_remarks,
     tax_cat: row.tax_cat,
     tax_code: row.tax_code,
-    tax_lcurr_amount: row.tax_lcurr_amount,
-    lcurr_amount_disc: row.lcurr_amount_disc,
+    tax_lcur_amount: taxLcurrAmount(row,ex_rate),
+    lcur_amount_disc: row.lcur_amount_disc,
   }));
 }
 

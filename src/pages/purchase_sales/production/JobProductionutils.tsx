@@ -37,7 +37,7 @@ export function formatAmount(value: number) {
 export const emptyLineRow = (divCode: string): PurchaseOrderLineRow => ({
     id: newId(),
     div_code: divCode,
-    zone: "",
+    zone_code: "",
     prod_code: "",
     prod_name: "",
     p_uom: "",
@@ -45,27 +45,29 @@ export const emptyLineRow = (divCode: string): PurchaseOrderLineRow => ({
     l_uom: "",
     qty_luom: 0,
     unit_price: 0,
-    disc_pct: 0,
-    qty: 0,
+    disc_percent: 0,
+    quantity: 0,
     tax_pct: 0,
     tax_amount: 0,
-    lcurr_amount: 0,
-    req_date: "",
+    lcur_amount: 0,
+    required_dt: "",
     line_remarks: "",
     tax_cat: "",
     tax_code: "",
-    tax_lcurr_amount: 0,
-    lcurr_amount_disc: 0,
+    tax_lcur_amount: 0,
+    lcur_amount_disc: 0,
+    disc_price: 0,
+    ex_rate: 1
 });
 
 export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
     return {
-        doc_no: editor?.mode === "edit" ? editor.row.doc_no : "",
+        doc_no: editor?.mode === "edit" ? editor.row.doc_no : 0,
         doc_date: editor?.mode === "edit" ? editor.row.doc_date || "" : new Date().toISOString().slice(0, 10),
         quotn_no: editor?.mode === "edit" ? editor.row.quotn_no || "" : "",
         quotn_date: editor?.mode === "edit" ? editor.row.quotn_date || "" : "",
         ref_no: editor?.mode === "edit" ? editor.row.ref_no || "" : "",
-    ref_date: editor?.mode === "edit" ? editor.row.ref_date || "" : "",
+        ref_date: editor?.mode === "edit" ? editor.row.ref_date || "" : "",
         div_code: editor?.mode === "create" ? editor.divCode || "" : editor?.mode === "edit" ? editor.row.div_code : "",
         div_name: editor?.mode === "create" ? editor.divName || "" : editor?.mode === "edit" ? editor.row.div_name || "" : "",
         ac_code: editor?.mode === "edit" ? editor.row.ac_code || "" : "",
@@ -87,11 +89,15 @@ export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
         delivery_tel: editor?.mode === "edit" ? editor.row.delivery_tel || "" : "",
         delivery_email: editor?.mode === "edit" ? editor.row.delivery_email || "" : "",
         remarks: editor?.mode === "edit" ? editor.row.remarks || "" : "",
-        disc_amt: editor?.mode === "edit" ? Number(editor.row.disc_amt || 0) : 0,
-        disc_pct: editor?.mode === "edit" ? Number(editor.row.disc_pct || 0) : 0,
+        disc_price: editor?.mode === "edit" ? Number(editor.row.disc_price || 0) : 0,
+        disc_percent: editor?.mode === "edit" ? Number(editor.row.disc_percent || 0) : 0,
         tax_category: editor?.mode === "edit" ? editor.row.tax_category || "" : "",
         tax_code: editor?.mode === "edit" ? editor.row.tax_code || "" : "",
-        expense_ac_post: editor?.mode === "edit" ? editor.row.expense_ac_post || EXPENSE_AC_OPTIONS[0] : EXPENSE_AC_OPTIONS[0],
+        expense_ac_post: editor?.mode === "edit"
+            ? typeof editor.row.expense_ac_post === "string"
+                ? editor.row.expense_ac_post
+                : (editor.row.expense_ac_post as unknown as { value?: string })?.value || EXPENSE_AC_OPTIONS[0].value
+            : EXPENSE_AC_OPTIONS[0].value,
         print_on_letterhead: editor?.mode === "edit" ? editor.row.print_on_letterhead || "N" : "N",
         project_name: editor?.mode === "edit" ? editor.row.project_name || "" : "",
         pr_no: editor?.mode === "edit" ? editor.row.pr_no || "" : "",
@@ -143,7 +149,7 @@ export async function fetchPurchaseOrderDetail(
         return {
             id: newId(),
             div_code: text(row.div_code),
-            zone: text(row.zone),
+            zone_code: text(row.zone),
             prod_code: text(row.prod_code),
             prod_name: text(row.prod_name),
             p_uom: text(row.p_uom),
@@ -151,17 +157,19 @@ export async function fetchPurchaseOrderDetail(
             l_uom: text(row.l_uom),
             qty_luom: numberOrZero(row.qty_luom),
             unit_price: numberOrZero(row.unit_price),
-            disc_pct: numberOrZero(row.disc_pct),
-            qty: numberOrZero(row.qty ?? row.quantity),
+            disc_price: numberOrZero(row.disc_price),
+            quantity: numberOrZero(row.qty ?? row.quantity),
             tax_pct: numberOrZero(row.tax_pct ?? row.tax_percent),
             tax_amount: numberOrZero(row.tax_amount),
-            lcurr_amount: numberOrZero(row.lcurr_amount),
-            req_date: text(row.req_date),
+            lcur_amount: numberOrZero(row.lcurr_amount),
+            required_dt: text(row.req_date),
             line_remarks: text(row.remarks ?? row.line_remarks),
             tax_cat: text(row.tax_cat ?? row.tax_category),
             tax_code: text(row.tax_code),
-            tax_lcurr_amount: numberOrZero(row.tax_lcurr_amount),
-            lcurr_amount_disc: numberOrZero(row.lcurr_amount_disc ?? row.lcurr_amount_discount),
+            tax_lcur_amount: numberOrZero(row.tax_lcurr_amount),
+            lcur_amount_disc: numberOrZero(row.lcurr_amount_disc ?? row.lcurr_amount_discount),
+            ex_rate: numberOrZero(row.ex_rate ?? 1),
+            disc_percent: numberOrZero(row.disc_pct ?? row.disc_percent),
         } satisfies PurchaseOrderLineRow;
     });
 }
@@ -180,68 +188,73 @@ export async function fetchjmiConsumDetailsDetail(
         loginid: loginid || "ADMIN",
     });
 
-   return (rows || []).map((raw) => {
-    const row = lowerRecord(raw as Record<string, unknown>);
+    return (rows || []).map((raw) => {
+        const row = lowerRecord(raw as Record<string, unknown>);
 
-    return {
-        id: newId(),
+        return {
+            id: newId(),
 
-        company_code: text(row.company_code),
-        doc_type: text(row.doc_type),
-        doc_no: numberOrZero(row.doc_no),
+            company_code: text(row.company_code),
+            doc_type: text(row.doc_type),
+            doc_no: numberOrZero(row.doc_no),
 
-        mi_doc_no: numberOrZero(row.mi_doc_no),
+            mi_doc_no: numberOrZero(row.mi_doc_no),
 
-        prod_code: text(row.prod_code),
-        prod_name: text(row.prod_name),
+            prod_code: text(row.prod_code),
+            prod_name: text(row.prod_name),
 
-        quantity: numberOrZero(row.quantity),
-        qty: numberOrZero(row.qty ?? row.quantity),
+            quantity: numberOrZero(row.quantity),
+            qty: numberOrZero(row.qty ?? row.quantity),
 
-        p_uom: text(row.p_uom),
-        l_uom: text(row.l_uom),
+            p_uom: text(row.p_uom),
+            l_uom: text(row.l_uom),
 
-        qty_puom: numberOrZero(row.qty_puom),
-        qty_luom: numberOrZero(row.qty_luom),
+            qty_puom: numberOrZero(row.qty_puom),
+            qty_luom: numberOrZero(row.qty_luom),
 
-        serial_no: numberOrZero(row.serial_no),
+            serial_no: numberOrZero(row.serial_no),
 
-        qty_consumd: numberOrZero(row.qty_consumd),
-        qty_scrapped: numberOrZero(row.qty_scrapped),
+            qty_consumd: numberOrZero(row.qty_consumd),
+            qty_scrapped: numberOrZero(row.qty_scrapped),
 
-        cost_rate: numberOrZero(row.cost_rate),
-        cost_amount: numberOrZero(row.cost_amount),
+            cost_rate: numberOrZero(row.cost_rate),
+            cost_amount: numberOrZero(row.cost_amount),
 
-        scrap_amount: numberOrZero(row.scrap_amount),
+            scrap_amount: numberOrZero(row.scrap_amount),
 
-        div_code: text(row.div_code),
+            div_code: text(row.div_code),
 
-        unit_price: numberOrZero(row.unit_price),
+            unit_price: numberOrZero(row.unit_price),
 
-        tax_pct: numberOrZero(row.tax_pct ?? row.tax_percent),
-        tax_amount: numberOrZero(row.tax_amount),
+            tax_pct: numberOrZero(row.tax_pct ?? row.tax_percent),
+            tax_amount: numberOrZero(row.tax_amount),
 
-        lcurr_amount: numberOrZero(row.lcurr_amount),
+            lcur_amount: numberOrZero(row.lcur_amount),
 
-        req_date: text(row.req_date),
+            required_dt: text(row.required_dt),
 
-        line_remarks: text(row.remarks ?? row.line_remarks),
+            line_remarks: text(row.remarks ?? row.line_remarks),
 
-        tax_cat: text(row.tax_cat ?? row.tax_category),
+            tax_cat: text(row.tax_cat ?? row.tax_category),
 
-        tax_lcurr_amount: numberOrZero(row.tax_lcurr_amount),
+            tax_lcur_amount: numberOrZero(row.tax_lcur_amount),
 
-        lcurr_amount_disc: numberOrZero(
-            row.lcurr_amount_disc ?? row.lcurr_amount_discount
-        ),
+            lcur_amount_disc: numberOrZero(
+                row.lcur_amount_disc ?? row.lcur_amount_discount
+            ),
+            uppp: numberOrZero(row.uppp),
+            ex_rate: numberOrZero(row.ex_rate ?? 1),
+            disc_percent: numberOrZero(row.disc_pct ?? row.disc_percent),
+            disc_price: numberOrZero(row.disc_price),
+            tax_code: text(row.tax_code),
 
-        zone_code: text(row.zone_code),
-        zone_name: text(row.zone_name),
+            zone_code: text(row.zone_code),
+            zone_name: text(row.zone_name),
 
-        uom_name: text(row.uom_name),
-        uom_code: text(row.uom_code),
-    } satisfies TteJmiConsumType;
-});
+            uom_name: text(row.uom_name),
+            uom_code: text(row.uom_code),
+        } satisfies TteJmiConsumType;
+    });
 }
 
 export async function fetchexpenseDetailsDetail(
@@ -258,70 +271,70 @@ export async function fetchexpenseDetailsDetail(
         loginid: loginid || "ADMIN",
     });
 
-  return (rows || []).map((raw) => {
-    const row = lowerRecord(raw as Record<string, unknown>);
+    return (rows || []).map((raw) => {
+        const row = lowerRecord(raw as Record<string, unknown>);
 
-    return {
-         id: newId(),
-        company_code: text(row.company_code),
-        doc_type: text(row.doc_type),
-        doc_no: text(row.doc_no),
+        return {
+            id: newId(),
+            company_code: text(row.company_code),
+            doc_type: text(row.doc_type),
+            doc_no: text(row.doc_no),
 
-        doc_date: row.doc_date ? new Date(String(row.doc_date)) : null,
+            doc_date: row.doc_date ? new Date(String(row.doc_date)) : null,
 
-        div_code: text(row.div_code),
-        dept_code: text(row.dept_code),
+            div_code: text(row.div_code),
+            dept_code: text(row.dept_code),
 
-        serial_no: numberOrZero(row.serial_no),
+            serial_no: numberOrZero(row.serial_no),
 
-        exp_code: text(row.exp_code),
+            exp_code: text(row.exp_code),
 
-        remarks: text(row.remarks),
+            remarks: text(row.remarks),
 
-        amount: numberOrZero(row.amount),
+            amount: numberOrZero(row.amount),
 
-        curr_code: text(row.curr_code),
+            curr_code: text(row.curr_code),
 
-        ex_rate: numberOrZero(row.ex_rate),
+            ex_rate: numberOrZero(row.ex_rate),
 
-        lcur_amount: numberOrZero(row.lcur_amount),
+            lcur_amount: numberOrZero(row.lcur_amount),
 
-        ref_doc_type: text(row.ref_doc_type),
+            ref_doc_type: text(row.ref_doc_type),
 
-        ref_doc_no: numberOrZero(row.ref_doc_no),
+            ref_doc_no: numberOrZero(row.ref_doc_no),
 
-        ref_doc_serial: numberOrZero(row.ref_doc_serial),
+            ref_doc_serial: numberOrZero(row.ref_doc_serial),
 
-        edit_user: text(row.edit_user),
+            edit_user: text(row.edit_user),
 
-        edit_date: row.edit_date
-            ? new Date(String(row.edit_date))
-            : null,
+            edit_date: row.edit_date
+                ? new Date(String(row.edit_date))
+                : null,
 
-        user_id: text(row.user_id),
+            user_id: text(row.user_id),
 
-        user_dt: row.user_dt
-            ? new Date(String(row.user_dt))
-            : null,
+            user_dt: row.user_dt
+                ? new Date(String(row.user_dt))
+                : null,
 
-        zone_code: text(row.zone_code),
+            zone_code: text(row.zone_code),
 
-        ac_code: text(row.ac_code),
+            ac_code: text(row.ac_code),
 
-        wrk_type: text(row.wrk_type),
+            wrk_type: text(row.wrk_type),
 
-        employee_id: text(row.employee_id),
+            employee_id: text(row.employee_id),
 
-        hourly_rate: numberOrZero(row.hourly_rate),
+            hourly_rate: numberOrZero(row.hourly_rate),
 
-    } satisfies ExpenseRow;
-});
+        } satisfies ExpenseRow;
+    });
 }
 
 
 export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: PODocType) {
     return {
-        doc_no: form.doc_no || undefined,
+        doc_no: numberOrZero(form.doc_no),
         doc_type: docType,
         doc_date: form.doc_date,
         quotn_no: form.quotn_no,
@@ -346,8 +359,8 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
         delivery_tel: form.delivery_tel,
         delivery_email: form.delivery_email,
         remarks: form.remarks,
-        disc_amt: form.disc_amt,
-        disc_pct: form.disc_pct,
+        disc_price: form.disc_price,
+        disc_percent: form.disc_percent,
         tax_category: form.tax_category,
         tax_code: form.tax_code,
         expense_ac_post: form.expense_ac_post,
@@ -369,7 +382,7 @@ export function lineAmount(row: PurchaseOrderLineRow) {
     return row.qty_puom * row.unit_price;
 }
 export function lineDiscPrice(row: PurchaseOrderLineRow) {
-    return lineAmount(row) * (row.disc_pct / 100);
+    return lineAmount(row) * (row.disc_percent / 100);
 }
 export function lineNetAmount(row: PurchaseOrderLineRow) {
     return lineAmount(row) - lineDiscPrice(row);
@@ -381,7 +394,7 @@ export function lineTaxAmount(row: PurchaseOrderLineRow) {
 export function buildDetailsPayload(rows: PurchaseOrderLineRow[]) {
     return rows.map((row) => ({
         div_code: row.div_code,
-        zone: row.zone,
+        zone_code: row.zone_code,
         prod_code: row.prod_code,
         prod_name: row.prod_name,
         p_uom: row.p_uom,
@@ -390,19 +403,19 @@ export function buildDetailsPayload(rows: PurchaseOrderLineRow[]) {
         qty_luom: row.qty_luom,
         unit_price: row.unit_price,
         amount: lineAmount(row),
-        disc_pct: row.disc_pct,
+        disc_percent: row.disc_percent,
         disc_price: lineDiscPrice(row),
         net_amount: lineNetAmount(row),
-        qty: row.qty,
+        quantity: row.quantity,
         tax_pct: row.tax_pct,
         tax_amount: lineTaxAmount(row),
-        lcurr_amount: row.lcurr_amount,
-        req_date: row.req_date,
+        lcur_amount: row.lcur_amount,
+        required_dt: row.required_dt,
         remarks: row.line_remarks,
         tax_cat: row.tax_cat,
         tax_code: row.tax_code,
-        tax_lcurr_amount: row.tax_lcurr_amount,
-        lcurr_amount_disc: row.lcurr_amount_disc,
+        tax_lcur_amount: row.tax_lcur_amount,
+        lcur_amount_disc: row.lcur_amount_disc,
     }));
 }
 
@@ -442,12 +455,12 @@ export function buildTteJmiConsumPayload(rows: TteJmiConsumType[]) {
         unit_price: row.unit_price,
         tax_pct: row.tax_pct,
         tax_amount: row.tax_amount,
-        lcurr_amount: row.lcurr_amount,
-        req_date: row.req_date,
+        lcur_amount: row.lcur_amount,
+        required_dt: row.required_dt,
         line_remarks: row.line_remarks,
         tax_cat: row.tax_cat,
-        tax_lcurr_amount: row.tax_lcurr_amount,
-        lcurr_amount_disc: row.lcurr_amount_disc,
+        tax_lcur_amount: row.tax_lcur_amount,
+        lcur_amount_disc: row.lcur_amount_disc,
 
         zone_code: row.zone_code,
         zone_name: row.zone_name,
@@ -462,7 +475,7 @@ export function buildExpensePayload(rows: ExpenseRow[]) {
 
         company_code: row.company_code,
         doc_type: row.doc_type,
-        doc_no: row.doc_no,
+        doc_no: numberOrZero(row.doc_no),
         doc_date: row.doc_date,
 
         div_code: row.div_code,
@@ -517,7 +530,7 @@ export async function runWorkflow(
             header: buildHeaderPayload(form, companyCode, loginid, docType),
             details: buildDetailsPayload(rows),
             jmiConsumDetails: buildTteJmiConsumPayload(subrow),
-            expenseDetails:buildExpensePayload(expenserow),
+            expenseDetails: buildExpensePayload(expenserow),
             company_code: companyCode || "",
             loginid: loginid || "ADMIN",
         },
