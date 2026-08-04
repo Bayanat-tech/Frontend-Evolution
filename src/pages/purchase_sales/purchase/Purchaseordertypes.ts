@@ -17,7 +17,7 @@ export interface PurchaseOrderLineRow {
   l_uom: string;
   qty_luom: number;
   unit_price: number;
-  disc_hdr_percent: number;
+  disc_hdr_percent?: number;
   qty: number;
   disc_percent: number;
   disc_price: number;
@@ -77,8 +77,8 @@ tx_cat_code: string;
   dlvr_mobile: string;
   dlvr_email: string;
   remarks: string;
-  disc_hdr_price: number;
-  disc_hdr_percent: number;
+  disc_hdr_price?: number;
+  disc_hdr_percent?: number;
   
  
   disc_price: number;

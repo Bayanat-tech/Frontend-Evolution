@@ -247,7 +247,7 @@ export function computeQuantity(row: PurchaseOrderLineRow): number {
 
 // Total discount for the whole line (was missing * quantity before)
 export function lineDiscPrice(row: PurchaseOrderLineRow) {
-  return row.unit_price * (row.disc_hdr_percent / 100) ;
+  // return row.unit_price * (row.disc_hdr_percent / 100) ;
   return row.unit_price * (row.disc_percent / 100) ;
 }
 export function finalRate(row: PurchaseOrderLineRow) {
