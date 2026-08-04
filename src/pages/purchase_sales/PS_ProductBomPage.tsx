@@ -28,7 +28,15 @@ import { useAuth } from "../../state/AuthContext";
 // wire it through if the co-pack view is actually needed.
 //
 // BOM_TYPE: no lookup source given yet — plain text input, TODO confirm if
-// this should be a dropdown and where its values come from. ─────────────
+// BOM_TYPE: no UI input for this — line.bom_type stays "" and is still sent
+// in the Save payload (val1s7) to keep the backend contract unchanged.
+//
+// Child/Parent Product Code selection: LookupField's onChange is assumed
+// to pass the selected row as an optional second argument (value, row).
+// If your LookupField implementation only passes value, add a row
+// parameter to its onChange signature so the Name field (and
+// principal/parent product names) can auto-fill from the selected
+// row — see onChange handlers below. ─────────────────────────────────────
 
 const COPACK_VIEW_FLAG = "N"; // TODO: no UI control for legacy cbx_1 yet.
 
@@ -99,6 +107,7 @@ const CHILD_PRODUCT_LOOKUP_COLUMNS: { field: string; header: string }[] = [
   { field: "prod_code", header: "Product Code" },
   { field: "prod_name", header: "Product Name" },
 ];
+const CHILD_PRODUCT_DISPLAY_FIELDS = ["prod_code", "prod_name"]; // renders as "CODE - NAME", same as Principal/Parent Product
 
 const UOM_LOOKUP_PARAMETER = "PURCHASE_SALE_MF_BOM_UOM";
 const UOM_LOOKUP_COLUMNS: { field: string; header: string }[] = [
@@ -106,8 +115,7 @@ const UOM_LOOKUP_COLUMNS: { field: string; header: string }[] = [
   { field: "uom_name", header: "UoM Name" },
 ];
 
-// TODO: MF_BOM retrieve proc doesn't exist yet — replace once built.
-const RETRIEVE_PARAMETER = "TODO_PS_PRODUCT_BOM_RETRIEVE";
+const RETRIEVE_PARAMETER = "PURCHASE_SALE_MF_BOM_RETRIEVE";
 
 // Save — wired to PURCHASE_SALE_MF_BOM_SAVE in
 // PROC_BUILD_DYNAMIC_INS_UPD_PURCHASE_SALE via executeDynamicMutation.
@@ -197,9 +205,6 @@ export function PS_ProductBomPage() {
   );
 
   // ── Retrieve — load existing MF_BOM lines for Principal + Parent Product.
-  // TODO: confirm the actual P_CODEn mapping once the retrieve proc exists
-  // — code2/code3 below are placeholder guesses matching the dropdown slot
-  // conventions above.
   const handleRetrieve = useCallback(async () => {
     if (!companyCode) return;
     if (!header.principal_code) {
@@ -364,10 +369,12 @@ export function PS_ProductBomPage() {
                 valueField="prin_code"
                 displayFields={["prin_code", "prin_name"]}
                 loadOptions={() => loadLookupRows(PRINCIPAL_LOOKUP_PARAMETER)}
-                onChange={(value) => {
+                onChange={(value: string, row: LookupRow | null) => {
                   setHeaderField("principal_code", value);
+                  setHeaderField("principal_name", row?.prin_name ? String(row.prin_name) : "");
                   // Principal changed — Parent Product no longer valid for it.
                   setHeaderField("parent_product_code", "");
+                  setHeaderField("parent_product_name", "");
                 }}
                 placeholder="Code or name"
               />
@@ -375,7 +382,7 @@ export function PS_ProductBomPage() {
           </div>
 
           <div className="flex items-center gap-1.5 min-w-0" key="parent_product">
-            <span className="w-24 shrink-0 text-sm text-primary font-medium">Parent Product:</span>
+            <span className="w-24 shrink-0 text-sm text-primary font-medium">Co-packing Product:</span>
             <div className="min-w-0 flex-1">
               <LookupField
                 compact
@@ -385,7 +392,10 @@ export function PS_ProductBomPage() {
                 valueField="prod_code"
                 displayFields={["prod_code", "prod_name"]}
                 loadOptions={loadParentProductRows}
-                onChange={(value) => setHeaderField("parent_product_code", value)}
+                onChange={(value: string, row: LookupRow | null) => {
+                  setHeaderField("parent_product_code", value);
+                  setHeaderField("parent_product_name", row?.prod_name ? String(row.prod_name) : "");
+                }}
                 placeholder={header.principal_code ? "Code or name" : "Select Principal first"}
               />
             </div>
@@ -408,25 +418,21 @@ export function PS_ProductBomPage() {
           <thead>
             <tr className="border-b bg-muted/40 text-left">
               <th className="p-2 w-10">No.</th>
-              <th className="p-2 min-w-[160px]">
-                Child Product Code<span className="text-destructive">*</span>
+              <th className="p-2 min-w-[240px]">
+                Product Code<span className="text-destructive">*</span>
               </th>
-              <th className="p-2 min-w-[180px]">Name</th>
               <th className="p-2 min-w-[130px]">
                 Parent Prodn LUOM QTY<span className="text-destructive">*</span>
               </th>
               <th className="p-2 w-24 text-center">MIS Reqd</th>
               <th className="p-2 min-w-[100px]">
-                P_QTY<span className="text-destructive">*</span>
+                Quantity 1<span className="text-destructive">*</span>
               </th>
-              <th className="p-2 min-w-[100px]">P_UOM</th>
-              <th className="p-2 min-w-[100px]">L_QTY</th>
-              <th className="p-2 min-w-[100px]">L_UOM</th>
+              <th className="p-2 min-w-[100px]">PUOM</th>
+              <th className="p-2 min-w-[100px]">Quantity 2</th>
+              <th className="p-2 min-w-[100px]">LUOM</th>
               <th className="p-2 min-w-[100px]">Quantity</th>
               <th className="p-2 min-w-[90px]">UPPP</th>
-              {/* TODO: no lookup source given for BOM_TYPE yet — plain text
-                  input until we know if it's a dropdown. */}
-              <th className="p-2 min-w-[110px]">BOM Type</th>
               <th className="p-2 min-w-[110px]">Unit Price</th>
               <th className="p-2 w-10" />
             </tr>
@@ -442,21 +448,14 @@ export function PS_ProductBomPage() {
                     value={line.child_prod_code}
                     columns={CHILD_PRODUCT_LOOKUP_COLUMNS}
                     valueField="prod_code"
-                    displayFields={["prod_code"]}
+                    displayFields={CHILD_PRODUCT_DISPLAY_FIELDS}
                     loadOptions={loadChildProductRows}
-                    onChange={(value) => {
+                    onChange={(value: string, row: LookupRow | null) => {
                       setLineField(line.row_id, "child_prod_code", value);
-                      // TODO: once lookup returns prod_name, auto-fill Name
-                      // from the selected row instead of leaving it manual.
+                      // Still tracked for the Retrieve/Save payload, just no longer its own column.
+                      setLineField(line.row_id, "name", row?.prod_name ? String(row.prod_name) : "");
                     }}
-                    placeholder="Code"
-                  />
-                </td>
-                <td className="p-1">
-                  <Input
-                    className="h-7 text-sm px-2"
-                    value={line.name}
-                    onChange={(e) => setLineField(line.row_id, "name", e.target.value)}
+                    placeholder="Code or name"
                   />
                 </td>
                 <td className="p-1">
@@ -528,13 +527,6 @@ export function PS_ProductBomPage() {
                     className="h-7 text-sm px-2"
                     value={line.uppp}
                     onChange={(e) => setLineField(line.row_id, "uppp", e.target.value)}
-                  />
-                </td>
-                <td className="p-1">
-                  <Input
-                    className="h-7 text-sm px-2"
-                    value={line.bom_type}
-                    onChange={(e) => setLineField(line.row_id, "bom_type", e.target.value)}
                   />
                 </td>
                 <td className="p-1">
