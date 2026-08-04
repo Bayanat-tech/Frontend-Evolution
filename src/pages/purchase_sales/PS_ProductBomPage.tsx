@@ -27,7 +27,6 @@ import { useAuth } from "../../state/AuthContext";
 // Hardcoded to 'N' (non-co-pack view) everywhere below. Add a checkbox and
 // wire it through if the co-pack view is actually needed.
 //
-// BOM_TYPE: no lookup source given yet — plain text input, TODO confirm if
 // BOM_TYPE: no UI input for this — line.bom_type stays "" and is still sent
 // in the Save payload (val1s7) to keep the backend contract unchanged.
 //
