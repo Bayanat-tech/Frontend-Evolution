@@ -65,8 +65,6 @@ export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
   return {
     doc_no: editor?.mode === "edit" ? editor.row.doc_no : "",
     doc_date: editor?.mode === "edit" ? editor.row.doc_date || "" : new Date().toISOString().slice(0, 10),
-    //quotn_no: editor?.mode === "edit" ? editor.row.quotn_no || "" : "",
-    //quotn_date: editor?.mode === "edit" ? editor.row.quotn_date || "" : "",
      ref_no: editor?.mode === "edit" ? editor.row.ref_no || "" : "",
     ref_date: editor?.mode === "edit" ? editor.row.ref_date || "" : "",
     div_code: editor?.mode === "create" ? editor.divCode || "" : editor?.mode === "edit" ? editor.row.div_code : "",
