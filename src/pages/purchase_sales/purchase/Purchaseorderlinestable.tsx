@@ -21,8 +21,8 @@ import {
 const STICKY_COLS = {
   sno: { width: 50, left: 0 },
   div: { width: 90, left: 50 },
-  zone: { width: 200, left: 140 },
-  product: { width: 260, left: 230 },
+  zone: { width: 180, left: 140 },
+  product: { width: 260, left: 320 },
 } as const;
 
 function stickyStyle(col: keyof typeof STICKY_COLS): React.CSSProperties {
@@ -177,7 +177,7 @@ export function PurchaseOrderLinesTable({
                       columns={[{ field: "prod_code", header: "Code" }, { field: "prod_name", header: "Name" }, { field: "p_uom", header: "P Uom" }, { field: "unit_price", header: "Unit Price" }]}
                       valueField="prod_code"
                       displayFields={["prod_code", "prod_name"]}
-                      loadOptions={() => getDynamicLookup({ parameter: "PS_POORDER_ENTRY_PRODUCT_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
+                      loadOptions={() => getDynamicLookup({ parameter: "PS_POORDENTRY_PRODUCT_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
                       disabled={headerAndLineDisabled}
                       onChange={(value, selectedRow) => {
                         const newPUom = text(getLookupValue(selectedRow || {}, "p_uom")) || row.p_uom;
@@ -329,7 +329,6 @@ export function PurchaseOrderLinesTable({
                   </td>
 
                   <td className="finance-amount-cell w-24 px-2 py-1">
-                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.disc_hdr_percent} onChange={(event) => updateRow(row.id, { disc_hdr_percent: Number(event.target.value || 0) })} />
                     <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.disc_percent} onChange={(event) => updateRow(row.id, { disc_percent: Number(event.target.value || 0) })} />
                   </td>
                   <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineDiscPrice(row))}</td>

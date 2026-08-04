@@ -221,7 +221,6 @@ export function StockadjustmentEditor({
 
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
-    if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", IV_DOC_TYPE.SAJ, form, rows, user?.company_code, user?.loginid || user?.username);

@@ -220,8 +220,6 @@ export function StockTransferEditor({
 
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
-    if (!form.ac_code) return setError("A/c Code is required");
-    if (!form.curr_code) return setError("Currency is required");
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", IV_DOC_TYPE.STR, form, rows, user?.company_code, user?.loginid || user?.username);
     }, editMode ? "Sales Order updated successfully" : "Sales Order created successfully");
@@ -313,6 +311,7 @@ export function StockTransferEditor({
   };
 
   const actionBarBusy = actionLoading !== null || saving;
+  console.log("flowLevelRunning------------------>",flowLevelRunning)
 
   return (
     <>
