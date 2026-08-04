@@ -62,6 +62,7 @@ export type HrMasterConfig = {
   buildDelete?: (row: Record<string, unknown>, context: HrMasterContext) => DynamicDeleteParams;
   financeSaveEndpoint?: string;
   autoGenerateKey?: boolean;
+  stripEditKeyOnSave?: boolean;
 };
 
 export type HrMasterContext = {
@@ -203,9 +204,20 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
         else await executeDynamicMutation(payload);
       } else if (config.source === "finance" && config.buildSave && config.financeSaveEndpoint) {
         await postFinance(config.financeSaveEndpoint, cleanPayload(config.buildSave(form, buildContext()) as Record<string, unknown>));
-      } else {
-        await saveHrGm(config.gmEndpoint, cleanPayload({ ...form, company_code: form.company_code || companyCode }), editMode ? "put" : "post");
-      }
+     } else {
+  const payload = config.stripEditKeyOnSave
+    ? (() => {
+        const { _edit_key, ...rest } = form;
+        return rest;
+      })()
+    : form;
+
+  await saveHrGm(
+    config.gmEndpoint,
+    cleanPayload({ ...payload, company_code: form.company_code || companyCode }),
+    editMode ? "put" : "post"
+  );
+}
       setFormOpen(false);
       setNotice({ type: "success", message: `${config.title} ${editMode ? "updated" : "created"} successfully.` });
       await loadRows(pageIndex, pageSize, false);
@@ -448,3 +460,7 @@ function toDateInputValue(input: unknown) {
   if (Number.isNaN(date.getTime())) return "";
   return date.toISOString().slice(0, 10);
 }
+
+
+
+

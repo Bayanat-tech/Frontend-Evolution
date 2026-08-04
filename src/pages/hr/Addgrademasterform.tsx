@@ -380,10 +380,10 @@ export function AddGradeMasterForm({ mode, existingData, onClose }: Props) {
 
       <Card>
         <CardContent className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-          <label className="field">
+          {/* <label className="field">
             <span>Company <strong className="text-destructive">*</strong></span>
             <Input disabled value={user?.company_name || user?.company_code || ""} />
-          </label>
+          </label> */}
 
           <label className="field">
             <span>Grade Code <strong className="text-destructive">*</strong></span>
