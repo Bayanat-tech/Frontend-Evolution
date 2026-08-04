@@ -36,6 +36,7 @@ type PackForm = {
   job_no: string;
   packlist_no: string;
   seq_number: string;
+  is_new_packlist: boolean;
   transport_mode: string;
   job_type: string;
   job_date: string;
@@ -228,6 +229,17 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
     setView("editor");
   };
 
+  const openNewPackForCurrentJob = () => {
+    setPack((current) => ({
+      ...current,
+      packlist_no: "",
+      seq_number: "",
+      is_new_packlist: true,
+    }));
+    setDimensions([]);
+    setNotice(null);
+  };
+
   const loadDimensions = async (row: LookupRow) => {
     const response = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/packlist/dimensions/list", {
       company_code: companyCode,
@@ -319,7 +331,12 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
     setSaving(true);
     setNotice(null);
     try {
-      const response = await api.post<{ success?: boolean; data?: { packlist_no?: string | number; seq_number?: string }; message?: string }>("/api/freight/packlist/save", { packlist: pack });
+      const payload = {
+        ...pack,
+        packlist_no: pack.is_new_packlist ? null : pack.packlist_no,
+        seq_number: pack.is_new_packlist ? null : pack.seq_number,
+      };
+      const response = await api.post<{ success?: boolean; data?: { packlist_no?: string | number; seq_number?: string }; message?: string }>("/api/freight/packlist/save", { packlist: payload });
       if (isAir && pack.job_no && pack.prin_code) {
         await api.post("/api/freight/packlist/dimensions/save", {
           company_code: companyCode,
@@ -334,6 +351,7 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
         ...current,
         packlist_no: String(response.data.data?.packlist_no || current.packlist_no),
         seq_number: response.data.data?.seq_number || current.seq_number,
+        is_new_packlist: false,
       }));
       await loadRows();
       setView("list");
@@ -379,6 +397,7 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
       <Header title={`${mode.label} ${direction.label} ${screenTitle}`} subtitle={pack.seq_number || `New ${screenTitle.toLowerCase()}`} icon={Icon} screenTitle={screenTitle}>
         {notice && <NoticeChip notice={notice} />}
         <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>
+        {pack.job_no && <Button type="button" size="sm" variant="outline" onClick={openNewPackForCurrentJob}><Plus size={14} />New Pack List</Button>}
         <Button type="submit" size="sm" disabled={saving || !pack.job_no}><Save size={14} />Save</Button>
       </Header>
 
@@ -612,6 +631,7 @@ function emptyPack(companyCode: string, userId: string, transportMode: string, j
     job_no: "",
     packlist_no: "",
     seq_number: "",
+    is_new_packlist: true,
     transport_mode: transportMode,
     job_type: jobType,
     job_date: "",
@@ -692,7 +712,10 @@ function emptyPack(companyCode: string, userId: string, transportMode: string, j
 
 function toPackForm(row: LookupRow, companyCode: string, userId: string, mode: string, jobType: string): PackForm {
   const base = emptyPack(companyCode, userId, mode, jobType);
-  return Object.fromEntries(Object.keys(base).map((key) => [key, lookupText(row, key) || (base as any)[key]])) as PackForm;
+  return {
+    ...(Object.fromEntries(Object.keys(base).map((key) => [key, lookupText(row, key) || (base as any)[key]])) as PackForm),
+    is_new_packlist: false,
+  };
 }
 
 function emptyDimension(srNo: number): DimensionLine {
@@ -761,8 +784,9 @@ function selectJob(value: string, row: LookupRow | null, setPack: (updater: (cur
     ...current,
     ...next,
     job_no: value,
-    packlist_no: current.packlist_no,
-    seq_number: current.seq_number,
+    packlist_no: current.is_new_packlist ? "" : current.packlist_no,
+    seq_number: current.is_new_packlist ? "" : current.seq_number,
+    is_new_packlist: current.is_new_packlist,
     curr_code: lookupText(row, "curr_code") || current.curr_code,
     ex_rate: lookupText(row, "ex_rate") || current.ex_rate,
   }));
