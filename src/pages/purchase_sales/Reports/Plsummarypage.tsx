@@ -10,11 +10,6 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../../state/AuthContext";
 import { getDynamicLookupaccount, getLookupText, getLookupValue, LookupRow } from "../../../api/lookups";
-// ─── Inline API client (merged in so this is a single file) ───────────────
-// I don't have visibility into your actual axios/fetch wrapper, so this is a
-// plain fetch() call mirroring the shape of your DN Summary calls. Swap in
-// whatever helper getDnSummaryReportHtml actually uses if it differs.
-
 interface PLSummaryReportParams {
     parameter: string;
     loginid: string;
@@ -70,12 +65,6 @@ async function getPLSummaryReportExcelDownload(params: PLSummaryReportParams): P
     window.URL.revokeObjectURL(url);
 }
 
-// ─── NOTE ──────────────────────────────────────────────────────────────────
-// Lookup parameter names below marked "CONFIRM" are guesses following your
-// existing naming convention (PURCHASE_SALE_MSE_*). Only PRODBRAND,
-// PRODCATEGORY and PRODTYPE were given to me explicitly — please verify the
-// rest against your actual WMSTST lookup procedures before shipping.
-// ────────────────────────────────────────────────────────────────────────────
 
 const LOOKUP_PARAMS = {
     group:        "PURCHASE_SALE_MSE_PRODGROUP",     // CONFIRM
@@ -285,142 +274,241 @@ function SingleSelectLookup({ label, value, onChange, loadOptions, valueField, d
     );
 }
 
-// ─── Dual-list transfer control (Group / Brand / Category / Type / Manufacturer / Customer tabs) ──
 
-type TransferListProps = {
+const ALL_SENTINEL = "__ALL__";
+
+type MultiSelectDropdownProps = {
+    label: string;
     selected: string[];
     onChange: (values: string[]) => void;
     loadOptions: () => Promise<LookupRow[]>;
     valueField: string;
-    nameField: string;
+    displayFields: string[];
+    placeholder?: string;
+    bgColor?: string;
 };
 
-function TransferList({ selected, onChange, loadOptions, valueField, nameField }: TransferListProps) {
+function MultiSelectDropdown({
+    label,
+    selected,
+    onChange,
+    loadOptions,
+    valueField,
+    displayFields,
+    placeholder = "All",
+    bgColor = "#fff",
+}: MultiSelectDropdownProps) {
+    const [open, setOpen] = useState(false);
     const [rows, setRows] = useState<LookupRow[]>([]);
     const [loading, setLoading] = useState(false);
-    const [loaded, setLoaded] = useState(false);
     const [search, setSearch] = useState("");
+    const wrapRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
-        let cancelled = false;
-        setLoading(true);
-        loadOptions()
-            .then((r) => { if (!cancelled) { setRows(r); setLoaded(true); } })
-            .finally(() => { if (!cancelled) setLoading(false); });
-        return () => { cancelled = true; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+        if (!open) return;
+        const handleClick = (e: MouseEvent) => {
+            if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+                setOpen(false);
+                setSearch("");
+            }
+        };
+        const handleKey = (e: KeyboardEvent) => {
+            if (e.key === "Escape") {
+                setOpen(false);
+                setSearch("");
+            }
+        };
+        document.addEventListener("mousedown", handleClick);
+        document.addEventListener("keydown", handleKey);
+        return () => {
+            document.removeEventListener("mousedown", handleClick);
+            document.removeEventListener("keydown", handleKey);
+        };
+    }, [open]);
 
-    const term = search.trim().toLowerCase();
-    const availableRows = rows.filter((r) => !selected.includes(String(getLookupValue(r, valueField) ?? "")));
-    const filteredAvailable = term
-        ? availableRows.filter((r) => Object.values(r).some((v) => String(v ?? "").toLowerCase().includes(term)))
-        : availableRows;
-
-    const selectedRows = selected
-        .map((code) => rows.find((r) => String(getLookupValue(r, valueField) ?? "") === code))
-        .filter(Boolean) as LookupRow[];
-
-    const addCode = (code: string) => onChange([...selected, code]);
-    const removeCode = (code: string) => onChange(selected.filter((c) => c !== code));
-    const addAll = () => onChange(rows.map((r) => String(getLookupValue(r, valueField) ?? "")));
-    const clearAll = () => onChange([]);
-
-    const listBoxStyle: React.CSSProperties = {
-        border: "0.5px solid #d1d5db",
-        borderRadius: 6,
-        height: 220,
-        overflowY: "auto",
-        background: "#fff",
+    const openDropdown = async () => {
+        const next = !open;
+        setOpen(next);
+        if (next && rows.length === 0 && !loading) {
+            setLoading(true);
+            try {
+                setRows(await loadOptions());
+            } finally {
+                setLoading(false);
+            }
+        }
     };
 
-    const rowStyle = (highlight: boolean): React.CSSProperties => ({
-        display: "grid",
-        gridTemplateColumns: "90px 1fr",
-        gap: 6,
-        padding: "5px 8px",
-        fontSize: 12,
-        cursor: "pointer",
-        borderBottom: "0.5px solid #f3f4f6",
-        background: highlight ? "#F5F9FF" : "transparent",
-    });
+    const term = search.trim().toLowerCase();
+    const filteredRows = term
+        ? rows.filter((row) => Object.values(row).some((v) => String(v ?? "").toLowerCase().includes(term)))
+        : rows;
+
+    const allValues = rows.map((r) => String(getLookupValue(r, valueField) ?? "")).filter(Boolean);
+
+    const isAllSelected =
+        selected.includes(ALL_SENTINEL) ||
+        (allValues.length > 0 && allValues.every((v) => selected.includes(v)));
+
+    const toggleAll = () => {
+        if (isAllSelected) onChange([]);
+        else onChange([ALL_SENTINEL]);
+    };
+
+    const toggleOne = (val: string) => {
+        const base = selected.includes(ALL_SENTINEL) ? allValues : selected;
+        if (base.includes(val)) onChange(base.filter((v) => v !== val));
+        else onChange([...base, val]);
+    };
+
+    const displayText = isAllSelected
+        ? "All"
+        : selected.length === 0
+        ? placeholder
+        : selected.length === 1
+        ? (() => {
+              const row = rows.find((r) => String(getLookupValue(r, valueField) ?? "") === selected[0]);
+              return row ? getLookupText(row, displayFields.length ? displayFields : [valueField]) : selected[0];
+          })()
+        : `${selected.length} selected`;
 
     return (
-        <div>
-            <div style={{ marginBottom: 6 }}>
-                <input
-                    type="text"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search available..."
-                    style={{ ...inputStyle, fontSize: 11, padding: "5px 8px", maxWidth: 260 }}
-                />
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 10, alignItems: "stretch" }}>
-                {/* Available */}
-                <div>
-                    <div style={{ display: "grid", gridTemplateColumns: "90px 1fr", background: "#e5e7eb", fontSize: 11, fontWeight: 600, padding: "5px 8px", borderRadius: "6px 6px 0 0", color: "#374151" }}>
-                        <span>Code</span><span>Name</span>
+        <div ref={wrapRef} style={{ position: "relative" }}>
+            <FloatLabel label={label} bgColor={bgColor}>
+                <button
+                    type="button"
+                    onClick={openDropdown}
+                    style={{
+                        ...inputStyle,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        cursor: "pointer",
+                        textAlign: "left",
+                    }}
+                >
+                    <span
+                        style={{
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            color: selected.length ? "#111827" : "#9ca3af",
+                        }}
+                    >
+                        {displayText}
+                    </span>
+                </button>
+            </FloatLabel>
+
+            {open && (
+                <div
+                    style={{
+                        position: "absolute",
+                        top: "100%",
+                        left: 0,
+                        right: 0,
+                        marginTop: 4,
+                        background: "#fff",
+                        border: "0.5px solid #d1d5db",
+                        borderRadius: 6,
+                        boxShadow: "0 6px 16px rgba(0,0,0,0.1)",
+                        zIndex: 50,
+                        maxHeight: 260,
+                        display: "flex",
+                        flexDirection: "column",
+                        overflow: "hidden",
+                    }}
+                >
+                    <div style={{ padding: "6px 8px", borderBottom: "0.5px solid #e5e7eb", flexShrink: 0 }}>
+                        <input
+                            type="text"
+                            autoFocus
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Search..."
+                            style={{ ...inputStyle, fontSize: 11, padding: "4px 8px" }}
+                        />
                     </div>
-                    <div style={{ ...listBoxStyle, borderRadius: "0 0 6px 6px" }}>
-                        {loading && !loaded ? (
+                    <div style={{ overflowY: "auto", flex: 1 }}>
+                        {loading ? (
                             <div style={{ padding: 12, fontSize: 12, color: "#6b7280", textAlign: "center" }}>Loading...</div>
-                        ) : filteredAvailable.length === 0 ? (
-                            <div style={{ padding: 12, fontSize: 12, color: "#6b7280", textAlign: "center" }}>No records</div>
-                        ) : filteredAvailable.map((row, idx) => {
-                            const code = String(getLookupValue(row, valueField) ?? "");
-                            const name = String(getLookupValue(row, nameField) ?? "");
-                            return (
-                                <div key={code || idx} style={rowStyle(false)} onDoubleClick={() => addCode(code)} onClick={() => addCode(code)} title="Click to add">
-                                    <span style={{ color: "#185FA5", fontWeight: 500 }}>{code}</span>
-                                    <span style={{ color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
-                                </div>
-                            );
-                        })}
+                        ) : filteredRows.length === 0 ? (
+                            <div style={{ padding: 12, fontSize: 12, color: "#6b7280", textAlign: "center" }}>No records found</div>
+                        ) : (
+                            <>
+                                <label
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 8,
+                                        padding: "7px 10px",
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        cursor: "pointer",
+                                        background: isAllSelected ? "#EFF6FF" : "transparent",
+                                        color: isAllSelected ? "#185FA5" : "#111827",
+                                        borderBottom: "0.5px solid #f3f4f6",
+                                    }}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={isAllSelected}
+                                        onChange={toggleAll}
+                                        style={{ accentColor: "#185FA5", width: 14, height: 14 }}
+                                    />
+                                    All
+                                </label>
+                                {filteredRows.map((row, idx) => {
+                                    const val = String(getLookupValue(row, valueField) ?? "");
+                                    const checked = isAllSelected || selected.includes(val);
+                                    const text = getLookupText(row, displayFields.length ? displayFields : [valueField]);
+                                    return (
+                                        <label
+                                            key={val || idx}
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 8,
+                                                padding: "6px 10px",
+                                                fontSize: 12,
+                                                cursor: "pointer",
+                                                background: checked ? "#F5F9FF" : "transparent",
+                                            }}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={checked}
+                                                onChange={() => toggleOne(val)}
+                                                style={{ accentColor: "#185FA5", width: 14, height: 14 }}
+                                            />
+                                            <span
+                                                style={{
+                                                    overflow: "hidden",
+                                                    textOverflow: "ellipsis",
+                                                    whiteSpace: "nowrap",
+                                                    color: "#374151",
+                                                }}
+                                            >
+                                                {text}
+                                            </span>
+                                        </label>
+                                    );
+                                })}
+                            </>
+                        )}
                     </div>
                 </div>
-
-                {/* Transfer buttons */}
-                <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 8 }}>
-                    <button type="button" onClick={addAll} style={transferBtnStyle} title="Add all">{"\u00bb"}</button>
-                    <button type="button" onClick={clearAll} style={transferBtnStyle} title="Remove all">{"\u00ab"}</button>
-                </div>
-
-                {/* Selected */}
-                <div>
-                    <div style={{ display: "grid", gridTemplateColumns: "90px 1fr", background: "#e5e7eb", fontSize: 11, fontWeight: 600, padding: "5px 8px", borderRadius: "6px 6px 0 0", color: "#374151" }}>
-                        <span>Code</span><span>Name</span>
-                    </div>
-                    <div style={{ ...listBoxStyle, borderRadius: "0 0 6px 6px" }}>
-                        {selectedRows.length === 0 ? (
-                            <div style={{ padding: 12, fontSize: 12, color: "#6b7280", textAlign: "center" }}>All (none selected = no filter)</div>
-                        ) : selectedRows.map((row, idx) => {
-                            const code = String(getLookupValue(row, valueField) ?? "");
-                            const name = String(getLookupValue(row, nameField) ?? "");
-                            return (
-                                <div key={code || idx} style={rowStyle(true)} onDoubleClick={() => removeCode(code)} onClick={() => removeCode(code)} title="Click to remove">
-                                    <span style={{ color: "#185FA5", fontWeight: 500 }}>{code}</span>
-                                    <span style={{ color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            </div>
+            )}
         </div>
     );
 }
 
-const transferBtnStyle: React.CSSProperties = {
-    padding: "6px 10px",
-    border: "0.5px solid #d1d5db",
-    background: "#fff",
-    borderRadius: 6,
-    cursor: "pointer",
-    fontSize: 13,
-    color: "#185FA5",
-    fontWeight: 700,
-};
+
+function toApiCodeString(selected: string[]): string {
+    if (selected.length === 0) return "All";
+    if (selected.includes(ALL_SENTINEL)) return "All";
+    return selected.join(",");
+}
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
@@ -441,7 +529,6 @@ export default function PLSummaryPage() {
     const [invoiceNo, setInvoiceNo] = useState("");
     const [salesman, setSalesman] = useState("");
     const [mode, setMode] = useState<ReportMode>("invoicewise");
-    const [activeTab, setActiveTab] = useState<TabKey>("group");
     const [selections, setSelections] = useState<Selections>(EMPTY_SELECTIONS);
 
     const lastRequestRef = useRef<PLSummaryReportParams | null>(null);
@@ -457,12 +544,12 @@ export default function PLSummaryPage() {
         todate: toDateIso || "All",
         docno: invoiceNo || "0",
         salesman: salesman || "All",
-        group: selections.group.length ? selections.group.join(",") : "All",
-        brand: selections.brand.length ? selections.brand.join(",") : "All",
-        prodcategory: selections.category.length ? selections.category.join(",") : "All",
-        prodtype: selections.type.length ? selections.type.join(",") : "All",
-        manu: selections.manufacturer.length ? selections.manufacturer.join(",") : "All",
-        cust: selections.customer.length ? selections.customer.join(",") : "All",
+        group: toApiCodeString(selections.group),
+        brand: toApiCodeString(selections.brand),
+        prodcategory: toApiCodeString(selections.category),
+        prodtype: toApiCodeString(selections.type),
+        manu: toApiCodeString(selections.manufacturer),
+        cust: toApiCodeString(selections.customer),
     });
 
     const fetchReport = useCallback(async (params: PLSummaryReportParams) => {
@@ -533,16 +620,12 @@ export default function PLSummaryPage() {
     };
 
     const BG = "#EEF5FD";
-    const activeTabDef = TABS.find((t) => t.key === activeTab)!;
-
     return (
         <div style={{ background: "#f3f4f6", padding: "6px 10px", fontFamily: "system-ui, sans-serif", minHeight: "100vh" }}>
             <style>{`
                 .action-btn-primary:hover { background: #1e40af !important; }
                 .action-btn-excel:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
                 .field-row { background: #EEF5FD; border-radius: 8px; padding: 10px 12px; }
-                .tab-btn { padding: 6px 14px; font-size: 12px; border: none; background: transparent; cursor: pointer; color: #6b7280; border-bottom: 2px solid transparent; }
-                .tab-btn.active { color: #185FA5; font-weight: 600; border-bottom: 2px solid #185FA5; }
                 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
             `}</style>
 
@@ -625,32 +708,22 @@ export default function PLSummaryPage() {
                         </div>
                     </div>
 
-                    {/* ── Tabs for Group / Brand / Category / Type / Manufacturer / Customer ── */}
-                    <div style={{ marginTop: 12 }}>
-                        <div style={{ display: "flex", gap: 4, borderBottom: "0.5px solid #e5e7eb" }}>
-                            {TABS.map((t) => {
-                                const count = selections[t.key].length;
-                                return (
-                                    <button
-                                        key={t.key}
-                                        type="button"
-                                        className={`tab-btn ${activeTab === t.key ? "active" : ""}`}
-                                        onClick={() => setActiveTab(t.key)}
-                                    >
-                                        {t.label}{count > 0 ? ` (${count})` : ""}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                        <div style={{ paddingTop: 10 }}>
-                            <TransferList
-                                selected={selections[activeTabDef.key]}
-                                onChange={(vals) => setSelections((s) => ({ ...s, [activeTabDef.key]: vals }))}
-                                valueField={activeTabDef.valueField}
-                                nameField={activeTabDef.nameField}
+                    {/* ── Group / Brand / Category / Type / Manufacturer / Customer ── */}
+                    {/* Same checkbox-dropdown pattern as your DN Summary Report's Principal field */}
+                    <div className="field-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 12 }}>
+                        {TABS.map((t) => (
+                            <MultiSelectDropdown
+                                key={t.key}
+                                label={t.label}
+                                bgColor={BG}
+                                selected={selections[t.key]}
+                                onChange={(vals) => setSelections((s) => ({ ...s, [t.key]: vals }))}
+                                valueField={t.valueField}
+                                displayFields={[t.valueField, t.nameField]}
+                                placeholder="All"
                                 loadOptions={() =>
                                     getDynamicLookupaccount({
-                                        parameter: activeTabDef.lookupParam,
+                                        parameter: t.lookupParam,
                                         loginid: loginId,
                                         code1: companyCode,
                                         code2: "", code3: "", code4: "",
@@ -659,10 +732,10 @@ export default function PLSummaryPage() {
                                     })
                                 }
                             />
-                        </div>
-                        <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4 }}>
-                            Leave a tab's selection empty to include all {activeTabDef.label.toLowerCase()}s.
-                        </div>
+                        ))}
+                    </div>
+                    <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4, marginLeft: 4 }}>
+                        Leave a field on "All" to include every value for that filter.
                     </div>
 
                     {/* Status bar */}
