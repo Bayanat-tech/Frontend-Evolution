@@ -35,7 +35,14 @@ import { useAuth } from "../../state/AuthContext";
 // If your LookupField implementation only passes value, add a row
 // parameter to its onChange signature so the Name field (and
 // principal/parent product names) can auto-fill from the selected
-// row — see onChange handlers below. ─────────────────────────────────────
+// row — see onChange handlers below.
+//
+// Delete: rows loaded from Retrieve are marked is_persisted = true. When
+// such a row is removed, we call executeDynamicMutation with
+// PURCHASE_SALE_MF_BOM_DELETE (wired to a WHEN branch in
+// PROC_BUILD_DYNAMIC_DEL_PURCHASE_SALE) before removing it from local
+// state. Brand-new rows (is_persisted = false) are just spliced out
+// locally, since they were never saved to MF_BOM. ───────────────────────
 
 const COPACK_VIEW_FLAG = "N"; // TODO: no UI control for legacy cbx_1 yet.
 
@@ -67,6 +74,7 @@ type TBomLine = {
   unit_price: string;
   prodn_reqd: boolean; // "MIS Reqd" in the screenshot
   prod_luom_qty: string; // "Parent Prodn LUOM QTY" in the screenshot
+  is_persisted: boolean; // true if this row already exists in MF_BOM (came from Retrieve)
   [key: string]: unknown;
 };
 
@@ -84,6 +92,7 @@ const makeEmptyLine = (): TBomLine => ({
   unit_price: "",
   prodn_reqd: false,
   prod_luom_qty: "",
+  is_persisted: false,
 });
 
 // ─── LookupField configs — wired to the real procs added to
@@ -120,6 +129,12 @@ const RETRIEVE_PARAMETER = "PURCHASE_SALE_MF_BOM_RETRIEVE";
 // PROC_BUILD_DYNAMIC_INS_UPD_PURCHASE_SALE via executeDynamicMutation.
 const SAVE_PARAMETER = "PURCHASE_SALE_MF_BOM_SAVE";
 
+// Delete — wired to PURCHASE_SALE_MF_BOM_DELETE in
+// PROC_BUILD_DYNAMIC_DEL_PURCHASE_SALE via executeDynamicMutation.
+// Slot mapping: val1s1=company_code, val1s2=prin_code,
+// val1s3=parent prod_code, val1s4=child_prod_code (key columns of MF_BOM).
+const DELETE_PARAMETER = "PURCHASE_SALE_MF_BOM_DELETE";
+
 export function PS_ProductBomPage() {
   const { user } = useAuth();
   const loginid = user?.loginid ?? "";
@@ -130,6 +145,7 @@ export function PS_ProductBomPage() {
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingRowId, setDeletingRowId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(
     null,
   );
@@ -144,8 +160,39 @@ export function PS_ProductBomPage() {
 
   const addLine = () => setLines((prev) => [...prev, makeEmptyLine()]);
 
-  const removeLine = (rowId: string) =>
+  // ── Remove a line. Rows that already exist in MF_BOM (is_persisted)
+  // are deleted server-side first; brand-new unsaved rows are just
+  // dropped from local state.
+  const removeLine = async (rowId: string) => {
+    if (lines.length <= 1) return;
+    const line = lines.find((l) => l.row_id === rowId);
+    if (!line) return;
+
+    if (line.is_persisted) {
+      setDeletingRowId(rowId);
+      setNotice(null);
+      try {
+        await executeDynamicMutation({
+          parameter: DELETE_PARAMETER,
+          loginid,
+          val1s1: companyCode,
+          val1s2: header.principal_code,
+          val1s3: header.parent_product_code,
+          val1s4: line.child_prod_code,
+        });
+      } catch (error) {
+        setNotice({
+          type: "error",
+          message: error instanceof Error ? error.message : "Unable to delete BOM line",
+        });
+        setDeletingRowId(null);
+        return; // keep the row in the UI if the server delete failed
+      }
+      setDeletingRowId(null);
+    }
+
     setLines((prev) => (prev.length > 1 ? prev.filter((l) => l.row_id !== rowId) : prev));
+  };
 
   // ── Generic lookup loader — shared for every non-parameterized dropdown.
   const loadLookupRows = useCallback(
@@ -258,6 +305,7 @@ export function PS_ProductBomPage() {
             unit_price: String(row.unit_price ?? ""),
             prodn_reqd: Boolean(row.prodn_reqd),
             prod_luom_qty: String(row.prod_luom_qty ?? ""),
+            is_persisted: true,
           })),
         );
       }
@@ -295,7 +343,7 @@ export function PS_ProductBomPage() {
     if (invalidLine) {
       setNotice({
         type: "error",
-        message: "Child Product Code, Parent Prodn LUOM QTY, and P_QTY are required on every line",
+        message: "Product Code, Parent Prodn LUOM QTY, and Quantity 1 are required on every line",
       });
       return;
     }
@@ -327,6 +375,8 @@ export function PS_ProductBomPage() {
           val1n5: Number(line.unit_price) || 0,
         });
       }
+      // Rows saved successfully are now persisted server-side.
+      setLines((prev) => prev.map((l) => ({ ...l, is_persisted: true })));
       setNotice({ type: "success", message: "BOM saved successfully" });
     } catch (error) {
       setNotice({
@@ -430,7 +480,6 @@ export function PS_ProductBomPage() {
               <th className="p-2 min-w-[100px]">PUOM</th>
               <th className="p-2 min-w-[100px]">Quantity 2</th>
               <th className="p-2 min-w-[100px]">LUOM</th>
-              <th className="p-2 min-w-[100px]">Quantity</th>
               <th className="p-2 min-w-[90px]">UPPP</th>
               <th className="p-2 min-w-[110px]">Unit Price</th>
               <th className="p-2 w-10" />
@@ -516,14 +565,6 @@ export function PS_ProductBomPage() {
                   <Input
                     type="number"
                     className="h-7 text-sm px-2"
-                    value={line.quantity}
-                    onChange={(e) => setLineField(line.row_id, "quantity", e.target.value)}
-                  />
-                </td>
-                <td className="p-1">
-                  <Input
-                    type="number"
-                    className="h-7 text-sm px-2"
                     value={line.uppp}
                     onChange={(e) => setLineField(line.row_id, "uppp", e.target.value)}
                   />
@@ -540,7 +581,8 @@ export function PS_ProductBomPage() {
                   <button
                     type="button"
                     onClick={() => removeLine(line.row_id)}
-                    className="text-destructive hover:opacity-70"
+                    disabled={deletingRowId === line.row_id}
+                    className="text-destructive hover:opacity-70 disabled:opacity-40"
                     aria-label="Remove row"
                   >
                     <Trash2 size={14} />
