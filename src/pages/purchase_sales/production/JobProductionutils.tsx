@@ -62,7 +62,7 @@ export const emptyLineRow = (divCode: string): PurchaseOrderLineRow => ({
 
 export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
     return {
-        doc_no: editor?.mode === "edit" ? editor.row.doc_no : "",
+        doc_no: editor?.mode === "edit" ? editor.row.doc_no : 0,
         doc_date: editor?.mode === "edit" ? editor.row.doc_date || "" : new Date().toISOString().slice(0, 10),
         quotn_no: editor?.mode === "edit" ? editor.row.quotn_no || "" : "",
         quotn_date: editor?.mode === "edit" ? editor.row.quotn_date || "" : "",
@@ -242,6 +242,11 @@ export async function fetchjmiConsumDetailsDetail(
             lcur_amount_disc: numberOrZero(
                 row.lcur_amount_disc ?? row.lcur_amount_discount
             ),
+            uppp: numberOrZero(row.uppp),
+            ex_rate: numberOrZero(row.ex_rate ?? 1),
+            disc_percent: numberOrZero(row.disc_pct ?? row.disc_percent),
+            disc_price: numberOrZero(row.disc_price),
+            tax_code: text(row.tax_code),
 
             zone_code: text(row.zone_code),
             zone_name: text(row.zone_name),
@@ -329,7 +334,7 @@ export async function fetchexpenseDetailsDetail(
 
 export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: PODocType) {
     return {
-        doc_no: form.doc_no || undefined,
+        doc_no: numberOrZero(form.doc_no),
         doc_type: docType,
         doc_date: form.doc_date,
         quotn_no: form.quotn_no,
@@ -470,7 +475,7 @@ export function buildExpensePayload(rows: ExpenseRow[]) {
 
         company_code: row.company_code,
         doc_type: row.doc_type,
-        doc_no: row.doc_no,
+        doc_no: numberOrZero(row.doc_no),
         doc_date: row.doc_date,
 
         div_code: row.div_code,
