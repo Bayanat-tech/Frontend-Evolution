@@ -33,12 +33,12 @@ export interface PurchaseOrderLineRow {
   zone_name?: string;
   uom_name?: string;
   uom_code?: string;
-  job_no?:string;
-  dept?:string;
-  sign_ind?:number
-  uppp?:number,
-  quantity:number,
-  ex_rate?:number,
+  job_no?: string;
+  dept?: string;
+  sign_ind?: number
+  uppp?: number,
+  quantity: number,
+  ex_rate?: number,
 
 
 }
@@ -48,8 +48,8 @@ export interface PurchaseOrderForm {
   doc_date: string;
   //quotn_no: string;
   //quotn_date: string;
-  ref_no:string;
-  ref_date:string;
+  ref_no: string;
+  ref_date: string;
   div_code: string;
   div_name: string;
   ac_code: string;
@@ -57,18 +57,18 @@ export interface PurchaseOrderForm {
   party_address: string;
   credit_period: number;
   dept_code: string;
-  dept_name:string;
+  dept_name: string;
   party_phone: string;
   party_fax: string;
   buyer: string;
-  wo_no: string;
+  wo_number: string;
   curr_code: string;
   curr_name: string;
-   tax_code: string;
-   tx_compntcat_code_1: string;
-tax_code_name: string;
-tx_cat_name: string;
-tx_cat_code: string;
+  tax_code: string;
+  tx_compntcat_code_1: string;
+  tax_code_name: string;
+  tx_cat_name: string;
+  tx_cat_code: string;
   ex_rate: number;
   payment_terms: string;
   dlvr_term: string;
@@ -78,12 +78,9 @@ tx_cat_code: string;
   remarks: string;
   disc_hdr_price?: number;
   disc_hdr_percent?: number;
-  
- 
   disc_price: number;
   disc_percent: number;
   tax_category: string;
- 
   expense_ac_post: string;
   print_on_letterhead: string;
   project_name: string;
@@ -103,7 +100,7 @@ export interface TteJmiConsumType {
   company_code: string;
   doc_type: string;
   doc_no: number;
-  uppp:number;
+  uppp: number;
   mi_doc_no: number;
 
   prod_code: string;
@@ -150,7 +147,7 @@ export interface TteJmiConsumType {
 }
 
 export interface ExpenseRow {
-    id: string;
+  id: string;
   company_code: string | null;
   doc_type: string | null;
   doc_no: string | null;
@@ -205,8 +202,8 @@ export interface JobProductionConfig {
   docType: PODocType;
   headerParameter: string;
   detailParameter: string;
-  jmiConsumDetails:string;
-  expenseDetails:string
+  jmiConsumDetails: string;
+  expenseDetails: string
 }
 
 export interface PurchaseConfig {
@@ -243,6 +240,6 @@ export const JP_CONFIG: JobProductionConfig = {
   docType: PO_DOC_TYPE.FGP,
   headerParameter: "PS_GRN_ENTRY_HEADER_PAGE",
   detailParameter: "PS_GRN_ENTRY_DETAIL_PAGE",
-  expenseDetails :"PS_GRN_ENTRY_VW_TTE_PGRN_EXP_DET",
-  jmiConsumDetails :"PS_GRN_ENTRY_VW_TTE_JMI_CONSUM"
+  expenseDetails: "PS_GRN_ENTRY_VW_TTE_PGRN_EXP_DET",
+  jmiConsumDetails: "PS_GRN_ENTRY_VW_TTE_JMI_CONSUM"
 };

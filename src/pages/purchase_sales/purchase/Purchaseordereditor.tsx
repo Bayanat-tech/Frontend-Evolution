@@ -131,7 +131,7 @@ export function PurchaseOrderEditor({
           party_phone: text(headerRaw.tel || current.party_phone),
           party_fax: text(headerRaw.fax || current.party_fax),
           buyer: text(headerRaw.buyer || current.buyer),
-          wo_no: text(headerRaw.wo_no || current.wo_no),
+          wo_number: text(headerRaw.wo_number || current.wo_number),
           curr_code: text(headerRaw.curr_code || current.curr_code),
           curr_name: text(headerRaw.curr_name || current.curr_name),
           ex_rate: Number(headerRaw.ex_rate || current.ex_rate || 1),

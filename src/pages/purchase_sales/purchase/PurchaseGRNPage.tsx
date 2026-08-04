@@ -32,7 +32,7 @@ export interface PurchaseOrderRow {
   tel?: string;
   fax?: string;
   buyer?: string;
-  wo_no?: string;
+  wo_number?: string;
   curr_code?: string;
   curr_name?: string;
   ex_rate?: number;
