@@ -1403,3 +1403,11 @@ export async function saveStockCount(payload: SaveStockCountPayload) {
 
   return result;
 }
+
+/** All users for the company (used by the Add User modal) */
+export async function getFlowAssignAllUsers(companyCode: string) {
+  return procBuildDynamicSqlSecurity({
+    parameter: "PROC_FUN_ASSIGN_ALL_USERS", // TODO: backend needs to add this branch, mirroring PROC_FUN_ASSIGN_ROLE_USERS but without the role filter
+    code1: companyCode,
+  }) as Promise<TFlowRoleUser[]>;
+}
