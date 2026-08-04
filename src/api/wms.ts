@@ -216,6 +216,40 @@ export async function getSalesOrderSheetReportExcelDownload(
   URL.revokeObjectURL(url);
 }
 
+
+// ---------Stock Adjusment Report----------------
+
+export async function getStockAdjusmentReportHtml(prinCode: string, adjNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/stockadjusment/${adjNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Stock Adjusment Report");
+  return response.data;
+}
+ 
+export async function getStockAdjusmentReportExcelDownload(
+  prinCode: string,
+  adjNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/stockadjusment/${adjNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `stock_adjusment_report_${adjNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+
 /*
 export async function getSalesOrderReportHtml(params: ReportParams): Promise<string> {
   const response = await api.get(
@@ -1368,4 +1402,12 @@ export async function saveStockCount(payload: SaveStockCountPayload) {
   }
 
   return result;
+}
+
+/** All users for the company (used by the Add User modal) */
+export async function getFlowAssignAllUsers(companyCode: string) {
+  return procBuildDynamicSqlSecurity({
+    parameter: "PROC_FUN_ASSIGN_ALL_USERS", // TODO: backend needs to add this branch, mirroring PROC_FUN_ASSIGN_ROLE_USERS but without the role filter
+    code1: companyCode,
+  }) as Promise<TFlowRoleUser[]>;
 }

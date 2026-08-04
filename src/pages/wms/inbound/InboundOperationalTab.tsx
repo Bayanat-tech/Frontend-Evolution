@@ -161,6 +161,7 @@ const handleActivityBillingSubmit = async () => {
         BILL_RATE: Number(value(row, "bill_rate") ?? 0),
         OTHER_SERVICES: value(row, "other_services") || null,
         USER_ID: userId,
+        COST_RATE: Number(value(row, "cost_rate") ?? 0), 
         // TODO: COST_RATE (value(row, "cost_rate")) has no matching column in
         // PROC_INS_UPD_TN_INVOICE's TN_INVOICE_DET insert list - confirm which
         // TX_COMPNT_*_COST field should carry it before wiring this in.

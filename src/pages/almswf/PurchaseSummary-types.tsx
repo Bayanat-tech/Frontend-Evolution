@@ -56,10 +56,12 @@ export interface TPRHeader {
   COMPANY_CODE: string;
   CURRENCY_RATE: number | null;
 
+
   USER_DT: string | null;
   USER_ID: string | null;
 
   FINAL_APPROVED: string | null;
+  isFinalApproval: boolean | null;
   CURR_CODE: string | null;
 
   CREATE_USER: string | null;
