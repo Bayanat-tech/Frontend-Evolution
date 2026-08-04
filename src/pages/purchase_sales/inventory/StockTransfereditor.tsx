@@ -271,15 +271,18 @@ export function StockTransferEditor({
       });
       const options: SendBackUserOption[] = (rows || []).map((raw) => {
         const row = lowerRecord(raw as Record<string, unknown>);
+        const level = row.level_no ?? row.level ?? row.levelno ?? row.level_no;
+        const name = row.description ?? row.desc ?? row.name ?? row.username;
         return {
-          code: text(row.level_no),
-          name: text(row.description),
-          level_no: numberOrZero(row.level_no),
+          code: text(level),
+          name: text(name),
+          level_no: numberOrZero(level),
         };
       }).filter((option) => option.code);
       setSendBackUsers(options);
-    } catch {
+    } catch (error) {
       setSendBackUsers([]);
+      setSendBackError(error instanceof Error ? error.message : "Unable to load send-back users");
     } finally {
       setSendBackUsersLoading(false);
     }

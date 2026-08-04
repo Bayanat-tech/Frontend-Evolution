@@ -29,6 +29,7 @@ const p_COLS = {
   l_uom: { width: 180, left: 50 },
    dept: { width: 180, left: 50 },
     job_no: { width: 180, left: 50 },
+    sign_ind: { width: 180, left: 50 },
 } as const;
 function stickyStyle(col: keyof typeof STICKY_COLS): React.CSSProperties {
   const { width, left } = STICKY_COLS[col];
@@ -287,16 +288,16 @@ export function StockDetail({
                   </td>
 
                   {isStockAdjustment && (
-                    <td className="px-2 py-1">
+                    <td className="px-2 py-1 w-32 finance-account-cell" style={widthStyle("sign_ind")}>
                       <select
-                        className="finance-select h-8 w-full rounded-md border px-2 text-xs"
+                        className="finance-select h-8 w-full rounded-md border px-2 text-md"
                         disabled={headerAndLineDisabled}
                         value={row.sign_ind }
                         onChange={(event) => updateRow(row.id, { sign_ind: Number(event.target.value) })}
                       >
                         <option value="">Select</option>
-                        <option value="1">Increase (+)</option>
-                        <option value="-1">Decrease (-)</option>
+                        <option value="1">Increase</option>
+                        <option value="-1">Decrease</option>
                       </select>
                     </td>
                   )}

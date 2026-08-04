@@ -177,7 +177,7 @@ export function PurchaseOrderLinesTable({
                       columns={[{ field: "prod_code", header: "Code" }, { field: "prod_name", header: "Name" }, { field: "p_uom", header: "P Uom" }, { field: "unit_price", header: "Unit Price" }]}
                       valueField="prod_code"
                       displayFields={["prod_code", "prod_name"]}
-                      loadOptions={() => getDynamicLookup({ parameter: "PS_POORDENTRY_PRODUCT_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
+                      loadOptions={() => getDynamicLookup({ parameter: "PS_POORDER_ENTRY_PRODUCT_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
                       disabled={headerAndLineDisabled}
                       onChange={(value, selectedRow) => {
                         const newPUom = text(getLookupValue(selectedRow || {}, "p_uom")) || row.p_uom;
