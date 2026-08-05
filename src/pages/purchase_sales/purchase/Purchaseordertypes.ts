@@ -17,6 +17,8 @@ export interface PurchaseOrderLineRow {
   l_uom: string;
   qty_luom: number;
   unit_price: number;
+  disc_hdr_percent: number;
+  qty: number;
   disc_percent: number;
   disc_price: number;
   tax_pct: number;
@@ -43,37 +45,46 @@ export interface PurchaseOrderLineRow {
 }
 
 export interface PurchaseOrderForm {
-  doc_no: string;
+  doc_no: number | string;
   doc_date: string;
-  quotn_no: string;
-  quotn_date: string;
+  //quotn_no: string;
+  //quotn_date: string;
   ref_no:string;
   ref_date:string;
   div_code: string;
   div_name: string;
   ac_code: string;
   ac_name: string;
-  address: string;
+  party_address: string;
   credit_period: number;
   dept_code: string;
   dept_name:string;
-  tel: string;
-  fax: string;
+  party_phone: string;
+  party_fax: string;
   buyer: string;
   wo_no: string;
   curr_code: string;
   curr_name: string;
+   tax_code: string;
+   tx_compntcat_code_1: string;
+tax_code_name: string;
+tx_cat_name: string;
+tx_cat_code: string;
   ex_rate: number;
-  pay_terms: string;
-  delivery_term: string;
-  delivery_contact: string;
-  delivery_tel: string;
-  delivery_email: string;
+  payment_terms: string;
+  dlvr_term: string;
+  dlvr_contact: string;
+  dlvr_mobile: string;
+  dlvr_email: string;
   remarks: string;
+  disc_hdr_price: number;
+  disc_hdr_percent: number;
+  
+ 
   disc_price: number;
   disc_percent: number;
   tax_category: string;
-  tax_code: string;
+ 
   expense_ac_post: string;
   print_on_letterhead: string;
   project_name: string;
@@ -93,7 +104,7 @@ export interface TteJmiConsumType {
   company_code: string;
   doc_type: string;
   doc_no: number;
-
+  uppp:number;
   mi_doc_no: number;
 
   prod_code: string;
@@ -101,9 +112,12 @@ export interface TteJmiConsumType {
 
   quantity: number;
   qty: number;
-
+  disc_percent: number;
+  disc_price: number;
   p_uom: string;
   l_uom: string;
+  tax_code: string;
+  ex_rate: number;
 
   qty_puom: number;
   qty_luom: number;
