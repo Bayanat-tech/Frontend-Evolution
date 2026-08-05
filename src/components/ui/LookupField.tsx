@@ -25,6 +25,7 @@ type LookupFieldProps = {
   placeholder?: string;
   required?: boolean;
   multiSelect?: boolean;
+  className?: string;
 };
 
   export function LookupField({
@@ -42,6 +43,7 @@ type LookupFieldProps = {
     required,
     enforceRequired,
     multiSelect,
+    className,
   }: LookupFieldProps) {
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -208,7 +210,7 @@ type LookupFieldProps = {
           {!compact && <span>{label} {required && ( <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span>)}
         </span>}
           {/* <div ref={triggerRef} className={`flex w-full min-w-0 overflow-hidden rounded-md border bg-background ${compact ? "h-7" : "h-9"}`}> */}
-          <div ref={triggerRef} className={`relative flex w-full min-w-0 overflow-hidden rounded-md border bg-background ${compact ? "h-7" : "h-9"}`}> 
+          <div ref={triggerRef} className={`relative flex w-full min-w-0 overflow-hidden rounded-md border bg-background ${compact ? "h-7" : "h-9"} ${className || ""}`}> 
              {enforceRequired && (
              <input
               ref={validityRef}
