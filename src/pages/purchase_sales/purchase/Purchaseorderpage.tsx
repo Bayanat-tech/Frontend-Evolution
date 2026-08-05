@@ -20,6 +20,7 @@ export interface PurchaseOrderRow {
   doc_no: string;
   doc_date: string;
   quotn_no?: string;
+  purchase_actype?: any;
   quotn_date?: string;
    ref_no?: string;
   ref_date?: string;
@@ -30,11 +31,20 @@ export interface PurchaseOrderRow {
   ac_code: string;
   ac_name?: string;
   party_address?: string;
+  address?: string;
   credit_period?: number;
   dept_code?: string;
   party_phone?: string;
   party_fax?: string;
   buyer?: string;
+  tel?: string;
+  fax?: string;
+  pay_terms?: string;
+  delivery_term?: string;
+  delivery_contact?: string;
+  delivery_tel?: string;
+  delivery_email?: string;
+  party_name?: string;
   wo_no?: string;
   curr_code?: string;
   curr_name?: string;
