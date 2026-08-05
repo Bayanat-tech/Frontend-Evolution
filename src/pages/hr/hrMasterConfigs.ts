@@ -1,3 +1,4 @@
+
 import type { HrMasterConfig } from "./HrMasterPage";
 import { getDynamicLookup } from "../../api/lookups";
 import { getWmsMaster } from "../../api/wms";
@@ -874,6 +875,7 @@ buildDelete: (row, context) => ({
     gmEndpoint: "designation",
     routeKeys: ["designation"],
     keyField: "desg_code",
+    stripEditKeyOnSave: true, 
     fields: [
       { name: "desg_code", label: "Designation Code", required: true, disabledOnEdit: true, width: 170 },
       { name: "desg_name", label: "Designation Name", required: true, width: 280 },
@@ -987,3 +989,11 @@ buildDelete: (row, context) => ({
     deleteMode: "master",
   },
 };
+
+
+
+
+
+
+
+

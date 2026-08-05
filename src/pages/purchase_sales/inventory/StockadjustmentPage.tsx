@@ -216,9 +216,11 @@ export function StocksAdjectmentPage({ onClose }: { onClose?: () => void } = {})
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
-          <Button title="Add Sales Order" onClick={() => setDivisionPicker(true)}>
+            { tab === "PENDING" && (
+          <Button title="Add Purchase Order" onClick={() => setDivisionPicker(true)}>
             <Plus size={15} /> Add
           </Button>
+        )}
         </div>
       </div>
 
