@@ -17,8 +17,7 @@ import { useToast } from "../../../components/ui/AlertToast";
 import { type FormField, type DropdownOption } from "../../../config/formFields";
 import { getInboundTabConfig } from "../../../config/tabConfig";
 import {
-  type WmsRow,
-  value, normalizeRow, sqlEscape, stripUiFields, recalcQuantity, makeColumns,
+  type WmsRow, value, normalizeRow, sqlEscape, stripUiFields, recalcQuantity, makeColumns,
 } from "../../../utils/inboundHelpers";
 import { useDebounce } from "../../../hooks/useDebounce";
 import { Upload, AlertTriangle } from "lucide-react";
@@ -86,6 +85,9 @@ const loadActivityBilling = useCallback(async () => {
         tid.QUANTITY,
         tid.BILL_RATE,
         tid.BILL,
+        tid.TX_COMPNT_PERC_1,
+        tid.TX_COMPNT_AMT_1,
+        tid.TX_COMPNT_LCURAMT_1,
         tid.COST_RATE,
         tid.COST,
         tid.OTHER_SERVICES
@@ -109,13 +111,15 @@ useEffect(() => {
 }, [isActivityBilling, loadingJob, jobNo, prinCode]);
 
 const activityTotals = useMemo(() => {
-  const totalBill = activityRows.reduce((sum, r) => sum + Number(value(r, "bill") ?? 0), 0);
-  const totalCost = activityRows.reduce((sum, r) => sum + Number(value(r, "cost") ?? 0), 0);
-  return { totalBill, totalCost };
+  const totalBill   = activityRows.reduce((sum, r) => sum + Number(value(r, "bill") ?? 0), 0);
+  const totalTax    = activityRows.reduce((sum, r) => sum + Number(value(r, "TX_COMPNT_AMT_1") ?? 0), 0);
+  const totalAmount = activityRows.reduce((sum, r) => sum + Number(value(r, "TX_COMPNT_LCURAMT_1") ?? 0), 0);
+  const totalCost   = activityRows.reduce((sum, r) => sum + Number(value(r, "cost") ?? 0), 0);
+  return { totalBill, totalTax, totalAmount, totalCost };
 }, [activityRows]);
 
 // recompute BILL/COST locally as rates are edited, and track which rows changed
-const handleActivityRateChange = (row: WmsRow, field:"quantity" | "bill_rate" | "cost_rate", raw: string) => {
+const handleActivityRateChange = (row: WmsRow, field:"quantity" | "bill_rate" | "cost_rate" | "TX_COMPNT_PERC_1", raw: string) => {
   const num = raw === "" ? 0 : Number(raw);
   const actCode = String(value(row, "act_code") ?? "");
   setActivityRows((prev) =>
@@ -123,8 +127,14 @@ const handleActivityRateChange = (row: WmsRow, field:"quantity" | "bill_rate" | 
       if (String(value(r, "act_code") ?? "") !== actCode) return r;
       const updated: WmsRow = { ...r, [field]: num };
       const qty = Number(value(updated, "quantity") ?? 0);
-      updated.bill = qty * Number(value(updated, "bill_rate") ?? 0);
+      const billRate = Number(value(updated, "bill_rate") ?? 0);
+      const taxPercent = Number(value(updated, "TX_COMPNT_PERC_1") ?? 0);
+      const bill = qty * billRate;
+      const taxAmount = bill * (taxPercent / 100);
+      updated.bill = bill;
       updated.cost = qty * Number(value(updated, "cost_rate") ?? 0);
+      updated.TX_COMPNT_AMT_1 = taxAmount;
+      updated.TX_COMPNT_LCURAMT_1 = bill + taxAmount;
       setActivityEdited((prevEdited) => ({ ...prevEdited, [actCode]: updated }));
       return updated;
     })
@@ -159,12 +169,17 @@ const handleActivityBillingSubmit = async () => {
         ACT_CODE: String(value(row, "act_code") ?? ""),
         QUANTITY: Number(value(row, "quantity") ?? 0),
         BILL_RATE: Number(value(row, "bill_rate") ?? 0),
+        TX_COMPNT_PERC_1: Number(value(row, "TX_COMPNT_PERC_1") ?? 0),
+        TX_COMPNT_AMT_1: Number(value(row, "TX_COMPNT_AMT_1") ?? 0),
+        TX_COMPNT_LCURAMT_1: Number(value(row, "TX_COMPNT_LCURAMT_1") ?? 0),
         OTHER_SERVICES: value(row, "other_services") || null,
         USER_ID: userId,
         COST_RATE: Number(value(row, "cost_rate") ?? 0), 
         // TODO: COST_RATE (value(row, "cost_rate")) has no matching column in
         // PROC_INS_UPD_TN_INVOICE's TN_INVOICE_DET insert list - confirm which
         // TX_COMPNT_*_COST field should carry it before wiring this in.
+        // TODO: confirm TAX_PERCENT / TX_COMPNT_AMT_1 / TX_COMPNT_LCURAMT_1 column names
+        // match what PROC_INS_UPD_TN_INVOICE expects for TN_INVOICE_DET.
       }));
 
     const payload = {
@@ -857,7 +872,12 @@ if (isActivityBilling) {
   const handleAddActivity = () => {
     setActivityRows((cur) => [
       ...cur,
-      { act_code: "", activity: "", quantity: 0, bill_rate: 0, bill: 0, cost_rate: 0, cost: 0, other_services: "" },
+      {
+        act_code: "", activity: "", quantity: 0,
+        bill_rate: 0, bill: 0,
+        TX_COMPNT_PERC_1: 0, TX_COMPNT_AMT_1: 0, TX_COMPNT_LCURAMT_1: 0,
+        cost_rate: 0, cost: 0, other_services: "",
+      },
     ]);
   }
 
@@ -889,7 +909,11 @@ if (isActivityBilling) {
     });
   };
 
-  const handleActivityRateChange = (row: WmsRow, field: "quantity" | "bill_rate" | "cost_rate", rawValue: string) => {
+  const handleActivityRateChange = (
+    row: WmsRow,
+    field: "quantity" | "bill_rate" | "cost_rate" | "TX_COMPNT_PERC_1",
+    rawValue: string
+  ) => {
     const i = activityRows.indexOf(row);
     if (i === -1) return;
     const numValue = Number(rawValue);
@@ -899,11 +923,21 @@ if (isActivityBilling) {
       const next = cur.map((r, idx) => {
         if (idx !== i) return r;
         const updated: WmsRow = { ...r, [field]: safeValue };
-        const quantity = Number(field === "quantity" ? safeValue : value(updated, "quantity") ?? 0);
-        const billRate = Number(field === "bill_rate" ? safeValue : value(updated, "bill_rate") ?? 0);
-        const costRate = Number(field === "cost_rate" ? safeValue : value(updated, "cost_rate") ?? 0);
-        updated.bill = quantity * billRate;
-        updated.cost = quantity * costRate;
+
+        const quantity   = Number(field === "quantity"    ? safeValue : value(updated, "quantity")    ?? 0);
+        const billRate    = Number(field === "bill_rate"   ? safeValue : value(updated, "bill_rate")    ?? 0);
+        const costRate    = Number(field === "cost_rate"   ? safeValue : value(updated, "cost_rate")    ?? 0);
+        const taxPercent  = Number(field === "TX_COMPNT_PERC_1" ? safeValue : value(updated, "TX_COMPNT_PERC_1")  ?? 0);
+
+        const bill = quantity * billRate;
+        const taxAmount = bill * (taxPercent / 100);
+
+        updated.bill         = bill;
+        updated.cost         = quantity * costRate;
+        updated.TX_COMPNT_PERC_1  = taxPercent;
+        updated.TX_COMPNT_AMT_1   = taxAmount;
+        updated.TX_COMPNT_LCURAMT_1 = bill + taxAmount;
+
         return updated;
       });
       const updatedRow = next[i];
@@ -959,6 +993,15 @@ if (isActivityBilling) {
                 Bill
               </th>
               <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Tax Percent
+              </th>
+              <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Tax Amount
+              </th>
+              <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Total Amount
+              </th>
+              <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Cost Rate
               </th>
               <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -972,13 +1015,13 @@ if (isActivityBilling) {
           <tbody className="divide-y divide-border">
             {activityLoading ? (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                <td colSpan={10} className="px-3 py-6 text-center text-sm text-muted-foreground">
                   Loading...
                 </td>
               </tr>
             ) : activityRows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                <td colSpan={10} className="px-3 py-6 text-center text-sm text-muted-foreground">
                   No records found
                 </td>
               </tr>
@@ -1028,6 +1071,23 @@ if (isActivityBilling) {
                   <td className="px-3 py-2.5 text-right font-medium text-foreground">
                     {Number(value(row, "bill") ?? 0).toFixed(2)}
                   </td>
+
+                  <td className="px-3 py-1.5 text-right">
+                    <input
+                      type="number" min="0" step="0.01"
+                      className="h-8 w-20 rounded-md border border-input bg-background px-2 text-right text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/40"
+                      value={String(value(row, "TX_COMPNT_PERC_1") ?? 0)}
+                      onChange={(e) => handleActivityRateChange(row, "TX_COMPNT_PERC_1", e.target.value)}
+                    />
+                  </td>
+
+                  <td className="px-3 py-2.5 text-right font-medium text-foreground">
+                    {Number(value(row, "TX_COMPNT_AMT_1") ?? 0).toFixed(2)}
+                  </td>
+
+                  <td className="px-3 py-2.5 text-right font-semibold text-primary">
+                    {Number(value(row, "TX_COMPNT_LCURAMT_1") ?? 0).toFixed(2)}
+                  </td>
                   <td className="px-3 py-1.5 text-right">
                     <input
                       type="number" min="0" step="0.01"
@@ -1054,6 +1114,13 @@ if (isActivityBilling) {
                 <td className="px-3 py-2.5" />
                 <td className="px-3 py-2.5 text-right text-sm font-semibold text-primary">
                   {activityTotals.totalBill.toFixed(2)}
+                </td>
+                <td className="px-3 py-2.5" />
+                <td className="px-3 py-2.5 text-right text-sm font-semibold text-primary">
+                  {activityTotals.totalTax.toFixed(2)}
+                </td>
+                <td className="px-3 py-2.5 text-right text-sm font-semibold text-primary">
+                  {activityTotals.totalAmount.toFixed(2)}
                 </td>
                 <td className="px-3 py-2.5" />
                 <td className="px-3 py-2.5 text-right text-sm font-semibold text-primary">

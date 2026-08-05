@@ -174,6 +174,7 @@ import { StocksTransferPage } from "../pages/purchase_sales/inventory/StockTrans
 import { StocksAdjectmentPage } from "../pages/purchase_sales/inventory/StockadjustmentPage";
 import { JobProductionOrderPage } from "../pages/purchase_sales/production/JobProductionPage";
 import { LeaveTypesPage } from "../pages/hr/Leavetypespage";
+import AccuralPayUnit from "../pages/hr/AccuralPayUnit";
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -193,6 +194,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: 'HR Accural Pay Unit',
+    match: ({pathname}) => pathname.toLowerCase().includes("/hr/hr/transactions/accural_pay_units"),
+    element: () => <AccuralPayUnit />,
+  },
   {
     name: "Activity WMS Master",
     match: ({pathname}) => pathname.toLowerCase().includes("/wms/wms/master/gm/activity"),
