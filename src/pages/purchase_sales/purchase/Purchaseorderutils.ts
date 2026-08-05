@@ -112,7 +112,7 @@ tx_compntcat_code_1: editor?.mode === "edit" ? editor.row.tx_compntcat_code_1 ||
     next_action_by: "",
     sentback_reason: "",
     reject_reason: "",
-  };
+  } as PurchaseOrderForm;
 }
 
 export async function fetchPurchaseOrderHeader(
