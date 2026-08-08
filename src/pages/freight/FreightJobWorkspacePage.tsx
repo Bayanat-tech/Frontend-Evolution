@@ -10,6 +10,7 @@ import { useAuth } from "../../state/AuthContext";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
 import { FreightJobPage } from "./FreightJobPage";
 import { FreightPacklistPage } from "./FreightPacklistPage";
+import { FreightJobSheetPage } from "./FreightJobSheetPage";
 import { FreightJobActivitiesPage } from "./FreightJobActivitiesPage";
 import { FreightJobFollowupTab } from "./FreightJobFollowupTabs";
 
@@ -264,7 +265,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
 
       {activeTab === "job" && <FreightJobPage target={target} initialJob={selectedJob} startMode="editor" />}
       {activeTab === "packlist" && <FreightPacklistPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="packlist" />}
-      {activeTab === "jobsheet" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="jobsheet" />}
+      {activeTab === "jobsheet" && <FreightJobSheetPage target={target} initialJob={selectedJob} />}
       {activeTab === "alerts" && <FreightJobFollowupTab target={target} kind="alerts" initialJob={selectedJob} />}
       {activeTab === "instructions" && <FreightJobFollowupTab target={target} kind="instructions" initialJob={selectedJob} />}
       {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" initialJob={selectedJob} />}
