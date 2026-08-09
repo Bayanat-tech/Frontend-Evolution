@@ -148,36 +148,35 @@ export async function fetchPurchaseOrderDetail(
     loginid: loginid || "ADMIN",
   });
 
-  return (rows || []).map((raw) => {
-    const row = lowerRecord(raw as Record<string, unknown>);
-    return {
-      id: newId(),
-      div_code: text(row.div_code),
-      zone_code: text(row.zone_code),
-      prod_code: text(row.prod_code),
-      prod_name: text(row.prod_name),
-      p_uom: text(row.p_uom),
-      qty_puom: numberOrZero(row.qty_puom),
-      l_uom: text(row.l_uom),
-      qty_luom: numberOrZero(row.qty_luom),
-      unit_price: numberOrZero(row.unit_price),
-      disc_hdr_percent: numberOrZero(row.disc_hdr_percent),
-      disc_percent: numberOrZero(row.disc_percent),
-       disc_price: numberOrZero(row.disc_price),
-      tax_pct: numberOrZero(row.tax_pct ?? row.tax_percent),
-      tax_amount: numberOrZero(row.tax_amount),
-      lcur_amount: numberOrZero(row.lcur_amount),
-      required_dt: text(row.required_dt),
-      line_remarks: text(row.remarks ?? row.line_remarks),
-      tax_cat: text(row.tax_cat ?? row.tax_category),
-      tax_code: text(row.tax_code),
-      tax_lcur_amount: numberOrZero(row.tax_lcur_amount),
-      lcur_amount_disc: numberOrZero(row.lcur_amount_disc ?? row.lcur_amount_discount),
-      uppp:numberOrZero(row.uppp),
-      quantity:numberOrZero(row.quantity),
-      ex_rate:numberOrZero(row.ex_rate),
-    } satisfies PurchaseOrderLineRow;
-  });
+    return (rows || []).map((raw) => {
+        const row = lowerRecord(raw as Record<string, unknown>);
+        return {
+            id: newId(),
+            div_code: text(row.div_code),
+            zone_code: text(row.zone),
+            prod_code: text(row.prod_code),
+            prod_name: text(row.prod_name),
+            p_uom: text(row.p_uom),
+            qty_puom: numberOrZero(row.qty_puom),
+            l_uom: text(row.l_uom),
+            qty_luom: numberOrZero(row.qty_luom),
+            unit_price: numberOrZero(row.unit_price),
+            disc_price: numberOrZero(row.disc_price),
+            quantity: numberOrZero(row.qty ?? row.quantity),
+            tax_pct: numberOrZero(row.tax_pct ?? row.tax_percent),
+            tax_amount: numberOrZero(row.tax_amount),
+            lcur_amount: numberOrZero(row.lcurr_amount),
+            required_dt: text(row.req_date),
+            line_remarks: text(row.remarks ?? row.line_remarks),
+            tax_cat: text(row.tax_cat ?? row.tax_category),
+            tax_code: text(row.tax_code),
+            tax_lcur_amount: numberOrZero(row.tax_lcurr_amount),
+            lcur_amount_disc: numberOrZero(row.lcurr_amount_disc ?? row.lcurr_amount_discount),
+            ex_rate: numberOrZero(row.ex_rate ?? 1),
+            disc_percent: numberOrZero(row.disc_pct ?? row.disc_percent),
+            disc_hdr_percent: numberOrZero(row.disc_hdr_percent ?? row.disc_pct ?? row.disc_percent),
+        } satisfies PurchaseOrderLineRow;
+    });
 }
 
 export async function fetchjmiConsumDetailsDetail(
