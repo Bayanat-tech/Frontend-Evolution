@@ -1,3 +1,4 @@
+
 import type { HrMasterConfig } from "./HrMasterPage";
 import { getDynamicLookup } from "../../api/lookups";
 import { getWmsMaster } from "../../api/wms";
@@ -807,24 +808,10 @@ buildDelete: (row, context) => ({
     routeKeys: ["categorymaster", "category", "appraisal categories"],
     keyField: "category_code",
     source: "dynamic",
-    listQuery: (context) => ({
-      parameter: "HR_CATEGORY_SELECT",
-      loginid: context.loginid,
-      code1: context.companyCode,
-      code2: "",
-      code3: "",
-      code4: "",
-      number1: 0,
-      number2: 0,
-      number3: 0,
-      number4: 0,
-      date1: null,
-      date2: null,
-      date3: null,
-      date4: null,
-    }),
+   listQuery: dynamicList("MST_HR_MS_HR_CATEGORY",true),
+   autoGenerateKey: true,
     buildSave: (form, context) => ({
-      parameter: "MST_HR_CATEGORY",
+      parameter: "MST_HR_CATEGORY",  //ins_upd_category
       loginid: context.loginid,
       val1s1: context.companyCode,
       val1s2: text(form, "category_code"),
@@ -874,6 +861,7 @@ buildDelete: (row, context) => ({
     gmEndpoint: "designation",
     routeKeys: ["designation"],
     keyField: "desg_code",
+    stripEditKeyOnSave: true, 
     fields: [
       { name: "desg_code", label: "Designation Code", required: true, disabledOnEdit: true, width: 170 },
       { name: "desg_name", label: "Designation Name", required: true, width: 280 },
@@ -987,3 +975,11 @@ buildDelete: (row, context) => ({
     deleteMode: "master",
   },
 };
+
+
+
+
+
+
+
+

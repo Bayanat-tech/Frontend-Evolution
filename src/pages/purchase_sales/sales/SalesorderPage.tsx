@@ -13,7 +13,7 @@ import { useAuth } from "../../../state/AuthContext";
 import { TabStrip } from "../../vendor/components";
 import { PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchaseordereditor";
 import { SalesOrderEditor } from "./SalesOrdereditor";
-import { SDN_CONFIG } from "./SalesOrdertypes";
+import { SDN_CONFIG, SO_CONFIG } from "./SalesOrdertypes";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface SalesOrderRow {
@@ -167,7 +167,6 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
     { accessorKey: "ac_code", header: "A/c Code" },
     { accessorKey: "ac_name", header: "A/c Name" },
     { accessorKey: "curr_code", header: "Currency" },
-    { accessorKey: "buyer", header: "Buyer" },
     {
       accessorKey: "canceled",
       header: "Status",
@@ -216,9 +215,11 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
-          <Button title="Add Sales Order" onClick={() => setDivisionPicker(true)}>
+           { tab === "PENDING" && (
+          <Button title="Add Purchase Order" onClick={() => setDivisionPicker(true)}>
             <Plus size={15} /> Add
           </Button>
+        )}
         </div>
       </div>
 
@@ -286,7 +287,7 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
         <div className="fixed inset-0 z-50 bg-background">
           <SalesOrderEditor
             key={editor?.mode === "edit" ? editor.row.doc_no : editor?.mode || "create"}
-            config={SDN_CONFIG}
+            config={SO_CONFIG}
             editor={editor}
             isPendingTab={isPendingTab}
             onClose={() => setEditor(null)}
