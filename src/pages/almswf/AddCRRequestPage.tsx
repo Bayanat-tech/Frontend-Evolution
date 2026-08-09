@@ -27,7 +27,6 @@ export type TCRHeader = {
   CREATE_DATE?: string | Date;
   LAST_ACTION?: string;
   HISTORY_SERIAL?: number;
-  NEXT_ACTION_BY?: string;
 
   COMPANY_NAME?: string;
   AWARE_CUSTOMER_CODE?: string;
@@ -38,7 +37,7 @@ export type TCRHeader = {
   PO_BOX?: string;
   POSTAL_CODE?: number;
   CITY?: string;
-  TEL_NO?: string;
+  OFFICE_TEL_NO?: string;
   FAX_NO?: string;
   WEBSITE?: string;
   EMAIL?: string;
@@ -96,6 +95,11 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const Required = () => <span className="text-destructive ml-0.5">*</span>;
 
   // ── Fetch existing CR (edit/view mode) ────────────────────────────────────
+  // Uses Amlspf_VW_CR_PAGE — same parameter as before, but the backend SQL
+  // for this WHEN case has been repointed from the limited VW_CR_PAGE view
+  // to the full CREDIT_FORM_REQUEST table, so all fields (WAY_NO, BLDG_NO,
+  // CITY, EMAIL, CREDIT_LIMIT, contact fields, etc.) now come through.
+  // almsCommonSelect auto-uppercases keys, so no manual normalization needed here.
   // FIX: was `enabled: isEditMode && !!requestNumber` — this meant View mode
   // (isEditMode=false, isViewMode=true) never fetched, so the form always
   // rendered blank even though a valid requestNumber was passed in.
@@ -127,7 +131,9 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     setHeader((prev) => ({ ...prev, [field]: value }));
 
   // ── Save (matches PROC_BUILD_DYNAMIC_INS_UPD_COLUMN90 -> 'capex_req_ins_upd') ──
- const saveHeader = async (status: string, extra: Record<string, unknown> = {}) =>
+  // `extra` lets Reject/Send Back override specific fields (the reason text)
+  // without duplicating this whole payload.
+  const saveHeader = async (status: string, extra: Record<string, unknown> = {}) =>
     executeDynamicMutationColumn90({
       parameter: "capex_req_ins_upd",
       loginid,
@@ -143,6 +149,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       val1s10: header.CREATE_USER || loginid,
       val1s11: loginid,
       val1s12: status,
+      val1s13: header.FAX_NO || "", // FAX_NO — was missing entirely before
 
       val1s18: header.COMPANY_NAME || "",
       val1s19: header.AWARE_CUSTOMER_CODE || "",
@@ -152,7 +159,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       val1s23: header.LOCATION || "",
       val1s24: header.PO_BOX || "",
       val1s25: header.CITY || "",
-      val1s26: header.TEL_NO || "",
+      val1s26: header.OFFICE_TEL_NO || "",
       val1s27: header.WEBSITE || "",
       val1s28: header.EMAIL || "",
 
@@ -174,11 +181,15 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       val1s40: header.ACCOUNT_ENV_WMS === "Y" ? "Y" : "N",
       val1s41: header.ACCOUNT_ENV_FREIGHT === "Y" ? "Y" : "N",
       val1s42: header.ACCOUNT_NO || "",
-      val1s43: loginid,
-      val1s44: loginid,
-      val1s45: header.NEXT_ACTION_BY || "",
-      val1s46: "",
-      val1s47: "",
+
+      // FIX: these were missing entirely — backend's UPDATE branch reads
+      // CREATED_BY/UPDATED_BY/NEXT_ACTION_BY/SENTBACK_REASON/REJECT_REASON
+      // from val1s43-47, so Reject/Send Back had nothing to write into.
+      val1s43: loginid,   // CREATED_BY (kept as-is on update; harmless)
+      val1s44: loginid,   // UPDATED_BY
+      val1s45: "",        // NEXT_ACTION_BY
+      val1s46: "",        // SENTBACK_REASON (overridden by handleSendBackConfirm)
+      val1s47: "",        // REJECT_REASON (overridden by handleRejectConfirm)
 
       val1n1: header.FLOW_LEVEL_INITIAL || 1,
       val1n2: header.FLOW_LEVEL_RUNNING || 1,
@@ -188,12 +199,9 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       val1n7: header.CREDIT_LIMIT || 0,
       val1n8: header.REQUESTED_CREDIT_PERIOD || 0,
       val1n9: header.SANCTIONED_CREDIT_LIMIT_AMT || 0,
-      // val1n10: header.SANCTIONED_CREDIT_PERIOD || 0,
-
       val1n10: header.SANCTIONED_CREDIT_PERIOD || 0,
 
-      ...extra,
-  
+      ...extra, // Reject/Send Back override val1s46/47 here
     });
 
   const runAction = async (status: string, successMsg: string) => {
@@ -216,42 +224,49 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const handleSubmit = () => runAction("SUBMITTED", "CR submitted successfully!");
 
   const handleRejectConfirm = async () => {
-  if (!remarkText.trim()) return setNotice({ type: "error", message: "Please enter a reject remark" });
-  setSaving(true);
-  setNotice(null);
-  try {
-    const result = await saveHeader("REJECTED", { val1s47: remarkText });
-    if (result.success) {
-      setNotice({ type: "success", message: "CR rejected successfully!" });
-      setRejectOpen(false);
-      setRemarkText("");
-      onClose(true);
+    if (!remarkText.trim()) return setNotice({ type: "error", message: "Please enter a reject remark" });
+    setSaving(true);
+    setNotice(null);
+    try {
+      // FIX: "Amlspf_RejectCR" doesn't exist on the backend — Reject must go
+      // through the same capex_req_ins_upd UPDATE path as Save/Submit, with
+      // LAST_ACTION='REJECTED' and the reason written to REJECT_REASON (val1s47).
+      const result = await saveHeader("REJECTED", { val1s47: remarkText });
+      if (result.success) {
+        setNotice({ type: "success", message: "CR rejected successfully!" });
+        setRejectOpen(false);
+        setRemarkText("");
+        onClose(true);
+      }
+    } catch (err) {
+      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to reject" });
+    } finally {
+      setSaving(false);
     }
-  } catch (err) {
-    setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to reject" });
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   const handleSendBackConfirm = async () => {
-  if (!remarkText.trim()) return setNotice({ type: "error", message: "Please enter a send back reason" });
-  setSaving(true);
-  setNotice(null);
-  try {
-    const result = await saveHeader("SENTBACK", { val1s46: remarkText });
-    if (result.success) {
-      setNotice({ type: "success", message: "CR sent back successfully!" });
-      setSendBackOpen(false);
-      setRemarkText("");
-      onClose(true);
+    if (!remarkText.trim()) return setNotice({ type: "error", message: "Please enter a send back reason" });
+    setSaving(true);
+    setNotice(null);
+    try {
+      // FIX: "Amlspf_SendBackCR" doesn't exist on the backend — Send Back must
+      // go through capex_req_ins_upd too. IMPORTANT: the tab-list query filters
+      // on LAST_ACTION = 'SENTBACK' (not 'SENDBACK'), so the status saved here
+      // must be 'SENTBACK' for the record to show up under the Send Back tab.
+      const result = await saveHeader("SENTBACK", { val1s46: remarkText });
+      if (result.success) {
+        setNotice({ type: "success", message: "CR sent back successfully!" });
+        setSendBackOpen(false);
+        setRemarkText("");
+        onClose(true);
+      }
+    } catch (err) {
+      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to send back" });
+    } finally {
+      setSaving(false);
     }
-  } catch (err) {
-    setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to send back" });
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-background">
@@ -304,7 +319,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                   </label>
                   <label className="field col-span-3">
                     <span>Company Name<Required /></span>
-                    <Input disabled={disabled} value={header.COMPANY_NAME || ""} onChange={(e) => setHdr("COMPANY_NAME", e.target.value)} />
+                    <Input disabled={disabled} value={header.DESCRIPTION || ""} onChange={(e) => setHdr("DESCRIPTION", e.target.value)} />
                   </label>
                 </div>
               </div>
@@ -323,7 +338,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                   <label className="field"><span>Po Box<Required /></span><Input disabled={disabled} value={header.PO_BOX || ""} onChange={(e) => setHdr("PO_BOX", e.target.value)} /></label>
                   <label className="field"><span>Postal Code<Required /></span><Input disabled={disabled} type="number" value={header.POSTAL_CODE ?? ""} onChange={(e) => setHdr("POSTAL_CODE", Number(e.target.value))} /></label>
                   <label className="field"><span>City<Required /></span><Input disabled={disabled} value={header.CITY || ""} onChange={(e) => setHdr("CITY", e.target.value)} /></label>
-                  <label className="field"><span>Tel No<Required /></span><Input disabled={disabled} value={header.TEL_NO || ""} onChange={(e) => setHdr("TEL_NO", e.target.value)} /></label>
+                  <label className="field"><span>Tel No<Required /></span><Input disabled={disabled} value={header.OFFICE_TEL_NO || ""} onChange={(e) => setHdr("OFFICE_TEL_NO", e.target.value)} /></label>
 
                   <label className="field"><span>Fax No<Required /></span><Input disabled={disabled} value={header.FAX_NO || ""} onChange={(e) => setHdr("FAX_NO", e.target.value)} /></label>
                   <label className="field"><span>Website<Required /></span><Input disabled={disabled} value={header.WEBSITE || ""} onChange={(e) => setHdr("WEBSITE", e.target.value)} /></label>
@@ -344,32 +359,11 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                   <label className="field"><span>Business Sector<Required /></span><Input disabled={disabled} value={header.BUSINESS_SECTOR || ""} onChange={(e) => setHdr("BUSINESS_SECTOR", e.target.value)} /></label>
                   <label className="field"><span>Contact Person<Required /></span><Input disabled={disabled} value={header.REMARKS_CONTACT_PERSON || ""} onChange={(e) => setHdr("REMARKS_CONTACT_PERSON", e.target.value)} /></label>
                   <label className="field"><span>Authorized Signatory<Required /></span><Input disabled={disabled} value={header.AUTHORIZED_SIGNATORY || ""} onChange={(e) => setHdr("AUTHORIZED_SIGNATORY", e.target.value)} /></label>
-                  <label className="field">
-                    <span>Comments<Required /></span>
-                    <textarea
-                      disabled={disabled}
-                      rows={2}
-                      value={header.COMMENTS || ""}
-                      onChange={(e) => setHdr("COMMENTS", e.target.value)}
-                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                    />
-                  </label>
-
-                  <label className="field">
-                    <span>Remarks<Required /></span>
-                    <textarea
-                      disabled={disabled}
-                      rows={1}
-                      value={header.REMARKS || ""}
-                      onChange={(e) => setHdr("REMARKS", e.target.value)}
-                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                    />
-                  </label>
                 </div>
               </div>
 
               {/* Comments */}
-              {/* <div className="rounded-md border bg-card">
+              <div className="rounded-md border bg-card">
                 <div className="border-b bg-secondary/40 px-3 py-1">
                   <h3 className="m-0 text-sm font-semibold leading-tight">Comments</h3>
                 </div>
@@ -395,7 +389,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                     />
                   </label>
                 </div>
-              </div> */}
+              </div>
 
               {/* Credit Requested */}
               <div className="rounded-md border bg-card">
