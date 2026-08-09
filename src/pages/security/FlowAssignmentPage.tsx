@@ -12,10 +12,9 @@ import {
   getFlowAssignLevelDetails,
   getFlowAssignRoles,
   getFlowAssignRoleUsers,
-  addUserToRole,
-  removeUserFromRole,
   saveFlowAssignLevels,
   insSecRoleFunctionAccessUser,
+  executeWmsInboundSqlCached,
   type TFlowRoleUser,
 } from "../../api/wms";
 import { useAuth } from "../../state/AuthContext";
@@ -79,7 +78,6 @@ export function FlowAssignmentPage() {
 
   const [rightPanelContext, setRightPanelContext] = useState<string>("");
 
-  const [selectedUserRow, setSelectedUserRow] = useState<TFlowRoleUser | null>(null);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   // ── Add User modal state ──────────────────────────────────────────────
@@ -90,7 +88,11 @@ export function FlowAssignmentPage() {
   const [modalRole, setModalRole] = useState("");
   const [modalRoleDesc, setModalRoleDesc] = useState("");
   const [addUserLoginId, setAddUserLoginId] = useState("");
-  const [addingUser, setAddingUser] = useState(false);
+  const [addUserLoginName, setAddUserLoginName] = useState("");
+  // Tracks whether the Assigned Users grid has unsaved local changes
+  // (additions via the modal, or removals via the row delete icon) so
+  // Save Role knows there's something to push.
+  const [roleUsersDirty, setRoleUsersDirty] = useState(false);
 
   const loadProcessOptions = useCallback(async () => {
     const rows = await getFlowAssignProcesses(companyCode);
@@ -99,6 +101,14 @@ export function FlowAssignmentPage() {
 
   const loadRoleOptions = useCallback(async () => {
     const rows = await getFlowAssignRoles(companyCode);
+    return (rows ?? []) as unknown as LookupRow[];
+  }, [companyCode]);
+
+  const loadUserOptions = useCallback(async () => {
+    const safeCompanyCode = companyCode.replace(/'/g, "''");
+    const rows = await executeWmsInboundSqlCached(
+      `select * from sec_login where company_code = '${safeCompanyCode}'`
+    );
     return (rows ?? []) as unknown as LookupRow[];
   }, [companyCode]);
 
@@ -169,7 +179,7 @@ export function FlowAssignmentPage() {
       setLevelDirty(false);
       setSelectedRole("");
       setSelectedRoleDesc("");
-      setSelectedUserRow(null);
+      setRoleUsersDirty(false);
 
       const filledCount = Object.values(next).filter(Boolean).length;
       setRightPanelContext(filledCount ? `Levels 1–${filledCount}` : "");
@@ -193,13 +203,28 @@ export function FlowAssignmentPage() {
     const levelLabel = LEVEL_FIELDS.find((field) => field.key === key)?.label || key;
     setSelectedRole(newValue);
     setSelectedRoleDesc(newValue ? val((row as Record<string, unknown>) || {}, "ROLE_DESC") : "");
-    setSelectedUserRow(null);
+    setRoleUsersDirty(false);
     setRightPanelContext(newValue ? `${levelLabel} — Role ${newValue}` : `${levelLabel} — no role selected yet`);
     if (newValue) {
       void loadRoleUsers(newValue);
     } else {
       setUserRows([]);
     }
+  };
+
+  // Clicking a level's label (not the dropdown itself) selects that level's
+  // already-assigned role in the Role Name field below, without changing
+  // the level's value.
+  const handleSelectLevelRole = (key: LevelKey) => {
+    const roleId = levelValues[key];
+    if (!roleId) return;
+
+    const levelLabel = LEVEL_FIELDS.find((field) => field.key === key)?.label || key;
+    setSelectedRole(roleId);
+    setSelectedRoleDesc(levelDescs[key]);
+    setRoleUsersDirty(false);
+    setRightPanelContext(`${levelLabel} — Role ${roleId}`);
+    void loadRoleUsers(roleId);
   };
 
   const totalLevelCount = useMemo(
@@ -252,19 +277,33 @@ export function FlowAssignmentPage() {
       setNotice({ type: "error", message: "Please select a role first." });
       return;
     }
+    if (!roleUsersDirty) {
+      setNotice({ type: "error", message: "No changes to save." });
+      return;
+    }
 
     setSavingRole(true);
     try {
-      const result = await insSecRoleFunctionAccessUser([
-        {
+      // Send the full current grid for this role — any user removed locally
+      // via the row delete icon is simply absent here, so the backend drops
+      // it on save instead of us calling a separate delete endpoint.
+      const rows = userRows.map((u) => {
+        const rec = u as Record<string, unknown>;
+        const rowLoginid = val(rec, "loginid");
+        return {
           company_code: companyCode,
+          loginid: rowLoginid,
           serial_no_or_role_id: selectedRole,
+          userid: rowLoginid,
           create_user: loginid,
-        },
-      ]);
+        };
+      });
+
+      const result = await insSecRoleFunctionAccessUser(rows);
 
       if (result?.success) {
         setNotice({ type: "success", message: "Role saved successfully." });
+        setRoleUsersDirty(false);
         await loadRoleUsers(selectedRole);
       } else {
         throw new Error(result?.message || "Save failed");
@@ -279,19 +318,40 @@ export function FlowAssignmentPage() {
     }
   };
 
+  // Removes a row from the grid only — nothing is sent to the backend until
+  // Save Role is clicked, at which point the row's absence is what deletes it.
+  const handleRemoveUserRow = (row: TFlowRoleUser) => {
+    setUserRows((prev) =>
+      prev.filter(
+        (r) =>
+          !(
+            val(r, "loginid") === val(row, "loginid") &&
+            val(r, "serial_no_or_role_id") === val(row, "serial_no_or_role_id")
+          )
+      )
+    );
+    setRoleUsersDirty(true);
+  };
+
   const userColumns = useMemo<ColumnDef<TFlowRoleUser>[]>(() => [
+    { accessorKey: "loginid", header: "User Code", size: 140, cell: ({ row }) => val(row.original, "loginid") },
+    { accessorKey: "serial_no_or_role_id", header: "Role Code", size: 130, cell: ({ row }) => val(row.original, "serial_no_or_role_id") || "-" },
+    { accessorKey: "username", header: "User Name", size: 200, cell: ({ row }) => val(row.original, "username") || "-" },
     {
-      accessorKey: "loginid",
-      header: "User Code",
-      size: 140,
+      id: "actions",
+      header: "",
+      size: 50,
       cell: ({ row }) => (
-        <button className="text-left hover:underline" onClick={() => setSelectedUserRow(row.original)}>
-          {val(row.original, "loginid")}
+        <button
+          type="button"
+          className="text-muted-foreground hover:text-red-500"
+          title="Remove from role"
+          onClick={() => handleRemoveUserRow(row.original)}
+        >
+          <Trash2 size={14} />
         </button>
       ),
     },
-    { accessorKey: "serial_no_or_role_id", header: "Role Code", size: 130, cell: ({ row }) => val(row.original, "serial_no_or_role_id") || "-" },
-    { accessorKey: "username", header: "User Name", size: 200, cell: ({ row }) => val(row.original, "username") || "-" },
   ], []);
 
   // Add is always openable now — even with no role/level selected (e.g. a
@@ -300,44 +360,31 @@ export function FlowAssignmentPage() {
     setModalRole(selectedRole || "");
     setModalRoleDesc(selectedRole ? selectedRoleDesc : "");
     setAddUserLoginId("");
+    setAddUserLoginName("");
     setAddUserOpen(true);
   };
 
-  const handleConfirmAddUser = async () => {
+  const handleConfirmAddUser = () => {
     if (!modalRole || !addUserLoginId) return;
-    setAddingUser(true);
-    try {
-      await addUserToRole(companyCode, modalRole, addUserLoginId, loginid);
-      setNotice({ type: "success", message: "User added to role." });
-      setAddUserOpen(false);
-      setAddUserLoginId("");
 
-      // Reflect the role picked in the modal back onto the page so the
-      // grid below shows the role that was just updated.
-      setSelectedRole(modalRole);
-      setSelectedRoleDesc(modalRoleDesc);
-      setRightPanelContext(`Role ${modalRole}`);
-      await loadRoleUsers(modalRole);
-    } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to add user." });
-    } finally {
-      setAddingUser(false);
-    }
-  };
+    const newRow: TFlowRoleUser = {
+      loginid: addUserLoginId,
+      username: addUserLoginName,
+      serial_no_or_role_id: modalRole,
+    };
 
-  const handleDeleteUser = async () => {
-    if (!selectedRole || !selectedUserRow) {
-      setNotice({ type: "error", message: "Select a role, then a user row, first." });
-      return;
-    }
-    try {
-      await removeUserFromRole(companyCode, selectedRole, val(selectedUserRow, "loginid"), loginid);
-      setNotice({ type: "success", message: "User removed from role." });
-      setSelectedUserRow(null);
-      await loadRoleUsers(selectedRole);
-    } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to remove user." });
-    }
+    setUserRows((prev) => [...prev, newRow]);
+    setRoleUsersDirty(true);
+
+    setAddUserOpen(false);
+    setAddUserLoginId("");
+    setAddUserLoginName("");
+
+    // Reflect the role picked in the modal back onto the page so the
+    // grid below shows the role that was just staged.
+    setSelectedRole(modalRole);
+    setSelectedRoleDesc(modalRoleDesc);
+    setRightPanelContext(`Role ${modalRole}`);
   };
 
   return (
@@ -374,7 +421,11 @@ export function FlowAssignmentPage() {
         <div className="grid grid-cols-1 gap-2.5">
           {LEVEL_FIELDS.map(({ key, label, required }) => (
             <div key={key} className="flex items-center gap-3">
-              <span className="w-16 shrink-0 text-xs font-medium text-muted-foreground sm:w-20">
+              <span
+                className="w-16 shrink-0 cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground hover:underline sm:w-20"
+                onClick={() => handleSelectLevelRole(key)}
+                title={levelValues[key] ? "View this role's assigned users" : undefined}
+              >
                 {label}
                 {required && <span className="ml-0.5 text-red-500">*</span>}
               </span>
@@ -433,7 +484,7 @@ export function FlowAssignmentPage() {
               onChange={(v, row) => {
                 setSelectedRole(v);
                 setSelectedRoleDesc(v ? val((row as Record<string, unknown>) || {}, "ROLE_DESC") : "");
-                setSelectedUserRow(null);
+                setRoleUsersDirty(false);
                 if (v) {
                   setRightPanelContext(`Role ${v}`);
                   void loadRoleUsers(v);
@@ -450,7 +501,7 @@ export function FlowAssignmentPage() {
             size="sm"
             variant="outline"
             onClick={handleSaveRole}
-            disabled={!selectedRole || savingRole}
+            disabled={!selectedRole || !roleUsersDirty || savingRole}
           >
             <Save size={14} />
             {savingRole ? "Saving..." : "Save Role"}
@@ -472,9 +523,6 @@ export function FlowAssignmentPage() {
         />
 
         <div className="flex justify-end gap-2 border-t pt-3">
-          <Button variant="outline" onClick={handleDeleteUser} disabled={!selectedRole || !selectedUserRow}>
-            <Trash2 size={15} /> Delete
-          </Button>
           {/* No longer gated on selectedRole — Level 5 (or any unpicked level) can open this and choose the role right inside the modal. */}
           <Button onClick={handleAddUser}>
             <Plus size={15} /> Add
@@ -494,9 +542,9 @@ export function FlowAssignmentPage() {
             <Button variant="outline" onClick={() => setAddUserOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleConfirmAddUser} disabled={!modalRole || !addUserLoginId || addingUser}>
+            <Button onClick={handleConfirmAddUser} disabled={!modalRole || !addUserLoginId}>
               <Plus size={14} />
-              {addingUser ? "Adding..." : "Add"}
+              Add User
             </Button>
           </>
         }
@@ -524,15 +572,22 @@ export function FlowAssignmentPage() {
 
           <label className="grid gap-1 text-sm">
             <span className="font-medium text-foreground">User Code</span>
-            <input
-              className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
-              placeholder="Enter loginid"
+            <LookupField
               value={addUserLoginId}
-              onChange={(e) => setAddUserLoginId(e.target.value)}
+              displayValue={formatRoleDisplay(addUserLoginId, addUserLoginName)}
+              placeholder="Search user code or name..."
+              columns={[
+                { field: "LOGINID", header: "User Code" },
+                { field: "USERNAME", header: "User Name" },
+              ]}
+              valueField="LOGINID"
+              displayFields={["LOGINID", "USERNAME"]}
+              loadOptions={loadUserOptions}
+              onChange={(v, row) => {
+                setAddUserLoginId(v);
+                setAddUserLoginName(v ? val((row as Record<string, unknown>) || {}, "USERNAME") : "");
+              }}
             />
-            {/* TODO: swap this input for a LookupField (User Code / User Name
-                columns) the moment a "list all users for company" API exists —
-                same pattern as the Role field above, just no endpoint yet. */}
           </label>
         </div>
       </Dialog>
