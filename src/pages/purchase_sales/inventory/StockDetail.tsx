@@ -40,8 +40,9 @@ function widthStyle(col: keyof typeof p_COLS): React.CSSProperties {
   return { width, minWidth: width, maxWidth: width };
 }
 function lineAmount(row: InventoryLineRow): number {
-  return (Number(row.quantity) || 0) * (Number(row.unit_price) || 0);
+  return getRowQuantity(row) * (Number(row.unit_price) || 0);
 }
+
 function stickyHeaderStyle(col: keyof typeof STICKY_COLS): React.CSSProperties {
   const { width, left } = STICKY_COLS[col];
   return { position: "sticky", top: 0, left, width, minWidth: width, maxWidth: width, zIndex: 3, backgroundColor: "var(--primary, #1d4ed8)" };
@@ -60,6 +61,15 @@ function numberOrZero(value: unknown): number {
 
 function isSameUom(row: InventoryLineRow): boolean {
   return !!row.p_uom && !!row.l_uom && row.p_uom === row.l_uom;
+}
+function getRowQuantity(row: InventoryLineRow): number {
+  const sameUom = isSameUom(row);
+  return computeQuantity(
+    numberOrZero(row.qty_puom),
+    numberOrZero(row.uppp),
+    numberOrZero(row.qty_luom),
+    sameUom
+  );
 }
 
 // Quantity is always derived, never typed directly:
@@ -417,8 +427,8 @@ export function StockDetail({
                       <td className="px-2 py-1" style={widthStyle("dept")}>
                         <Input
                           disabled={headerAndLineDisabled}
-                          value={row.dept || ""}
-                          onChange={(event) => updateRow(row.id, { dept: event.target.value })}
+                          value={row.dept_code || ""}
+                          onChange={(event) => updateRow(row.id, { dept_code: event.target.value })}
                         />
                       </td>
                       <td className="px-2 py-1" style={widthStyle("job_no")}>

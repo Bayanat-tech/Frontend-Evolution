@@ -138,7 +138,7 @@ export function JobProductionOrderPage({ onClose }: { onClose?: () => void } = {
           parameter: "PS_POORDER_ENTRY_FUN_CHECK_GLOBAL_APPR_LEVEL",
           code1: user?.company_code,
           code2: user?.loginid || user?.username || "ADMIN",
-          code3: "purchase_order",
+          code3: "job_production",
         });
         if (!mounted) return;
         const first = (rows || [])[0] as Record<string, unknown> | undefined;

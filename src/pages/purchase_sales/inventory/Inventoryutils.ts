@@ -57,7 +57,10 @@ export const emptyLineRow = (divCode: string): InventoryLineRow => ({
   lcurr_amount_disc: 0,
   sign_ind:0,
   sale_price:0,
-  uppp : 0
+  uppp : 0,
+  dept_code: "",
+  job_no: "",
+  remarks: "",
 });
 
 export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
@@ -166,6 +169,9 @@ export async function fetchSalesOrderDetail(
       sign_ind : numberOrZero(row.sign_ind),
        sale_price: numberOrZero(row.sale_price),
        uppp:numberOrZero(row.uppp),
+       dept_code: text(row.dept_code),
+       job_no: text(row.job_no),
+       remarks: text(row.remarks),
     } satisfies InventoryLineRow;
   });
 }
@@ -258,7 +264,6 @@ export function buildDetailsPayload(rows: InventoryLineRow[]) {
     tax_amount: lineTaxAmount(row),
     lcurr_amount: row.lcurr_amount,
     req_date: row.req_date,
-    remarks: row.line_remarks,
     tax_cat: row.tax_cat,
     tax_code: row.tax_code,
     tax_lcurr_amount: row.tax_lcurr_amount,
@@ -266,7 +271,10 @@ export function buildDetailsPayload(rows: InventoryLineRow[]) {
     sign_ind : row.sign_ind,
     sale_price: row.sale_price,
     uppp: row.uppp,
-    quantity:row.quantity
+    quantity:row.quantity,
+    job_no: row.job_no,
+    dept_code: row.dept_code,
+    remarks: row.remarks,
     
   }));
 }

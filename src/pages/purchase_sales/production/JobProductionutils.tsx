@@ -340,7 +340,7 @@ export async function fetchexpenseDetailsDetail(
 
 export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: PODocType) {
   return {
-    doc_no: form.doc_no || undefined,
+    doc_no: numberOrZero(form.doc_no) || undefined,
     doc_type: docType,
     doc_date: form.doc_date,
     ref_no: form.ref_no,

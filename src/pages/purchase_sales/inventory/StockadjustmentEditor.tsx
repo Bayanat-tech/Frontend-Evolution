@@ -137,6 +137,7 @@ export function StockadjustmentEditor({
           from_zone_code : text(headerRaw.from_zone_code || current.from_zone_code ),
         to_zone_code : text(headerRaw.to_zone_code || current.to_zone_code ),
           zone_code : text(headerRaw.zone_code || current.zone_code ),
+          job_no : text(headerRaw.job_no || current.job_no ),
 
         }));
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);

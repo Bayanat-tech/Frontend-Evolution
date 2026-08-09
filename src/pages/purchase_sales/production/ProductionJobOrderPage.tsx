@@ -136,7 +136,7 @@ export function ProductionJobOrderPage({ onClose }: { onClose?: () => void } = {
           parameter: "PS_POORDER_ENTRY_FUN_CHECK_GLOBAL_APPR_LEVEL",
           code1: user?.company_code,
           code2: user?.loginid || user?.username || "ADMIN",
-          code3: "purchase_order",
+          code3: "production_job_order",
         });
         if (!mounted) return;
         const first = (rows || [])[0] as Record<string, unknown> | undefined;
@@ -203,7 +203,7 @@ export function ProductionJobOrderPage({ onClose }: { onClose?: () => void } = {
     setDivisionPicker(false);
     setEditor({ mode: "create", divCode: division.div_code, divName: division.div_name });
   };
-
+console.log(approvalLevel, "approvalLevel");
   return (
     <section className="finance-list-page grid gap-4">
       <div className="finance-list-heading">

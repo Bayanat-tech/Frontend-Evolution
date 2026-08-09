@@ -71,7 +71,7 @@ export function PurchaseOrderHeaderForm({
           <Input type="date" disabled={headerAndLineDisabled} value={form.ref_date} onChange={(event) => updateField("ref_date", event.target.value)} />
         </CField>
 
-        <div className="col-span-1">
+        <div className="col-span-2">
           <LookupField
             label="Division *"
             value={form.div_code}
@@ -89,7 +89,7 @@ export function PurchaseOrderHeaderForm({
           />
         </div>
 
-        <div className="col-span-1">
+        <div className="col-span-2">
           <LookupField
             label="A/c code *"
             value={form.ac_code}
@@ -113,7 +113,7 @@ export function PurchaseOrderHeaderForm({
         <CField label="Credit Period">
           <Input disabled={headerAndLineDisabled} className="text-right" type="number" step="1" value={form.credit_period} onChange={(event) => updateField("credit_period", Number(event.target.value || 0))} />
         </CField>
-        <div className="col-span-1">
+        <div className="col-span-2">
           <LookupField
             label="Department"
             value={form.dept_code || ""}
@@ -167,7 +167,7 @@ export function PurchaseOrderHeaderForm({
           <Input className="text-right" type="number" disabled={headerAndLineDisabled} value={form.wo_number} onChange={(event) => updateField("wo_number", event.target.value)} />
         </CField>
 
-        <div className="col-span-1">
+        <div className="col-span-2">
           <LookupField
             label="Currency *"
             value={form.curr_code}
@@ -200,7 +200,7 @@ export function PurchaseOrderHeaderForm({
           <Input disabled={headerAndLineDisabled} type="number" step="0.01" value={form.disc_percent} onChange={(event) => updateField("disc_percent", Number(event.target.value || 0))} />
         </CField> */}
         <div>
-          <label className="mb-1 block text-xs font-semibold text-primary-foreground/80">Tax Category</label>
+          <label >Tax Category</label>
           <LookupField
             label="Tax Category"
             compact

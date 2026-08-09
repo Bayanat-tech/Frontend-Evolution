@@ -190,7 +190,7 @@ export const PO_DOC_TYPE = {
 export const PROCESS = "purchase_order";
 export const PROCESSQUOTATION = 'purchase_quotation'
 export const PROCESSGRN = 'purchase_grn'
-export const PROCESSJO = 'production_joborder'
+export const PROCESSJO = 'production_job_order'
 export const PROCESSJP = 'job_production'
 export const EXPENSE_AC_OPTIONS = [
   { label: "Inventory A/c", value: "I" },

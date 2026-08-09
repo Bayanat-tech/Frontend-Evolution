@@ -213,6 +213,7 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
     setDivisionPicker(false);
     setEditor({ mode: "create", divCode: division.div_code, divName: division.div_name });
   };
+  console.log(approvalLevel, "approvalLevel");
 
   return (
     <section className="finance-list-page grid gap-4">
@@ -232,6 +233,7 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
         )}
         </div>
       </div>
+    
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
      <TabStrip
@@ -239,6 +241,7 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
   onChange={(value) => setTab(value as RequestTab)}
   tabs={
     approvalLevel === 0
+    
       ? [
           { label: "Pending", value: "PENDING", icon: "pending" },
           { label: "Closed", value: "CLOSED", icon: "closed" },
