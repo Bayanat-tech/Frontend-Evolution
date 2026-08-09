@@ -1,6 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { Plus, Save, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { NoticeToast } from "../../components/ui/NoticeToast";
@@ -15,6 +15,7 @@ import {
   addUserToRole,
   removeUserFromRole,
   saveFlowAssignLevels,
+  insSecRoleFunctionAccessUser,
   type TFlowRoleUser,
 } from "../../api/wms";
 import { useAuth } from "../../state/AuthContext";
@@ -25,12 +26,12 @@ function val(row: Record<string, unknown>, key: string) {
 
 type LevelKey = "level1_role" | "level2_role" | "level3_role" | "level4_role" | "level5_role";
 
-const LEVEL_FIELDS: { key: LevelKey; label: string; required: boolean; descField: string }[] = [
-  { key: "level1_role", label: "Level 1", required: true, descField: "level1_role_desc" },
-  { key: "level2_role", label: "Level 2", required: true, descField: "level2_role_desc" },
-  { key: "level3_role", label: "Level 3", required: false, descField: "level3_role_desc" },
-  { key: "level4_role", label: "Level 4", required: false, descField: "level4_role_desc" },
-  { key: "level5_role", label: "Level 5", required: false, descField: "level5_role_desc" },
+const LEVEL_FIELDS: { key: LevelKey; label: string; required: boolean }[] = [
+  { key: "level1_role", label: "Level 1", required: true },
+  { key: "level2_role", label: "Level 2", required: true },
+  { key: "level3_role", label: "Level 3", required: false },
+  { key: "level4_role", label: "Level 4", required: false },
+  { key: "level5_role", label: "Level 5", required: false },
 ];
 
 const EMPTY_LEVEL_VALUES: Record<LevelKey, string> = {
@@ -49,110 +50,12 @@ const EMPTY_LEVEL_DESCS: Record<LevelKey, string> = {
   level5_role: "",
 };
 
-// ─── A small, properly-styled custom dropdown for the Level rows ──────────
-type DropdownOption = { label: string; value: string };
-
-function LevelDropdown({
-  label,
-  required,
-  value,
-  descValue,
-  options,
-  disabled,
-  onSelect,
-  onOpen,
-}: {
-  label: string;
-  required: boolean;
-  value: string;
-  descValue?: string;
-  options: DropdownOption[];
-  disabled?: boolean;
-  onSelect: (value: string) => void;
-  onOpen?: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handlePointerDown = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [open]);
-
-  const formatOption = (option: DropdownOption) =>
-    option.label && option.label !== option.value ? `${option.value} — ${option.label}` : option.value;
-
-  const currentOption = options.find((option) => option.value === value);
-  const currentLabel = value
-    ? descValue
-      ? `${value} — ${descValue}`
-      : currentOption
-      ? formatOption(currentOption)
-      : value
-    : "";
-
-  return (
-    <div ref={containerRef} className="relative flex items-center gap-3">
-      <span className="w-16 shrink-0 text-xs font-medium text-muted-foreground sm:w-20">
-        {label}
-        {required && <span className="ml-0.5 text-red-500">*</span>}
-      </span>
-
-      <div className="relative min-w-0 flex-1">
-        <button
-          type="button"
-          disabled={disabled}
-          className={`flex h-9 w-full items-center justify-between rounded-md border bg-background px-2 text-left text-sm text-foreground disabled:opacity-60 ${
-            required && !value ? "border-red-400" : "border-input"
-          }`}
-          onClick={() => {
-            const next = !open;
-            setOpen(next);
-            if (next) onOpen?.();
-          }}
-        >
-          <span className="truncate">{currentLabel || (required ? "Select (required)" : "None")}</span>
-          <span className="shrink-0 text-muted-foreground">▾</span>
-        </button>
-
-        {open && (
-          <div className="absolute z-20 mt-1 max-h-48 w-full min-w-[220px] overflow-auto rounded-md border bg-card shadow-lg">
-            <button
-              type="button"
-              className="block w-full px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent"
-              onClick={() => {
-                onSelect("");
-                setOpen(false);
-              }}
-            >
-              {required ? "Select (required)" : "None"}
-            </button>
-            {options.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={`block w-full truncate px-2 py-1.5 text-left text-sm hover:bg-accent ${
-                  option.value === value ? "bg-primary/10 font-medium" : ""
-                }`}
-                onClick={() => {
-                  onSelect(option.value);
-                  setOpen(false);
-                }}
-              >
-                {formatOption(option)}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+// LookupField shows raw `value` until its own lookup rows are loaded/matched,
+// so code-only vs desc-only flicker happens unless we hand it an explicit
+// "CODE — DESC" string via its `displayValue` prop.
+function formatRoleDisplay(code: string, desc: string) {
+  if (!code) return "";
+  return desc ? `${code} — ${desc}` : code;
 }
 
 export function FlowAssignmentPage() {
@@ -162,14 +65,14 @@ export function FlowAssignmentPage() {
 
   const [selectedProcess, setSelectedProcess] = useState<string>("");
   const [selectedRole, setSelectedRole] = useState<string>("");
+  const [selectedRoleDesc, setSelectedRoleDesc] = useState<string>("");
 
   const [levelValues, setLevelValues] = useState<Record<LevelKey, string>>(EMPTY_LEVEL_VALUES);
   const [levelDescs, setLevelDescs] = useState<Record<LevelKey, string>>(EMPTY_LEVEL_DESCS);
   const [levelLoading, setLevelLoading] = useState(false);
   const [savingLevels, setSavingLevels] = useState(false);
   const [levelDirty, setLevelDirty] = useState(false);
-
-  const [approverOptions, setApproverOptions] = useState<{ label: string; value: string }[]>([]);
+  const [savingRole, setSavingRole] = useState(false);
 
   const [userRows, setUserRows] = useState<TFlowRoleUser[]>([]);
   const [userLoading, setUserLoading] = useState(false);
@@ -185,15 +88,9 @@ export function FlowAssignmentPage() {
   // the person picks the role right here via LookupField.
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [modalRole, setModalRole] = useState("");
+  const [modalRoleDesc, setModalRoleDesc] = useState("");
   const [addUserLoginId, setAddUserLoginId] = useState("");
   const [addingUser, setAddingUser] = useState(false);
-
-  useEffect(() => {
-    if (!companyCode) return;
-    getFlowAssignRoles(companyCode)
-      .then((roles) => setApproverOptions((roles ?? []).map((r: any) => ({ label: r.ROLE_DESC, value: r.ROLE_ID }))))
-      .catch(() => {});
-  }, [companyCode]);
 
   const loadProcessOptions = useCallback(async () => {
     const rows = await getFlowAssignProcesses(companyCode);
@@ -271,6 +168,7 @@ export function FlowAssignmentPage() {
       setLevelDescs(nextDescs);
       setLevelDirty(false);
       setSelectedRole("");
+      setSelectedRoleDesc("");
       setSelectedUserRow(null);
 
       const filledCount = Object.values(next).filter(Boolean).length;
@@ -283,30 +181,18 @@ export function FlowAssignmentPage() {
     }
   };
 
-  const handleLevelCellOpen = (key: LevelKey) => {
-    const roleCode = levelValues[key];
-    const levelLabel = LEVEL_FIELDS.find((field) => field.key === key)?.label || key;
-    setSelectedRole(roleCode || "");
-    setSelectedUserRow(null);
-    setRightPanelContext(roleCode ? `${levelLabel} — Role ${roleCode}` : `${levelLabel} — no role selected yet`);
-    if (roleCode) {
-      void loadRoleUsers(roleCode);
-    } else {
-      setUserRows([]);
-    }
-  };
-
-  const updateLevelValue = (key: LevelKey, newValue: string) => {
+  const updateLevelValue = (key: LevelKey, newValue: string, row: LookupRow | null) => {
     const next = { ...levelValues, [key]: newValue };
     setLevelValues(next);
     setLevelDescs((prev) => ({
       ...prev,
-      [key]: approverOptions.find((option) => option.value === newValue)?.label || "",
+      [key]: newValue ? val((row as Record<string, unknown>) || {}, "ROLE_DESC") : "",
     }));
     setLevelDirty(true);
 
     const levelLabel = LEVEL_FIELDS.find((field) => field.key === key)?.label || key;
     setSelectedRole(newValue);
+    setSelectedRoleDesc(newValue ? val((row as Record<string, unknown>) || {}, "ROLE_DESC") : "");
     setSelectedUserRow(null);
     setRightPanelContext(newValue ? `${levelLabel} — Role ${newValue}` : `${levelLabel} — no role selected yet`);
     if (newValue) {
@@ -319,16 +205,6 @@ export function FlowAssignmentPage() {
   const totalLevelCount = useMemo(
     () => Object.values(levelValues).filter(Boolean).length,
     [levelValues]
-  );
-
-  const optionsWithFallback = useCallback(
-    (currentValue: string) => {
-      if (!currentValue || approverOptions.some((option) => option.value === currentValue)) {
-        return approverOptions;
-      }
-      return [{ label: currentValue, value: currentValue }, ...approverOptions];
-    },
-    [approverOptions]
   );
 
   const handleSaveLevels = async () => {
@@ -371,6 +247,38 @@ export function FlowAssignmentPage() {
     }
   };
 
+  const handleSaveRole = async () => {
+    if (!selectedRole) {
+      setNotice({ type: "error", message: "Please select a role first." });
+      return;
+    }
+
+    setSavingRole(true);
+    try {
+      const result = await insSecRoleFunctionAccessUser([
+        {
+          company_code: companyCode,
+          serial_no_or_role_id: selectedRole,
+          create_user: loginid,
+        },
+      ]);
+
+      if (result?.success) {
+        setNotice({ type: "success", message: "Role saved successfully." });
+        await loadRoleUsers(selectedRole);
+      } else {
+        throw new Error(result?.message || "Save failed");
+      }
+    } catch (error: any) {
+      setNotice({
+        type: "error",
+        message: error?.message || "Failed to save role.",
+      });
+    } finally {
+      setSavingRole(false);
+    }
+  };
+
   const userColumns = useMemo<ColumnDef<TFlowRoleUser>[]>(() => [
     {
       accessorKey: "loginid",
@@ -390,6 +298,7 @@ export function FlowAssignmentPage() {
   // null Level 5) — because the role itself is picked inside the modal.
   const handleAddUser = () => {
     setModalRole(selectedRole || "");
+    setModalRoleDesc(selectedRole ? selectedRoleDesc : "");
     setAddUserLoginId("");
     setAddUserOpen(true);
   };
@@ -406,6 +315,7 @@ export function FlowAssignmentPage() {
       // Reflect the role picked in the modal back onto the page so the
       // grid below shows the role that was just updated.
       setSelectedRole(modalRole);
+      setSelectedRoleDesc(modalRoleDesc);
       setRightPanelContext(`Role ${modalRole}`);
       await loadRoleUsers(modalRole);
     } catch (error) {
@@ -443,7 +353,7 @@ export function FlowAssignmentPage() {
 
       {/* TOP: Process -> Approver Levels */}
       <div className="grid gap-3 rounded-lg border bg-card p-4 shadow-sm">
-        <label className="grid max-w-md gap-1 text-sm">
+        <label className="grid gap-1 text-sm">
           <span className="font-medium text-foreground">Process</span>
           <LookupField
             value={selectedProcess}
@@ -461,19 +371,30 @@ export function FlowAssignmentPage() {
 
         <h2 className="m-0 text-sm font-semibold text-foreground">Approver Levels</h2>
 
-        <div className="grid max-w-md grid-cols-1 gap-2.5">
+        <div className="grid grid-cols-1 gap-2.5">
           {LEVEL_FIELDS.map(({ key, label, required }) => (
-            <LevelDropdown
-              key={key}
-              label={label}
-              required={required}
-              value={levelValues[key]}
-              descValue={levelDescs[key]}
-              options={optionsWithFallback(levelValues[key])}
-              disabled={!selectedProcess || levelLoading}
-              onOpen={() => handleLevelCellOpen(key)}
-              onSelect={(v) => updateLevelValue(key, v)}
-            />
+            <div key={key} className="flex items-center gap-3">
+              <span className="w-16 shrink-0 text-xs font-medium text-muted-foreground sm:w-20">
+                {label}
+                {required && <span className="ml-0.5 text-red-500">*</span>}
+              </span>
+              <div className="min-w-0 flex-1">
+                <LookupField
+                  value={levelValues[key]}
+                  displayValue={formatRoleDisplay(levelValues[key], levelDescs[key])}
+                  placeholder={required ? "Select (required)" : "None"}
+                  columns={[
+                    { field: "ROLE_ID", header: "Role Code" },
+                    { field: "ROLE_DESC", header: "Role Description" },
+                  ]}
+                  valueField="ROLE_ID"
+                  displayFields={["ROLE_ID", "ROLE_DESC"]}
+                  loadOptions={loadRoleOptions}
+                  disabled={!selectedProcess || levelLoading}
+                  onChange={(v, row) => updateLevelValue(key, v, row)}
+                />
+              </div>
+            </div>
           ))}
         </div>
 
@@ -496,20 +417,22 @@ export function FlowAssignmentPage() {
           or a single role explicitly picked via Role Name */}
       <div className="grid gap-3 rounded-lg border bg-card p-4 shadow-sm">
         <div className="flex items-end justify-between gap-3">
-          <label className="grid max-w-md flex-1 gap-1 text-sm">
+          <label className="grid flex-1 gap-1 text-sm">
             <span className="font-medium text-foreground">Role Name</span>
             <LookupField
               value={selectedRole}
+              displayValue={formatRoleDisplay(selectedRole, selectedRoleDesc)}
               placeholder="Filter to a single role"
               columns={[
                 { field: "ROLE_ID", header: "Role Code" },
                 { field: "ROLE_DESC", header: "Role Description" },
               ]}
               valueField="ROLE_ID"
-              displayFields={["ROLE_DESC"]}
+              displayFields={["ROLE_ID", "ROLE_DESC"]}
               loadOptions={loadRoleOptions}
-              onChange={(v) => {
+              onChange={(v, row) => {
                 setSelectedRole(v);
+                setSelectedRoleDesc(v ? val((row as Record<string, unknown>) || {}, "ROLE_DESC") : "");
                 setSelectedUserRow(null);
                 if (v) {
                   setRightPanelContext(`Role ${v}`);
@@ -526,11 +449,11 @@ export function FlowAssignmentPage() {
           <Button
             size="sm"
             variant="outline"
-            onClick={handleSaveLevels}
-            disabled={!selectedProcess || !levelDirty || savingLevels}
+            onClick={handleSaveRole}
+            disabled={!selectedRole || savingRole}
           >
             <Save size={14} />
-            {savingLevels ? "Saving..." : "Save Levels"}
+            {savingRole ? "Saving..." : "Save Role"}
           </Button>
         </div>
 
@@ -583,15 +506,19 @@ export function FlowAssignmentPage() {
             <span className="font-medium text-foreground">Role</span>
             <LookupField
               value={modalRole}
+              displayValue={formatRoleDisplay(modalRole, modalRoleDesc)}
               placeholder="Search code, name, description..."
               columns={[
                 { field: "ROLE_ID", header: "Role Code" },
                 { field: "ROLE_DESC", header: "Role Description" },
               ]}
               valueField="ROLE_ID"
-              displayFields={["ROLE_DESC"]}
+              displayFields={["ROLE_ID", "ROLE_DESC"]}
               loadOptions={loadRoleOptions}
-              onChange={setModalRole}
+              onChange={(v, row) => {
+                setModalRole(v);
+                setModalRoleDesc(v ? val((row as Record<string, unknown>) || {}, "ROLE_DESC") : "");
+              }}
             />
           </label>
 
