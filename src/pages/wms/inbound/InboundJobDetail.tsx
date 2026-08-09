@@ -175,6 +175,7 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
 
   const availableTabs = getTabsForJob(value(job || {}, "job_class"));
   const activeTab     = availableTabs.some((t: any) => t.value === tab) ? tab : "shipment_details";
+  console.log("value(job || {}, 'job_class'):", value(job || {}, "job_class"));
 
   const jobStatus   = isCanceled(job || {}) ? "Canceled"
     : hasDate(value(job || {}, "confirm_date")) ? "Confirmed" : "In Progress";
