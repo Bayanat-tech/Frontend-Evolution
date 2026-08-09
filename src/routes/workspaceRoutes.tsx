@@ -60,6 +60,7 @@ import {
   oxMaintMasterConfigs,
 } from "../pages/oxmaint/OxMaintPages";
 import { SalaryAdvancePage } from "../pages/hr/SalaryAdvancePage";
+import { HrEmployeePayUnits } from "../pages/hr/HrEmployeePayUnits";
 import { TrainingFeedbackPage } from "../pages/hr/Trainingfeedbackpage";
 import { Leaf } from "lucide-react";
 import LedgerBasics from "../pages/accounts_report/detailed_reports/LedgerBasics";
@@ -107,6 +108,8 @@ import { ApplicantInfoPage } from "../pages/hr/Applicantinfopage";
 import { InterviewEvalPage } from "../pages/hr/Interviewevalpage";
 
 import { HrJoiningPage } from "../pages/hr/HrJoiningPage";
+
+import { HrAccuralAccountSetup } from "../pages/hr/HrAccuralAccountSetup";
 
 import { HrEmpEducationPage } from "../pages/hr/HrEmpEducationPage";  
 import GradeSalaryIncrement from "../pages/hr/GradeSalaryIncrement.";
@@ -231,6 +234,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => isLeaveFlowRoute(context, "request"),
     element: () => <LeaveWorkspacePage initialTab="request" />,
   },
+
+  {
+  name: "HR Accural Account Setup",
+  match: ({ pathname }) => isHrAccuralAccountSetupRoute(pathname),
+  element: () => <HrAccuralAccountSetup />,
+  },
+
   {
     name: "HR Leave In Progress",
     match: (context) => isLeaveFlowRoute(context, "inProgress"),
@@ -1057,11 +1067,23 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => isOxMaintRoute(context),
     element: (context) => getOxMaintElement(context),
   },
+
+  {
+  name: "HR Employee Pay Units",
+  match: (context) =>
+    isHrRoute(context) && isHrEmployeePayUnitsRoute(context),
+  element: () => <HrEmployeePayUnits />,
+  },
+
+  
   {
     name: "HR Pay Units",
     match: (context) => isHrRoute(context) && isHrPayUnitsRoute(context),
     element: () => <HrPayUnitsPage mode="units" />,
   },
+
+  
+
   {
     name: "HR Pay Units Dependant",
     match: (context) => isHrRoute(context) && isHrPayUnitsDependantRoute(context),
@@ -1741,6 +1763,13 @@ function isVisaExpiryListingRoute(pathname:string) {
           normalized.includes("hr/reports/employee/visa-expiry-listing");
 }
 
+
+function isHrAccuralAccountSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/hcm/hcm/pay%20components/accural%20account%20setup"
+  );
+}
 
 function isWmsCountryRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -2463,5 +2492,14 @@ function isProductBomRoute(pathname: string) {
     normalized.includes("/purchase_sales/purchase_sales/masters/product_bom") ||
     normalized.includes("/purchase_sales/purchase_sales/masters/product%20bom") ||
     normalized.includes("/purchase_sales/purchase_sales/masters/product-bom")
+  );
+}
+
+function isHrEmployeePayUnitsRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+
+  return (
+    compact.includes("employeepayunits") ||
+    compact.includes("employee_payunits")
   );
 }
