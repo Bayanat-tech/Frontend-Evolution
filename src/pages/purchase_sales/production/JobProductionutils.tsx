@@ -185,7 +185,6 @@ export async function fetchPurchaseOrderDetail(
             unit_price: numberOrZero(row.unit_price),
             disc_price: numberOrZero(row.disc_price),
             quantity: numberOrZero(row.qty ?? row.quantity),
-            qty: numberOrZero(row.qty ?? row.quantity),
             tax_pct: numberOrZero(row.tax_pct ?? row.tax_percent),
             tax_amount: numberOrZero(row.tax_amount),
             lcur_amount: numberOrZero(row.lcurr_amount),

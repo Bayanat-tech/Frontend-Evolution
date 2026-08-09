@@ -189,7 +189,6 @@ export async function fetchSalesOrderDetail(
       lcur_amount_disc: numberOrZero(row.lcur_amount_disc ?? row.lcur_amount_discount),
       uppp: numberOrZero(row.uppp),
       quantity: numberOrZero(row.quantity),
-      qty: numberOrZero(row.qty ?? row.quantity),
       ex_rate: numberOrZero(row.ex_rate),
     } satisfies PurchaseOrderLineRow;
   });

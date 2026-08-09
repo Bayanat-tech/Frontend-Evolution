@@ -18,7 +18,6 @@ export interface PurchaseOrderLineRow {
   qty_luom: number;
   unit_price: number;
   disc_hdr_percent: number;
-  qty: number;
   disc_percent: number;
   disc_price: number;
   tax_pct: number;

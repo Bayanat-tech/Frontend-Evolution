@@ -78,6 +78,7 @@ export interface PurchaseOrderRow {
   sentback_reason?: string;
   reject_reason?: string; // added for reject action
   last_action?: "SENTBACK" | "REJECTED" | "APPROVED" | "CANCELED" | "PENDING" | string;
+  wo_number?: string;
 }
 
 // TODO: swap for a real API call, e.g. cancelPurchaseOrderApi(docNo)
