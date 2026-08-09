@@ -17,9 +17,15 @@ import {
   SendBackUserOption,
 } from "../../purchase_sales/purchase/Purchaseordertypes";
 import {
-
+  emptyForm,
+  emptyLineRow,
+  fetchPurchaseOrderDetail,
+  fetchPurchaseOrderHeader,
   formatAmount,
- 
+  lineAmount,
+  lineDiscPrice,
+  lineNetAmount,
+  lineTaxAmount,
   lowerRecord,
   newId,
   numberOrZero,
@@ -29,8 +35,8 @@ import { PurchaseOrderHeaderForm } from "../../purchase_sales/purchase/Purchaseo
 import { PurchaseOrderLinesTable } from "../../purchase_sales/purchase/Purchaseorderlinestable";
 import { SendBackDialog } from "../../purchase_sales/purchase/Sendbackdialog";
 import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
-import { PROCESSSDN, PROCESSSO, SalesConfig, SalesOrderLineRow, SO_DOC_TYPE } from "./SalesOrdertypes";
-import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, lineAmount, lineDiscPrice, lineTaxAmount, runWorkflow } from "./SalesOrderutils";
+import { PROCESSSDN, PROCESSSO, SO_DOC_TYPE } from "./SalesOrdertypes";
+import { runWorkflow } from "./SalesOrderutils";
 
 
 export type { PurchaseOrderEditorState };
@@ -42,7 +48,7 @@ export function SalesDNEditor({
   onClose,
   onSaved,
 }: {
-  config: SalesConfig;
+  config: PurchaseConfig;
   editor: PurchaseOrderEditorState;
   isPendingTab: boolean;
   onClose: () => void;
@@ -91,8 +97,8 @@ export function SalesDNEditor({
       try {
         const docNo = editor.row.doc_no;
         const [headerRaw, detailRows] = await Promise.all([
-          fetchSalesOrderHeader(docNo,config, user?.company_code, user?.loginid || user?.username),
-          fetchSalesOrderDetail(docNo,config, user?.company_code, user?.loginid || user?.username),
+          fetchPurchaseOrderHeader(docNo,config, user?.company_code, user?.loginid || user?.username),
+          fetchPurchaseOrderDetail(docNo,config, user?.company_code, user?.loginid || user?.username),
         ]);
         if (!mounted) return;
 
@@ -100,29 +106,29 @@ export function SalesDNEditor({
           ...current,
           doc_no: text(headerRaw.doc_no || docNo),
           doc_date: toDateInputValue(headerRaw.doc_date) || current.doc_date,
-          ref_no: text(headerRaw.quotn_no || current.ref_no),
-          ref_date: toDateInputValue(headerRaw.quotn_date) || current.ref_date,
+          quotn_no: text(headerRaw.quotn_no || current.quotn_no),
+          quotn_date: toDateInputValue(headerRaw.quotn_date) || current.quotn_date,
           div_code: text(headerRaw.div_code || current.div_code),
           div_name: text(headerRaw.div_name || current.div_name),
           ac_code: text(headerRaw.ac_code || current.ac_code),
           ac_name: text(headerRaw.ac_name || current.ac_name),
-          party_address: text(headerRaw.address || current.party_address),
+          address: text(headerRaw.address || current.address),
           credit_period: Number(headerRaw.credit_period || current.credit_period || 0),
           dept_code: text(headerRaw.dept_code || current.dept_code),
-          party_phone: text(headerRaw.tel || current.party_phone),
-          party_fax: text(headerRaw.fax || current.party_fax),
+          tel: text(headerRaw.tel || current.tel),
+          fax: text(headerRaw.fax || current.fax),
           buyer: text(headerRaw.buyer || current.buyer),
-          wo_number: text(headerRaw.wo_number || current.wo_number),
+          wo_no: text(headerRaw.wo_no || current.wo_no),
           curr_code: text(headerRaw.curr_code || current.curr_code),
           curr_name: text(headerRaw.curr_name || current.curr_name),
           ex_rate: Number(headerRaw.ex_rate || current.ex_rate || 1),
-          payment_terms: text(headerRaw.pay_terms || current.payment_terms),
-          dlvr_term: text(headerRaw.delivery_term || current.dlvr_term),
-          dlvr_contact: text(headerRaw.delivery_contact || current.dlvr_contact),
-          dlvr_mobile: text(headerRaw.delivery_tel || current.dlvr_mobile),
-          dlvr_email: text(headerRaw.delivery_email || current.dlvr_email),
+          pay_terms: text(headerRaw.pay_terms || current.pay_terms),
+          delivery_term: text(headerRaw.delivery_term || current.delivery_term),
+          delivery_contact: text(headerRaw.delivery_contact || current.delivery_contact),
+          delivery_tel: text(headerRaw.delivery_tel || current.delivery_tel),
+          delivery_email: text(headerRaw.delivery_email || current.delivery_email),
           remarks: text(headerRaw.remarks || current.remarks),
-          disc_price: Number(headerRaw.disc_price || 0),
+          disc_amt: Number(headerRaw.disc_amt || 0),
           disc_pct: Number(headerRaw.disc_pct || 0),
           tax_category: text(headerRaw.tax_category || current.tax_category),
           tax_code: text(headerRaw.tax_code || current.tax_code),
@@ -134,8 +140,6 @@ export function SalesDNEditor({
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
         }));
-
-
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
         if (!mounted) return;
@@ -182,14 +186,14 @@ export function SalesDNEditor({
     const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
     const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-    return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
+    return totalAmount - totalDiscPrice - form.disc_amt + totalTaxAmount;
   })();
 
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const updateRow = (id: string, patch: Partial<SalesOrderLineRow>) => {
+  const updateRow = (id: string, patch: Partial<PurchaseOrderLineRow>) => {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
 
@@ -386,12 +390,11 @@ export function SalesDNEditor({
 
               <PurchaseOrderLinesTable
                 rows={rows}
-                ex_rate={form.ex_rate}
                 updateRow={updateRow}
                 addRow={addRow}
                 removeRow={removeRow}
                 headerAndLineDisabled={headerAndLineDisabled}
-                discAmt={form.disc_price}
+                discAmt={form.disc_amt}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
               />
@@ -399,35 +402,33 @@ export function SalesDNEditor({
           )}
         </CardContent>
 
-       
         <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
           <div className="flex flex-wrap gap-3 rounded-2xl bg-gray-50 p-5 shadow-inner">
-           { isPendingTab && (
-             <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
-                {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                {actionLoading === "draft" ? "Saving..." : "Save Draft"}
-              </Button>
-            )}
-          { isPendingTab && <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
+            <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
+              {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              {actionLoading === "draft" ? "Saving..." : "Save Draft"}
+            </Button>
+
+            <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
               {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
               {actionLoading === "submit" ? "Submitting..." : "Submit"}
-            </Button>}
+            </Button>
 
-            {isPendingTab && canSendBackOrReject && (
+            {canSendBackOrReject && (
               <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
                 {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
               </Button>
             )}
 
-            {isPendingTab && canSendBackOrReject && (
+            {canSendBackOrReject && (
               <Button type="button" onClick={openRejectDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60">
                 {actionLoading === "reject" ? "Rejecting..." : "Reject"}
               </Button>
             )}
-{isPendingTab &&
+
             <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
               {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
-            </Button>}
+            </Button>
           </div>
           <div className="flex items-center gap-2">
             <Button aria-label="Print" type="button" variant="outline" size="icon" disabled={actionDisabled}><Printer size={15} /></Button>

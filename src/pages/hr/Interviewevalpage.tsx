@@ -47,6 +47,21 @@ const baseParams = (loginid: string, companyCode: string) => ({
   date4: null,
 });
 
+// CREATED_AT is a DB-level audit timestamp (DATE DEFAULT SYSDATE NOT NULL)
+// set once at insert time and never touched afterward, so it's a reliable
+// "true creation order" — unlike doc_date (user-editable business field,
+// can be backdated/postdated) or doc_no (sequential, but only a reliable
+// proxy for creation order if the backend never reuses/backfills numbers).
+//
+// created_at can arrive from the backend in several shapes depending on
+// how Oracle/the API layer serializes SYSDATE, e.g.:
+//   - ISO string:                "2026-06-30T14:05:09.000Z"
+//   - Oracle default format:     "30-JUN-26" or "30-JUN-2026"
+//   - "YYYY-MM-DD HH24:MI:SS"
+//   - With stray whitespace, or wrapped as { value: "..." }
+// We parse defensively and fall back to -Infinity (sorts last) on
+// anything unparseable rather than letting NaN comparisons silently
+// produce insertion-order-looking results.
 const parseCreatedAt = (input: unknown): number => {
   if (input === null || input === undefined || input === "") return -Infinity;
 

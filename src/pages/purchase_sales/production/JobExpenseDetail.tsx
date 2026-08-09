@@ -129,7 +129,7 @@ export function OtherExpensesTable({
                                         columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Name" }]}
                                         valueField="curr_code"
                                         displayFields={["curr_code"]}
-                                        loadOptions={() => getDynamicLookup({ parameter: "Account_Currency_CODE_Serach", code1: companyCode, loginid: loginid || "ADMIN" })}
+                                        loadOptions={() => getDynamicLookup({ parameter: "PS_POORDER_ENTRY_CURR_LIST", code1: companyCode, loginid: loginid || "ADMIN" })}
                                         disabled={headerAndLineDisabled}
                                         onChange={(value, selectedRow) => updateRow(row.id, {
                                             curr_code: value,

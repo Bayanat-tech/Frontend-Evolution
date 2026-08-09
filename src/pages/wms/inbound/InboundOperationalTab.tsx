@@ -24,7 +24,6 @@ import { useDebounce } from "../../../hooks/useDebounce";
 import { Upload, AlertTriangle } from "lucide-react";
 import * as XLSX from "xlsx";
 import { FileSpreadsheet, Download, CheckCircle2 as CheckCircle2Icon } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Props = {
   job:        WmsRow | null;
@@ -115,7 +114,7 @@ const activityTotals = useMemo(() => {
 }, [activityRows]);
 
 // recompute BILL/COST locally as rates are edited, and track which rows changed
-const handleActivityRateChange = (row: WmsRow, field:"quantity" | "bill_rate" | "cost_rate", raw: string) => {
+const handleActivityRateChange = (row: WmsRow, field: "bill_rate" | "cost_rate", raw: string) => {
   const num = raw === "" ? 0 : Number(raw);
   const actCode = String(value(row, "act_code") ?? "");
   setActivityRows((prev) =>
@@ -132,67 +131,28 @@ const handleActivityRateChange = (row: WmsRow, field:"quantity" | "bill_rate" | 
 };
 
 const handleActivityBillingSubmit = async () => {
-  if (!Object.keys(activityEdited).length) { toast.error("No changes to update"); return; }
+  const editedList = Object.values(activityEdited);
+  if (!editedList.length) { toast.error("No changes to update"); return; }
   setActivitySaving(true);
   try {
-    const userId = String(user?.USERNAME || user?.username || "");
-
-    // Look up whatever invoice already exists for this job/principal, if any.
-    // If none exists, `existingHeader` stays null and every header field
-    // below falls back to null/defaults - PROC_INS_UPD_TN_INVOICE treats a
-    // null/absent INVOICE_NO as "create a new invoice" and just inserts it.
-    const headerSql = `
-      SELECT
-        INVOICE_NO, INVOICE_DATE, INV_TYPE, INV_TO, CURR_CODE, EX_RATE,
-        ALLOCATED, DESPATCHED, JOB_TYPE, INV_PRINT_COUNT, INV_PRINTED,
-        INV_GRP_PRINT_COUNT, INV_GRP_PRINTED, FA_UPLOADED
-      FROM TN_INVOICE
-      WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
-        AND PRIN_CODE    = '${sqlEscape(prinCode)}'
-        AND JOB_NO       = '${sqlEscape(jobNo)}'`;
-    const headerRows = await executeWmsInboundSql(headerSql);
-    const existingHeader: any = headerRows?.[0] ? normalizeRow(headerRows[0]) : {};
-
-    const detailRows = activityRows
-      .filter((row) => String(value(row, "act_code") || "").trim() !== "") // drop blank "Add Activity" rows
-      .map((row) => ({
-        ACT_CODE: String(value(row, "act_code") ?? ""),
-        QUANTITY: Number(value(row, "quantity") ?? 0),
-        BILL_RATE: Number(value(row, "bill_rate") ?? 0),
-        OTHER_SERVICES: value(row, "other_services") || null,
-        USER_ID: userId,
-        COST_RATE: Number(value(row, "cost_rate") ?? 0), 
-        // TODO: COST_RATE (value(row, "cost_rate")) has no matching column in
-        // PROC_INS_UPD_TN_INVOICE's TN_INVOICE_DET insert list - confirm which
-        // TX_COMPNT_*_COST field should carry it before wiring this in.
-      }));
-
-    const payload = {
-      header: {
-        INVOICE_NO: value(existingHeader, "invoice_no") ?? null,
-        INVOICE_DATE: value(existingHeader, "invoice_date") ?? null,
-        JOB_NO: jobNo,
-        INV_TYPE: value(existingHeader, "inv_type") ?? null,
-        PRIN_CODE: prinCode,
-        INV_TO: value(existingHeader, "inv_to") ?? null,
-        CURR_CODE: value(existingHeader, "curr_code") ?? null,
-        EX_RATE: Number(value(existingHeader, "ex_rate") ?? 1),
-        ALLOCATED: value(existingHeader, "allocated") ?? null,
-        USER_ID: userId,
-        DESPATCHED: value(existingHeader, "despatched") ?? null,
-        COMPANY_CODE: companyCode,
-        JOB_TYPE: value(existingHeader, "job_type") ?? null,
-        INV_PRINT_COUNT: Number(value(existingHeader, "inv_print_count") ?? 0),
-        INV_PRINTED: value(existingHeader, "inv_printed") ?? null,
-        INV_GRP_PRINT_COUNT: Number(value(existingHeader, "inv_grp_print_count") ?? 0),
-        INV_GRP_PRINTED: value(existingHeader, "inv_grp_printed") ?? null,
-        FA_UPLOADED: value(existingHeader, "fa_uploaded") ?? null,
-      },
-      details: detailRows,
-    };
-
-    await api.post("/api/finance/insUpdTnInvoiceBulk", payload); // adjust to your actual route path
-
+    for (const row of editedList) {
+      const qty      = Number(value(row, "quantity") ?? 0);
+      const billRate = Number(value(row, "bill_rate") ?? 0);
+      const costRate = Number(value(row, "cost_rate") ?? 0);
+      const actCode  = String(value(row, "act_code") ?? "");
+      const updateSql = `
+        UPDATE TN_INVOICE_DET
+        SET
+          QUANTITY  = ${qty},
+          BILL_RATE = ${billRate},
+          COST_RATE = ${costRate},
+          BILL      = ${qty} * ${billRate},
+          COST      = ${qty} * ${costRate}
+        WHERE PRIN_CODE = '${sqlEscape(prinCode)}'
+          AND JOB_NO    = '${sqlEscape(jobNo)}'
+          AND ACT_CODE  = '${sqlEscape(actCode)}'`;
+      await executeWmsInboundSql(updateSql);
+    }
     toast.success("Activity billing updated successfully");
     setActivityEdited({});
     await loadActivityBilling();
@@ -852,67 +812,7 @@ const openEdiImportModal = () => {
       } finally { setEditSaving(false); }
     };
 
-
 if (isActivityBilling) {
-  const handleAddActivity = () => {
-    setActivityRows((cur) => [
-      ...cur,
-      { act_code: "", activity: "", quantity: 0, bill_rate: 0, bill: 0, cost_rate: 0, cost: 0, other_services: "" },
-    ]);
-  }
-
-  const { data: activityData = [] } = useQuery({
-    queryKey: ["activityBilling", companyCode, prinCode, jobNo],
-    enabled: !!companyCode && !!prinCode && !!jobNo,
-    queryFn: async () => {
-      const sql = `SELECT ACTIVITY_CODE, ACTIVITY FROM MS_ACTIVITY WHERE COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY ACTIVITY`;
-      const res = await executeWmsInboundSql(sql);
-      return Array.isArray(res) ? res : [];
-    },
-  });
-
-  const handleActivitySelect = (i: number, selectedRow: any) => {
-    setActivityRows((cur) => {
-      const next = cur.map((r, idx) =>
-        idx === i
-          ? {
-              ...r,
-              act_code: selectedRow ? String(selectedRow.ACTIVITY_CODE ?? "") : "",
-              activity: selectedRow ? String(selectedRow.ACTIVITY ?? "") : "",
-            }
-          : r
-      );
-      const updatedRow = next[i];
-      const key = String(value(updatedRow, "act_code") || `row_${i}`);
-      setActivityEdited((prevEdited) => ({ ...prevEdited, [key]: updatedRow }));
-      return next;
-    });
-  };
-
-  const handleActivityRateChange = (row: WmsRow, field: "quantity" | "bill_rate" | "cost_rate", rawValue: string) => {
-    const i = activityRows.indexOf(row);
-    if (i === -1) return;
-    const numValue = Number(rawValue);
-    const safeValue = Number.isFinite(numValue) ? numValue : 0;
-
-    setActivityRows((cur) => {
-      const next = cur.map((r, idx) => {
-        if (idx !== i) return r;
-        const updated: WmsRow = { ...r, [field]: safeValue };
-        const quantity = Number(field === "quantity" ? safeValue : value(updated, "quantity") ?? 0);
-        const billRate = Number(field === "bill_rate" ? safeValue : value(updated, "bill_rate") ?? 0);
-        const costRate = Number(field === "cost_rate" ? safeValue : value(updated, "cost_rate") ?? 0);
-        updated.bill = quantity * billRate;
-        updated.cost = quantity * costRate;
-        return updated;
-      });
-      const updatedRow = next[i];
-      const key = String(value(updatedRow, "act_code") || `row_${i}`);
-      setActivityEdited((prevEdited) => ({ ...prevEdited, [key]: updatedRow }));
-      return next;
-    });
-  };
-
   return (
     <section className="grid gap-3">
       {/* ── Toolbar (matches DataTable's toolbar row) ── */}
@@ -926,9 +826,6 @@ if (isActivityBilling) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="outline" onClick={handleAddActivity}>
-            <Plus size={14} /> Add Activity
-          </Button>
           <Button size="sm" variant="outline" onClick={loadActivityBilling}>
             <RefreshCw size={14} /> Refresh
           </Button>
@@ -985,37 +882,9 @@ if (isActivityBilling) {
             ) : (
               activityRows.map((row, i) => (
                 <tr key={`${String(value(row, "act_code") ?? "")}_${i}`} className="hover:bg-muted/30">
-                  <td className="px-3 py-1.5">
-                    <LookupField
-                      compact
-                      value={String(value(row, "act_code") || "")}
-                      displayValue={String(value(row, "activity") || "")}
-                      columns={[
-                        { field: "ACTIVITY_CODE", header: "Code" },
-                        { field: "ACTIVITY", header: "Activity" },
-                      ]}
-                      valueField="ACTIVITY_CODE"
-                      displayFields={["ACTIVITY"]}
-                      loadOptions={async (query) => {
-                        if (!query) return activityData;
-                        const term = query.toLowerCase();
-                        return activityData.filter(
-                          (r) =>
-                            String(r.ACTIVITY_CODE ?? "").toLowerCase().includes(term) ||
-                            String(r.ACTIVITY ?? "").toLowerCase().includes(term)
-                        );
-                      }}
-                      onChange={(_val, selectedRow) => handleActivitySelect(i, selectedRow)}
-                      placeholder="Select activity"
-                    />
-                  </td>
-                  <td className="px-3 py-1.5 text-right">
-                    <input
-                      type="number" min="0" step="1"
-                      className="h-8 w-20 rounded-md border border-input bg-background px-2 text-right text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/40"
-                      value={String(value(row, "quantity") ?? 0)}
-                      onChange={(e) => handleActivityRateChange(row, "quantity", e.target.value)}
-                    />
+                  <td className="px-3 py-2.5 text-foreground">{String(value(row, "activity") || "")}</td>
+                  <td className="px-3 py-2.5 text-right font-medium text-foreground">
+                    {Number(value(row, "quantity") ?? 0)}
                   </td>
                   <td className="px-3 py-1.5 text-right">
                     <input
@@ -1076,6 +945,7 @@ if (isActivityBilling) {
     </section>
   );
 }
+
 if (!config) return (
   <Card><CardContent className="p-6 text-sm text-muted-foreground">This tab is not configured yet.</CardContent></Card>
 );

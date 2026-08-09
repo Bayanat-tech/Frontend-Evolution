@@ -7,7 +7,6 @@ import { NoticeToast } from "../../../components/ui/NoticeToast";
 import { useAuth } from "../../../state/AuthContext";
 import { getAllInvoices } from "../../../api/billing";
 import InvoiceForm from "./InvoiceForm";
-import { Badge } from "../../../components/ui/Badge";
 
 type WmsRow = Record<string, unknown>;
 
@@ -75,7 +74,7 @@ export function InvoicePage() {
 //     }
 //   };
 
-const columns = useMemo<ColumnDef<WmsRow>[]>(() => [
+  const columns = useMemo<ColumnDef<WmsRow>[]>(() => [
     {
       accessorKey: "invoice_no",
       header: "Invoice No",
@@ -93,18 +92,6 @@ const columns = useMemo<ColumnDef<WmsRow>[]>(() => [
       cell: ({ row }) => formatDate(val(row.original, "invoice_date")),
     },
     {
-      accessorKey: "from_date",
-      header: "From Date",
-      size: 120,
-      cell: ({ row }) => formatDate(val(row.original, "from_date")),
-    },
-    {
-      accessorKey: "to_date",
-      header: "To Date",
-      size: 120,
-      cell: ({ row }) => formatDate(val(row.original, "to_date")),
-    },
-    {
       id: "principal",
       header: "Principal",
       size: 220,
@@ -114,82 +101,15 @@ const columns = useMemo<ColumnDef<WmsRow>[]>(() => [
         return [code, name].filter(Boolean).join(" - ") || "-";
       },
     },
-    { accessorKey: "div_code", header: "Division Code", size: 100, cell: ({ row }) => val(row.original, "div_code") || "-" },
     { accessorKey: "div_name", header: "Division", size: 120, cell: ({ row }) => val(row.original, "div_name") || "-" },
-    { accessorKey: "job_no", header: "Job No", size: 110, cell: ({ row }) => val(row.original, "job_no") || "-" },
-    { accessorKey: "other_job", header: "Other Job", size: 110, cell: ({ row }) => val(row.original, "other_job") || "-" },
-    { accessorKey: "cust_code", header: "Customer Code", size: 120, cell: ({ row }) => val(row.original, "cust_code") || "-" },
-    { accessorKey: "inv_to", header: "Invoice To", size: 160, cell: ({ row }) => val(row.original, "inv_to") || "-" },
-    { accessorKey: "inv_type", header: "Invoice Type", size: 110, cell: ({ row }) => val(row.original, "inv_type") || "-" },
-    { accessorKey: "inv_mode", header: "Invoice Mode", size: 110, cell: ({ row }) => val(row.original, "inv_mode") || "-" },
-    { accessorKey: "curr_code", header: "Currency", size: 90, cell: ({ row }) => val(row.original, "curr_code") || "-" },
-    {
-      accessorKey: "ex_rate",
-      header: "Exchange Rate",
-      size: 110,
-      cell: ({ row }) => <span className="block text-right tabular-nums">{val(row.original, "ex_rate") ?? "-"}</span>,
-    },
+    { accessorKey: "curr_code", header: "Currency", size: 90 },
     {
       accessorKey: "inv_amount",
       header: "Invoice Amount",
       size: 130,
       cell: ({ row }) => <span className="block text-right tabular-nums">{val(row.original, "inv_amount")}</span>,
     },
-    { accessorKey: "crdr", header: "Cr/Dr", size: 80, cell: ({ row }) => val(row.original, "crdr") || "-" },
     { accessorKey: "inv_status", header: "Status", size: 90 },
-    {
-      accessorKey: "allocated",
-      header: "Allocated",
-      size: 100,
-      cell: ({ row }) => {
-        const value = val(row.original, "allocated");
-        return (
-          <Badge variant={value === "Y" ? "default" : "secondary"}>
-            {value === "Y" ? "Yes" : "No"}
-          </Badge>
-        );
-      },
-    },
-    {
-      accessorKey: "allocated_date",
-      header: "Allocated Date",
-      size: 130,
-      cell: ({ row }) => formatDate(val(row.original, "allocated_date")),
-    },
-    {
-      accessorKey: "despatched",
-      header: "Despatched",
-      size: 100,
-      cell: ({ row }) => {
-        const value = val(row.original, "despatched");
-        return (
-          <Badge variant={value === "Y" ? "default" : "secondary"}>
-            {value === "Y" ? "Yes" : "No"}
-          </Badge>
-        );
-      },
-    },
-    {
-      accessorKey: "desp_date",
-      header: "Despatch Date",
-      size: 130,
-      cell: ({ row }) => formatDate(val(row.original, "desp_date")),
-    },
-    { accessorKey: "awb_no", header: "AWB No", size: 120, cell: ({ row }) => val(row.original, "awb_no") || "-" },
-    { accessorKey: "stmt_actno", header: "Statement A/C No", size: 140, cell: ({ row }) => val(row.original, "stmt_actno") || "-" },
-    { accessorKey: "account_ref", header: "Account Ref", size: 130, cell: ({ row }) => val(row.original, "account_ref") || "-" },
-    { accessorKey: "party", header: "Party", size: 150, cell: ({ row }) => val(row.original, "party") || "-" },
-    { accessorKey: "inv_desc1", header: "Description 1", size: 180, cell: ({ row }) => val(row.original, "inv_desc1") || "-" },
-    { accessorKey: "inv_desc2", header: "Description 2", size: 180, cell: ({ row }) => val(row.original, "inv_desc2") || "-" },
-    { accessorKey: "prin_ref1", header: "Principal Ref 1", size: 140, cell: ({ row }) => val(row.original, "prin_ref1") || "-" },
-    { accessorKey: "prin_ref2", header: "Principal Ref 2", size: 140, cell: ({ row }) => val(row.original, "prin_ref2") || "-" },
-    { accessorKey: "credit_note_no", header: "Credit Note No", size: 130, cell: ({ row }) => val(row.original, "credit_note_no") || "-" },
-    {
-      accessorKey: "credit_note_date",
-      header: "Credit Note Date",
-      size: 140,
-      cell: ({ row }) => formatDate(val(row.original, "credit_note_date")),
-    },
     {
       id: "actions",
       header: "Actions",

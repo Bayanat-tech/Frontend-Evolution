@@ -9,7 +9,6 @@ import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { CardHeader } from "../../components/ui/Card";
 import { useAuth } from "../../state/AuthContext";
 import { almsSave, almsCommonSelect } from "../../api/alms";
-import { executeDynamicMutationColumn90 } from "../../api/lookups";
 
 // ─── Type ─────────────────────────────────────────────────────────────────
 export type TCRHeader = {
@@ -128,7 +127,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
 
   // ── Save (matches PROC_BUILD_DYNAMIC_INS_UPD_COLUMN90 -> 'capex_req_ins_upd') ──
  const saveHeader = async (status: string, extra: Record<string, unknown> = {}) =>
-    executeDynamicMutationColumn90({
+    almsSave({
       parameter: "capex_req_ins_upd",
       loginid,
       val1s1: requestNumber || "",

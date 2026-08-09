@@ -99,7 +99,7 @@ export function ProductionJobOrderPage({ onClose }: { onClose?: () => void } = {
       setRows(response);
       setTotalRows(response.length);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load Job Orders" });
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load purchase orders" });
     } finally {
       setLoading(false);
     }
@@ -136,7 +136,7 @@ export function ProductionJobOrderPage({ onClose }: { onClose?: () => void } = {
           parameter: "PS_POORDER_ENTRY_FUN_CHECK_GLOBAL_APPR_LEVEL",
           code1: user?.company_code,
           code2: user?.loginid || user?.username || "ADMIN",
-          code3: "production_job_order",
+          code3: "purchase_order",
         });
         if (!mounted) return;
         const first = (rows || [])[0] as Record<string, unknown> | undefined;
@@ -167,6 +167,7 @@ export function ProductionJobOrderPage({ onClose }: { onClose?: () => void } = {
     { accessorKey: "ac_code", header: "A/c Code" },
     { accessorKey: "ac_name", header: "A/c Name" },
     { accessorKey: "curr_code", header: "Currency" },
+    { accessorKey: "buyer", header: "Buyer" },
     {
       accessorKey: "canceled",
       header: "Status",
@@ -203,23 +204,21 @@ export function ProductionJobOrderPage({ onClose }: { onClose?: () => void } = {
     setDivisionPicker(false);
     setEditor({ mode: "create", divCode: division.div_code, divName: division.div_name });
   };
-console.log(approvalLevel, "approvalLevel");
+
   return (
     <section className="finance-list-page grid gap-4">
       <div className="finance-list-heading">
         <div className="finance-list-title">
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">Job Order</h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">Job Order document</p>
+          <h1 className="m-0 text-2xl font-semibold tracking-tight">Purchase Order</h1>
+          <p className="m-0 mt-1 text-sm text-muted-foreground">Purchase order document</p>
         </div>
         <div className="finance-list-actions">
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
-            { tab === "PENDING" && (
-          <Button title="Add Job Order" onClick={() => setDivisionPicker(true)}>
+          <Button title="Add Purchase Order" onClick={() => setDivisionPicker(true)}>
             <Plus size={15} /> Add
           </Button>
-        )}
         </div>
       </div>
 
@@ -248,8 +247,8 @@ console.log(approvalLevel, "approvalLevel");
         <DataTable
           columns={columns}
           data={rows}
-          title={loading ? "Loading" : `${totalRows.toLocaleString()} Job Orders`}
-          subtitle="Job Order List"
+          title={loading ? "Loading" : `${totalRows.toLocaleString()} Purchase Orders`}
+          subtitle="Purchase Order List"
           searchValue={query}
           onSearchChange={(value) => {
             setQuery(value);
@@ -257,7 +256,7 @@ console.log(approvalLevel, "approvalLevel");
           }}
           searchPlaceholder="Search doc no, division, vendor..."
           loading={loading}
-          emptyText="No Job Orders found"
+          emptyText="No purchase orders found"
           height={620}
           minWidth={1000}
           density="grid"
@@ -303,7 +302,7 @@ console.log(approvalLevel, "approvalLevel");
       <Dialog
         open={divisionPicker}
         title="Select Division"
-        description="Choose the division before opening the Job Order form."
+        description="Choose the division before opening the purchase order form."
         onClose={() => setDivisionPicker(false)}
         footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}
       >

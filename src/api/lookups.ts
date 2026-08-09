@@ -79,14 +79,6 @@ export type DynamicMutationParams = {
   val1s40?: string;
   val1s41?: string;
   val1s42?: string;
-  val1s43?: string;
-  val1s44?: string;
-  val1s45?: string;
-  val1s46?: string;
-  val1s47?: string;
-  val1s48?: string;
-  val1s49?: string;
-  val1s50?: string;
 
   val1s90?: string;
 
@@ -97,9 +89,6 @@ export type DynamicMutationParams = {
   val1n5?: number;
   val1n6?: number;
   val1n7?: number;
-  val1n8?: number;
-  val1n9?: number;
-  val1n10?: number;
 
   val1d1?: string | null;
   val1d2?: string | null;

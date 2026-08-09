@@ -15,7 +15,7 @@ import {
   SendBackUserOption,
 } from "../purchase/Purchaseordertypes";
 import {
-
+  emptyForm,
   formatAmount,
   lineNetAmount,
 
@@ -27,7 +27,7 @@ import {
 import { SendBackDialog } from "../purchase/Sendbackdialog";
 import { RejectDialog } from "../purchase/Rejectdialog";
 import {  PROCESSSA, InventoryConfig, IV_DOC_TYPE, PurchaseOrderForm, InventoryLineRow } from "./Inventorytypes";
-import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, lineAmount, lineDiscPrice, lineTaxAmount, runWorkflow } from "./Inventoryutils";
+import { emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, lineAmount, lineDiscPrice, lineTaxAmount, runWorkflow } from "./Inventoryutils";
 import { StockHeaderForm } from "./StockHeaderForm";
 import { StockDetail } from "./StockDetail";
 
@@ -123,7 +123,7 @@ export function StockadjustmentEditor({
           remarks: text(headerRaw.remarks || current.remarks),
           issued_by: text(headerRaw.issued_by || current.issued_by),
            received_by: text(headerRaw.received_by || current.received_by),
-          disc_price: Number(headerRaw.disc_price || 0),
+          disc_amt: Number(headerRaw.disc_amt || 0),
           disc_pct: Number(headerRaw.disc_pct || 0),
           tax_category: text(headerRaw.tax_category || current.tax_category),
           tax_code: text(headerRaw.tax_code || current.tax_code),
@@ -137,7 +137,6 @@ export function StockadjustmentEditor({
           from_zone_code : text(headerRaw.from_zone_code || current.from_zone_code ),
         to_zone_code : text(headerRaw.to_zone_code || current.to_zone_code ),
           zone_code : text(headerRaw.zone_code || current.zone_code ),
-          job_no : text(headerRaw.job_no || current.job_no ),
 
         }));
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
@@ -186,7 +185,7 @@ export function StockadjustmentEditor({
     const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
     const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-    return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
+    return totalAmount - totalDiscPrice - form.disc_amt + totalTaxAmount;
   })();
 
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
@@ -216,13 +215,14 @@ export function StockadjustmentEditor({
   };
 
  const handleSaveAsDraft = () =>
- {  if (!form.div_code) return setError("Division is required");
-  return runAction("draft", async () => {
+  runAction("draft", async () => {
     await runWorkflow("SAVEASDRAFT",  IV_DOC_TYPE.SAJ, form, rows, user?.company_code, user?.loginid || user?.username);
   }, "Sales Order saved as draft");
-}
+
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
+    if (!form.ac_code) return setError("A/c Code is required");
+    if (!form.curr_code) return setError("Currency is required");
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", IV_DOC_TYPE.SAJ, form, rows, user?.company_code, user?.loginid || user?.username);
     }, editMode ? "Sales Order updated successfully" : "Sales Order created successfully");
@@ -274,18 +274,15 @@ export function StockadjustmentEditor({
       });
       const options: SendBackUserOption[] = (rows || []).map((raw) => {
         const row = lowerRecord(raw as Record<string, unknown>);
-        const level = row.level_no ?? row.level ?? row.levelno ?? row.level_no;
-        const name = row.description ?? row.desc ?? row.name ?? row.username;
         return {
-          code: text(level),
-          name: text(name),
-          level_no: numberOrZero(level),
+          code: text(row.level_no),
+          name: text(row.description),
+          level_no: numberOrZero(row.level_no),
         };
       }).filter((option) => option.code);
       setSendBackUsers(options);
-    } catch (error) {
+    } catch {
       setSendBackUsers([]);
-      setSendBackError(error instanceof Error ? error.message : "Unable to load send-back users");
     } finally {
       setSendBackUsersLoading(false);
     }
@@ -405,35 +402,33 @@ export function StockadjustmentEditor({
           )}
         </CardContent>
 
-      
         <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
           <div className="flex flex-wrap gap-3 rounded-2xl bg-gray-50 p-5 shadow-inner">
-           { isPendingTab && (
-             <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
-                {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                {actionLoading === "draft" ? "Saving..." : "Save Draft"}
-              </Button>
-            )}
-          { isPendingTab && <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
+            <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
+              {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              {actionLoading === "draft" ? "Saving..." : "Save Draft"}
+            </Button>
+
+            <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
               {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
               {actionLoading === "submit" ? "Submitting..." : "Submit"}
-            </Button>}
+            </Button>
 
-            {isPendingTab && canSendBackOrReject && (
+            {canSendBackOrReject && (
               <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
                 {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
               </Button>
             )}
 
-            {isPendingTab && canSendBackOrReject && (
+            {canSendBackOrReject && (
               <Button type="button" onClick={openRejectDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60">
                 {actionLoading === "reject" ? "Rejecting..." : "Reject"}
               </Button>
             )}
-{isPendingTab &&
+
             <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
               {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
-            </Button>}
+            </Button>
           </div>
           <div className="flex items-center gap-2">
             <Button aria-label="Print" type="button" variant="outline" size="icon" disabled={actionDisabled}><Printer size={15} /></Button>

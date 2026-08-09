@@ -366,7 +366,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       USER_DT: new Date().toISOString(),
       USER_ID: loginid,
       FA_UPLOADED: "",
-      FINAL_APPROVED: header.isFinalApproval ? "Y" : "N",
+      FINAL_APPROVED: "N",
       TX_CAT_CODE: header.TX_CAT_CODE || "",
       TX_COMPNTCAT_CODE_1: header.TX_COMPNTCAT_CODE_1 || "",
       TX_COMPNTCAT_CODE_2: "",
@@ -590,9 +590,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     if (!requestNumber) return setNotice({ type: "error", message: "No PR to approve" });
     setSaving(true); setNotice(null);
     try {
-      const result = await saveBulk("APPROVED", "", {
-      FINAL_APPROVED:  header.isFinalApproval ? "Y" : "N"
-    })
+      const result = await saveBulk("APPROVED");
       if (result.success) {
         setNotice({ type: "success", message: "PR approved successfully!" });
         onClose(true);

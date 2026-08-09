@@ -900,14 +900,14 @@ function uniqueStrings(values: unknown[]) {
 function getNextModulePosition(appCode: unknown, rows: Record<string, unknown>[], excludeSerial?: unknown) {
   const app = String(appCode ?? "").trim().toUpperCase();
   if (!app) return 1;
-  const moduleRows = rows
+  const positions = rows
     .filter((row) =>
       String(row.app_code ?? "").trim().toUpperCase() === app &&
       Number(row.serial_no) !== Number(excludeSerial),
-    );
-  // Positions are maintained as a compact 1..N sequence. Count-based next
-  // position stays correct even while legacy data still contains gaps.
-  return moduleRows.length + 1;
+    )
+    .map((row) => Number(row.position))
+    .filter(Number.isFinite);
+  return positions.length ? Math.max(...positions) + 1 : 1;
 }
 
 function getPositionImpact(
@@ -922,10 +922,7 @@ function getPositionImpact(
   const serialNo = Number(form.serial_no);
   const current = editMode ? rows.find((row) => Number(row.serial_no) === serialNo) : undefined;
   const oldAppCode = String(current?.app_code ?? "").trim().toUpperCase();
-  const currentAppRows = rows
-    .filter((row) => String(row.app_code ?? "").trim().toUpperCase() === oldAppCode)
-    .sort((left, right) => Number(left.position) - Number(right.position));
-  const oldOrdinal = currentAppRows.findIndex((row) => Number(row.serial_no) === serialNo) + 1;
+  const oldPosition = Number(current?.position);
   const targetRows = rows
     .filter((row) => String(row.app_code ?? "").trim().toUpperCase() === appCode && Number(row.serial_no) !== serialNo)
     .sort((left, right) => Number(left.position) - Number(right.position));
@@ -934,19 +931,23 @@ function getPositionImpact(
   let affected: Record<string, unknown>[] = [];
   let direction = "";
   if (!current || oldAppCode !== appCode) {
-    affected = targetRows.slice(finalPosition - 1);
+    affected = targetRows.filter((row) => Number(row.position) >= finalPosition);
     direction = "down by one";
-  } else if (finalPosition < oldOrdinal) {
-    affected = targetRows.slice(finalPosition - 1, oldOrdinal - 1);
+  } else if (finalPosition < oldPosition) {
+    affected = targetRows.filter((row) => Number(row.position) >= finalPosition && Number(row.position) < oldPosition);
     direction = "down by one";
-  } else if (finalPosition > oldOrdinal) {
-    affected = targetRows.slice(oldOrdinal - 1, finalPosition - 1);
+  } else if (finalPosition > oldPosition) {
+    affected = targetRows.filter((row) => Number(row.position) > oldPosition && Number(row.position) <= finalPosition);
     direction = "up by one";
   }
 
-  const screenName = getMenuScreenName(form) || "This screen";
-  const detail = affected.length
-    ? ` ${affected.length} existing ${appCode} screen${affected.length === 1 ? "" : "s"} will move ${direction}.`
+  const screenName = String(form.level3 || form.level2 || form.level1 || "This screen");
+  const affectedNames = affected
+    .slice(0, 5)
+    .map((row) => String(row.level3 || row.level2 || row.level1 || `#${row.serial_no}`));
+  const extra = Math.max(affected.length - affectedNames.length, 0);
+  const detail = affectedNames.length
+    ? ` ${affectedNames.join(", ")}${extra ? ` and ${extra} more` : ""} will move ${direction}.`
     : " No existing screen will move.";
 
   return {
@@ -954,12 +955,6 @@ function getPositionImpact(
     summary: `${screenName} will be position ${finalPosition} of ${targetRows.length + 1}.${detail}`,
     confirmation: `Change ${screenName} to position ${finalPosition} in ${appCode}?${detail}`,
   };
-}
-
-function getMenuScreenName(row: Record<string, unknown>) {
-  return [row.level3, row.level2, row.level1]
-    .map((value) => String(value ?? "").trim())
-    .find((value) => value && value.toLowerCase() !== "null") || "";
 }
 
 function buildModuleUrlPath(form: Record<string, unknown>) {

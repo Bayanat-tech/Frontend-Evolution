@@ -1,11 +1,12 @@
-import { Save, Send, X } from "lucide-react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Save, Search, Send, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { executeDynamicMutationColumn90, getDynamicLookup } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
+import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
-import { LookupField } from "../../components/ui/LookupField";
 import { useAuth } from "../../state/AuthContext";
 
 // ─── Old field set — kept exactly as in the old form (no repurposed/workaround
@@ -50,12 +51,6 @@ type Props = {
   onClose: (shouldRefetch?: boolean) => void;
 };
 
-// ── Employee dropdown option — only code + name shown, same as before ──────
-type EmployeeOption = {
-  employee_code: string;
-  employee_name: string;
-};
-
 const DOC_TYPES = [
   { value: "ADD", label: "Addition" },
   { value: "DED", label: "Deduction" },
@@ -78,32 +73,6 @@ function toDate(value: unknown): string {
 
   const date = new Date(raw);
   return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
-}
-
-function buildParams(
-  parameter: string,
-  loginid: string,
-  companyCode: string,
-  code2 = "",
-  code3 = "",
-  code4 = "",
-) {
-  return {
-    parameter,
-    loginid,
-    code1: companyCode,
-    code2,
-    code3,
-    code4,
-    number1: 0,
-    number2: 0,
-    number3: 0,
-    number4: 0,
-    date1: null,
-    date2: null,
-    date3: null,
-    date4: null,
-  };
 }
 
 const EMPTY: TContinuousAutoMemo = {
@@ -136,6 +105,35 @@ const EMPTY: TContinuousAutoMemo = {
   signatory_position: "",
 };
 
+type EmployeeRow = {
+  employee_code: string;
+  rpt_name?: string;
+  desg_name?: string;
+  join_date?: string;
+  labourcard_no?: string;
+  ppt_no?: string;
+  [key: string]: unknown;
+};
+
+const EMPLOYEE_COLUMNS: ColumnDef<EmployeeRow>[] = [
+  { accessorKey: "employee_code", header: "Code", size: 110 },
+  { accessorKey: "rpt_name", header: "Name", size: 200 },
+  { accessorKey: "desg_name", header: "Designation", size: 180 },
+  {
+    accessorKey: "join_date",
+    header: "Join Date",
+    size: 130,
+    cell: ({ getValue }) => {
+      const val = getValue<string>();
+      if (!val) return "-";
+      const d = new Date(val);
+      return Number.isNaN(d.getTime()) ? "-" : d.toLocaleDateString("en-GB");
+    },
+  },
+  { accessorKey: "labourcard_no", header: "Labour Card", size: 140 },
+  { accessorKey: "ppt_no", header: "Passport No", size: 140 },
+];
+
 const MODE_BADGE: Record<FormMode, { label: string; className: string }> = {
   add: { label: "New", className: "bg-emerald-100 text-emerald-700" },
   edit: { label: "Editing", className: "bg-blue-100 text-blue-700" },
@@ -146,8 +144,6 @@ export function AddContinuousAutoMemoForm({ mode, existingData, onClose }: Props
   const { user } = useAuth();
   const readonly = mode === "view";
   const isEdit = mode === "edit";
-  const loginid = user?.loginid ?? "";
-  const companyCode = user?.company_code ?? "";
 
   const [form, setForm] = useState<TContinuousAutoMemo>({ ...EMPTY });
   const [errors, setErrors] = useState<Partial<Record<keyof TContinuousAutoMemo, string>>>({});
@@ -155,33 +151,26 @@ export function AddContinuousAutoMemoForm({ mode, existingData, onClose }: Props
   const [apiError, setApiError] = useState("");
   const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
 
+  const [empSearchOpen, setEmpSearchOpen] = useState(false);
+  const [employees, setEmployees] = useState<EmployeeRow[]>([]);
+  const [empLoading, setEmpLoading] = useState(false);
+
   const [payComponents, setPayComponents] = useState<any[]>([]);
   const [months, setMonths] = useState<{ value: string; label: string }[]>([]);
-
-  // ── Employee dropdown state — same data source as before
-  // ("HR_CAM_HR_Employee_Code"), just rendered as a LookupField dropdown
-  // (search + select in one control) instead of a separate search Dialog. ──
-  const [employee, setEmployee] = useState<EmployeeOption | null>(null);
-  const [resetKey, setResetKey] = useState(0);
 
   // ── Load existing record into form ─────────────────────────────────────
   useEffect(() => {
     if ((isEdit || readonly) && existingData) {
-      const empCode =
-        (existingData as any).EMPLOYEE_CODE ?? existingData.employee_code ?? "";
-      const empName =
-        (existingData as any).EMPLOYEE_NAME ?? existingData.employee_name ?? "";
       setForm({
         ...EMPTY,
         ...existingData,
-        employee_code: empCode,
-        employee_name: empName,
+        employee_code:
+          (existingData as any).EMPLOYEE_CODE ?? existingData.employee_code ?? "",
+        employee_name:
+          (existingData as any).EMPLOYEE_NAME ?? existingData.employee_name ?? "",
         doc_date: toDate(existingData.doc_date) || EMPTY.doc_date,
         approved_date: toDate(existingData.approved_date) || EMPTY.approved_date,
       });
-      if (empCode) {
-        setEmployee({ employee_code: String(empCode), employee_name: String(empName) });
-      }
     }
   }, [isEdit, readonly, existingData]);
 
@@ -190,26 +179,52 @@ export function AddContinuousAutoMemoForm({ mode, existingData, onClose }: Props
 
   // ── Fetch Pay Components — parameter "PAY_COMPONENT_PAYUNIT_Dep_UnitId" ──
   useEffect(() => {
-    if (!companyCode) return;
+    if (!user?.company_code) return;
     (async () => {
       try {
-        const response = await getDynamicLookup(
-          buildParams("PAY_COMPONENT_PAYUNIT_Dep_UnitId", loginid, companyCode),
-        );
+        const response = await getDynamicLookup({
+          parameter: "PAY_COMPONENT_PAYUNIT_Dep_UnitId",
+          loginid: user?.loginid ?? "",
+          code1: user?.company_code ?? "",
+          code2: "",
+          code3: "",
+          code4: "",
+          number1: 0,
+          number2: 0,
+          number3: 0,
+          number4: 0,
+          date1: null,
+          date2: null,
+          date3: null,
+          date4: null,
+        });
         setPayComponents(Array.isArray(response) ? response : []);
       } catch (error) {
         console.error("Failed to load pay components:", error);
       }
     })();
-  }, [companyCode, loginid]);
+  }, [user?.company_code, user?.loginid]);
 
   // ── Fetch Months — parameter "HR_CAM_HR_CODE_VALUES_37" ─────────────────
   useEffect(() => {
-    if (!companyCode) return;
+    if (!user?.company_code) return;
     (async () => {
       try {
         const response = await getDynamicLookup({
-          ...buildParams("HR_CAM_HR_CODE_VALUES_37", loginid, companyCode, "37", "A"),
+          parameter: "HR_CAM_HR_CODE_VALUES_37",
+          loginid: user?.loginid ?? "",
+          code1: user?.company_code ?? "",
+          code2: "37",
+          code3: "A",
+          code4: "",
+          number1: 0,
+          number2: 0,
+          number3: 0,
+          number4: 0,
+          date1: null,
+          date2: null,
+          date3: null,
+          date4: null,
         });
         const data = Array.isArray(response) ? response : [];
         const sorted = [...data]
@@ -220,33 +235,58 @@ export function AddContinuousAutoMemoForm({ mode, existingData, onClose }: Props
         console.error("Failed to load months:", error);
       }
     })();
-  }, [companyCode, loginid]);
+  }, [user?.company_code, user?.loginid]);
 
-  // ── Employee lookup — SAME parameter/source as the original page
-  // ("HR_CAM_HR_Employee_Code" -> VW_HR_EMP_REGISTER), just consumed by a
-  // LookupField dropdown instead of the old search Dialog. ────────────────
-  const loadEmployees = useCallback(
-    () => getDynamicLookup(buildParams("HR_CAM_HR_Employee_Code", loginid, companyCode)),
-    [loginid, companyCode],
-  );
-
-  const handleEmployeeChange = useCallback((_: string, row: Record<string, unknown> | null) => {
-    if (!row) {
-      setEmployee(null);
-      setForm((prev) => ({ ...prev, employee_code: "", employee_name: "" }));
-      return;
+  // ── Fetch Employees for search dialog — parameter "HR_CAM_HR_Employee_Code" ──
+  const loadEmployees = useCallback(async () => {
+    if (!user?.company_code) return;
+    setEmpLoading(true);
+    try {
+      const response = await getDynamicLookup({
+        parameter: "HR_CAM_HR_Employee_Code",
+        loginid: user?.loginid ?? "",
+        code1: user?.company_code ?? "",
+        code2: "",
+        code3: "",
+        code4: "",
+        number1: 0,
+        number2: 0,
+        number3: 0,
+        number4: 0,
+        date1: null,
+        date2: null,
+        date3: null,
+        date4: null,
+      });
+      setEmployees(Array.isArray(response) ? (response as EmployeeRow[]) : []);
+    } catch (error) {
+      console.error("Failed to load employees:", error);
+      setEmployees([]);
+    } finally {
+      setEmpLoading(false);
     }
-    const code = String(row.employee_code ?? (row as any).EMPLOYEE_CODE ?? "");
-    const name = String(row.rpt_name ?? (row as any).RPT_NAME ?? row.employee_name ?? "");
-    setEmployee({ employee_code: code, employee_name: name });
-    setForm((prev) => ({ ...prev, employee_code: code, employee_name: name }));
+  }, [user?.company_code, user?.loginid]);
+
+  const openEmployeeSearch = () => {
+    if (readonly) return;
+    setEmpSearchOpen(true);
+    void loadEmployees();
+  };
+
+  const handleSelectEmployee = useCallback((row: EmployeeRow) => {
+    setForm((prev) => ({
+      ...prev,
+      employee_code: row.employee_code ?? "",
+      employee_name: row.rpt_name ?? "",
+    }));
+    setEmpSearchOpen(false);
     setErrors((prev) => ({ ...prev, employee_code: undefined }));
   }, []);
 
   // ── Validation ────────────────────────────────────────────────────────
   const validate = (): boolean => {
     const next: Partial<Record<keyof TContinuousAutoMemo, string>> = {};
-    if (!form.employee_code?.trim()) next.employee_code = "Employee is required";
+    if (!form.employee_code?.trim()) next.employee_code = "Employee Code is required";
     if (!form.doc_date) next.doc_date = "Doc Date is required";
     if (!form.doc_type?.trim()) next.doc_type = "Doc Type is required";
     if (!form.pay_comp_id?.trim()) next.pay_comp_id = "Pay Component is required";
@@ -275,9 +315,9 @@ export function AddContinuousAutoMemoForm({ mode, existingData, onClose }: Props
     try {
       await executeDynamicMutationColumn90({
         parameter: "hr_cam_emp_cont_memo_ins_upd",
-        loginid,
+        loginid: user?.loginid ?? "",
 
-        val1s1: companyCode,
+        val1s1: user?.company_code ?? "",
         val1s2: form.doc_type ?? "ADD",
         val1n1: form.doc_no ? Number(form.doc_no) : undefined,
         val1s3: toDate(form.doc_date),
@@ -401,12 +441,17 @@ export function AddContinuousAutoMemoForm({ mode, existingData, onClose }: Props
   );
 
   return (
+    // Flat, single flowing grid — no card sections, no per-section scroll.
+    // Every field is min-w-0 inside a fixed-column grid so nothing can push
+    // past the container width, and the row count is kept low enough that
+    // the whole form fits without a vertical scrollbar either.
     <div className="grid gap-y-3 gap-x-4 overflow-hidden">
       {apiError && <div className="alert error">{apiError}</div>}
 
       {/* ── Header strip ─────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-2 border-b pb-2">
         <div className="min-w-0">
+          
           <h2 className="m-0 text-base font-semibold">Continuous Auto Memo</h2>
           <p className="m-0 text-sm font-semibold text-primary truncate">
             {form.doc_no || "Doc No"}
@@ -419,44 +464,32 @@ export function AddContinuousAutoMemoForm({ mode, existingData, onClose }: Props
         </span>
       </div>
 
-      {/* ── One flowing grid — same fields/order as the original page ────── */}
+      {/* ── One flowing 4-column grid — matches the target layout ──────── */}
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 min-w-0 sm:grid-cols-4">
         {field("Doc Date", "doc_date", "date", true)}
         {selectField("Doc Type", "doc_type", DOC_TYPES, true)}
         {field("Approved Date", "approved_date", "date")}
-
-        <label className="field min-w-0">
+        <label className="field min-w-0" key="employee_code">
           <span>
             Employee Code <strong className="text-destructive">*</strong>
           </span>
-          <LookupField
-            key={`employee-${resetKey}`}
-            compact
-            label="Employee"
-            disabled={readonly}
-            value={employee?.employee_code ?? ""}
-            // Only Code + Name shown, in the dropdown and as the display value
-            displayValue={
-              employee ? `${employee.employee_code} - ${employee.employee_name}` : ""
-            }
-            columns={[
-              { field: "employee_code", header: "Code" },
-              { field: "rpt_name", header: "Name" },
-            ]}
-            valueField="employee_code"
-            displayFields={["employee_code", "rpt_name"]}
-            loadOptions={loadEmployees}
-            onChange={handleEmployeeChange}
-          />
+          <div className="flex items-center gap-1 min-w-0">
+            <div className="min-w-0 flex-1">
+              <Input readOnly disabled={readonly} value={form.employee_code ?? ""} />
+            </div>
+            <Button size="icon" variant="outline" disabled={readonly} onClick={openEmployeeSearch}>
+              <Search size={14} />
+            </Button>
+          </div>
           {errors.employee_code && (
             <span className="text-destructive text-xs mt-0.5">{errors.employee_code}</span>
           )}
         </label>
 
-        {/* <label className="field min-w-0" key="employee_name">
+        <label className="field min-w-0" key="employee_name">
           <span>Employee Name</span>
           <Input disabled value={form.employee_name ?? ""} />
-        </label> */}
+        </label>
         {selectField("Pay Component", "pay_comp_id", payComponentOptions, true)}
         {field("Amount", "amount", "number", true)}
         {selectField("Effective From (Month)", "month_from", months, true)}
@@ -504,13 +537,7 @@ export function AddContinuousAutoMemoForm({ mode, existingData, onClose }: Props
 
       {/* ── Actions ──────────────────────────────────────────────────── */}
       <div className="flex flex-wrap justify-end gap-2 border-t pt-3">
-        <Button
-          variant="outline"
-          onClick={() => {
-            setResetKey((k) => k + 1);
-            onClose(false);
-          }}
-        >
+        <Button variant="outline" onClick={() => onClose(false)}>
           <X size={15} /> {readonly ? "Close" : "Cancel"}
         </Button>
         {!readonly && (
@@ -546,6 +573,24 @@ export function AddContinuousAutoMemoForm({ mode, existingData, onClose }: Props
         <p className="text-sm text-muted-foreground">
           This will submit document <strong>{form.doc_no || "(new)"}</strong>.
         </p>
+      </Dialog>
+
+      {/* ── Employee search dialog ───────────────────────────────────────── */}
+      <Dialog open={empSearchOpen} title="Employee" wide onClose={() => setEmpSearchOpen(false)}>
+        <div className="overflow-x-auto">
+          <DataTable
+            columns={EMPLOYEE_COLUMNS}
+            data={employees}
+            loading={empLoading}
+            height={420}
+            minWidth={700}
+            searchPlaceholder="Search employee code, name..."
+            enablePagination
+            pageSize={50}
+            getRowId={(row) => row.employee_code}
+            onRowClick={(row) => handleSelectEmployee(row)}
+          />
+        </div>
       </Dialog>
     </div>
   );

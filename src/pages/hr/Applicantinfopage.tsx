@@ -32,7 +32,7 @@ type PopupState = {
 };
 
 const baseParams = (loginid: string, companyCode: string) => ({
-  parameter: "MST_HR_APPLICANT_INFO",
+  parameter: "HR_CAM_APPLICANT_INFO",
   loginid,
   code1: companyCode,
   code2: "NULL",
