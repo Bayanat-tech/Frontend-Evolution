@@ -35,7 +35,7 @@ export interface InventoryLineRow {
   uom_code?: string;
   // STR (Stock Transfer) only
   remarks?: string;
-  dept?: string;
+  dept_code?: string;
   job_no?: string;
  
   // SAJ (Stock Adjustment) only
@@ -95,6 +95,7 @@ export interface PurchaseOrderForm {
   zone_name?: string,
   dept_name?: string,
   zone_code? : string
+  job_no?: string;
 
 }
 

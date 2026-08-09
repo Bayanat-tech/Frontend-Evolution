@@ -47,8 +47,8 @@ export interface PurchaseOrderLineRow {
 export interface PurchaseOrderForm {
   doc_no: number | string;
   doc_date: string;
-  //quotn_no: string;
-  //quotn_date: string;
+  quotn_no: string;
+  quotn_date: string;
   ref_no:string;
   ref_date:string;
   div_code: string;
@@ -57,12 +57,14 @@ export interface PurchaseOrderForm {
   ac_name: string;
   party_address: string;
   credit_period: number;
+  party_name: string;
   dept_code: string;
   dept_name:string;
   party_phone: string;
   party_fax: string;
   buyer: string;
   wo_no: string;
+  wo_number: string;
   curr_code: string;
   curr_name: string;
    tax_code: string;
@@ -95,7 +97,14 @@ tx_cat_code: string;
   next_action_by?: string;
   sentback_reason?: string;
   reject_reason?: string;
-
+address:string;
+tel:string;
+fax:string;
+pay_terms:string;
+delivery_term:string;
+delivery_contact:string;
+delivery_tel:string;
+delivery_email:string;
 
 }
 
