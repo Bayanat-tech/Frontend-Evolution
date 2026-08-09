@@ -111,7 +111,7 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
     if (!query.trim()) return rows;
     const q = query.toLowerCase();
     return rows.filter((row) =>
-      [row.REQUEST_NUMBER, (row as any).DESCRIPTION, (row as any).CREATE_USER, statusOf(row)]
+      [row.REQUEST_NUMBER, (row as any).DESCRIPTION, (row as any).SUPPLIER, (row as any).SUPPLIER_NAME]
         .filter(Boolean)
         .some((field) => String(field).toLowerCase().includes(q))
     );
@@ -304,6 +304,56 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
     []
   );
 
+  // alag column set sirf PO Generated tab ke liye
+const poColumns = useMemo<ColumnDef<any>[]>(() => [
+  {
+    accessorKey: "REQUEST_NUMBER",
+    header: "Request No",
+    cell: ({ row }) => (
+      <span className="font-semibold text-[#082A89]">{row.original.REQUEST_NUMBER}</span>
+    ),
+  },
+  {
+    accessorKey: "REQUEST_DATE",
+    header: "Request Date",
+    cell: ({ row }) => fmtDate(row.original.REQUEST_DATE),
+  },
+  {
+    accessorKey: "SUPPLIER",
+    header: "Supplier",
+    cell: ({ row }) => {
+      const r = row.original;
+      return r.SUPPLIER_NAME ? `${r.SUPPLIER} - ${r.SUPPLIER_NAME}` : (r.SUPPLIER || "—");
+    },
+  },
+  {
+    id: "actions",
+    header: "Action",
+    enableSorting: false,
+    cell: ({ row }) => (
+      <Button size="icon" variant="ghost" title="Edit" onClick={() => handlePoEdit(row.original)}>
+        <Edit2 size={15} />
+      </Button>
+    ),
+  },
+], []);
+
+const handlePoEdit = (row: any) => {
+  setTaskPopup({
+    open: true,
+    title: `PO - ${row.DOC_NO}`,
+    data: {
+      existingData: { REQUEST_NUMBER: row.REQUEST_NUMBER } as any,
+      isEditMode: true,
+      isViewMode: false,
+      flowCode: "",
+      flowDescription: "",
+      docType: row.DOC_TYPE,         // NEW
+      docNo: String(row.DOC_NO), // NEW — isi se items scope honge
+    } as any,
+  });
+};
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <section className="finance-list-page grid gap-4">
@@ -365,7 +415,7 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
       {/* Data Table */}
       <div className="min-h-[650px]">
         <DataTable
-          columns={columns}
+          columns={activeTab === 5 ? poColumns : columns}
           data={filteredRows}
           title={isLoading ? "Loading" : `${filteredRows.length.toLocaleString()} Purchase Requests`}
           subtitle="Purchase Request List"
@@ -479,6 +529,8 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
             }
             flowCode={taskPopup.data.flowCode}
             flowDescription={taskPopup.data.flowDescription}
+            docType={(taskPopup.data as any).docType}   // NEW
+            docNo={(taskPopup.data as any).docNo}
             onClose={closePopup}
           />
         )}
