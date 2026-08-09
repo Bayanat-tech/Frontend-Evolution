@@ -1229,7 +1229,10 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
   name: "Product BOM",
   match: ({ pathname }) => isProductBomRoute(pathname),
-  element: () => <PS_ProductBomPage />,
+  element: () => <PS_ProductBomPage />},
+
+  
+  {
   name: "Profit & Loss Summary Report",
   match: ({ pathname }) => isProfitLossSummaryRoute(pathname),
   element: () => <PLSummaryPage />,
