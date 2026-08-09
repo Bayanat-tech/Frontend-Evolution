@@ -7,10 +7,9 @@ export type PurchaseOrderEditorState =
 
 export type ActionKey = "draft" | "submit" | "sendBack" | "reject" | "cancel" | "close";
 
-export interface PurchaseOrderLineRow {
+export interface SalesOrderLineRow {
   id: string;
   div_code: string;
-  zone: string;
   prod_code: string;
   prod_name: string;
   p_uom: string;
@@ -18,22 +17,26 @@ export interface PurchaseOrderLineRow {
   l_uom: string;
   qty_luom: number;
   unit_price: number;
-  disc_pct: number;
-  qty: number;
+  disc_percent: number;
+  quantity: number;
   tax_pct: number;
   tax_amount: number;
-  lcurr_amount: number;
-  req_date: string;
+  lcur_amount: number;
+  required_dt: string;
   line_remarks: string;
   tax_cat: string;
   tax_code: string;
-  tax_lcurr_amount: number;
-  lcurr_amount_disc: number;
+  tax_lcur_amount: number;
+  lcur_amount_disc: number;
   zone_code?: string;
   zone_name?: string;
   uom_name?: string;
   uom_code?: string;
-  
+  disc_hdr_percent?: number;
+  disc_hdr_price?: number;
+  disc_price?: number;
+  uppp?: number;
+  ex_rate?: number;
 }
 
 export interface PurchaseOrderForm {

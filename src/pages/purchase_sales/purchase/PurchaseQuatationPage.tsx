@@ -98,7 +98,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
       setRows(response);
       setTotalRows(response.length);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load purchase orders" });
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load Purchase Quotations" });
     } finally {
       setLoading(false);
     }
@@ -166,7 +166,6 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
     { accessorKey: "ac_code", header: "A/c Code" },
     { accessorKey: "ac_name", header: "A/c Name" },
     { accessorKey: "curr_code", header: "Currency" },
-    { accessorKey: "buyer", header: "Buyer" },
     {
       accessorKey: "canceled",
       header: "Status",
@@ -215,9 +214,11 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
+          { tab === "PENDING" && (
           <Button title="Add Purchase Quotation" onClick={() => setDivisionPicker(true)}>
             <Plus size={15} /> Add
           </Button>
+        )}
         </div>
       </div>
 
@@ -301,7 +302,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
       <Dialog
         open={divisionPicker}
         title="Select Division"
-        description="Choose the division before opening the purchase order form."
+        description="Choose the division before opening the Purchase Quotation form."
         onClose={() => setDivisionPicker(false)}
         footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}
       >

@@ -20,39 +20,57 @@ export interface PurchaseOrderRow {
   doc_no: string;
   doc_date: string;
   quotn_no?: string;
+  purchase_actype?: any;
   quotn_date?: string;
    ref_no?: string;
   ref_date?: string;
   dept_name?: string;
+  uppp?: number;
   div_code: string;
   div_name?: string;
   ac_code: string;
   ac_name?: string;
+  party_address?: string;
   address?: string;
   credit_period?: number;
   dept_code?: string;
+  party_phone?: string;
+  party_fax?: string;
+  buyer?: string;
   tel?: string;
   fax?: string;
-  buyer?: string;
-  wo_no?: string;
-  curr_code?: string;
-  curr_name?: string;
-  ex_rate?: number;
   pay_terms?: string;
   delivery_term?: string;
   delivery_contact?: string;
   delivery_tel?: string;
   delivery_email?: string;
+  party_name?: string;
+  wo_no?: string;
+  curr_code?: string;
+  curr_name?: string;
+  ex_rate?: number;
+  payment_terms?: string;
+  dlvr_term?: string;
+  dlvr_contact?: string;
+  dlvr_mobile?: string;
+  dlvr_email?: string;
   remarks?: string;
-  disc_amt?: number;
+  disc_hdr_price?: number;
+  disc_hdr_percent?: number;
+  tx_cat_code?: string;
+  tx_cat_name?: string;
+  disc_price?: number;
   disc_pct?: number;
   tax_category?: string;
   tax_code?: string;
+  tx_compntcat_code_1?: string;
+  tax_code_name?: string;
   expense_ac_post?: string;
   print_on_letterhead?: string;
   project_name?: string;
   pr_no?: string;
   scope_of_work?: string;
+  disc_percent?: number;
   status?: string;
   canceled?: string;
   flow_level_running?: number;
@@ -60,6 +78,7 @@ export interface PurchaseOrderRow {
   sentback_reason?: string;
   reject_reason?: string; // added for reject action
   last_action?: "SENTBACK" | "REJECTED" | "APPROVED" | "CANCELED" | "PENDING" | string;
+  wo_number?: string;
 }
 
 // TODO: swap for a real API call, e.g. cancelPurchaseOrderApi(docNo)
@@ -169,7 +188,6 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
     { accessorKey: "ac_code", header: "A/c Code" },
     { accessorKey: "ac_name", header: "A/c Name" },
     { accessorKey: "curr_code", header: "Currency" },
-    { accessorKey: "buyer", header: "Buyer" },
     {
       accessorKey: "canceled",
       header: "Status",
@@ -218,9 +236,11 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
+        { tab === "PENDING" && (
           <Button title="Add Purchase Order" onClick={() => setDivisionPicker(true)}>
             <Plus size={15} /> Add
           </Button>
+        )}
         </div>
       </div>
 

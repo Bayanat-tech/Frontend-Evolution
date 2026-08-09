@@ -302,7 +302,7 @@ export function SecurityOperationAccessPage({ mode }: SecurityOperationAccessPag
           <CardContent className="grid min-w-0 gap-3 text-sm">
             <SummaryRow label={principalLabel} value={selectedPrincipalRow ? formatPrincipal(selectedPrincipalRow, isRoleMode) : "Not selected"} />
             <SummaryRow label="App" value={selectedApp || String(selectedScreenRow?.app_code ?? "All")} />
-            <SummaryRow label="Screen" value={selectedScreenRow ? String(selectedScreenRow.level3 || selectedScreenRow.level2 || selectedScreenRow.level1 || selectedScreenRow.serial_no) : "Not selected"} />
+            <SummaryRow label="Screen" value={selectedScreenRow ? getScreenName(selectedScreenRow) : "Not selected"} />
             <SummaryRow label="Company" value={String(selectedScreenRow?.company_code || user?.company_code || "")} />
             <div className="mt-2 grid gap-2">
               <Button className="w-full justify-center" disabled={!canLoadPermissions || saving || permissionLoading} onClick={saveAccess}>
@@ -543,6 +543,9 @@ function normalizeRow(row: Record<string, unknown>) {
   alias(normalized, "level2", ["LEVEL2"]);
   alias(normalized, "level3", ["LEVEL3"]);
   alias(normalized, "company_code", ["companycode", "companyCode", "COMPANY_CODE"]);
+  normalized.level1 = cleanMenuLevel(normalized.level1);
+  normalized.level2 = cleanMenuLevel(normalized.level2);
+  normalized.level3 = cleanMenuLevel(normalized.level3);
   return normalized;
 }
 
@@ -567,7 +570,7 @@ function formatPrincipal(row: OptionRow, isRoleMode: boolean) {
 }
 
 function formatScreen(row: OptionRow) {
-  return [row.serial_no, row.level3 || row.level2 || row.level1].filter(Boolean).join(" - ");
+  return [row.serial_no, getScreenName(row)].filter(Boolean).join(" - ");
 }
 
 function getAssignableScreens(rows: OptionRow[]) {
@@ -575,6 +578,11 @@ function getAssignableScreens(rows: OptionRow[]) {
     rows
       .filter((row) => hasText(row.level3))
       .map((row) => menuLevelKey(row.app_code, row.level1, row.level2)),
+  );
+  const level2Parents = new Set(
+    rows
+      .filter((row) => hasText(row.level2))
+      .map((row) => menuLevelKey(row.app_code, row.level1)),
   );
   const bySerial = new Map<string, OptionRow>();
 
@@ -584,7 +592,8 @@ function getAssignableScreens(rows: OptionRow[]) {
 
     const hasLevel3 = hasText(row.level3);
     const isLeafLevel2 = hasText(row.level2) && !hasLevel3 && !level3Parents.has(menuLevelKey(row.app_code, row.level1, row.level2));
-    if (hasLevel3 || isLeafLevel2) {
+    const isLeafLevel1 = hasText(row.level1) && !hasText(row.level2) && !hasLevel3 && !level2Parents.has(menuLevelKey(row.app_code, row.level1));
+    if (hasLevel3 || isLeafLevel2 || isLeafLevel1) {
       bySerial.set(serialNo, row);
     }
   });
@@ -598,7 +607,16 @@ function getAssignableScreens(rows: OptionRow[]) {
 }
 
 function hasText(value: unknown) {
-  return String(value ?? "").trim().length > 0;
+  return cleanMenuLevel(value).length > 0;
+}
+
+function cleanMenuLevel(value: unknown) {
+  const text = String(value ?? "").trim();
+  return text.toUpperCase() === "NULL" ? "" : text;
+}
+
+function getScreenName(row: OptionRow) {
+  return cleanMenuLevel(row.level3) || cleanMenuLevel(row.level2) || cleanMenuLevel(row.level1) || String(row.serial_no ?? "").trim();
 }
 
 function menuLevelKey(...parts: unknown[]) {
