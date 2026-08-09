@@ -14,11 +14,11 @@ import {
   PROCESSJO,
   JobProductionConfig,
   PurchaseOrderEditorState,
-  PurchaseOrderForm,
-  PurchaseOrderLineRow,
   SendBackUserOption,
   TteJmiConsumType,
   ExpenseRow,
+  PurchaseOrderForm,
+  PurchaseOrderLineRow,
 } from "../../purchase_sales/purchase/Purchaseordertypes";
 import {
   emptyForm,
@@ -51,6 +51,7 @@ type LineTab = "lines" | "expenses";
 function emptyJobConsumRow(divCode?: string): TteJmiConsumType {
   return {
     id: newId(),
+    
     div_code: divCode || "",
     prod_code: "",
     prod_name: "",
@@ -65,7 +66,8 @@ function emptyJobConsumRow(divCode?: string): TteJmiConsumType {
     tax_cat: "",
     tax_lcurr_amount: 0,
     lcurr_amount_disc: 0,
-  } as TteJmiConsumType;
+
+  } as unknown as TteJmiConsumType;
 }
 
 function emptyExpenseRow(divCode?: string): ExpenseRow {
@@ -139,7 +141,7 @@ export function JobProductionOrderEditor({
   const [flowLevelRunning, setFlowLevelRunning] = useState<number>(0);
   const [actionLoading, setActionLoading] = useState<ActionKey | null>(null);
 
-  // ---- Line tabs (Purchase Order Lines + Job Consumption together, Other Expenses separate) ----
+  // ---- Line tabs (Job Order Lines + Job Consumption together, Other Expenses separate) ----
   const [activeLineTab, setActiveLineTab] = useState<LineTab>("lines");
 
   // ---- Send Back dialog state ----
@@ -184,33 +186,33 @@ export function JobProductionOrderEditor({
         ]);
         if (!mounted) return;
 
-        setForm((current) => ({
+       setForm((current) => ({
           ...current,
           doc_no: text(headerRaw.doc_no || docNo),
           doc_date: toDateInputValue(headerRaw.doc_date) || current.doc_date,
-          quotn_no: text(headerRaw.quotn_no || current.quotn_no),
-          quotn_date: toDateInputValue(headerRaw.quotn_date) || current.quotn_date,
+          ref_no: text(headerRaw.quotn_no || current.ref_no),
+          ref_date: toDateInputValue(headerRaw.quotn_date) || current.ref_date,
           div_code: text(headerRaw.div_code || current.div_code),
           div_name: text(headerRaw.div_name || current.div_name),
           ac_code: text(headerRaw.ac_code || current.ac_code),
           ac_name: text(headerRaw.ac_name || current.ac_name),
-          address: text(headerRaw.address || current.address),
+          party_address: text(headerRaw.address || current.party_address),
           credit_period: Number(headerRaw.credit_period || current.credit_period || 0),
           dept_code: text(headerRaw.dept_code || current.dept_code),
-          tel: text(headerRaw.tel || current.tel),
-          fax: text(headerRaw.fax || current.fax),
+          party_phone: text(headerRaw.tel || current.party_phone),
+          party_fax: text(headerRaw.fax || current.party_fax),
           buyer: text(headerRaw.buyer || current.buyer),
-          wo_no: text(headerRaw.wo_no || current.wo_no),
+          wo_number: text(headerRaw.wo_number || current.wo_number),
           curr_code: text(headerRaw.curr_code || current.curr_code),
           curr_name: text(headerRaw.curr_name || current.curr_name),
           ex_rate: Number(headerRaw.ex_rate || current.ex_rate || 1),
-          pay_terms: text(headerRaw.pay_terms || current.pay_terms),
-          delivery_term: text(headerRaw.delivery_term || current.delivery_term),
-          delivery_contact: text(headerRaw.delivery_contact || current.delivery_contact),
-          delivery_tel: text(headerRaw.delivery_tel || current.delivery_tel),
-          delivery_email: text(headerRaw.delivery_email || current.delivery_email),
+          payment_terms: text(headerRaw.pay_terms || current.payment_terms),
+          dlvr_term: text(headerRaw.delivery_term || current.dlvr_term),
+          dlvr_contact: text(headerRaw.delivery_contact || current.dlvr_contact),
+          dlvr_mobile: text(headerRaw.delivery_tel || current.dlvr_mobile),
+          dlvr_email: text(headerRaw.delivery_email || current.dlvr_email),
           remarks: text(headerRaw.remarks || current.remarks),
-          disc_amt: Number(headerRaw.disc_amt || 0),
+          disc_price: Number(headerRaw.disc_price || 0),
           disc_pct: Number(headerRaw.disc_pct || 0),
           tax_category: text(headerRaw.tax_category || current.tax_category),
           tax_code: text(headerRaw.tax_code || current.tax_code),
@@ -227,7 +229,7 @@ export function JobProductionOrderEditor({
         setExpenseRows(expenseDetailRows.length ? expenseDetailRows : [emptyExpenseRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
         if (!mounted) return;
-        setError(loadError instanceof Error ? loadError.message : "Unable to load purchase order");
+        setError(loadError instanceof Error ? loadError.message : "Unable to load Job Order");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -270,7 +272,7 @@ export function JobProductionOrderEditor({
     const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
     const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-    return totalAmount - totalDiscPrice - form.disc_amt + totalTaxAmount;
+    return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
   })();
 
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
@@ -316,7 +318,7 @@ export function JobProductionOrderEditor({
   const handleSaveAsDraft = () =>
     runAction("draft", async () => {
       await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.FGP, form, rows, jobConsumRows, expenseRows,user?.company_code, user?.loginid || user?.username);
-    }, "Purchase order saved as draft");
+    }, "Job Order saved as draft");
 
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
@@ -324,13 +326,13 @@ export function JobProductionOrderEditor({
     if (!form.curr_code) return setError("Currency is required");
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", PO_DOC_TYPE.FGP, form, rows, jobConsumRows,expenseRows, user?.company_code, user?.loginid || user?.username);
-    }, editMode ? "Purchase order updated successfully" : "Purchase order created successfully");
+    }, editMode ? "Job Order updated successfully" : "Job Order created successfully");
   };
 
   const handleCancel = () =>
     runAction("cancel", async () => {
       await runWorkflow("CANCELED", PO_DOC_TYPE.FGP, form, rows, jobConsumRows,expenseRows, user?.company_code, user?.loginid || user?.username);
-    }, "Purchase order cancelled");
+    }, "Job Order cancelled");
 
   // ---- Reject handlers ----
   const openRejectDialog = () => {
@@ -352,7 +354,7 @@ export function JobProductionOrderEditor({
       const payloadForm: PurchaseOrderForm = { ...form, reject_reason: rejectReason.trim() };
       await runWorkflow("REJECTED", PO_DOC_TYPE.FGP, payloadForm, rows, jobConsumRows,expenseRows, user?.company_code, user?.loginid || user?.username);
       setRejectDialogOpen(false);
-    }, "Purchase order rejected");
+    }, "Job Order rejected");
   };
 
   // ---- Send Back handlers ----
@@ -409,7 +411,7 @@ export function JobProductionOrderEditor({
       };
       await runWorkflow("SENTBACK", PO_DOC_TYPE.FGP, payloadForm, rows, jobConsumRows,expenseRows, user?.company_code, user?.loginid || user?.username);
       setSendBackDialogOpen(false);
-    }, "Purchase order sent back");
+    }, "Job Order sent back");
   };
 
   const actionBarBusy = actionLoading !== null || saving;
@@ -425,9 +427,9 @@ export function JobProductionOrderEditor({
             <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
               <div>
                 <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                  {editMode ? "Edit Purchase Order" : "New Purchase Order"}
+                  {editMode ? "Edit Job Order" : "New Job Order"}
                 </p>
-                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Purchase Order</h2>
+                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Job Order</h2>
               </div>
               <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
@@ -462,15 +464,15 @@ export function JobProductionOrderEditor({
           <div className="cancelled-document-banner" role="status">
             <div>
               <span className="cancelled-document-kicker">Cancelled Document</span>
-              <strong>{form.doc_no || "Purchase Order"}</strong>
+              <strong>{form.doc_no || "Job Order"}</strong>
             </div>
-            <p>This purchase order is cancelled and opened in read-only mode.</p>
+            <p>This Job Order is cancelled and opened in read-only mode.</p>
           </div>
         )}
 
        <CardContent className="min-h-0 overflow-auto p-3">
   {loading ? (
-    <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading purchase order...</div>
+    <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Job Order...</div>
   ) : (
     <div className="grid gap-3">
       <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
@@ -486,7 +488,7 @@ export function JobProductionOrderEditor({
                 : "border border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            Purchase Order
+            Job Order
           </button>
           <button
             type="button"
@@ -516,11 +518,12 @@ export function JobProductionOrderEditor({
 
             <PurchaseOrderLinesTable
               rows={rows}
+              ex_rate={form.ex_rate}
               updateRow={updateRow}
               addRow={addRow}
               removeRow={removeRow}
               headerAndLineDisabled={headerAndLineDisabled}
-              discAmt={form.disc_amt}
+              discAmt={form.disc_price}
               companyCode={user?.company_code}
               loginid={user?.loginid || user?.username}
             />
@@ -531,7 +534,7 @@ export function JobProductionOrderEditor({
               addRow={addJobConsumRow}
               removeRow={removeJobConsumRow}
               headerAndLineDisabled={headerAndLineDisabled}
-              discAmt={form.disc_amt}
+              discAmt={form.disc_price}
               companyCode={user?.company_code}
               loginid={user?.loginid || user?.username}
             />
@@ -556,33 +559,35 @@ export function JobProductionOrderEditor({
   )}
 </CardContent>
 
+      
         <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
           <div className="flex flex-wrap gap-3 rounded-2xl bg-gray-50 p-5 shadow-inner">
-            <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
-              {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              {actionLoading === "draft" ? "Saving..." : "Save Draft"}
-            </Button>
-
-            <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
+           { isPendingTab && (
+             <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
+                {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                {actionLoading === "draft" ? "Saving..." : "Save Draft"}
+              </Button>
+            )}
+          { isPendingTab && <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
               {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
               {actionLoading === "submit" ? "Submitting..." : "Submit"}
-            </Button>
+            </Button>}
 
-            {canSendBackOrReject && (
+            {isPendingTab && canSendBackOrReject && (
               <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
                 {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
               </Button>
             )}
 
-            {canSendBackOrReject && (
+            {isPendingTab && canSendBackOrReject && (
               <Button type="button" onClick={openRejectDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60">
                 {actionLoading === "reject" ? "Rejecting..." : "Reject"}
               </Button>
             )}
-
+{isPendingTab &&
             <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
               {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
-            </Button>
+            </Button>}
           </div>
           <div className="flex items-center gap-2">
             <Button aria-label="Print" type="button" variant="outline" size="icon" disabled={actionDisabled}><Printer size={15} /></Button>

@@ -18,7 +18,7 @@ export interface InventoryLineRow {
   l_uom: string;
   qty_luom: number;
   unit_price: number;
-  disc_pct: number;
+  disc_precent: number;
   qty: number;
   tax_pct: number;
   tax_amount: number;
@@ -43,7 +43,8 @@ export interface InventoryLineRow {
   sale_price?:number;
   quantity?:number;
   uppp?:number;
-  ex_rate?: number
+  ex_rate?: number;
+  disc_price?: number;
   
   
 }
@@ -73,8 +74,8 @@ export interface PurchaseOrderForm {
   delivery_tel: string;
   delivery_email: string;
   remarks: string;
-  disc_amt: number;
-  disc_pct: number;
+  disc_price: number;
+  disc_precent: number;
   tax_category: string;
   tax_code: string;
   expense_ac_post: string;

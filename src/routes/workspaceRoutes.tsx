@@ -174,6 +174,7 @@ import { StocksTransferPage } from "../pages/purchase_sales/inventory/StockTrans
 import { StocksAdjectmentPage } from "../pages/purchase_sales/inventory/StockadjustmentPage";
 import { JobProductionOrderPage } from "../pages/purchase_sales/production/JobProductionPage";
 import { LeaveTypesPage } from "../pages/hr/Leavetypespage";
+import PLSummaryPage from "../pages/purchase_sales/Reports/Plsummarypage";
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -193,6 +194,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: "Activity WMS Master",
+    match: ({pathname}) => pathname.toLowerCase().includes("/wms/wms/master/gm/activity"),
+    element: () => <WmsSimpleMasterPage config={wmsSimpleMasterConfigs.activity} />,
+  },
 
   {
     name: 'mms inspection report',
@@ -1196,6 +1202,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   match: ({ pathname }) => isJobProductionSetupRoute(pathname),
   element: () => <JobProductionOrderPage />,
   },
+
+  {
+  name: "Profit & Loss Summary Report",
+  match: ({ pathname }) => isProfitLossSummaryRoute(pathname),
+  element: () => <PLSummaryPage />,
+},
   
 ];
 
@@ -1208,8 +1220,8 @@ function isHrLeaveTypeRoute(pathname: string) {
   const normalized = decodeRouteText(pathname).toLowerCase();
   // const compact = normalized.replace(/[^a-z0-9]/g, "");
   return (
-    normalized.includes("/hcm/hcm/pay components/leave_types1") ||
-    normalized.includes("/hcm/hcm/pay%20components/leave_types1")
+    normalized.includes("/hcm/hcm/pay components/leave_types") ||
+    normalized.includes("/hcm/hcm/pay%20components/leave_types")
     // compact.includes("paycomponentsleavetype")
   );
 }
@@ -1236,6 +1248,15 @@ function isPurchaseSaleSetupRoute(pathname: string) {
     "/workspace/purchase_sales/purchase_sales/utilities/purchase/sales_setup"
   );
 }
+
+
+function isProfitLossSummaryRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/reports/profit_loss_summary"
+  );
+}
+
 
 
 function isStockAdjViewRoute(pathname: string) {
