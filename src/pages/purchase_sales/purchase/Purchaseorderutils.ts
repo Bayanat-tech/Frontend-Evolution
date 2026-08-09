@@ -210,7 +210,7 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     tx_cat_code: form.tx_cat_code,
     
   
-    tx_compntcat_code_1: form.tax_code,
+    tx_compntcat_code_1: form.tx_compntcat_code_1,
     purchase_actype: form.expense_ac_post,
     project_name: form.project_name,
     pr_no: form.pr_no,
