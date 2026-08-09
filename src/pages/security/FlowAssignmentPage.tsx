@@ -63,6 +63,11 @@ export function FlowAssignmentPage() {
   const loginid = user?.loginid || "";
 
   const [selectedProcess, setSelectedProcess] = useState<string>("");
+  // Processes added client-side via "Add Process" — merged into the Process
+  // dropdown options below. No API call; purely local until backend support exists.
+  const [customProcesses, setCustomProcesses] = useState<{ PROCESS: string }[]>([]);
+  const [addProcessOpen, setAddProcessOpen] = useState(false);
+  const [newProcessName, setNewProcessName] = useState("");
   const [selectedRole, setSelectedRole] = useState<string>("");
   const [selectedRoleDesc, setSelectedRoleDesc] = useState<string>("");
 
@@ -96,8 +101,14 @@ export function FlowAssignmentPage() {
 
   const loadProcessOptions = useCallback(async () => {
     const rows = await getFlowAssignProcesses(companyCode);
-    return (rows ?? []) as unknown as LookupRow[];
-  }, [companyCode]);
+    const apiRows = (rows ?? []) as unknown as LookupRow[];
+    const existing = new Set(apiRows.map((r) => val(r as unknown as Record<string, unknown>, "PROCESS")));
+    const merged = [
+      ...apiRows,
+      ...customProcesses.filter((p) => !existing.has(p.PROCESS)),
+    ];
+    return merged as unknown as LookupRow[];
+  }, [companyCode, customProcesses]);
 
   const loadRoleOptions = useCallback(async () => {
     const rows = await getFlowAssignRoles(companyCode);
@@ -354,6 +365,22 @@ export function FlowAssignmentPage() {
     },
   ], []);
 
+  // Frontend-only: stage a new process name into the dropdown and select it.
+  // No API call — nothing is persisted until a backend endpoint exists.
+  const handleConfirmAddProcess = () => {
+    const processValue = newProcessName.trim();
+    if (!processValue) return;
+
+    setCustomProcesses((prev) =>
+      prev.some((p) => p.PROCESS === processValue) ? prev : [...prev, { PROCESS: processValue }]
+    );
+    setSelectedProcess(processValue);
+    void loadLevelDetails(processValue);
+
+    setAddProcessOpen(false);
+    setNewProcessName("");
+  };
+
   // Add is always openable now — even with no role/level selected (e.g. a
   // null Level 5) — because the role itself is picked inside the modal.
   const handleAddUser = () => {
@@ -400,21 +427,33 @@ export function FlowAssignmentPage() {
 
       {/* TOP: Process -> Approver Levels */}
       <div className="grid gap-3 rounded-lg border bg-card p-4 shadow-sm">
-        <label className="grid gap-1 text-sm">
-          <span className="font-medium text-foreground">Process</span>
-          <LookupField
-            value={selectedProcess}
-            placeholder="Select process"
-            columns={[{ field: "PROCESS", header: "Process" }]}
-            valueField="PROCESS"
-            displayFields={["PROCESS"]}
-            loadOptions={loadProcessOptions}
-            onChange={(v) => {
-              setSelectedProcess(v);
-              void loadLevelDetails(v);
+        <div className="flex items-end gap-3">
+          <label className="grid flex-1 gap-1 text-sm">
+            <span className="font-medium text-foreground">Process</span>
+            <LookupField
+              value={selectedProcess}
+              placeholder="Select process"
+              columns={[{ field: "PROCESS", header: "Process" }]}
+              valueField="PROCESS"
+              displayFields={["PROCESS"]}
+              loadOptions={loadProcessOptions}
+              onChange={(v) => {
+                setSelectedProcess(v);
+                void loadLevelDetails(v);
+              }}
+            />
+          </label>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setNewProcessName("");
+              setAddProcessOpen(true);
             }}
-          />
-        </label>
+          >
+            <Plus size={14} /> Add Process
+          </Button>
+        </div>
 
         <h2 className="m-0 text-sm font-semibold text-foreground">Approver Levels</h2>
 
@@ -590,6 +629,41 @@ export function FlowAssignmentPage() {
             />
           </label>
         </div>
+      </Dialog>
+
+      {/* Add Process modal — frontend-only, no API call. Adds the typed
+          name into the Process dropdown's options and selects it. */}
+      <Dialog
+        open={addProcessOpen}
+        title="Add Process"
+        description="Enter a process name to add it to the dropdown above."
+        compact
+        onClose={() => setAddProcessOpen(false)}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setAddProcessOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmAddProcess} disabled={!newProcessName.trim()}>
+              <Plus size={14} />
+              Add
+            </Button>
+          </>
+        }
+      >
+        <label className="grid gap-1 text-sm">
+          <span className="font-medium text-foreground">Process Name</span>
+          <input
+            className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+            placeholder="e.g. credit_request_form"
+            value={newProcessName}
+            onChange={(e) => setNewProcessName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleConfirmAddProcess();
+            }}
+            autoFocus
+          />
+        </label>
       </Dialog>
     </section>
   );
