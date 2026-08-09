@@ -20,6 +20,7 @@ export interface PurchaseOrderRow {
   doc_no: string;
   doc_date: string;
   quotn_no?: string;
+  purchase_actype?: any;
   quotn_date?: string;
    ref_no?: string;
   ref_date?: string;
@@ -30,12 +31,21 @@ export interface PurchaseOrderRow {
   ac_code: string;
   ac_name?: string;
   party_address?: string;
+  address?: string;
   credit_period?: number;
   dept_code?: string;
   party_phone?: string;
   party_fax?: string;
   buyer?: string;
-  wo_number?: string;
+  tel?: string;
+  fax?: string;
+  pay_terms?: string;
+  delivery_term?: string;
+  delivery_contact?: string;
+  delivery_tel?: string;
+  delivery_email?: string;
+  party_name?: string;
+  wo_no?: string;
   curr_code?: string;
   curr_name?: string;
   ex_rate?: number;
@@ -213,7 +223,6 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
     setDivisionPicker(false);
     setEditor({ mode: "create", divCode: division.div_code, divName: division.div_name });
   };
-  console.log(approvalLevel, "approvalLevel");
 
   return (
     <section className="finance-list-page grid gap-4">
@@ -233,7 +242,6 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
         )}
         </div>
       </div>
-    
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
      <TabStrip
@@ -241,7 +249,6 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
   onChange={(value) => setTab(value as RequestTab)}
   tabs={
     approvalLevel === 0
-    
       ? [
           { label: "Pending", value: "PENDING", icon: "pending" },
           { label: "Closed", value: "CLOSED", icon: "closed" },
