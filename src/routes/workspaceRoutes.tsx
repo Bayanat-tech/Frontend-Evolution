@@ -1506,9 +1506,9 @@ function isHrContinuousAutoMemoRoute(context: WorkspaceRouteContext) {
   const normalized = getHrMatchText(context);
   const compact    = normalized.replace(/[^a-z0-9]/g, "");
   return (
-    compact.includes("continuousautomemo") ||
-    normalized.includes("continuous_auto_memo") ||
-    normalized.includes("continuous-auto-memo")
+    compact.includes("continousautomemo") ||
+    normalized.includes("continous_auto_memo") ||
+    normalized.includes("continous_auto_memo")
   );
 }
 

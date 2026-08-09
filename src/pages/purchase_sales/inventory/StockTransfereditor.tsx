@@ -220,8 +220,6 @@ export function StockTransferEditor({
 
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
-    if (!form.ac_code) return setError("A/c Code is required");
-    if (!form.curr_code) return setError("Currency is required");
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", IV_DOC_TYPE.STR, form, rows, user?.company_code, user?.loginid || user?.username);
     }, editMode ? "Sales Order updated successfully" : "Sales Order created successfully");
@@ -273,15 +271,18 @@ export function StockTransferEditor({
       });
       const options: SendBackUserOption[] = (rows || []).map((raw) => {
         const row = lowerRecord(raw as Record<string, unknown>);
+        const level = row.level_no ?? row.level ?? row.levelno ?? row.level_no;
+        const name = row.description ?? row.desc ?? row.name ?? row.username;
         return {
-          code: text(row.level_no),
-          name: text(row.description),
-          level_no: numberOrZero(row.level_no),
+          code: text(level),
+          name: text(name),
+          level_no: numberOrZero(level),
         };
       }).filter((option) => option.code);
       setSendBackUsers(options);
-    } catch {
+    } catch (error) {
       setSendBackUsers([]);
+      setSendBackError(error instanceof Error ? error.message : "Unable to load send-back users");
     } finally {
       setSendBackUsersLoading(false);
     }
@@ -313,6 +314,7 @@ export function StockTransferEditor({
   };
 
   const actionBarBusy = actionLoading !== null || saving;
+  console.log("flowLevelRunning------------------>",flowLevelRunning)
 
   return (
     <>
