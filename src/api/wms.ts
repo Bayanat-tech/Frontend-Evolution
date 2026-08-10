@@ -353,31 +353,31 @@ export async function getFlowAssignRoleUsers(companyCode: string, roleId: string
     code2: roleId,
   }) as Promise<TFlowRoleUser[]>;
 }
- export const saveFlowAssignLevels = async (
+export const saveFlowAssignLevels = async (
   companyCode: string,
   process: string,
-  levelValues: {
+  rows: {
     level1_role: string;
     level2_role: string;
     level3_role?: string;
     level4_role?: string;
     level5_role?: string;
     last_level: number;
-  }
+    flow_code?: string;
+  }[]
 ) => {
   const payload = {
-    rows: [
-      {
-        company_code: companyCode,
-        process: process,
-        level1_role: levelValues.level1_role,
-        level2_role: levelValues.level2_role,
-        level3_role: levelValues.level3_role || null,
-        level4_role: levelValues.level4_role || null,
-        level5_role: levelValues.level5_role || null,
-        last_level: levelValues.last_level,
-      },
-    ],
+    rows: rows.map((r) => ({
+      company_code: companyCode,
+      process: process,
+      level1_role: r.level1_role,
+      level2_role: r.level2_role,
+      level3_role: r.level3_role || null,
+      level4_role: r.level4_role || null,
+      level5_role: r.level5_role || null,
+      last_level: r.last_level,
+      flow_code: r.flow_code || "NA",
+    })),
   };
 
   const res = await api.post("/api/finance/insUpdMsApproverLevels", payload);
@@ -1403,7 +1403,7 @@ export async function saveStockCount(payload: SaveStockCountPayload) {
 
   return result;
 }
-
+saveFlowAssignLevels 
 /** All users for the company (used by the Add User modal) */
 export async function getFlowAssignAllUsers(companyCode: string) {
   return procBuildDynamicSqlSecurity({
