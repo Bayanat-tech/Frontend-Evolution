@@ -10,6 +10,7 @@ import { CardHeader } from "../../components/ui/Card";
 import { useAuth } from "../../state/AuthContext";
 import { almsSave, almsCommonSelect } from "../../api/alms";
 import { executeDynamicMutationColumn90 } from "../../api/lookups";
+import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 
 // ─── Type ─────────────────────────────────────────────────────────────────
 export type TCRHeader = {
@@ -87,6 +88,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const [header, setHeader] = useState<Partial<TCRHeader>>({});
   const [rejectOpen, setRejectOpen] = useState(false);
   const [sendBackOpen, setSendBackOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [remarkText, setRemarkText] = useState("");
   const [attachOpen, setAttachOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
@@ -94,15 +96,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const disabled = isViewMode || saving;
   const Required = () => <span className="text-destructive ml-0.5">*</span>;
 
-  // ── Fetch existing CR (edit/view mode) ────────────────────────────────────
-  // Uses Amlspf_VW_CR_PAGE — same parameter as before, but the backend SQL
-  // for this WHEN case has been repointed from the limited VW_CR_PAGE view
-  // to the full CREDIT_FORM_REQUEST table, so all fields (WAY_NO, BLDG_NO,
-  // CITY, EMAIL, CREDIT_LIMIT, contact fields, etc.) now come through.
-  // almsCommonSelect auto-uppercases keys, so no manual normalization needed here.
-  // FIX: was `enabled: isEditMode && !!requestNumber` — this meant View mode
-  // (isEditMode=false, isViewMode=true) never fetched, so the form always
-  // rendered blank even though a valid requestNumber was passed in.
+
   const { data: hdrList = [] } = useQuery<TCRHeader[]>({
     queryKey: ["cr-header", requestNumber, companyCode],
     queryFn: () =>
@@ -120,19 +114,12 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       setHeader(hdrList[0]);
       setLoading(false);
     } else if (!isEditMode && !isViewMode) {
-      // FIX: genuinely a new/create form only when NEITHER edit NOR view —
-      // previously `!isEditMode` alone also matched View mode and cleared
-      // loading before the fetch above ever had a chance to run/resolve.
       setLoading(false);
     }
   }, [hdrList, isEditMode, isViewMode]);
 
   const setHdr = (field: keyof TCRHeader, value: unknown) =>
     setHeader((prev) => ({ ...prev, [field]: value }));
-
-  // ── Save (matches PROC_BUILD_DYNAMIC_INS_UPD_COLUMN90 -> 'capex_req_ins_upd') ──
-  // `extra` lets Reject/Send Back override specific fields (the reason text)
-  // without duplicating this whole payload.
   const saveHeader = async (status: string, extra: Record<string, unknown> = {}) =>
     executeDynamicMutationColumn90({
       parameter: "capex_req_ins_upd",
@@ -149,7 +136,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       val1s10: header.CREATE_USER || loginid,
       val1s11: loginid,
       val1s12: status,
-      val1s13: header.FAX_NO || "", // FAX_NO — was missing entirely before
+      val1s13: header.FAX_NO || "",
 
       val1s18: header.COMPANY_NAME || "",
       val1s19: header.AWARE_CUSTOMER_CODE || "",
@@ -182,14 +169,12 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       val1s41: header.ACCOUNT_ENV_FREIGHT === "Y" ? "Y" : "N",
       val1s42: header.ACCOUNT_NO || "",
 
-      // FIX: these were missing entirely — backend's UPDATE branch reads
-      // CREATED_BY/UPDATED_BY/NEXT_ACTION_BY/SENTBACK_REASON/REJECT_REASON
-      // from val1s43-47, so Reject/Send Back had nothing to write into.
-      val1s43: loginid,   // CREATED_BY (kept as-is on update; harmless)
+
+      val1s43: loginid,   // CREATED_BY 
       val1s44: loginid,   // UPDATED_BY
       val1s45: "",        // NEXT_ACTION_BY
-      val1s46: "",        // SENTBACK_REASON (overridden by handleSendBackConfirm)
-      val1s47: "",        // REJECT_REASON (overridden by handleRejectConfirm)
+      val1s46: "",        // SENTBACK_REASON 
+      val1s47: "",        // REJECT_REASON 
 
       val1n1: header.FLOW_LEVEL_INITIAL || 1,
       val1n2: header.FLOW_LEVEL_RUNNING || 1,
@@ -228,9 +213,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     setSaving(true);
     setNotice(null);
     try {
-      // FIX: "Amlspf_RejectCR" doesn't exist on the backend — Reject must go
-      // through the same capex_req_ins_upd UPDATE path as Save/Submit, with
-      // LAST_ACTION='REJECTED' and the reason written to REJECT_REASON (val1s47).
+
       const result = await saveHeader("REJECTED", { val1s47: remarkText });
       if (result.success) {
         setNotice({ type: "success", message: "CR rejected successfully!" });
@@ -250,10 +233,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     setSaving(true);
     setNotice(null);
     try {
-      // FIX: "Amlspf_SendBackCR" doesn't exist on the backend — Send Back must
-      // go through capex_req_ins_upd too. IMPORTANT: the tab-list query filters
-      // on LAST_ACTION = 'SENTBACK' (not 'SENDBACK'), so the status saved here
-      // must be 'SENTBACK' for the record to show up under the Send Back tab.
+
       const result = await saveHeader("SENTBACK", { val1s46: remarkText });
       if (result.success) {
         setNotice({ type: "success", message: "CR sent back successfully!" });
@@ -263,6 +243,24 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       }
     } catch (err) {
       setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to send back" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+
+  const handleCancelConfirm = async () => {
+    setSaving(true);
+    setNotice(null);
+    try {
+      const result = await saveHeader("CANCELED");
+      if (result.success) {
+        setNotice({ type: "success", message: "CR canceled successfully!" });
+        setCancelOpen(false);
+        onClose(true);
+      }
+    } catch (err) {
+      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to cancel" });
     } finally {
       setSaving(false);
     }
@@ -408,7 +406,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                       onChange={(e) => setHdr("CREDIT_FORM_SIGNATURE_DATE", e.target.value)}
                     />
                   </label>
-                   <label className="field"><span>Sanctioned Credit Limit Amt<Required /></span><Input disabled={disabled} type="number" step="0.001" value={header.SANCTIONED_CREDIT_LIMIT_AMT ?? ""} onChange={(e) => setHdr("SANCTIONED_CREDIT_LIMIT_AMT", Number(e.target.value))} /></label>
+                  <label className="field"><span>Sanctioned Credit Limit Amt<Required /></span><Input disabled={disabled} type="number" step="0.001" value={header.SANCTIONED_CREDIT_LIMIT_AMT ?? ""} onChange={(e) => setHdr("SANCTIONED_CREDIT_LIMIT_AMT", Number(e.target.value))} /></label>
                   <label className="field"><span>Sanctioned Credit Period<Required /></span><Input disabled={disabled} type="number" value={header.SANCTIONED_CREDIT_PERIOD ?? ""} onChange={(e) => setHdr("SANCTIONED_CREDIT_PERIOD", Number(e.target.value))} /></label>
                 </div>
               </div>
@@ -460,7 +458,15 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
         <div className="flex items-center justify-end gap-2 border-t bg-secondary/60 px-4 py-2">
           {!isViewMode && (
             <>
-              <Button disabled={saving} type="button" variant="outline" onClick={() => onClose()}>Close</Button>
+              <Button
+                disabled={saving}
+                type="button"
+                variant="outline"
+                onClick={() => setCancelOpen(true)}
+                className="border-red-300 text-red-700 hover:bg-red-50"
+              >
+                <X size={15} /> Cancel
+              </Button>
               <Button disabled={saving} type="button" variant="outline" onClick={handleSaveDraft}>
                 <Save size={15} /> {saving ? "Saving..." : "Save As Draft"}
               </Button>
@@ -519,6 +525,36 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       >
         <textarea rows={4} value={remarkText} onChange={(e) => setRemarkText(e.target.value)} placeholder="Enter send back reason..." className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
       </Dialog>
+
+      <Dialog
+        open={cancelOpen}
+        title="Cancel Request"
+        description="Are you sure you want to cancel this credit request? This action cannot be undone."
+        onClose={() => setCancelOpen(false)}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setCancelOpen(false)}>No, Keep It</Button>
+            <Button variant="destructive" disabled={saving} onClick={handleCancelConfirm}>
+              {saving ? "Canceling..." : "Yes, Cancel Request"}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-muted-foreground">
+          Once canceled, this request will move to the "Canceled" tab and no further action can be taken on it.
+        </p>
+      </Dialog>
+      <AttachmentDialog
+        open={attachOpen}
+        onClose={() => setAttachOpen(false)}
+        requestNumber={requestNumber}
+        title="Credit Request Attachments"
+        module="LMS"
+        type="CR"
+        companyCode={companyCode}
+        loginId={loginid}
+        readOnly={isViewMode}
+      />
     </div>
   );
 };
