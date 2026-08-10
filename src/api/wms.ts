@@ -1360,6 +1360,12 @@ export async function postWmsStockCount<TPayload extends Record<string, unknown>
   return response.data;
 }
 
+export async function insUpdHrEmpComponentApi<TPayload extends Record<string, unknown>>( payload: TPayload) {
+  const response = await api.post<ApiResponse<unknown>>(`/api/hr/employee/pay-components/upsert`, payload);
+  if (!response.data.success) throw new Error(response.data.message || `Unable to save`);
+  return response.data;
+}
+
 /**
  * GET — principal detail rows for a given count_no (edit mode).
  * Ported 1:1 from the old page's `STOCKCOUNT_prin_page` call via

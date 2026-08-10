@@ -1,10 +1,137 @@
 import { useCallback, useEffect, useState } from "react";
-import { getDynamicLookup } from "../../api/lookups";
-import type { LookupRow } from "../../api/lookups";
+import { getDynamicLookup, type LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { useAuth } from "../../state/AuthContext";
+import { insUpdHrEmpComponentApi } from "../../api/wms";
+
+// ════════════════════════════════════════════════════════════════════════
+// API LAYER — was HrEmpComponents.ts, inlined here so the whole screen
+// lives in a single file. Talks to PROC_INS_UPD_HR_EMP_COMPONENTS via
+// POST /api/hr/employee/pay-components/upsert (employeHr.routes.ts,
+// mounted under /api/hr/employee in hr.routes.ts) → insUpdHrEmpPayunits
+// controller. The proc only accepts one HR_EMP_COMPONENTS row per call,
+// so bulk saves issue one request per row (see upsertHrEmpComponentsApi).
+// ════════════════════════════════════════════════════════════════════════
+
+export type THrEmpComponentPayload = {
+  employee_id: string;
+  pay_comp_id: string;
+  pay_comp_amt?: number | null;
+  pay_comp_perc?: number | null;
+  pay_comp_amt_old?: number | null;
+  entered_on?: string | null;
+  entered_by?: string | null;
+  verified_on?: string | null;
+  verified_by?: string | null;
+  approved_on?: string | null;
+  approved_by?: string | null;
+  revised_on?: string | null;
+  revised_by?: string | null;
+  freezed_on?: string | null;
+  freezed_reason?: string | null;
+  freezed_till?: string | null;
+  remarks?: string | null;
+  status_flag?: string | null;
+  user_id?: string | null;
+  user_dt?: string | null;
+  company_code: string;
+  pay_comp_earn_ded?: string | null;
+  pay_roll_status?: string | null;
+  comp_status?: string | null;
+  arrears_amt?: number | null;
+  arrears_type?: string | null;
+  arrears_posted?: string | null;
+  ref_doc_type?: string | null;
+  ref_doc_no?: string | null;
+  pay_comp_amt_vac?: number | null;
+  vac_updated?: string | null;
+  source_from?: string | null;
+  source_updated?: string | null;
+  curr_code?: string | null;
+  doc_no?: string | null;
+};
+
+export type THrEmpComponentSaveResult = {
+  success: boolean;
+  message: string;
+  data?: {
+    company_code: string;
+    employee_id: string;
+    pay_comp_id: string;
+    curr_code: string;
+  };
+  details?: string;
+};
+
+/**
+ * POSTs a single HR_EMP_COMPONENTS row to PROC_INS_UPD_HR_EMP_COMPONENTS
+ * via POST /api/hr/employee/pay-components/upsert. The proc only accepts
+ * one component per call, so bulk saves are done by calling this once per
+ * row (see upsertHrEmpComponentsApi below).
+ */
+// export async function insUpdHrEmpComponentApi(
+//   component: THrEmpComponentPayload,
+// ): Promise<THrEmpComponentSaveResult> {
+//   const response = await fetch("/api/hr/employee/pay-components/upsert", {
+//     method: "POST",
+//     headers: { "Content-Type": "application/json" },
+//     credentials: "include",
+//     body: JSON.stringify({ component }),
+//   });
+
+//   // Read as text first — an empty or non-JSON body (404 page, empty 204,
+//   // proxy error page, etc.) would otherwise throw an opaque "Unexpected
+//   // end of JSON input" that hides the real HTTP status.
+//   const rawText = await response.text();
+
+//   if (!rawText) {
+//     throw new Error(
+//       `Empty response from ${response.url} (HTTP ${response.status} ${response.statusText}). ` +
+//         `The route likely doesn't match the backend's actual mount path — check the Express router.`,
+//     );
+//   }
+
+//   let result: THrEmpComponentSaveResult;
+//   try {
+//     result = JSON.parse(rawText) as THrEmpComponentSaveResult;
+//   } catch {
+//     throw new Error(
+//       `Non-JSON response from ${response.url} (HTTP ${response.status}): ${rawText.slice(0, 200)}`,
+//     );
+//   }
+
+//   if (!response.ok || !result.success) {
+//     throw new Error(result.details || result.message || "Unable to save pay component");
+//   }
+
+//   return result;
+// }
+
+/**
+ * Bulk-style helper: saves multiple HR_EMP_COMPONENTS rows by issuing one
+ * insUpdHrEmpComponentApi call per row (the backend proc is single-row).
+ * Returns per-row results in the same order as the input array; rejected
+ * rows carry an `error` string instead of throwing, so one bad row doesn't
+ * abort the rest.
+ */
+// export async function upsertHrEmpComponentsApi(
+//   components: THrEmpComponentPayload[],
+// ): Promise<Array<THrEmpComponentSaveResult | { success: false; error: string }>> {
+//   return Promise.all(
+//     components.map((component) =>
+//       insUpdHrEmpComponentApi(component).catch((error: unknown) => ({
+//         success: false as const,
+//         error: error instanceof Error ? error.message : "Unable to save pay component",
+//       })),
+//     ),
+//   );
+// }
+
+// ════════════════════════════════════════════════════════════════════════
+// SCREEN — HR Employee - Pay Units
+// ════════════════════════════════════════════════════════════════════════
 
 // ─── Header filter set — Company / Division / Department / Section /
 // Employee, mirroring the "HR Employee - Pay Units" screen. Division /
@@ -71,7 +198,22 @@ type TPayUnitRow = {
   approved_on: string;
   status: string; // display label: Active / Inactive
   remarks: string;
+  dirty: boolean; // true once the user edits this row — only dirty rows are saved
+  is_new: boolean; // true for rows added via the Add button, not yet in HR_EMP_COMPONENTS
 };
+
+const makeNewRow = (): TPayUnitRow => ({
+  row_id: `new-${crypto.randomUUID()}`,
+  pay_unit_code: "",
+  pay_unit_name: "",
+  amount: "0",
+  pay_unit_status: "Pending",
+  approved_on: "",
+  status: "Active",
+  remarks: "",
+  dirty: true,
+  is_new: true,
+});
 
 // ─── LookupField configs — parameter strings match the exact WHEN literals
 // in PROC_BUILD_DYNAMIC_SQL_MST_HR. ────────────────────────────────────
@@ -117,14 +259,14 @@ const EMPLOYEE_LOOKUP_COLUMNS: { field: string; header: string }[] = [
 // REMARKS — a 1:1 match for this grid's columns.
 const PAY_UNITS_RETRIEVE_PARAMETER = "MST_HR_EMPLOYEE_PAY_UNITS_SELECT";
 
-// ─── Save — PLACEHOLDER. No update/save WHEN-block exists yet in
-// PROC_BUILD_DYNAMIC_SQL_MST_HR for writing back to HR_EMP_COMPONENTS from
-// this screen (the old PowerBuilder script's protect/freeze logic —
-// hr_emp_pay_calc_hdr_history + sec_login.hr_payunit_change — also isn't
-// exposed via any proc parameter here). Add a WHEN block, e.g.
-// 'HR_EMPLOYEE_PAY_UNITS_SAVE', before wiring this up for real. ──────────
-const SAVE_PARAMETER = "HR_EMPLOYEE_PAY_UNITS_SAVE";
-
+// ─── Save — wired to PROC_INS_UPD_HR_EMP_COMPONENTS via
+// insUpdHrEmpComponentApi / upsertHrEmpComponentsApi (defined above).
+// The proc takes one HR_EMP_COMPONENTS row at a time, so only rows the
+// user actually touched (dirty === true) are sent, one request per row,
+// in parallel. Existing rows are updated; rows added via the Add button
+// (is_new === true) are inserted — the proc handles both through the
+// same PL/SQL table type, keyed off EMPLOYEE_ID + PAY_COMP_ID.
+// ───────────────────────────────────────────────────────────────────────
 export function HrEmployeePayUnits() {
   const { user } = useAuth();
   const loginid = user?.loginid ?? "";
@@ -234,6 +376,8 @@ export function HrEmployeePayUnits() {
         approved_on: r.approved_on ?? "",
         status: r.status ?? "Active",
         remarks: r.remarks ?? "",
+        dirty: false,
+        is_new: false,
       }));
       setRows(mapped);
     } catch (error) {
@@ -262,45 +406,91 @@ export function HrEmployeePayUnits() {
 
   // ── Row editing helpers ────────────────────────────────────────────
   const updateRow = (row_id: string, patch: Partial<TPayUnitRow>) =>
-    setRows((prev) => prev.map((r) => (r.row_id === row_id ? { ...r, ...patch } : r)));
+    setRows((prev) =>
+      prev.map((r) => (r.row_id === row_id ? { ...r, ...patch, dirty: true } : r)),
+    );
 
-  // ── Save — PLACEHOLDER call, see SAVE_PARAMETER note above. Sends the
-  // header scope only; row payload (amount / pay_unit_status / status /
-  // remarks per pay unit) still needs a real save proc + row-array shape
-  // before this can persist anything. ─────────────────────────────────────
+  // ── Add — inserts a brand-new blank row at the top of the grid. Pay
+  // Unit Code is entered inline (no PAY_UNIT/PAY_COMP lookup parameter
+  // was given, so it's a free-text Input for now — swap in a LookupField
+  // once one exists). New rows start dirty so Save always includes them.
+  // ────────────────────────────────────────────────────────────────────
+  const addRow = () => {
+    if (!employeeReady) return;
+    setRows((prev) => [makeNewRow(), ...prev]);
+  };
+
+  // ── Remove a row the user just added (before it's saved). Only allowed
+  // for unsaved new rows — existing rows aren't deletable from this
+  // screen. ──────────────────────────────────────────────────────────
+  const removeNewRow = (row_id: string) =>
+    setRows((prev) => prev.filter((r) => r.row_id !== row_id));
+
+  // ── Save — sends only the rows the user actually edited or added to
+  // PROC_INS_UPD_HR_EMP_COMPONENTS, one request per row, in parallel.
+  // Un-dirtied rows are skipped so unrelated pay units aren't rewritten.
+  // On success, saved rows are marked clean (and no longer "new"). ──────
   const handleSave = useCallback(async () => {
     if (!employeeReady) return;
+
+    const dirtyRows = rows.filter((r) => r.dirty);
+    if (dirtyRows.length === 0) {
+      setNotice({ type: "error", message: "No changes to save." });
+      return;
+    }
+
+    const missingCode = dirtyRows.find((r) => !r.pay_unit_code.trim());
+    if (missingCode) {
+      setNotice({ type: "error", message: "Pay Unit is required on every row." });
+      return;
+    }
+
     setSaving(true);
     setNotice(null);
     try {
-      await getDynamicLookup({
-        parameter: SAVE_PARAMETER,
-        loginid,
-        code1: header.company_code,
-        code2: header.employee_id,
-        code3: "NULL",
-        code4: "NULL",
-        code5: "NULL",
-        code6: "NULL",
-        code7: "NULL",
-        code8: "NULL",
-        code9: "NULL",
-        code10: "NULL",
-        number1: 0,
-        number2: 0,
-        number3: 0,
-        number4: 0,
-        date1: null,
-        date2: null,
-        date3: null,
-        date4: null,
-        // NOTE: rows intentionally NOT threaded through the shared
-        // code1..10 slots — the save proc for this screen still needs its
-        // own row-array parameter shape. TODO for whoever wires the real
-        // save proc + the freeze/protect business rules from the old PB
-        // script (hr_emp_pay_calc_hdr_history / sec_login.hr_payunit_change).
-      } as any);
-      setNotice({ type: "success", message: "Pay units saved." });
+      const today = new Date().toISOString();
+
+      const payloads: THrEmpComponentPayload[] = dirtyRows.map((row) => ({
+        employee_id: header.employee_id,
+        pay_comp_id: row.pay_unit_code,
+        pay_comp_amt: Number(row.amount) || 0,
+        pay_roll_status: labelToPayUnitStatusCode(row.pay_unit_status),
+        status_flag: labelToStatusCode(row.status),
+        remarks: row.remarks,
+        company_code: header.company_code,
+        user_id: loginid,
+        user_dt: today,
+      }));
+
+      const results = await insUpdHrEmpComponentApi({payloads});
+
+      // Surface the actual failure reason (from the caught error, or the
+      // proc's own `details`) instead of just a pass/fail count — logged
+      // to the console too so a longer Oracle message isn't clipped in
+      // the notice banner.
+      const failed = results.data
+        .map((r, i) => ({ result: r, row: dirtyRows[i] }))
+        .filter(({ result }) => !result.success);
+
+      if (failed.length === 0) {
+        setRows((prev) =>
+          prev.map((r) => (r.dirty ? { ...r, dirty: false, is_new: false } : r)),
+        );
+        setNotice({ type: "success", message: "Pay units saved." });
+      } else {
+        console.error("Pay unit save failures:", failed);
+        const firstReason =
+          "error" in failed[0].result
+            ? failed[0].result.error
+            : failed[0].result.details || failed[0].result.message;
+        setNotice({
+          type: "error",
+          message:
+            failed.length === 1
+              ? `Failed to save "${failed[0].row.pay_unit_code}": ${firstReason}`
+              : `${failed.length} of ${dirtyRows.length} pay unit(s) failed to save. First error: ${firstReason}`,
+        });
+      }
     } catch (error) {
       setNotice({
         type: "error",
@@ -309,7 +499,7 @@ export function HrEmployeePayUnits() {
     } finally {
       setSaving(false);
     }
-  }, [loginid, header, employeeReady]);
+  }, [rows, header, employeeReady, loginid]);
 
   return (
     <section className="grid gap-4">
@@ -469,7 +659,15 @@ export function HrEmployeePayUnits() {
           </div>
         </div>
 
-        <div className="mt-2 flex items-center justify-end border-t pt-2">
+        <div className="mt-2 flex items-center justify-end gap-2 border-t pt-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={!employeeReady}
+            onClick={addRow}
+          >
+            Add
+          </Button>
           <Button size="sm" disabled={!employeeReady || loading} onClick={handleRetrieve}>
             {loading ? "Retrieving..." : "Retrieve"}
           </Button>
@@ -499,16 +697,29 @@ export function HrEmployeePayUnits() {
                 <th className="min-w-[130px] px-2 py-1.5 font-medium">Approved On</th>
                 <th className="min-w-[120px] px-2 py-1.5 font-medium">Status</th>
                 <th className="min-w-[200px] px-2 py-1.5 font-medium">Remarks</th>
+                <th className="w-10 px-2 py-1.5" />
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
                 <tr key={row.row_id} className="border-b last:border-b-0">
                   <td className="px-2 py-1">
-                    <span className="font-medium">{row.pay_unit_code}</span>
-                    {row.pay_unit_name && row.pay_unit_name !== row.pay_unit_code && (
-                      <span className="ml-1 text-muted-foreground">{row.pay_unit_name}</span>
+                    {row.is_new ? (
+                      <Input
+                        className="h-7 text-sm px-2"
+                        value={row.pay_unit_code}
+                        onChange={(e) => updateRow(row.row_id, { pay_unit_code: e.target.value })}
+                        placeholder="Pay unit code"
+                      />
+                    ) : (
+                      <>
+                        <span className="font-medium">{row.pay_unit_code}</span>
+                        {row.pay_unit_name && row.pay_unit_name !== row.pay_unit_code && (
+                          <span className="ml-1 text-muted-foreground">{row.pay_unit_name}</span>
+                        )}
+                      </>
                     )}
+                    {row.dirty && <span className="ml-1 text-warning" title="Unsaved change">●</span>}
                   </td>
 
                   <td className="px-2 py-1">
@@ -570,12 +781,26 @@ export function HrEmployeePayUnits() {
                       placeholder="Remarks"
                     />
                   </td>
+
+                  <td className="px-2 py-1 text-center">
+                    {row.is_new && (
+                      <button
+                        type="button"
+                        onClick={() => removeNewRow(row.row_id)}
+                        className="text-destructive hover:opacity-70"
+                        aria-label="Remove row"
+                        title="Remove unsaved row"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
 
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-2 py-6 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-2 py-6 text-center text-muted-foreground">
                     {employeeReady
                       ? loading
                         ? "Loading..."
@@ -592,10 +817,10 @@ export function HrEmployeePayUnits() {
   );
 }
 
-// ─── Helpers exported for whoever wires the real save proc — converts a
-// grid row's display labels back to the raw DB codes the DECODE()s in
-// MST_HR_EMPLOYEE_PAY_UNITS_SELECT came from. Not called anywhere yet
-// since SAVE_PARAMETER is still a placeholder. ─────────────────────────
+// ─── Helpers exported for reuse elsewhere — converts a grid row's display
+// labels back to the raw DB codes the DECODE()s in
+// MST_HR_EMPLOYEE_PAY_UNITS_SELECT came from. Used internally by
+// handleSave's payload mapping above. ─────────────────────────
 export function payUnitRowToRawCodes(row: TPayUnitRow) {
   return {
     pay_comp_id: row.pay_unit_code,

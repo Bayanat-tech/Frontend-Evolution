@@ -2,6 +2,7 @@ import { Plus, Trash2, Save, RefreshCw } from "lucide-react";
 import { useCallback, useState } from "react";
 import { executeDynamicMutation, getDynamicLookupaccount } from "../../api/lookups";
 import type { LookupRow } from "../../api/lookups";
+import { upsertMfBomApi, type TMfBomRowPayload } from "./MfBom";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
@@ -28,7 +29,7 @@ import { useAuth } from "../../state/AuthContext";
 // wire it through if the co-pack view is actually needed.
 //
 // BOM_TYPE: no UI input for this — line.bom_type stays "" and is still sent
-// in the Save payload (val1s7) to keep the backend contract unchanged.
+// in the Save payload to keep the backend contract unchanged.
 //
 // Child/Parent Product Code selection: LookupField's onChange is assumed
 // to pass the selected row as an optional second argument (value, row).
@@ -37,12 +38,23 @@ import { useAuth } from "../../state/AuthContext";
 // principal/parent product names) can auto-fill from the selected
 // row — see onChange handlers below.
 //
+// Retrieve: still goes through getDynamicLookupaccount /
+// PURCHASE_SALE_MF_BOM_RETRIEVE — no other backend file was shared for
+// that route, so it's untouched.
+//
 // Delete: rows loaded from Retrieve are marked is_persisted = true. When
 // such a row is removed, we call executeDynamicMutation with
 // PURCHASE_SALE_MF_BOM_DELETE (wired to a WHEN branch in
 // PROC_BUILD_DYNAMIC_DEL_PURCHASE_SALE) before removing it from local
 // state. Brand-new rows (is_persisted = false) are just spliced out
-// locally, since they were never saved to MF_BOM. ───────────────────────
+// locally, since they were never saved to MF_BOM. Also untouched — no
+// backend file shared for this route either.
+//
+// Save: wired to the real PROC_INS_UPD_MF_BOM endpoint via upsertMfBomApi
+// (see ./MfBom). That proc takes an array of MF_BOM rows in one call (all
+// rows must share COMPANY_CODE/PRIN_CODE/PROD_CODE, which the backend
+// validates), so this replaces the old per-line executeDynamicMutation
+// loop with a single request carrying every line. ───────────────────────
 
 const COPACK_VIEW_FLAG = "N"; // TODO: no UI control for legacy cbx_1 yet.
 
@@ -124,10 +136,6 @@ const UOM_LOOKUP_COLUMNS: { field: string; header: string }[] = [
 ];
 
 const RETRIEVE_PARAMETER = "PURCHASE_SALE_MF_BOM_RETRIEVE";
-
-// Save — wired to PURCHASE_SALE_MF_BOM_SAVE in
-// PROC_BUILD_DYNAMIC_INS_UPD_PURCHASE_SALE via executeDynamicMutation.
-const SAVE_PARAMETER = "PURCHASE_SALE_MF_BOM_SAVE";
 
 // Delete — wired to PURCHASE_SALE_MF_BOM_DELETE in
 // PROC_BUILD_DYNAMIC_DEL_PURCHASE_SALE via executeDynamicMutation.
@@ -319,14 +327,10 @@ export function PS_ProductBomPage() {
     }
   }, [loginid, companyCode, header.principal_code, header.parent_product_code]);
 
-  // ── Save — parameter "PURCHASE_SALE_MF_BOM_SAVE". Slot mapping must stay
-  // in lockstep with the corresponding WHEN branch in
-  // PROC_BUILD_DYNAMIC_INS_UPD_PURCHASE_SALE:
-  // val1s1=child_prod_code (key), val1s2=company_code, val1s3=prin_code,
-  // val1s4=parent prod_code, val1s5=p_uom, val1s6=l_uom, val1s7=bom_type,
-  // val1s8=loginid, val1s9=prodn_reqd ('Y'/'N'), val1s10=prod_luom_qty,
-  // val1n1=p_qty, val1n2=l_qty, val1n3=quantity, val1n4=uppp,
-  // val1n5=unit_price, val1d1=user_dt.
+  // ── Save — wired to PROC_INS_UPD_MF_BOM via upsertMfBomApi (see
+  // ./MfBom). The proc validates every row shares the same
+  // COMPANY_CODE/PRIN_CODE/PROD_CODE, so all lines go in one call instead
+  // of the old per-line executeDynamicMutation loop.
   const handleSave = async () => {
     if (!companyCode) return;
     if (!header.principal_code) {
@@ -350,31 +354,28 @@ export function PS_ProductBomPage() {
     setSaving(true);
     setNotice(null);
     try {
-      // One mutation call per line. TODO: consider a batch/array-based
-      // procedure call if the backend can support it instead of N round trips.
-      for (const line of lines) {
-        await executeDynamicMutation({
-          parameter: SAVE_PARAMETER,
-          loginid,
+      const today = new Date().toISOString();
 
-          val1s1: line.child_prod_code,
-          val1s2: companyCode,
-          val1s3: header.principal_code,
-          val1s4: header.parent_product_code,
-          val1s5: line.p_uom,
-          val1s6: line.l_uom,
-          val1s7: line.bom_type,
-          val1s8: loginid,
-          val1s9: line.prodn_reqd ? "Y" : "N",
-          val1s10: line.prod_luom_qty,
+      const payload: TMfBomRowPayload[] = lines.map((line) => ({
+        company_code: companyCode,
+        prin_code: header.principal_code,
+        prod_code: header.parent_product_code,
+        child_prod_code: line.child_prod_code,
+        p_uom: line.p_uom,
+        p_qty: Number(line.p_qty) || 0,
+        l_uom: line.l_uom,
+        l_qty: Number(line.l_qty) || 0,
+        user_id: loginid,
+        user_dt: today,
+        quantity: Number(line.quantity) || 0,
+        uppp: Number(line.uppp) || 0,
+        bom_type: line.bom_type,
+        unit_price: Number(line.unit_price) || 0,
+        prnt_p_code: header.parent_product_code,
+      }));
 
-          val1n1: Number(line.p_qty) || 0,
-          val1n2: Number(line.l_qty) || 0,
-          val1n3: Number(line.quantity) || 0,
-          val1n4: Number(line.uppp) || 0,
-          val1n5: Number(line.unit_price) || 0,
-        });
-      }
+      await upsertMfBomApi(payload);
+
       // Rows saved successfully are now persisted server-side.
       setLines((prev) => prev.map((l) => ({ ...l, is_persisted: true })));
       setNotice({ type: "success", message: "BOM saved successfully" });
