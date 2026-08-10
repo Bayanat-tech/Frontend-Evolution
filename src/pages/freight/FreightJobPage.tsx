@@ -147,6 +147,8 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
   const mode = modeMap[modeKey];
   const direction = directionMap[directionKey];
   const Icon = mode.icon;
+  const isReexport = direction.code === "IRE";
+  const isExportLike = direction.code === "EXP" || isReexport;
 
   const [view, setView] = useState<ViewMode>(startMode);
   const [rows, setRows] = useState<LookupRow[]>([]);
@@ -408,10 +410,21 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
             </div>
           </Panel>
 
+          {isReexport && (
+            <Panel className="lg:col-span-12 freight-job-reexport-panel" icon={Ship} title="Re-export Linkage" meta={job.ref_jobno || job.combined_jobno || "Import job reference"}>
+              <div className="freight-job-field-grid freight-job-field-grid-4">
+                <Field label="Import Job No(s)" value={job.ref_jobno} onChange={(value) => setJobField(setJob, "ref_jobno", value)} />
+                <SelectField label="Job Indicator" value={job.job_flag} options={[["M", "Master"], ["H", "House"], ["C", "Console"]]} onChange={(value) => setJobField(setJob, "job_flag", value)} />
+                <Field label="Parent Job No" value={job.combined_jobno} onChange={(value) => setJobField(setJob, "combined_jobno", value)} />
+                <ReadOnlyField label="Re-export" value="Yes" />
+              </div>
+            </Panel>
+          )}
+
           <Panel className="lg:col-span-4 freight-job-compact-panel" icon={MapPinned} title="Journey" meta={`${job.port_code || "Origin"} -> ${job.destination_port || "Destination"}`}>
             <div className="freight-job-field-grid freight-job-field-grid-4">
-              <Lookup label={direction.code === "EXP" ? "Port of Loading" : "Origin Port"} value={job.port_code} valueField="PORT_CODE" displayFields={["PORT_CODE", "PORT_NAME"]} columns={portColumns} loadOptions={(search) => lookup("freight_port", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "port_code", value)} />
-              <Lookup label={direction.code === "EXP" ? "Port of Destination" : "Destination Port"} value={job.destination_port} valueField="PORT_CODE" displayFields={["PORT_CODE", "PORT_NAME"]} columns={portColumns} loadOptions={(search) => lookup("freight_port", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "destination_port", value)} />
+              <Lookup label={isExportLike ? "Port of Loading" : "Origin Port"} value={job.port_code} valueField="PORT_CODE" displayFields={["PORT_CODE", "PORT_NAME"]} columns={portColumns} loadOptions={(search) => lookup("freight_port", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "port_code", value)} />
+              <Lookup label={isExportLike ? "Port of Destination" : "Destination Port"} value={job.destination_port} valueField="PORT_CODE" displayFields={["PORT_CODE", "PORT_NAME"]} columns={portColumns} loadOptions={(search) => lookup("freight_port", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "destination_port", value)} />
               <Field label="Place of Receipt" value={job.place_receipt} onChange={(value) => setJobField(setJob, "place_receipt", value)} />
               <Field label="Place of Delivery" value={job.place_delivery} onChange={(value) => setJobField(setJob, "place_delivery", value)} />
               <ModeCarrierLookup mode={mode.code} companyCode={companyCode} value={job.vessel_name} onChange={(value) => setJobField(setJob, "vessel_name", value)} />
@@ -474,8 +487,8 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
               <DateField label="Customs Ref Date" value={job.ref_customs_date} onChange={(value) => setJobField(setJob, "ref_customs_date", value)} />
               <Field label="Country Origin" value={job.country_origin} onChange={(value) => setJobField(setJob, "country_origin", value)} />
               <Field label="Country Destination" value={job.country_destination} onChange={(value) => setJobField(setJob, "country_destination", value)} />
-              <Field label="Import Job No(s)" value={job.ref_jobno} onChange={(value) => setJobField(setJob, "ref_jobno", value)} />
-              <Field label="Parent Job No" value={job.combined_jobno} onChange={(value) => setJobField(setJob, "combined_jobno", value)} />
+              {!isReexport && <Field label="Import Job No(s)" value={job.ref_jobno} onChange={(value) => setJobField(setJob, "ref_jobno", value)} />}
+              {!isReexport && <Field label="Parent Job No" value={job.combined_jobno} onChange={(value) => setJobField(setJob, "combined_jobno", value)} />}
             </div>
           </Panel>
 
@@ -703,7 +716,7 @@ function toJobFromQuotation(row: LookupRow, current: JobForm, quotationNr: strin
     prin_code: lookupText(row, "PRIN_CODE") || current.prin_code,
     quotation_ref: quotationNr,
     dept_code: lookupText(row, "DEPT_CODE") || current.dept_code,
-    job_type: lookupText(row, "JOB_TYPE") || current.job_type,
+    job_type: current.job_type === "IRE" ? "IRE" : lookupText(row, "JOB_TYPE") || current.job_type,
     transport_mode: lookupText(row, "TRANSPORT_MODE") || current.transport_mode,
     port_code: lookupText(row, "ORIGIN_PORT") || current.port_code,
     destination_port: lookupText(row, "DESTINATION_PORT") || current.destination_port,
@@ -724,6 +737,7 @@ function toJobFromQuotation(row: LookupRow, current: JobForm, quotationNr: strin
     job_category: lookupText(row, "JOB_CATEGORY") || current.job_category,
     description1: lookupText(row, "CARGO_DETAIL") || lookupText(row, "CARGO_DETAILS") || current.description1,
     remarks: lookupText(row, "REMARKS") || current.remarks,
+    reexport: current.job_type === "IRE" ? "Y" : current.reexport,
   };
 }
 
