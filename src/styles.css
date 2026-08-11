@@ -3569,6 +3569,36 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   background-color: #f1f5f9 !important;
 }
 
+.freight-dense-form .freight-form-card label > div.border.bg-background {
+  border-color: #94a3b8 !important;
+  background-color: #f1f5f9 !important;
+}
+
+.freight-dense-form .freight-panel-body label > div.border.bg-background {
+  border-color: #94a3b8 !important;
+  background-color: #f1f5f9 !important;
+}
+
+.freight-dense-form .freight-panel-body :where(
+  .ui-input,
+  .ui-select,
+  input,
+  select,
+  .lookup-field-trigger,
+  button[role="combobox"]
+) {
+  height: 32px !important;
+  min-height: 32px !important;
+  border-color: #94a3b8 !important;
+  background-color: #f1f5f9 !important;
+}
+
+.freight-dense-form .freight-panel-body :where(.ui-textarea, textarea) {
+  min-height: 32px !important;
+  border-color: #94a3b8 !important;
+  background-color: #f1f5f9 !important;
+}
+
 @media (max-width: 1024px) {
   .freight-form-header,
   .freight-document-paper {
