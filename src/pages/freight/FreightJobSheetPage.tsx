@@ -28,7 +28,7 @@ type SheetState = {
   packlist: LookupRow | null;
 };
 
-export function FreightJobSheetPage({ target, initialJob = null }: { target?: FreightWorkspaceTarget; initialJob?: LookupRow | null }) {
+export function FreightJobSheetPage({ target, initialJob = null, readOnly = false }: { target?: FreightWorkspaceTarget; initialJob?: LookupRow | null; readOnly?: boolean }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const userRecord = (user || {}) as Record<string, unknown>;
@@ -90,8 +90,12 @@ export function FreightJobSheetPage({ target, initialJob = null }: { target?: Fr
   }, [companyCode, toast]);
 
   function startEditing() {
-  setDraft(job ? { ...job } : null);
-  setEditing(true);
+    if (readOnly) {
+      toast.error("Invoiced or completed job is locked. Job sheet is view only.");
+      return;
+    }
+    setDraft(job ? { ...job } : null);
+    setEditing(true);
 }
 
 function cancelEditing() {
@@ -105,6 +109,10 @@ function updateDraft(key: string, value: string) {
 
 async function saveHeader() {
   if (!draft) return;
+  if (readOnly) {
+    toast.error("Invoiced or completed job is locked. Job sheet is view only.");
+    return;
+  }
   setSaving(true);
   try {
     await api.post("/api/freight/job/save", {
@@ -129,6 +137,13 @@ async function saveHeader() {
     setEditing(false);
   setDraft(null);
   }, [initialJob, modeKey, directionKey]);
+
+  useEffect(() => {
+    if (readOnly && isEditing) {
+      setEditing(false);
+      setDraft(null);
+    }
+  }, [isEditing, readOnly]);
 
   useEffect(() => {
     if (selectedJob) {
@@ -217,13 +232,13 @@ async function saveHeader() {
         <div className="freight-job-inline-actions">
           <Button type="button" size="sm" variant="outline" onClick={() => setSelectedJob(null)}><ArrowLeft size={14} /> Select Job</Button>
           <Button type="button" size="sm" variant="outline" onClick={() => void loadSheet(job)} disabled={loading}><RefreshCw size={14} /> Refresh</Button>
-          {!isEditing && <Button type="button" size="sm" variant="outline" onClick={startEditing}><Edit2 size={14} /> Edit</Button>}
+          {!isEditing && !readOnly && <Button type="button" size="sm" variant="outline" onClick={startEditing}><Edit2 size={14} /> Edit</Button>}
           {isEditing && <Button type="button" size="sm" variant="outline" onClick={cancelEditing}>Cancel</Button>}
-          {isEditing && <Button type="button" size="sm" onClick={() => void saveHeader()} disabled={saving}><Save size={14} /> Save</Button>}
+          {isEditing && !readOnly && <Button type="button" size="sm" onClick={() => void saveHeader()} disabled={saving || readOnly}><Save size={14} /> Save</Button>}
         </div>
       </div>
 
-      <div className="freight-document-paper freight-shipment-paper is-viewing">
+      <div className={`freight-document-paper freight-shipment-paper ${isEditing && !readOnly ? "is-editing" : "is-viewing"}`}>
         <div className="freight-shipment-hero">
           <div className="freight-shipment-hero-item">
             <span>Booking Ref / Job No</span>
@@ -249,7 +264,6 @@ async function saveHeader() {
             <div className="freight-job-field-grid freight-job-field-grid-4">
               <Display label="Job No" value={titleRef} strong />
               <Display label="Job Date" value={jobDate} />
-              <Display label="Principal" value={text(job, "prin_code")} />
               {isEditing
                  ? <Field label="Principal" value={text(draft, "prin_code")} onChange={(v) => updateDraft("prin_code", v)} />
                  : <Display label="Principal" value={text(job, "prin_code")} />}
@@ -334,21 +348,6 @@ async function saveHeader() {
               <Display label="Packages" value={joinParts([text(pack, "no_of_packings"), text(pack, "puom")])} />
               <Display label="Gross / Net / Volume" value={joinParts([text(pack, "gross_wt"), text(pack, "net_wt"), text(pack, "volume")], " / ")} />
               <Display label="Container" value={joinParts([text(pack, "container_no"), text(pack, "container_type")])} />
-            </div>
-          </SheetSection>
-
-          <SheetSection className="lg:col-span-12" title="Job Progress" meta={progressMeta(job)}>
-            <div className="freight-job-field-grid freight-job-field-grid-4">
-              <Display label="Job Indicator" value={jobFlagLabel(text(job, "job_flag"))} />
-              <Display label="Pack List" value={yesNo(text(job, "packdet"))} />
-              <Display label="Pack Date" value={formatDate(text(job, "packdet_date"))} />
-              <Display label="Confirmed" value={yesNo(text(job, "confirmed"))} />
-              <Display label="Confirm Date" value={formatDate(text(job, "confirm_date"))} />
-              <Display label="Completed" value={yesNo(text(job, "completed"))} />
-              <Display label="Complete Date" value={formatDate(text(job, "complete_date"))} />
-              <Display label="Invoice Date" value={formatDate(text(job, "invoice_date"))} />
-              <Display label="Import Job No(s)" value={text(job, "ref_jobno")} />
-              <Display label="Parent Job No" value={text(job, "combined_jobno")} />
             </div>
           </SheetSection>
         </div>

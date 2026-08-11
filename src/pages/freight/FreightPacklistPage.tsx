@@ -143,7 +143,7 @@ const directionMap = {
   reexport: { code: "IRE", label: "Import for Re-export" },
 };
 
-export function FreightPacklistPage({ target, initialJob = null, startMode = "list", screen = "packlist" }: { target?: FreightWorkspaceTarget; initialJob?: LookupRow | null; startMode?: ViewMode; screen?: "packlist" | "jobsheet" }) {
+export function FreightPacklistPage({ target, initialJob = null, startMode = "list", screen = "packlist", readOnly = false }: { target?: FreightWorkspaceTarget; initialJob?: LookupRow | null; startMode?: ViewMode; screen?: "packlist" | "jobsheet"; readOnly?: boolean }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const userRecord = (user || {}) as Record<string, unknown>;
@@ -203,8 +203,8 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
     setPack(emptyPack(companyCode, userId, mode.code, direction.code));
     setDimensions([]);
     setView(startMode);
-    setEditing(startMode === "editor");
-  }, [companyCode, direction.code, mode.code, startMode, userId]);
+    setEditing(!readOnly && startMode === "editor");
+  }, [companyCode, direction.code, mode.code, readOnly, startMode, userId]);
 
   useEffect(() => {
     if (!initialJob) return;
@@ -223,10 +223,14 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
     { accessorKey: "container_no", header: "Container", size: 130 },
     { accessorKey: "gross_wt", header: "Gross Wt", size: 90 },
     { accessorKey: "quantity", header: "Qty", size: 80 },
-    { id: "actions", header: "Actions", size: 90, cell: ({ row }) => <div className="flex gap-1"><Button type="button" size="icon" variant="ghost" title="View" onClick={() => openPack(row.original)}><Eye size={14} /></Button><Button type="button" size="icon" variant="ghost" title="Delete" onClick={(event) => { event.stopPropagation(); void deletePack(row.original); }}><Trash2 size={14} /></Button></div> },
-  ], [isAir]);
+    { id: "actions", header: "Actions", size: 90, cell: ({ row }) => <div className="flex gap-1"><Button type="button" size="icon" variant="ghost" title="View" onClick={() => openPack(row.original)}><Eye size={14} /></Button><Button type="button" size="icon" variant="ghost" title="Delete" disabled={readOnly} onClick={(event) => { event.stopPropagation(); void deletePack(row.original); }}><Trash2 size={14} /></Button></div> },
+  ], [isAir, readOnly]);
 
   const openAdd = () => {
+    if (readOnly) {
+      setNotice({ type: "error", text: "Invoiced or completed job is locked. Pack list is view only." });
+      return;
+    }
     setPack(emptyPack(companyCode, userId, mode.code, direction.code));
     setDimensions([]);
     setNotice(null);
@@ -235,6 +239,10 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
   };
 
   const openNewPackForCurrentJob = () => {
+    if (readOnly) {
+      setNotice({ type: "error", text: "Invoiced or completed job is locked. Pack list is view only." });
+      return;
+    }
     setPack((current) => ({
       ...current,
       packlist_no: "",
@@ -281,12 +289,12 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
       setPack(toPackDraftFromJob(normalized, companyCode, userId, mode.code, direction.code));
       if (mode.code === "A") await loadDimensions(normalized);
       else setDimensions([]);
-      setEditing(true);
+      setEditing(!readOnly);
       setView("editor");
     } catch (error: any) {
       setPack(toPackDraftFromJob(normalized, companyCode, userId, mode.code, direction.code));
       setDimensions([]);
-      setEditing(true);
+      setEditing(!readOnly);
       setView("editor");
       setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to check existing pack list; opened new draft." });
     } finally {
@@ -317,6 +325,10 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
   };
 
   const deletePack = async (row: LookupRow) => {
+    if (readOnly) {
+      setNotice({ type: "error", text: "Invoiced or completed job is locked. Pack list is view only." });
+      return;
+    }
     setSaving(true);
     setNotice(null);
     try {
@@ -337,6 +349,10 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
 
   const savePack = async (event: FormEvent) => {
     event.preventDefault();
+    if (readOnly) {
+      setNotice({ type: "error", text: "Invoiced or completed job is locked. Pack list is view only." });
+      return;
+    }
     setSaving(true);
     setNotice(null);
     try {
@@ -378,7 +394,7 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
         <Header title={`${mode.label} ${direction.label} ${screenTitle}`} subtitle={screenSubtitle} icon={Icon} screenTitle={screenTitle}>
           {notice && <NoticeChip notice={notice} />}
           <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}><RefreshCw size={14} />Refresh</Button>
-          <Button type="button" size="sm" onClick={openAdd}><Plus size={14} />Add {screenTitle}</Button>
+          {!readOnly && <Button type="button" size="sm" onClick={openAdd}><Plus size={14} />Add {screenTitle}</Button>}
         </Header>
         <DataTable
           columns={columns}
@@ -407,9 +423,9 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
       <Header title={`${mode.label} ${direction.label} ${screenTitle}`} subtitle={pack.seq_number || `New ${screenTitle.toLowerCase()}`} icon={Icon} screenTitle={screenTitle}>
         {notice && <NoticeChip notice={notice} />}
         <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>
-        {!editing && <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}><Edit2 size={14} />Edit</Button>}
-        {pack.job_no && <Button type="button" size="sm" variant="outline" onClick={openNewPackForCurrentJob}><Plus size={14} />New {screenTitle}</Button>}
-        {editing && <Button type="submit" size="sm" disabled={saving || !pack.job_no}><Save size={14} />Save</Button>}
+        {!editing && !readOnly && <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}><Edit2 size={14} />Edit</Button>}
+        {pack.job_no && !readOnly && <Button type="button" size="sm" variant="outline" onClick={openNewPackForCurrentJob}><Plus size={14} />New {screenTitle}</Button>}
+        {editing && !readOnly && <Button type="submit" size="sm" disabled={saving || !pack.job_no || readOnly}><Save size={14} />Save</Button>}
       </Header>
 
       <div className="freight-job-focus-bar freight-job-focus-compact">
@@ -424,8 +440,8 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
         </div>
       </div>
 
-      <fieldset disabled={!editing} className={`freight-document-paper freight-shipment-paper ${editing ? "is-editing" : "is-viewing"}`}>
-        <PackEditContext.Provider value={editing}>
+      <fieldset disabled={readOnly || !editing} className={`freight-document-paper freight-shipment-paper ${editing && !readOnly ? "is-editing" : "is-viewing"}`}>
+        <PackEditContext.Provider value={editing && !readOnly}>
         <div className="freight-job-section-grid">
         <Panel className="lg:col-span-12" icon={FileSignature} title="Document Reference" meta={`${pack.seq_number || "Auto"} / ${pack.job_no || "Select job"}`}>
           <div className="freight-job-field-grid freight-job-field-grid-8">

@@ -129,6 +129,16 @@ function isJobCancelLocked(job: JobForm) {
   );
 }
 
+function isJobEditLocked(job: JobForm) {
+  return Boolean(
+    job.canceled === "Y" ||
+    isTruthyFlag(job.invoiced) ||
+    isTruthyFlag(job.completed) ||
+    job.invoice_date ||
+    job.complete_date
+  );
+}
+
 function getJobCancelLockMessage(job: JobForm) {
   if (isTruthyFlag(job.invoiced) || job.invoice_date) return "Invoiced jobs cannot be cancelled.";
   if (isTruthyFlag(job.completed) || job.complete_date) return "Completed jobs cannot be cancelled.";
@@ -169,7 +179,9 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
 
   const isCanceled = job.canceled === "Y";
   const isCancelLocked = isJobCancelLocked(job);
+  const isEditLocked = isJobEditLocked(job);
   const cancelLockMessage = getJobCancelLockMessage(job);
+  const editLockMessage = isCanceled ? "Cancelled job cannot be edited." : "Invoiced or completed job cannot be edited.";
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -253,8 +265,16 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
     setView("editor");
   }, [initialJob, startMode]);
 
+  useEffect(() => {
+    if (isEditLocked && editing) setEditing(false);
+  }, [editing, isEditLocked]);
+
   const saveJob = async (event: FormEvent) => {
     event.preventDefault();
+    if (isEditLocked) {
+      setNotice({ type: "error", text: editLockMessage });
+      return;
+    }
     setSaving(true);
     setNotice(null);
     try {
@@ -348,29 +368,30 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
       {!embeddedInWorkspace && <Header title={`${mode.label} ${direction.label} Job`} subtitle={job.job_no || "New job"} icon={Icon}>
         {notice && <NoticeChip notice={notice} />}
         <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>
-        {!editing && !isCanceled && <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}><Edit2 size={14} />Edit</Button>}
+        {!editing && !isEditLocked && <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}><Edit2 size={14} />Edit</Button>}
         <Button type="button" size="sm" variant="outline" onClick={cancelJob} disabled={saving || !job.job_no || isCanceled || isCancelLocked} title={isCancelLocked ? cancelLockMessage : "Cancel job"}><Ban size={14} />Cancel</Button>
-        {editing && <Button type="submit" size="sm" disabled={saving || isCanceled}><Save size={14} />Save</Button>}
+        {editing && <Button type="submit" size="sm" disabled={saving || isEditLocked}><Save size={14} />Save</Button>}
       </Header>}
       <div className="freight-job-focus-bar freight-job-focus-compact">
-        <div className="freight-job-progress">
-          <span className="done">Job</span>
-          <span className={job.packdet === "Y" || job.packdet_date ? "done" : ""}>Pack List</span>
-          <span className={job.confirmed === "Y" || job.confirm_date ? "done" : ""}>Confirmed</span>
-          <span className={job.invoiced === "Y" || job.invoice_date ? "done" : ""}>Invoiced</span>
-          <span className={job.completed === "Y" || job.complete_date ? "done" : ""}>Completed</span>
+        <div className="freight-job-progress" aria-label="Job status">
+          {buildJobProgress(job).map((step) => (
+            <span key={step.label} className={step.className}>
+              <span className="freight-job-progress-dot" />
+              {step.label}
+            </span>
+          ))}
         </div>
         <div className="freight-job-inline-actions">
           {notice && <NoticeChip notice={notice} />}
           {embeddedInWorkspace && <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>}
-          {!editing && !isCanceled && <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}><Edit2 size={14} />Edit</Button>}
+          {!editing && !isEditLocked && <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}><Edit2 size={14} />Edit</Button>}
           <Button type="button" size="sm" variant="outline" onClick={cancelJob} disabled={saving || !job.job_no || isCanceled || isCancelLocked} title={isCancelLocked ? cancelLockMessage : "Cancel job"}><Ban size={14} />Cancel</Button>
-          {editing && <Button type="submit" size="sm" disabled={saving || isCanceled}><Save size={14} />Save</Button>}
+          {editing && <Button type="submit" size="sm" disabled={saving || isEditLocked}><Save size={14} />Save</Button>}
           <span className={`freight-job-mode-badge ${editing ? "editing" : "viewing"}`}>{editing ? "Edit" : "View"}</span>
         </div>
       </div>
-      <fieldset disabled={isCanceled || !editing} className={`freight-document-paper freight-shipment-paper ${editing ? "is-editing" : "is-viewing"}`}>
-        <JobEditContext.Provider value={editing && !isCanceled}>
+      <fieldset disabled={isEditLocked || !editing} className={`freight-document-paper freight-shipment-paper ${editing ? "is-editing" : "is-viewing"}`}>
+        <JobEditContext.Provider value={editing && !isEditLocked}>
         <div className="freight-shipment-hero">
           <div className="freight-shipment-hero-item">
             <span>Booking Ref / Job No</span>
@@ -378,7 +399,7 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
           </div>
           <div className="freight-shipment-hero-item">
             <span>{mode.code === "A" ? "HAWB Number" : "House / BL Number"}</span>
-            {editing && !isCanceled ? (
+            {editing && !isEditLocked ? (
               <Input className="freight-shipment-hero-input" value={job.hawb} onChange={(event) => setJobField(setJob, "hawb", event.target.value)} />
             ) : (
               <strong>{job.hawb || job.doc_ref || "-"}</strong>
@@ -497,6 +518,25 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
       </fieldset>
     </form>
   );
+}
+
+function buildJobProgress(job: JobForm) {
+  const packDone = job.packdet === "Y" || Boolean(job.packdet_date);
+  const confirmDone = job.confirmed === "Y" || Boolean(job.confirm_date);
+  const invoiceDone = job.invoiced === "Y" || Boolean(job.invoice_date);
+  const completeDone = job.completed === "Y" || Boolean(job.complete_date);
+  const steps = [
+    { label: "Job", done: true },
+    { label: "Pack List", done: packDone },
+    { label: "Confirmed", done: confirmDone },
+    { label: "Invoiced", done: invoiceDone },
+    { label: "Completed", done: completeDone },
+  ];
+  const currentIndex = steps.findIndex((step) => !step.done);
+  return steps.map((step, index) => ({
+    ...step,
+    className: step.done ? "done" : index === currentIndex ? "current" : "",
+  }));
 }
 
 function Header({ title, subtitle, icon: Icon, children }: { title: string; subtitle: string; icon: typeof Plane; children: React.ReactNode }) {

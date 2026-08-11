@@ -166,6 +166,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
 
   const health = useMemo(() => buildHealth(rows), [rows]);
   const filteredRows = useMemo(() => rows.filter((row) => filterJobByStatus(row, activeStatus)), [activeStatus, rows]);
+  const selectedJobReadOnly = isClosedJob(selectedJob);
 
   function openSteps(row: LookupRow | null, tab: JobTab) {
     setSelectedJob(row ? normalizeLookupRow(row) : null);
@@ -280,13 +281,13 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
       </div>
 
       {activeTab === "job" && <FreightJobPage target={target} initialJob={selectedJob} startMode="editor" />}
-      {activeTab === "packlist" && <FreightPacklistPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="packlist" />}
-      {activeTab === "jobsheet" && <FreightJobSheetPage target={target} initialJob={selectedJob} />}
-      {activeTab === "alerts" && <FreightJobFollowupTab target={target} kind="alerts" initialJob={selectedJob} />}
-      {activeTab === "instructions" && <FreightJobFollowupTab target={target} kind="instructions" initialJob={selectedJob} />}
-      {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" initialJob={selectedJob} />}
-      {activeTab === "deposits" && <FreightJobFollowupTab target={target} kind="deposits" initialJob={selectedJob} />}
-      {activeTab === "activities" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="activities" />}
+      {activeTab === "packlist" && <FreightPacklistPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="packlist" readOnly={selectedJobReadOnly} />}
+      {activeTab === "jobsheet" && <FreightJobSheetPage target={target} initialJob={selectedJob} readOnly={selectedJobReadOnly} />}
+      {activeTab === "alerts" && <FreightJobFollowupTab target={target} kind="alerts" initialJob={selectedJob} readOnly={selectedJobReadOnly} />}
+      {activeTab === "instructions" && <FreightJobFollowupTab target={target} kind="instructions" initialJob={selectedJob} readOnly={selectedJobReadOnly} />}
+      {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" initialJob={selectedJob} readOnly={selectedJobReadOnly} />}
+      {activeTab === "deposits" && <FreightJobFollowupTab target={target} kind="deposits" initialJob={selectedJob} readOnly={selectedJobReadOnly} />}
+      {activeTab === "activities" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="activities" readOnly={selectedJobReadOnly} />}
 
     </section>
   );
@@ -310,6 +311,21 @@ function filterJobByStatus(row: LookupRow, tab: string) {
   if (tab === "confirmed") return !cancelled && confirmed && !invoiced;
   if (tab === "in_progress") return !cancelled && !confirmed && !invoiced;
   return true;
+}
+
+function isClosedJob(row: LookupRow | null | undefined) {
+  if (!row) return false;
+  return Boolean(
+    isTruthy(text(row, "canceled")) ||
+    isTruthy(text(row, "invoiced")) ||
+    isTruthy(text(row, "completed")) ||
+    text(row, "invoice_date") ||
+    text(row, "complete_date")
+  );
+}
+
+function isTruthy(value: string) {
+  return ["Y", "YES", "TRUE", "1"].includes(value.trim().toUpperCase());
 }
 
 function buildHealth(rows: LookupRow[]) {
