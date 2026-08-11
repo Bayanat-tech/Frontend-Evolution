@@ -919,9 +919,9 @@ export async function getGrnSummaryReportExcelDownload(params: ReportParams): Pr
   window.URL.revokeObjectURL(url);
 }
 
-export async function getInvocieDetailReport(prin_code: string, invoice_no: string): Promise<string> {
+export async function getInvocieDetailReport(prin_code: string, invoice_no: string, company_code: string): Promise<string> {
   const response = await api.get(
-    `/api/wms/inbound/reports/invoice-detail/html?prin_code=${prin_code}&invoice_no=${invoice_no}`,
+    `/api/wms/inbound/reports/invoice-detail/html?prin_code=${prin_code}&invoice_no=${invoice_no}&company_code=${company_code}`,
     { responseType: "text" }
   );
   if (!response.data) throw new Error("Unable to fetch Invoice Detail Report");
