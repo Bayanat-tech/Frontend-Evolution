@@ -700,6 +700,7 @@ export function FlowAssignmentPage() {
           loading={userLoading}
           height="320px"
           minWidth={420}
+           loaderType="circle" 
           density="grid"
           getRowId={(row: any, index: any) => val(row, "loginid") + "_" + val(row, "serial_no_or_role_id") + "_" + index}
         />
