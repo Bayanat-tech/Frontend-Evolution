@@ -180,6 +180,7 @@ import { JobProductionOrderPage } from "../pages/purchase_sales/production/JobPr
 import { LeaveTypesPage } from "../pages/hr/Leavetypespage";
 import AccuralPayUnit from "../pages/hr/AccuralPayUnit";
 import PLSummaryPage from "../pages/purchase_sales/Reports/Plsummarypage";
+import PayUnitsPage from "../pages/hr/pay_componants/PayUnitsPage";
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -1091,7 +1092,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: "HR Pay Units",
     match: (context) => isHrRoute(context) && isHrPayUnitsRoute(context),
-    element: () => <HrPayUnitsPage mode="units" />,
+    element: () => <PayUnitsPage/>,
   },
 
   
