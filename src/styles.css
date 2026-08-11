@@ -3492,6 +3492,20 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
+  .freight-job-focus-compact {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+
+  .freight-job-focus-compact .freight-job-progress,
+  .freight-job-focus-compact .freight-job-inline-actions {
+    grid-column: 1;
+  }
+
+  .freight-job-focus-compact .freight-job-inline-actions {
+    justify-content: flex-end;
+  }
+
   .freight-job-status-strip {
     justify-content: flex-start;
     order: 3;
