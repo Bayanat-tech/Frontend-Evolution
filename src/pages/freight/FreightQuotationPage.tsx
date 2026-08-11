@@ -1,5 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Activity,
   AlertTriangle,
@@ -171,6 +172,7 @@ const listStatusTabs: { key: ListStatusTab; label: string }[] = [
 
 export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?: FreightWorkspaceTarget; initialTab?: FreightQuotationInitialTab }) {
   const { user } = useAuth();
+  const location = useLocation();
   const { toast } = useToast();
   const userInfo = user as Record<string, unknown> | null;
   const initialHeader = useMemo(() => buildInitialHeader(userInfo, target), [target, userInfo]);
@@ -191,6 +193,9 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   const formRef = useRef<HTMLFormElement | null>(null);
   const [pendingValidateTab, setPendingValidateTab] = useState<FreightQuotationInitialTab | null>(null);
   const [approvalEnabled, setApprovalEnabled] = useState(false);
+  const [deepOpenDone, setDeepOpenDone] = useState("");
+  const freightSearchRecord = (location.state as { freightSearchRecord?: LookupRow } | null)?.freightSearchRecord;
+  const openRecordNo = new URLSearchParams(location.search).get("open") || "";
 
   useEffect(() => {
     if (!notice) return;
@@ -499,6 +504,18 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!openRecordNo || deepOpenDone === openRecordNo) return;
+    const recordType = lookupText(freightSearchRecord || {}, "record_type").toUpperCase();
+    if (recordType !== "QUOTATION") return;
+    setDeepOpenDone(openRecordNo);
+    void openQuotation(normalizeLookupRow({
+      company_code: lookupText(freightSearchRecord || {}, "company_code") || header.company_code,
+      prin_code: lookupText(freightSearchRecord || {}, "prin_code"),
+      quotation_nr: openRecordNo,
+    }));
+  }, [deepOpenDone, freightSearchRecord, header.company_code, openRecordNo]);
 
   const copyFromEnquiry = async (companyCode: string, prinCode: string, enquiryNo: string, enquiryType: string) => {
     if (!companyCode || !enquiryNo) return;

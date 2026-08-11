@@ -1,5 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { FormEvent, useEffect, useMemo, useState, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { Activity, AlertTriangle, ArrowLeft, Ban, CreditCard, Eye, MapPinned, PackageCheck, Paperclip, Plus, RefreshCw, RotateCcw, Save, ShieldCheck, ShipWheel, Sparkles, Trash2, X } from "lucide-react";
 import { api } from "../../api/client";
 import { freightSelect } from "../../api/freight";
@@ -186,6 +187,7 @@ const listStatusTabs: { key: ListStatusTab; label: string }[] = [
 export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: FreightEnquiryMainPageProps) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const location = useLocation();
   const userInfo = user as Record<string, unknown> | null;
   const isRfq = screenType === "rfq";
   const initialHeader = useMemo(() => buildInitialHeader(userInfo, target, screenType), [screenType, target, userInfo]);
@@ -200,6 +202,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   const [activeListTab, setActiveListTab] = useState<ListStatusTab>("draft");
   const [view, setView] = useState<EnquiryView>("list");
   const [notice, setNotice] = useState<Notice>(null);
+  const [deepOpenDone, setDeepOpenDone] = useState("");
   const [activeTab, setActiveTab] = useState<EnquiryTab>("cargo");
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [assistOpen, setAssistOpen] = useState(false);
@@ -210,6 +213,8 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   const [approvalEnabled, setApprovalEnabled] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
   const [pendingValidateTab, setPendingValidateTab] = useState<EnquiryTab | null>(null);
+  const freightSearchRecord = (location.state as { freightSearchRecord?: LookupRow } | null)?.freightSearchRecord;
+  const openRecordNo = new URLSearchParams(location.search).get("open") || "";
 
   useEffect(() => {
     if (!notice) return;
@@ -786,6 +791,19 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
       setLoadingRecord(false);
     }
   };
+
+  useEffect(() => {
+    if (!openRecordNo || deepOpenDone === openRecordNo) return;
+    const recordType = lookupText(freightSearchRecord || {}, "record_type").toUpperCase();
+    if (isRfq ? recordType !== "RFQ" : recordType !== "ENQUIRY") return;
+    setDeepOpenDone(openRecordNo);
+    void openEnquiry(normalizeLookupRow({
+      company_code: lookupText(freightSearchRecord || {}, "company_code") || header.company_code,
+      prin_code: lookupText(freightSearchRecord || {}, "prin_code"),
+      enquiry_nr: openRecordNo,
+      enquiry_type: isRfq ? "RFQ" : "EQI",
+    }) as EnquiryListRow);
+  }, [deepOpenDone, freightSearchRecord, header.company_code, isRfq, openRecordNo]);
 
   const addDetail = () => {
     setDetails((current) => [...current, buildInitialDetail(header, current.length + 1)]);

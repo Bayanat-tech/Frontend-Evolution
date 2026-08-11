@@ -1,5 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Ban, Bell, BrainCircuit, CheckCircle2, ClipboardList, FileText, Info, PackageCheck, Plane, Plus, ReceiptText, RefreshCw, Search, Ship, Truck, WalletCards } from "lucide-react";
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
@@ -68,6 +69,7 @@ const listingTabs = [
 
 export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target?: FreightWorkspaceTarget; initialTab?: JobTab }) {
   const { user } = useAuth();
+  const location = useLocation();
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
   const [activeTab, setActiveTab] = useState<JobTab>(initialTab);
@@ -80,6 +82,8 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   const [message, setMessage] = useState("");
   const targetMode = target?.mode || "air";
   const targetDirection = target?.direction || "import";
+  const freightSearchRecord = (location.state as { freightSearchRecord?: LookupRow } | null)?.freightSearchRecord;
+  const openRecordNo = new URLSearchParams(location.search).get("open") || "";
   const title = useMemo(() => {
     const modeText = modeLabel[targetMode];
     const direction = directionLabel[targetDirection];
@@ -114,6 +118,18 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
     setMode(initialTab === "job" ? "list" : "steps");
     setSelectedJob(null);
   }, [initialTab, targetDirection, targetMode]);
+
+  useEffect(() => {
+    if (!openRecordNo) return;
+    if (text(freightSearchRecord || {}, "record_type").toUpperCase() !== "JOB") return;
+    const prinCode = text(freightSearchRecord || {}, "prin_code");
+    if (!prinCode) return;
+    openSteps(normalizeLookupRow({
+      company_code: companyCode,
+      prin_code: prinCode,
+      job_no: openRecordNo,
+    }), "job");
+  }, [companyCode, freightSearchRecord, openRecordNo]);
 
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
     {
