@@ -88,6 +88,7 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
   }, [notice, toast]);
 
   const totals = useMemo(() => calculateTotals(lines), [lines]);
+  const isConfirmed = Boolean(lookupText(header, "confirm_date"));
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -231,7 +232,11 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
         {notice && <NoticeChip notice={notice} />}
         {!initialJob && <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>}
         <Button type="button" size="sm" variant="outline" onClick={addLine}><Plus size={14} />Line</Button>
-        <Button type="button" size="sm" variant="outline" onClick={() => void confirmJob()} disabled={saving || !lines.length}><CheckCircle2 size={14} />Confirm</Button>
+        <Button type="button" size="sm" variant="outline" onClick={addLine} disabled={isConfirmed}><Plus size={14} />Line</Button>
+        {/* <Button type="button" size="sm" variant="outline" onClick={() => void confirmJob()} disabled={saving || !lines.length}><CheckCircle2 size={14} />Confirm</Button> */}
+       <Button type="button" size="sm" variant="outline" onClick={() => void confirmJob()} disabled={saving || !lines.length || Boolean(lookupText(header, "confirm_date"))}>
+           <CheckCircle2 size={14} />{lookupText(header, "confirm_date") ? "Confirmed" : "Confirm"}
+        </Button>
         <Button type="button" size="sm" onClick={() => void saveLines()} disabled={saving}><Save size={14} />Save</Button>
       </Header>
 
@@ -251,30 +256,30 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
             <div key={`${line.srno}-${index}`} className="freight-job-table-row">
               <div className="grid grid-cols-[42px_90px_minmax(190px,1fr)_76px_94px_105px_105px_90px_105px_90px_105px_50px] items-center gap-1 px-2 py-1">
                 <span className="text-xs font-semibold text-muted-foreground">{index + 1}</span>
-                <ActivityLookup value={line.act_code} companyCode={companyCode} onChange={(value, row) => updateLine(index, { act_code: value, activity: lookupText(row || undefined, "activity"), other_services: lookupText(row || undefined, "activity") || line.other_services, bill_rate: lookupText(row || undefined, "bill") || line.bill_rate, actual_cost: lookupText(row || undefined, "cost") || line.actual_cost })} />
+                <ActivityLookup value={line.act_code} companyCode={companyCode} disabled={isConfirmed} onChange={(value, row) => updateLine(index, { act_code: value, activity: lookupText(row || undefined, "activity"), other_services: lookupText(row || undefined, "activity") || line.other_services, bill_rate: lookupText(row || undefined, "bill") || line.bill_rate, actual_cost: lookupText(row || undefined, "cost") || line.actual_cost })} />
                 <Input className="h-7 text-xs" value={line.other_services} onChange={(event) => updateLine(index, { other_services: event.target.value })} />
-                <MoneyInput value={line.quantity} onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))} />
-                <MoneyInput value={line.bill_rate} onChange={(value) => updateLine(index, recalc({ ...line, bill_rate: value }))} />
-                <MoneyInput value={line.bill} onChange={(value) => updateLine(index, { bill: value })} />
-                <MoneyInput value={line.actual_cost} onChange={(value) => updateLine(index, { actual_cost: value })} />
-                <Input className="h-7 text-xs" value={line.broker_code} onChange={(event) => updateLine(index, { broker_code: event.target.value })} />
-                <MoneyInput value={line.partners_price} onChange={(value) => updateLine(index, { partners_price: value })} />
-                <Input className="h-7 text-xs" value={line.transporter_code} onChange={(event) => updateLine(index, { transporter_code: event.target.value })} />
-                <MoneyInput value={line.transport_price} onChange={(value) => updateLine(index, { transport_price: value })} />
+                <MoneyInput value={line.quantity} disabled={isConfirmed}onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))} />
+                <MoneyInput value={line.bill_rate} disabled={isConfirmed} onChange={(value) => updateLine(index, recalc({ ...line, bill_rate: value }))} />
+                <MoneyInput value={line.bill} disabled={isConfirmed} onChange={(value) => updateLine(index, { bill: value })} />
+                <MoneyInput value={line.actual_cost} disabled={isConfirmed} onChange={(value) => updateLine(index, { actual_cost: value })} />
+                <Input className="h-7 text-xs" value={line.broker_code} disabled={isConfirmed} onChange={(event) => updateLine(index, { broker_code: event.target.value })} />
+                <MoneyInput value={line.partners_price} disabled={isConfirmed} onChange={(value) => updateLine(index, { partners_price: value })} />
+                <Input className="h-7 text-xs" value={line.transporter_code} disabled={isConfirmed} onChange={(event) => updateLine(index, { transporter_code: event.target.value })} />
+                <MoneyInput value={line.transport_price} disabled={isConfirmed} onChange={(value) => updateLine(index, { transport_price: value })} />
                 <Button type="button" size="icon" variant="ghost" title="Remove line" onClick={() => removeLine(index)}><Trash2 size={14} /></Button>
               </div>
               <div className="freight-job-table-subrow grid grid-cols-[42px_repeat(10,minmax(88px,1fr))] gap-1 px-2 pb-1">
                 <span className="self-center text-[10px] font-semibold uppercase text-muted-foreground">Tax</span>
                 <Input title="Sale tax category" placeholder="Sale Cat" className="h-7 text-xs" value={line.tx_cat_code} onChange={(event) => updateLine(index, { tx_cat_code: event.target.value })} />
                 <Input title="Sale tax component" placeholder="Sale Comp" className="h-7 text-xs" value={line.tx_compntcat_code_1} onChange={(event) => updateLine(index, { tx_compntcat_code_1: event.target.value })} />
-                <MoneyInput value={line.tx_compnt_perc_1} onChange={(value) => updateLine(index, { tx_compnt_perc_1: value })} />
-                <MoneyInput value={line.tx_compnt_amt_1} onChange={(value) => updateLine(index, { tx_compnt_amt_1: value })} />
-                <MoneyInput value={line.tx_compnt_lcuramt_1} onChange={(value) => updateLine(index, { tx_compnt_lcuramt_1: value })} />
+                <MoneyInput value={line.tx_compnt_perc_1} disabled={isConfirmed} onChange={(value) => updateLine(index, { tx_compnt_perc_1: value })} />
+                <MoneyInput value={line.tx_compnt_amt_1} disabled={isConfirmed} onChange={(value) => updateLine(index, { tx_compnt_amt_1: value })} />
+                <MoneyInput value={line.tx_compnt_lcuramt_1} disabled={isConfirmed} onChange={(value) => updateLine(index, { tx_compnt_lcuramt_1: value })} />
                 <Input title="Cost tax category" placeholder="Cost Cat" className="h-7 text-xs" value={line.tx_cat_code_cost} onChange={(event) => updateLine(index, { tx_cat_code_cost: event.target.value })} />
                 <Input title="Cost tax component" placeholder="Cost Comp" className="h-7 text-xs" value={line.tx_compntcat_code_1_cost} onChange={(event) => updateLine(index, { tx_compntcat_code_1_cost: event.target.value })} />
-                <MoneyInput value={line.tx_compnt_perc_1_cost} onChange={(value) => updateLine(index, { tx_compnt_perc_1_cost: value })} />
-                <MoneyInput value={line.tx_compnt_amt_1_cost} onChange={(value) => updateLine(index, { tx_compnt_amt_1_cost: value })} />
-                <MoneyInput value={line.tx_compnt_lcuramt_1_cost} onChange={(value) => updateLine(index, { tx_compnt_lcuramt_1_cost: value })} />
+                <MoneyInput value={line.tx_compnt_perc_1_cost} disabled={isConfirmed} onChange={(value) => updateLine(index, { tx_compnt_perc_1_cost: value })} />
+                <MoneyInput value={line.tx_compnt_amt_1_cost} disabled={isConfirmed} onChange={(value) => updateLine(index, { tx_compnt_amt_1_cost: value })} />
+                <MoneyInput value={line.tx_compnt_lcuramt_1_cost} disabled={isConfirmed} onChange={(value) => updateLine(index, { tx_compnt_lcuramt_1_cost: value })} />
               </div>
             </div>
           ))}
@@ -314,7 +319,7 @@ function Metric({ label, value, tone = "neutral" }: { label: string; value: stri
   return <div className={`freight-job-metric-card${toneClass}`}><div><TrendingUp size={12} />{label}</div><strong>{value}</strong></div>;
 }
 
-function ActivityLookup({ companyCode, value, onChange }: { companyCode: string; value: string; onChange: (value: string, row: LookupRow | null) => void }) {
+function ActivityLookup({ companyCode, value, onChange, disabled }: { companyCode: string; value: string; onChange: (value: string, row: LookupRow | null) => void; disabled?: boolean }) {
   return (
     <LookupField
       value={value}
@@ -324,12 +329,13 @@ function ActivityLookup({ companyCode, value, onChange }: { companyCode: string;
       columns={[{ field: "ACT_CODE", header: "Code" }, { field: "ACTIVITY", header: "Activity" }, { field: "BILL", header: "Bill" }, { field: "COST", header: "Cost" }]}
       loadOptions={() => loadFreightLookup("freight_activity", companyCode)}
       onChange={onChange}
+      disabled={disabled}
     />
   );
 }
 
-function MoneyInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  return <Input className="h-7 text-right text-xs" type="number" value={value} onChange={(event) => onChange(event.target.value)} />;
+function MoneyInput({ value, onChange, disabled }: { value: string; onChange: (value: string) => void; disabled?: boolean }) {
+  return <Input className="h-7 text-right text-xs" type="number" value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} />;
 }
 
 function NoticeChip({ notice }: { notice: Exclude<Notice, null> }) {
@@ -346,7 +352,7 @@ function toLine(row: LookupRow, index: number): ActivityLine {
 }
 
 function recalc(line: ActivityLine) {
-  return { bill: String(numberValue(line.quantity) * numberValue(line.bill_rate)) };
+  return { ...line, bill: String(numberValue(line.quantity) * numberValue(line.bill_rate)) };
 }
 
 function calculateTotals(lines: ActivityLine[]) {

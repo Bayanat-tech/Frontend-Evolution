@@ -596,6 +596,9 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       applyWorkflowResult(response.data?.data);
       setNotice({ type: "success", text: response.data?.message || "Quotation workflow updated" });
       await loadRows();
+      if (action === "SUBMITTED" || action === "APPROVED" || action === "REJECTED") {
+        setView("list");
+      }
     } catch (error) {
       setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to update quotation workflow" });
     } finally {
@@ -716,9 +719,10 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={17} /></div>
             <div>
-              <p className="eyebrow mb-0.5">Freight Quotation</p>
-              <h1 className="m-0 text-xl font-semibold leading-tight text-foreground">Quotation Listing</h1>
-              <p className="m-0 mt-1 text-xs text-muted-foreground">Build quotations from enquiry/RFQ data and maintain charge lines.</p>
+              <h1 className="m-0 text-xl font-semibold leading-tight text-foreground">Freight Quotation</h1>
+              {/* <p className="eyebrow mb-0.5">Freight Quotation</p> */}
+              {/* <h1 className="m-0 text-xl font-semibold leading-tight text-foreground">Quotation Listing</h1>
+              <p className="m-0 mt-1 text-xs text-muted-foreground">Build quotations from enquiry/RFQ data and maintain charge lines.</p> */}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
@@ -781,17 +785,19 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={15} /></div>
             <div className="min-w-0">
-              <p className="eyebrow m-0 text-lg">Freight Quotation</p>
+              <p className="eyebrow m-1000 text-lg">Freight Quotation</p>
+               {/* <h1 className="m-0 text-xl font-semibold leading-tight text-foreground">Quotation</h1> */}
               <div className="flex flex-wrap items-center gap-1.5">
-                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Quotation</h1>
-                <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">{header.quotation_nr || "New quotation"}</span>
+                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{header.quotation_nr}</h1>
+                {/* <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Quotation</h1> */}
+                {/* <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">{header.quotation_nr || "New quotation"}</span> */}
                 <span className={statusBadgeClass(header.indstatus, header.last_action, header.final_approved)}>{statusLabel(header.indstatus, header.last_action, header.final_approved)}</span>
               </div>
-              <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+              {/* <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground"> */}
                 {/* <span>{modeLabel(header.transport_mode)}</span><span className="h-1 w-1 rounded-full bg-muted-foreground/50" /> */}
                 {/* <span>{jobTypeLabel(header.job_type)}</span><span className="h-1 w-1 rounded-full bg-muted-foreground/50" /> */}
-                <h1>{header.quotation_nr}</h1>
-              </div>
+                {/* <h1>{header.quotation_nr}</h1> */}
+              {/* </div> */}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
@@ -1474,7 +1480,11 @@ const portColumns = [{ field: "port_code", header: "Code" }, { field: "port_name
 
 async function loadPrincipalLookup(companyCode: string) { return loadFreightLookup("freight_principal", companyCode); }
 async function loadWalkinPrincipalLookup(companyCode: string) { return loadFreightLookup("freight_walkin_principal", companyCode); }
-async function loadEnquiryLookup(companyCode: string) { return loadFreightLookup("freight_quotation_source", companyCode); }
+// async function loadEnquiryLookup(companyCode: string) { return loadFreightLookup("freight_quotation_source", companyCode); }
+async function loadEnquiryLookup(companyCode: string) {
+  const rows = await loadFreightLookup("freight_quotation_source", companyCode);
+  return rows.filter((row) => lookupText(row, "enquiry_type") === "EQI");
+}
 async function loadCommodityLookup(companyCode: string) { return loadFreightLookup("freight_commodity", companyCode); }
 async function loadPortLookup(companyCode: string) { return loadFreightLookup("freight_port", companyCode); }
 async function loadCurrencyLookup(companyCode: string) { return loadFreightLookup("freight_currency", companyCode); }

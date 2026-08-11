@@ -667,6 +667,9 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
       applyWorkflowResult(response.data?.data);
       setNotice({ type: "success", text: response.data?.message || `${enquiryLabel} workflow updated` });
       await loadEnquiries();
+      if (action === "SUBMITTED" ||action === "APPROVED" || action === "REJECTED") {
+        setView("list");
+      }
     } catch (error) {
       setNotice({ type: "error", text: error instanceof Error ? error.message : `Unable to update ${enquiryLabel} workflow` });
     } finally {
@@ -708,6 +711,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
       setHeader((current) => ({ ...current, indstatus: "A", final_approved: "Y", last_action: "APPROVED" }));
       setNotice({ type: "success", text: response.data?.message || `${enquiryLabel} approved` });
       await loadEnquiries();
+      setView("list");
     } catch (error) {
       setNotice({ type: "error", text: error instanceof Error ? error.message : `Unable to approve ${enquiryLabel}` });
     } finally {
@@ -872,6 +876,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
       }
       setNotice({ type: "success", text: response.data?.message || "Enquiry saved" });
       await loadEnquiries();
+      setView("list");
     } catch (error) {
       setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to save enquiry" });
     } finally {
@@ -888,9 +893,11 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
               <ShipWheel size={17} />
             </div>
             <div className="min-w-0">
-              <p className="eyebrow mb-0.5">{isRfq ? "Freight RFQ" : "Freight Enquiry"}</p>
-              <h1 className="m-0 text-xl font-semibold leading-tight text-foreground">{enquiryLabel} Listing</h1>
-              <p className="m-0 mt-1 text-xs text-muted-foreground">Create, search, and reopen freight {enquiryLabel.toLowerCase()} records.</p>
+              {/* <p className="eyebrow mb-0.5">{isRfq ? "Freight RFQ" : "Freight Enquiry"}</p> */}
+              <h1 className="m-0 text-xl font-semibold leading-tight text-foreground"> {isRfq ? "Freight RFQ" : "Freight Enquiry"}
+                {/* {enquiryLabel} Listing */}
+                </h1>
+              {/* <p className="m-0 mt-1 text-xs text-muted-foreground">Create, search, and reopen freight {enquiryLabel.toLowerCase()} records.</p> */}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -966,9 +973,13 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
             <ShipWheel size={15} />
           </div>
           <div className="min-w-0">
-            <p className="eyebrow mb-0.5">{isRfq ? "Freight RFQ" : "Freight Enquiry"}</p>
+            <p className="eyebrow mb-10"> {isRfq ? "Request For Quote" : "Freight Enquiry"}
+              {/* {isRfq ? "Freight RFQ" : "Freight Enquiry"} */}
+              </p>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{isRfq ? "Request For Quote" : "Freight Enquiry"}</h1>
+              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{header.enquiry_nr}
+                {/* {isRfq ? "Request For Quote" : "Freight Enquiry"} */}
+                </h1>
               {/* <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">
                 {header.enquiry_nr || (isRfq ? "New RFQ" : "New enquiry")}
               </span> */}
@@ -980,8 +991,8 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
               {/* <span>{modeLabel(header.transport_mode)}</span> */}
               <span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
               {/* <span>{header.job_type === "IMP" ? "Import" : "Export"}</span> */}
-              <span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
-              <span>{header.enquiry_nr}</span>
+              {/* <span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
+              <span>{header.enquiry_nr}</span> */}
             </div>
           </div>
         </div>
@@ -1183,7 +1194,6 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
                 <SectionPanel className="lg:col-span-5" icon={ShipWheel} title="Shipment Reference" meta={header.job_number || "Job pending"}>
                   <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                     <FormInput label="Via" value={header.via} onChange={(value) => setHeaderField("via", value)} />
-                    <FormInput label="Shipment Status" value={header.shipment_status} onChange={(value) => setHeaderField("shipment_status", value)} />
                     <FormInput label="Job No" value={header.job_number} onChange={(value) => setHeaderField("job_number", value)} />
                     <FormInput label="Ready Date" type="date" value={header.schedule_date} onChange={(value) => setHeaderField("schedule_date", value)} />
                     {header.transport_mode === "S" && (

@@ -1,6 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, FileText, Plane, RefreshCw, Search, Ship, Truck } from "lucide-react";
+import { ArrowLeft, FileText, Plane, RefreshCw, Search, Ship, Truck, Save, Edit2 } from "lucide-react";
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
@@ -9,6 +9,7 @@ import { Input } from "../../components/ui/Input";
 import { useToast } from "../../components/ui/AlertToast";
 import { useAuth } from "../../state/AuthContext";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
+import { Field } from "../vendor/components";
 
 const modeMap = {
   air: { code: "A", label: "Air", icon: Plane },
@@ -43,6 +44,9 @@ export function FreightJobSheetPage({ target, initialJob = null }: { target?: Fr
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [listLoading, setListLoading] = useState(false);
+  const [isEditing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<LookupRow | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const loadRows = useCallback(async () => {
     setListLoading(true);
@@ -85,10 +89,45 @@ export function FreightJobSheetPage({ target, initialJob = null }: { target?: Fr
     }
   }, [companyCode, toast]);
 
+  function startEditing() {
+  setDraft(job ? { ...job } : null);
+  setEditing(true);
+}
+
+function cancelEditing() {
+  setDraft(null);
+  setEditing(false);
+}
+
+function updateDraft(key: string, value: string) {
+  setDraft((current) => ({ ...(current || {}), [key.toUpperCase()]: value }));
+}
+
+async function saveHeader() {
+  if (!draft) return;
+  setSaving(true);
+  try {
+    await api.post("/api/freight/job/save", {
+      company_code: companyCode,
+      job: draft,
+    });
+    toast.success("Job sheet saved.");
+    setEditing(false);
+    setDraft(null);
+    await loadSheet(normalizeRow(draft));
+  } catch (error: any) {
+    toast.error(error?.response?.data?.details || error?.response?.data?.message || "Unable to save job sheet.");
+  } finally {
+    setSaving(false);
+  }
+ }
+
   useEffect(() => {
     const nextJob = initialJob ? normalizeRow(initialJob) : null;
     setSelectedJob(nextJob);
     setSheet({ header: null, packlist: null });
+    setEditing(false);
+  setDraft(null);
   }, [initialJob, modeKey, directionKey]);
 
   useEffect(() => {
@@ -178,6 +217,9 @@ export function FreightJobSheetPage({ target, initialJob = null }: { target?: Fr
         <div className="freight-job-inline-actions">
           <Button type="button" size="sm" variant="outline" onClick={() => setSelectedJob(null)}><ArrowLeft size={14} /> Select Job</Button>
           <Button type="button" size="sm" variant="outline" onClick={() => void loadSheet(job)} disabled={loading}><RefreshCw size={14} /> Refresh</Button>
+          {!isEditing && <Button type="button" size="sm" variant="outline" onClick={startEditing}><Edit2 size={14} /> Edit</Button>}
+          {isEditing && <Button type="button" size="sm" variant="outline" onClick={cancelEditing}>Cancel</Button>}
+          {isEditing && <Button type="button" size="sm" onClick={() => void saveHeader()} disabled={saving}><Save size={14} /> Save</Button>}
         </div>
       </div>
 
@@ -208,7 +250,12 @@ export function FreightJobSheetPage({ target, initialJob = null }: { target?: Fr
               <Display label="Job No" value={titleRef} strong />
               <Display label="Job Date" value={jobDate} />
               <Display label="Principal" value={text(job, "prin_code")} />
-              <Display label="Quotation Ref" value={text(job, "quotation_ref")} />
+              {isEditing
+                 ? <Field label="Principal" value={text(draft, "prin_code")} onChange={(v) => updateDraft("prin_code", v)} />
+                 : <Display label="Principal" value={text(job, "prin_code")} />}
+              {isEditing
+                ? <Field label="Quotation Ref" value={text(draft, "quotation_ref")} onChange={(v) => updateDraft("quotation_ref", v)} />
+                : <Display label="Quotation Ref" value={text(job, "quotation_ref")} />}
               <Display label="Department" value={text(job, "dept_code")} />
               <Display label="Division" value={text(job, "div_code")} />
               <Display label="Job Category" value={text(job, "job_category")} />
