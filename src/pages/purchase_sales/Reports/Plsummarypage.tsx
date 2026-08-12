@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import {
     Printer,
     RotateCcw,
@@ -10,6 +10,12 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../../state/AuthContext";
 import { getDynamicLookupaccount, getLookupText, getLookupValue, LookupRow } from "../../../api/lookups";
+import {
+    getPLSummaryReportHtml,
+    getPLSummaryReportExcel
+} from "../../../api/transactions"; // ← आपल्या प्रोजेक्टमधल्या actual path प्रमाणे adjust करा
+import { useState as useStateHook, useRef as useRefHook, useEffect } from "react";
+
 interface PLSummaryReportParams {
     parameter: string;
     loginid: string;
@@ -25,55 +31,17 @@ interface PLSummaryReportParams {
     prodtype: string;
     manu: string;
     cust: string;
+    [key: string]: any; // ReportParams (transactions.ts) सोबत compatible राहण्यासाठी
 }
-
-const PL_API_BASE = "/api/reports/pl-summary";
-
-async function getPLSummaryReportHtml(params: PLSummaryReportParams): Promise<string> {
-    const res = await fetch(`${PL_API_BASE}/html`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(params),
-    });
-    if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.message || "Failed to generate report");
-    }
-    return res.text();
-}
-
-async function getPLSummaryReportExcelDownload(params: PLSummaryReportParams): Promise<void> {
-    const res = await fetch(`${PL_API_BASE}/excel`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(params),
-    });
-    if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.message || "Failed to export Excel");
-    }
-    const blob = await res.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "PL_Summary_Report.xlsx";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.URL.revokeObjectURL(url);
-}
-
 
 const LOOKUP_PARAMS = {
-    group:        "PURCHASE_SALE_MSE_PRODGROUP",     // CONFIRM
+    group:        "PURCHASE_SALE_MSE_PRODGROUP",
     brand:        "PURCHASE_SALE_MSE_PRODBRAND",
     category:     "PURCHASE_SALE_MSE_PRODCATEGORY",
     type:         "PURCHASE_SALE_MSE_PRODTYPE",
-    manufacturer: "PURCHASE_SALE_MSE_MANUFACTURER",  // CONFIRM
-    customer:     "PURCHASE_SALE_MSE_CUSTOMER",      // CONFIRM
-    salesman:     "PURCHASE_SALE_MSE_SALESMAN",      // CONFIRM
+    manufacturer: "PURCHASE_SALE_MSE_MANUFACTURER",
+    customer:     "PURCHASE_SALE_MSE_CUSTOMER",
+    salesman:     "PURCHASE_SALE_MSE_SALESMAN",
 } as const;
 
 // ─── Types ────────────────────────────────────────────────────────────────
@@ -86,9 +54,9 @@ export type ReportMode =
     | "groupcustomerwise";
 
 const MODE_OPTIONS: { value: ReportMode; label: string }[] = [
-    { value: "invoicewise",      label: "Invoice wise" },
-    { value: "customerwise",     label: "Customer wise" },
-    { value: "salesmanwise",     label: "Salesman wise" },
+    { value: "invoicewise",       label: "Invoice wise" },
+    { value: "customerwise",      label: "Customer wise" },
+    { value: "salesmanwise",      label: "Salesman wise" },
     { value: "customergroupwise", label: "Customer-Group wise" },
     { value: "groupcustomerwise", label: "Group-Customer wise" },
 ];
@@ -118,15 +86,6 @@ const EMPTY_SELECTIONS: Selections = {
 };
 
 // ─── Shared styles ─────────────────────────────────────────────────────────
-
-const fieldLabelStyle: React.CSSProperties = {
-    fontSize: 11,
-    fontWeight: 500,
-    color: "#6b7280",
-    marginBottom: 2,
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-};
 
 const inputStyle: React.CSSProperties = {
     width: "100%",
@@ -177,7 +136,7 @@ const DateField: React.FC<{
 
 type SingleLookupProps = {
     label: string;
-    value: string;          // "" = All
+    value: string;
     onChange: (v: string) => void;
     loadOptions: () => Promise<LookupRow[]>;
     valueField: string;
@@ -273,7 +232,6 @@ function SingleSelectLookup({ label, value, onChange, loadOptions, valueField, d
         </div>
     );
 }
-
 
 const ALL_SENTINEL = "__ALL__";
 
@@ -503,7 +461,6 @@ function MultiSelectDropdown({
     );
 }
 
-
 function toApiCodeString(selected: string[]): string {
     if (selected.length === 0) return "All";
     if (selected.includes(ALL_SENTINEL)) return "All";
@@ -566,6 +523,9 @@ export default function PLSummaryPage() {
         newTab.document.write("<title>P&amp;L Summary Report</title><body style='font-family:sans-serif;padding:40px;color:#6b7280;'>Loading report…</body>");
 
         try {
+            // ✅ आधीचा raw fetch("/api/reports/pl-summary/html") काढून टाकला —
+            // आता तोच axios client (`api`) आणि तोच endpoint वापरतो जो DN Summary/
+            // Profit&Loss वगैरे बाकीच्या reports वापरतात.
             const html = await getPLSummaryReportHtml(params);
             newTab.document.open();
             newTab.document.write(html);
@@ -610,7 +570,7 @@ export default function PLSummaryPage() {
         }
         setExporting(true);
         try {
-            await getPLSummaryReportExcelDownload(lastRequestRef.current);
+            await getPLSummaryReportExcel(lastRequestRef.current);
         } catch (err) {
             console.error("Excel export error:", err);
             alert("Excel export failed. Please try again.");
@@ -656,7 +616,7 @@ export default function PLSummaryPage() {
                         </div>
                     )}
 
-                    {/* ── Top fields + Report Criteria (matches image1) ── */}
+                    {/* ── Top fields + Report Criteria ── */}
                     <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
                         <div className="field-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                             <FloatLabel label="Date From" bgColor={BG}>
@@ -709,7 +669,6 @@ export default function PLSummaryPage() {
                     </div>
 
                     {/* ── Group / Brand / Category / Type / Manufacturer / Customer ── */}
-                    {/* Same checkbox-dropdown pattern as your DN Summary Report's Principal field */}
                     <div className="field-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 12 }}>
                         {TABS.map((t) => (
                             <MultiSelectDropdown

@@ -1131,11 +1131,35 @@ export async function exportTransactionWithoutTransfersExcel(params: ReportParam
   window.URL.revokeObjectURL(url);
 }
 
+//----------PL(Profit/Loss) analysis summary Report----------------
 
+export async function getPLSummaryReportHtml(params: ReportParams): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getPLSummaryReport/html`,      
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
 
-
-
-
+export async function getPLSummaryReportExcel(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getPLSummaryReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "PL_Summary_Report.xlsx";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
 
 // ---------DN Summary Report----------------
 
