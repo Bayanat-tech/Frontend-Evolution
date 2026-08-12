@@ -290,13 +290,13 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
               </div>
               <div className="freight-job-table-subrow grid grid-cols-[42px_repeat(10,minmax(88px,1fr))] gap-1 px-2 pb-1">
                 <span className="self-center text-[10px] font-semibold uppercase text-muted-foreground">Tax</span>
-                <Input title="Sale tax category" placeholder="Sale Cat" className="h-7 text-xs" value={line.tx_cat_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { tx_cat_code: event.target.value })} />
-                <Input title="Sale tax component" placeholder="Sale Comp" className="h-7 text-xs" value={line.tx_compntcat_code_1} disabled={isLineLocked} onChange={(event) => updateLine(index, { tx_compntcat_code_1: event.target.value })} />
+                <TaxCategoryLookup companyCode={companyCode} value={line.tx_cat_code} disabled={isLineLocked} placeholder="Sale Cat" onChange={(value) => updateLine(index, { tx_cat_code: value })} />
+                <TaxCodeLookup companyCode={companyCode} value={line.tx_compntcat_code_1} disabled={isLineLocked} placeholder="Sale Code" onChange={(value, row) => updateLine(index, { tx_compntcat_code_1: value, tx_cat_code: lookupText(row, "tx_cat_code") || line.tx_cat_code, tx_compnt_perc_1: lookupText(row, "tx_percnt") || line.tx_compnt_perc_1 })} />
                 <MoneyInput value={line.tx_compnt_perc_1} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_perc_1: value })} />
                 <MoneyInput value={line.tx_compnt_amt_1} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_amt_1: value })} />
                 <MoneyInput value={line.tx_compnt_lcuramt_1} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_lcuramt_1: value })} />
-                <Input title="Cost tax category" placeholder="Cost Cat" className="h-7 text-xs" value={line.tx_cat_code_cost} disabled={isLineLocked} onChange={(event) => updateLine(index, { tx_cat_code_cost: event.target.value })} />
-                <Input title="Cost tax component" placeholder="Cost Comp" className="h-7 text-xs" value={line.tx_compntcat_code_1_cost} disabled={isLineLocked} onChange={(event) => updateLine(index, { tx_compntcat_code_1_cost: event.target.value })} />
+                <TaxCategoryLookup companyCode={companyCode} value={line.tx_cat_code_cost} disabled={isLineLocked} placeholder="Cost Cat" onChange={(value) => updateLine(index, { tx_cat_code_cost: value })} />
+                <TaxCodeLookup companyCode={companyCode} value={line.tx_compntcat_code_1_cost} disabled={isLineLocked} placeholder="Cost Code" onChange={(value, row) => updateLine(index, { tx_compntcat_code_1_cost: value, tx_cat_code_cost: lookupText(row, "tx_cat_code") || line.tx_cat_code_cost, tx_compnt_perc_1_cost: lookupText(row, "tx_percnt") || line.tx_compnt_perc_1_cost })} />
                 <MoneyInput value={line.tx_compnt_perc_1_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_perc_1_cost: value })} />
                 <MoneyInput value={line.tx_compnt_amt_1_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_amt_1_cost: value })} />
                 <MoneyInput value={line.tx_compnt_lcuramt_1_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_lcuramt_1_cost: value })} />
@@ -357,7 +357,39 @@ function ActivityLookup({ companyCode, value, onChange, disabled }: { companyCod
       valueField="ACT_CODE"
       displayFields={["ACT_CODE", "ACTIVITY"]}
       columns={[{ field: "ACT_CODE", header: "Code" }, { field: "ACTIVITY", header: "Activity" }, { field: "BILL", header: "Bill" }, { field: "COST", header: "Cost" }]}
-      loadOptions={() => loadFreightLookup("freight_activity", companyCode)}
+      loadOptions={(query) => loadFreightLookup("freight_activity", companyCode, query)}
+      onChange={onChange}
+      disabled={disabled}
+    />
+  );
+}
+
+function TaxCategoryLookup({ companyCode, value, onChange, disabled, placeholder }: { companyCode: string; value: string; onChange: (value: string, row: LookupRow | null) => void; disabled?: boolean; placeholder: string }) {
+  return (
+    <LookupField
+      value={value}
+      compact
+      placeholder={placeholder}
+      valueField="TX_CAT_CODE"
+      displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]}
+      columns={[{ field: "TX_CAT_CODE", header: "Code" }, { field: "TX_CAT_NAME", header: "Tax Category" }]}
+      loadOptions={(query) => loadFreightLookup("freight_tax_category", companyCode, query)}
+      onChange={onChange}
+      disabled={disabled}
+    />
+  );
+}
+
+function TaxCodeLookup({ companyCode, value, onChange, disabled, placeholder }: { companyCode: string; value: string; onChange: (value: string, row: LookupRow | null) => void; disabled?: boolean; placeholder: string }) {
+  return (
+    <LookupField
+      value={value}
+      compact
+      placeholder={placeholder}
+      valueField="TX_COMPNTCAT_CODE"
+      displayFields={["TX_COMPNTCAT_CODE", "TX_COMPNTCAT_NAME"]}
+      columns={[{ field: "TX_COMPNTCAT_CODE", header: "Code" }, { field: "TX_COMPNTCAT_NAME", header: "Tax Code" }, { field: "TX_CAT_CODE", header: "Tax Category" }, { field: "TX_PERCNT", header: "Tax %" }]}
+      loadOptions={(query) => loadFreightLookup("freight_tax_code", companyCode, query)}
       onChange={onChange}
       disabled={disabled}
     />
@@ -365,7 +397,7 @@ function ActivityLookup({ companyCode, value, onChange, disabled }: { companyCod
 }
 
 function MoneyInput({ value, onChange, disabled }: { value: string; onChange: (value: string) => void; disabled?: boolean }) {
-  return <Input className="h-7 text-right text-xs" type="number" value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} />;
+  return <Input className="h-7 text-right text-xs tabular-nums" type="text" inputMode="decimal" value={value} disabled={disabled} onChange={(event) => onChange(normalizeMoneyInput(event.target.value))} />;
 }
 
 function NoticeChip({ notice }: { notice: Exclude<Notice, null> }) {
@@ -420,6 +452,15 @@ function lookupText(row: LookupRow | null | undefined, key: string) {
 function numberValue(input: unknown) {
   const number = Number(input || 0);
   return Number.isFinite(number) ? number : 0;
+}
+
+function normalizeMoneyInput(value: string) {
+  const withoutCommas = value.replace(/,/g, "");
+  const numericOnly = withoutCommas.replace(/[^\d.-]/g, "");
+  const sign = numericOnly.startsWith("-") ? "-" : "";
+  const unsigned = numericOnly.replace(/-/g, "");
+  const [whole = "", ...decimal] = unsigned.split(".");
+  return `${sign}${whole}${decimal.length ? `.${decimal.join("")}` : ""}`;
 }
 
 function money(input: unknown) {
