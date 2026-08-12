@@ -149,6 +149,8 @@ import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/As
 import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation";
 import StockCountPage from "../pages/wms/stock count/StockCountPage";
 import{ExpenseMasterPage} from "../pages/purchase_sales/Expensemasterpage";
+import MseProdGroup from "../pages/purchase_sales/MseProdGroup";
+import ProductPurchaseSales from "../pages/purchase_sales/ProductPurchaseSales";
 import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
 
 
@@ -201,6 +203,16 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: 'MSE Prod Group',
+    match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_group"),
+    element: () => <MseProdGroup />,
+  },
+  {
+    name: 'Purchase Sales Product',
+    match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product"),
+    element: () => <ProductPurchaseSales />
+  },
   {
     name: 'HR Accural Pay Unit',
     match: ({pathname}) => pathname.toLowerCase().includes("/hr/hr/transactions/accural_pay_units"),
