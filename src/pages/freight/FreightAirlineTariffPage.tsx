@@ -434,7 +434,6 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
                       displayValue={form.airline_name}
                       required
                       compact
-                      className="border-slate-400"
                       valueField="AIRLINE_CODE"
                       displayFields={["AIRLINE_CODE", "AIRLINE_NAME"]}
                       columns={[{ field: "AIRLINE_CODE", header: "Code" }, { field: "AIRLINE_NAME", header: "Airline" }]}
@@ -456,7 +455,6 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
                       label="Currency"
                       value={form.curr_code}
                       compact
-                      className="border-slate-400"
                       valueField="CURR_CODE"
                       displayFields={["CURR_CODE", "CURR_NAME"]}
                       columns={[{ field: "CURR_CODE", header: "Code" }, { field: "CURR_NAME", header: "Currency" }]}
