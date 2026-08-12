@@ -1,7 +1,7 @@
 import { ArrowLeft, FileSpreadsheet, Printer, RefreshCw, Save } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { executeWmsInboundSql, getDnReport, downloadDnReportExcel, getOubPickReport, downloadOubPickReportExcel, downloadOubJobDetReportExcel, getOubJobDetReport, getOubServiceActivityReport, downloadOubServiceActivityReportExcel } from "../../../api/wms";
+import { executeWmsInboundSql, getDnReport, downloadDnReportExcel, getOubPickReport, downloadOubPickReportExcel, downloadOubJobDetReportExcel, getOubJobDetReport, getOubServiceActivityReport, downloadOubServiceActivityReportExcel, getSalesOrderReportHtml, getSalesOrderSheetReportExcelDownload } from "../../../api/wms";
 import { Button } from "../../../components/ui/Button";
 import { useAuth } from "../../../state/AuthContext";
 import type { WmsRow } from "./Outboundtypes";
@@ -53,6 +53,13 @@ const REPORTS: TReport[] = [
     apiFn:       getOubServiceActivityReport,
     excelFn:     downloadOubServiceActivityReportExcel,
   },
+   {
+    id:          5,
+    reportTitle: "Sales Order Report",
+    apiFn:       getSalesOrderReportHtml,
+    excelFn:     getSalesOrderSheetReportExcelDownload,
+  },
+  
 ];
 
 export function OutboundJobDetail({

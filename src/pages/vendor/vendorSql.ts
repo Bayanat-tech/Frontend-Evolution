@@ -110,7 +110,7 @@ export function vendorApprovalSql(companyCode: string, loginid: string, actions:
       SELECT H.*,
         (SELECT AMOUNT FROM VW_VENDOR_AMOUNT K WHERE K.COMPANY_CODE = H.COMPANY_CODE AND K.DOC_NO = H.DOC_NO) AS AMOUNT
       FROM VW_VMS_FLOW_HDR_CLOSED H
-      WHERE H.FINAL_APPROVED = 'YES'
+      WHERE H.FINAL_APPROVED = 'YES' AND H.NEXT_ACTION_BY ='APPROVED'
         ${companyFilter}
       ORDER BY H.DOC_NO DESC
     `;

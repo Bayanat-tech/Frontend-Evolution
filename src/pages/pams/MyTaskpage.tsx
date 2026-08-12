@@ -774,6 +774,7 @@ const MyTaskPage = ({ initialTab = 0 }: MyTaskPageProps) => {
         onSearchChange={setQuery}
         searchPlaceholder="Search appraisal..."
         loading={loading}
+        loaderType="circle" 
         height={550}
         minWidth={1300}
         density="compact"

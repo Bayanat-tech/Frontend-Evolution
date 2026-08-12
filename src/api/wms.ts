@@ -76,6 +76,23 @@ export type StockAdjustmentListResponse = {
   details: LookupRow[];
 };
 
+export type DynamicSqlSecurityParams = {
+  parameter: string;
+  loginid?: string;
+  code1?: string;
+  code2?: string;
+  code3?: string;
+  code4?: string;
+  number1?: number;
+  number2?: number;
+  number3?: number;
+  number4?: number;
+  date1?: string | null;
+  date2?: string | null;
+  date3?: string | null;
+  date4?: string | null;
+};
+
 type BulkApiResponse = {
   success: boolean;
   message?: string;
@@ -166,7 +183,246 @@ export async function getWmsMaster(master: string, options: WmsPagination & Reco
   return response.data.data || { tableData: [], count: 0 };
 }
 
+// ---------Sales Order Report----------------
 
+
+export async function getSalesOrderReportHtml(prinCode: string, jobNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/salesorder/${jobNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Job Details Report");
+  return response.data;
+}
+ 
+export async function getSalesOrderSheetReportExcelDownload(
+  prinCode: string,
+  jobNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/salesorder/${jobNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `sales_order_report_${jobNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+
+// ---------Stock Adjusment Report----------------
+
+export async function getStockAdjusmentReportHtml(prinCode: string, adjNo: string): Promise<string> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/stockadjusment/${adjNo}?prin_code=${prinCode}`,
+    { responseType: "text" }
+  );
+  if (!response.data) throw new Error("Unable to fetch Stock Adjusment Report");
+  return response.data;
+}
+ 
+export async function getStockAdjusmentReportExcelDownload(
+  prinCode: string,
+  adjNo: string
+): Promise<void> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/stockadjusment/${adjNo}/excel?prin_code=${prinCode}`,
+    { responseType: "arraybuffer" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `stock_adjusment_report_${adjNo}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+
+/*
+export async function getSalesOrderReportHtml(params: ReportParams): Promise<string> {
+  const response = await api.get(
+    `/api/wms/outbound/reports/salesorder/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+*/
+
+/*
+
+export async function getSalesOrderSheetReportExcelDownload(params: ReportParams): Promise<void> {
+  const response = await api.get(
+     `/api/wms/outbound/reports/salesorder/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "SalesOrderSheet.xlsx";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+*/
+
+export async function procBuildDynamicSqlSecurity(params: DynamicSqlSecurityParams) {
+  const response = await api.post<ApiResponse<LookupRow[]>>(
+    "/api/wms/common/proc_build_dynamic_sql_common", // TODO: confirm this matches your actual route
+    params
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load data");
+  return response.data.data || [];
+}
+ 
+// ─── Flow Assignment (Approver Levels + Role Users) ───────────────────────
+ 
+export type TFlowProcess = { PROCESS: string };
+ 
+export type TFlowLevelDetail = {
+  COMPANY_CODE?: string;
+  PROCESS?: string;
+  LEVEL1?: string;
+  LEVEL2?: string;
+  LEVEL3?: string;
+  LEVEL4?: string;
+  LEVEL5?: string;
+  COUNT?: number | string;
+  [key: string]: unknown;
+};
+ 
+export type TFlowRole = { ROLE_ID: string; ROLE_DESC: string };
+ 
+export type TFlowRoleUser = {
+  SERIAL_NO_OR_ROLE_ID?: string;
+  LOGINID?: string;
+  USERNAME?: string;
+  COMPANY_CODE?: string;
+  [key: string]: unknown;
+};
+ 
+/** Process dropdown */
+export async function getFlowAssignProcesses(companyCode: string) {
+  return procBuildDynamicSqlSecurity({
+    parameter: "PROC_FUN_ASSIGN_PROCESS",
+    code1: companyCode,
+  }) as Promise<TFlowProcess[]>;
+}
+ 
+/** Level details (LEVEL1-5 + COUNT) for the selected process */
+export async function getFlowAssignLevelDetails(companyCode: string, process: string) {
+  if (!process) return [] as TFlowLevelDetail[];
+  return procBuildDynamicSqlSecurity({
+    parameter: "PROC_FUN_ASSIGN_LEVEL_DETAILS",
+    code1: companyCode,
+    code2: process,
+  }) as Promise<TFlowLevelDetail[]>;
+}
+ 
+/** Role Name dropdown */
+export async function getFlowAssignRoles(companyCode: string) {
+  return procBuildDynamicSqlSecurity({
+    parameter: "PROC_FUN_ASSIGN_ROLE_DROPDOWN",
+    code1: companyCode,
+  }) as Promise<TFlowRole[]>;
+}
+ 
+/** Users currently assigned to the selected role */
+export async function getFlowAssignRoleUsers(companyCode: string, roleId: string) {
+  if (!roleId) return [] as TFlowRoleUser[];
+  return procBuildDynamicSqlSecurity({
+    parameter: "PROC_FUN_ASSIGN_ROLE_USERS",
+    code1: companyCode,
+    code2: roleId,
+  }) as Promise<TFlowRoleUser[]>;
+}
+export const saveFlowAssignLevels = async (
+  companyCode: string,
+  process: string,
+  rows: {
+    level1_role: string;
+    level2_role: string;
+    level3_role?: string;
+    level4_role?: string;
+    level5_role?: string;
+    last_level: number;
+    flow_code?: string;
+  }[]
+) => {
+  const payload = {
+    rows: rows.map((r) => ({
+      company_code: companyCode,
+      process: process,
+      level1_role: r.level1_role,
+      level2_role: r.level2_role,
+      level3_role: r.level3_role || null,
+      level4_role: r.level4_role || null,
+      level5_role: r.level5_role || null,
+      last_level: r.last_level,
+      flow_code: r.flow_code || "NA",
+    })),
+  };
+
+  const res = await api.post("/api/finance/insUpdMsApproverLevels", payload);
+  return res.data;
+};
+// ─── Add / Remove user from role ──────────────────────────────────────────
+// No insert/delete branch was provided in PROC_BUILD_DYNAMIC_SQL_PROC_FUN_ASSIGN
+// yet, so these two stubs call a generic ins/upd/del common proc the same way
+// wms.ts does (procBuildDynamicInsUpdCommon / procBuildDynamicDelCommon).
+// Ask the backend to add corresponding CASE branches, then swap the
+// parameter/endpoint below once they exist — everything else on the page
+// will keep working unchanged.
+ 
+export async function addUserToRole(companyCode: string, roleId: string, loginidToAdd: string, actorLoginId: string) {
+  const res = await insSecRoleFunctionAccessUser([
+    {
+      company_code: companyCode,
+      loginid: loginidToAdd,
+      serial_no_or_role_id: roleId,
+      userid: loginidToAdd,
+      create_user: actorLoginId,
+    },
+  ]);
+  if (!res?.success) throw new Error(res?.message || "Unable to add user to role");
+  return res;
+}
+
+ export const insSecRoleFunctionAccessUser = async (rows: any[]) => {
+  const res = await api.post("/api/finance/insSecRoleFunctionAccessUser", { rows });
+  return res.data;
+};
+export async function removeUserFromRole(companyCode: string, roleId: string, loginid: string, actorLoginId: string) {
+  const response = await api.post<ApiResponse<unknown>>(
+    "/api/wms/common/proc_build_dynamic_del_common", // TODO: confirm route + parameter name with backend
+    {
+      parameter: "PROC_FUN_ASSIGN_DEL_ROLE_USER", // TODO: backend needs to add this branch
+      loginid: actorLoginId,
+      code1: companyCode,
+      code2: roleId,
+      code3: loginid,
+    }
+  );
+  if (!response.data.success) throw new Error(response.data.message || "Unable to remove user from role");
+  return response.data;
+}
 
 export async function deleteWmsMaster(master: string, ids: unknown[]) {
   const response = await api.post<ApiResponse<unknown>>(`/api/wms/${master}`, { ids });
@@ -259,6 +515,19 @@ export async function executeWmsInboundSql(rawSql: string, signal?: AbortSignal)
   );
   if (!response.data.success) throw new Error(response.data.message || "Unable to load inbound data");
   return response.data.data || [];
+}
+
+const rawSqlLookupCache = new Map<string, { expiresAt: number; rows: LookupRow[] }>();
+const RAW_SQL_LOOKUP_TTL_MS = 5 * 60 * 1000;
+
+export async function executeWmsInboundSqlCached(rawSql: string, signal?: AbortSignal) {
+  const cacheKey = rawSql.replace(/\s+/g, " ").trim();
+  const cached = rawSqlLookupCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.rows;
+
+  const rows = await executeWmsInboundSql(rawSql, signal);
+  rawSqlLookupCache.set(cacheKey, { expiresAt: Date.now() + RAW_SQL_LOOKUP_TTL_MS, rows });
+  return rows;
 }
 
 export async function executeWmsInboundSqlBody(query_parameter: string, query_where: string, query_updatevalues: string) {
@@ -650,9 +919,9 @@ export async function getGrnSummaryReportExcelDownload(params: ReportParams): Pr
   window.URL.revokeObjectURL(url);
 }
 
-export async function getInvocieDetailReport(prin_code: string, invoice_no: string): Promise<string> {
+export async function getInvocieDetailReport(prin_code: string, invoice_no: string, company_code: string): Promise<string> {
   const response = await api.get(
-    `/api/wms/inbound/reports/invoice-detail/html?prin_code=${prin_code}&invoice_no=${invoice_no}`,
+    `/api/wms/inbound/reports/invoice-detail/html?prin_code=${prin_code}&invoice_no=${invoice_no}&company_code=${company_code}`,
     { responseType: "text" }
   );
   if (!response.data) throw new Error("Unable to fetch Invoice Detail Report");
@@ -1133,4 +1402,12 @@ export async function saveStockCount(payload: SaveStockCountPayload) {
   }
 
   return result;
+}
+saveFlowAssignLevels 
+/** All users for the company (used by the Add User modal) */
+export async function getFlowAssignAllUsers(companyCode: string) {
+  return procBuildDynamicSqlSecurity({
+    parameter: "PROC_FUN_ASSIGN_ALL_USERS", // TODO: backend needs to add this branch, mirroring PROC_FUN_ASSIGN_ROLE_USERS but without the role filter
+    code1: companyCode,
+  }) as Promise<TFlowRoleUser[]>;
 }

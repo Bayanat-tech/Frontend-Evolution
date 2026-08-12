@@ -29,6 +29,8 @@ export type HrMasterField = {
   label: string;
   required?: boolean;
   hideOnAdd?: boolean;
+  Placeholder?: string;
+  helperText?: string;
   disabledOnEdit?: boolean;
   disabledOnAdd?: boolean;
   type?: "text" | "number" | "select" | "email" | "date";
@@ -60,6 +62,7 @@ export type HrMasterConfig = {
   buildDelete?: (row: Record<string, unknown>, context: HrMasterContext) => DynamicDeleteParams;
   financeSaveEndpoint?: string;
   autoGenerateKey?: boolean;
+  stripEditKeyOnSave?: boolean;
 };
 
 export type HrMasterContext = {
@@ -123,8 +126,8 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
         setTotalRows(response.count || response.tableData.length);
       }
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to load ${config.title}` });
-    } finally {
+  setNotice({ type: "error", message: getErrorMessage(error, `Unable to load ${config.title}`) });
+  } finally {
       setLoading(false);
     }
   };
@@ -201,14 +204,25 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
         else await executeDynamicMutation(payload);
       } else if (config.source === "finance" && config.buildSave && config.financeSaveEndpoint) {
         await postFinance(config.financeSaveEndpoint, cleanPayload(config.buildSave(form, buildContext()) as Record<string, unknown>));
-      } else {
-        await saveHrGm(config.gmEndpoint, cleanPayload({ ...form, company_code: form.company_code || companyCode }), editMode ? "put" : "post");
-      }
+     } else {
+  const payload = config.stripEditKeyOnSave
+    ? (() => {
+        const { _edit_key, ...rest } = form;
+        return rest;
+      })()
+    : form;
+
+  await saveHrGm(
+    config.gmEndpoint,
+    cleanPayload({ ...payload, company_code: form.company_code || companyCode }),
+    editMode ? "put" : "post"
+  );
+}
       setFormOpen(false);
       setNotice({ type: "success", message: `${config.title} ${editMode ? "updated" : "created"} successfully.` });
       await loadRows(pageIndex, pageSize, false);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to save ${config.title}` });
+  setNotice({ type: "error", message: getErrorMessage(error, `Unable to save ${config.title}`) });
     } finally {
       setSaving(false);
     }
@@ -228,8 +242,8 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
       setNotice({ type: "success", message: `${config.title} deleted successfully.` });
       await loadRows(pageIndex, pageSize, false);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : `Unable to delete ${config.title}` });
-    } finally {
+  setNotice({ type: "error", message: getErrorMessage(error, `Unable to delete ${config.title}`) });
+  } finally {
       setSaving(false);
     }
   };
@@ -416,6 +430,20 @@ function cleanPayload(payload: Record<string, unknown>) {
   return next;
 }
 
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === "object") {
+    const anyErr = error as any;
+    const backendMessage =
+      anyErr.response?.data?.message ||
+      anyErr.data?.message ||
+      anyErr.message;
+    if (backendMessage && typeof backendMessage === "string") return backendMessage;
+  }
+  if (error instanceof Error) return error.message;
+  return fallback;
+}
+
 function nextCode(rows: Record<string, unknown>[], keyField: string) {
   const values = rows
     .map((row) => Number(row[keyField]))
@@ -432,3 +460,7 @@ function toDateInputValue(input: unknown) {
   if (Number.isNaN(date.getTime())) return "";
   return date.toISOString().slice(0, 10);
 }
+
+
+
+

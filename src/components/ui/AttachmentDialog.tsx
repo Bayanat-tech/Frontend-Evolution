@@ -19,6 +19,7 @@ type AttachmentDialogProps = {
   open: boolean;
   onClose: () => void;
   requestNumber?: string;
+  relatedRequestNumbers?: string[];
   title?: string;
   module: string;
   type: string;
@@ -34,6 +35,7 @@ export function AttachmentDialog({
   open,
   onClose,
   requestNumber,
+  relatedRequestNumbers = [],
   title = "Attachments",
   module,
   type,
@@ -50,6 +52,11 @@ export function AttachmentDialog({
   const [editName, setEditName] = useState("");
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const canUpload = Boolean(requestNumber && companyCode && loginId && !readOnly);
+  const relatedKey = useMemo(() => relatedRequestNumbers.filter(Boolean).join("|"), [relatedRequestNumbers]);
+  const allRequestNumbers = useMemo(
+    () => Array.from(new Set([requestNumber, ...relatedRequestNumbers].filter(Boolean) as string[])),
+    [relatedKey, requestNumber]
+  );
 
   const fileCount = files.length;
   const totalSizeLabel = useMemo(() => `${fileCount} file${fileCount === 1 ? "" : "s"}`, [fileCount]);
@@ -62,7 +69,8 @@ export function AttachmentDialog({
     setLoading(true);
     setNotice(null);
     try {
-      setFiles(await getAccountFiles(requestNumber));
+      const groups = await Promise.all(allRequestNumbers.map((item) => getAccountFiles(item)));
+      setFiles(groups.flat());
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load attachments" });
     } finally {
@@ -72,7 +80,7 @@ export function AttachmentDialog({
 
   useEffect(() => {
     void loadFiles();
-  }, [open, requestNumber]);
+  }, [open, requestNumber, relatedKey]);
 
   const handleFileInput = async (event: ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(event.target.files || []);
@@ -81,7 +89,7 @@ export function AttachmentDialog({
 
     const oversized = selected.filter((file) => file.size > MAX_FILE_SIZE);
     const incoming = selected.filter((file) => file.size <= MAX_FILE_SIZE);
-    const existingNames = new Set(files.map((file) => `${file.request_number}:${file.org_file_name}`.toLowerCase()));
+    const existingNames = new Set(files.filter((file) => isPrimaryFile(file, requestNumber)).map((file) => `${file.request_number}:${file.org_file_name}`.toLowerCase()));
     const unique = incoming.filter((file) => !existingNames.has(`${requestNumber}:${file.name}`.toLowerCase()));
 
     if (oversized.length) {
@@ -145,7 +153,7 @@ export function AttachmentDialog({
       open={open}
       wide
       title={title}
-      description={requestNumber ? `Linked to ${requestNumber}` : "Save the record first, then attach files."}
+      description={requestNumber ? `Linked to ${requestNumber}${relatedRequestNumbers.length ? " with source files shown" : ""}` : "Save the record first, then attach files."}
       onClose={onClose}
       footer={<Button variant="outline" onClick={onClose}>Close</Button>}
     >
@@ -182,6 +190,7 @@ export function AttachmentDialog({
                   <th className="px-3 py-2 text-left">File</th>
                   <th className="px-3 py-2 text-left">Display Name</th>
                   <th className="px-3 py-2 text-left">Module</th>
+                  <th className="px-3 py-2 text-left">Document</th>
                   <th className="px-3 py-2 text-right">Actions</th>
                 </tr>
               </thead>
@@ -189,6 +198,7 @@ export function AttachmentDialog({
                 {files.map((file) => {
                   const key = fileKey(file);
                   const editing = editingKey === key;
+                  const primary = isPrimaryFile(file, requestNumber);
                   return (
                     <tr className="border-t" key={key}>
                       <td className="px-3 py-2">
@@ -211,18 +221,26 @@ export function AttachmentDialog({
                       </td>
                       <td className="px-3 py-2 text-xs text-muted-foreground">{file.modules || module}</td>
                       <td className="px-3 py-2">
+                        <span className={cn(
+                          "inline-flex max-w-[220px] items-center rounded-md border px-2 py-0.5 text-xs font-medium",
+                          primary ? "bg-secondary text-secondary-foreground" : "border-blue-200 bg-blue-50 text-blue-700"
+                        )}>
+                          {primary ? "Current" : `Source: ${file.request_number}`}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
                         <div className="flex justify-end gap-1">
                           {file.aws_file_locn && (
                             <Button asChild size="icon" variant="ghost" title="Open file">
                               <a href={file.aws_file_locn} target="_blank" rel="noreferrer"><Download size={14} /></a>
                             </Button>
                           )}
-                          {!readOnly && editing ? (
+                          {!readOnly && primary && editing ? (
                             <>
                               <Button size="sm" type="button" onClick={() => void saveRename(file)}>Save</Button>
                               <Button size="icon" type="button" variant="ghost" onClick={() => setEditingKey("")}><X size={14} /></Button>
                             </>
-                          ) : !readOnly ? (
+                          ) : !readOnly && primary ? (
                             <>
                               <Button size="icon" type="button" variant="ghost" onClick={() => beginRename(file)} title="Rename"><Pencil size={14} /></Button>
                               <Button
@@ -236,6 +254,8 @@ export function AttachmentDialog({
                                 <Trash2 size={14} />
                               </Button>
                             </>
+                          ) : !primary ? (
+                            <span className="self-center rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">Reference</span>
                           ) : null}
                         </div>
                       </td>
@@ -267,4 +287,8 @@ function EmptyAttachmentState({ title, message }: { title: string; message: stri
 
 function fileKey(file: NormalizedFile) {
   return `${file.request_number}_${file.sr_no || file.aws_file_locn || file.org_file_name}`;
+}
+
+function isPrimaryFile(file: NormalizedFile, requestNumber?: string) {
+  return Boolean(requestNumber && file.request_number === requestNumber);
 }
