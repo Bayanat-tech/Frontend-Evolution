@@ -1,5 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Ban, Bell, BrainCircuit, CheckCircle2, ClipboardList, FileText, Info, PackageCheck, Plane, Plus, ReceiptText, RefreshCw, Search, Ship, Truck, WalletCards } from "lucide-react";
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
@@ -10,6 +11,7 @@ import { useAuth } from "../../state/AuthContext";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
 import { FreightJobPage } from "./FreightJobPage";
 import { FreightPacklistPage } from "./FreightPacklistPage";
+import { FreightJobSheetPage } from "./FreightJobSheetPage";
 import { FreightJobActivitiesPage } from "./FreightJobActivitiesPage";
 import { FreightJobFollowupTab } from "./FreightJobFollowupTabs";
 
@@ -67,6 +69,7 @@ const listingTabs = [
 
 export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target?: FreightWorkspaceTarget; initialTab?: JobTab }) {
   const { user } = useAuth();
+  const location = useLocation();
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
   const [activeTab, setActiveTab] = useState<JobTab>(initialTab);
@@ -79,6 +82,8 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   const [message, setMessage] = useState("");
   const targetMode = target?.mode || "air";
   const targetDirection = target?.direction || "import";
+  const freightSearchRecord = (location.state as { freightSearchRecord?: LookupRow } | null)?.freightSearchRecord;
+  const openRecordNo = new URLSearchParams(location.search).get("open") || "";
   const title = useMemo(() => {
     const modeText = modeLabel[targetMode];
     const direction = directionLabel[targetDirection];
@@ -113,6 +118,18 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
     setMode(initialTab === "job" ? "list" : "steps");
     setSelectedJob(null);
   }, [initialTab, targetDirection, targetMode]);
+
+  useEffect(() => {
+    if (!openRecordNo) return;
+    if (text(freightSearchRecord || {}, "record_type").toUpperCase() !== "JOB") return;
+    const prinCode = text(freightSearchRecord || {}, "prin_code");
+    if (!prinCode) return;
+    openSteps(normalizeLookupRow({
+      company_code: companyCode,
+      prin_code: prinCode,
+      job_no: openRecordNo,
+    }), "job");
+  }, [companyCode, freightSearchRecord, openRecordNo]);
 
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
     {
@@ -149,6 +166,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
 
   const health = useMemo(() => buildHealth(rows), [rows]);
   const filteredRows = useMemo(() => rows.filter((row) => filterJobByStatus(row, activeStatus)), [activeStatus, rows]);
+  const selectedJobReadOnly = isClosedJob(selectedJob);
 
   function openSteps(row: LookupRow | null, tab: JobTab) {
     setSelectedJob(row ? normalizeLookupRow(row) : null);
@@ -263,13 +281,13 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
       </div>
 
       {activeTab === "job" && <FreightJobPage target={target} initialJob={selectedJob} startMode="editor" />}
-      {activeTab === "packlist" && <FreightPacklistPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="packlist" />}
-      {activeTab === "jobsheet" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="jobsheet" />}
-      {activeTab === "alerts" && <FreightJobFollowupTab target={target} kind="alerts" initialJob={selectedJob} />}
-      {activeTab === "instructions" && <FreightJobFollowupTab target={target} kind="instructions" initialJob={selectedJob} />}
-      {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" initialJob={selectedJob} />}
-      {activeTab === "deposits" && <FreightJobFollowupTab target={target} kind="deposits" initialJob={selectedJob} />}
-      {activeTab === "activities" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="activities" />}
+      {activeTab === "packlist" && <FreightPacklistPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="packlist" readOnly={selectedJobReadOnly} />}
+      {activeTab === "jobsheet" && <FreightJobSheetPage target={target} initialJob={selectedJob} readOnly={selectedJobReadOnly} />}
+      {activeTab === "alerts" && <FreightJobFollowupTab target={target} kind="alerts" initialJob={selectedJob} readOnly={selectedJobReadOnly} />}
+      {activeTab === "instructions" && <FreightJobFollowupTab target={target} kind="instructions" initialJob={selectedJob} readOnly={selectedJobReadOnly} />}
+      {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" initialJob={selectedJob} readOnly={selectedJobReadOnly} />}
+      {activeTab === "deposits" && <FreightJobFollowupTab target={target} kind="deposits" initialJob={selectedJob} readOnly={selectedJobReadOnly} />}
+      {activeTab === "activities" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="activities" readOnly={selectedJobReadOnly} />}
 
     </section>
   );
@@ -293,6 +311,21 @@ function filterJobByStatus(row: LookupRow, tab: string) {
   if (tab === "confirmed") return !cancelled && confirmed && !invoiced;
   if (tab === "in_progress") return !cancelled && !confirmed && !invoiced;
   return true;
+}
+
+function isClosedJob(row: LookupRow | null | undefined) {
+  if (!row) return false;
+  return Boolean(
+    isTruthy(text(row, "canceled")) ||
+    isTruthy(text(row, "invoiced")) ||
+    isTruthy(text(row, "completed")) ||
+    text(row, "invoice_date") ||
+    text(row, "complete_date")
+  );
+}
+
+function isTruthy(value: string) {
+  return ["Y", "YES", "TRUE", "1"].includes(value.trim().toUpperCase());
 }
 
 function buildHealth(rows: LookupRow[]) {

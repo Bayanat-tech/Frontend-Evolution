@@ -392,6 +392,7 @@ export function PurchaseQuotationEditor({
 
               <PurchaseOrderHeaderForm
                 form={form}
+                docType={PO_DOC_TYPE.PQA}
                 setForm={setForm}
                 updateField={updateField}
                 disabled={disabled}

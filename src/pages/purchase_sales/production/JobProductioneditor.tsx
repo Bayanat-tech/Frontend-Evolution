@@ -584,6 +584,7 @@ export function JobProductionOrderEditor({
                   <div className="grid gap-3 p-2">
                     <PurchaseOrderHeaderForm
                       form={form}
+                      docType={PO_DOC_TYPE.FGP}
                       setForm={setForm}
                       updateField={updateField}
                       disabled={disabled}

@@ -111,12 +111,12 @@ const emptyForm = (companyCode: string, userId: string): TariffForm => ({
 const slabFields: { key: keyof TariffForm; label: string }[] = [
   { key: "minimum", label: "Minimum" },
   { key: "normal", label: "Normal" },
-  { key: "k_45", label: "+45" },
-  { key: "k_100", label: "+100" },
-  { key: "k_250", label: "+250" },
-  { key: "k_300", label: "+300" },
-  { key: "k_500", label: "+500" },
-  { key: "k_1000", label: "+1000" },
+  { key: "k_45", label: "45 kg" },
+  { key: "k_100", label: "100 kg" },
+  { key: "k_250", label: "250 kg" },
+  { key: "k_300", label: "300 kg" },
+  { key: "k_500", label: "500 kg" },
+  { key: "k_1000", label: "1000 kg" },
 ];
 
 export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTariffMode }) {
@@ -295,12 +295,12 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
     { accessorKey: "CURR_CODE", header: "Currency", size: 85 },
     { accessorKey: "MINIMUM", header: "Min", size: 80 },
     { accessorKey: "NORMAL", header: "Normal", size: 80 },
-    { accessorKey: "K_45", header: "+45", size: 70 },
-    { accessorKey: "K_100", header: "+100", size: 70 },
-    { accessorKey: "K_250", header: "+250", size: 70 },
-    { accessorKey: "K_300", header: "+300", size: 70 },
-    { accessorKey: "K_500", header: "+500", size: 70 },
-    { accessorKey: "K_1000", header: "+1000", size: 80 },
+    { accessorKey: "K_45", header: "45 kg", size: 70 },
+    { accessorKey: "K_100", header: "100 kg", size: 70 },
+    { accessorKey: "K_250", header: "250 kg", size: 70 },
+    { accessorKey: "K_300", header: "300 kg", size: 70 },
+    { accessorKey: "K_500", header: "500 kg", size: 70 },
+    { accessorKey: "K_1000", header: "1000 kg", size: 80 },
     { accessorKey: "HARD_FREIGHT", header: "Hard", size: 70 },
     { accessorKey: "PERISHABLE", header: "Perish", size: 70 },
     { accessorKey: "RESTRICTION", header: "Restriction", size: 20},
@@ -356,16 +356,16 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
     } satisfies ColumnDef<AirlineTariffRow>] : []),
   ], [isReport, saving, deleteTariffRow]);
 
-  return (
-    <section className="grid gap-3">
-      <div className={`rounded-md border shadow-sm ${isReport ? "overflow-hidden bg-card" : "bg-card"}`}>
-        <div className={`flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 ${isReport ? "bg-[#185FA5] text-white" : ""}`}>
+   return (
+     <section className="grid gap-3">
+       <div className={`rounded-md border shadow-sm ${isReport ? "overflow-hidden bg-card" : "bg-card"}`}>
+        <div className={`flex flex-wrap items-center justify-between gap-3  px-4 py-3 ${isReport ? "bg-[#185FA5] text-white" : ""}`}>
           <div className="flex min-w-0 items-center gap-3">
             <span className={`grid h-10 w-10 place-items-center rounded-md ${isReport ? "bg-white/15 text-white" : "bg-primary/10 text-primary"}`}>
               {isReport ? <BarChart3 className="h-5 w-5" /> : <Plane className="h-5 w-5" />}
             </span>
             <div className="min-w-0">
-              <div className={`text-[11px] font-bold uppercase tracking-[0.22em] ${isReport ? "text-blue-100" : "text-primary"}`}>Freight Air</div>
+              {/* <div className={`text-[11px] font-bold uppercase tracking-[0.22em] ${isReport ? "text-blue-100" : "text-primary"}`}>Freight Air</div> */}
               <h1 className={`truncate text-2xl font-bold ${isReport ? "text-white" : "text-foreground"}`}>
                 {isReport ? "Airline Tariff Report" : "Airline Tariff"}
               </h1>
@@ -394,6 +394,7 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
           </div>
         </div>
 
+        {(notice || isReport || entryView === "editor") && (
         <div className="grid gap-3 p-3">
           {notice && (
             <div className={`rounded-md border px-3 py-2 text-sm font-medium ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-destructive/20 bg-destructive/10 text-destructive"}`}>
@@ -423,9 +424,9 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
               <div className="grid gap-3 ">
                 <div className="rounded-md border bg-muted/20">
                   <SectionTitle title="Route and Airline" subtitle={`${form.airline_code || "Airline pending"} / ${form.source || "-"} -> ${form.destination || "-"}`} />
-                  <div className="grid gap-2 p-3 md:grid-cols-4">
+                  <div className="grid gap-2 p-3 md:grid-cols-4 tariff-form-fields"> 
                     <Field label="Tariff No" value={form.air_tariff_no || "Auto"} disabled onChange={() => undefined} />
-                    <div className="grid gap-1 text-[11px] font-bold uppercase text-muted-foreground">
+                    <div className="grid gap-1 text-[11px] font-bold uppercase text-muted-foreground tariff-lookup-fix">
                       <span>Airline <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span></span>
                       <LookupField
                       label="Airline"
@@ -433,6 +434,7 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
                       displayValue={form.airline_name}
                       required
                       compact
+                      className="border-slate-400"
                       valueField="AIRLINE_CODE"
                       displayFields={["AIRLINE_CODE", "AIRLINE_NAME"]}
                       columns={[{ field: "AIRLINE_CODE", header: "Code" }, { field: "AIRLINE_NAME", header: "Airline" }]}
@@ -448,12 +450,13 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
                     <Field label="Destination" value={form.destination} required disabled={readOnly} onChange={(value) => updateForm(setForm, { destination: value })} />
                     <Field label="Direct/Via" value={form.direct_via} disabled={readOnly} onChange={(value) => updateForm(setForm, { direct_via: value })} />
                     <Field label="IATA Code" value={form.iata_code} disabled={readOnly} onChange={(value) => updateForm(setForm, { iata_code: value })} />
-                    <div className="grid gap-1 text-[11px] font-bold uppercase text-muted-foreground">
+                    <div className="grid gap-1 text-[11px] font-bold uppercase text-muted-foreground tariff-lookup-fix">
                       <span>Currency <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span></span>
                       <LookupField
                       label="Currency"
                       value={form.curr_code}
                       compact
+                      className="border-slate-400"
                       valueField="CURR_CODE"
                       displayFields={["CURR_CODE", "CURR_NAME"]}
                       columns={[{ field: "CURR_CODE", header: "Code" }, { field: "CURR_NAME", header: "Currency" }]}
@@ -473,7 +476,7 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
 
                 <div className="rounded-md border bg-muted/20">
                   <SectionTitle title="Weight Breaks" subtitle={`${form.curr_code || "Currency pending"} rate slabs`} />
-                  <div className="grid gap-2 p-3 sm:grid-cols-4">
+                  <div className="grid gap-2 p-3 sm:grid-cols-4 tariff-form-fields">
                     {slabFields.map((field) => (
                       <Field
                         key={field.key}
@@ -504,14 +507,12 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
                 )}
               </div>
             </form>
-          ) : (
-            <div className="rounded-md border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
-              Use Add to create a tariff, or use View/Edit actions from the list.
-            </div>
-          )}
+          ) : null
+          }
         </div>
+      )}
       </div>
-
+    
       {(isReport || entryView === "list") && (
         <DataTable
           columns={columns}
@@ -669,8 +670,8 @@ function Field({
   return (
     <label className="grid gap-1 text-[11px] font-bold uppercase text-muted-foreground">
       {label}
-      <Input
-        className="h-8 text-sm font-semibold"
+        <Input
+        className="h-8 text-sm font-semibold" style={{ borderColor: "#94a3b8" }}
         value={value}
         type={type}
         required={required}
@@ -686,7 +687,7 @@ function SelectField({ label, value, disabled, onChange }: { label: string; valu
     <label className="grid gap-1 text-[11px] font-bold uppercase text-muted-foreground">
       {label}
       <select
-        className="h-8 rounded-md border border-input bg-background px-2 text-sm font-semibold text-foreground shadow-sm"
+        className="h-8 rounded-md border border-slate-400 bg-background px-2 text-sm font-semibold text-foreground shadow-none"
         value={value || "N"}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
