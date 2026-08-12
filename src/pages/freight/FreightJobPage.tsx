@@ -54,6 +54,8 @@ type JobForm = {
   feeder_vessel_name: string;
   voyage_no: string;
   carrier: string;
+  driver_ref: string;
+  driver_remarks: string;
   forwarder_code: string;
   eta: string;
   ata: string;
@@ -455,6 +457,15 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
             </div>
           </Panel>
 
+          {mode.code === "R" && (
+            <Panel className="lg:col-span-4 freight-job-compact-panel" icon={Truck} title="Truck And Driver Details" meta={job.driver_ref || job.vessel_name || "Road details"}>
+              <div className="freight-job-field-grid freight-job-field-grid-2">
+                <Field label="Driver Name / Ref" value={job.driver_ref} onChange={(value) => setJobField(setJob, "driver_ref", value)} />
+                <Textarea className="sm:col-span-2" label="Driver Remarks / Contact" value={job.driver_remarks} onChange={(value) => setJobField(setJob, "driver_remarks", value)} />
+              </div>
+            </Panel>
+          )}
+
           <Panel className="lg:col-span-4 freight-job-compact-panel" icon={FileText} title="Bill Of Lading Details" meta={job.doc_ref || job.hawb || "Document refs"}>
             <div className="freight-job-field-grid freight-job-field-grid-2">
               <Field className="sm:col-span-2" label={mode.code === "A" ? "MAWB" : "Master BL No"} value={job.doc_ref} onChange={(value) => setJobField(setJob, "doc_ref", value)} />
@@ -699,6 +710,8 @@ function emptyJob(companyCode: string, userId: string, transportMode: string, jo
     feeder_vessel_name: "",
     voyage_no: "",
     carrier: "",
+    driver_ref: "",
+    driver_remarks: "",
     forwarder_code: "",
     eta: "",
     ata: "",
