@@ -450,6 +450,7 @@ export function ProductionJobOrderEditor({
 
               <PurchaseOrderHeaderForm
                 form={form}
+                docType={PO_DOC_TYPE.JO}
                 setForm={setForm}
                 updateField={updateField}
                 disabled={disabled}

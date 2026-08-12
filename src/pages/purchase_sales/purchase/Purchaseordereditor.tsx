@@ -120,7 +120,7 @@ export function PurchaseOrderEditor({
           doc_no: text(headerRaw.doc_no || docNo),
           doc_date: toDateInputValue(headerRaw.doc_date) || current.doc_date,
           ref_no: text(headerRaw.quotn_no || current.ref_no),
-          ref_date: toDateInputValue(headerRaw.quotn_date) || current.ref_date,
+          ref_date: toDateInputValue(headerRaw.ref_date) || current.ref_date,
           div_code: text(headerRaw.div_code || current.div_code),
           div_name: text(headerRaw.div_name || current.div_name),
           ac_code: text(headerRaw.ac_code || current.ac_code),
@@ -400,6 +400,7 @@ export function PurchaseOrderEditor({
 
               <PurchaseOrderHeaderForm
                 form={form}
+                docType={config.docType}
                 setForm={setForm}
                 updateField={updateField}
                 disabled={disabled}
