@@ -127,10 +127,6 @@ export async function getAllStockAdjustments() {
   return data.headers || [];
 }
 
-// export async function getAllStockAdjustments(company_code: string) {
-//   return getWmsStockAdjustment<LookupRow[]>({ view: "headers", company_code });
-// }
-
 export async function getStockAdjustmentDetails(
   adj_no: string,
   company_code: string,
@@ -249,40 +245,6 @@ export async function getStockAdjusmentReportExcelDownload(
   URL.revokeObjectURL(url);
 }
 
-
-/*
-export async function getSalesOrderReportHtml(params: ReportParams): Promise<string> {
-  const response = await api.get(
-    `/api/wms/outbound/reports/salesorder/html`,
-    params,
-    { responseType: "text" }
-  );
-  return response.data as string;
-}
-*/
-
-/*
-
-export async function getSalesOrderSheetReportExcelDownload(params: ReportParams): Promise<void> {
-  const response = await api.get(
-     `/api/wms/outbound/reports/salesorder/excel`,
-    params,
-    { responseType: "blob" }
-  );
-  const blob = new Blob([response.data], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "SalesOrderSheet.xlsx";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.URL.revokeObjectURL(url);
-}
-*/
-
 export async function procBuildDynamicSqlSecurity(params: DynamicSqlSecurityParams) {
   const response = await api.post<ApiResponse<LookupRow[]>>(
     "/api/wms/common/proc_build_dynamic_sql_common", // TODO: confirm this matches your actual route
@@ -384,13 +346,6 @@ export async function getFlowAssignRoleUsers(companyCode: string, roleId: string
   return res.data;
 };
 // ─── Add / Remove user from role ──────────────────────────────────────────
-// No insert/delete branch was provided in PROC_BUILD_DYNAMIC_SQL_PROC_FUN_ASSIGN
-// yet, so these two stubs call a generic ins/upd/del common proc the same way
-// wms.ts does (procBuildDynamicInsUpdCommon / procBuildDynamicDelCommon).
-// Ask the backend to add corresponding CASE branches, then swap the
-// parameter/endpoint below once they exist — everything else on the page
-// will keep working unchanged.
- 
 export async function addUserToRole(companyCode: string, roleId: string, loginidToAdd: string, actorLoginId: string) {
   const res = await insSecRoleFunctionAccessUser([
     {
@@ -511,7 +466,7 @@ export async function executeWmsInboundSql(rawSql: string, signal?: AbortSignal)
   const response = await api.post<ApiResponse<LookupRow[]>>(
     "/api/wms/inbound/executeRawSql",
     { raw_sql: rawSql },
-    { signal }  // 👈 Signal goes here (Axios config)
+    { signal }
   );
   if (!response.data.success) throw new Error(response.data.message || "Unable to load inbound data");
   return response.data.data || [];
@@ -609,7 +564,7 @@ export async function downloadJobDetailsReportExcel(
 ): Promise<void> {
   const response = await api.get(
     `/api/wms/inbound/reports/job-details/${jobNo}/excel?prin_code=${prinCode}`,
-    { responseType: "arraybuffer" }  // arraybuffer, not "blob" — avoids axios blob quirks
+    { responseType: "arraybuffer" }
   );
   const blob = new Blob([response.data], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -639,7 +594,7 @@ export async function downloadPutawayReportExcel(
 ): Promise<void> {
   const response = await api.get(
     `/api/wms/inbound/reports/tally-putaway/${jobNo}/excel?prin_code=${prinCode}`,
-    { responseType: "arraybuffer" }  // arraybuffer, not "blob" — avoids axios blob quirks
+    { responseType: "arraybuffer" }
   );
   const blob = new Blob([response.data], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1063,7 +1018,6 @@ export async function editStockTransferHeader(
   company_code: string,
   payload: StnEditPayload
 ) {
-  // PUT /api/wms/stocktransfer/editSTN/:stn_no/:company_code
   return putWmsOutbound(`stocktransfer/editSTN/${stn_no}/${company_code}`, payload as Record<string, unknown>);
 }
 
@@ -1099,9 +1053,6 @@ export async function createStockTransferDetail(payload: StockTransferDetailPayl
 
 /** PATCH edit STN detail line */
 export async function editStockTransferDetail(payload: StockTransferDetailPayload) {
-  // uses PATCH — postWmsStockTransfer only does POST, so we call patchWmsInbound pattern
-  // but stocktransfer has no patch helper — use putWmsOutbound with the correct prefix
-  // endpoint: api/wms/stocktransfer/editstocktransfer
   return putWmsOutbound("stocktransfer/editstocktransfer", payload as unknown as Record<string, unknown>);
 }
 
@@ -1117,10 +1068,6 @@ export async function confirmStockTransfer(payload: ConfirmStockTransferPayload)
 
 /** DELETE stock transfer detail */
 export async function deleteStockTransferDetail(payload: DeleteStockTransferDetailPayload) {
-  // DELETE /api/wms/stocktransfer/deleteStockTransfer with body
-  // No deleteWmsStockTransfer helper exists — use deleteWmsGmRaw pattern from wms.ts
-  // But to keep it in the stocktransfer namespace we call the api client directly via putWmsOutbound trick.
-  // Safest: import api client and call delete with data:
   const { api } = await import("./client");
   const response = await api.delete<{ success: boolean; message?: string }>(
     "/api/wms/stocktransfer/deleteStockTransfer",
@@ -1186,7 +1133,6 @@ export type DynamicInsUpdCommonParams = {
   parameter: string;
   loginid: string;
 
-  // INSERT / UPDATE VALUES
   val1s1?: string;
   val1s2?: string;
   val1s3?: string;
@@ -1212,7 +1158,6 @@ export type DynamicInsUpdCommonParams = {
   val1d4?: string | null;
   val1d5?: string | null;
 
-  // WHERE VALUES
   wval1s1?: string;
   wval1s2?: string;
   wval1s3?: string;
@@ -1290,7 +1235,7 @@ export async function procBuildDynamicSqlCommonBase(params: {
   date4?: string | null;
 }) {
   const response = await api.post<ApiResponse<LookupRow[]>>(
-    "/api/wms/common/proc_build_dynamic_sql_common", // ← no "20" — matches old commonservices.ts
+    "/api/wms/common/proc_build_dynamic_sql_common",
     params
   );
   if (!response.data.success) throw new Error(response.data.message || "Unable to load data");
@@ -1346,8 +1291,6 @@ export type SaveStockCountPayload = {
   loginid: string;
 };
 
-/** GET/POST base helpers, same pattern as getWmsStockAdjustment/postWmsStockAdjustment.
- *  Adjust the "/api/wms/stock-count" prefix if your backend route differs. */
 export async function getWmsStockCount<T = unknown>(params: Record<string, unknown> = {}) {
   const response = await api.get<ApiResponse<T>>("/api/wms/stock-count", { params });
   if (!response.data.success) throw new Error(response.data.message || "Unable to load stock count data");
@@ -1360,10 +1303,97 @@ export async function postWmsStockCount<TPayload extends Record<string, unknown>
   return response.data;
 }
 
-export async function insUpdHrEmpComponentApi<TPayload extends Record<string, unknown>>( payload: TPayload) {
-  const response = await api.post<ApiResponse<unknown>>(`/api/hr/employee/pay-components/upsert`, payload);
-  if (!response.data.success) throw new Error(response.data.message || `Unable to save`);
+// ════════════════════════════════════════════════════════════════════════
+// HR Employee Pay Components — talks to PROC_INS_UPD_HR_EMP_COMPONENTS via
+// POST /api/hr/employee/pay-components/upsert → insUpdHrEmpPayunits
+// controller. That controller reads req.body?.component (SINGULAR — one
+// row), and the underlying proc's p_component table type only accepts one
+// row per call. Bulk saves must therefore issue one request per row.
+// ════════════════════════════════════════════════════════════════════════
+
+export type THrEmpComponentPayload = {
+  employee_id: string;
+  pay_comp_id: string;
+  pay_comp_amt?: number | null;
+  pay_comp_perc?: number | null;
+  pay_comp_amt_old?: number | null;
+  entered_on?: string | null;
+  entered_by?: string | null;
+  verified_on?: string | null;
+  verified_by?: string | null;
+  approved_on?: string | null;
+  approved_by?: string | null;
+  revised_on?: string | null;
+  revised_by?: string | null;
+  freezed_on?: string | null;
+  freezed_reason?: string | null;
+  freezed_till?: string | null;
+  remarks?: string | null;
+  status_flag?: string | null;
+  user_id?: string | null;
+  user_dt?: string | null;
+  company_code: string;
+  pay_comp_earn_ded?: string | null;
+  pay_roll_status?: string | null;
+  comp_status?: string | null;
+  arrears_amt?: number | null;
+  arrears_type?: string | null;
+  arrears_posted?: string | null;
+  ref_doc_type?: string | null;
+  ref_doc_no?: string | null;
+  pay_comp_amt_vac?: number | null;
+  vac_updated?: string | null;
+  source_from?: string | null;
+  source_updated?: string | null;
+  curr_code?: string | null;
+  doc_no?: string | null;
+};
+
+export type THrEmpComponentSaveResult = {
+  success: boolean;
+  message?: string;
+  data?: {
+    company_code: string;
+    employee_id: string;
+    pay_comp_id: string;
+    curr_code: string;
+  };
+  details?: string;
+};
+
+/**
+ * POSTs a single HR_EMP_COMPONENTS row. The backend reads req.body?.component
+ * (singular), so the row is wrapped as { component } here — sending the raw
+ * payload directly (as the previous version of this function did) means
+ * `component` arrives as undefined and the backend 400s.
+ */
+export async function insUpdHrEmpComponentApi<TPayload extends Record<string, unknown>>(component: TPayload) {
+  const response = await api.post<THrEmpComponentSaveResult>(
+    `/api/hr/employee/pay-components/upsert`,
+    { component },
+  );
+  if (!response.data.success) throw new Error(response.data.details || response.data.message || `Unable to save`);
   return response.data;
+}
+
+/**
+ * Bulk-style helper: saves multiple HR_EMP_COMPONENTS rows by issuing one
+ * insUpdHrEmpComponentApi call per row (the backend proc is single-row).
+ * Returns per-row results in the same order as the input array; rejected
+ * rows carry an `error` string instead of throwing, so one bad row doesn't
+ * abort the rest.
+ */
+export async function upsertHrEmpComponentsApi<TPayload extends Record<string, unknown>>(
+  components: TPayload[],
+) {
+  return Promise.all(
+    components.map((component) =>
+      insUpdHrEmpComponentApi(component).catch((error: unknown) => ({
+        success: false as const,
+        error: error instanceof Error ? error.message : "Unable to save pay component",
+      })),
+    ),
+  );
 }
 
 /**

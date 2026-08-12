@@ -4,133 +4,16 @@ import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { useAuth } from "../../state/AuthContext";
-import { insUpdHrEmpComponentApi } from "../../api/wms";
-
-// ════════════════════════════════════════════════════════════════════════
-// API LAYER — was HrEmpComponents.ts, inlined here so the whole screen
-// lives in a single file. Talks to PROC_INS_UPD_HR_EMP_COMPONENTS via
-// POST /api/hr/employee/pay-components/upsert (employeHr.routes.ts,
-// mounted under /api/hr/employee in hr.routes.ts) → insUpdHrEmpPayunits
-// controller. The proc only accepts one HR_EMP_COMPONENTS row per call,
-// so bulk saves issue one request per row (see upsertHrEmpComponentsApi).
-// ════════════════════════════════════════════════════════════════════════
-
-export type THrEmpComponentPayload = {
-  employee_id: string;
-  pay_comp_id: string;
-  pay_comp_amt?: number | null;
-  pay_comp_perc?: number | null;
-  pay_comp_amt_old?: number | null;
-  entered_on?: string | null;
-  entered_by?: string | null;
-  verified_on?: string | null;
-  verified_by?: string | null;
-  approved_on?: string | null;
-  approved_by?: string | null;
-  revised_on?: string | null;
-  revised_by?: string | null;
-  freezed_on?: string | null;
-  freezed_reason?: string | null;
-  freezed_till?: string | null;
-  remarks?: string | null;
-  status_flag?: string | null;
-  user_id?: string | null;
-  user_dt?: string | null;
-  company_code: string;
-  pay_comp_earn_ded?: string | null;
-  pay_roll_status?: string | null;
-  comp_status?: string | null;
-  arrears_amt?: number | null;
-  arrears_type?: string | null;
-  arrears_posted?: string | null;
-  ref_doc_type?: string | null;
-  ref_doc_no?: string | null;
-  pay_comp_amt_vac?: number | null;
-  vac_updated?: string | null;
-  source_from?: string | null;
-  source_updated?: string | null;
-  curr_code?: string | null;
-  doc_no?: string | null;
-};
-
-export type THrEmpComponentSaveResult = {
-  success: boolean;
-  message: string;
-  data?: {
-    company_code: string;
-    employee_id: string;
-    pay_comp_id: string;
-    curr_code: string;
-  };
-  details?: string;
-};
-
-/**
- * POSTs a single HR_EMP_COMPONENTS row to PROC_INS_UPD_HR_EMP_COMPONENTS
- * via POST /api/hr/employee/pay-components/upsert. The proc only accepts
- * one component per call, so bulk saves are done by calling this once per
- * row (see upsertHrEmpComponentsApi below).
- */
-// export async function insUpdHrEmpComponentApi(
-//   component: THrEmpComponentPayload,
-// ): Promise<THrEmpComponentSaveResult> {
-//   const response = await fetch("/api/hr/employee/pay-components/upsert", {
-//     method: "POST",
-//     headers: { "Content-Type": "application/json" },
-//     credentials: "include",
-//     body: JSON.stringify({ component }),
-//   });
-
-//   // Read as text first — an empty or non-JSON body (404 page, empty 204,
-//   // proxy error page, etc.) would otherwise throw an opaque "Unexpected
-//   // end of JSON input" that hides the real HTTP status.
-//   const rawText = await response.text();
-
-//   if (!rawText) {
-//     throw new Error(
-//       `Empty response from ${response.url} (HTTP ${response.status} ${response.statusText}). ` +
-//         `The route likely doesn't match the backend's actual mount path — check the Express router.`,
-//     );
-//   }
-
-//   let result: THrEmpComponentSaveResult;
-//   try {
-//     result = JSON.parse(rawText) as THrEmpComponentSaveResult;
-//   } catch {
-//     throw new Error(
-//       `Non-JSON response from ${response.url} (HTTP ${response.status}): ${rawText.slice(0, 200)}`,
-//     );
-//   }
-
-//   if (!response.ok || !result.success) {
-//     throw new Error(result.details || result.message || "Unable to save pay component");
-//   }
-
-//   return result;
-// }
-
-/**
- * Bulk-style helper: saves multiple HR_EMP_COMPONENTS rows by issuing one
- * insUpdHrEmpComponentApi call per row (the backend proc is single-row).
- * Returns per-row results in the same order as the input array; rejected
- * rows carry an `error` string instead of throwing, so one bad row doesn't
- * abort the rest.
- */
-// export async function upsertHrEmpComponentsApi(
-//   components: THrEmpComponentPayload[],
-// ): Promise<Array<THrEmpComponentSaveResult | { success: false; error: string }>> {
-//   return Promise.all(
-//     components.map((component) =>
-//       insUpdHrEmpComponentApi(component).catch((error: unknown) => ({
-//         success: false as const,
-//         error: error instanceof Error ? error.message : "Unable to save pay component",
-//       })),
-//     ),
-//   );
-// }
+import {
+  upsertHrEmpComponentsApi,
+  type THrEmpComponentPayload,
+} from "../../api/wms";
 
 // ════════════════════════════════════════════════════════════════════════
 // SCREEN — HR Employee - Pay Units
+// Save flow POSTs to PROC_INS_UPD_HR_EMP_COMPONENTS (single-row proc) via
+// upsertHrEmpComponentsApi, which issues one request per dirty row in
+// parallel — see api/wms.ts.
 // ════════════════════════════════════════════════════════════════════════
 
 // ─── Header filter set — Company / Division / Department / Section /
@@ -260,12 +143,10 @@ const EMPLOYEE_LOOKUP_COLUMNS: { field: string; header: string }[] = [
 const PAY_UNITS_RETRIEVE_PARAMETER = "MST_HR_EMPLOYEE_PAY_UNITS_SELECT";
 
 // ─── Save — wired to PROC_INS_UPD_HR_EMP_COMPONENTS via
-// insUpdHrEmpComponentApi / upsertHrEmpComponentsApi (defined above).
-// The proc takes one HR_EMP_COMPONENTS row at a time, so only rows the
-// user actually touched (dirty === true) are sent, one request per row,
-// in parallel. Existing rows are updated; rows added via the Add button
-// (is_new === true) are inserted — the proc handles both through the
-// same PL/SQL table type, keyed off EMPLOYEE_ID + PAY_COMP_ID.
+// upsertHrEmpComponentsApi (api/wms.ts), which fires one request per dirty
+// row in parallel since the proc only accepts a single row per call.
+// Existing rows are updated; rows added via the Add button (is_new === true)
+// are inserted — the proc handles both, keyed off EMPLOYEE_ID + PAY_COMP_ID.
 // ───────────────────────────────────────────────────────────────────────
 export function HrEmployeePayUnits() {
   const { user } = useAuth();
@@ -427,9 +308,11 @@ export function HrEmployeePayUnits() {
     setRows((prev) => prev.filter((r) => r.row_id !== row_id));
 
   // ── Save — sends only the rows the user actually edited or added to
-  // PROC_INS_UPD_HR_EMP_COMPONENTS, one request per row, in parallel.
-  // Un-dirtied rows are skipped so unrelated pay units aren't rewritten.
-  // On success, saved rows are marked clean (and no longer "new"). ──────
+  // PROC_INS_UPD_HR_EMP_COMPONENTS via upsertHrEmpComponentsApi, which
+  // issues one request per dirty row in parallel (the backend proc only
+  // accepts a single row per call). Un-dirtied rows are skipped so
+  // unrelated pay units aren't rewritten. On success, saved rows are
+  // marked clean (and no longer "new"). ──────
   const handleSave = useCallback(async () => {
     if (!employeeReady) return;
 
@@ -462,13 +345,13 @@ export function HrEmployeePayUnits() {
         user_dt: today,
       }));
 
-      const results = await insUpdHrEmpComponentApi({payloads});
+      const results = await upsertHrEmpComponentsApi(payloads);
 
       // Surface the actual failure reason (from the caught error, or the
       // proc's own `details`) instead of just a pass/fail count — logged
       // to the console too so a longer Oracle message isn't clipped in
       // the notice banner.
-      const failed = results.data
+      const failed = results
         .map((r, i) => ({ result: r, row: dirtyRows[i] }))
         .filter(({ result }) => !result.success);
 

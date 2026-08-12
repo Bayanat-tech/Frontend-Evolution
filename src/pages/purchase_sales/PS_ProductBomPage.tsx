@@ -2,14 +2,15 @@ import { Plus, Trash2, Save, RefreshCw } from "lucide-react";
 import { useCallback, useState } from "react";
 import { executeDynamicMutation, getDynamicLookupaccount } from "../../api/lookups";
 import type { LookupRow } from "../../api/lookups";
-import { upsertMfBomApi, type TMfBomRowPayload } from "./MfBom";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { useAuth } from "../../state/AuthContext";
+import { upsertMfBomApi, TMfBomRowPayload } from "../../api/purchaseSales";
 
-// ─── PS_ProductBomPage — maintains the MF_BOM table (per manager's Main
-// SQL): COMPANY_CODE, PRIN_CODE, PROD_CODE (parent), CHILD_PROD_CODE,
+// ════════════════════════════════════════════════════════════════════════
+// SCREEN — PS_ProductBomPage — maintains the MF_BOM table (per manager's
+// Main SQL): COMPANY_CODE, PRIN_CODE, PROD_CODE (parent), CHILD_PROD_CODE,
 // P_UOM, P_QTY, L_UOM, L_QTY, USER_ID, USER_DT, QUANTITY, UPPP, BOM_TYPE,
 // UNIT_PRICE, PRODN_REQD, PROD_LUOM_QTY.
 //
@@ -51,10 +52,11 @@ import { useAuth } from "../../state/AuthContext";
 // backend file shared for this route either.
 //
 // Save: wired to the real PROC_INS_UPD_MF_BOM endpoint via upsertMfBomApi
-// (see ./MfBom). That proc takes an array of MF_BOM rows in one call (all
-// rows must share COMPANY_CODE/PRIN_CODE/PROD_CODE, which the backend
-// validates), so this replaces the old per-line executeDynamicMutation
-// loop with a single request carrying every line. ───────────────────────
+// (defined above). That proc takes an array of MF_BOM rows in one call
+// (all rows must share COMPANY_CODE/PRIN_CODE/PROD_CODE, which the
+// backend validates), so this replaces the old per-line
+// executeDynamicMutation loop with a single request carrying every line.
+// ───────────────────────────────────────────────────────────────────────
 
 const COPACK_VIEW_FLAG = "N"; // TODO: no UI control for legacy cbx_1 yet.
 
@@ -327,8 +329,8 @@ export function PS_ProductBomPage() {
     }
   }, [loginid, companyCode, header.principal_code, header.parent_product_code]);
 
-  // ── Save — wired to PROC_INS_UPD_MF_BOM via upsertMfBomApi (see
-  // ./MfBom). The proc validates every row shares the same
+  // ── Save — wired to PROC_INS_UPD_MF_BOM via upsertMfBomApi (defined
+  // above). The proc validates every row shares the same
   // COMPANY_CODE/PRIN_CODE/PROD_CODE, so all lines go in one call instead
   // of the old per-line executeDynamicMutation loop.
   const handleSave = async () => {

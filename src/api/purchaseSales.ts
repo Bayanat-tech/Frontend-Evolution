@@ -14,6 +14,48 @@ type ApiResponse<T> = {
   message?: string;
 };
 
+export type TMfBomRowPayload = {
+  company_code: string;
+  prin_code: string;
+  prod_code: string;
+  child_prod_code: string;
+  p_uom?: string | null;
+  p_qty?: number | null;
+  l_uom?: string | null;
+  l_qty?: number | null;
+  user_id?: string | null;
+  user_dt?: string | null;
+  quantity?: number | null;
+  uppp?: number | null;
+  bom_type?: string | null;
+  unit_price?: number | null;
+  prnt_p_code?: string | null;
+};
+
+export type TMfBomSaveResult = {
+  success: boolean;
+  message: string;
+  data?: {
+    company_code: string;
+    prin_code: string;
+    prod_code: string;
+    records: number;
+  };
+  details?: string;
+};
+
+export async function upsertMfBomApi(bom: TMfBomRowPayload[]): Promise<TMfBomSaveResult> {
+  const response = await api.post<ApiResponse<TMfBomSaveResult>>("/api/purchase-sales/insUpdMfBom", {
+    bom,
+  });
+
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.message ?? "Unable to save BOM");
+  }
+
+  return response.data.data;
+}
+
 /**
  * Direct 1:1 port of commonservices.ts → proc_build_dynamic_sql_common.
  * Does NOT throw on failure — returns [] instead, matching old behavior
