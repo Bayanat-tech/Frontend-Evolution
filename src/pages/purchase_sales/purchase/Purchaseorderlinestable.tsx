@@ -21,8 +21,8 @@ import {
 const STICKY_COLS = {
   sno: { width: 50, left: 0 },
   div: { width: 90, left: 50 },
-  zone: { width: 200, left: 140 },
-  product: { width: 260, left: 230 },
+  zone: { width: 180, left: 140 },
+  product: { width: 260, left: 320 },
 } as const;
 
 function stickyStyle(col: keyof typeof STICKY_COLS): React.CSSProperties {
@@ -42,6 +42,7 @@ const TABLE_COLUMN_COUNT = 24;
 // Final Rate = Unit Price - (Unit Price * Disc % / 100)  [matches lineNetAmount / "Final Rate" in the sheet]
 function finalRate(row: PurchaseOrderLineRow): number {
   const price = numberOrZero(row.unit_price);
+  
   const discPct = numberOrZero(row.disc_percent);
   return price - (price * discPct) / 100;
 }
@@ -53,7 +54,7 @@ function netTotalAmount(quantity: number, row: PurchaseOrderLineRow): number {
 
 // Lcurr Amount = Total Amount * Final Rate  (=L2*K2 in the sheet)
 function computeLcurrAmount(quantity: number, row: PurchaseOrderLineRow): number {
-  return netTotalAmount(quantity, row) * finalRate(row) * row.ex_rate;
+  return netTotalAmount(quantity, row) * finalRate(row) * numberOrZero(row.ex_rate);
 }
 
 export function PurchaseOrderLinesTable({

@@ -12,36 +12,39 @@ import {
   ActionKey,
   PurchaseConfig,
   PurchaseOrderEditorState,
+  PurchaseOrderForm,
+  PurchaseOrderLineRow,
   SendBackUserOption,
-} from "../purchase/Purchaseordertypes";
+} from "../../purchase_sales/purchase/Purchaseordertypes";
 import {
-
   formatAmount,
+  lineAmount,
+  lineDiscPrice,
   lineNetAmount,
-
+  lineTaxAmount,
   lowerRecord,
   newId,
   numberOrZero,
   text,
-} from "../purchase/Purchaseorderutils";
-import { SendBackDialog } from "../purchase/Sendbackdialog";
-import { RejectDialog } from "../purchase/Rejectdialog";
-import {  PROCESSSA, InventoryConfig, IV_DOC_TYPE, PurchaseOrderForm, InventoryLineRow } from "./Inventorytypes";
-import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, lineAmount, lineDiscPrice, lineTaxAmount, runWorkflow } from "./Inventoryutils";
-import { StockHeaderForm } from "./StockHeaderForm";
-import { StockDetail } from "./StockDetail";
+} from "../../purchase_sales/purchase/Purchaseorderutils";
+import { PurchaseOrderHeaderForm } from "../../purchase_sales/purchase/Purchaseorderheaderform";
+import { PurchaseOrderLinesTable } from "../../purchase_sales/purchase/Purchaseorderlinestable";
+import { SendBackDialog } from "../../purchase_sales/purchase/Sendbackdialog";
+import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
+import {  PROCESSSO, SalesConfig, SO_DOC_TYPE } from "./SalesOrdertypes";
+import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, runWorkflow } from "./SalesOrderutils";
 
 
 export type { PurchaseOrderEditorState };
 
-export function StockadjustmentEditor({
+export function SalesInvoiceEditor({
   config,
   editor,
   isPendingTab,
   onClose,
   onSaved,
 }: {
-  config: InventoryConfig;
+  config: SalesConfig;
   editor: PurchaseOrderEditorState;
   isPendingTab: boolean;
   onClose: () => void;
@@ -50,7 +53,7 @@ export function StockadjustmentEditor({
   const { user } = useAuth();
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
-  const [rows, setRows] = useState<InventoryLineRow[]>(() => (editMode ? [] : [emptyLineRow(form.div_code)]));
+  const [rows, setRows] = useState<PurchaseOrderLineRow[]>(() => (editMode ? [] : [emptyLineRow(form.div_code)]));
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -95,34 +98,32 @@ export function StockadjustmentEditor({
         ]);
         if (!mounted) return;
 
-        setForm((current) => ({
+         setForm((current) => ({
           ...current,
-          doc_no: text(headerRaw.doc_no || docNo),
+          doc_no: numberOrZero(headerRaw.doc_no || docNo),
           doc_date: toDateInputValue(headerRaw.doc_date) || current.doc_date,
-          quotn_no: text(headerRaw.quotn_no || current.quotn_no),
-          quotn_date: toDateInputValue(headerRaw.quotn_date) || current.quotn_date,
+          ref_no: text(headerRaw.quotn_no || current.ref_no),
+          ref_date: toDateInputValue(headerRaw.quotn_date) || current.ref_date,
           div_code: text(headerRaw.div_code || current.div_code),
           div_name: text(headerRaw.div_name || current.div_name),
           ac_code: text(headerRaw.ac_code || current.ac_code),
           ac_name: text(headerRaw.ac_name || current.ac_name),
-          address: text(headerRaw.address || current.address),
+          party_address: text(headerRaw.address || current.party_address),
           credit_period: Number(headerRaw.credit_period || current.credit_period || 0),
           dept_code: text(headerRaw.dept_code || current.dept_code),
-          tel: text(headerRaw.tel || current.tel),
-          fax: text(headerRaw.fax || current.fax),
+          party_phone: text(headerRaw.tel || current.party_phone),
+          party_fax: text(headerRaw.fax || current.party_fax),
           buyer: text(headerRaw.buyer || current.buyer),
-          wo_no: text(headerRaw.wo_no || current.wo_no),
+          wo_number: text(headerRaw.wo_number || current.wo_number),
           curr_code: text(headerRaw.curr_code || current.curr_code),
           curr_name: text(headerRaw.curr_name || current.curr_name),
           ex_rate: Number(headerRaw.ex_rate || current.ex_rate || 1),
-          pay_terms: text(headerRaw.pay_terms || current.pay_terms),
-          delivery_term: text(headerRaw.delivery_term || current.delivery_term),
-          delivery_contact: text(headerRaw.delivery_contact || current.delivery_contact),
-          delivery_tel: text(headerRaw.delivery_tel || current.delivery_tel),
-          delivery_email: text(headerRaw.delivery_email || current.delivery_email),
+          payment_terms: text(headerRaw.pay_terms || current.payment_terms),
+          dlvr_term: text(headerRaw.delivery_term || current.dlvr_term),
+          dlvr_contact: text(headerRaw.delivery_contact || current.dlvr_contact),
+          dlvr_mobile: text(headerRaw.delivery_tel || current.dlvr_mobile),
+          dlvr_email: text(headerRaw.delivery_email || current.dlvr_email),
           remarks: text(headerRaw.remarks || current.remarks),
-          issued_by: text(headerRaw.issued_by || current.issued_by),
-           received_by: text(headerRaw.received_by || current.received_by),
           disc_price: Number(headerRaw.disc_price || 0),
           disc_pct: Number(headerRaw.disc_pct || 0),
           tax_category: text(headerRaw.tax_category || current.tax_category),
@@ -134,11 +135,6 @@ export function StockadjustmentEditor({
           scope_of_work: text(headerRaw.scope_of_work || current.scope_of_work),
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
-          from_zone_code : text(headerRaw.from_zone_code || current.from_zone_code ),
-        to_zone_code : text(headerRaw.to_zone_code || current.to_zone_code ),
-          zone_code : text(headerRaw.zone_code || current.zone_code ),
-          job_no : text(headerRaw.job_no || current.job_no ),
-
         }));
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
@@ -161,7 +157,7 @@ export function StockadjustmentEditor({
           parameter: "PS_POORDER_ENTRY_FUN_CHECK_GLOBAL_APPR_LEVEL",
           code1: user?.company_code,
           code2: user?.loginid || user?.username || "ADMIN",
-          code3: PROCESSSA,
+          code3: "sales_invoice",
         });
         if (!mounted) return;
         const first = (rows || [])[0] as Record<string, unknown> | undefined;
@@ -193,7 +189,7 @@ export function StockadjustmentEditor({
     setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const updateRow = (id: string, patch: Partial<InventoryLineRow>) => {
+  const updateRow = (id: string, patch: Partial<PurchaseOrderLineRow>) => {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
 
@@ -216,21 +212,22 @@ export function StockadjustmentEditor({
   };
 
  const handleSaveAsDraft = () =>
- {  if (!form.div_code) return setError("Division is required");
-  return runAction("draft", async () => {
-    await runWorkflow("SAVEASDRAFT",  IV_DOC_TYPE.SAJ, form, rows, user?.company_code, user?.loginid || user?.username);
+  runAction("draft", async () => {
+    await runWorkflow("SAVEASDRAFT",  SO_DOC_TYPE.SIN, form, rows, user?.company_code, user?.loginid || user?.username);
   }, "Sales Order saved as draft");
-}
+
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
+    if (!form.ac_code) return setError("A/c Code is required");
+    if (!form.curr_code) return setError("Currency is required");
     return runAction("submit", async () => {
-      await runWorkflow("SUBMITTED", IV_DOC_TYPE.SAJ, form, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("SUBMITTED", SO_DOC_TYPE.SIN, form, rows, user?.company_code, user?.loginid || user?.username);
     }, editMode ? "Sales Order updated successfully" : "Sales Order created successfully");
   };
 
   const handleCancel = () =>
     runAction("cancel", async () => {
-      await runWorkflow("CANCELED", IV_DOC_TYPE.SAJ, form, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("CANCELED", SO_DOC_TYPE.SIN, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Sales Order cancelled");
 
   // ---- Reject handlers ----
@@ -251,7 +248,7 @@ export function StockadjustmentEditor({
     setRejectError("");
     return runAction("reject", async () => {
       const payloadForm: PurchaseOrderForm = { ...form, reject_reason: rejectReason.trim() };
-      await runWorkflow("REJECTED", IV_DOC_TYPE.SAJ, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("REJECTED", SO_DOC_TYPE.SIN, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setRejectDialogOpen(false);
     }, "Sales Order rejected");
   };
@@ -270,22 +267,19 @@ export function StockadjustmentEditor({
         parameter: "PS_POORDER_ENTRY_SENTBACK_USER_LIST",
         code1: user?.company_code,
         number1: flowLevelRunning,
-        code2: PROCESSSA,
+        code2: "sales_invoice",
       });
       const options: SendBackUserOption[] = (rows || []).map((raw) => {
         const row = lowerRecord(raw as Record<string, unknown>);
-        const level = row.level_no ?? row.level ?? row.levelno ?? row.level_no;
-        const name = row.description ?? row.desc ?? row.name ?? row.username;
         return {
-          code: text(level),
-          name: text(name),
-          level_no: numberOrZero(level),
+          code: text(row.level_no),
+          name: text(row.description),
+          level_no: numberOrZero(row.level_no),
         };
       }).filter((option) => option.code);
       setSendBackUsers(options);
-    } catch (error) {
+    } catch {
       setSendBackUsers([]);
-      setSendBackError(error instanceof Error ? error.message : "Unable to load send-back users");
     } finally {
       setSendBackUsersLoading(false);
     }
@@ -311,7 +305,7 @@ export function StockadjustmentEditor({
         sentback_reason: sendBackReason.trim(),
         flow_level_running: sendBackUserLevel,
       };
-      await runWorkflow("SENTBACK", IV_DOC_TYPE.SAJ, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("SENTBACK", SO_DOC_TYPE.SIN, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setSendBackDialogOpen(false);
     }, "Sales Order sent back");
   };
@@ -379,8 +373,9 @@ export function StockadjustmentEditor({
             <div className="grid gap-3">
               <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
-              <StockHeaderForm
+              <PurchaseOrderHeaderForm
                 form={form}
+                docType={config.docType}
                 setForm={setForm}
                 updateField={updateField}
                 disabled={disabled}
@@ -388,24 +383,22 @@ export function StockadjustmentEditor({
                 editMode={editMode}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
-                docType={config.docType}
               />
 
-              <StockDetail
+              <PurchaseOrderLinesTable
                 rows={rows}
+                ex_rate={form.ex_rate}
                 updateRow={updateRow}
                 addRow={addRow}
                 removeRow={removeRow}
                 headerAndLineDisabled={headerAndLineDisabled}
+                discAmt={form.disc_price}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
-                docType={config.docType}
               />
             </div>
           )}
         </CardContent>
-
-      
         <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
           <div className="flex flex-wrap gap-3 rounded-2xl bg-gray-50 p-5 shadow-inner">
            { isPendingTab && (
