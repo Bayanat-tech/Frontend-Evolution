@@ -3,8 +3,9 @@ import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
 import { Select } from "../../../components/ui/Select";
 import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
-import { EXPENSE_AC_OPTIONS, PurchaseOrderForm } from "./Purchaseordertypes";
+import { EXPENSE_AC_OPTIONS, PODocType, PurchaseOrderForm } from "./Purchaseordertypes";
 import { text } from "./Purchaseorderutils";
+import { SODocType } from "../sales/SalesOrdertypes";
 
 function CompactSection({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
   return (
@@ -38,6 +39,7 @@ export function PurchaseOrderHeaderForm({
   editMode,
   companyCode,
   loginid,
+  docType,
 }: {
   form: PurchaseOrderForm;
   setForm: (updater: (current: PurchaseOrderForm) => PurchaseOrderForm) => void;
@@ -47,6 +49,7 @@ export function PurchaseOrderHeaderForm({
   editMode: boolean;
   companyCode?: string;
   loginid?: string;
+  docType: PODocType | SODocType
 }) {
   const loginIdOrAdmin = loginid || "ADMIN";
 
@@ -236,7 +239,27 @@ export function PurchaseOrderHeaderForm({
             onChange={(value) => setForm((current) => ({ ...current, tx_compntcat_code_1: value }))}
           />
         </div>
-
+        {String(docType ?? "").trim().toUpperCase() === "PIN" || String(docType ?? "").trim().toUpperCase() === "SIN" && (
+          <div>
+            <label >GRN No</label>
+            <LookupField
+              label="GRN No"
+              compact
+              placeholder="GRN No"
+              value={String(form.grn_no ?? "")}
+              displayValue={String(form.grn_no ?? "")}
+              columns={[{ field: "grn_no", header: "GRN No" }]}
+              valueField="grn_no"
+              displayFields={["grn_no"]}
+              loadOptions={() => getDynamicLookup({ parameter: "PS_INVOICE_ENTRY_GRN_NO_DETAIL", code1: companyCode, loginid: loginIdOrAdmin , code2: form.div_code })}
+              disabled={disabled}
+              onChange={(value, row) => setForm((current) => ({
+                ...current,
+                grn_no: value
+              }))}
+            />
+          </div>
+        )}
 
         <CField label="Pay Terms" className="col-span-2">
           <Input disabled={headerAndLineDisabled} value={form.payment_terms} onChange={(event) => updateField("payment_terms", event.target.value)} />

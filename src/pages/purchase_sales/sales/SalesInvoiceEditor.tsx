@@ -17,9 +17,11 @@ import {
   SendBackUserOption,
 } from "../../purchase_sales/purchase/Purchaseordertypes";
 import {
-
   formatAmount,
- 
+  lineAmount,
+  lineDiscPrice,
+  lineNetAmount,
+  lineTaxAmount,
   lowerRecord,
   newId,
   numberOrZero,
@@ -29,13 +31,13 @@ import { PurchaseOrderHeaderForm } from "../../purchase_sales/purchase/Purchaseo
 import { PurchaseOrderLinesTable } from "../../purchase_sales/purchase/Purchaseorderlinestable";
 import { SendBackDialog } from "../../purchase_sales/purchase/Sendbackdialog";
 import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
-import { PROCESSSDN, PROCESSSO, SalesConfig, SalesOrderLineRow, SO_DOC_TYPE } from "./SalesOrdertypes";
-import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, lineAmount, lineDiscPrice, lineTaxAmount, runWorkflow } from "./SalesOrderutils";
+import {  PROCESSSO, SalesConfig, SO_DOC_TYPE } from "./SalesOrdertypes";
+import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, runWorkflow } from "./SalesOrderutils";
 
 
 export type { PurchaseOrderEditorState };
 
-export function SalesDNEditor({
+export function SalesInvoiceEditor({
   config,
   editor,
   isPendingTab,
@@ -96,12 +98,12 @@ export function SalesDNEditor({
         ]);
         if (!mounted) return;
 
-        setForm((current) => ({
+         setForm((current) => ({
           ...current,
-          doc_no: text(headerRaw.doc_no || docNo),
+          doc_no: numberOrZero(headerRaw.doc_no || docNo),
           doc_date: toDateInputValue(headerRaw.doc_date) || current.doc_date,
           ref_no: text(headerRaw.quotn_no || current.ref_no),
-          ref_date: toDateInputValue(headerRaw.ref_date) || current.ref_date,
+          ref_date: toDateInputValue(headerRaw.quotn_date) || current.ref_date,
           div_code: text(headerRaw.div_code || current.div_code),
           div_name: text(headerRaw.div_name || current.div_name),
           ac_code: text(headerRaw.ac_code || current.ac_code),
@@ -134,8 +136,6 @@ export function SalesDNEditor({
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
         }));
-
-
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
         if (!mounted) return;
@@ -157,7 +157,7 @@ export function SalesDNEditor({
           parameter: "PS_POORDER_ENTRY_FUN_CHECK_GLOBAL_APPR_LEVEL",
           code1: user?.company_code,
           code2: user?.loginid || user?.username || "ADMIN",
-          code3: PROCESSSDN,
+          code3: "sales_invoice",
         });
         if (!mounted) return;
         const first = (rows || [])[0] as Record<string, unknown> | undefined;
@@ -189,7 +189,7 @@ export function SalesDNEditor({
     setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const updateRow = (id: string, patch: Partial<SalesOrderLineRow>) => {
+  const updateRow = (id: string, patch: Partial<PurchaseOrderLineRow>) => {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
 
@@ -213,7 +213,7 @@ export function SalesDNEditor({
 
  const handleSaveAsDraft = () =>
   runAction("draft", async () => {
-    await runWorkflow("SAVEASDRAFT",  SO_DOC_TYPE.SDN, form, rows, user?.company_code, user?.loginid || user?.username);
+    await runWorkflow("SAVEASDRAFT",  SO_DOC_TYPE.SIN, form, rows, user?.company_code, user?.loginid || user?.username);
   }, "Sales Order saved as draft");
 
   const handleSubmit = () => {
@@ -221,13 +221,13 @@ export function SalesDNEditor({
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
     return runAction("submit", async () => {
-      await runWorkflow("SUBMITTED", SO_DOC_TYPE.SDN, form, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("SUBMITTED", SO_DOC_TYPE.SIN, form, rows, user?.company_code, user?.loginid || user?.username);
     }, editMode ? "Sales Order updated successfully" : "Sales Order created successfully");
   };
 
   const handleCancel = () =>
     runAction("cancel", async () => {
-      await runWorkflow("CANCELED", SO_DOC_TYPE.SDN, form, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("CANCELED", SO_DOC_TYPE.SIN, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Sales Order cancelled");
 
   // ---- Reject handlers ----
@@ -248,7 +248,7 @@ export function SalesDNEditor({
     setRejectError("");
     return runAction("reject", async () => {
       const payloadForm: PurchaseOrderForm = { ...form, reject_reason: rejectReason.trim() };
-      await runWorkflow("REJECTED", SO_DOC_TYPE.SDN, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("REJECTED", SO_DOC_TYPE.SIN, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setRejectDialogOpen(false);
     }, "Sales Order rejected");
   };
@@ -267,7 +267,7 @@ export function SalesDNEditor({
         parameter: "PS_POORDER_ENTRY_SENTBACK_USER_LIST",
         code1: user?.company_code,
         number1: flowLevelRunning,
-        code2: PROCESSSO,
+        code2: "sales_invoice",
       });
       const options: SendBackUserOption[] = (rows || []).map((raw) => {
         const row = lowerRecord(raw as Record<string, unknown>);
@@ -305,7 +305,7 @@ export function SalesDNEditor({
         sentback_reason: sendBackReason.trim(),
         flow_level_running: sendBackUserLevel,
       };
-      await runWorkflow("SENTBACK", SO_DOC_TYPE.SDN, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
+      await runWorkflow("SENTBACK", SO_DOC_TYPE.SIN, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setSendBackDialogOpen(false);
     }, "Sales Order sent back");
   };
@@ -375,8 +375,8 @@ export function SalesDNEditor({
 
               <PurchaseOrderHeaderForm
                 form={form}
+                docType={config.docType}
                 setForm={setForm}
-                docType={SO_DOC_TYPE.SDN}
                 updateField={updateField}
                 disabled={disabled}
                 headerAndLineDisabled={headerAndLineDisabled}
@@ -399,8 +399,6 @@ export function SalesDNEditor({
             </div>
           )}
         </CardContent>
-
-       
         <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
           <div className="flex flex-wrap gap-3 rounded-2xl bg-gray-50 p-5 shadow-inner">
            { isPendingTab && (

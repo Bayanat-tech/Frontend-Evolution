@@ -3,6 +3,7 @@ import { Plus, Save, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { getDynamicLookup } from "../../api/lookups";
 import type { LookupRow } from "../../api/lookups";
+import { upsertAccrualAcctSetupApi } from "../../api/hr";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
@@ -144,11 +145,11 @@ const EXP_SUBTYPE_LOOKUP_COLUMNS: { field: string; header: string }[] = [
   { field: "exp_subtype_description", header: "Subtype Description" },
 ];
 
-// ─── Retrieve / Save proc parameters. RETRIEVE is real (matches the proc
-// WHEN block added for MS_HR_SEC_PAYCOMP_AC). SAVE is still a placeholder —
-// no save proc SQL has been supplied yet. ──────────────────────────────
+// ─── Retrieve parameter — matches the proc WHEN block added for
+// MS_HR_SEC_PAYCOMP_AC. Save now goes through upsertAccrualAcctSetupApi
+// (POST /api/finance/insUpdAccrualAcctSetup), one row per call, since
+// PROC_INS_UPD_MS_HR_SEC_PAYCOMP_AC only accepts a single-row table type. ──
 const RETRIEVE_PARAMETER = "MST_HR_ACCRUAL_AC_SETUP_RETRIEVE";
-const SAVE_PARAMETER = "HR_ACCRUAL_AC_SETUP_SAVE";
 
 export function HrAccuralAccountSetup() {
   const { user } = useAuth();
@@ -266,7 +267,7 @@ export function HrAccuralAccountSetup() {
         section_code: r.section_code ?? header.section_code,
         pay_comp_id: r.pay_comp_id ?? "",
         pay_desc: r.pay_desc ?? "",
-        ac_code_db: r.ac_code_db ?? "",
+        ac_code_db: String(r.ac_code_db ?? "").trim(),
         ac_code_db_name: r.ac_code_db_name ?? "",
         ac_code_cr: r.ac_code_cr ?? "",
         ac_code_cr_name: r.ac_code_cr_name ?? "",
@@ -322,51 +323,51 @@ export function HrAccuralAccountSetup() {
   // the previously-picked exp_subtype (it's no longer valid for the new
   // exp_type), and stores the new account name.
   const handleDbAccountChange = async (row_id: string, value: string, acName: string) => {
+    const trimmedValue = value.trim();
     updateRow(row_id, {
-      ac_code_db: value,
+      ac_code_db: trimmedValue,
       ac_code_db_name: acName,
       exp_type_code: "",
       exp_subtype_code: "",
       exp_subtype_desc: "",
     });
-    const expType = await fetchExpTypeForAcCode(value);
+    const expType = await fetchExpTypeForAcCode(trimmedValue);
     updateRow(row_id, { exp_type_code: expType });
   };
 
-  // ── Save — pushes the grid back to MS_HR_SEC_PAYCOMP_AC. Basic UI only:
-  // sends rows as-is, one call, no client-side validation beyond required
-  // header fields. ──────────────────────────────────────────────────────
+  // ── Save — pushes each row back to MS_HR_SEC_PAYCOMP_AC via
+  // upsertAccrualAcctSetupApi (POST /api/finance/insUpdAccrualAcctSetup).
+  // The proc only accepts one row per call (WMSTST.MS_HR_SEC_PAYCOMP_AC_TAB
+  // is built from a single-element array server-side), so rows are saved
+  // sequentially. Deletes are still not wired — see removeRow /
+  // deletedRowIds; no delete proc exists yet for this table. ─────────────
   const handleSave = useCallback(async () => {
     if (!headerReady) return;
     setSaving(true);
     setNotice(null);
     try {
-      await getDynamicLookup({
-        parameter: SAVE_PARAMETER,
-        loginid,
-        code1: header.company_code,
-        code2: header.div_code,
-        code3: header.dept_code,
-        code4: header.section_code,
-        code5: "NULL",
-        code6: "NULL",
-        code7: "NULL",
-        code8: "NULL",
-        code9: "NULL",
-        code10: "NULL",
-        number1: 0,
-        number2: 0,
-        number3: 0,
-        number4: 0,
-        date1: null,
-        date2: null,
-        date3: null,
-        date4: null,
-        // NOTE: rows / deletedRowIds intentionally NOT threaded through the
-        // shared code1..10 slots — the save proc for this screen will need
-        // its own row-array parameter shape. Left as a TODO for whoever
-        // wires the real save proc.
-      } as any);
+      const today = new Date().toISOString();
+
+      for (const row of rows) {
+        await upsertAccrualAcctSetupApi({
+          company_code: header.company_code,
+          div_code: header.div_code,
+          dept_code: header.dept_code,
+          section_code: header.section_code,
+          pay_comp_id: row.pay_comp_id,
+          ac_code_db: row.ac_code_db || null,
+          ac_code_cr: row.ac_code_cr || null,
+          exp_type_code: row.exp_type_code || null,
+          exp_subtype_code: row.exp_subtype_code || null,
+          pay_comp_type: "A",
+          pay_comp_earn_ded: row.pay_comp_earn_ded || null,
+          sepn_flag: row.sepn_flag,
+          remarks: row.remarks || null,
+          user_id: loginid,
+          user_dt: today,
+        });
+      }
+
       setNotice({ type: "success", message: "Accrual account setup saved." });
       setDeletedRowIds([]);
     } catch (error) {
@@ -377,7 +378,7 @@ export function HrAccuralAccountSetup() {
     } finally {
       setSaving(false);
     }
-  }, [loginid, header, headerReady]);
+  }, [loginid, header, headerReady, rows]);
 
   const columns: ColumnDef<TAccrualAccountRow>[] = [
     { accessorKey: "pay_comp_id", header: "Accrual Type", size: 130 },
@@ -622,7 +623,7 @@ export function HrAccuralAccountSetup() {
                   <td className="px-2 py-1">
                     <LookupField
                       compact
-                      disabled={!row.exp_type_code}
+                      // disabled={!row.exp_type_code}
                       value={row.exp_subtype_code}
                       columns={EXP_SUBTYPE_LOOKUP_COLUMNS}
                       valueField="exp_subtype_code"

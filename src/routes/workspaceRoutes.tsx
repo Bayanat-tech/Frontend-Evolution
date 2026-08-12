@@ -180,6 +180,8 @@ import { JobProductionOrderPage } from "../pages/purchase_sales/production/JobPr
 import { LeaveTypesPage } from "../pages/hr/Leavetypespage";
 import AccuralPayUnit from "../pages/hr/AccuralPayUnit";
 import PLSummaryPage from "../pages/purchase_sales/Reports/Plsummarypage";
+import { PurchaseInvoicePage } from "../pages/purchase_sales/purchase/PurchaseInvoicePage";
+import { SalesInvoicePage } from "../pages/purchase_sales/sales/SalesInvoicePage";
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -831,6 +833,21 @@ export const workspaceRoutes: WorkspaceRoute[] = [
       throw new Error("Function not implemented.");
     } }  />,
   },
+    {
+    name: "Purchase Invoice Setup",
+    match: ({ pathname }) => isPurchaseInvoiceSetupRoute(pathname),
+    element: () => <PurchaseInvoicePage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
+
+      {
+    name: "Sales Invoice Setup",
+    match: ({ pathname }) => isSalesInvoiceSetupRoute(pathname),
+    element: () => <SalesInvoicePage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
 
     {
     name: "Purchase Quotation Setup",
@@ -1348,6 +1365,18 @@ function isPurchaseSalesSetupRoute(pathname: string) {
   
     return (normalized.includes("purchase_sales/purchase/purchase_order"))
 }
+function isPurchaseInvoiceSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/purchase/purchase_invoice"))
+}
+
+function isSalesInvoiceSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/sales/sales_invoice"))
+}
+
 
 function isPurchaseQuotationSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();

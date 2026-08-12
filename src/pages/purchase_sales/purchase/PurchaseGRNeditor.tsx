@@ -380,6 +380,7 @@ export function PurchaseGRNEditor({
 
               <PurchaseOrderHeaderForm
                 form={form}
+                docType={PO_DOC_TYPE.GRN}
                 setForm={setForm}
                 updateField={updateField}
                 disabled={disabled}
