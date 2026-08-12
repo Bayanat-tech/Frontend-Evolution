@@ -172,12 +172,17 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
   const [editing, setEditing] = useState(false);
   const embeddedInWorkspace = startMode === "editor";
 
+  const notify = useCallback((next: Exclude<Notice, null>) => {
+    setNotice(next);
+    if (next.type === "success") toast.success(next.text);
+    else toast.error(next.text);
+  }, [toast]);
+
   useEffect(() => {
     if (!notice) return;
-    if (notice.type === "success") toast.success(notice.text);
-    else toast.error(notice.text);
-    setNotice(null);
-  }, [notice, toast]);
+    const timer = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   const isCanceled = job.canceled === "Y";
   const isCancelLocked = isJobCancelLocked(job);
@@ -198,11 +203,11 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
       setRows((response.data.data || []).map(normalizeLookupRow));
     } catch (error: any) {
       setRows([]);
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to load freight jobs." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to load freight jobs." });
     } finally {
       setLoading(false);
     }
-  }, [companyCode, direction.code, mode.code, query]);
+  }, [companyCode, direction.code, mode.code, notify, query]);
 
   useEffect(() => {
     void loadRows();
@@ -250,7 +255,7 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
       setEditing(false);
       setView("editor");
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to open freight job." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to open freight job." });
     } finally {
       setLoading(false);
     }
@@ -274,19 +279,19 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
   const saveJob = async (event: FormEvent) => {
     event.preventDefault();
     if (isEditLocked) {
-      setNotice({ type: "error", text: editLockMessage });
+      notify({ type: "error", text: editLockMessage });
       return;
     }
     setSaving(true);
     setNotice(null);
     try {
       const response = await api.post<{ success?: boolean; data?: { job_no?: string }; message?: string }>("/api/freight/job/save", { job });
-      setNotice({ type: "success", text: response.data.message || "Freight job saved." });
+      notify({ type: "success", text: response.data.message || "Freight job saved." });
       setJob((current) => ({ ...current, job_no: response.data.data?.job_no || current.job_no }));
       setEditing(false);
       await loadRows();
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to save freight job." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to save freight job." });
     } finally {
       setSaving(false);
     }
@@ -295,18 +300,18 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
   const cancelJob = async () => {
     if (!job.job_no) return;
     if (isCancelLocked) {
-      setNotice({ type: "error", text: cancelLockMessage });
+      notify({ type: "error", text: cancelLockMessage });
       return;
     }
     setSaving(true);
     setNotice(null);
     try {
       await api.post("/api/freight/job/cancel", { company_code: companyCode, prin_code: job.prin_code, job_no: job.job_no, cancelled_by: userId, cancel_remarks: job.remarks });
-      setNotice({ type: "success", text: `Job ${job.job_no} cancelled.` });
+      notify({ type: "success", text: `Job ${job.job_no} cancelled.` });
       await loadRows();
       setView("list");
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to cancel freight job." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to cancel freight job." });
     } finally {
       setSaving(false);
     }
@@ -329,9 +334,9 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
       });
       const quotation = normalizeLookupRow(response.data.data?.header || {});
       setJob((current) => toJobFromQuotation(quotation, current, quotationNr));
-      setNotice({ type: "success", text: `Quotation ${quotationNr} copied to job draft.` });
+      notify({ type: "success", text: `Quotation ${quotationNr} copied to job draft.` });
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to copy quotation details." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to copy quotation details." });
     }
   };
 

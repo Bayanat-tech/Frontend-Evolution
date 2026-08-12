@@ -41,12 +41,17 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null, readOnl
   const jobType = directionMap[target?.direction || "import"];
   const stats = useMemo(() => getStats(kind, rows), [kind, rows]);
 
+  const notify = useCallback((next: Exclude<Notice, null>) => {
+    setNotice(next);
+    if (next.type === "success") toast.success(next.text);
+    else toast.error(next.text);
+  }, [toast]);
+
   useEffect(() => {
     if (!notice) return;
-    if (notice.type === "success") toast.success(notice.text);
-    else toast.error(notice.text);
-    setNotice(null);
-  }, [notice, toast]);
+    const timer = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   const loadRows = useCallback(async (selected = job) => {
     if (!selected) return;
@@ -58,11 +63,11 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null, readOnl
       setRows((response.data.data || []).map(normalizeLookupRow));
     } catch (error: any) {
       setRows([]);
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || `Unable to load ${cfg.title}.` });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || `Unable to load ${cfg.title}.` });
     } finally {
       setLoading(false);
     }
-  }, [cfg.endpoint, cfg.title, companyCode, job]);
+  }, [cfg.endpoint, cfg.title, companyCode, job, notify]);
 
   useEffect(() => {
     setJob(null);
@@ -79,16 +84,16 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null, readOnl
   async function initRows() {
     if (!job) return;
     if (readOnly) {
-      setNotice({ type: "error", text: "Invoiced or completed job is locked. Follow-up rows are view only." });
+      notify({ type: "error", text: "Invoiced or completed job is locked. Follow-up rows are view only." });
       return;
     }
     setSaving(true);
     try {
       await api.post(`/api/freight/${cfg.endpoint}/init`, { ...jobPayload(companyCode, job), user_id: userId, op_type: jobType === "EXP" ? "EXP" : "IMP", op_mode: mode });
       await loadRows(job);
-      setNotice({ type: "success", text: `${cfg.title} initialized from freight masters.` });
+      notify({ type: "success", text: `${cfg.title} initialized from freight masters.` });
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || `Unable to initialize ${cfg.title}.` });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || `Unable to initialize ${cfg.title}.` });
     } finally {
       setSaving(false);
     }
@@ -97,17 +102,17 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null, readOnl
   async function saveRows() {
     if (!job) return;
     if (readOnly) {
-      setNotice({ type: "error", text: "Invoiced or completed job is locked. Follow-up rows are view only." });
+      notify({ type: "error", text: "Invoiced or completed job is locked. Follow-up rows are view only." });
       return;
     }
     setSaving(true);
     try {
       const bodyKey = kind === "documents" ? "docs" : "lines";
       await api.post(`/api/freight/${cfg.endpoint}/save`, { ...jobPayload(companyCode, job), user_id: userId, [bodyKey]: rows });
-      setNotice({ type: "success", text: `${cfg.title} saved.` });
+      notify({ type: "success", text: `${cfg.title} saved.` });
       await loadRows(job);
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || `Unable to save ${cfg.title}.` });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || `Unable to save ${cfg.title}.` });
     } finally {
       setSaving(false);
     }
@@ -116,7 +121,7 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null, readOnl
   async function deleteRow(row: LookupRow) {
     if (!job) return;
     if (readOnly) {
-      setNotice({ type: "error", text: "Invoiced or completed job is locked. Follow-up rows are view only." });
+      notify({ type: "error", text: "Invoiced or completed job is locked. Follow-up rows are view only." });
       return;
     }
     const key = kind === "documents" ? { doc_nr: text(row, "doc_nr") } : kind === "deposits" ? { sr_no: text(row, "sr_no") } : { op_code: text(row, "op_code") };
@@ -124,9 +129,9 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null, readOnl
     try {
       await api.post(`/api/freight/${cfg.endpoint}/delete`, { ...jobPayload(companyCode, job), ...key });
       await loadRows(job);
-      setNotice({ type: "success", text: "Line deleted." });
+      notify({ type: "success", text: "Line deleted." });
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to delete line." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to delete line." });
     } finally {
       setSaving(false);
     }

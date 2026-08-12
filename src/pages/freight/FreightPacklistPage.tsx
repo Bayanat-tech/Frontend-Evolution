@@ -167,12 +167,17 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
   const [notice, setNotice] = useState<Notice>(null);
   const [editing, setEditing] = useState(false);
 
+  const notify = useCallback((next: Exclude<Notice, null>) => {
+    setNotice(next);
+    if (next.type === "success") toast.success(next.text);
+    else toast.error(next.text);
+  }, [toast]);
+
   useEffect(() => {
     if (!notice) return;
-    if (notice.type === "success") toast.success(notice.text);
-    else toast.error(notice.text);
-    setNotice(null);
-  }, [notice, toast]);
+    const timer = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   const isAir = mode.code === "A";
 
@@ -189,11 +194,11 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
       setRows((response.data.data || []).map(normalizeLookupRow));
     } catch (error: any) {
       setRows([]);
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to load pack lists." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to load pack lists." });
     } finally {
       setLoading(false);
     }
-  }, [companyCode, direction.code, mode.code, query]);
+  }, [companyCode, direction.code, mode.code, notify, query]);
 
   useEffect(() => {
     void loadRows();
@@ -228,7 +233,7 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
 
   const openAdd = () => {
     if (readOnly) {
-      setNotice({ type: "error", text: "Invoiced or completed job is locked. Pack list is view only." });
+      notify({ type: "error", text: "Invoiced or completed job is locked. Pack list is view only." });
       return;
     }
     setPack(emptyPack(companyCode, userId, mode.code, direction.code));
@@ -240,7 +245,7 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
 
   const openNewPackForCurrentJob = () => {
     if (readOnly) {
-      setNotice({ type: "error", text: "Invoiced or completed job is locked. Pack list is view only." });
+      notify({ type: "error", text: "Invoiced or completed job is locked. Pack list is view only." });
       return;
     }
     setPack((current) => ({
@@ -296,7 +301,7 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
       setDimensions([]);
       setEditing(!readOnly);
       setView("editor");
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to check existing pack list; opened new draft." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to check existing pack list; opened new draft." });
     } finally {
       setLoading(false);
     }
@@ -318,7 +323,7 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
       setEditing(false);
       setView("editor");
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to open pack list." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to open pack list." });
     } finally {
       setLoading(false);
     }
@@ -326,7 +331,7 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
 
   const deletePack = async (row: LookupRow) => {
     if (readOnly) {
-      setNotice({ type: "error", text: "Invoiced or completed job is locked. Pack list is view only." });
+      notify({ type: "error", text: "Invoiced or completed job is locked. Pack list is view only." });
       return;
     }
     setSaving(true);
@@ -338,10 +343,10 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
         job_no: lookupText(row, "job_no"),
         packlist_no: lookupText(row, "packlist_no"),
       });
-      setNotice({ type: "success", text: "Pack list deleted." });
+      notify({ type: "success", text: "Pack list deleted." });
       await loadRows();
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to delete pack list." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to delete pack list." });
     } finally {
       setSaving(false);
     }
@@ -350,7 +355,7 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
   const savePack = async (event: FormEvent) => {
     event.preventDefault();
     if (readOnly) {
-      setNotice({ type: "error", text: "Invoiced or completed job is locked. Pack list is view only." });
+      notify({ type: "error", text: "Invoiced or completed job is locked. Pack list is view only." });
       return;
     }
     setSaving(true);
@@ -371,7 +376,7 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
           lines: dimensions,
         });
       }
-      setNotice({ type: "success", text: response.data.message || "Pack list saved." });
+      notify({ type: "success", text: response.data.message || "Pack list saved." });
       setPack((current) => ({
         ...current,
         packlist_no: String(response.data.data?.packlist_no || current.packlist_no),
@@ -382,7 +387,7 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
       setEditing(false);
       setView("editor");
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to save pack list." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to save pack list." });
     } finally {
       setSaving(false);
     }

@@ -80,12 +80,17 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
 
+  const notify = useCallback((next: Exclude<Notice, null>) => {
+    setNotice(next);
+    if (next.type === "success") toast.success(next.text);
+    else toast.error(next.text);
+  }, [toast]);
+
   useEffect(() => {
     if (!notice) return;
-    if (notice.type === "success") toast.success(notice.text);
-    else toast.error(notice.text);
-    setNotice(null);
-  }, [notice, toast]);
+    const timer = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   const totals = useMemo(() => calculateTotals(lines), [lines]);
   const isConfirmed = Boolean(lookupText(header, "confirm_date"));
@@ -111,11 +116,11 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
       setRows((response.data.data || []).map(normalizeLookupRow).filter((row) => matchesCurrentJobBucket(row, mode.code, direction.code)));
     } catch (error: any) {
       setRows([]);
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to load freight jobs." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to load freight jobs." });
     } finally {
       setLoading(false);
     }
-  }, [companyCode, direction.code, mode.code, query]);
+  }, [companyCode, direction.code, mode.code, notify, query]);
 
   useEffect(() => {
     if (view === "list") void loadRows();
@@ -158,7 +163,7 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
       setLines((response.data.data?.lines || []).map(toLine));
       setView("editor");
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to open job activities." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to open job activities." });
     } finally {
       setLoading(false);
     }
@@ -167,7 +172,7 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
   async function saveLines() {
     if (!header) return;
     if (isLineLocked) {
-      setNotice({ type: "error", text: "Confirmed, invoiced, or completed job is locked. Activities are view only." });
+      notify({ type: "error", text: "Confirmed, invoiced, or completed job is locked. Activities are view only." });
       return;
     }
     setSaving(true);
@@ -180,10 +185,10 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
         user_id: userId,
         lines,
       });
-      setNotice({ type: "success", text: "Job activities saved." });
+      notify({ type: "success", text: "Job activities saved." });
       await loadRows();
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to save job activities." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to save job activities." });
     } finally {
       setSaving(false);
     }
@@ -192,7 +197,7 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
   async function confirmJob() {
     if (!header) return;
     if (isClosed) {
-      setNotice({ type: "error", text: "Invoiced or completed job is locked. Activities are view only." });
+      notify({ type: "error", text: "Invoiced or completed job is locked. Activities are view only." });
       return;
     }
     setSaving(true);
@@ -204,10 +209,10 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
         job_no: lookupText(header, "job_no"),
         user_id: userId,
       });
-      setNotice({ type: "success", text: "Job activities confirmed." });
+      notify({ type: "success", text: "Job activities confirmed." });
       await openJob(header);
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to confirm job activities." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to confirm job activities." });
     } finally {
       setSaving(false);
     }
@@ -306,7 +311,7 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
 
   function addLine() {
     if (isLineLocked) {
-      setNotice({ type: "error", text: "Confirmed, invoiced, or completed job is locked. Activities are view only." });
+      notify({ type: "error", text: "Confirmed, invoiced, or completed job is locked. Activities are view only." });
       return;
     }
     setLines((current) => [...current, emptyLine(current.length + 1)]);
