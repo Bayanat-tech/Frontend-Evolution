@@ -184,6 +184,7 @@ import PayUnitsPage from "../pages/hr/pay_componants/PayUnitsPage";
 import GradePayUnitPage from "../pages/hr/pay_componants/Gradepayunitpage";
 import PayUnitDependentPage from "../pages/hr/pay_componants/PayUnitDependentPage";
 import PayrollAccountSetupPage from "../pages/hr/pay_componants/Payroll_Account_SetupPage";
+import AccrualTypePage from "../pages/hr/pay_componants/AccrualTypePage";
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -1116,6 +1117,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => isHrRoute(context) && isHrPayrollAccountSetupRoute(context),
     element: () => <PayrollAccountSetupPage />,
   },
+
+  {
+    name: "HR Accrual Type",
+    match: (context) => isHrRoute(context) && isHrAccrualTypeRoute(context),
+    element: () => <AccrualTypePage />,
+  },
+
 
 
   {
@@ -2417,7 +2425,7 @@ function isHrPayrollProcessRoute(context: WorkspaceRouteContext) {
 
 function isHrPayUnitsRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
-  return (compact.includes("payunits") || compact.includes("payunit")) && !compact.includes("depend")&& !compact.includes("grade")&& !compact.includes("payrollaccountsetup");
+  return (compact.includes("payunits") || compact.includes("payunit")) && !compact.includes("depend")&& !compact.includes("grade")&& !compact.includes("payrollaccountsetup") && !compact.includes("accrualtype"); ;
 }
 
 function isHrPayUnitsDependantRoute(context: WorkspaceRouteContext) {
@@ -2430,9 +2438,17 @@ function isHrGradePayUnitRoute(context: WorkspaceRouteContext) {
   return compact.includes("gradepayunit") || compact.includes("gradepayunits");
 }
 
+
+
 function isHrPayrollAccountSetupRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
   return compact.includes("payrollaccountsetup") || compact.includes("payrollaccountssetup") || compact.includes("payrollacsetup");
+}
+
+
+function isHrAccrualTypeRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("accrualtype") || compact.includes("accrualtypes");
 }
 
 function isHrLeaveCancelRoute(context: WorkspaceRouteContext) {
