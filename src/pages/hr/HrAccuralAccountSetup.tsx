@@ -513,6 +513,11 @@ export function HrAccuralAccountSetup() {
           </Button>
         </div>
       </div>
+        <div className="mt-2 flex items-cemter justify-end border-t pt-2">
+          <Button size="sm" disabled={!headerReady || loading} onClick={handleRetrieve}>
+            {loading ? "Retrieving..." : re}
+          </Button>
+        </div>
 
       {/* ── Editable grid — Accrual Type / DB / CR / End of Service / Remarks ── */}
       <div className="rounded-md border bg-card">
