@@ -181,6 +181,9 @@ import { LeaveTypesPage } from "../pages/hr/Leavetypespage";
 import AccuralPayUnit from "../pages/hr/AccuralPayUnit";
 import PLSummaryPage from "../pages/purchase_sales/Reports/Plsummarypage";
 import PayUnitsPage from "../pages/hr/pay_componants/PayUnitsPage";
+import GradePayUnitPage from "../pages/hr/pay_componants/Gradepayunitpage";
+import PayUnitDependentPage from "../pages/hr/pay_componants/PayUnitDependentPage";
+import PayrollAccountSetupPage from "../pages/hr/pay_componants/Payroll_Account_SetupPage";
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -1088,7 +1091,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   element: () => <HrEmployeePayUnits />,
   },
 
-  
+  // ----------------------------- HR Pay Componants Routes --------------------------------
   {
     name: "HR Pay Units",
     match: (context) => isHrRoute(context) && isHrPayUnitsRoute(context),
@@ -1096,12 +1099,25 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
 
   
-
   {
     name: "HR Pay Units Dependant",
     match: (context) => isHrRoute(context) && isHrPayUnitsDependantRoute(context),
-    element: () => <HrPayUnitsPage mode="dependant" />,
+    element: () => <PayUnitDependentPage />,
   },
+
+  {
+  name: "HR Grade Pay Unit",
+  match: (context) => isHrRoute(context) && isHrGradePayUnitRoute(context),
+  element: () => <GradePayUnitPage />,
+},
+
+{
+    name: "HR Payroll Account Setup",
+    match: (context) => isHrRoute(context) && isHrPayrollAccountSetupRoute(context),
+    element: () => <PayrollAccountSetupPage />,
+  },
+
+
   {
     name: "HR Payroll Process",
     match: (context) => isHrRoute(context) && isHrPayrollProcessRoute(context),
@@ -1165,13 +1181,6 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   match: (context) => isHrRoute(context) && isHrEmployeeInformationRoute(context),
   element: () => <KpiEmployeeInformationPage />,
 },
-
-
-{
-    name: "HR Payroll Account Setup",
-    match: (context) => isHrRoute(context) && isHrPayrollAccountSetupRoute(context),
-    element: () => <HrPayrollAccountSetupPage />,
-  },
   {
     name: "HR Leave Types",
     match: ({ pathname }) => isHrLeaveTypeRoute(pathname),
@@ -2408,12 +2417,22 @@ function isHrPayrollProcessRoute(context: WorkspaceRouteContext) {
 
 function isHrPayUnitsRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
-  return (compact.includes("payunits") || compact.includes("payunit")) && !compact.includes("depend");
+  return (compact.includes("payunits") || compact.includes("payunit")) && !compact.includes("depend")&& !compact.includes("grade")&& !compact.includes("payrollaccountsetup");
 }
 
 function isHrPayUnitsDependantRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
   return compact.includes("payunitsdependant") || compact.includes("payunitdependant") || compact.includes("payunitsdependent") || compact.includes("payunitdependent");
+}
+
+function isHrGradePayUnitRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("gradepayunit") || compact.includes("gradepayunits");
+}
+
+function isHrPayrollAccountSetupRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("payrollaccountsetup") || compact.includes("payrollaccountssetup") || compact.includes("payrollacsetup");
 }
 
 function isHrLeaveCancelRoute(context: WorkspaceRouteContext) {
@@ -2450,10 +2469,10 @@ function isHrEmployeeProfileRoute(context: WorkspaceRouteContext) {
   return compact.includes("employeeprofile") || compact.includes("employeemaster") || compact.includes("hremployeeprofile");
 }
 
-function isHrPayrollAccountSetupRoute(context: WorkspaceRouteContext) {
-  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
-  return compact.includes("payrollaccountsetup") || compact.includes("payrollaccountssetup") || compact.includes("payrollacsetup");
-}
+// function isHrPayrollAccountSetupRoute(context: WorkspaceRouteContext) {
+//   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+//   return compact.includes("payrollaccountsetup") || compact.includes("payrollaccountssetup") || compact.includes("payrollacsetup");
+// }
 
 function isHrMemosAndFormsWarningLetterRoute(context: WorkspaceRouteContext) {
   const normalized = getHrMatchText(context);

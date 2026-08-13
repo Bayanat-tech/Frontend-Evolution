@@ -157,7 +157,7 @@ const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
               onBlur={handleBlur}
               disabled={disabled}
             >
-              <option value="">— Select —</option>
+              <option value="">Select</option>
               {PAY_COMP_TYPE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
@@ -178,7 +178,7 @@ const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
               onBlur={handleBlur}
               disabled={disabled}
             >
-              <option value="">— Select —</option>
+              <option value="">Select</option>
               {earnDedOptions.map((opt) => (
                 <option key={opt.value_code} value={opt.value_code}>
                   {opt.value_code} - {opt.value_desc}
@@ -200,7 +200,7 @@ const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
               onBlur={handleBlur}
               disabled={disabled}
             >
-              <option value="">— Select —</option>
+              <option value="">Select</option>
               {payCompDependentOptions.map((opt) => (
                 <option key={opt.value_code} value={opt.value_code}>
                   {opt.value_code} - {opt.value_desc}
@@ -222,7 +222,7 @@ const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
               onBlur={handleBlur}
               disabled={disabled}
             >
-              <option value="">— Select —</option>
+              <option value="">Select</option>
               {periodicityOptions.map((opt) => (
                 <option key={opt.value_code} value={opt.value_code}>
                   {opt.value_code} - {opt.value_desc}
@@ -247,7 +247,7 @@ const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
               onBlur={handleBlur}
               disabled={disabled}
             >
-              <option value="">— Select —</option>
+              <option value="">Select</option>
               {attendDepOptions.map((opt) => (
                 <option key={opt.value_code} value={opt.value_code}>
                   {opt.value_code} - {opt.value_desc}
@@ -274,7 +274,7 @@ const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
               onBlur={handleBlur}
               disabled={disabled}
             >
-              <option value="">— Select —</option>
+              <option value="">Select</option>
               {taxableOptions.map((opt) => (
                 <option key={opt.value_code} value={opt.value_code}>
                   {opt.value_code} - {opt.value_desc}
@@ -300,7 +300,7 @@ const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
               onBlur={handleBlur}
               disabled={disabled}
             >
-              <option value="">— Select —</option>
+              <option value="">Select </option>
               {payFlagOptions.map((opt) => (
                 <option key={opt.value_code} value={opt.value_code}>
                   {opt.value_code} - {opt.value_desc}
@@ -325,7 +325,7 @@ const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
               onBlur={handleBlur}
               disabled={disabled}
             >
-              <option value="">— Select —</option>
+              <option value="">Select</option>
               {roundOffOptions.map((opt) => (
                 <option key={opt.value_code} value={opt.value_code}>
                   {opt.value_code} - {opt.value_desc}
@@ -390,7 +390,7 @@ const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
               onBlur={handleBlur}
               disabled={disabled}
             >
-              <option value="">— Select —</option>
+              <option value="">Select</option>
               {statusOptions.map((opt) => (
                 <option key={opt.value_code} value={opt.value_code}>
                   {opt.value_code} - {opt.value_desc}
