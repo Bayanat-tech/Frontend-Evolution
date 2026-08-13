@@ -13,7 +13,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowDownUp, ArrowUp, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Search, X } from "lucide-react";
+import { ArrowDown, ArrowDownUp, ArrowUp, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Loader2, Search, X } from "lucide-react";
 import { ReactNode, UIEvent, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "../../lib/utils";
 import { Button } from "./Button";
@@ -23,6 +23,7 @@ import { Skeleton } from "./Skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./Table";
 
 export type DataTableDensity = "grid" | "compact" | "comfortable" | "large";
+export type DataTableLoaderType = "skeleton" | "circle";
 
 export type DataTableProps<TData, TValue> = {
   columns: ColumnDef<TData, TValue>[];
@@ -34,6 +35,7 @@ export type DataTableProps<TData, TValue> = {
   searchPlaceholder?: string;
   toolbar?: ReactNode;
   loading?: boolean;
+  loaderType?: DataTableLoaderType; 
   emptyText?: string;
   height?: number | string;
   minWidth?: number | string;
@@ -128,6 +130,7 @@ export function DataTable<TData, TValue>({
   searchPlaceholder = "Search...",
   toolbar,
   loading,
+  loaderType = "skeleton",
   emptyText = "No records found",
   height = 590,
   minWidth,
@@ -386,13 +389,24 @@ export function DataTable<TData, TValue>({
             ))}
           </TableHeader>
           <TableBody>
-            {loading ? (
-              skeletonRows.map((_, index) => (
-                <TableRow className={rowStyle.row} key={index}>
-                  <TableCell className={rowStyle.cell} colSpan={enhancedColumns.length}><Skeleton /></TableCell>
-                </TableRow>
-              ))
-            ) : visibleRows.length ? (
+             {loading ? (
+    loaderType === "circle" ? (
+      <TableRow>
+        <TableCell className="h-40 text-center" colSpan={enhancedColumns.length}>
+          <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
+            <Loader2 className="animate-spin text-primary" size={22} />
+            <span className="text-xs font-medium">Loading...</span>
+          </div>
+        </TableCell>
+      </TableRow>
+    ) : (
+      skeletonRows.map((_, index) => (
+        <TableRow className={rowStyle.row} key={index}>
+          <TableCell className={rowStyle.cell} colSpan={enhancedColumns.length}><Skeleton /></TableCell>
+        </TableRow>
+      ))
+    )
+  ) : visibleRows.length ? (
               visibleRows.map((row) => (
                 <TableRow
                   className={cn(rowStyle.row, onRowClick && "cursor-pointer", rowClassName?.(row.original))}

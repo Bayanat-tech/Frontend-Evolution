@@ -300,3 +300,29 @@ export async function uploadFile(file: Blob | File, filename?: string) {
     if (!response.data.success) throw new Error(response.data.message || "Unable to save Image");
     return response.data;
 };
+
+export type TAccrualAcctSetupPayload = {
+  company_code: string;
+  div_code: string;
+  dept_code: string;
+  section_code: string;
+  pay_comp_id: string;
+  ac_code_db?: string | null;
+  ac_code_cr?: string | null;
+  exp_type_code?: string | null;
+  exp_subtype_code?: string | null;
+  pay_comp_type?: string | null;
+  pay_comp_earn_ded?: string | null;
+  sepn_flag?: "Y" | "N";
+  remarks?: string | null;
+  user_id?: string | null;
+  user_dt?: string | null;
+};
+
+export async function upsertAccrualAcctSetupApi(paycompAc: TAccrualAcctSetupPayload) {
+  const response = await api.post<ApiResponse<unknown>>("/api/hr/insUpdAccrualAcctSetup", {
+    paycomp_ac: paycompAc,
+  });
+  if (!response.data.success) throw new Error(response.data.message || "Unable to save accrual account setup");
+  return response.data;
+}

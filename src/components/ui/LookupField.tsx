@@ -22,6 +22,7 @@ type LookupFieldProps = {
   disabled?: boolean;
   enforceRequired?: boolean;
   compact?: boolean;
+  dense?: boolean; // trims height further than `compact`, opt-in only
   placeholder?: string;
   required?: boolean;
   multiSelect?: boolean;
@@ -38,6 +39,7 @@ export function LookupField({
   onChange,
   disabled,
   compact,
+  dense = false,
   placeholder,
   required,
   enforceRequired,
@@ -205,11 +207,17 @@ export function LookupField({
   return (
     <>
       <label className={compact ? "block w-full min-w-0" : "field"}>
-        {!compact && <span>{label} {required && (<span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span>)}
-        </span>}
-        <div ref={triggerRef} className="flex h-9 overflow-hidden rounded-md border border-gray-400  bg-background">
-        {/* <div ref={triggerRef} className={`flex w-full min-w-0 overflow-hidden rounded-md border bg-background ${compact ? "h-7" : "h-9"}`}> */}
-        <div ref={triggerRef} className={`relative flex w-full min-w-0 overflow-hidden rounded-md border bg-background ${compact ? "h-7" : "h-9"}`}>
+        {!compact && (
+          <span>
+            {label} {required && <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span>}
+          </span>
+        )}
+        <div
+          ref={triggerRef}
+          className={`relative flex w-full min-w-0 overflow-hidden rounded-md border border-gray-400 bg-background ${
+            dense ? "h-7" : compact ? "h-7" : "h-9"
+          }`}
+        >
           {enforceRequired && (
             <input
               ref={validityRef}
@@ -218,12 +226,14 @@ export function LookupField({
               className="pointer-events-none absolute inset-0 h-full w-full border-0 bg-transparent p-0 opacity-0"
               value={value}
               required
-              onChange={() => { }}
+              onChange={() => {}}
               onInvalid={(e) => (e.target as HTMLInputElement).setCustomValidity(`${label || "This field"} is required`)}
             />
           )}
           <button
-            className={`min-w-0 flex-1 border-0 bg-transparent text-left text-foreground disabled:opacity-60 ${compact ? "px-2 text-xs" : "px-3 text-sm"}`}
+            className={`min-w-0 flex-1 border-0 bg-transparent text-left text-foreground disabled:opacity-60 ${
+              dense || compact ? "px-2 text-xs" : "px-3 text-sm"
+            }`}
             type="button"
             onClick={openLookup}
             disabled={disabled}
@@ -234,23 +244,22 @@ export function LookupField({
           </button>
           {value && !disabled && (
             <button
-              className={`${compact ? "w-7" : "w-8"} grid place-items-center text-muted-foreground hover:bg-accent`}
+              className={`${dense || compact ? "w-7" : "w-8"} grid place-items-center text-muted-foreground hover:bg-accent`}
               type="button"
               onClick={() => onChange("", null)}
             >
-              <X size={14} />
+              <X size={dense ? 12 : 14} />
             </button>
           )}
           <button
-            className={`${compact ? "w-7" : "w-9"} grid place-items-center border-l text-muted-foreground hover:bg-accent`}
+            className={`${dense || compact ? "w-7" : "w-9"} grid place-items-center border-l text-muted-foreground hover:bg-accent`}
             type="button"
             onClick={openLookup}
             disabled={disabled}
           >
-            <Search size={15} />
+            <Search size={dense ? 13 : 15} />
           </button>
         </div>
-      </div>
       </label>
 
       {open &&

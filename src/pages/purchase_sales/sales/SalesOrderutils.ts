@@ -199,8 +199,8 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     doc_no: form.doc_no || undefined, // if number, okay; if string, API may handle
     doc_type: docType,
     doc_date: form.doc_date,
-    ref_no: form.quotn_no,
-    ref_date: form.quotn_date,
+    ref_no: form.ref_no,
+    ref_date: form.ref_date,
     div_code: form.div_code,
     div_name: form.div_name,
     ac_code: form.ac_code,

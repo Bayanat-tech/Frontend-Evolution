@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { Plus, Save, Trash2, Users } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
@@ -33,21 +33,35 @@ const LEVEL_FIELDS: { key: LevelKey; label: string; required: boolean }[] = [
   { key: "level5_role", label: "Level 5", required: false },
 ];
 
-const EMPTY_LEVEL_VALUES: Record<LevelKey, string> = {
-  level1_role: "",
-  level2_role: "",
-  level3_role: "",
-  level4_role: "",
-  level5_role: "",
-};
+// Each grid cell carries its code + resolved description together so
+// LookupField can render "CODE — DESC" via displayValue without flicker.
+type LevelCell = { value: string; desc: string };
 
-const EMPTY_LEVEL_DESCS: Record<LevelKey, string> = {
-  level1_role: "",
-  level2_role: "",
-  level3_role: "",
-  level4_role: "",
-  level5_role: "",
-};
+// One row of the horizontal Approver Levels grid = one flow for the
+// selected process. A process can now have several rows — e.g. the same
+// Level 1 approver handling multiple departments via different Flow Codes.
+// `rowId` is a client-only key (the backend has no serial number for these
+// rows) used for React keys / dirty tracking — never sent to the backend.
+type FlowRow = { rowId: string } & Record<LevelKey, LevelCell> & { flow_code: LevelCell };
+
+function makeRowId() {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `row_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+}
+
+function emptyRow(): FlowRow {
+  return {
+    rowId: makeRowId(),
+    level1_role: { value: "", desc: "" },
+    level2_role: { value: "", desc: "" },
+    level3_role: { value: "", desc: "" },
+    level4_role: { value: "", desc: "" },
+    level5_role: { value: "", desc: "" },
+    // Backend returns "NA" when nothing's been picked yet — default to it.
+    flow_code: { value: "NA", desc: "" },
+  };
+}
 
 // LookupField shows raw `value` until its own lookup rows are loaded/matched,
 // so code-only vs desc-only flicker happens unless we hand it an explicit
@@ -68,14 +82,15 @@ export function FlowAssignmentPage() {
   const [customProcesses, setCustomProcesses] = useState<{ PROCESS: string }[]>([]);
   const [addProcessOpen, setAddProcessOpen] = useState(false);
   const [newProcessName, setNewProcessName] = useState("");
-  const [selectedRole, setSelectedRole] = useState<string>("");
-  const [selectedRoleDesc, setSelectedRoleDesc] = useState<string>("");
 
-  const [levelValues, setLevelValues] = useState<Record<LevelKey, string>>(EMPTY_LEVEL_VALUES);
-  const [levelDescs, setLevelDescs] = useState<Record<LevelKey, string>>(EMPTY_LEVEL_DESCS);
+  // Horizontal Approver Levels grid — one process can have multiple flow rows.
+  const [flowRows, setFlowRows] = useState<FlowRow[]>([]);
   const [levelLoading, setLevelLoading] = useState(false);
   const [savingLevels, setSavingLevels] = useState(false);
   const [levelDirty, setLevelDirty] = useState(false);
+
+  const [selectedRole, setSelectedRole] = useState<string>("");
+  const [selectedRoleDesc, setSelectedRoleDesc] = useState<string>("");
   const [savingRole, setSavingRole] = useState(false);
 
   const [userRows, setUserRows] = useState<TFlowRoleUser[]>([]);
@@ -86,17 +101,11 @@ export function FlowAssignmentPage() {
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   // ── Add User modal state ──────────────────────────────────────────────
-  // modalRole is independent from the page's selectedRole, so the modal
-  // can be opened even when nothing (or a null Level 5) is selected yet —
-  // the person picks the role right here via LookupField.
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [modalRole, setModalRole] = useState("");
   const [modalRoleDesc, setModalRoleDesc] = useState("");
   const [addUserLoginId, setAddUserLoginId] = useState("");
   const [addUserLoginName, setAddUserLoginName] = useState("");
-  // Tracks whether the Assigned Users grid has unsaved local changes
-  // (additions via the modal, or removals via the row delete icon) so
-  // Save Role knows there's something to push.
   const [roleUsersDirty, setRoleUsersDirty] = useState(false);
 
   const loadProcessOptions = useCallback(async () => {
@@ -123,8 +132,31 @@ export function FlowAssignmentPage() {
     return (rows ?? []) as unknown as LookupRow[];
   }, [companyCode]);
 
-  const loadUsersForLevels = async (levels: Record<LevelKey, string>) => {
-    const roleCodes = Array.from(new Set(Object.values(levels).filter(Boolean)));
+  const loadFlowCodeOptions = useCallback(async () => {
+    const safeCompanyCode = companyCode.replace(/'/g, "''");
+    const rows = await executeWmsInboundSqlCached(
+      `select * from MS_PS_FLOW_MASTER where company_code = '${safeCompanyCode}'`
+    );
+    return (rows ?? []) as unknown as LookupRow[];
+  }, [companyCode]);
+
+  // Default bottom-panel view: users across every role used anywhere in the
+  // grid (all rows, all levels) — same fallback as before, extended from
+  // "one row's levels" to "all rows' levels" now that there can be several.
+  const loadUsersForRows = async (rows: FlowRow[]) => {
+    const roleCodes = Array.from(
+      new Set(
+        rows
+          .flatMap((r) => [
+            r.level1_role.value,
+            r.level2_role.value,
+            r.level3_role.value,
+            r.level4_role.value,
+            r.level5_role.value,
+          ])
+          .filter(Boolean)
+      )
+    );
     if (roleCodes.length === 0) {
       setUserRows([]);
       return;
@@ -158,43 +190,39 @@ export function FlowAssignmentPage() {
 
   const loadLevelDetails = async (process: string) => {
     if (!process) {
-      setLevelValues(EMPTY_LEVEL_VALUES);
-      setLevelDescs(EMPTY_LEVEL_DESCS);
+      setFlowRows([]);
       setLevelDirty(false);
       setUserRows([]);
       setRightPanelContext("");
+      setSelectedRole("");
+      setSelectedRoleDesc("");
       return;
     }
     setLevelLoading(true);
     try {
       const rows = await getFlowAssignLevelDetails(companyCode, process);
-      const first = (rows ?? [])[0] as Record<string, unknown> | undefined;
+      const data = (rows ?? []) as unknown as Record<string, unknown>[];
 
-      const next: Record<LevelKey, string> = {
-        level1_role: first ? val(first, "level1_role") : "",
-        level2_role: first ? val(first, "level2_role") : "",
-        level3_role: first ? val(first, "level3_role") : "",
-        level4_role: first ? val(first, "level4_role") : "",
-        level5_role: first ? val(first, "level5_role") : "",
-      };
-      const nextDescs: Record<LevelKey, string> = {
-        level1_role: first ? val(first, "level1_role_desc") : "",
-        level2_role: first ? val(first, "level2_role_desc") : "",
-        level3_role: first ? val(first, "level3_role_desc") : "",
-        level4_role: first ? val(first, "level4_role_desc") : "",
-        level5_role: first ? val(first, "level5_role_desc") : "",
-      };
+      const mapped: FlowRow[] = data.map((r) => ({
+        rowId: makeRowId(),
+        level1_role: { value: val(r, "level1_role"), desc: val(r, "level1_role_desc") },
+        level2_role: { value: val(r, "level2_role"), desc: val(r, "level2_role_desc") },
+        level3_role: { value: val(r, "level3_role"), desc: val(r, "level3_role_desc") },
+        level4_role: { value: val(r, "level4_role"), desc: val(r, "level4_role_desc") },
+        level5_role: { value: val(r, "level5_role"), desc: val(r, "level5_role_desc") },
+        flow_code: { value: val(r, "flow_code") || "NA", desc: val(r, "flow_code_desc") },
+      }));
 
-      setLevelValues(next);
-      setLevelDescs(nextDescs);
+      // Always keep at least one (possibly empty) row so there's something
+      // to fill in for a process that has no flows configured yet.
+      const next = mapped.length ? mapped : [emptyRow()];
+      setFlowRows(next);
       setLevelDirty(false);
       setSelectedRole("");
       setSelectedRoleDesc("");
       setRoleUsersDirty(false);
-
-      const filledCount = Object.values(next).filter(Boolean).length;
-      setRightPanelContext(filledCount ? `Levels 1–${filledCount}` : "");
-      await loadUsersForLevels(next);
+      setRightPanelContext("");
+      await loadUsersForRows(next);
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load level details." });
     } finally {
@@ -202,69 +230,126 @@ export function FlowAssignmentPage() {
     }
   };
 
-  const updateLevelValue = (key: LevelKey, newValue: string, row: LookupRow | null) => {
-    const next = { ...levelValues, [key]: newValue };
-    setLevelValues(next);
-    setLevelDescs((prev) => ({
-      ...prev,
-      [key]: newValue ? val((row as Record<string, unknown>) || {}, "ROLE_DESC") : "",
-    }));
+  const updateRowLevel = (rowId: string, key: LevelKey, newValue: string, row: LookupRow | null) => {
+    setFlowRows((prev) =>
+      prev.map((r) =>
+        r.rowId === rowId
+          ? {
+              ...r,
+              [key]: {
+                value: newValue,
+                desc: newValue ? val((row as Record<string, unknown>) || {}, "ROLE_DESC") : "",
+              },
+            }
+          : r
+      )
+    );
     setLevelDirty(true);
-
-    const levelLabel = LEVEL_FIELDS.find((field) => field.key === key)?.label || key;
-    setSelectedRole(newValue);
-    setSelectedRoleDesc(newValue ? val((row as Record<string, unknown>) || {}, "ROLE_DESC") : "");
-    setRoleUsersDirty(false);
-    setRightPanelContext(newValue ? `${levelLabel} — Role ${newValue}` : `${levelLabel} — no role selected yet`);
-    if (newValue) {
-      void loadRoleUsers(newValue);
-    } else {
-      setUserRows([]);
-    }
   };
 
-  // Clicking a level's label (not the dropdown itself) selects that level's
-  // already-assigned role in the Role Name field below, without changing
-  // the level's value.
-  const handleSelectLevelRole = (key: LevelKey) => {
-    const roleId = levelValues[key];
-    if (!roleId) return;
-
-    const levelLabel = LEVEL_FIELDS.find((field) => field.key === key)?.label || key;
-    setSelectedRole(roleId);
-    setSelectedRoleDesc(levelDescs[key]);
-    setRoleUsersDirty(false);
-    setRightPanelContext(`${levelLabel} — Role ${roleId}`);
-    void loadRoleUsers(roleId);
+  const updateRowFlowCode = (rowId: string, v: string, row: LookupRow | null) => {
+    // Clearing the selection falls back to "NA" — same sentinel the backend
+    // sends when nothing has been picked — rather than an empty string.
+    const nextCode = v || "NA";
+    setFlowRows((prev) =>
+      prev.map((r) =>
+        r.rowId === rowId
+          ? {
+              ...r,
+              flow_code: {
+                value: nextCode,
+                desc: v ? val((row as Record<string, unknown>) || {}, "FLOW_DESCRIPTION") : "",
+              },
+            }
+          : r
+      )
+    );
+    setLevelDirty(true);
   };
 
-  const totalLevelCount = useMemo(
-    () => Object.values(levelValues).filter(Boolean).length,
-    [levelValues]
-  );
+  // Clicking the small "view users" icon next to a filled cell shows that
+  // specific row + level's role in the bottom panel, without touching the grid.
+  const handleViewRoleUsers = (row: FlowRow, key: LevelKey) => {
+    const cell = row[key];
+    if (!cell.value) return;
+    const levelLabel = LEVEL_FIELDS.find((f) => f.key === key)?.label || key;
+    setSelectedRole(cell.value);
+    setSelectedRoleDesc(cell.desc);
+    setRoleUsersDirty(false);
+    setRightPanelContext(`${levelLabel} — Role ${cell.value}`);
+    void loadRoleUsers(cell.value);
+  };
+
+  const handleAddRow = () => {
+    setFlowRows((prev) => [...prev, emptyRow()]);
+    setLevelDirty(true);
+  };
+
+  // Removing a row is purely client-side, same pattern as removing a user
+  // from the Assigned Users grid below — its absence on Save Levels is what
+  // tells the backend to drop it.
+  const handleRemoveRow = (rowId: string) => {
+    setFlowRows((prev) => {
+      const next = prev.filter((r) => r.rowId !== rowId);
+      return next.length ? next : [emptyRow()];
+    });
+    setLevelDirty(true);
+  };
 
   const handleSaveLevels = async () => {
     if (!selectedProcess) {
       setNotice({ type: "error", message: "Please select a process first." });
       return;
     }
-    if (!levelValues.level1_role || !levelValues.level2_role) {
-      setNotice({ type: "error", message: "Level 1 and Level 2 are required." });
+
+    // Drop rows nobody touched (added via "+ Add Row" then left blank).
+    const usableRows = flowRows.filter(
+      (r) => r.level1_role.value || r.level2_role.value || r.level3_role.value || r.level4_role.value || r.level5_role.value
+    );
+
+    if (usableRows.length === 0) {
+      setNotice({ type: "error", message: "Add at least one row with Level 1 and Level 2." });
       return;
+    }
+
+    for (const row of usableRows) {
+      if (!row.level1_role.value || !row.level2_role.value) {
+        setNotice({ type: "error", message: "Level 1 and Level 2 are required on every row." });
+        return;
+      }
+    }
+
+    // Same Level 1 across rows is fine (one approver, multiple departments)
+    // — but those rows must then use different Flow Codes, otherwise the
+    // flows can't be told apart.
+    const seen = new Set<string>();
+    for (const row of usableRows) {
+      const key = `${row.level1_role.value}::${row.flow_code.value || "NA"}`;
+      if (seen.has(key)) {
+        setNotice({
+          type: "error",
+          message: `Two rows share Level 1 (${row.level1_role.value}) and Flow Code (${row.flow_code.value || "NA"}) — give one of them a different Flow Code.`,
+        });
+        return;
+      }
+      seen.add(key);
     }
 
     setSavingLevels(true);
     try {
-      const lastLevel = totalLevelCount;
+      const payloadRows = usableRows.map((row) => ({
+        level1_role: row.level1_role.value,
+        level2_role: row.level2_role.value,
+        level3_role: row.level3_role.value || undefined,
+        level4_role: row.level4_role.value || undefined,
+        level5_role: row.level5_role.value || undefined,
+        last_level: [row.level1_role.value, row.level2_role.value, row.level3_role.value, row.level4_role.value, row.level5_role.value].filter(
+          Boolean
+        ).length,
+        flow_code: row.flow_code.value || "NA",
+      }));
 
-      const result = await saveFlowAssignLevels(companyCode, selectedProcess, {
-        level1_role: levelValues.level1_role,
-        level2_role: levelValues.level2_role,
-        level3_role: levelValues.level3_role || undefined,
-        level4_role: levelValues.level4_role || undefined,
-        level5_role: levelValues.level5_role || undefined,
-        last_level: lastLevel,
-      });
+      const result = await saveFlowAssignLevels(companyCode, selectedProcess, payloadRows);
 
       if (result?.success) {
         setLevelDirty(false);
@@ -381,8 +466,6 @@ export function FlowAssignmentPage() {
     setNewProcessName("");
   };
 
-  // Add is always openable now — even with no role/level selected (e.g. a
-  // null Level 5) — because the role itself is picked inside the modal.
   const handleAddUser = () => {
     setModalRole(selectedRole || "");
     setModalRoleDesc(selectedRole ? selectedRoleDesc : "");
@@ -407,12 +490,12 @@ export function FlowAssignmentPage() {
     setAddUserLoginId("");
     setAddUserLoginName("");
 
-    // Reflect the role picked in the modal back onto the page so the
-    // grid below shows the role that was just staged.
     setSelectedRole(modalRole);
     setSelectedRoleDesc(modalRoleDesc);
     setRightPanelContext(`Role ${modalRole}`);
   };
+
+  const filledRowCount = flowRows.filter((r) => r.level1_role.value).length;
 
   return (
     <section className="grid gap-5">
@@ -425,91 +508,152 @@ export function FlowAssignmentPage() {
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      {/* TOP: Process -> Approver Levels */}
-      <div className="grid gap-3 rounded-lg border bg-card p-4 shadow-sm">
-        <div className="flex items-end gap-3">
-          <label className="grid flex-1 gap-1 text-sm">
-            <span className="font-medium text-foreground">Process</span>
-            <LookupField
-              value={selectedProcess}
-              placeholder="Select process"
-              columns={[{ field: "PROCESS", header: "Process" }]}
-              valueField="PROCESS"
-              displayFields={["PROCESS"]}
-              loadOptions={loadProcessOptions}
-              onChange={(v) => {
-                setSelectedProcess(v);
-                void loadLevelDetails(v);
-              }}
-            />
-          </label>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setNewProcessName("");
-              setAddProcessOpen(true);
-            }}
-          >
-            <Plus size={14} /> Add Process
-          </Button>
-        </div>
+{/* TOP: Process -> Approver Levels (horizontal grid, one row per flow) */}
+<div className="grid gap-2.5 rounded-lg border bg-card p-3 shadow-sm">
+  <div className="flex items-end gap-2">
+    <label className="grid flex-1 gap-1 text-sm">
+      <span className="font-medium text-foreground">Process</span>
+      <LookupField
+        value={selectedProcess}
+        dense
+        placeholder="Select process"
+        columns={[{ field: "PROCESS", header: "Process" }]}
+        valueField="PROCESS"
+        displayFields={["PROCESS"]}
+        loadOptions={loadProcessOptions}
+        onChange={(v) => {
+          setSelectedProcess(v);
+          void loadLevelDetails(v);
+        }}
+      />
+    </label>
+    <Button
+      size="sm"
+      variant="outline"
+      onClick={() => {
+        setNewProcessName("");
+        setAddProcessOpen(true);
+      }}
+    >
+      <Plus size={14} /> Add Process
+    </Button>
+  </div>
 
-        <h2 className="m-0 text-sm font-semibold text-foreground">Approver Levels</h2>
+  <div className="flex items-center justify-between">
+    <h2 className="m-0 text-sm font-semibold text-foreground">Approver Levels</h2>
+    <Button size="sm" variant="outline" onClick={handleAddRow} disabled={!selectedProcess || levelLoading}>
+      <Plus size={14} /> Add Row
+    </Button>
+  </div>
 
-        <div className="grid grid-cols-1 gap-2.5">
-          {LEVEL_FIELDS.map(({ key, label, required }) => (
-            <div key={key} className="flex items-center gap-3">
-              <span
-                className="w-16 shrink-0 cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground hover:underline sm:w-20"
-                onClick={() => handleSelectLevelRole(key)}
-                title={levelValues[key] ? "View this role's assigned users" : undefined}
-              >
-                {label}
-                {required && <span className="ml-0.5 text-red-500">*</span>}
-              </span>
-              <div className="min-w-0 flex-1">
-                <LookupField
-                  value={levelValues[key]}
-                  displayValue={formatRoleDisplay(levelValues[key], levelDescs[key])}
-                  placeholder={required ? "Select (required)" : "None"}
-                  columns={[
-                    { field: "ROLE_ID", header: "Role Code" },
-                    { field: "ROLE_DESC", header: "Role Description" },
-                  ]}
-                  valueField="ROLE_ID"
-                  displayFields={["ROLE_ID", "ROLE_DESC"]}
-                  loadOptions={loadRoleOptions}
-                  disabled={!selectedProcess || levelLoading}
-                  onChange={(v, row) => updateLevelValue(key, v, row)}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex items-center justify-between border-t pt-3">
-          <span className="text-sm font-medium text-foreground">
-            Total Level Count: <span className="tabular-nums">{totalLevelCount}</span>
+  <div className="overflow-x-auto">
+    <div className="min-w-[860px]">
+      {/* header */}
+      <div className="grid grid-cols-[repeat(6,minmax(130px,1fr))_24px] gap-1.5 border-b pb-1.5">
+        {LEVEL_FIELDS.map(({ key, label, required }) => (
+          <span key={key} className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {label}
+            {required && <span className="ml-0.5 text-red-500">*</span>}
           </span>
-          <Button
-            size="sm"
-            onClick={handleSaveLevels}
-            disabled={!selectedProcess || !levelDirty || savingLevels}
-          >
-            <Save size={14} />
-            {savingLevels ? "Saving..." : "Save Levels"}
-          </Button>
-        </div>
+        ))}
+        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Flow Code</span>
+        <span />
       </div>
 
-      {/* BOTTOM: users for whichever level cell was last clicked/edited,
-          or a single role explicitly picked via Role Name */}
+      {/* rows */}
+      <div className="grid gap-1 pt-1.5">
+        {flowRows.map((row) => (
+          <div
+            key={row.rowId}
+            className="grid grid-cols-[repeat(6,minmax(130px,1fr))_24px] items-center gap-1.5 rounded-md px-1 py-0.5 hover:bg-muted/40"
+          >
+            {LEVEL_FIELDS.map(({ key, required }) => (
+              <div key={key} className="flex min-w-0 items-center gap-1">
+                <div className="min-w-0 flex-1">
+                  <LookupField
+                  dense
+                    value={row[key].value}
+                    displayValue={formatRoleDisplay(row[key].value, row[key].desc)}
+                    placeholder={required ? "Select" : "None"}
+                    columns={[
+                      { field: "ROLE_ID", header: "Role Code" },
+                      { field: "ROLE_DESC", header: "Role Description" },
+                    ]}
+                    valueField="ROLE_ID"
+                    displayFields={["ROLE_ID", "ROLE_DESC"]}
+                    loadOptions={loadRoleOptions}
+                    disabled={!selectedProcess || levelLoading}
+                    onChange={(v, r) => updateRowLevel(row.rowId, key, v, r)}
+                  />
+                </div>
+                {row[key].value && (
+                  <button
+                    type="button"
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                    title="View this role's assigned users"
+                    onClick={() => handleViewRoleUsers(row, key)}
+                  >
+                    <Users size={12} />
+                  </button>
+                )}
+              </div>
+            ))}
+
+            <div className="min-w-0">
+              <LookupField
+              dense
+                value={row.flow_code.value === "NA" ? "" : row.flow_code.value}
+                displayValue={row.flow_code.value === "NA" ? "NA" : formatRoleDisplay(row.flow_code.value, row.flow_code.desc)}
+                placeholder="NA"
+                columns={[
+                  { field: "FLOW_CODE", header: "Flow Code" },
+                  { field: "FLOW_DESCRIPTION", header: "Flow Description" },
+                ]}
+                valueField="FLOW_CODE"
+                displayFields={["FLOW_CODE", "FLOW_DESCRIPTION"]}
+                loadOptions={loadFlowCodeOptions}
+                disabled={!selectedProcess || levelLoading}
+                onChange={(v, r) => updateRowFlowCode(row.rowId, v, r)}
+              />
+            </div>
+
+            <button
+              type="button"
+              className="shrink-0 text-muted-foreground hover:text-red-500"
+              title="Remove row"
+              onClick={() => handleRemoveRow(row.rowId)}
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+
+  <div className="flex items-center justify-between border-t pt-2">
+    <span className="text-xs font-medium text-muted-foreground">
+      Rows: <span className="tabular-nums text-foreground">{filledRowCount}</span>
+    </span>
+    <Button
+      size="sm"
+      onClick={handleSaveLevels}
+      disabled={!selectedProcess || !levelDirty || savingLevels}
+    >
+      <Save size={14} />
+      {savingLevels ? "Saving..." : "Save Levels"}
+    </Button>
+  </div>
+</div>
+
+      {/* BOTTOM: users for whichever row/level's "view users" icon was last
+          clicked, or a single role explicitly picked via Role Name */}
       <div className="grid gap-3 rounded-lg border bg-card p-4 shadow-sm">
         <div className="flex items-end justify-between gap-3">
           <label className="grid flex-1 gap-1 text-sm">
             <span className="font-medium text-foreground">Role Name</span>
             <LookupField
+            dense
               value={selectedRole}
               displayValue={formatRoleDisplay(selectedRole, selectedRoleDesc)}
               placeholder="Filter to a single role"
@@ -528,9 +672,8 @@ export function FlowAssignmentPage() {
                   setRightPanelContext(`Role ${v}`);
                   void loadRoleUsers(v);
                 } else {
-                  const filledCount = Object.values(levelValues).filter(Boolean).length;
-                  setRightPanelContext(filledCount ? `Levels 1–${filledCount}` : "");
-                  void loadUsersForLevels(levelValues);
+                  setRightPanelContext("");
+                  void loadUsersForRows(flowRows);
                 }
               }}
             />
@@ -557,12 +700,12 @@ export function FlowAssignmentPage() {
           loading={userLoading}
           height="320px"
           minWidth={420}
+           loaderType="circle" 
           density="grid"
           getRowId={(row: any, index: any) => val(row, "loginid") + "_" + val(row, "serial_no_or_role_id") + "_" + index}
         />
 
         <div className="flex justify-end gap-2 border-t pt-3">
-          {/* No longer gated on selectedRole — Level 5 (or any unpicked level) can open this and choose the role right inside the modal. */}
           <Button onClick={handleAddUser}>
             <Plus size={15} /> Add
           </Button>
@@ -592,6 +735,7 @@ export function FlowAssignmentPage() {
           <label className="grid gap-1 text-sm">
             <span className="font-medium text-foreground">Role</span>
             <LookupField
+            dense
               value={modalRole}
               displayValue={formatRoleDisplay(modalRole, modalRoleDesc)}
               placeholder="Search code, name, description..."
@@ -612,6 +756,7 @@ export function FlowAssignmentPage() {
           <label className="grid gap-1 text-sm">
             <span className="font-medium text-foreground">User Code</span>
             <LookupField
+            dense
               value={addUserLoginId}
               displayValue={formatRoleDisplay(addUserLoginId, addUserLoginName)}
               placeholder="Search user code or name..."

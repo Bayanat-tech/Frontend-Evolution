@@ -1,8 +1,9 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { Plus, Save, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { getDynamicLookup } from "../../api/lookups";
+import { executeDynamicDelete, getDynamicLookup } from "../../api/lookups";
 import type { LookupRow } from "../../api/lookups";
+import { upsertAccrualAcctSetupApi } from "../../api/hr";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
@@ -36,10 +37,7 @@ const EMPTY_HEADER: THeaderFilters = {
 
 // ─── Grid row — one per Accrual Type, field names mirror the SELECT list
 // from MS_HR_SEC_PAYCOMP_AC (PAY_COMP_TYPE = 'A' branch) plus the joined
-// pay_desc subquery (ms_hr_accruals.accrual_desc). exp_type_code is derived
-// (not user-picked) from ac_code_db via MS_ACCODES; exp_subtype_code is a
-// dependent dropdown filtered by that derived exp_type_code — mirrors the
-// PowerBuilder 'ac_code_db' / 'exp_subtype_code' CASE blocks. ─────────────
+// pay_desc subquery (ms_hr_accruals.accrual_desc). ─────────────────────────
 type TAccrualAccountRow = {
   row_id: string;
   company_code: string;
@@ -54,9 +52,6 @@ type TAccrualAccountRow = {
   ac_code_cr_name: string;
   sepn_flag: "Y" | "N"; // End of Service
   remarks: string;
-  exp_type_code: string; // derived from ac_code_db, not directly editable
-  exp_subtype_code: string;
-  exp_subtype_desc: string;
   pay_comp_earn_ded?: string;
   is_new?: boolean;
 };
@@ -75,9 +70,6 @@ const blankRow = (): TAccrualAccountRow => ({
   ac_code_cr_name: "",
   sepn_flag: "N",
   remarks: "",
-  exp_type_code: "",
-  exp_subtype_code: "",
-  exp_subtype_desc: "",
   is_new: true,
 });
 
@@ -131,24 +123,22 @@ const ACCOUNT_LOOKUP_COLUMNS: { field: string; header: string }[] = [
   { field: "ac_name", header: "Account Name" },
 ];
 
-// Expense type for a chosen DB account — scalar lookup (P_CODE1 = company,
-// P_CODE2 = ac_code_db). Mirrors PB's "SELECT exp_type_code INTO :ls_expense_code
-// FROM ms_accodes WHERE company_code = :co AND TRIM(ac_code) = :ac_code_db".
-const EXP_TYPE_FOR_ACCODE_PARAMETER = "MST_HR_EXP_TYPE_FOR_ACCODE";
-
-// Expense Subtype — P_CODE1 = company, P_CODE2 = exp_type_code (derived
-// above). Mirrors PB 'exp_subtype_code' CASE block.
-const EXP_SUBTYPE_LOOKUP_PARAMETER = "MST_HR_EXP_SUBTYPE_DDL";
-const EXP_SUBTYPE_LOOKUP_COLUMNS: { field: string; header: string }[] = [
-  { field: "exp_subtype_code", header: "Subtype Code" },
-  { field: "exp_subtype_description", header: "Subtype Description" },
-];
-
-// ─── Retrieve / Save proc parameters. RETRIEVE is real (matches the proc
-// WHEN block added for MS_HR_SEC_PAYCOMP_AC). SAVE is still a placeholder —
-// no save proc SQL has been supplied yet. ──────────────────────────────
+// ─── Retrieve parameter — matches the proc WHEN block added for
+// MS_HR_SEC_PAYCOMP_AC. Save now goes through upsertAccrualAcctSetupApi
+// (POST /api/finance/insUpdAccrualAcctSetup), one row per call, since
+// PROC_INS_UPD_MS_HR_SEC_PAYCOMP_AC only accepts a single-row table type. ──
 const RETRIEVE_PARAMETER = "MST_HR_ACCRUAL_AC_SETUP_RETRIEVE";
-const SAVE_PARAMETER = "HR_ACCRUAL_AC_SETUP_SAVE";
+
+// ─── Delete parameter — routes through PROC_BUILD_DYNAMIC_DEL_COMMON
+// ('MST_HR_' prefix) → PROC_BUILD_DYNAMIC_DEL_MST_HR. P_CODE1..P_CODE4 =
+// Company/Div/Dept/Section, as usual. NOTE: the backend route
+// (proc_build_dynamic_del_common) never forwards P_CODE5 — it's hardcoded
+// to null there and that route can't be changed — so pay_comp_id (accrual
+// type) instead gets appended directly onto the parameter string itself:
+// 'MST_HR_ACCRUAL_AC_SETUP_DELETE_' + pay_comp_id (e.g. "...DELETE_AL").
+// The DB proc detects this prefix with SUBSTR before its CASE statement
+// and pulls pay_comp_id back out of the parameter suffix. ────────────────
+const DELETE_PARAMETER_PREFIX = "MST_HR_ACCRUAL_AC_SETUP_DELETE_";
 
 export function HrAccuralAccountSetup() {
   const { user } = useAuth();
@@ -160,6 +150,7 @@ export function HrAccuralAccountSetup() {
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingRowId, setDeletingRowId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(
     null,
   );
@@ -209,22 +200,6 @@ export function HrAccuralAccountSetup() {
     [loginid],
   );
 
-  // ── Derives EXP_TYPE_CODE for a chosen DB account, then returns it so the
-  // caller can immediately fetch the matching Expense Subtype list. ──────
-  const fetchExpTypeForAcCode = useCallback(
-    async (acCode: string): Promise<string> => {
-      if (!header.company_code || !acCode) return "";
-      const rowsFound = await loadLookupRows(
-        EXP_TYPE_FOR_ACCODE_PARAMETER,
-        header.company_code,
-        acCode,
-      );
-      const first = rowsFound[0] as Record<string, unknown> | undefined;
-      return (first?.exp_type_code as string) ?? "";
-    },
-    [header.company_code, loadLookupRows],
-  );
-
   // ── Retrieve — pulls existing MS_HR_SEC_PAYCOMP_AC rows for the header
   // scope (COMPANY_CODE / DIV_CODE / DEPT_CODE / SECTION_CODE, PAY_COMP_TYPE
   // = 'A'), per the SELECT in the email ss. ──────────────────────────────
@@ -266,15 +241,12 @@ export function HrAccuralAccountSetup() {
         section_code: r.section_code ?? header.section_code,
         pay_comp_id: r.pay_comp_id ?? "",
         pay_desc: r.pay_desc ?? "",
-        ac_code_db: r.ac_code_db ?? "",
+        ac_code_db: String(r.ac_code_db ?? "").trim(),
         ac_code_db_name: r.ac_code_db_name ?? "",
         ac_code_cr: r.ac_code_cr ?? "",
         ac_code_cr_name: r.ac_code_cr_name ?? "",
         sepn_flag: r.sepn_flag === "Y" ? "Y" : "N",
         remarks: r.remarks ?? "",
-        exp_type_code: r.exp_type_code ?? "",
-        exp_subtype_code: r.exp_subtype_code ?? "",
-        exp_subtype_desc: r.exp_subtype_desc ?? "",
       }));
       setRows(mapped);
       setDeletedRowIds([]);
@@ -313,60 +285,76 @@ export function HrAccuralAccountSetup() {
 
   const addRow = () => setRows((prev) => [...prev, blankRow()]);
 
-  const removeRow = (row_id: string) => {
-    setRows((prev) => prev.filter((r) => r.row_id !== row_id));
-    setDeletedRowIds((prev) => (row_id.startsWith("new-") ? prev : [...prev, row_id]));
-  };
+  // ── Delete row — new/unsaved rows (row_id starts with "new-") only ever
+  // existed in local state, so they're just dropped. Existing rows are
+  // deleted immediately against MS_HR_SEC_PAYCOMP_AC via executeDynamicDelete
+  // (routes through PROC_BUILD_DYNAMIC_DEL_COMMON → PROC_BUILD_DYNAMIC_DEL_MST_HR),
+  // scoped by Company/Div/Dept/Section (P_CODE1-4) + pay_comp_id, which is
+  // appended onto the parameter string itself (see DELETE_PARAMETER_PREFIX)
+  // since the backend route never forwards P_CODE5. Only removed from the
+  // grid on success so a failed delete doesn't silently desync the UI from
+  // the database. ───────────────────────────────────────────────────────
+  const removeRow = async (row: TAccrualAccountRow) => {
+    if (row.row_id.startsWith("new-")) {
+      setRows((prev) => prev.filter((r) => r.row_id !== row.row_id));
+      return;
+    }
 
-  // Called when a row's DB account changes — derives exp_type_code, clears
-  // the previously-picked exp_subtype (it's no longer valid for the new
-  // exp_type), and stores the new account name.
-  const handleDbAccountChange = async (row_id: string, value: string, acName: string) => {
-    updateRow(row_id, {
-      ac_code_db: value,
-      ac_code_db_name: acName,
-      exp_type_code: "",
-      exp_subtype_code: "",
-      exp_subtype_desc: "",
-    });
-    const expType = await fetchExpTypeForAcCode(value);
-    updateRow(row_id, { exp_type_code: expType });
-  };
-
-  // ── Save — pushes the grid back to MS_HR_SEC_PAYCOMP_AC. Basic UI only:
-  // sends rows as-is, one call, no client-side validation beyond required
-  // header fields. ──────────────────────────────────────────────────────
-  const handleSave = useCallback(async () => {
-    if (!headerReady) return;
-    setSaving(true);
+    setDeletingRowId(row.row_id);
     setNotice(null);
     try {
-      await getDynamicLookup({
-        parameter: SAVE_PARAMETER,
+      await executeDynamicDelete({
+        parameter: `${DELETE_PARAMETER_PREFIX}${row.pay_comp_id}`,
         loginid,
         code1: header.company_code,
         code2: header.div_code,
         code3: header.dept_code,
         code4: header.section_code,
-        code5: "NULL",
-        code6: "NULL",
-        code7: "NULL",
-        code8: "NULL",
-        code9: "NULL",
-        code10: "NULL",
-        number1: 0,
-        number2: 0,
-        number3: 0,
-        number4: 0,
-        date1: null,
-        date2: null,
-        date3: null,
-        date4: null,
-        // NOTE: rows / deletedRowIds intentionally NOT threaded through the
-        // shared code1..10 slots — the save proc for this screen will need
-        // its own row-array parameter shape. Left as a TODO for whoever
-        // wires the real save proc.
-      } as any);
+      });
+      setRows((prev) => prev.filter((r) => r.row_id !== row.row_id));
+      setDeletedRowIds((prev) => [...prev, row.row_id]);
+      setNotice({ type: "success", message: "Row deleted." });
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to delete row",
+      });
+    } finally {
+      setDeletingRowId(null);
+    }
+  };
+
+  // ── Save — pushes each row back to MS_HR_SEC_PAYCOMP_AC via
+  // upsertAccrualAcctSetupApi (POST /api/finance/insUpdAccrualAcctSetup).
+  // The proc only accepts one row per call (WMSTST.MS_HR_SEC_PAYCOMP_AC_TAB
+  // is built from a single-element array server-side), so rows are saved
+  // sequentially. Row deletes are handled separately by removeRow, which
+  // deletes immediately rather than batching with Save. ──────────────────
+  const handleSave = useCallback(async () => {
+    if (!headerReady) return;
+    setSaving(true);
+    setNotice(null);
+    try {
+      const today = new Date().toISOString();
+
+      for (const row of rows) {
+        await upsertAccrualAcctSetupApi({
+          company_code: header.company_code,
+          div_code: header.div_code,
+          dept_code: header.dept_code,
+          section_code: header.section_code,
+          pay_comp_id: row.pay_comp_id,
+          ac_code_db: row.ac_code_db || null,
+          ac_code_cr: row.ac_code_cr || null,
+          pay_comp_type: "A",
+          pay_comp_earn_ded: row.pay_comp_earn_ded || null,
+          sepn_flag: row.sepn_flag,
+          remarks: row.remarks || null,
+          user_id: loginid,
+          user_dt: today,
+        });
+      }
+
       setNotice({ type: "success", message: "Accrual account setup saved." });
       setDeletedRowIds([]);
     } catch (error) {
@@ -377,13 +365,12 @@ export function HrAccuralAccountSetup() {
     } finally {
       setSaving(false);
     }
-  }, [loginid, header, headerReady]);
+  }, [loginid, header, headerReady, rows]);
 
   const columns: ColumnDef<TAccrualAccountRow>[] = [
     { accessorKey: "pay_comp_id", header: "Accrual Type", size: 130 },
     { accessorKey: "ac_code_db", header: "DB Account Code", size: 260 },
     { accessorKey: "ac_code_cr", header: "CR Account Code", size: 260 },
-    { accessorKey: "exp_subtype_code", header: "Exp Subtype", size: 200 },
     { accessorKey: "sepn_flag", header: "End of Service", size: 130 },
     { accessorKey: "remarks", header: "Remarks", size: 200 },
   ];
@@ -527,7 +514,7 @@ export function HrAccuralAccountSetup() {
         </div>
       </div>
 
-      {/* ── Editable grid — Accrual Type / DB / CR / Exp Subtype / End of Service / Remarks ── */}
+      {/* ── Editable grid — Accrual Type / DB / CR / End of Service / Remarks ── */}
       <div className="rounded-md border bg-card">
         <div className="flex items-center justify-between border-b p-2">
           <span className="text-sm font-medium text-foreground">
@@ -551,7 +538,6 @@ export function HrAccuralAccountSetup() {
                 <th className="min-w-[180px] px-2 py-1.5 font-medium">Accrual Type</th>
                 <th className="min-w-[260px] px-2 py-1.5 font-medium">DB Account Code</th>
                 <th className="min-w-[260px] px-2 py-1.5 font-medium">CR Account Code</th>
-                <th className="min-w-[220px] px-2 py-1.5 font-medium">Exp Subtype</th>
                 <th className="min-w-[120px] px-2 py-1.5 font-medium">End of Service</th>
                 <th className="min-w-[180px] px-2 py-1.5 font-medium">Remarks</th>
                 <th className="w-10 px-2 py-1.5" />
@@ -593,7 +579,10 @@ export function HrAccuralAccountSetup() {
                         loadLookupRows(ACCOUNT_LOOKUP_PARAMETER, header.company_code)
                       }
                       onChange={(value, opt) =>
-                        handleDbAccountChange(row.row_id, value, (opt?.ac_name as string) ?? "")
+                        updateRow(row.row_id, {
+                          ac_code_db: value.trim(),
+                          ac_code_db_name: (opt?.ac_name as string) ?? "",
+                        })
                       }
                       placeholder="DB account"
                     />
@@ -616,31 +605,6 @@ export function HrAccuralAccountSetup() {
                         })
                       }
                       placeholder="CR account"
-                    />
-                  </td>
-
-                  <td className="px-2 py-1">
-                    <LookupField
-                      compact
-                      disabled={!row.exp_type_code}
-                      value={row.exp_subtype_code}
-                      columns={EXP_SUBTYPE_LOOKUP_COLUMNS}
-                      valueField="exp_subtype_code"
-                      displayFields={["exp_subtype_code", "exp_subtype_description"]}
-                      loadOptions={() =>
-                        loadLookupRows(
-                          EXP_SUBTYPE_LOOKUP_PARAMETER,
-                          header.company_code,
-                          row.exp_type_code,
-                        )
-                      }
-                      onChange={(value, opt) =>
-                        updateRow(row.row_id, {
-                          exp_subtype_code: value,
-                          exp_subtype_desc: (opt?.exp_subtype_description as string) ?? "",
-                        })
-                      }
-                      placeholder={row.exp_type_code ? "Exp subtype" : "Pick DB account first"}
                     />
                   </td>
 
@@ -671,8 +635,9 @@ export function HrAccuralAccountSetup() {
                   <td className="px-2 py-1 text-center">
                     <button
                       type="button"
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() => removeRow(row.row_id)}
+                      className="text-muted-foreground hover:text-destructive disabled:opacity-50"
+                      onClick={() => removeRow(row)}
+                      disabled={deletingRowId === row.row_id}
                       aria-label="Remove row"
                     >
                       <Trash2 size={14} />
@@ -683,7 +648,7 @@ export function HrAccuralAccountSetup() {
 
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-2 py-6 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-2 py-6 text-center text-muted-foreground">
                     {headerReady
                       ? loading
                         ? "Loading..."
