@@ -217,6 +217,7 @@ export function PurchaseOrderEditor({
         ...emptyLineRow(form.div_code),
         tax_code: form.tax_code,
         tax_cat: form.tax_category,
+        doc_no: form.doc_no,
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
@@ -412,7 +413,9 @@ export function PurchaseOrderEditor({
 
               <PurchaseOrderLinesTable
                 rows={rows}
+                form={form}
                 updateRow={updateRow}
+                docType={config.docType}
                 addRow={addRow}
                 removeRow={removeRow}
                 ex_rate={form.ex_rate}

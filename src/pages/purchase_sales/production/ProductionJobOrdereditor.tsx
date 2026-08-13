@@ -462,8 +462,11 @@ export function ProductionJobOrderEditor({
 
               <PurchaseOrderLinesTable
                 rows={rows}
+                form={form}
+          
                 ex_rate={form.ex_rate}
                 updateRow={updateRow}
+                docType={PO_DOC_TYPE.JO}
                 addRow={addRow}
                 removeRow={removeRow}
                 headerAndLineDisabled={headerAndLineDisabled}

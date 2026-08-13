@@ -392,7 +392,9 @@ export function PurchaseGRNEditor({
 
               <PurchaseOrderLinesTable
                 rows={rows}
+                form={form}
                 updateRow={updateRow}
+                docType={PO_DOC_TYPE.GRN}
                 addRow={addRow}
                 removeRow={removeRow}
                 headerAndLineDisabled={headerAndLineDisabled}

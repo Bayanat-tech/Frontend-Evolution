@@ -596,7 +596,9 @@ export function JobProductionOrderEditor({
 
                     <PurchaseOrderLinesTable
                       rows={rows}
+                      form={form}
                       ex_rate={form.ex_rate}
+                        docType={PO_DOC_TYPE.FGP}
                       updateRow={updateRow}
                       addRow={addRow}
                       removeRow={removeRow}

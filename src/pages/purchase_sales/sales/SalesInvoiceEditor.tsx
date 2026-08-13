@@ -387,6 +387,8 @@ export function SalesInvoiceEditor({
 
               <PurchaseOrderLinesTable
                 rows={rows}
+                form={form}
+                  docType={config.docType}
                 ex_rate={form.ex_rate}
                 updateRow={updateRow}
                 addRow={addRow}

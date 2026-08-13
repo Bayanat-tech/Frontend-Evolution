@@ -400,7 +400,7 @@ export function PurchaseInvoiceEditor({
 
               <PurchaseOrderHeaderForm
                 form={form}
-                docType={config.docType}
+                docType={PO_DOC_TYPE.PIN}
                 setForm={setForm}
                 updateField={updateField}
                 disabled={disabled}
@@ -412,6 +412,8 @@ export function PurchaseInvoiceEditor({
 
               <PurchaseOrderLinesTable
                 rows={rows}
+                form={form}
+                  docType={PO_DOC_TYPE.PIN}
                 updateRow={updateRow}
                 addRow={addRow}
                 removeRow={removeRow}

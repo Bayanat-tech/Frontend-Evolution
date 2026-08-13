@@ -387,6 +387,8 @@ export function SalesDNEditor({
 
               <PurchaseOrderLinesTable
                 rows={rows}
+                form={form}
+                 docType={SO_DOC_TYPE.SDN}
                 ex_rate={form.ex_rate}
                 updateRow={updateRow}
                 addRow={addRow}

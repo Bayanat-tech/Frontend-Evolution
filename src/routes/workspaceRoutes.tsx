@@ -184,6 +184,8 @@ import AccuralPayUnit from "../pages/hr/AccuralPayUnit";
 import PLSummaryPage from "../pages/purchase_sales/Reports/Plsummarypage";
 import { PurchaseInvoicePage } from "../pages/purchase_sales/purchase/PurchaseInvoicePage";
 import { SalesInvoicePage } from "../pages/purchase_sales/sales/SalesInvoicePage";
+import { AbsentProcessEditor } from "../pages/hr/absent_memo_flow/AbsentProcessEditor";
+import { AbsentProcessPage } from "../pages/hr/absent_memo_flow/Absentprocesspage";
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -203,6 +205,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: "Absent Memo",
+    match: ({ pathname }) => pathname.toLowerCase().includes("hcm/hcm/memos/absent_flow"), 
+    element: () => <AbsentProcessPage />,
+  },
   {
     name: 'MSE Prod Group',
     match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_group"),
@@ -314,7 +321,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
   {
     name: "HR Absent Memo",
-    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/memo_and_forms/absent_memo"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("hcm/hr/transactions/memo_and_forms/absent_memo"),
     element: () => <AbsentMemoMainPage />,
   },
   {

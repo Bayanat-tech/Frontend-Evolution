@@ -404,6 +404,8 @@ export function PurchaseQuotationEditor({
 
               <PurchaseOrderLinesTable
                 rows={rows}
+                form={form}
+                docType={PO_DOC_TYPE.PQA}
                 updateRow={updateRow}
                 addRow={addRow}
                 removeRow={removeRow}
