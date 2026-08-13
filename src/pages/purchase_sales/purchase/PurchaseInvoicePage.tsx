@@ -230,8 +230,8 @@ export function PurchaseInvoicePage({ onClose }: { onClose?: () => void } = {}) 
     <section className="finance-list-page grid gap-4">
       <div className="finance-list-heading">
         <div className="finance-list-title">
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">Purchase Order</h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">Purchase order document</p>
+          <h1 className="m-0 text-2xl font-semibold tracking-tight">Purchase Invoice</h1>
+          <p className="m-0 mt-1 text-sm text-muted-foreground">Purchase invoice document</p>
         </div>
         <div className="finance-list-actions">
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
