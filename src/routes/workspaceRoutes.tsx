@@ -149,6 +149,8 @@ import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/As
 import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation";
 import StockCountPage from "../pages/wms/stock count/StockCountPage";
 import{ExpenseMasterPage} from "../pages/purchase_sales/Expensemasterpage";
+import MseProdGroup from "../pages/purchase_sales/MseProdGroup";
+import ProductPurchaseSales from "../pages/purchase_sales/ProductPurchaseSales";
 import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
 
 
@@ -180,6 +182,8 @@ import { JobProductionOrderPage } from "../pages/purchase_sales/production/JobPr
 import { LeaveTypesPage } from "../pages/hr/Leavetypespage";
 import AccuralPayUnit from "../pages/hr/AccuralPayUnit";
 import PLSummaryPage from "../pages/purchase_sales/Reports/Plsummarypage";
+import { PurchaseInvoicePage } from "../pages/purchase_sales/purchase/PurchaseInvoicePage";
+import { SalesInvoicePage } from "../pages/purchase_sales/sales/SalesInvoicePage";
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -199,6 +203,16 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: 'MSE Prod Group',
+    match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_group"),
+    element: () => <MseProdGroup />,
+  },
+  {
+    name: 'Purchase Sales Product',
+    match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product"),
+    element: () => <ProductPurchaseSales />
+  },
   {
     name: 'HR Accural Pay Unit',
     match: ({pathname}) => pathname.toLowerCase().includes("/hr/hr/transactions/accural_pay_units"),
@@ -831,6 +845,21 @@ export const workspaceRoutes: WorkspaceRoute[] = [
       throw new Error("Function not implemented.");
     } }  />,
   },
+    {
+    name: "Purchase Invoice Setup",
+    match: ({ pathname }) => isPurchaseInvoiceSetupRoute(pathname),
+    element: () => <PurchaseInvoicePage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
+
+      {
+    name: "Sales Invoice Setup",
+    match: ({ pathname }) => isSalesInvoiceSetupRoute(pathname),
+    element: () => <SalesInvoicePage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
 
     {
     name: "Purchase Quotation Setup",
@@ -1348,6 +1377,18 @@ function isPurchaseSalesSetupRoute(pathname: string) {
   
     return (normalized.includes("purchase_sales/purchase/purchase_order"))
 }
+function isPurchaseInvoiceSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/purchase/purchase_invoice"))
+}
+
+function isSalesInvoiceSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/sales/sales_invoice"))
+}
+
 
 function isPurchaseQuotationSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();

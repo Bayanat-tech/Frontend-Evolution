@@ -90,7 +90,8 @@ export const SO_DOC_TYPE = {
   SO: "SO",
   SDN: "SDN",
   STR: "STR",
-  SAJ :"SAJ"
+  SAJ :"SAJ",
+  SIN: "SIN",
 } as const;
 export const PROCESSSO ='sales_order'
 export const PROCESSSDN ='sales_dn'
@@ -125,4 +126,10 @@ export const SAJ_CONFIG: SalesConfig = {
   docType: SO_DOC_TYPE.SAJ,
   headerParameter: "PS_JORDER_ENTRY_HEADER_PAGE",
   detailParameter: "PS_JORDER_ENTRY_DETAIL_PAGE",
+};
+
+export const SIN_CONFIG: SalesConfig = {
+  docType: SO_DOC_TYPE.SIN,
+  headerParameter: "PS_SALE_PURCHASE_ENTRY_SINV_HEADER_PAGE",
+  detailParameter: "PS_SALE_PURCHASE_ENTRY_SINV_DETAIL_PAGE",
 };

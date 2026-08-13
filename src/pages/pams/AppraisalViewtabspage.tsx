@@ -418,7 +418,7 @@ const AppraisalViewTabsPage: React.FC = () => {
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const isFinalized              = finalApproved === "YES";
-  const showSaveSubmitButtons    = !isFinalized && flowLevel >= 1 && flowLevel <= 2;
+  const showSaveSubmitButtons    = !isFinalized && flowLevel >= 0 && flowLevel <= 2;
   const showApproveRejectButtons = !isFinalized && flowLevel >= 3 && flowLevel <= 7;
   const finalRating              = calcFinalRating(taskTotal, characterTotal, weightageConfig);
   const showFinalRating          = taskTotal > 0 && characterTotal > 0;

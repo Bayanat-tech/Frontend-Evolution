@@ -672,7 +672,51 @@ function AdvancedReportFilters({
           <RangeLookup label="Broker" companyCode={companyCode} parameter="freight_broker" valueField="BROKER_CODE" displayFields={["BROKER_CODE", "BROKER_NAME"]} columns={[{ field: "BROKER_CODE", header: "Code" }, { field: "BROKER_NAME", header: "Broker" }]} fromKey="broker_code_from" toKey="broker_code_to" filters={filters} setFilters={setFilters} />
         )}
         {items.includes("jobRange") && <RangeText label="Job No" fromKey="job_no_from" toKey="job_no_to" filters={filters} setFilters={setFilters} />}
-        {items.includes("documentRange") && <RangeText label={config.title === "Quotation List" ? "Quotation No" : config.title === "RFQ List" ? "RFQ No" : "Enquiry No"} fromKey="doc_no_from" toKey="doc_no_to" filters={filters} setFilters={setFilters} />}
+        {/* {items.includes("documentRange") && <RangeText label={config.title === "Quotation List" ? "Quotation No" : config.title === "RFQ List" ? "RFQ No" : "Enquiry No"} fromKey="doc_no_from" toKey="doc_no_to" filters={filters} setFilters={setFilters} />} */}
+        {items.includes("documentRange") && (
+     config.title === "Quotation List" ? (
+     <div className="grid grid-cols-2 gap-2">
+      <Field label="Quotation No From">
+        <LookupField
+          value={filters.doc_no_from}
+          displayValue={filters.doc_no_from}
+          onChange={(value) => setFilter(setFilters, "doc_no_from", value)}
+          loadOptions={(query) => loadQuotationSourceLookup(companyCode, filters.transport_mode, filters.job_type, query)}
+          valueField="QUOTATION_NR"
+          displayFields={["QUOTATION_NR", "PRIN_CODE"]}
+          columns={[{ field: "QUOTATION_NR", header: "Quotation No" }, { field: "PRIN_CODE", header: "Principal" }]}
+          compact
+        />
+      </Field>
+      <Field label="Quotation No To">
+        <LookupField
+          value={filters.doc_no_to}
+          displayValue={filters.doc_no_to}
+          onChange={(value) => setFilter(setFilters, "doc_no_to", value)}
+          loadOptions={(query) => loadQuotationSourceLookup(companyCode, filters.transport_mode, filters.job_type, query)}
+          valueField="QUOTATION_NR"
+          displayFields={["QUOTATION_NR", "PRIN_CODE"]}
+          columns={[{ field: "QUOTATION_NR", header: "Quotation No" }, { field: "PRIN_CODE", header: "Principal" }]}
+          compact
+        />
+      </Field>
+    </div>
+   ) : (
+    <RangeLookup
+      label={config.title === "RFQ List" ? "RFQ No" : "Enquiry No"}
+      companyCode={companyCode}
+      // parameter={config.title === "RFQ List" ? "freight_quotation_source" : "freight_approved_enquiry"}
+      parameter={config.title === "RFQ List" ? "freight_rfq_report" : "freight_approved_enquiry"}
+      valueField="ENQUIRY_NR"
+      displayFields={["ENQUIRY_NR", "PRIN_CODE"]}
+      columns={[{ field: "ENQUIRY_NR", header: config.title === "RFQ List" ? "RFQ No" : "Enquiry No" }, { field: "PRIN_CODE", header: "Principal" }]}
+      fromKey="doc_no_from"
+      toKey="doc_no_to"
+      filters={filters}
+      setFilters={setFilters}
+    />
+  )
+  )}
         {items.includes("departmentRange") && <RangeText label="Department" fromKey="dept_code_from" toKey="dept_code_to" filters={filters} setFilters={setFilters} />}
         {items.includes("portRange") && (
           <>
@@ -1288,6 +1332,18 @@ function setFilter<T extends Record<string, string>>(setter: Dispatch<SetStateAc
 
 async function loadLookup(parameter: string, companyCode: string, query = "") {
   const rows = await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 50 });
+  return (Array.isArray(rows) ? rows : []).map(normalizeLookupRow);
+}
+
+async function loadQuotationSourceLookup(companyCode: string, transportMode: string, jobType: string, query = "") {
+  const rows = await freightSelect<LookupRow>({
+    parameter: "freight_job_quotation_source",
+    code1: companyCode,
+    code2: transportMode || "NULL",
+    code3: jobType || "NULL",
+    code4: query || "NULL",
+    number1: 50,
+  });
   return (Array.isArray(rows) ? rows : []).map(normalizeLookupRow);
 }
 
