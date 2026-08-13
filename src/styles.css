@@ -2751,6 +2751,10 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   min-height: 36px;
 }
 
+.freight-job-actions-only {
+  grid-template-columns: 1fr;
+}
+
 .freight-job-number {
   display: inline-flex;
   align-items: center;
@@ -2802,6 +2806,156 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   justify-content: flex-end;
   gap: 5px;
   grid-column: 3;
+}
+
+.freight-job-actions-only .freight-job-inline-actions {
+  grid-column: 1;
+}
+
+.freight-job-editor-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 190px;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.freight-job-editor-shell .freight-document-paper {
+  min-width: 0;
+}
+
+.freight-job-progress-rail {
+  position: sticky;
+  top: 84px;
+  align-self: stretch;
+  min-height: calc(100vh - 170px);
+  border: 1px solid #d8dee8;
+  border-radius: 7px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  padding: 10px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.freight-job-progress-rail-title {
+  display: grid;
+  gap: 1px;
+  border-bottom: 1px solid #dce6f2;
+  padding: 1px 2px 8px;
+  margin-bottom: 8px;
+}
+
+.freight-job-progress-rail-title span {
+  color: #6f7f94;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.freight-job-progress-rail-title strong {
+  color: #0f172a;
+  font-size: 15px;
+  line-height: 1.1;
+}
+
+.freight-job-progress-rail-list {
+  display: grid;
+  gap: 0;
+  min-height: calc(100vh - 270px);
+  align-content: stretch;
+}
+
+.freight-job-progress-rail-step {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 8px;
+  min-height: 0;
+  color: #64748b;
+}
+
+.freight-job-progress-rail-marker {
+  position: relative;
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  margin-top: 0;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #c7d1df;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #94a3b8;
+}
+
+.freight-job-progress-rail-marker::after {
+  content: "";
+  position: absolute;
+  top: 20px;
+  left: 9px;
+  width: 2px;
+  height: calc(100% + 56px);
+  background: #dbe3ee;
+}
+
+.freight-job-progress-rail-step:last-child .freight-job-progress-rail-marker::after {
+  display: none;
+}
+
+.freight-job-progress-rail-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 1px 0 10px;
+}
+
+.freight-job-progress-rail-copy strong {
+  color: #253247;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.freight-job-progress-rail-copy small {
+  overflow: hidden;
+  color: #8290a3;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.freight-job-progress-rail-step.done .freight-job-progress-rail-marker {
+  border-color: #059669;
+  background: #059669;
+  color: #ffffff;
+  box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.12);
+}
+
+.freight-job-progress-rail-step.done .freight-job-progress-rail-marker::after {
+  background: #059669;
+}
+
+.freight-job-progress-rail-step.done .freight-job-progress-rail-copy strong {
+  color: #0f6f52;
+}
+
+.freight-job-progress-rail-step.current .freight-job-progress-rail-marker {
+  border-color: #004aad;
+  background: #eaf3ff;
+  color: #004aad;
+  box-shadow: 0 0 0 4px rgba(0, 74, 173, 0.12);
+}
+
+.freight-job-progress-rail-step.pending .freight-job-progress-rail-marker {
+  background: #f8fafc;
+}
+
+.freight-job-progress-rail-step.current .freight-job-progress-rail-copy strong {
+  color: #004aad;
+}
+
+.freight-job-progress-rail-step.current .freight-job-progress-rail-copy small {
+  color: #0f5fc0;
 }
 
 .freight-job-progress {
@@ -3256,12 +3410,12 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 
 .freight-shipment-paper.is-viewing .freight-job-field-grid,
 .freight-shipment-paper.is-editing .freight-job-field-grid {
-  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
 
 .freight-shipment-paper.is-viewing .freight-job-field-grid-2,
 .freight-shipment-paper.is-editing .freight-job-field-grid-2 {
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .freight-shipment-paper.is-viewing .freight-job-field-grid-3,
@@ -3270,7 +3424,14 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .freight-shipment-paper.is-editing .freight-job-field-grid-4,
 .freight-shipment-paper.is-viewing .freight-job-field-grid-8,
 .freight-shipment-paper.is-editing .freight-job-field-grid-8 {
-  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.freight-shipment-paper.is-editing .lg\:col-span-4 .freight-job-field-grid,
+.freight-shipment-paper.is-editing .lg\:col-span-4 .freight-job-field-grid-2,
+.freight-shipment-paper.is-editing .lg\:col-span-4 .freight-job-field-grid-3,
+.freight-shipment-paper.is-editing .lg\:col-span-4 .freight-job-field-grid-4 {
+  grid-template-columns: 1fr;
 }
 
 .freight-shipment-paper.is-viewing .lg\:col-span-4 .freight-job-field-grid,
@@ -3495,6 +3656,30 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   .freight-job-focus-compact {
     grid-template-columns: 1fr;
     justify-items: stretch;
+  }
+
+  .freight-job-editor-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .freight-job-progress-rail {
+    position: static;
+    min-height: 0;
+  }
+
+  .freight-job-progress-rail-list {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    min-height: 0;
+    gap: 6px;
+  }
+
+  .freight-job-progress-rail-step {
+    grid-template-columns: 22px minmax(0, 1fr);
+    min-height: 34px;
+  }
+
+  .freight-job-progress-rail-marker::after {
+    display: none;
   }
 
   .freight-job-focus-compact .freight-job-progress,

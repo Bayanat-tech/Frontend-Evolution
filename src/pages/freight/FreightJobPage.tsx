@@ -4,6 +4,9 @@ import {
   ArrowLeft,
   Ban,
   BriefcaseBusiness,
+  CheckCircle2,
+  Circle,
+  CircleDot,
   Edit2,
   FileText,
   MapPinned,
@@ -379,15 +382,7 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
         <Button type="button" size="sm" variant="outline" onClick={cancelJob} disabled={saving || !job.job_no || isCanceled || isCancelLocked} title={isCancelLocked ? cancelLockMessage : "Cancel job"}><Ban size={14} />Cancel</Button>
         {editing && <Button type="submit" size="sm" disabled={saving || isEditLocked}><Save size={14} />Save</Button>}
       </Header>}
-      <div className="freight-job-focus-bar freight-job-focus-compact">
-        <div className="freight-job-progress" aria-label="Job status">
-          {buildJobProgress(job).map((step) => (
-            <span key={step.label} className={step.className}>
-              <span className="freight-job-progress-dot" />
-              {step.label}
-            </span>
-          ))}
-        </div>
+      <div className="freight-job-focus-bar freight-job-focus-compact freight-job-actions-only">
         <div className="freight-job-inline-actions">
           {notice && <NoticeChip notice={notice} />}
           {embeddedInWorkspace && <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>}
@@ -397,31 +392,32 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
           <span className={`freight-job-mode-badge ${editing ? "editing" : "viewing"}`}>{editing ? "Edit" : "View"}</span>
         </div>
       </div>
-      <fieldset disabled={isEditLocked || !editing} className={`freight-document-paper freight-shipment-paper ${editing ? "is-editing" : "is-viewing"}`}>
-        <JobEditContext.Provider value={editing && !isEditLocked}>
-        <div className="freight-shipment-hero">
-          <div className="freight-shipment-hero-item">
-            <span>Booking Ref / Job No</span>
-            <strong>{job.job_no || "New Job"}</strong>
+      <div className="freight-job-editor-shell">
+        <fieldset disabled={isEditLocked || !editing} className={`freight-document-paper freight-shipment-paper ${editing ? "is-editing" : "is-viewing"}`}>
+          <JobEditContext.Provider value={editing && !isEditLocked}>
+          <div className="freight-shipment-hero">
+            <div className="freight-shipment-hero-item">
+              <span>Booking Ref / Job No</span>
+              <strong>{job.job_no || "New Job"}</strong>
+            </div>
+            <div className="freight-shipment-hero-item">
+              <span>{mode.code === "A" ? "HAWB Number" : "House / BL Number"}</span>
+              {editing && !isEditLocked ? (
+                <Input className="freight-shipment-hero-input" value={job.hawb} onChange={(event) => setJobField(setJob, "hawb", event.target.value)} />
+              ) : (
+                <strong>{job.hawb || job.doc_ref || "-"}</strong>
+              )}
+            </div>
           </div>
-          <div className="freight-shipment-hero-item">
-            <span>{mode.code === "A" ? "HAWB Number" : "House / BL Number"}</span>
-            {editing && !isEditLocked ? (
-              <Input className="freight-shipment-hero-input" value={job.hawb} onChange={(event) => setJobField(setJob, "hawb", event.target.value)} />
-            ) : (
-              <strong>{job.hawb || job.doc_ref || "-"}</strong>
-            )}
+          <div className="freight-shipment-quickfacts">
+            <DisplayField label="Shipment Date" value={toDisplayDate(job.job_date)} />
+            <DisplayField label="Shipment Type" value={direction.label} />
+            <DisplayField label="Transport Mode" value={`${mode.label} Freight`} />
+            <DisplayField label="From Quote" value={job.quotation_ref || "-"} />
+            <DisplayField label="Sales Rep" value={job.salesman_code || "-"} />
+            <DisplayField label="Principal" value={job.prin_code || "-"} />
           </div>
-        </div>
-        <div className="freight-shipment-quickfacts">
-          <DisplayField label="Shipment Date" value={toDisplayDate(job.job_date)} />
-          <DisplayField label="Shipment Type" value={direction.label} />
-          <DisplayField label="Transport Mode" value={`${mode.label} Freight`} />
-          <DisplayField label="From Quote" value={job.quotation_ref || "-"} />
-          <DisplayField label="Sales Rep" value={job.salesman_code || "-"} />
-          <DisplayField label="Principal" value={job.prin_code || "-"} />
-        </div>
-        <div className="freight-job-section-grid">
+          <div className="freight-job-section-grid">
           <Panel className="lg:col-span-12" icon={BriefcaseBusiness} title="Job Identity" meta={`${job.job_no || "Auto"} / ${mode.label} / ${direction.label}`}>
             <div className="freight-job-field-grid freight-job-field-grid-8">
               <ReadOnlyField label="Job No" value={job.job_no || "Auto"} />
@@ -529,9 +525,11 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
             </div>
           </Panel>
 
-        </div>
-        </JobEditContext.Provider>
-      </fieldset>
+          </div>
+          </JobEditContext.Provider>
+        </fieldset>
+        <JobProgressRail job={job} />
+      </div>
     </form>
   );
 }
@@ -542,17 +540,44 @@ function buildJobProgress(job: JobForm) {
   const invoiceDone = job.invoiced === "Y" || Boolean(job.invoice_date);
   const completeDone = job.completed === "Y" || Boolean(job.complete_date);
   const steps = [
-    { label: "Job", done: true },
-    { label: "Pack List", done: packDone },
-    { label: "Confirmed", done: confirmDone },
-    { label: "Invoiced", done: invoiceDone },
-    { label: "Completed", done: completeDone },
+    { label: "Job", done: true, detail: toDisplayDate(job.job_date) },
+    { label: "Pack List", done: packDone, detail: toDisplayDate(job.packdet_date) },
+    { label: "Confirmed", done: confirmDone, detail: toDisplayDate(job.confirm_date) },
+    { label: "Invoiced", done: invoiceDone, detail: toDisplayDate(job.invoice_date) },
+    { label: "Completed", done: completeDone, detail: toDisplayDate(job.complete_date) },
   ];
   const currentIndex = steps.findIndex((step) => !step.done);
   return steps.map((step, index) => ({
     ...step,
     className: step.done ? "done" : index === currentIndex ? "current" : "",
   }));
+}
+
+function JobProgressRail({ job }: { job: JobForm }) {
+  const steps = buildJobProgress(job);
+  const activeStep = steps.find((step) => step.className === "current") || steps[steps.length - 1];
+
+  return (
+    <aside className="freight-job-progress-rail" aria-label="Job status">
+      <div className="freight-job-progress-rail-title">
+        <span>Job Status</span>
+        <strong>{activeStep?.label || "Completed"}</strong>
+      </div>
+      <div className="freight-job-progress-rail-list">
+        {steps.map((step) => (
+          <div key={step.label} className={`freight-job-progress-rail-step ${step.className || "pending"}`}>
+            <span className="freight-job-progress-rail-marker">
+              {step.className === "done" ? <CheckCircle2 size={14} /> : step.className === "current" ? <CircleDot size={14} /> : <Circle size={13} />}
+            </span>
+            <span className="freight-job-progress-rail-copy">
+              <strong>{step.label}</strong>
+              <small>{step.detail || (step.className === "current" ? "Current step" : step.done ? "Done" : "Pending")}</small>
+            </span>
+          </div>
+        ))}
+      </div>
+    </aside>
+  );
 }
 
 function Header({ title, subtitle, icon: Icon, children }: { title: string; subtitle: string; icon: typeof Plane; children: React.ReactNode }) {
