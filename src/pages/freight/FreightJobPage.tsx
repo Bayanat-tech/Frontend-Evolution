@@ -525,7 +525,7 @@ export function FreightJobPage({
           <Panel className="lg:col-span-4 freight-job-compact-panel" icon={FileText} title="Bill Of Lading Details" meta={job.doc_ref || job.hawb || "Document refs"}>
             <div className="freight-job-field-grid freight-job-field-grid-2">
               <Field className="sm:col-span-2" label={mode.code === "A" ? "MAWB" : "Master BL No"} value={job.doc_ref} onChange={(value) => setJobField(setJob, "doc_ref", value)} />
-              <Field className="sm:col-span-2" label="Doc Ref 2" value={job.doc_ref2} onChange={(value) => setJobField(setJob, "doc_ref2", value)} />
+              {/* <Field className="sm:col-span-2" label="Doc Ref 2" value={job.doc_ref2} onChange={(value) => setJobField(setJob, "doc_ref2", value)} /> */}
               <Textarea className="sm:col-span-2" label="Cargo Description" value={job.description1} onChange={(value) => setJobField(setJob, "description1", value)} />
               <Textarea className="sm:col-span-2" label="Remarks" value={job.remarks} onChange={(value) => setJobField(setJob, "remarks", value)} />
               <Field label={mode.code === "A" ? "HAWB" : "HBL"} value={job.hawb} onChange={(value) => setJobField(setJob, "hawb", value)} />
@@ -559,7 +559,6 @@ export function FreightJobPage({
             <div className="freight-job-field-grid freight-job-field-grid-2">
               <Lookup label="Forwarder" value={job.forwarder_code} valueField="FORWARDER_CODE" displayFields={["FORWARDER_CODE", "FORWARDER_NAME"]} columns={[{ field: "FORWARDER_CODE", header: "Code" }, { field: "FORWARDER_NAME", header: "Forwarder" }]} loadOptions={(search) => lookup("freight_forwarder", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "forwarder_code", value)} />
               <Lookup label="Sales Rep" value={job.salesman_code} valueField="SALESMAN_CODE" displayFields={["SALESMAN_CODE", "SALESMAN_NAME"]} columns={[{ field: "SALESMAN_CODE", header: "Code" }, { field: "SALESMAN_NAME", header: "Salesman" }]} loadOptions={(search) => lookup("freight_salesman", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "salesman_code", value)} />
-              <Field label="Principal Ref 1" value={job.prin_ref1} onChange={(value) => setJobField(setJob, "prin_ref1", value)} />
               <Field label="Principal Ref 2" value={job.prin_ref2} onChange={(value) => setJobField(setJob, "prin_ref2", value)} />
               <Lookup label="Customer" value={job.cust_code} valueField="CUSTOMER_CODE" displayFields={["CUSTOMER_CODE", "CUSTOMER_NAME"]} columns={[{ field: "CUSTOMER_CODE", header: "Code" }, { field: "CUSTOMER_NAME", header: "Customer" }]} loadOptions={(search) => lookup("freight_customer", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "cust_code", value)} />
               <Lookup label="Broker" value={job.broker_code} valueField="BROKER_CODE" displayFields={["BROKER_CODE", "BROKER_NAME"]} columns={[{ field: "BROKER_CODE", header: "Code" }, { field: "BROKER_NAME", header: "Broker" }]} loadOptions={(search) => lookup("freight_broker", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "broker_code", value)} />
@@ -695,37 +694,46 @@ function SelectField({ label, value, options, onChange, required }: { label: str
   );
 }
 
-function DateField({ label, value, onChange, required }: { label: string; value: string; onChange: (value: string) => void  ; required?: boolean }) {
+function DateField({
+  label,
+  value,
+  onChange,
+  required,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+}) {
   const editable = useContext(JobEditContext);
-  const [displayValue, setDisplayValue] = useState(() => toDisplayDate(value));
 
-  useEffect(() => {
-    setDisplayValue(toDisplayDate(value));
-  }, [value]);
-
-  function commit(nextDisplayValue = displayValue) {
-    const parsed = parseDisplayDate(nextDisplayValue);
-    if (parsed || !nextDisplayValue.trim()) onChange(parsed);
-    setDisplayValue(parsed ? toDisplayDate(parsed) : nextDisplayValue);
+  if (!editable) {
+    return <DisplayField label={label} value={toDisplayDate(value)} />;
   }
 
-  if (!editable) return <DisplayField label={label} value={toDisplayDate(value)} />;
+  const inputValue = dateInputValue(value);
 
   return (
     <label className="freight-compact-label">
-      <span>{label}{required && <span style={{ color: "#E24B4A" }}>*</span>}</span>
+      <span>
+        {label}
+        {required && <span style={{ color: "#E24B4A" }}> *</span>}
+      </span>
+
       <Input
         className="h-7 text-xs font-semibold"
-        placeholder="dd/mm/yyyy"
-        value={displayValue}
+        type="date"
+        value={inputValue}
         required={required}
-        onChange={(event) => setDisplayValue(event.target.value)}
-        onBlur={() => commit()}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") commit();
-        }}
-        onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
-        onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")}
+        onChange={(event) => onChange(event.target.value)}
+        onInvalid={(event) =>
+          (event.target as HTMLInputElement).setCustomValidity(
+            `${label} is required`
+          )
+        }
+        onInput={(event) =>
+          (event.target as HTMLInputElement).setCustomValidity("")
+        }
       />
     </label>
   );

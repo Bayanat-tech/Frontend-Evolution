@@ -132,6 +132,28 @@ type QuotationTerm = {
   font_size: string;
 };
 
+type QuotationHeaderNames = {
+  prin_name: string;
+  walkin_prin_name: string;
+  curr_name: string;
+  origin_port_name: string;
+  destination_port_name: string;
+  forwarder_name: string;
+  vehicle_type_name: string;
+  carrier_name: string;
+};
+
+const emptyHeaderNames: QuotationHeaderNames = {
+  prin_name: "",
+  walkin_prin_name: "",
+  curr_name: "",
+  origin_port_name: "",
+  destination_port_name: "",
+  forwarder_name: "",
+  vehicle_type_name: "",
+  carrier_name: "",
+};
+
 type Notice = { type: "success" | "error"; text: string } | null;
 type ViewMode = "list" | "editor";
 export type FreightQuotationInitialTab = "cargo" | "payment" | "charges" | "terms";
@@ -196,6 +218,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   const [deepOpenDone, setDeepOpenDone] = useState("");
   const freightSearchRecord = (location.state as { freightSearchRecord?: LookupRow } | null)?.freightSearchRecord;
   const openRecordNo = new URLSearchParams(location.search).get("open") || "";
+  const [headerNames, setHeaderNames] = useState<QuotationHeaderNames>(emptyHeaderNames);
 
   useEffect(() => {
     if (!notice) return;
@@ -355,7 +378,26 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
     });
   };
 
-  const applyHeaderLookup = (field: keyof QuotationHeader, value: string, row: LookupRow | null) => {
+  // const applyHeaderLookup = (field: keyof QuotationHeader, value: string, row: LookupRow | null) => {
+  //   setHeader((current) => {
+  //     const next = { ...current, [field]: value };
+  //     if (field === "prin_code" && row) {
+  //       next.dept_code = lookupText(row, "prin_dept_code") || next.dept_code;
+  //       next.curr_code = lookupText(row, "curr_code") || next.curr_code;
+  //       next.ex_rate = lookupText(row, "ex_rate") || next.ex_rate;
+  //     }
+  //     if (field === "curr_code" && row) next.ex_rate = lookupText(row, "ex_rate") || next.ex_rate;
+  //     if (field === "origin_port" && row) next.country_origin = lookupText(row, "country_name") || lookupText(row, "country_code") || next.country_origin;
+  //     if (field === "destination_port" && row) next.country_destination = lookupText(row, "country_name") || lookupText(row, "country_code") || next.country_destination;
+  //     if (field === "enquiry_no" && row) {
+  //       next.enquiry_type = lookupText(row, "enquiry_type") || next.enquiry_type;
+  //       void copyFromEnquiry(lookupText(row, "company_code") || current.company_code, lookupText(row, "prin_code"), value, next.enquiry_type);
+  //     }
+  //     return next;
+  //   });
+  // };
+
+ const applyHeaderLookup = (field: keyof QuotationHeader, value: string, row: LookupRow | null) => {
     setHeader((current) => {
       const next = { ...current, [field]: value };
       if (field === "prin_code" && row) {
@@ -369,6 +411,23 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       if (field === "enquiry_no" && row) {
         next.enquiry_type = lookupText(row, "enquiry_type") || next.enquiry_type;
         void copyFromEnquiry(lookupText(row, "company_code") || current.company_code, lookupText(row, "prin_code"), value, next.enquiry_type);
+      }
+      return next;
+    });
+
+    setHeaderNames((current) => {
+      const next = { ...current };
+      if (field === "prin_code") next.prin_name = row ? lookupText(row, "prin_name") : "";
+      if (field === "walkin_prin_code") next.walkin_prin_name = row ? lookupText(row, "prin_name") : "";
+      if (field === "curr_code") next.curr_name = row ? lookupText(row, "curr_name") : "";
+      if (field === "origin_port") next.origin_port_name = row ? lookupText(row, "port_name") : "";
+      if (field === "destination_port") next.destination_port_name = row ? lookupText(row, "port_name") : "";
+      if (field === "forwarder_code") next.forwarder_name = row ? lookupText(row, "forwarder_name") : "";
+      if (field === "vehicle_type") next.vehicle_type_name = row ? lookupText(row, "vtype_name") : "";
+      if (field === "carrier") {
+        next.carrier_name = row
+          ? lookupText(row, "vessel_name") || lookupText(row, "vehicle_desc") || lookupText(row, "airline_name")
+          : "";
       }
       return next;
     });
@@ -445,6 +504,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   const resetForm = () => {
     const fresh = buildInitialHeader(userInfo, target);
     setHeader(fresh);
+    setHeaderNames(emptyHeaderNames); 
     setDetails([buildInitialDetail(fresh, 1)]);
     setTerms([]);
     setNotice(null);
@@ -492,8 +552,21 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       });
       if (response.data?.success === false) throw new Error(response.data.message || "Unable to open quotation");
       const data = response.data?.data;
-      const loadedHeader = toHeaderFromRow(normalizeLookupRow(data?.header || row), userInfo, target);
+      // const loadedHeader = toHeaderFromRow(normalizeLookupRow(data?.header || row), userInfo, target);
+      // setHeader(loadedHeader);
+      const loadedRow = normalizeLookupRow(data?.header || row);
+      const loadedHeader = toHeaderFromRow(loadedRow, userInfo, target);
       setHeader(loadedHeader);
+      setHeaderNames({
+        prin_name: lookupText(loadedRow, "prin_name"),
+        walkin_prin_name: lookupText(loadedRow, "walkin_prin_name"),
+        curr_name: lookupText(loadedRow, "curr_name"),
+        origin_port_name: lookupText(loadedRow, "origin_port_name"),
+        destination_port_name: lookupText(loadedRow, "destination_port_name"),
+        forwarder_name: lookupText(loadedRow, "forwarder_name"),
+        vehicle_type_name: lookupText(loadedRow, "vtype_name"),
+        carrier_name: lookupText(loadedRow, "carrier_name"),
+      });
       setDetails(data?.details?.length ? data.details.map((item, index) => toDetailFromRow(normalizeLookupRow(item), loadedHeader, index + 1)) : [buildInitialDetail(loadedHeader, 1)]);
       setTerms(data?.terms?.length ? data.terms.map((item, index) => toTermFromRow(normalizeLookupRow(item), index + 1)) : []);
       setActiveTab(initialTab);

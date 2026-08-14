@@ -251,20 +251,21 @@ function DocumentsGrid({ rows, setRows, deleteRow, onAttach, readOnly }: GridPro
 }
 
 function InstructionGrid({ rows, setRows, deleteRow, readOnly }: GridProps) {
-  return <EditableGrid columns={["op_code", "op_desc", "op_assigned", "op_date", "op_remarks", "end_date", "end_remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} addFactory={() => ({ OP_CODE: "", OP_DESC: "", OP_ASSIGNED: "", OP_DATE: "", OP_REMARKS: "", END_DATE: "", END_REMARKS: "" })} readOnly={readOnly} />;
+  return <EditableGrid columns={["op_code", "op_desc", "op_assigned", "op_date", "op_remarks", "end_date", "end_remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} addFactory={() => ({ OP_CODE: "", OP_DESC: "", OP_ASSIGNED: "", OP_DATE: "", OP_REMARKS: "", END_DATE: "", END_REMARKS: "" })} readOnly={readOnly}  labels={{ op_code: "Instruction Code", op_desc: "Instruction", op_assigned: " Instruction Assigned To", op_date: "Instruction Date", op_remarks: "Remarks" }} />;
 }
 
 function AlertGrid({ rows, setRows, deleteRow, readOnly }: GridProps) {
-  return <EditableGrid columns={["op_desc", "op_date", "op_yesno", "remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} readOnly={readOnly} />;
+  return <EditableGrid columns={["op_desc", "op_date", "remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} readOnly={readOnly} labels={{ op_desc: "Alert Description", op_date: "Alert Date", remarks: "Remarks" }} />;
 }
 
 function DepositGrid({ rows, setRows, deleteRow, readOnly }: GridProps) {
   return <EditableGrid columns={["sr_no", "deposit_type", "amount", "currency", "deposit_date", "deposit_expiry_date", "status", "be_no", "claim_ref_no", "deposit_remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} addFactory={() => ({ SR_NO: String(rows.length + 1), TXN_TYPE: "JOB", DEPOSIT_TYPE: "CNTRLNR", AMOUNT: "0", CURRENCY: "OMR", STATUS: "D" })} readOnly={readOnly} />;
 }
 
-type GridProps = { rows: LookupRow[]; setRows: (updater: (rows: LookupRow[]) => LookupRow[]) => void; deleteRow: (row: LookupRow) => void; addFactory?: () => LookupRow; readOnly?: boolean };
+// type GridProps = { rows: LookupRow[]; setRows: (updater: (rows: LookupRow[]) => LookupRow[]) => void; deleteRow: (row: LookupRow) => void; addFactory?: () => LookupRow; readOnly?: boolean };
+type GridProps = { rows: LookupRow[]; setRows: (updater: (rows: LookupRow[]) => LookupRow[]) => void; deleteRow: (row: LookupRow) => void; addFactory?: () => LookupRow; readOnly?: boolean; labels?: Record<string, string> };
 
-function EditableGrid({ columns, rows, setRows, deleteRow, addFactory, onAttach, readOnly = false }: GridProps & { columns: string[]; onAttach?: (row: LookupRow) => void }) {
+function EditableGrid({ columns, rows, setRows, deleteRow, addFactory, onAttach, readOnly = false, labels }: GridProps & { columns: string[]; onAttach?: (row: LookupRow) => void }) {
   return (
     <div className="freight-job-table-shell">
       <div className="flex items-center justify-between border-b bg-[#f8fbff] px-2 py-1.5">
@@ -273,7 +274,8 @@ function EditableGrid({ columns, rows, setRows, deleteRow, addFactory, onAttach,
       </div>
       <div className="max-h-[calc(100vh-330px)] overflow-auto">
         <div className="freight-job-table-head grid min-w-[1100px] gap-1 px-2 py-1" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(105px, 1fr)) ${onAttach ? "44px " : ""}44px` }}>
-          {columns.map((column) => <span key={column}>{label(column)}</span>)}{onAttach && <span>Files</span>}<span />
+          {columns.map((column) => <span key={column}>{labels?.[column] ?? label(column)}</span>)}{onAttach && <span>Files</span>}<span />
+          {/* {columns.map((column) => <span key={column}>{label(column)}</span>)}{onAttach && <span>Files</span>}<span /> */}
         </div>
         {rows.map((row, rowIndex) => (
           <div key={rowIndex} className="freight-job-table-row grid min-w-[1100px] gap-1 px-2 py-1" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(105px, 1fr)) ${onAttach ? "44px " : ""}44px` }}>
@@ -287,6 +289,8 @@ function EditableGrid({ columns, rows, setRows, deleteRow, addFactory, onAttach,
     </div>
   );
 }
+
+
 
 function Cell({ row, column, onChange, readOnly = false }: { row: LookupRow; column: string; onChange: (value: string) => void; readOnly?: boolean }) {
   const value = text(row, column);

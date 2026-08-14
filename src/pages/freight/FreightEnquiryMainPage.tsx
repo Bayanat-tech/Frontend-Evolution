@@ -1221,7 +1221,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
                   <div className="grid gap-1 sm:grid-cols-2">
                     <FormInput label="Transit Time" value={header.transit_time} onChange={(value) => setHeaderField("transit_time", value)} />
                     <FormInput label="Frequency" value={header.frequency} onChange={(value) => setHeaderField("frequency", value)} />
-                    <FormLookup label="Sales Executive" value={header.salesman_code} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Sales Executive" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} />
+                    <FormLookup label="Sales Executive" value={header.salesman_code} displayValue={headerNames.salesman_name} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Sales Executive" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} />
                     <FormInput label="Ready Date" type="date" value={header.schedule_date} onChange={(value) => setHeaderField("schedule_date", value)} />
                   </div>
                 </SectionPanel>
@@ -1814,8 +1814,9 @@ function FormInput({
   inputClassName?: string;
 }) {
   return (
-    <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
-      {label}
+    // <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
+      <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground freight-field-label ${className}`}>
+        {label}
       <Input
         className={`h-7 text-[11px] ${inputClassName}`}
         value={value}
@@ -1877,7 +1878,8 @@ function FormLookup({
   className?: string;
 }) {
   return (
-    <div className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
+    // <div className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
+    <div className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground freight-field-label ${className}`}>
     <span>
        {label} {required && <span style={{ color: "#E24B4A" }}>*</span>}
      </span>
@@ -1924,8 +1926,9 @@ function FormSelect({
     //   </select>
     // </label>
 
-     <label className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
-      <span> {label} {required && <span style={{ color: "#E24B4A" }}>*</span>} </span>
+    //  <label className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground">
+     <label className="grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground freight-field-label">
+    <span> {label} {required && <span style={{ color: "#E24B4A" }}>*</span>} </span>
       <select
         className={fieldClassName}
         value={value}
@@ -1957,8 +1960,9 @@ function FormTextarea({
   className?: string;
 }) {
   return (
-    <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
-      {label}
+    // <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
+     <label className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground freight-field-label ${className}`}>
+       {label}
       <textarea className={`${fieldClassName} ${compact ? "min-h-8" : "min-h-10"} resize-y py-1`} value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
@@ -1977,7 +1981,8 @@ function CellInput({
 }) {
   return (
     <td className="px-1.5 py-1.5">
-      <Input className={`h-7 text-xs ${className}`} type={type} value={value} onChange={(event) => onChange(event.target.value)} />
+      {/* <Input className={`h-7 text-xs ${className}`} type={type} value={value} onChange={(event) => onChange(event.target.value)} /> */}
+     <Input className={`h-7 text-sm font-medium text-foreground ${className}`} type={type} value={value} onChange={(event) => onChange(event.target.value)} />
     </td>
   );
 }
