@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bell, CheckSquare, FileText, Info, Paperclip, Plus, RefreshCw, Save, Search, Trash2, WalletCards } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Bell, CheckSquare, FileText, Info, Paperclip, Plus, RefreshCw, Save, Search, Trash2, WalletCards } from "lucide-react";
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
@@ -23,7 +23,21 @@ const meta = {
 const modeMap = { air: "A", sea: "S", land: "R" };
 const directionMap = { import: "IMP", export: "EXP", reexport: "IRE" };
 
-export function FreightJobFollowupTab({ target, kind, initialJob = null, readOnly = false }: { target?: FreightWorkspaceTarget; kind: FollowupKind; initialJob?: LookupRow | null; readOnly?: boolean }) {
+export function FreightJobFollowupTab({
+  target,
+  kind,
+  initialJob = null,
+  readOnly = false,
+  onEmbeddedActionsChange,
+  onEmbeddedList,
+}: {
+  target?: FreightWorkspaceTarget;
+  kind: FollowupKind;
+  initialJob?: LookupRow | null;
+  readOnly?: boolean;
+  onEmbeddedActionsChange?: (actions: ReactNode | null) => void;
+  onEmbeddedList?: () => void;
+}) {
   const cfg = meta[kind];
   const Icon = cfg.icon;
   const { toast } = useToast();
@@ -37,9 +51,12 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null, readOnl
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
   const userId = String(userRecord.user_id || userRecord.USER_ID || userRecord.loginid || userRecord.LOGINID || "Admin");
-  const mode = modeMap[target?.mode || "air"];
-  const jobType = directionMap[target?.direction || "import"];
+  const modeKey = (target?.mode || "air") as keyof typeof modeMap;
+  const directionKey = (target?.direction || "import") as keyof typeof directionMap;
+  const mode = modeMap[modeKey];
+  const jobType = directionMap[directionKey];
   const stats = useMemo(() => getStats(kind, rows), [kind, rows]);
+  const embeddedInWorkspace = Boolean(onEmbeddedActionsChange);
 
   const notify = useCallback((next: Exclude<Notice, null>) => {
     setNotice(next);
@@ -137,9 +154,34 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null, readOnl
     }
   }
 
+  useEffect(() => {
+    if (!onEmbeddedActionsChange) return;
+    onEmbeddedActionsChange(
+      <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar">
+        {notice && <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>{notice.text}</span>}
+        <Button type="button" size="sm" variant="outline" onClick={onEmbeddedList}>
+          <ArrowLeft size={14} />List
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={!job || loading}>
+          <RefreshCw size={14} />Refresh
+        </Button>
+        {kind !== "deposits" && (
+          <Button type="button" size="sm" variant="outline" onClick={() => void initRows()} disabled={!job || saving || readOnly}>
+            <Search size={14} />Init
+          </Button>
+        )}
+        <Button type="button" size="sm" onClick={() => void saveRows()} disabled={!job || saving || readOnly}>
+          <Save size={14} />Save
+        </Button>
+        <span className="freight-job-mode-badge viewing">View</span>
+      </div>
+    );
+    return () => onEmbeddedActionsChange(null);
+  }, [job, kind, loading, notice, onEmbeddedActionsChange, onEmbeddedList, readOnly, saving, loadRows]);
+
   return (
     <section className="grid gap-2 freight-job-ops-screen">
-      <div className="freight-form-header">
+      {!embeddedInWorkspace && <div className="freight-form-header">
         <div className="flex flex-wrap items-center justify-between gap-2 w-full">
           <div className="flex items-center gap-2">
             <span className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary"><Icon size={18} /></span>
@@ -152,7 +194,7 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null, readOnl
             <Button type="button" size="sm" onClick={() => void saveRows()} disabled={!job || saving || readOnly}><Save size={14} />Save</Button>
           </div>
         </div>
-      </div>
+      </div>}
 
       <div className="grid gap-2 lg:grid-cols-[minmax(360px,520px)_1fr_1fr]">
         <div className="freight-job-metric-card freight-job-selector-card">

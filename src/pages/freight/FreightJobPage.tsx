@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { createContext, FormEvent, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, FormEvent, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   Ban,
@@ -151,14 +151,26 @@ function getJobCancelLockMessage(job: JobForm) {
   return "This job cannot be cancelled.";
 }
 
-export function FreightJobPage({ target, initialJob, startMode = "list" }: { target?: FreightWorkspaceTarget; initialJob?: LookupRow | null; startMode?: ViewMode }) {
+export function FreightJobPage({
+  target,
+  initialJob,
+  startMode = "list",
+  onEmbeddedActionsChange,
+  onEmbeddedList,
+}: {
+  target?: FreightWorkspaceTarget;
+  initialJob?: LookupRow | null;
+  startMode?: ViewMode;
+  onEmbeddedActionsChange?: (actions: ReactNode | null) => void;
+  onEmbeddedList?: () => void;
+}) {
   const { user } = useAuth();
   const { toast } = useToast();
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
   const userId = String(userRecord.user_id || userRecord.USER_ID || userRecord.loginid || userRecord.LOGINID || "");
-  const modeKey = target?.mode || "air";
-  const directionKey = target?.direction || "import";
+  const modeKey = (target?.mode || "air") as keyof typeof modeMap;
+  const directionKey = (target?.direction || "import") as keyof typeof directionMap;
   const mode = modeMap[modeKey];
   const direction = directionMap[directionKey];
   const Icon = mode.icon;
@@ -173,7 +185,7 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [editing, setEditing] = useState(false);
-  const embeddedInWorkspace = startMode === "editor";
+  const embeddedInWorkspace = Boolean(onEmbeddedActionsChange);
 
   const notify = useCallback((next: Exclude<Notice, null>) => {
     setNotice(next);
@@ -192,6 +204,7 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
   const isEditLocked = isJobEditLocked(job);
   const cancelLockMessage = getJobCancelLockMessage(job);
   const editLockMessage = isCanceled ? "Cancelled job cannot be edited." : "Invoiced or completed job cannot be edited.";
+  const embeddedFormId = "freight-job-embedded-form";
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -320,6 +333,58 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
     }
   };
 
+  useEffect(() => {
+    if (!embeddedInWorkspace || !onEmbeddedActionsChange || view !== "editor") {
+      onEmbeddedActionsChange?.(null);
+      return undefined;
+    }
+
+    onEmbeddedActionsChange(
+      <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar">
+        {notice && <NoticeChip notice={notice} />}
+        <Button type="button" size="sm" variant="outline" onClick={() => (onEmbeddedList ? onEmbeddedList() : setView("list"))}>
+          <ArrowLeft size={14} /> List
+        </Button>
+        {!editing && !isEditLocked && (
+          <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}>
+            <Edit2 size={14} /> Edit
+          </Button>
+        )}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={cancelJob}
+          disabled={saving || !job.job_no || isCanceled || isCancelLocked}
+          title={isCancelLocked ? cancelLockMessage : "Cancel job"}
+        >
+          <Ban size={14} /> Cancel
+        </Button>
+        {editing && (
+          <Button type="submit" size="sm" disabled={saving || isEditLocked} form={embeddedFormId}>
+            <Save size={14} /> Save
+          </Button>
+        )}
+        <span className={`freight-job-mode-badge ${editing ? "editing" : "viewing"}`}>{editing ? "Edit" : "View"}</span>
+      </div>
+    );
+
+    return () => onEmbeddedActionsChange(null);
+  }, [
+    cancelLockMessage,
+    embeddedInWorkspace,
+    editing,
+    isCancelLocked,
+    isCanceled,
+    isEditLocked,
+    job.job_no,
+    notice,
+    onEmbeddedActionsChange,
+    onEmbeddedList,
+    saving,
+    view,
+  ]);
+
   const copyQuotationToJob = async (quotationNr: string, row: LookupRow | null) => {
     setJob((current) => ({
       ...current,
@@ -374,7 +439,7 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
   }
 
   return (
-    <form className="freight-document-form" onSubmit={saveJob}>
+    <form id={embeddedInWorkspace ? embeddedFormId : undefined} className="freight-document-form" onSubmit={saveJob}>
       {!embeddedInWorkspace && <Header title={`${mode.label} ${direction.label} Job`} subtitle={job.job_no || "New job"} icon={Icon}>
         {notice && <NoticeChip notice={notice} />}
         <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>
@@ -382,16 +447,6 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
         <Button type="button" size="sm" variant="outline" onClick={cancelJob} disabled={saving || !job.job_no || isCanceled || isCancelLocked} title={isCancelLocked ? cancelLockMessage : "Cancel job"}><Ban size={14} />Cancel</Button>
         {editing && <Button type="submit" size="sm" disabled={saving || isEditLocked}><Save size={14} />Save</Button>}
       </Header>}
-      <div className="freight-job-focus-bar freight-job-focus-compact freight-job-actions-only">
-        <div className="freight-job-inline-actions">
-          {notice && <NoticeChip notice={notice} />}
-          {embeddedInWorkspace && <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>}
-          {!editing && !isEditLocked && <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}><Edit2 size={14} />Edit</Button>}
-          <Button type="button" size="sm" variant="outline" onClick={cancelJob} disabled={saving || !job.job_no || isCanceled || isCancelLocked} title={isCancelLocked ? cancelLockMessage : "Cancel job"}><Ban size={14} />Cancel</Button>
-          {editing && <Button type="submit" size="sm" disabled={saving || isEditLocked}><Save size={14} />Save</Button>}
-          <span className={`freight-job-mode-badge ${editing ? "editing" : "viewing"}`}>{editing ? "Edit" : "View"}</span>
-        </div>
-      </div>
       <div className="freight-job-editor-shell">
         <fieldset disabled={isEditLocked || !editing} className={`freight-document-paper freight-shipment-paper ${editing ? "is-editing" : "is-viewing"}`}>
           <JobEditContext.Provider value={editing && !isEditLocked}>

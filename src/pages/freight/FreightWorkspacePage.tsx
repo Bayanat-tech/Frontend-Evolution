@@ -9,7 +9,7 @@ import {
   Search,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { Button } from "../../components/ui/Button";
@@ -90,8 +90,8 @@ export function FreightWorkspacePage({ target: _target }: { target?: FreightWork
     }
   }, [companyCode, userId]);
 
-  const searchFreight = useCallback(async (nextSearch?: string) => {
-    const term = nextSearch ?? smartSearch;
+  const searchFreight = useCallback(async (nextSearch = "") => {
+    const term = nextSearch.trim();
     setLoading(true);
     setMessage("");
     try {
@@ -108,7 +108,7 @@ export function FreightWorkspacePage({ target: _target }: { target?: FreightWork
     } finally {
       setLoading(false);
     }
-  }, [companyCode, smartSearch, userId]);
+  }, [companyCode, userId]);
 
   useEffect(() => {
     void loadWorkspace();
@@ -123,11 +123,11 @@ export function FreightWorkspacePage({ target: _target }: { target?: FreightWork
   return (
     <section className="grid gap-2">
       <section className="overflow-hidden rounded-md border bg-card shadow-sm">
-        <div className="grid gap-3 border-b bg-white px-4 py-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+        <div className="grid gap-3 border-b bg-white px-4 py-2.5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
           <div className="min-w-0">
-            <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-primary">Freight Management</div>
-            <h1 className="m-0 mt-1 text-[22px] font-extrabold leading-tight text-slate-950">Freight Control Center</h1>
-            <p className="m-0 max-w-3xl text-[13px] font-medium text-slate-500">
+            <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-primary">Freight Management</div>
+            <h1 className="m-0 text-[21px] font-extrabold leading-tight text-slate-950">Freight Control Center</h1>
+            <p className="m-0 max-w-3xl text-[12px] font-medium text-slate-500">
               Search enquiry, RFQ, quotation, job, house BL, HBL, or principal from one clean workspace.
             </p>
           </div>
@@ -142,7 +142,7 @@ export function FreightWorkspacePage({ target: _target }: { target?: FreightWork
             {loading ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
           </Button>
         </div>
-        <div className="grid gap-2 bg-slate-50/60 p-2 md:grid-cols-4">
+        <div className="grid gap-2 bg-slate-50/70 p-2 md:grid-cols-4">
           <Metric icon={BriefcaseBusiness} label="Open Jobs" value={valueText(summary.OPEN_JOBS)} tone="blue" />
           <Metric icon={ClipboardList} label="Pending Enquiry" value={valueText(summary.PENDING_ENQUIRIES)} tone="amber" />
           <Metric icon={FileText} label="Active RFQ" value={valueText(summary.ACTIVE_RFQ)} tone="violet" />
@@ -151,32 +151,46 @@ export function FreightWorkspacePage({ target: _target }: { target?: FreightWork
       </section>
 
       <section className="overflow-hidden rounded-md border bg-card shadow-sm">
-        <PanelHeader icon={Search} title="Global Freight Search" subtitle="Commercial and operations records" />
+        <PanelHeader
+          icon={Search}
+          title="Global Freight Search"
+          subtitle="Commercial and operations records"
+          action={
+            <div className="flex flex-wrap items-center gap-1.5">
+              <ResultPill label="Records" value={String(resultStats.total)} tone="blue" />
+              <ResultPill label="Jobs" value={String(resultStats.jobs)} tone="emerald" />
+              <ResultPill label="Commercial" value={String(resultStats.commercial)} tone="amber" />
+            </div>
+          }
+        />
         <form
-          className="grid gap-2 border-b bg-slate-50/50 p-3 md:grid-cols-[minmax(0,1fr)_auto_auto]"
+          className="grid gap-2 border-b bg-slate-50/50 p-2.5 md:grid-cols-[minmax(0,1fr)_auto_auto]"
           onSubmit={(event) => {
             event.preventDefault();
-            void searchFreight();
+            void searchFreight(smartSearch);
           }}
         >
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 z-10 -translate-y-1/2 text-slate-400" size={18} />
+          <div className="relative freight-smart-search-field">
+            <Search className="freight-smart-search-icon pointer-events-none absolute left-3.5 top-1/2 z-10 -translate-y-1/2 text-slate-400" size={18} />
             <Input
-              className="h-11 rounded-md border-slate-200 bg-white pr-4 text-[14px] font-semibold shadow-sm placeholder:font-semibold placeholder:text-slate-500 focus-visible:ring-primary/25"
-              style={{ paddingLeft: 44 }}
+              className="freight-smart-search-input h-10 rounded-md border-slate-200 bg-white pl-11 pr-4 text-[14px] font-semibold shadow-sm placeholder:font-semibold placeholder:text-slate-500 focus-visible:ring-primary/25"
               value={smartSearch}
-              onChange={(event) => setSmartSearch(event.target.value)}
+              onChange={(event) => {
+                const value = event.target.value;
+                setSmartSearch(value);
+                if (!value.trim()) void searchFreight("");
+              }}
               placeholder="Search AI/00001/00008, RFQ no, quotation no, job no, HBL, house/BL number, principal..."
             />
           </div>
-          <Button type="submit" className="h-11 min-w-32 rounded-md text-sm font-bold">
+          <Button type="submit" className="h-10 min-w-28 rounded-md text-sm font-bold">
             {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />} Search
           </Button>
           <Button
             type="button"
             variant="outline"
             size="icon"
-            className="h-11 w-11 rounded-md"
+            className="h-10 w-10 rounded-md"
             title="Reset search"
             onClick={() => {
               setSmartSearch("");
@@ -186,12 +200,7 @@ export function FreightWorkspacePage({ target: _target }: { target?: FreightWork
             <RefreshCw size={16} />
           </Button>
         </form>
-        <div className="grid gap-2 border-b bg-background p-2 md:grid-cols-3">
-          <SearchCard label="Results Loaded" value={String(resultStats.total)} hint="Live Oracle records" />
-          <SearchCard label="Job Matches" value={String(resultStats.jobs)} hint="Operational records" />
-          <SearchCard label="Commercial Matches" value={String(resultStats.commercial)} hint="Enquiry, RFQ, quotation" />
-        </div>
-        <div className="max-h-[calc(100vh-405px)] min-h-[245px] overflow-auto">
+        <div className="max-h-[calc(100vh-325px)] min-h-[220px] overflow-auto">
           <table className="w-full min-w-[900px] text-sm">
             <thead className="bg-blue-50 text-xs uppercase text-blue-950">
               <tr>
@@ -269,16 +278,19 @@ export function FreightWorkspacePage({ target: _target }: { target?: FreightWork
   }
 }
 
-function PanelHeader({ title, subtitle, icon: Icon }: { title: string; subtitle: string; icon: LucideIcon }) {
+function PanelHeader({ title, subtitle, icon: Icon, action }: { title: string; subtitle: string; icon: LucideIcon; action?: ReactNode }) {
   return (
-    <div className="flex min-w-0 items-center gap-2.5 border-b bg-white px-3 py-2.5">
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-blue-50 text-primary">
-        <Icon size={16} />
-      </span>
-      <div className="min-w-0">
-        <h2 className="m-0 text-[13px] font-bold leading-tight text-slate-950">{title}</h2>
-        <p className="m-0 truncate text-xs font-medium text-muted-foreground">{subtitle}</p>
+    <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b bg-white px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-blue-50 text-primary">
+          <Icon size={16} />
+        </span>
+        <div className="min-w-0">
+          <h2 className="m-0 text-[13px] font-bold leading-tight text-slate-950">{title}</h2>
+          <p className="m-0 truncate text-xs font-medium text-muted-foreground">{subtitle}</p>
+        </div>
       </div>
+      {action}
     </div>
   );
 }
@@ -292,7 +304,7 @@ function Metric({ icon: Icon, label, value, tone }: { icon: LucideIcon; label: s
   }[tone];
 
   return (
-    <div className="flex items-center gap-2.5 rounded-md border bg-white px-3 py-2 shadow-sm">
+    <div className="flex items-center gap-2.5 rounded-md border bg-white px-3 py-2 shadow-sm ring-1 ring-slate-100">
       <span className={`grid h-8 w-8 place-items-center rounded-md border ${toneClass}`}>
         <Icon size={15} />
       </span>
@@ -304,13 +316,18 @@ function Metric({ icon: Icon, label, value, tone }: { icon: LucideIcon; label: s
   );
 }
 
-function SearchCard({ label, value, hint }: { label: string; value: string; hint: string }) {
+function ResultPill({ label, value, tone }: { label: string; value: string; tone: "blue" | "amber" | "emerald" }) {
+  const toneClass = {
+    blue: "border-blue-100 bg-blue-50 text-blue-800",
+    amber: "border-amber-100 bg-amber-50 text-amber-800",
+    emerald: "border-emerald-100 bg-emerald-50 text-emerald-800",
+  }[tone];
+
   return (
-    <div className="rounded-md border bg-slate-50/80 px-3 py-2">
-      <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="text-lg font-extrabold leading-tight text-slate-950">{value}</div>
-      <div className="truncate text-[11px] font-medium text-slate-500">{hint}</div>
-    </div>
+    <span className={`inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-[11px] font-bold uppercase ${toneClass}`}>
+      {label}
+      <strong className="text-sm leading-none">{value}</strong>
+    </span>
   );
 }
 

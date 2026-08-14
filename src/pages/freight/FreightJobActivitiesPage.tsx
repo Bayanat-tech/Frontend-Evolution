@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Calculator, CheckCircle2, Edit2, Plus, RefreshCw, Save, Trash2, TrendingUp } from "lucide-react";
 import { api } from "../../api/client";
 import { freightSelect } from "../../api/freight";
@@ -59,14 +59,32 @@ const directionMap = {
   reexport: { code: "IRE", label: "Import for Re-export" },
 };
 
-export function FreightJobActivitiesPage({ target, initialJob = null, startMode = "list", screen = "activities", readOnly = false }: { target?: FreightWorkspaceTarget; initialJob?: LookupRow | null; startMode?: ViewMode; screen?: ActivityScreen; readOnly?: boolean }) {
+export function FreightJobActivitiesPage({
+  target,
+  initialJob = null,
+  startMode = "list",
+  screen = "activities",
+  readOnly = false,
+  onEmbeddedActionsChange,
+  onEmbeddedList,
+}: {
+  target?: FreightWorkspaceTarget;
+  initialJob?: LookupRow | null;
+  startMode?: ViewMode;
+  screen?: ActivityScreen;
+  readOnly?: boolean;
+  onEmbeddedActionsChange?: (actions: ReactNode | null) => void;
+  onEmbeddedList?: () => void;
+}) {
   const { user } = useAuth();
   const { toast } = useToast();
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
   const userId = String(userRecord.user_id || userRecord.USER_ID || userRecord.loginid || userRecord.LOGINID || "");
-  const mode = modeMap[target?.mode || "air"];
-  const direction = directionMap[target?.direction || "import"];
+  const modeKey = (target?.mode || "air") as keyof typeof modeMap;
+  const directionKey = (target?.direction || "import") as keyof typeof directionMap;
+  const mode = modeMap[modeKey];
+  const direction = directionMap[directionKey];
   const copy = screen === "jobsheet"
     ? { eyebrow: "Freight Job Sheet", title: "JOB Sheet", subtitle: "Revenue, cost, profit and billing activity lines" }
     : { eyebrow: "Freight Service", title: "Service & Activities", subtitle: "Operational services, vendor cost and customer billing lines" };
@@ -102,6 +120,7 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
     lookupText(header, "complete_date")
   );
   const isLineLocked = isConfirmed || isClosed;
+  const embeddedInWorkspace = Boolean(onEmbeddedActionsChange);
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -218,6 +237,33 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
     }
   }
 
+  useEffect(() => {
+    if (!onEmbeddedActionsChange) return;
+    if (view !== "editor") {
+      onEmbeddedActionsChange(null);
+      return () => onEmbeddedActionsChange(null);
+    }
+    onEmbeddedActionsChange(
+      <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar">
+        {notice && <NoticeChip notice={notice} />}
+        <Button type="button" size="sm" variant="outline" onClick={onEmbeddedList || (() => setView("list"))}>
+          <ArrowLeft size={14} />List
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={addLine} disabled={isLineLocked}>
+          <Plus size={14} />Line
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={() => void confirmJob()} disabled={saving || isClosed || !lines.length || Boolean(lookupText(header, "confirm_date"))}>
+          <CheckCircle2 size={14} />{lookupText(header, "confirm_date") ? "Confirmed" : "Confirm"}
+        </Button>
+        <Button type="button" size="sm" onClick={() => void saveLines()} disabled={saving || isLineLocked}>
+          <Save size={14} />Save
+        </Button>
+        <span className="freight-job-mode-badge viewing">View</span>
+      </div>
+    );
+    return () => onEmbeddedActionsChange(null);
+  }, [header, isClosed, isLineLocked, lines.length, notice, onEmbeddedActionsChange, onEmbeddedList, saving, view]);
+
   if (view === "list") {
     return (
       <section className="grid gap-3">
@@ -249,7 +295,7 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
 
   return (
     <section className="grid gap-2 freight-job-ops-screen">
-      <Header eyebrow={copy.eyebrow} title={copy.title} subtitle={`${lookupText(header, "job_no")} / ${lookupText(header, "prin_name") || lookupText(header, "prin_code")}`}>
+      {!embeddedInWorkspace && <Header eyebrow={copy.eyebrow} title={copy.title} subtitle={`${lookupText(header, "job_no")} / ${lookupText(header, "prin_name") || lookupText(header, "prin_code")}`}>
         {notice && <NoticeChip notice={notice} />}
         {!initialJob && <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>}
         <Button type="button" size="sm" variant="outline" onClick={addLine} disabled={isLineLocked}><Plus size={14} />Line</Button>
@@ -258,7 +304,7 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
            <CheckCircle2 size={14} />{lookupText(header, "confirm_date") ? "Confirmed" : "Confirm"}
         </Button>
         <Button type="button" size="sm" onClick={() => void saveLines()} disabled={saving || isLineLocked}><Save size={14} />Save</Button>
-      </Header>
+      </Header>}
 
       <div className="grid gap-2 lg:grid-cols-4">
         <Metric label="Revenue" value={money(totals.revenue)} />
