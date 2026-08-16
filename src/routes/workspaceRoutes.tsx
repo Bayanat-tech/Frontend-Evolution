@@ -203,6 +203,20 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+
+  {
+  name: "Purchase Sales Product Category",
+  match: ({ pathname }) => isProductCategoryRoute(pathname),
+  element: () => <ProductCategoryPage />,
+  },
+
+  {
+  name: "Purchase Sales Product Type",
+  match: ({ pathname }) => isProductTypeRoute(pathname),
+  element: () => <ProductTypePage />,
+  },
+
+
   {
     name: 'MSE Prod Group',
     match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_group"),
@@ -1213,21 +1227,6 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "HR Master",
     match: (context) => Boolean(getHrMasterConfig(context)),
     element: (context) => <HrMasterPage config={getHrMasterConfig(context)!} />,
-  },
-
- 
-
-  {
-  name: "Purchase Sales Product Type",
-  match: ({ pathname }) => isProductTypeRoute(pathname),
-  element: () => <ProductTypePage />,
-  },
-
-
-  {
-  name: "Purchase Sales Product Category",
-  match: ({ pathname }) => isProductCategoryRoute(pathname),
-  element: () => <ProductCategoryPage />,
   },
 
    {
