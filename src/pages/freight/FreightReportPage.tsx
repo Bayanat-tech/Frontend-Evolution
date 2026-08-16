@@ -606,7 +606,7 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
 
         {visibleFilters.includes("search") && (
           <div className="border-t bg-muted/20 p-3">
-            <Field label="Oracle Search">
+            <Field label="Search">
               <Input className="h-8" value={filters.search} onChange={(event) => setFilter(setFilters, "search", event.target.value)} placeholder="Document, job, principal..." />
             </Field>
           </div>
@@ -661,7 +661,7 @@ function AdvancedReportFilters({
       <div className="mb-2 flex items-center justify-between gap-2">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Advanced Filters</div>
-          <div className="text-xs text-muted-foreground">Refine the report with shipment, commercial, and document criteria.</div>
+          {/* <div className="text-xs text-muted-foreground">Refine the report with shipment, commercial, and document criteria.</div> */}
         </div>
       </div>
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
@@ -969,7 +969,7 @@ function ReportLaunchPanel({
         <div className="rounded-md border bg-background p-4">
           <div className="text-[10px] font-semibold uppercase text-muted-foreground">{config.primaryMetric}</div>
           <div className="mt-2 text-3xl font-bold text-foreground">{loading ? "..." : rows.length}</div>
-          <div className="mt-1 text-xs text-muted-foreground">Records loaded from Oracle</div>
+          <div className="mt-1 text-xs text-muted-foreground">Records loaded</div>
         </div>
         <div className="rounded-md border bg-background p-4">
           <div className="text-[10px] font-semibold uppercase text-muted-foreground">Totals</div>
@@ -1336,8 +1336,9 @@ async function loadLookup(parameter: string, companyCode: string, query = "") {
 }
 
 async function loadQuotationSourceLookup(companyCode: string, transportMode: string, jobType: string, query = "") {
+  console.log("Loading quotation source lookup with:", { companyCode, transportMode, jobType, query });
   const rows = await freightSelect<LookupRow>({
-    parameter: "freight_job_quotation_source",
+    parameter: "frt_quotation_reports",
     code1: companyCode,
     code2: transportMode || "NULL",
     code3: jobType || "NULL",
@@ -1556,7 +1557,9 @@ function reportHtml(
     .sheet{padding:${interactive ? "18px" : "0"}}.paper{max-width:1280px;margin:0 auto;background:white;padding:14px;${interactive ? "border:1px solid #dbe3ef;box-shadow:0 18px 42px rgba(15,23,42,.08)" : ""}}
     .logo{height:54px;border-bottom:1px solid #94a3b8;display:flex;align-items:center;justify-content:space-between}.brand-wrap{display:flex;align-items:center;gap:10px}.brand-wrap img{width:36px;height:36px;object-fit:contain}.brand{font-size:12px;font-weight:800;letter-spacing:.28em;color:#0b4ca1;text-transform:uppercase}.system{font-size:10px;font-weight:700;letter-spacing:.18em;color:#64748b;text-transform:uppercase}
     .top{display:grid;grid-template-columns:1.35fr 1fr;gap:20px;border-bottom:1px solid #94a3b8;padding:8px 0}.title{font-size:20px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin:0}.sub{font-size:11px;color:#64748b;margin-top:2px}
-    .meta{text-align:right;font-size:11px;color:#334155;line-height:1.45}.meta b{display:inline-block;width:54px;text-align:left;color:#0f172a}.params{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;border-bottom:1px solid #cbd5e1;padding:7px 0;font-size:11px;color:#334155}.params b{color:#0f172a}
+    .meta{margin-left:auto;display:grid;grid-template-columns:max-content 1fr;column-gap:6px;font-size:11px;color:#334155;line-height:1.45}
+    .meta>div{display:contents}
+    .meta b{color:#0f172a;text-align:left}.params{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;border-bottom:1px solid #cbd5e1;padding:7px 0;font-size:11px;color:#334155}.params b{color:#0f172a}
     .group{margin-top:10px}.group-title{background:#f1f5f9;padding:4px 6px;font-size:13px;font-weight:800}
     table{border-collapse:collapse;width:100%;font-size:10.5px;margin-top:3px}th{background:#f1f5f9;color:#0f172a;font-size:10px;border-top:1px solid #475569;border-bottom:1px solid #475569;padding:6px 5px;text-align:center;font-weight:700}td{padding:4px 5px;vertical-align:top}
     .line2 td,.rowline{border-bottom:1px solid #64748b}.right{text-align:right}.center{text-align:center}.primary-text{color:#0b4ca1;font-weight:800}.profit{color:#047857;font-weight:700}.muted{color:#64748b}.empty{border:1px dashed #cbd5e1;background:#f8fafc;text-align:center;padding:56px;margin-top:14px;color:#64748b;font-weight:700}
