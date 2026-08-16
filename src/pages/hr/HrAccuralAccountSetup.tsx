@@ -1,7 +1,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { Plus, Save, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { executeDynamicDelete, getDynamicLookup } from "../../api/lookups";
+import { getDynamicLookup } from "../../api/lookups";
 import type { LookupRow } from "../../api/lookups";
 import { upsertAccrualAcctSetupApi } from "../../api/hr";
 import { Button } from "../../components/ui/Button";
@@ -124,21 +124,8 @@ const ACCOUNT_LOOKUP_COLUMNS: { field: string; header: string }[] = [
 ];
 
 // ─── Retrieve parameter — matches the proc WHEN block added for
-// MS_HR_SEC_PAYCOMP_AC. Save now goes through upsertAccrualAcctSetupApi
-// (POST /api/finance/insUpdAccrualAcctSetup), one row per call, since
-// PROC_INS_UPD_MS_HR_SEC_PAYCOMP_AC only accepts a single-row table type. ──
+// MS_HR_SEC_PAYCOMP_AC. ────────────────────────────────────────────────
 const RETRIEVE_PARAMETER = "MST_HR_ACCRUAL_AC_SETUP_RETRIEVE";
-
-// ─── Delete parameter — routes through PROC_BUILD_DYNAMIC_DEL_COMMON
-// ('MST_HR_' prefix) → PROC_BUILD_DYNAMIC_DEL_MST_HR. P_CODE1..P_CODE4 =
-// Company/Div/Dept/Section, as usual. NOTE: the backend route
-// (proc_build_dynamic_del_common) never forwards P_CODE5 — it's hardcoded
-// to null there and that route can't be changed — so pay_comp_id (accrual
-// type) instead gets appended directly onto the parameter string itself:
-// 'MST_HR_ACCRUAL_AC_SETUP_DELETE_' + pay_comp_id (e.g. "...DELETE_AL").
-// The DB proc detects this prefix with SUBSTR before its CASE statement
-// and pulls pay_comp_id back out of the parameter suffix. ────────────────
-const DELETE_PARAMETER_PREFIX = "MST_HR_ACCRUAL_AC_SETUP_DELETE_";
 
 export function HrAccuralAccountSetup() {
   const { user } = useAuth();
@@ -150,7 +137,6 @@ export function HrAccuralAccountSetup() {
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [deletingRowId, setDeletingRowId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(
     null,
   );
@@ -232,6 +218,7 @@ export function HrAccuralAccountSetup() {
         date3: null,
         date4: null,
       });
+
       const list = Array.isArray(response) ? response : [];
       const mapped: TAccrualAccountRow[] = list.map((r: any, idx: number) => ({
         row_id: `${r.pay_comp_id ?? "row"}-${idx}`,
@@ -263,16 +250,11 @@ export function HrAccuralAccountSetup() {
 
   // ── Auto-retrieve — as soon as all four header fields (Company, Division,
   // Department, Section) are selected, fire the same Retrieve call the
-  // button triggers, so the grid populates without an extra click. Any
-  // change that clears one of the four (e.g. re-picking Company) simply
-  // won't satisfy the condition below, so this won't fire again until the
-  // full scope is complete again. ────────────────────────────────────────
+  // button triggers, so the grid populates without an extra click. ───────
   useEffect(() => {
     if (headerReady) {
       handleRetrieve();
     } else {
-      // Header scope is incomplete again — clear any previously retrieved
-      // rows so the grid doesn't show data for a stale/mismatched scope.
       setRows([]);
       setDeletedRowIds([]);
     }
@@ -285,87 +267,79 @@ export function HrAccuralAccountSetup() {
 
   const addRow = () => setRows((prev) => [...prev, blankRow()]);
 
-  // ── Delete row — new/unsaved rows (row_id starts with "new-") only ever
-  // existed in local state, so they're just dropped. Existing rows are
-  // deleted immediately against MS_HR_SEC_PAYCOMP_AC via executeDynamicDelete
-  // (routes through PROC_BUILD_DYNAMIC_DEL_COMMON → PROC_BUILD_DYNAMIC_DEL_MST_HR),
-  // scoped by Company/Div/Dept/Section (P_CODE1-4) + pay_comp_id, which is
-  // appended onto the parameter string itself (see DELETE_PARAMETER_PREFIX)
-  // since the backend route never forwards P_CODE5. Only removed from the
-  // grid on success so a failed delete doesn't silently desync the UI from
-  // the database. ───────────────────────────────────────────────────────
-  const removeRow = async (row: TAccrualAccountRow) => {
-    if (row.row_id.startsWith("new-")) {
-      setRows((prev) => prev.filter((r) => r.row_id !== row.row_id));
+  // ── Remove row — local grid state only. On Save the procedure deletes
+  // the whole scope and re-inserts whatever is still in the grid, so
+  // removed rows disappear from the DB as well. ───────────────────────
+  const removeRow = (row_id: string) => {
+    setRows((prev) => prev.filter((r) => r.row_id !== row_id));
+    setDeletedRowIds((prev) => (row_id.startsWith("new-") ? prev : [...prev, row_id]));
+  };
+
+  // ── Save — pushes the WHOLE grid to MS_HR_SEC_PAYCOMP_AC in a single
+  // upsertAccrualAcctSetupApi call. Procedure deletes the entire scope
+  // then inserts this array. ──────────────────────────────────────────
+  const handleSave = useCallback(async () => {
+    if (!headerReady) return;
+
+    if (rows.length === 0) {
+      setNotice({
+        type: "error",
+        message: "Add at least one row before saving.",
+      });
       return;
     }
 
-    setDeletingRowId(row.row_id);
-    setNotice(null);
-    try {
-      await executeDynamicDelete({
-        parameter: `${DELETE_PARAMETER_PREFIX}${row.pay_comp_id}`,
-        loginid,
-        code1: header.company_code,
-        code2: header.div_code,
-        code3: header.dept_code,
-        code4: header.section_code,
-      });
-      setRows((prev) => prev.filter((r) => r.row_id !== row.row_id));
-      setDeletedRowIds((prev) => [...prev, row.row_id]);
-      setNotice({ type: "success", message: "Row deleted." });
-    } catch (error) {
+    // Basic client-side validation
+    const invalid = rows.find((r) => !r.pay_comp_id?.trim());
+    if (invalid) {
       setNotice({
         type: "error",
-        message: error instanceof Error ? error.message : "Unable to delete row",
+        message: "Every row must have an Accrual Type selected.",
       });
-    } finally {
-      setDeletingRowId(null);
+      return;
     }
-  };
 
-  // ── Save — pushes each row back to MS_HR_SEC_PAYCOMP_AC via
-  // upsertAccrualAcctSetupApi (POST /api/finance/insUpdAccrualAcctSetup).
-  // The proc only accepts one row per call (WMSTST.MS_HR_SEC_PAYCOMP_AC_TAB
-  // is built from a single-element array server-side), so rows are saved
-  // sequentially. Row deletes are handled separately by removeRow, which
-  // deletes immediately rather than batching with Save. ──────────────────
-  const handleSave = useCallback(async () => {
-    if (!headerReady) return;
     setSaving(true);
     setNotice(null);
+
     try {
       const today = new Date().toISOString();
 
-      for (const row of rows) {
-        await upsertAccrualAcctSetupApi({
-          company_code: header.company_code,
-          div_code: header.div_code,
-          dept_code: header.dept_code,
-          section_code: header.section_code,
-          pay_comp_id: row.pay_comp_id,
-          ac_code_db: row.ac_code_db || null,
-          ac_code_cr: row.ac_code_cr || null,
-          pay_comp_type: "A",
-          pay_comp_earn_ded: row.pay_comp_earn_ded || null,
-          sepn_flag: row.sepn_flag,
-          remarks: row.remarks || null,
-          user_id: loginid,
-          user_dt: today,
-        });
-      }
+      // Array of objects – one per grid row
+      const paycomp_ac = rows.map((row) => ({
+        company_code: header.company_code,
+        div_code: header.div_code,
+        dept_code: header.dept_code,
+        section_code: header.section_code,
+        pay_comp_id: row.pay_comp_id,
+        ac_code_db: row.ac_code_db || null,
+        ac_code_cr: row.ac_code_cr || null,
+        pay_comp_type: "A",
+        pay_comp_earn_ded: row.pay_comp_earn_ded || null,
+        sepn_flag: row.sepn_flag,
+        remarks: row.remarks || null,
+        user_id: loginid,
+        user_dt: today,
+      }));
+
+      // API posts { paycomp_ac: [...] }
+      await upsertAccrualAcctSetupApi({ paycomp_ac });
 
       setNotice({ type: "success", message: "Accrual account setup saved." });
       setDeletedRowIds([]);
+
+      // Re-retrieve so grid reflects exactly what is in DB
+      await handleRetrieve();
     } catch (error) {
       setNotice({
         type: "error",
-        message: error instanceof Error ? error.message : "Unable to save accrual account setup",
+        message:
+          error instanceof Error ? error.message : "Unable to save accrual account setup",
       });
     } finally {
       setSaving(false);
     }
-  }, [loginid, header, headerReady, rows]);
+  }, [loginid, header, headerReady, rows, handleRetrieve]);
 
   const columns: ColumnDef<TAccrualAccountRow>[] = [
     { accessorKey: "pay_comp_id", header: "Accrual Type", size: 130 },
@@ -524,7 +498,7 @@ export function HrAccuralAccountSetup() {
             <Button size="sm" variant="secondary" disabled={!headerReady} onClick={addRow}>
               <Plus size={13} /> Add Row
             </Button>
-            <Button size="sm" disabled={!headerReady || saving} onClick={handleSave}>
+            <Button size="sm" disabled={!headerReady || saving } onClick={handleSave}>
               <Save size={13} /> {saving ? "Saving..." : "Save"}
             </Button>
           </div>
@@ -635,9 +609,8 @@ export function HrAccuralAccountSetup() {
                   <td className="px-2 py-1 text-center">
                     <button
                       type="button"
-                      className="text-muted-foreground hover:text-destructive disabled:opacity-50"
-                      onClick={() => removeRow(row)}
-                      disabled={deletingRowId === row.row_id}
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => removeRow(row.row_id)}
                       aria-label="Remove row"
                     >
                       <Trash2 size={14} />

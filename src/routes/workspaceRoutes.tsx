@@ -208,6 +208,10 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_group"),
     element: () => <MseProdGroup />,
   },
+   {
+  name: "Product BOM",
+  match: ({ pathname }) => isProductBomRoute(pathname),
+  element: () => <PS_ProductBomPage />},
   {
     name: 'Purchase Sales Product',
     match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product"),
@@ -1211,6 +1215,8 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: (context) => <HrMasterPage config={getHrMasterConfig(context)!} />,
   },
 
+ 
+
   {
   name: "Purchase Sales Product Type",
   match: ({ pathname }) => isProductTypeRoute(pathname),
@@ -1261,10 +1267,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   element: () => <JobProductionOrderPage />,
   },
 
-  {
-  name: "Product BOM",
-  match: ({ pathname }) => isProductBomRoute(pathname),
-  element: () => <PS_ProductBomPage />},
+  
 
   
   {
