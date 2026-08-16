@@ -523,9 +523,7 @@ export default function PLSummaryPage() {
         newTab.document.write("<title>P&amp;L Summary Report</title><body style='font-family:sans-serif;padding:40px;color:#6b7280;'>Loading report…</body>");
 
         try {
-            // ✅ आधीचा raw fetch("/api/reports/pl-summary/html") काढून टाकला —
-            // आता तोच axios client (`api`) आणि तोच endpoint वापरतो जो DN Summary/
-            // Profit&Loss वगैरे बाकीच्या reports वापरतात.
+           
             const html = await getPLSummaryReportHtml(params);
             newTab.document.open();
             newTab.document.write(html);
