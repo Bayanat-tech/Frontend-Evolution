@@ -44,6 +44,8 @@ function rowKeyOf(row: ReturnType<typeof normalizeRow>) {
   return `${row.job_no}||${row.act_code}`;
 }
 
+const ALL_GROUPS = "__all__";
+
 export function JobSelectionModal({
   prinCode,
   invoiceNo,
@@ -57,6 +59,7 @@ export function JobSelectionModal({
   const [jobs, setJobs] = useState<ReturnType<typeof normalizeRow>[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [groupFilter, setGroupFilter] = useState<string>(ALL_GROUPS);
 
   // Jobs already added to the invoice (Job Details grid) — never show these again here.
   const excludeSet = useMemo(() => new Set(existingKeys), [existingKeys]);
@@ -89,6 +92,7 @@ export function JobSelectionModal({
         setJobs(normalized);
         // Pre-check rows already flagged SELECTED = 'Y' by the backend view
         setSelected(new Set(normalized.filter((r) => r.selected).map(rowKeyOf)));
+        setGroupFilter(ALL_GROUPS);
       } catch {
         setJobs([]);
       } finally {
@@ -96,6 +100,20 @@ export function JobSelectionModal({
       }
     })();
   }, [prinCode, invoiceNo, user?.loginid, user?.company_code, excludeSet]);
+
+  // Distinct activity group names present in the fetched jobs, for the filter dropdown
+  const groupOptions = useMemo(() => {
+    const names = new Set<string>();
+    jobs.forEach((row) => {
+      if (row.act_group_name) names.add(row.act_group_name);
+    });
+    return Array.from(names).sort();
+  }, [jobs]);
+
+  const visibleJobs = useMemo(
+    () => (groupFilter === ALL_GROUPS ? jobs : jobs.filter((row) => row.act_group_name === groupFilter)),
+    [jobs, groupFilter],
+  );
 
   const toggleRow = (key: string) => {
     setSelected((prev) => {
@@ -105,9 +123,19 @@ export function JobSelectionModal({
     });
   };
 
+  // "Select all" only affects the currently visible (filtered) rows.
+  const allVisibleSelected = visibleJobs.length > 0 && visibleJobs.every((row) => selected.has(rowKeyOf(row)));
+
   const toggleAll = () => {
-    if (selected.size === jobs.length) setSelected(new Set());
-    else setSelected(new Set(jobs.map(rowKeyOf)));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        visibleJobs.forEach((row) => next.delete(rowKeyOf(row)));
+      } else {
+        visibleJobs.forEach((row) => next.add(rowKeyOf(row)));
+      }
+      return next;
+    });
   };
 
   const handleSelect = () => {
@@ -117,12 +145,33 @@ export function JobSelectionModal({
 
   return (
     <Dialog open wide title="Select Jobs" onClose={onClose}>
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-xs font-medium text-muted-foreground">Activity Group</span>
+        <select
+          className="h-8 rounded-md border bg-background px-2 text-sm"
+          value={groupFilter}
+          onChange={(e) => setGroupFilter(e.target.value)}
+        >
+          <option value={ALL_GROUPS}>All Groups</option>
+          {groupOptions.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+        {groupFilter !== ALL_GROUPS && (
+          <Button variant="ghost" size="sm" onClick={() => setGroupFilter(ALL_GROUPS)}>
+            Clear
+          </Button>
+        )}
+      </div>
+
       <div className="max-h-[420px] overflow-auto rounded-md border">
         <Table>
           <TableHeader className="sticky top-0 z-10 bg-secondary/70">
             <TableRow>
               <TableHead className="w-10">
-                <input type="checkbox" checked={jobs.length > 0 && selected.size === jobs.length} onChange={toggleAll} />
+                <input type="checkbox" checked={allVisibleSelected} onChange={toggleAll} />
               </TableHead>
               <TableHead>Job No</TableHead>
               <TableHead>Activity</TableHead>
@@ -141,12 +190,14 @@ export function JobSelectionModal({
               <TableRow>
                 <TableCell colSpan={11} className="py-6 text-center text-muted-foreground">Loading...</TableCell>
               </TableRow>
-            ) : jobs.length === 0 ? (
+            ) : visibleJobs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="py-6 text-center text-muted-foreground">No jobs found</TableCell>
+                <TableCell colSpan={11} className="py-6 text-center text-muted-foreground">
+                  {jobs.length === 0 ? "No jobs found" : "No jobs found for this activity group"}
+                </TableCell>
               </TableRow>
             ) : (
-              jobs.map((row) => {
+              visibleJobs.map((row) => {
                 const key = rowKeyOf(row);
                 const isSelected = selected.has(key);
                 return (
