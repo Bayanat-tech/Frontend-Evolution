@@ -162,7 +162,7 @@ const jobCategories = ["International", "Combined services", "Clearance", "Other
 const enquiryTabs: { key: EnquiryTab; label: string; icon: typeof PackageCheck }[] = [
   { key: "cargo", label: "Cargo", icon: PackageCheck },
   { key: "journey", label: "Journey", icon: MapPinned },
-  { key: "carrier", label: "Carrier", icon: ShipWheel },
+  // { key: "carrier", label: "Carrier", icon: ShipWheel },
   { key: "payment", label: "Payment", icon: CreditCard },
   { key: "activities", label: "Activities", icon: Activity },
 ];
@@ -682,7 +682,34 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
     }
   };
 
-  const submitForApproval = () => {
+  // const submitForApproval = () => {
+  //   void runWorkflowAction("SUBMITTED");
+  // };
+  const submitForApproval = async () => {
+    if (isReadOnly) {
+      setNotice({ type: "error", text: `${statusLabel(header.indstatus, header.last_action, header.final_approved)} ${enquiryLabel.toLowerCase()} is read-only` });
+      return;
+    }
+
+    const wasDraftSaved = Boolean(header.enquiry_nr);
+
+    setSaving(true);
+    setNotice(null);
+    try {
+      await persistEnquiry();
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to save enquiry" });
+      setSaving(false);
+      return;
+    }
+    setSaving(false);
+
+    if (!wasDraftSaved) {
+      setNotice({ type: "success", text: "Draft saved successfully" });
+      await loadEnquiries();
+      return;
+    }
+
     void runWorkflowAction("SUBMITTED");
   };
 
@@ -824,6 +851,44 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
     );
   };
 
+  const persistEnquiry = async () => {
+  const loginid = String(userInfo?.loginid || userInfo?.USERID || userInfo?.user_id || "");
+  const payload = {
+    header: {
+      ...header,
+      userid: loginid,
+      user_date: new Date().toISOString(),
+    },
+    details: details.filter((row) => row.act_code.trim()).map((row, index) => ({
+      ...row,
+      srno: index + 1,
+      sr_no: index + 1,
+      company_code: header.company_code,
+      prin_code: header.prin_code,
+      enquiry_nr: header.enquiry_nr || "0",
+      enquiry_type: header.enquiry_type,
+      curr_code: row.curr_code || header.curr_code,
+      ex_rate: row.ex_rate || header.ex_rate,
+      origin_port: row.origin_port || header.origin_port,
+      destination_port: row.destination_port || header.destination_port,
+      transport_mode: row.transport_mode || header.transport_mode,
+      userid: loginid,
+      user_dt: new Date().toISOString(),
+    })),
+  };
+
+  const response = await api.post<{ success?: boolean; message?: string; data?: { enquiry_nr?: string } }>(
+    isRfq ? "/api/freight/rfq/save" : "/api/freight/enquiry/save",
+    payload
+  );
+  if (response.data?.success === false) {
+    throw new Error(response.data.message || "Unable to save enquiry");
+  }
+  if (response.data?.data?.enquiry_nr) {
+    setHeaderField("enquiry_nr", response.data.data.enquiry_nr);
+  }
+};
+
   const saveEnquiry = async (event: FormEvent) => {
     event.preventDefault();
     if (isReadOnly) {
@@ -841,45 +906,11 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
     }
     return;
   }
-    setSaving(true);
+  setSaving(true);
     setNotice(null);
     try {
-      const loginid = String(userInfo?.loginid || userInfo?.USERID || userInfo?.user_id || "");
-      const payload = {
-        header: {
-          ...header,
-          userid: loginid,
-          user_date: new Date().toISOString(),
-        },
-        details: details.filter((row) => row.act_code.trim()).map((row, index) => ({
-          ...row,
-          srno: index + 1,
-          sr_no: index + 1,
-          company_code: header.company_code,
-          prin_code: header.prin_code,
-          enquiry_nr: header.enquiry_nr || "0",
-          enquiry_type: header.enquiry_type,
-          curr_code: row.curr_code || header.curr_code,
-          ex_rate: row.ex_rate || header.ex_rate,
-          origin_port: row.origin_port || header.origin_port,
-          destination_port: row.destination_port || header.destination_port,
-          transport_mode: row.transport_mode || header.transport_mode,
-          userid: loginid,
-          user_dt: new Date().toISOString(),
-        })),
-      };
-
-      const response = await api.post<{ success?: boolean; message?: string; data?: { enquiry_nr?: string } }>(
-        isRfq ? "/api/freight/rfq/save" : "/api/freight/enquiry/save",
-        payload
-      );
-      if (response.data?.success === false) {
-        throw new Error(response.data.message || "Unable to save enquiry");
-      }
-      if (response.data?.data?.enquiry_nr) {
-        setHeaderField("enquiry_nr", response.data.data.enquiry_nr);
-      }
-      setNotice({ type: "success", text: response.data?.message || "Enquiry saved" });
+      await persistEnquiry();
+      setNotice({ type: "success", text: "Enquiry saved" });
       await loadEnquiries();
       setView("list");
     } catch (error) {
@@ -888,6 +919,53 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
       setSaving(false);
     }
   };
+  //   setSaving(true);
+  //   setNotice(null);
+  //   try {
+  //     const loginid = String(userInfo?.loginid || userInfo?.USERID || userInfo?.user_id || "");
+  //     const payload = {
+  //       header: {
+  //         ...header,
+  //         userid: loginid,
+  //         user_date: new Date().toISOString(),
+  //       },
+  //       details: details.filter((row) => row.act_code.trim()).map((row, index) => ({
+  //         ...row,
+  //         srno: index + 1,
+  //         sr_no: index + 1,
+  //         company_code: header.company_code,
+  //         prin_code: header.prin_code,
+  //         enquiry_nr: header.enquiry_nr || "0",
+  //         enquiry_type: header.enquiry_type,
+  //         curr_code: row.curr_code || header.curr_code,
+  //         ex_rate: row.ex_rate || header.ex_rate,
+  //         origin_port: row.origin_port || header.origin_port,
+  //         destination_port: row.destination_port || header.destination_port,
+  //         transport_mode: row.transport_mode || header.transport_mode,
+  //         userid: loginid,
+  //         user_dt: new Date().toISOString(),
+  //       })),
+  //     };
+
+  //     const response = await api.post<{ success?: boolean; message?: string; data?: { enquiry_nr?: string } }>(
+  //       isRfq ? "/api/freight/rfq/save" : "/api/freight/enquiry/save",
+  //       payload
+  //     );
+  //     if (response.data?.success === false) {
+  //       throw new Error(response.data.message || "Unable to save enquiry");
+  //     }
+  //     if (response.data?.data?.enquiry_nr) {
+  //       setHeaderField("enquiry_nr", response.data.data.enquiry_nr);
+  //     }
+  //     setNotice({ type: "success", text: response.data?.message || "Enquiry saved" });
+  //     await loadEnquiries();
+  //     setView("list");
+  //   } catch (error) {
+  //     setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to save enquiry" });
+  //   } finally {
+  //     setSaving(false);
+  //   }
+  // };
 
   if (view === "list") {
     return (
@@ -902,7 +980,6 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
               <h1 className="m-0 text-xl font-semibold leading-tight text-foreground"> {isRfq ? "Freight RFQ" : "Freight Enquiry"}
                 {/* {enquiryLabel} Listing */}
                 </h1>
-              {/* <p className="m-0 mt-1 text-xs text-muted-foreground">Create, search, and reopen freight {enquiryLabel.toLowerCase()} records.</p> */}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -993,11 +1070,7 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
               </span>
             </div>
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-              {/* <span>{modeLabel(header.transport_mode)}</span> */}
               <span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
-              {/* <span>{header.job_type === "IMP" ? "Import" : "Export"}</span> */}
-              {/* <span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
-              <span>{header.enquiry_nr}</span> */}
             </div>
           </div>
         </div>
@@ -1185,8 +1258,8 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
           )}
           {activeTab === "journey" && (
             <section>
-              <SectionHeading title="Journey" description="Port routing, country movement, and shipment reference" />
-              <div className="grid gap-1.5 lg:grid-cols-12">
+              <SectionHeading title="Journey & Carrier Details" description="Port routing, Carrier details, and shipment reference" />
+              <div className="grid gap-2.5 lg:grid-cols-12">
                 <SectionPanel className="lg:col-span-7" icon={MapPinned} title="Routing" meta={`${header.origin_port || "Origin"} -> ${header.destination_port || "Destination"}`}>
                   <div className="grid gap-1 sm:grid-cols-2">
                     <FormLookup label="Port of Loading" value={header.origin_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("origin_port", value, row)} required />
@@ -1208,10 +1281,38 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
                   </div>
                 </SectionPanel>
               </div>
+
+              {/* <SectionHeading title="Carrier Details" description="Carrier, forwarder, transit schedule, and sales owner" /> */}
+              <div className="mt-3 grid gap-2.5 lg:grid-cols-12">
+                <SectionPanel className="lg:col-span-6" icon={ShipWheel} title="Carrier And Forwarder" meta={`${modeLabel(header.transport_mode)} / ${header.carrier || "Carrier pending"}`}>
+                  <div className="grid gap-1 sm:grid-cols-2">
+                    <FormLookup key={`carrier-${header.transport_mode}`} label="Carrier" value={header.carrier} {...carrierLookupProps(header.transport_mode, header.company_code)} onChange={(value, row) => applyHeaderLookup("carrier", value, row)} />
+                    <FormLookup label="Forwarder" value={header.forwarder_code} valueField="forwarder_code" displayFields={["forwarder_code", "forwarder_name"]} columns={[{ field: "forwarder_code", header: "Code" }, { field: "forwarder_name", header: "Forwarder" }]} loadOptions={() => loadForwarderLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("forwarder_code", value, row)} />
+                  </div>
+                </SectionPanel>
+
+                <SectionPanel className="lg:col-span-6" icon={Activity} title="Schedule And Sales" meta={header.salesman_code || "Sales executive pending"}>
+                  <div className="grid gap-1 sm:grid-cols-2">
+                    <FormInput
+                      label="Transit Time"
+                      type="datetime-local"
+                      value={toInputDateTime(header.transit_time)}
+                      onChange={(value) => setHeaderField("transit_time", fromInputDateTime(value))}
+                      inputClassName="font-semibold"
+                    />
+                    <FormInput label="Frequency" value={header.frequency} onChange={(value) => setHeaderField("frequency", value)} />
+                    <FormLookup label="Sales Executive" value={header.salesman_code} displayValue={headerNames.salesman_name} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Sales Executive" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} />
+                    <FormInput label="Ready Date" type="date" value={header.schedule_date} onChange={(value) => setHeaderField("schedule_date", value)} />
+                  </div>
+                </SectionPanel>
+              </div>
+            
             </section>
+
+            
           )}
 
-          {activeTab === "carrier" && (
+          {/* {activeTab === "carrier" && (
             <section>
               <SectionHeading title="Carrier Details" description="Carrier, forwarder, transit schedule, and sales owner" />
               <div className="grid gap-1.5 lg:grid-cols-12">
@@ -1238,12 +1339,12 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
                 </SectionPanel>
               </div>
             </section>
-          )}
+          )} */}
 
           {activeTab === "payment" && (
             <section>
               <SectionHeading title="Payment Terms" description="Commercial terms, currency, references, and instructions" />
-              <div className="grid gap-1.5 lg:grid-cols-12">
+              <div className="grid gap-2.5 lg:grid-cols-12">
                 <SectionPanel className="lg:col-span-6" icon={CreditCard} title="Terms And Currency" meta={`${header.payment_terms || "Terms"} / ${header.curr_code || "Currency"}`}>
                   <div className="grid gap-2 sm:grid-cols-2">
                     <FormSelect label="INCO Terms" value={header.payment_terms} onChange={(value) => setHeaderField("payment_terms", value)} options={paymentTerms.map((value) => ({ value, label: value }))} />

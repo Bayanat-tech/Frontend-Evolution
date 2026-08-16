@@ -671,11 +671,24 @@ function AdvancedReportFilters({
         {items.includes("brokerRange") && (
           <RangeLookup label="Broker" companyCode={companyCode} parameter="freight_broker" valueField="BROKER_CODE" displayFields={["BROKER_CODE", "BROKER_NAME"]} columns={[{ field: "BROKER_CODE", header: "Code" }, { field: "BROKER_NAME", header: "Broker" }]} fromKey="broker_code_from" toKey="broker_code_to" filters={filters} setFilters={setFilters} />
         )}
-        {items.includes("jobRange") && <RangeText label="Job No" fromKey="job_no_from" toKey="job_no_to" filters={filters} setFilters={setFilters} />}
+        {/* {items.includes("jobRange") && <RangeText label="Job No" fromKey="job_no_from" toKey="job_no_to" filters={filters} setFilters={setFilters} />} */}
+        {items.includes("jobRange") && (
+          <RangeLookup
+             label="Job No"
+             companyCode={companyCode}
+             parameter="frt_jobNo"
+             valueField="JOB_NO"
+             displayFields={["JOB_NO", "PRIN_CODE"]}
+             columns={[{ field: "JOB_NO", header: "Job No" }, { field: "PRIN_CODE", header: "Principal" }]}
+             fromKey="job_no_from"
+             toKey="job_no_to"
+             filters={filters}
+             setFilters={setFilters}
+          />
+        )}
         {/* {items.includes("documentRange") && <RangeText label={config.title === "Quotation List" ? "Quotation No" : config.title === "RFQ List" ? "RFQ No" : "Enquiry No"} fromKey="doc_no_from" toKey="doc_no_to" filters={filters} setFilters={setFilters} />} */}
-        {items.includes("documentRange") && (
-     config.title === "Quotation List" ? (
-     <div className="grid grid-cols-2 gap-2">
+        {items.includes("documentRange") && ( config.title === "Quotation List" ? (
+      <div className="grid grid-cols-2 gap-2">
       <Field label="Quotation No From">
         <LookupField
           value={filters.doc_no_from}

@@ -679,7 +679,35 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
     }
   };
 
-  const submitQuotation = () => {
+  // const submitQuotation = () => {
+  //   void runWorkflowAction("SUBMITTED");
+  // };
+
+  const submitQuotation = async () => {
+    if (isReadOnly) {
+      setNotice({ type: "error", text: `${statusLabel(header.indstatus, header.last_action, header.final_approved)} quotation is read-only` });
+      return;
+    }
+
+    const wasDraftSaved = Boolean(header.quotation_nr);
+
+    setSaving(true);
+    setNotice(null);
+    try {
+      await persistQuotation();
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to save quotation. Confirm Oracle quotation SP/types are created." });
+      setSaving(false);
+      return;
+    }
+    setSaving(false);
+
+    if (!wasDraftSaved) {
+      setNotice({ type: "success", text: "Draft saved successfully" });
+      await loadRows();
+      return;
+    }
+
     void runWorkflowAction("SUBMITTED");
   };
 
@@ -735,6 +763,30 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   const addTerm = () => setTerms((current) => [...current, { serial_no: current.length + 1, sr_no: String(current.length + 1), type_ind: "T", description: "", font_type: "Normal", font_size: "Normal" }]);
   const removeTerm = (index: number) => setTerms((current) => current.filter((_, rowIndex) => rowIndex !== index).map((row, rowIndex) => ({ ...row, serial_no: rowIndex + 1, sr_no: String(rowIndex + 1) })));
 
+  const persistQuotation = async () => {
+  const payload = {
+    header: { ...header, userid: loginId, user_date: new Date().toISOString(), quotation_type: "QTN" },
+    details: details.filter((row) => row.act_code.trim()).map((row, index) => ({
+      ...row,
+      srno: index + 1,
+      company_code: header.company_code,
+      prin_code: header.prin_code,
+      quotation_nr: header.quotation_nr || "0",
+      curr_code: row.curr_code || header.curr_code,
+      ex_rate: row.ex_rate || header.ex_rate,
+      transport_mode: row.transport_mode || header.transport_mode,
+      origin_port: row.origin_port || header.origin_port,
+      destination_port: row.destination_port || header.destination_port,
+      userid: loginId,
+      user_dt: new Date().toISOString(),
+    })),
+    terms,
+  };
+  const response = await api.post<{ success?: boolean; message?: string; data?: { quotation_nr?: string } }>("/api/freight/quotation/save", payload);
+  if (response.data?.success === false) throw new Error(response.data.message || "Unable to save quotation");
+  if (response.data?.data?.quotation_nr) setHeaderField("quotation_nr", response.data.data.quotation_nr);
+};
+
   const saveQuotation = async (event: FormEvent) => {
     event.preventDefault();
     if (isReadOnly) {
@@ -752,31 +804,42 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
     }
     return;
   }
+    // setSaving(true);
+    // setNotice(null);
+    // try {
+    //   const payload = {
+    //     header: { ...header, userid: loginId, user_date: new Date().toISOString(), quotation_type: "QTN" },
+    //     details: details.filter((row) => row.act_code.trim()).map((row, index) => ({
+    //       ...row,
+    //       srno: index + 1,
+    //       company_code: header.company_code,
+    //       prin_code: header.prin_code,
+    //       quotation_nr: header.quotation_nr || "0",
+    //       curr_code: row.curr_code || header.curr_code,
+    //       ex_rate: row.ex_rate || header.ex_rate,
+    //       transport_mode: row.transport_mode || header.transport_mode,
+    //       origin_port: row.origin_port || header.origin_port,
+    //       destination_port: row.destination_port || header.destination_port,
+    //       userid: loginId,
+    //       user_dt: new Date().toISOString(),
+    //     })),
+    //     terms,
+    //   };
+    //   const response = await api.post<{ success?: boolean; message?: string; data?: { quotation_nr?: string } }>("/api/freight/quotation/save", payload);
+    //   if (response.data?.success === false) throw new Error(response.data.message || "Unable to save quotation");
+    //   if (response.data?.data?.quotation_nr) setHeaderField("quotation_nr", response.data.data.quotation_nr);
+    //   setNotice({ type: "success", text: response.data?.message || "Quotation saved" });
+    //   await loadRows();
+    // } catch (error) {
+    //   setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to save quotation. Confirm Oracle quotation SP/types are created." });
+    // } finally {
+    //   setSaving(false);
+    // }
     setSaving(true);
     setNotice(null);
     try {
-      const payload = {
-        header: { ...header, userid: loginId, user_date: new Date().toISOString(), quotation_type: "QTN" },
-        details: details.filter((row) => row.act_code.trim()).map((row, index) => ({
-          ...row,
-          srno: index + 1,
-          company_code: header.company_code,
-          prin_code: header.prin_code,
-          quotation_nr: header.quotation_nr || "0",
-          curr_code: row.curr_code || header.curr_code,
-          ex_rate: row.ex_rate || header.ex_rate,
-          transport_mode: row.transport_mode || header.transport_mode,
-          origin_port: row.origin_port || header.origin_port,
-          destination_port: row.destination_port || header.destination_port,
-          userid: loginId,
-          user_dt: new Date().toISOString(),
-        })),
-        terms,
-      };
-      const response = await api.post<{ success?: boolean; message?: string; data?: { quotation_nr?: string } }>("/api/freight/quotation/save", payload);
-      if (response.data?.success === false) throw new Error(response.data.message || "Unable to save quotation");
-      if (response.data?.data?.quotation_nr) setHeaderField("quotation_nr", response.data.data.quotation_nr);
-      setNotice({ type: "success", text: response.data?.message || "Quotation saved" });
+      await persistQuotation();
+      setNotice({ type: "success", text: "Quotation saved" });
       await loadRows();
     } catch (error) {
       setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to save quotation. Confirm Oracle quotation SP/types are created." });
