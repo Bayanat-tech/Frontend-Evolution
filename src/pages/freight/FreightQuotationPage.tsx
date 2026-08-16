@@ -1050,54 +1050,94 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                   </div>
                   <Button type="button" size="sm" variant="outline" onClick={addDetail}><Plus size={14} />Add Line</Button>
                 </div>
-                <div className="max-h-[calc(100vh-330px)] overflow-auto rounded-md border">
-                  <table className="min-w-[1500px] w-full border-collapse text-xs">
+
+                <div className="max-h-[calc(100vh-330px)] overflow-auto rounded-lg border border-slate-200 bg-white shadow-[0_1px_0_rgba(15,23,42,0.04)]">
+                  <table className="min-w-[1500px] w-full border-collapse text-[11px]">
                     <thead>
-                      <tr className="sticky top-0 z-10 border-b bg-muted text-left text-[11px] uppercase text-muted-foreground">
-                        {["Act", "Activity", "Remarks", "Mode", "Origin", "Dest", "Qty", "UOM", "Cost Cur", "Cost Ex", "Cost Rate", "Cost", "Sell Cur", "Sell Ex", "Sell Rate", "Sell", "Agent FC", "Agent", ""].map((label) => <th key={label} className="px-1.5 py-1.5 font-semibold">{label}</th>)}
+                      <tr className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 text-left text-[10px] font-bold uppercase tracking-wide text-slate-700">
+                        {['Act', 'Activity', 'Remarks', 'Mode', 'Origin', 'Dest', 'Qty', 'UOM', 'Cost Cur', 'Cost Ex', 'Cost Rate', 'Cost', 'Sell Cur', 'Sell Ex', 'Sell Rate', 'Sell', 'Agent FC', 'Agent', ''].map((label) => (
+                          <th key={label} className="px-1.5 py-2">{label}</th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
                       {details.map((row, index) => (
-                        <tr key={row.srno} className="border-b transition hover:bg-primary/5 last:border-0">
-                          <td className="px-1.5 py-1.5">
-                            <LookupField
-                              compact
-                              label="Activity"
-                              value={row.act_code}
-                              valueField="activity_code"
-                              displayFields={["activity_code", "activity"]}
-                              columns={[
-                                { field: "activity_code", header: "Code" },
-                                { field: "activity", header: "Activity" },
-                                { field: "uom", header: "UOM" },
-                                { field: "bill", header: "Bill" },
-                                { field: "cost", header: "Cost" },
-                              ]}
-                              loadOptions={() => loadActivityLookup(header.company_code)}
-                              onChange={(value, lookupRow) => applyDetailActivityLookup(index, value, lookupRow)}
-                              placeholder="Activity"
-                            />
-                          </td>
-                          <CellInput value={row.activity} onChange={(value) => setDetailField(index, "activity", value)} className="min-w-44" />
-                          <CellInput value={row.activity_remarks || row.rate_remarks} onChange={(value) => { setDetailField(index, "activity_remarks", value); setDetailField(index, "rate_remarks", value); }} className="min-w-44" />
-                          <td className="px-2 py-2"><select className={fieldClassName} value={row.transport_mode} onChange={(event) => setDetailField(index, "transport_mode", event.target.value)}>{transportModes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></td>
-                          <CellInput value={row.origin_port} onChange={(value) => setDetailField(index, "origin_port", value)} className="w-24" />
-                          <CellInput value={row.destination_port} onChange={(value) => setDetailField(index, "destination_port", value)} className="w-24" />
-                          <CellInput type="number" value={row.quantity} onChange={(value) => setDetailField(index, "quantity", value)} className="w-24 text-right" />
-                          <CellInput value={row.uom} onChange={(value) => setDetailField(index, "uom", value)} className="w-20" />
-                          <CellInput value={row.cost_curr_code} onChange={(value) => setDetailField(index, "cost_curr_code", value)} className="w-20" />
-                          <CellInput type="number" value={row.cost_ex_rate} onChange={(value) => setDetailField(index, "cost_ex_rate", value)} className="w-24 text-right" />
-                          <CellInput type="number" value={row.fc_costrate} onChange={(value) => setDetailField(index, "fc_costrate", value)} className="w-24 text-right" />
-                          <CellInput type="number" value={row.cost} onChange={(value) => setDetailField(index, "cost", value)} className="w-24 text-right" />
-                          <CellInput value={row.curr_code} onChange={(value) => setDetailField(index, "curr_code", value)} className="w-20" />
-                          <CellInput type="number" value={row.ex_rate} onChange={(value) => setDetailField(index, "ex_rate", value)} className="w-24 text-right" />
-                          <CellInput type="number" value={row.fc_billrate} onChange={(value) => setDetailField(index, "fc_billrate", value)} className="w-24 text-right" />
-                          <CellInput type="number" value={row.bill} onChange={(value) => setDetailField(index, "bill", value)} className="w-24 text-right" />
-                          <CellInput type="number" value={row.fc_partners} onChange={(value) => setDetailField(index, "fc_partners", value)} className="w-24 text-right" />
-                          <CellInput type="number" value={row.partners_price} onChange={(value) => setDetailField(index, "partners_price", value)} className="w-24 text-right" />
-                          <td className="px-2 py-2 text-right"><Button type="button" size="icon" variant="ghost" title="Remove line" disabled={details.length === 1} onClick={() => removeDetail(index)}><Trash2 size={14} /></Button></td>
-                        </tr>
+                        <>
+                          <tr key={`${row.srno}-main`} className="border-b border-slate-200 bg-white transition last:border-0 hover:bg-slate-50/80">
+                            <td className="px-1.5 py-2 align-top">
+                              <div className="rounded-md border border-slate-200 bg-slate-50 p-1.5 shadow-sm">
+                                <div className="mb-1 flex items-center justify-between gap-1">
+                                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded bg-slate-700 px-1 text-[8px] font-bold text-white">
+                                    {index + 1}
+                                  </span>
+                                  <span className="text-[8px] font-bold uppercase tracking-wide text-slate-500">Line</span>
+                                </div>
+                                <LookupField
+                                  compact
+                                  label="Activity"
+                                  value={row.act_code}
+                                  valueField="activity_code"
+                                  displayFields={["activity_code", "activity"]}
+                                  columns={[
+                                    { field: "activity_code", header: "Code" },
+                                    { field: "activity", header: "Activity" },
+                                    { field: "uom", header: "UOM" },
+                                    { field: "bill", header: "Bill" },
+                                    { field: "cost", header: "Cost" },
+                                  ]}
+                                  loadOptions={() => loadActivityLookup(header.company_code)}
+                                  onChange={(value, lookupRow) => applyDetailActivityLookup(index, value, lookupRow)}
+                                  placeholder="Activity"
+                                />
+                                <div className="mt-1.5 rounded border border-sky-200 bg-sky-50 px-1.5 py-1 text-[10px] font-semibold text-slate-700">
+                                  {row.activity || "Activity name"}
+                                </div>
+                              </div>
+                            </td>
+                            <CellInput value={row.activity} onChange={(value) => setDetailField(index, "activity", value)} className="min-w-[130px]" />
+                            <CellInput value={row.activity_remarks || row.rate_remarks} onChange={(value) => { setDetailField(index, "activity_remarks", value); setDetailField(index, "rate_remarks", value); }} className="min-w-[180px]" />
+                            <td className="px-1 py-1.5 align-top"><select className={`${fieldClassName} h-8`} value={row.transport_mode} onChange={(event) => setDetailField(index, "transport_mode", event.target.value)}>{transportModes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></td>
+                            <CellInput value={row.origin_port} onChange={(value) => setDetailField(index, "origin_port", value)} className="w-24" />
+                            <CellInput value={row.destination_port} onChange={(value) => setDetailField(index, "destination_port", value)} className="w-24" />
+                            <CellInput type="number" value={row.quantity} onChange={(value) => setDetailField(index, "quantity", value)} className="w-20 text-right" />
+                            <CellInput value={row.uom} onChange={(value) => setDetailField(index, "uom", value)} className="w-16" />
+                            <CellInput value={row.cost_curr_code} onChange={(value) => setDetailField(index, "cost_curr_code", value)} className="w-20" />
+                            <CellInput type="number" value={row.cost_ex_rate} onChange={(value) => setDetailField(index, "cost_ex_rate", value)} className="w-20 text-right" />
+                            <CellInput type="number" value={row.fc_costrate} onChange={(value) => setDetailField(index, "fc_costrate", value)} className="w-20 text-right" />
+                            <CellInput type="number" value={row.cost} onChange={(value) => setDetailField(index, "cost", value)} className="w-20 text-right" />
+                            <CellInput value={row.curr_code} onChange={(value) => setDetailField(index, "curr_code", value)} className="w-20" />
+                            <CellInput type="number" value={row.ex_rate} onChange={(value) => setDetailField(index, "ex_rate", value)} className="w-20 text-right" />
+                            <CellInput type="number" value={row.fc_billrate} onChange={(value) => setDetailField(index, "fc_billrate", value)} className="w-20 text-right" />
+                            <CellInput type="number" value={row.bill} onChange={(value) => setDetailField(index, "bill", value)} className="w-20 text-right" />
+                            <CellInput type="number" value={row.fc_partners} onChange={(value) => setDetailField(index, "fc_partners", value)} className="w-20 text-right" />
+                            <CellInput type="number" value={row.partners_price} onChange={(value) => setDetailField(index, "partners_price", value)} className="w-20 text-right" />
+                            <td className="px-1 py-1.5 text-right align-top">
+                              <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={details.length === 1} onClick={() => removeDetail(index)}><Trash2 size={12} /></Button>
+                            </td>
+                          </tr>
+                          <tr key={`${row.srno}-detail`} className="border-b border-slate-200 bg-slate-50 transition last:border-0 hover:bg-slate-100/80">
+                            <td colSpan={19} className="px-2 py-2">
+                              <div className="grid grid-cols-12 gap-2">
+                                <div className="col-span-2">
+                                  <label className="mb-0.5 block text-[8px] font-bold uppercase tracking-wide text-slate-600">Bill</label>
+                                  <CellInput type="number" value={row.bill} onChange={(value) => setDetailField(index, "bill", value)} className="w-full text-right" />
+                                </div>
+                                <div className="col-span-2">
+                                  <label className="mb-0.5 block text-[8px] font-bold uppercase tracking-wide text-slate-600">Cost</label>
+                                  <CellInput type="number" value={row.cost} onChange={(value) => setDetailField(index, "cost", value)} className="w-full text-right" />
+                                </div>
+                                <div className="col-span-1">
+                                  <label className="mb-0.5 block text-[8px] font-bold uppercase tracking-wide text-slate-600">Curr</label>
+                                  <CellInput value={row.curr_code || row.cost_curr_code} onChange={(value) => setDetailField(index, "curr_code", value)} className="w-full" />
+                                </div>
+                                <div className="col-span-7">
+                                  <label className="mb-0.5 block text-[8px] font-bold uppercase tracking-wide text-slate-600">Remarks</label>
+                                  <CellInput value={row.activity_remarks || row.rate_remarks} onChange={(value) => { setDetailField(index, "activity_remarks", value); setDetailField(index, "rate_remarks", value); }} className="w-full" />
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        </>
                       ))}
                     </tbody>
                   </table>
@@ -1499,7 +1539,7 @@ function buildSmartChecks(header: QuotationHeader, details: QuotationDetail[], t
 
 function FormInput({ label, value, onChange, type = "text", required, placeholder, className = "",disabled }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean; placeholder?: string; className?: string; disabled?: boolean }) {
   return (
-    <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground ${className}`}>
+    <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-slate-800 freight-field-label ${className}`}>
       <span>{label} {required && <span style={{ color: "#E24B4A" }}>*</span>}</span>
       <Input
         className={fieldClassName}
@@ -1518,7 +1558,7 @@ function FormInput({ label, value, onChange, type = "text", required, placeholde
 
 function FormLookup({ label, value, valueField, displayFields, columns, loadOptions, onChange, required, className = "" }: { label: string; value: string; valueField: string; displayFields: string[]; columns: { field: string; header: string }[]; loadOptions: () => Promise<LookupRow[]>; onChange: (value: string, row: LookupRow | null) => void; required?: boolean; className?: string }) {
   return (
-    <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground ${className}`}>
+    <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-slate-800 freight-field-label ${className}`}>
       <span>{label}{required && <span style={{ color: "#E24B4A" }}>*</span>}</span>
       <LookupField
         value={value}
@@ -1536,11 +1576,11 @@ function FormLookup({ label, value, valueField, displayFields, columns, loadOpti
 }
 
 function FormSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) {
-  return <label className="grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground">{label}<select className={fieldClassName} value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>;
+  return <label className="grid gap-0.5 text-[10px] font-semibold uppercase text-slate-800 freight-field-label">{label}<select className={fieldClassName} value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>;
 }
 
 function FormTextarea({ label, value, onChange, compact, className = "" }: { label: string; value: string; onChange: (value: string) => void; compact?: boolean; className?: string }) {
-  return <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground ${className}`}>{label}<textarea className={`${fieldClassName} ${compact ? "min-h-7" : "min-h-10"} py-0.5`} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+  return <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-slate-800 freight-field-label ${className}`}>{label}<textarea className={`${fieldClassName} ${compact ? "min-h-7" : "min-h-10"} py-0.5`} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
 function CellInput({ value, onChange, type = "text", className = "" }: { value: string; onChange: (value: string) => void; type?: string; className?: string }) {

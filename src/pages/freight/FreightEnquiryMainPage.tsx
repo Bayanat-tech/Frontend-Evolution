@@ -1281,13 +1281,13 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
                       <table className="w-full border-collapse text-xs">
                         <thead>
                           <tr className="sticky top-0 z-10 border-b bg-muted text-left text-[11px] uppercase text-slate-700 font-bold">
-                            <th className="px-1.5 py-1.5 font-semibold w-28">Activity Code</th>
-                            <th className="px-1.5 py-1.5 font-semibold flex-1">Activity Name</th>
+                            <th className="px-1.5 py-1.5 font-semibold w-24">Activity Code</th>
+                            <th className="px-1.5 py-1.5 font-semibold w-44">Activity Name</th>
                             <th className="px-1.5 py-1.5 font-semibold w-12">Mode</th>
                             <th className="px-1.5 py-1.5 font-semibold w-16">Qty</th>
                             <th className="px-1.5 py-1.5 font-semibold w-16">UOM</th>
-                            <th className="px-1.5 py-1.5 font-semibold w-24">Bill Rate</th>
-                            <th className="px-1.5 py-1.5 font-semibold w-24">Cost Rate</th>
+                            <th className="px-1.5 py-1.5 font-semibold w-28">Bill Rate</th>
+                            <th className="px-1.5 py-1.5 font-semibold w-28">Cost Rate</th>
                             <th className="px-1.5 py-1.5 font-semibold w-12" />
                     </tr>
                   </thead>
