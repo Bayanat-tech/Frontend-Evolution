@@ -13,8 +13,8 @@ import { getDynamicLookupaccount, getLookupText, getLookupValue, LookupRow } fro
 import {
     getPLSummaryReportHtml,
     getPLSummaryReportExcel
-} from "../../../api/transactions"; // ← आपल्या प्रोजेक्टमधल्या actual path प्रमाणे adjust करा
-import { useState as useStateHook, useRef as useRefHook, useEffect } from "react";
+} from "../../../api/transactions";
+import { useEffect } from "react";
 
 interface PLSummaryReportParams {
     parameter: string;
@@ -31,20 +31,19 @@ interface PLSummaryReportParams {
     prodtype: string;
     manu: string;
     cust: string;
-    [key: string]: any; // ReportParams (transactions.ts) सोबत compatible राहण्यासाठी
+    [key: string]: any;
 }
 
 const LOOKUP_PARAMS = {
-    group:        "PURCHASE_SALE_MSE_PRODGROUP",
-    brand:        "PURCHASE_SALE_MSE_PRODBRAND",
-    category:     "PURCHASE_SALE_MSE_PRODCATEGORY",
-    type:         "PURCHASE_SALE_MSE_PRODTYPE",
+    group: "PURCHASE_SALE_MSE_PRODGROUP",
+    brand: "PURCHASE_SALE_MSE_PRODBRAND",
+    category: "PURCHASE_SALE_MSE_PRODCATEGORY",
+    type: "PURCHASE_SALE_MSE_PRODTYPE",
     manufacturer: "PURCHASE_SALE_MSE_MANUFACTURER",
-    customer:     "PURCHASE_SALE_MSE_CUSTOMER",
-    salesman:     "PURCHASE_SALE_MSE_SALESMAN",
+    customer: "PURCHASE_SALE_MSE_CUSTOMER",
+    salesman: "PURCHASE_SALE_MSE_SALESMAN",
+    docno: "PURCHASE_SALE_SALESINVOICE_DOCNO", // ← new lookup added in procedure
 } as const;
-
-// ─── Types ────────────────────────────────────────────────────────────────
 
 export type ReportMode =
     | "invoicewise"
@@ -54,9 +53,9 @@ export type ReportMode =
     | "groupcustomerwise";
 
 const MODE_OPTIONS: { value: ReportMode; label: string }[] = [
-    { value: "invoicewise",       label: "Invoice wise" },
-    { value: "customerwise",      label: "Customer wise" },
-    { value: "salesmanwise",      label: "Salesman wise" },
+    { value: "invoicewise", label: "Invoice wise" },
+    { value: "customerwise", label: "Customer wise" },
+    { value: "salesmanwise", label: "Salesman wise" },
     { value: "customergroupwise", label: "Customer-Group wise" },
     { value: "groupcustomerwise", label: "Group-Customer wise" },
 ];
@@ -64,12 +63,12 @@ const MODE_OPTIONS: { value: ReportMode; label: string }[] = [
 type TabKey = "group" | "brand" | "category" | "type" | "manufacturer" | "customer";
 
 const TABS: { key: TabKey; label: string; lookupParam: string; valueField: string; nameField: string }[] = [
-    { key: "group",        label: "Group",        lookupParam: LOOKUP_PARAMS.group,        valueField: "group_code",    nameField: "group_name" },
-    { key: "brand",        label: "Brand",        lookupParam: LOOKUP_PARAMS.brand,        valueField: "brand_code",    nameField: "brand_name" },
-    { key: "category",     label: "Category",     lookupParam: LOOKUP_PARAMS.category,     valueField: "category_code", nameField: "category_name" },
-    { key: "type",         label: "Type",         lookupParam: LOOKUP_PARAMS.type,         valueField: "prodtype_code", nameField: "prodtype_name" },
-    { key: "manufacturer", label: "Manufacturer", lookupParam: LOOKUP_PARAMS.manufacturer, valueField: "manu_code",     nameField: "manu_name" },
-    { key: "customer",     label: "Customer",     lookupParam: LOOKUP_PARAMS.customer,     valueField: "ac_code",       nameField: "ac_name" },
+    { key: "group", label: "Group", lookupParam: LOOKUP_PARAMS.group, valueField: "group_code", nameField: "group_name" },
+    { key: "brand", label: "Brand", lookupParam: LOOKUP_PARAMS.brand, valueField: "brand_code", nameField: "brand_name" },
+    { key: "category", label: "Category", lookupParam: LOOKUP_PARAMS.category, valueField: "category_code", nameField: "category_name" },
+    { key: "type", label: "Type", lookupParam: LOOKUP_PARAMS.type, valueField: "prodtype_code", nameField: "prodtype_name" },
+    { key: "manufacturer", label: "Manufacturer", lookupParam: LOOKUP_PARAMS.manufacturer, valueField: "manu_code", nameField: "manu_name" },
+    { key: "customer", label: "Customer", lookupParam: LOOKUP_PARAMS.customer, valueField: "ac_code", nameField: "ac_name" },
 ];
 
 interface Selections {
@@ -132,7 +131,7 @@ const DateField: React.FC<{
     />
 );
 
-// ─── Single-select searchable lookup (Sales Person) ───────────────────────
+// ─── Single-select searchable lookup (Sales Person / Invoice No) ──────────
 
 type SingleLookupProps = {
     label: string;
@@ -322,13 +321,13 @@ function MultiSelectDropdown({
     const displayText = isAllSelected
         ? "All"
         : selected.length === 0
-        ? placeholder
-        : selected.length === 1
-        ? (() => {
-              const row = rows.find((r) => String(getLookupValue(r, valueField) ?? "") === selected[0]);
-              return row ? getLookupText(row, displayFields.length ? displayFields : [valueField]) : selected[0];
-          })()
-        : `${selected.length} selected`;
+            ? placeholder
+            : selected.length === 1
+                ? (() => {
+                    const row = rows.find((r) => String(getLookupValue(r, valueField) ?? "") === selected[0]);
+                    return row ? getLookupText(row, displayFields.length ? displayFields : [valueField]) : selected[0];
+                })()
+                : `${selected.length} selected`;
 
     return (
         <div ref={wrapRef} style={{ position: "relative" }}>
@@ -483,7 +482,7 @@ export default function PLSummaryPage() {
 
     const [fromDateIso, setFromDateIso] = useState("");
     const [toDateIso, setToDateIso] = useState("");
-    const [invoiceNo, setInvoiceNo] = useState("");
+    const [invoiceNo, setInvoiceNo] = useState(""); // ← ata doc_no value store hoto (dropdown selected)
     const [salesman, setSalesman] = useState("");
     const [mode, setMode] = useState<ReportMode>("invoicewise");
     const [selections, setSelections] = useState<Selections>(EMPTY_SELECTIONS);
@@ -523,7 +522,6 @@ export default function PLSummaryPage() {
         newTab.document.write("<title>P&amp;L Summary Report</title><body style='font-family:sans-serif;padding:40px;color:#6b7280;'>Loading report…</body>");
 
         try {
-           
             const html = await getPLSummaryReportHtml(params);
             newTab.document.open();
             newTab.document.write(html);
@@ -623,15 +621,26 @@ export default function PLSummaryPage() {
                             <FloatLabel label="Date To" bgColor={BG}>
                                 <DateField value={toDateIso} onChange={setToDateIso} min={fromDateIso || undefined} />
                             </FloatLabel>
-                            <FloatLabel label="Invoice No" bgColor={BG}>
-                                <input
-                                    type="text"
-                                    value={invoiceNo}
-                                    onChange={(e) => setInvoiceNo(e.target.value)}
-                                    placeholder="All"
-                                    style={inputStyle}
-                                />
-                            </FloatLabel>
+
+                            {/* Invoice No — ata SingleSelectLookup dropdown */}
+                            <SingleSelectLookup
+                                label="Invoice No"
+                                bgColor={BG}
+                                value={invoiceNo}
+                                onChange={setInvoiceNo}
+                                valueField="doc_no"
+                                displayFields={["inv_no"]}
+                                loadOptions={() =>
+                                    getDynamicLookupaccount({
+                                        parameter: LOOKUP_PARAMS.docno,
+                                        loginid: loginId,
+                                        code1: companyCode,
+                                        code2: "", code3: "", code4: "",
+                                        number1: 0, number2: 0, number3: 0, number4: 0,
+                                        date1: null, date2: null, date3: null, date4: null,
+                                    })
+                                }
+                            />
                             <SingleSelectLookup
                                 label="Sales Person"
                                 bgColor={BG}
