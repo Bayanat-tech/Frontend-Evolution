@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FileText, LoaderCircle, Package, Printer, Receipt, Save, Trash2, X } from "lucide-react";
 import { Dialog } from "../../../components/ui/Dialog";
 import { Button } from "../../../components/ui/Button";
@@ -69,6 +69,25 @@ const CURRENCY_FIELDS: FieldDef[] = [
   { label: "Exchange Rate", key: "ex_rate", disabled: true },
 ];
 
+// Tiny placeholder pages shown in the new tab while the report loads / if it fails.
+const REPORT_LOADING_HTML = `<!DOCTYPE html>
+<html>
+  <head><meta charset="utf-8" /><title>Loading report...</title></head>
+  <body style="font-family:Arial,Helvetica,sans-serif;display:flex;align-items:center;
+    justify-content:center;height:100vh;margin:0;color:#555;">
+    Loading invoice report...
+  </body>
+</html>`;
+
+const reportErrorHtml = (message: string) => `<!DOCTYPE html>
+<html>
+  <head><meta charset="utf-8" /><title>Error</title></head>
+  <body style="font-family:Arial,Helvetica,sans-serif;display:flex;align-items:center;
+    justify-content:center;height:100vh;margin:0;color:#c0392b;">
+    ${message}
+  </body>
+</html>`;
+
 function SectionHeader({ icon: Icon, title, subtitle }: { icon: any; title: string; subtitle: string }) {
   return (
     <div className="mb-2 flex items-center gap-2 border-b pb-1">
@@ -107,6 +126,7 @@ function FieldGrid({ fields, invoice, onChange, disabled }: {
 
 export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProps) {
   const { user } = useAuth();
+  const company_code = user?.company_code ?? "";
   console.log("InvoiceForm existingData:", existingData);
 
   /* ================= STATE ================= */
@@ -119,13 +139,8 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
   const [storageModalOpen, setStorageModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [warning, setWarning] = useState("");
-  const [reportOpen, setReportOpen] = useState(false);
-  const [reportHtml, setReportHtml] = useState("");
-  const [reportLoading, setReportLoading] = useState(false);
-  const [reportError, setReportError] = useState("");
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [printError, setPrintError] = useState("");
 
-  const reportReady = !reportLoading && !reportError && !!reportHtml;
   /* ================= DERIVED VALUES ================= */
   const prinCode = getValue(invoice, "prin_code") || "";
   const invoiceNo = getValue(invoice, "invoice_no") || "";
@@ -323,31 +338,39 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
     }
   };
 
+  // Backend returns raw HTML for the report — open it directly in a new tab
+  // instead of rendering it inside a dialog/iframe.
   const handlePrint = async () => {
     if (!prinCode || !invoiceNo) return;
-    setReportOpen(true);
-    setReportHtml("");
-    setReportError("");
-    setReportLoading(true);
+    setPrintError("");
+
+    // Open the tab synchronously, inside the click handler, before the
+    // await — otherwise most browsers' popup blockers will silently kill it.
+    const reportWindow = window.open("", "_blank");
+    if (!reportWindow) {
+      setPrintError("Please allow pop-ups for this site to view the report.");
+      return;
+    }
+
+    reportWindow.document.open();
+    reportWindow.document.write(REPORT_LOADING_HTML);
+    reportWindow.document.close();
+
     try {
-      const html = await getInvocieDetailReport(String(prinCode), String(invoiceNo));
-      setReportHtml(html);
+      const html = await getInvocieDetailReport(String(prinCode), String(invoiceNo), String(company_code));
+      if (reportWindow.closed) return; // user closed the tab while we waited
+      reportWindow.document.open();
+      reportWindow.document.write(html);
+      reportWindow.document.close();
     } catch (err) {
       console.error("Invoice report error:", err);
-      setReportError("Failed to load report. Please try again.");
-    } finally {
-      setReportLoading(false);
+      setPrintError("Failed to load report. Please try again.");
+      if (!reportWindow.closed) {
+        reportWindow.document.open();
+        reportWindow.document.write(reportErrorHtml("Failed to load report. Please try again."));
+        reportWindow.document.close();
+      }
     }
-  };
-
-  const handleIframePrint = () => {
-    iframeRef.current?.contentWindow?.postMessage("print", "*");
-  };
-
-  const closeReportDialog = () => {
-    setReportOpen(false);
-    setReportHtml("");
-    setReportError("");
   };
 
   useEffect(() => {
@@ -421,6 +444,12 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
       {warning && (
         <div className="mb-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
           {warning}
+        </div>
+      )}
+
+      {printError && (
+        <div className="mb-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
+          {printError}
         </div>
       )}
 
@@ -613,48 +642,6 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
           onSelect={handleStorageSelect}
         />
       )}
-      {reportOpen && (
-  <Dialog
-    open={reportOpen}
-    title="Invoice Detail Report"
-    wide
-    onClose={closeReportDialog}
-  >
-    <div className="flex flex-col" style={{ height: "75vh" }}>
-
-      {reportReady && (
-        <div className="flex shrink-0 items-center gap-2 border-b bg-muted/40 px-3 py-2">
-          <Button size="sm" variant="outline" onClick={handleIframePrint}>
-            <Printer size={13} /> Print / Save as PDF
-          </Button>
-        </div>
-      )}
-
-      {reportLoading && (
-        <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
-          <LoaderCircle size={14} className="animate-spin" />
-          Loading report…
-        </div>
-      )}
-
-      {!reportLoading && reportError && (
-        <div className="flex flex-1 items-center justify-center text-sm text-red-600">
-          {reportError}
-        </div>
-      )}
-
-      {reportReady && (
-        <iframe
-          ref={iframeRef}
-          srcDoc={reportHtml}
-          title="Invoice Detail Report"
-          className="flex-1 w-full rounded border-0"
-          style={{ minHeight: 0 }}
-        />
-      )}
-    </div>
-  </Dialog>
-)}
     </Dialog>
   );
 }
