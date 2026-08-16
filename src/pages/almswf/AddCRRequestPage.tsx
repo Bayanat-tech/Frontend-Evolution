@@ -190,6 +190,10 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
     });
 
   const runAction = async (status: string, successMsg: string) => {
+    if (header.FIN_CONTACT_NUMBER && header.FIN_CONTACT_NUMBER.length !== 10) {
+      setNotice({ type: "error", message: "Tel No must be exactly 10 digits" });
+      return;
+    }
     setSaving(true);
     setNotice(null);
     try {
@@ -317,7 +321,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                   </label>
                   <label className="field col-span-3">
                     <span>Company Name<Required /></span>
-                    <Input disabled={disabled} value={header.DESCRIPTION || ""} onChange={(e) => setHdr("DESCRIPTION", e.target.value)} />
+                    <Input disabled={disabled} value={header.COMPANY_NAME || ""} onChange={(e) => setHdr("COMPANY_NAME", e.target.value)} />
                   </label>
                 </div>
               </div>
@@ -351,7 +355,15 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                 </div>
                 <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-6">
                   <label className="field"><span>Contact Person<Required /></span><Input disabled={disabled} value={header.FIN_CONTACT_PERSON || ""} onChange={(e) => setHdr("FIN_CONTACT_PERSON", e.target.value)} /></label>
-                  <label className="field"><span>Tel No<Required /></span><Input disabled={disabled} value={header.FIN_CONTACT_NUMBER || ""} onChange={(e) => setHdr("FIN_CONTACT_NUMBER", e.target.value)} /></label>
+                  <label className="field"><span>Tel No<Required /></span><Input  disabled={disabled}  type="tel" inputMode="numeric" maxLength={10} value={header.FIN_CONTACT_NUMBER || ""}  onChange={(e) => {
+                   const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 10);
+                        setHdr("FIN_CONTACT_NUMBER", digitsOnly);
+                      }}
+                    />
+                    {header.FIN_CONTACT_NUMBER && header.FIN_CONTACT_NUMBER.length !== 10 && (
+                      <p className="mt-1 text-xs text-destructive">Tel No must be exactly 10 digits</p>
+                    )}
+                  </label>
                   <label className="field"><span>Email<Required /></span><Input disabled={disabled} type="email" value={header.FIN_CONTACT_EMAIL || ""} onChange={(e) => setHdr("FIN_CONTACT_EMAIL", e.target.value)} /></label>
                   <label className="field"><span>Commercial Reg No<Required /></span><Input disabled={disabled} value={header.COMMERCIAL_REG_NO || ""} onChange={(e) => setHdr("COMMERCIAL_REG_NO", e.target.value)} /></label>
                   <label className="field"><span>Business Sector<Required /></span><Input disabled={disabled} value={header.BUSINESS_SECTOR || ""} onChange={(e) => setHdr("BUSINESS_SECTOR", e.target.value)} /></label>
@@ -365,7 +377,17 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                 <div className="border-b bg-secondary/40 px-3 py-1">
                   <h3 className="m-0 text-sm font-semibold leading-tight">Comments</h3>
                 </div>
-                <div className="grid grid-cols-2 gap-3 p-1 md:grid-cols-2">
+                <div className="grid grid-cols-2 gap-3 p-1 md:grid-cols-3">
+                  <label className="field">
+                    <span>Description<Required /></span>
+                    <textarea
+                      disabled={disabled}
+                      rows={2}
+                      value={header.DESCRIPTION || ""}
+                      onChange={(e) => setHdr("DESCRIPTION", e.target.value)}
+                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                    />
+                  </label>
                   <label className="field">
                     <span>Comments<Required /></span>
                     <textarea

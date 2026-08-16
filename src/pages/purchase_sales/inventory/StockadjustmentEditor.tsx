@@ -143,7 +143,7 @@ export function StockadjustmentEditor({
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
         if (!mounted) return;
-        setError(loadError instanceof Error ? loadError.message : "Unable to load Sales Order");
+        setError(loadError instanceof Error ? loadError.message : "Unable to load Stock Adjustment");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -219,19 +219,19 @@ export function StockadjustmentEditor({
  {  if (!form.div_code) return setError("Division is required");
   return runAction("draft", async () => {
     await runWorkflow("SAVEASDRAFT",  IV_DOC_TYPE.SAJ, form, rows, user?.company_code, user?.loginid || user?.username);
-  }, "Sales Order saved as draft");
+  }, "Stock Adjustment saved as draft");
 }
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", IV_DOC_TYPE.SAJ, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, editMode ? "Sales Order updated successfully" : "Sales Order created successfully");
+    }, editMode ? "Stock Adjustment updated successfully" : "Stock Adjustment created successfully");
   };
 
   const handleCancel = () =>
     runAction("cancel", async () => {
       await runWorkflow("CANCELED", IV_DOC_TYPE.SAJ, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, "Sales Order cancelled");
+    }, "Stock Adjustment cancelled");
 
   // ---- Reject handlers ----
   const openRejectDialog = () => {
@@ -253,7 +253,7 @@ export function StockadjustmentEditor({
       const payloadForm: PurchaseOrderForm = { ...form, reject_reason: rejectReason.trim() };
       await runWorkflow("REJECTED", IV_DOC_TYPE.SAJ, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setRejectDialogOpen(false);
-    }, "Sales Order rejected");
+    }, "Stock Adjustment rejected");
   };
 
   // ---- Send Back handlers ----
@@ -313,7 +313,7 @@ export function StockadjustmentEditor({
       };
       await runWorkflow("SENTBACK", IV_DOC_TYPE.SAJ, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setSendBackDialogOpen(false);
-    }, "Sales Order sent back");
+    }, "Stock Adjustment sent back");
   };
 
   const actionBarBusy = actionLoading !== null || saving;
@@ -329,9 +329,9 @@ export function StockadjustmentEditor({
             <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
               <div>
                 <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                  {editMode ? "Edit Sales Order" : "New Sales Order"}
+                  {editMode ? "Edit Stock Adjustment" : "New Stock Adjustment"}
                 </p>
-                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Sales Order</h2>
+                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Stock Adjustment</h2>
               </div>
               <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
@@ -366,15 +366,15 @@ export function StockadjustmentEditor({
           <div className="cancelled-document-banner" role="status">
             <div>
               <span className="cancelled-document-kicker">Cancelled Document</span>
-              <strong>{form.doc_no || "Sales Order"}</strong>
+              <strong>{form.doc_no || "Stock Adjustment"}</strong>
             </div>
-            <p>This Sales Order is cancelled and opened in read-only mode.</p>
+            <p>This Stock Adjustment is cancelled and opened in read-only mode.</p>
           </div>
         )}
 
         <CardContent className="min-h-0 overflow-auto p-3">
           {loading ? (
-            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Sales Order...</div>
+            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Stock Adjustment...</div>
           ) : (
             <div className="grid gap-3">
               <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
