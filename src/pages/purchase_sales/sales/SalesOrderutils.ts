@@ -189,7 +189,6 @@ export async function fetchSalesOrderDetail(
       lcur_amount_disc: numberOrZero(row.lcur_amount_disc ?? row.lcur_amount_discount),
       uppp: numberOrZero(row.uppp),
       quantity: numberOrZero(row.quantity),
-      qty: numberOrZero(row.qty ?? row.quantity),
       ex_rate: numberOrZero(row.ex_rate),
     } satisfies PurchaseOrderLineRow;
   });
@@ -200,8 +199,8 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     doc_no: form.doc_no || undefined, // if number, okay; if string, API may handle
     doc_type: docType,
     doc_date: form.doc_date,
-    ref_no: form.quotn_no,
-    ref_date: form.quotn_date,
+    ref_no: form.ref_no,
+    ref_date: form.ref_date,
     div_code: form.div_code,
     div_name: form.div_name,
     ac_code: form.ac_code,

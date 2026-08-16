@@ -79,6 +79,14 @@ export type DynamicMutationParams = {
   val1s40?: string;
   val1s41?: string;
   val1s42?: string;
+  val1s43?: string;
+  val1s44?: string;
+  val1s45?: string;
+  val1s46?: string;
+  val1s47?: string;
+  val1s48?: string;
+  val1s49?: string;
+  val1s50?: string;
 
   val1s90?: string;
 
@@ -89,6 +97,9 @@ export type DynamicMutationParams = {
   val1n5?: number;
   val1n6?: number;
   val1n7?: number;
+  val1n8?: number;
+  val1n9?: number;
+  val1n10?: number;
 
   val1d1?: string | null;
   val1d2?: string | null;
@@ -135,7 +146,12 @@ export type DynamicDeleteParams = {
 
 function extractApiErrorMessage(error: unknown, fallback: string) {
   const anyErr = error as any;
-  const backendMessage = anyErr?.response?.data?.message || anyErr?.response?.data?.details;
+  const data = anyErr?.response?.data;
+  // `details` carries the specific underlying error (e.g. the raw Oracle
+  // error text, such as "ORA-00001: unique constraint ... violated");
+  // `message` is often just a generic wrapper like "Failed to execute
+  // insert/update". Prefer `details` so the real cause reaches the user.
+  const backendMessage = data?.details || data?.message;
   if (backendMessage && typeof backendMessage === "string") return backendMessage;
   if (error instanceof Error) return error.message;
   return fallback;
@@ -144,7 +160,7 @@ function extractApiErrorMessage(error: unknown, fallback: string) {
 export async function getMasterLookup(appCode: string, master: string) {
   try {
     const response = await api.get<ApiResponse<{ tableData: LookupRow[]; count: number }>>(`/api/${appCode}/${master}`);
-    if (!response.data.success) throw new Error(response.data.message || `Unable to load ${master}`);
+    if (!response.data.success) throw new Error(response.data.details || response.data.message || `Unable to load ${master}`);
     return response.data.data?.tableData || [];
   } catch (error) {
     throw new Error(extractApiErrorMessage(error, `Unable to load ${master}`));
@@ -154,7 +170,7 @@ export async function getMasterLookup(appCode: string, master: string) {
 export async function getDynamicLookup(params: DynamicQueryParams) {
   try {
     const response = await api.post<ApiResponse<LookupRow[]>>("/api/wms/common/proc_build_dynamic_sql_common", params);
-    if (!response.data.success) throw new Error(response.data.message || "Unable to load lookup data");
+    if (!response.data.success) throw new Error(response.data.details || response.data.message || "Unable to load lookup data");
     return response.data.data || [];
   } catch (error) {
     throw new Error(extractApiErrorMessage(error, "Unable to load lookup data"));
@@ -164,7 +180,7 @@ export async function getDynamicLookup(params: DynamicQueryParams) {
 export async function getDynamicLookupaccount(params: DynamicQueryParams) {
   try {
     const response = await api.post<ApiResponse<LookupRow[]>>("/api/wms/common/proc_build_dynamic_sql_common20", params);
-    if (!response.data.success) throw new Error(response.data.message || "Unable to load lookup data");
+    if (!response.data.success) throw new Error(response.data.details || response.data.message || "Unable to load lookup data");
     return response.data.data || [];
   } catch (error) {
     throw new Error(extractApiErrorMessage(error, "Unable to load lookup data"));
@@ -174,7 +190,7 @@ export async function getDynamicLookupaccount(params: DynamicQueryParams) {
 export async function getDynamicFinanceLookup(params: DynamicQueryParams) {
   try {
     const response = await api.post<ApiResponse<LookupRow[]>>("api/finance/proc_common_sql_finance", params);
-    if (!response.data.success) throw new Error(response.data.message || "Unable to load Financelookup data");
+    if (!response.data.success) throw new Error(response.data.details || response.data.message || "Unable to load Financelookup data");
     return response.data.data || [];
   } catch (error) {
     throw new Error(extractApiErrorMessage(error, "Unable to load Financelookup data"));
@@ -184,7 +200,7 @@ export async function getDynamicFinanceLookup(params: DynamicQueryParams) {
 export async function executeDynamicMutation(params: DynamicMutationParams) {
   try {
     const response = await api.post<ApiResponse<unknown>>("/api/wms/common/proc_build_dynamic_ins_upd_common", params);
-    if (!response.data.success) throw new Error(response.data.message || "Unable to save record");
+    if (!response.data.success) throw new Error(response.data.details || response.data.message || "Unable to save record");
     return response.data;
   } catch (error) {
     throw new Error(extractApiErrorMessage(error, "Unable to save record"));
@@ -194,7 +210,7 @@ export async function executeDynamicMutation(params: DynamicMutationParams) {
 export async function executeDynamicMutationColumn90(params: DynamicMutationParams) {
   try {
     const response = await api.post<ApiResponse<unknown>>("/api/wms/common/proc_build_dynamic_ins_upd_column90", params);
-    if (!response.data.success) throw new Error(response.data.message || "Unable to save record");
+    if (!response.data.success) throw new Error(response.data.details || response.data.message || "Unable to save record");
     return response.data;
   } catch (error) {
     throw new Error(extractApiErrorMessage(error, "Unable to save record"));
@@ -204,7 +220,7 @@ export async function executeDynamicMutationColumn90(params: DynamicMutationPara
 export async function executeDynamicDelete(params: DynamicDeleteParams) {
   try {
     const response = await api.post<ApiResponse<unknown>>("/api/wms/common/proc_build_dynamic_del_common", params);
-    if (!response.data.success) throw new Error(response.data.message || "Unable to delete record");
+    if (!response.data.success) throw new Error(response.data.details || response.data.message || "Unable to delete record");
     return response.data;
   } catch (error) {
     throw new Error(extractApiErrorMessage(error, "Unable to delete record"));
@@ -214,7 +230,7 @@ export async function executeDynamicDelete(params: DynamicDeleteParams) {
 export async function executeCommonProcedure(params: Record<string, unknown>) {
   try {
     const response = await api.post<ApiResponse<unknown>>("/api/wms/common/procBuildCommonProcedurewmc", params);
-    if (!response.data.success) throw new Error(response.data.message || "Unable to execute procedure");
+    if (!response.data.success) throw new Error(response.data.details || response.data.message || "Unable to execute procedure");
     return response.data;
   } catch (error) {
     throw new Error(extractApiErrorMessage(error, "Unable to execute procedure"));

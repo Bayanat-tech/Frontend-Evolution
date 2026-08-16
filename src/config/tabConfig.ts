@@ -208,6 +208,7 @@ export function getTabsForJob(jobClass: string) {
   const allowed: Record<string, string[]> = {
     M:  ["shipment_details", "putway_manual", "job_confirmation", "activity_billing"],
     NP: ["shipment_details", "packing_details", "quality_clearance", "tally_details", "putway_hht", "job_confirmation", "activity_billing"],
+    NI: ["activity_billing"],
     N:  ["shipment_details", "packing_details", "receiving_details", "quality_clearance", "putway_details", "job_confirmation", "activity_billing"],
   };
   const list = allowed[jobClass];

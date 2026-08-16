@@ -99,7 +99,7 @@ export function StocksAdjectmentPage({ onClose }: { onClose?: () => void } = {})
       setRows(response);
       setTotalRows(response.length);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load purchase orders" });
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load Stock Adjustments" });
     } finally {
       setLoading(false);
     }
@@ -164,10 +164,6 @@ export function StocksAdjectmentPage({ onClose }: { onClose?: () => void } = {})
     },
     { accessorKey: "doc_date", header: "Doc Date", cell: ({ getValue }) => formatDate(getValue()) },
     { accessorKey: "div_code", header: "Div" },
-    { accessorKey: "ac_code", header: "A/c Code" },
-    { accessorKey: "ac_name", header: "A/c Name" },
-    { accessorKey: "curr_code", header: "Currency" },
-    { accessorKey: "buyer", header: "Buyer" },
     {
       accessorKey: "canceled",
       header: "Status",
@@ -209,15 +205,15 @@ export function StocksAdjectmentPage({ onClose }: { onClose?: () => void } = {})
     <section className="finance-list-page grid gap-4">
       <div className="finance-list-heading">
         <div className="finance-list-title">
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">Sales Order</h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">Sales order document</p>
+          <h1 className="m-0 text-2xl font-semibold tracking-tight">Stock Adjustment</h1>
+          <p className="m-0 mt-1 text-sm text-muted-foreground">Stock Adjustment document</p>
         </div>
         <div className="finance-list-actions">
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
             { tab === "PENDING" && (
-          <Button title="Add Purchase Order" onClick={() => setDivisionPicker(true)}>
+          <Button title="Add Stock Adjustment" onClick={() => setDivisionPicker(true)}>
             <Plus size={15} /> Add
           </Button>
         )}
@@ -249,8 +245,8 @@ export function StocksAdjectmentPage({ onClose }: { onClose?: () => void } = {})
         <DataTable
           columns={columns}
           data={rows}
-          title={loading ? "Loading" : `${totalRows.toLocaleString()} Sales Orders`}
-          subtitle="Sales Order List"
+          title={loading ? "Loading" : `${totalRows.toLocaleString()} Stock Adjustments`}
+          subtitle="Stock Adjustment List"
           searchValue={query}
           onSearchChange={(value) => {
             setQuery(value);
@@ -258,7 +254,7 @@ export function StocksAdjectmentPage({ onClose }: { onClose?: () => void } = {})
           }}
           searchPlaceholder="Search doc no, division, vendor..."
           loading={loading}
-          emptyText="No sales order found"
+          emptyText="No Stock Adjustment found"
           height={620}
           minWidth={1000}
           density="grid"
@@ -304,7 +300,7 @@ export function StocksAdjectmentPage({ onClose }: { onClose?: () => void } = {})
       <Dialog
         open={divisionPicker}
         title="Select Division"
-        description="Choose the division before opening the sales order form."
+        description="Choose the division before opening the Stock Adjustment form."
         onClose={() => setDivisionPicker(false)}
         footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}
       >

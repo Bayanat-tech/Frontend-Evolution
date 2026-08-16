@@ -165,6 +165,9 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
         const leftRatings = ratings.slice(0, 3);
         const rightRatings = ratings.slice(3);
 
+        // Index 0 here is reused only as a fallback; Level 0 (employee's own
+        // self-rating comment) is NOT stored in APPRAISER_COMMENTS1-5 -- it
+        // lives in APPRAISEE_COMMENTS, handled separately below.
         const commentsByLevel = [
             section5.APPRAISER_COMMENTS1 ?? "",
             section5.APPRAISER_COMMENTS2 ?? "",
@@ -480,9 +483,14 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
                             ) : (
                                 flowHistory.map((f: AppraisalFlowHistory, idx: number) => {
                                     const level = Number(f.FLOW_LEVEL);
+                                    // Level 0 = employee's own self-rating draft submission.
+                                    // Its remark lives in APPRAISEE_COMMENTS (not APPRAISER_COMMENTS1-5),
+                                    // so it's picked up in the Appraisee Comments cell below, not here.
                                     const comment = level >= 1 && level <= 5
                                         ? commentsByLevel[level - 1]
                                         : "";
+                                    const isEmployeeSelfRow =
+                                        level === 0 && f.ACTION_BY === appraisal.EMPLOYEE_CODE;
 
                                     return (
                                         <tr key={f.HISTORY_ID ?? idx}>
@@ -532,7 +540,7 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
                                             </td>
 
                                             <td style={{ verticalAlign: "top", padding: "5px 6px", height: "40px" }}>
-                                                {f.ACTION_BY === appraisal.EMPLOYEE_CODE && section5.APPRAISEE_COMMENTS
+                                                {(isEmployeeSelfRow || f.ACTION_BY === appraisal.EMPLOYEE_CODE) && section5.APPRAISEE_COMMENTS
                                                     ? <span className="c-comment-text">{section5.APPRAISEE_COMMENTS}</span>
                                                     : <span>&nbsp;</span>}
                                             </td>
@@ -669,7 +677,9 @@ const PerformanceReportDesign: React.FC<Props> = ({ required_values, printRef, o
                 const uniqueFlow = (flowHist as AppraisalFlowHistory[])
                     .filter(f => {
                         const level = Number(f.FLOW_LEVEL);
-                        if (level < 1 || level > 5) return false;
+                        // Level 0 (self-rating employee's own draft submission)
+                        // is now INCLUDED so it shows up as a row in the report.
+                        if (level < 0 || level > 5) return false;
                         if (seen.has(level)) return false;
                         seen.add(level);
                         return true;

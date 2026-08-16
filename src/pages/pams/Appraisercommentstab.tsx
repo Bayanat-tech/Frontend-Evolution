@@ -84,7 +84,6 @@ const S = {
   prevComment: {
     fontSize: "13px", color: "#4b5563", whiteSpace: "pre-wrap" as const,
   },
-  currentName: { fontSize: "12px", fontWeight: 700, color: "#374151", marginBottom: "4px" },
   nameBox: { fontSize: "12px", fontWeight: 700, color: "#374151", marginBottom: "4px" },
 };
 
@@ -106,21 +105,53 @@ const AppraiserCommentsTab: React.FC<Props> = ({
   const [appraiseeComment, setAppraiseeComment] = useState("");
   const [existingData,     setExistingData]     = useState<Row | null>(null);
   const [loading,          setLoading]          = useState(false);
+  
   const isEmployee          = loginid.trim().toUpperCase() === employeeCode.trim().toUpperCase();
   const isFinal             = flowLevel >= 6;
   const isCurrentActionUser = userFlowLevel === 0 && !isEmployee && !isFinal;
   const appraiserReadOnly   = isEmployee || isFinal || !isCurrentActionUser;
   const appraiseeReadOnly   = !isEmployee || isFinal;
+  
   const effectiveLevel = userFlowLevel === 0 ? flowLevel : userFlowLevel;
   const prevLevelNum        = effectiveLevel - 1;
   const prevLevelCommentRaw = effectiveLevel >= 2 ? commentForLevel(existingData, prevLevelNum) : "";
   const prevLevelComment    = prevLevelCommentRaw.trim();
   const showPrevLevel       = prevLevelComment.length > 0;
   const prevLevelName       = showPrevLevel ? nameForLevel(existingData, prevLevelNum) : "";
-  const currentActorName = userFlowLevel === 0
-    ? (text(existingData?.CURRENT_USER_NAME) || myName || loginid)
-    : nameForLevel(existingData, userFlowLevel);
+
+  // ── FIXED: Current Actor Name Logic ──
+  const currentActorName = useMemo(() => {
+    if (!existingData) return myName || loginid;
+    
+    // If document is at Level 0 (employee self-rating draft)
+    // Show Level 1 (Supervisor) name - because that's who will act next
+    if (flowLevel === 0) {
+      const level1Name = text(existingData.APPRAISER_NAME1);
+      // Also try to get IMMEDIATE_SUPERVISOR name if available
+      const supervisorName = text(existingData.IMMEDIATE_SUPERVISOR_NAME) || text(existingData.NEXT_ACTION_BY_NAME);
+      return level1Name || supervisorName || myName || loginid;
+    }
+    
+    // If current user is the actor (userFlowLevel === 0 means "it's my turn")
+    if (userFlowLevel === 0) {
+      if (isCurrentActionUser) {
+        // Current user is the one who should act
+        return text(existingData.CURRENT_USER_NAME) || myName || loginid;
+      }
+      if (isEmployee) {
+        // Employee is viewing - show who created it
+        return text(existingData.CREATED_BY_NAME) || myName || loginid;
+      }
+      // For other cases, show the next action person
+      return text(existingData.NEXT_ACTION_BY_NAME) || myName || loginid;
+    }
+    
+    // For other levels (1-5), show the name for that specific level
+    return nameForLevel(existingData, userFlowLevel);
+  }, [existingData, flowLevel, userFlowLevel, isCurrentActionUser, isEmployee, myName, loginid]);
+
   const employeeName = text(existingData?.EMPLOYEE_NAME);
+  
   const { finalRating, taskWeighted, charWeighted } = useMemo(() => {
     const t = Number(taskTotal      || 0);
     const c = Number(characterTotal || 0);

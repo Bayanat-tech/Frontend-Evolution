@@ -21,8 +21,8 @@ import {
 const STICKY_COLS = {
   sno: { width: 50, left: 0 },
   div: { width: 90, left: 50 },
-  zone: { width: 200, left: 140 },
-  product: { width: 260, left: 230 },
+  zone: { width: 180, left: 140 },
+  product: { width: 260, left: 320 },
 } as const;
 
 function stickyStyle(col: keyof typeof STICKY_COLS): React.CSSProperties {
@@ -54,7 +54,7 @@ function netTotalAmount(quantity: number, row: PurchaseOrderLineRow): number {
 
 // Lcurr Amount = Total Amount * Final Rate  (=L2*K2 in the sheet)
 function computeLcurrAmount(quantity: number, row: PurchaseOrderLineRow): number {
-  return netTotalAmount(quantity, row) * finalRate(row) * row.ex_rate;
+  return netTotalAmount(quantity, row) * finalRate(row) * numberOrZero(row.ex_rate);
 }
 
 export function PurchaseOrderLinesTable({
@@ -329,7 +329,6 @@ export function PurchaseOrderLinesTable({
                   </td>
 
                   <td className="finance-amount-cell w-24 px-2 py-1">
-                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.disc_hdr_percent} onChange={(event) => updateRow(row.id, { disc_hdr_percent: Number(event.target.value || 0) })} />
                     <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.disc_percent} onChange={(event) => updateRow(row.id, { disc_percent: Number(event.target.value || 0) })} />
                   </td>
                   <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineDiscPrice(row))}</td>

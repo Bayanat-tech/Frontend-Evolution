@@ -115,6 +115,10 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   const displayCollapsed = isMobile ? false : collapsed;
   const userDisplayName = user?.username || user?.loginid || "User";
   const companyName = user?.company_name || user?.company_code || "Company";
+  const isFreightLandingRoute = useMemo(() => {
+    const normalizedPath = location.pathname.toLowerCase().replace(/\/+$/, "");
+    return (appCode || "").toLowerCase() === "fms" && (normalizedPath === "/workspace/fms" || normalizedPath === "/workspace/fms/fms");
+  }, [appCode, location.pathname]);
 
   // useEffect(() => {
   //   setExpanded(collectExpandedPath(activeMenuPath));
@@ -126,6 +130,12 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
       ...collectExpandedPath(activeMenuPath),
     });
   }, [activeApp?.id, activeApp?.title, location.pathname]);
+
+  useEffect(() => {
+    if (!isMobile && isFreightLandingRoute) {
+      setCollapsed(true);
+    }
+  }, [isFreightLandingRoute, isMobile]);
 
   const toggleSidebar = () => {
     if (isMobile) {

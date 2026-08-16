@@ -100,7 +100,7 @@ export function JobProductionOrderPage({ onClose }: { onClose?: () => void } = {
       setRows(response);
       setTotalRows(response.length);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load purchase orders" });
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load Job Productions" });
     } finally {
       setLoading(false);
     }
@@ -138,7 +138,7 @@ export function JobProductionOrderPage({ onClose }: { onClose?: () => void } = {
           parameter: "PS_POORDER_ENTRY_FUN_CHECK_GLOBAL_APPR_LEVEL",
           code1: user?.company_code,
           code2: user?.loginid || user?.username || "ADMIN",
-          code3: "purchase_order",
+          code3: "job_production",
         });
         if (!mounted) return;
         const first = (rows || [])[0] as Record<string, unknown> | undefined;
@@ -210,15 +210,15 @@ export function JobProductionOrderPage({ onClose }: { onClose?: () => void } = {
     <section className="finance-list-page grid gap-4">
       <div className="finance-list-heading">
         <div className="finance-list-title">
-          <h1 className="m-0 text-2xl font-semibold tracking-tight">Purchase Order</h1>
-          <p className="m-0 mt-1 text-sm text-muted-foreground">Purchase order document</p>
+          <h1 className="m-0 text-2xl font-semibold tracking-tight">Job Production</h1>
+          <p className="m-0 mt-1 text-sm text-muted-foreground">Job Production document</p>
         </div>
         <div className="finance-list-actions">
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
             { tab === "PENDING" && (
-          <Button title="Add Purchase Order" onClick={() => setDivisionPicker(true)}>
+          <Button title="Add Job Production" onClick={() => setDivisionPicker(true)}>
             <Plus size={15} /> Add
           </Button>
         )}
@@ -250,8 +250,8 @@ export function JobProductionOrderPage({ onClose }: { onClose?: () => void } = {
         <DataTable
           columns={columns}
           data={rows}
-          title={loading ? "Loading" : `${totalRows.toLocaleString()} Purchase Orders`}
-          subtitle="Purchase Order List"
+          title={loading ? "Loading" : `${totalRows.toLocaleString()} Job Productions`}
+          subtitle="Job Production List"
           searchValue={query}
           onSearchChange={(value) => {
             setQuery(value);
@@ -259,7 +259,7 @@ export function JobProductionOrderPage({ onClose }: { onClose?: () => void } = {
           }}
           searchPlaceholder="Search doc no, division, vendor..."
           loading={loading}
-          emptyText="No purchase orders found"
+          emptyText="No Job Productions found"
           height={620}
           minWidth={1000}
           density="grid"
@@ -305,7 +305,7 @@ export function JobProductionOrderPage({ onClose }: { onClose?: () => void } = {
       <Dialog
         open={divisionPicker}
         title="Select Division"
-        description="Choose the division before opening the purchase order form."
+        description="Choose the division before opening the Job Production form."
         onClose={() => setDivisionPicker(false)}
         footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}
       >

@@ -1,5 +1,6 @@
 import { getDynamicLookup } from "../../../api/lookups";
 import { upsertBulkPurchaseEntryApi } from "../../../api/purchaseSales";
+import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 import {
   EXPENSE_AC_OPTIONS,
   PO_DOC_TYPE,
@@ -44,7 +45,6 @@ export const emptyLineRow = (divCode: string): PurchaseOrderLineRow => ({
   qty_luom: 0,
   unit_price: 0,
   disc_hdr_percent: 0,
-  qty: 0,
   disc_percent: 0,
   disc_price: 0,
   tax_pct: 0,
@@ -65,8 +65,6 @@ export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
   return {
     doc_no: editor?.mode === "edit" ? editor.row.doc_no : "",
     doc_date: editor?.mode === "edit" ? editor.row.doc_date || "" : new Date().toISOString().slice(0, 10),
-    //quotn_no: editor?.mode === "edit" ? editor.row.quotn_no || "" : "",
-    //quotn_date: editor?.mode === "edit" ? editor.row.quotn_date || "" : "",
      ref_no: editor?.mode === "edit" ? editor.row.ref_no || "" : "",
     ref_date: editor?.mode === "edit" ? editor.row.ref_date || "" : "",
     div_code: editor?.mode === "create" ? editor.divCode || "" : editor?.mode === "edit" ? editor.row.div_code : "",
@@ -80,7 +78,7 @@ export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
     party_phone: editor?.mode === "edit" ? editor.row.party_phone || "" : "",
     party_fax: editor?.mode === "edit" ? editor.row.party_fax || "" : "",
     buyer: editor?.mode === "edit" ? editor.row.buyer || "" : "",
-    wo_no: editor?.mode === "edit" ? editor.row.wo_no || "NC" : "NC",
+    wo_number: editor?.mode === "edit" ? editor.row.wo_number || "NC" : "NC",
     curr_code: editor?.mode === "edit" ? editor.row.curr_code || "" : "",
     curr_name: editor?.mode === "edit" ? editor.row.curr_name || "" : "",
     ex_rate: editor?.mode === "edit" ? Number(editor.row.ex_rate || 1) : 1,
@@ -162,13 +160,12 @@ export async function fetchPurchaseOrderDetail(
       qty_luom: numberOrZero(row.qty_luom),
       unit_price: numberOrZero(row.unit_price),
       disc_hdr_percent: numberOrZero(row.disc_hdr_percent),
-      qty: numberOrZero(row.qty ?? row.quantity),
       disc_percent: numberOrZero(row.disc_percent),
        disc_price: numberOrZero(row.disc_price),
       tax_pct: numberOrZero(row.tax_pct ?? row.tax_percent),
       tax_amount: numberOrZero(row.tax_amount),
       lcur_amount: numberOrZero(row.lcur_amount),
-      required_dt: text(row.required_dt),
+    required_dt: toDateInputValue(raw.required_dt) || "",
       line_remarks: text(row.remarks ?? row.line_remarks),
       tax_cat: text(row.tax_cat ?? row.tax_category),
       tax_code: text(row.tax_code),
@@ -183,7 +180,7 @@ export async function fetchPurchaseOrderDetail(
 
 export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: PODocType) {
   return {
-    doc_no: form.doc_no || undefined,
+    doc_no:numberOrZero( form.doc_no )|| undefined,
     doc_type: docType,
     doc_date: form.doc_date,
     ref_no: form.ref_no,
@@ -199,7 +196,7 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     party_phone: form.party_phone,
     party_fax: form.party_fax,
     buyer: form.buyer,
-    wo_number: form.wo_no,
+    wo_number: form.wo_number,
     curr_code: form.curr_code,
     curr_name: form.curr_name,
     ex_rate: form.ex_rate,
@@ -214,7 +211,7 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     tx_cat_code: form.tx_cat_code,
     
   
-    tx_compntcat_code_1: form.tax_code,
+    tx_compntcat_code_1: form.tx_compntcat_code_1,
     purchase_actype: form.expense_ac_post,
     project_name: form.project_name,
     pr_no: form.pr_no,
@@ -249,7 +246,7 @@ export function computeQuantity(row: PurchaseOrderLineRow): number {
 
 // Total discount for the whole line (was missing * quantity before)
 export function lineDiscPrice(row: PurchaseOrderLineRow) {
-  return row.unit_price * (row.disc_hdr_percent / 100) ;
+  // return row.unit_price * (row.disc_hdr_percent / 100) ;
   return row.unit_price * (row.disc_percent / 100) ;
 }
 export function finalRate(row: PurchaseOrderLineRow) {

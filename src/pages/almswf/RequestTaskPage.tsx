@@ -70,7 +70,7 @@ const REQUEST_CONFIGS: Record<RequestType, RequestTypeConfig> = {
     breadcrumbLabel: "Capex Request",
     addLabel: "Add CP",
     addColor: "#6b21a8",
-    showEdit: false, // CP is view-only, no Edit action (matches original Mytaskalmspage behavior)
+    showEdit: false, 
     FormComponent: AddCPRequestPage,
   },
 };

@@ -98,7 +98,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
       setRows(response);
       setTotalRows(response.length);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load purchase orders" });
+      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load Purchase Quotations" });
     } finally {
       setLoading(false);
     }
@@ -215,7 +215,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
             <RefreshCw size={15} />
           </Button>
           { tab === "PENDING" && (
-          <Button title="Add Purchase Order" onClick={() => setDivisionPicker(true)}>
+          <Button title="Add Purchase Quotation" onClick={() => setDivisionPicker(true)}>
             <Plus size={15} /> Add
           </Button>
         )}
@@ -302,7 +302,7 @@ export function PurchaseQuotationPage({ onClose }: { onClose?: () => void } = {}
       <Dialog
         open={divisionPicker}
         title="Select Division"
-        description="Choose the division before opening the purchase order form."
+        description="Choose the division before opening the Purchase Quotation form."
         onClose={() => setDivisionPicker(false)}
         footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}
       >
