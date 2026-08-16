@@ -1270,114 +1270,112 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
 
           {activeTab === "activities" && (
             <section>
-              <SectionHeading title="Activities" description="Service activities with quantity, rates, and cost breakdown" />
               <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="grid gap-1">
+                  <h2 className="m-0 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Activities</h2>
+                  <p className="m-0 text-[11px] text-slate-500">Service activities with quantity, rates, and cost breakdown</p>
+                </div>
                 <Button type="button" size="sm" variant="outline" onClick={addDetail} disabled={isReadOnly}>
                   <Plus size={14} />
                   Add Line
                 </Button>
               </div>
-              <div className="max-h-[calc(100vh-360px)] overflow-auto rounded-md border">
-                      <table className="w-full border-collapse text-xs">
-                        <thead>
-                          <tr className="sticky top-0 z-10 border-b bg-muted text-left text-[11px] uppercase text-slate-700 font-bold">
-                            <th className="px-1.5 py-1.5 font-semibold w-24">Activity Code</th>
-                            <th className="px-1.5 py-1.5 font-semibold w-44">Activity Name</th>
-                            <th className="px-1.5 py-1.5 font-semibold w-12">Mode</th>
-                            <th className="px-1.5 py-1.5 font-semibold w-16">Qty</th>
-                            <th className="px-1.5 py-1.5 font-semibold w-16">UOM</th>
-                            <th className="px-1.5 py-1.5 font-semibold w-28">Bill Rate</th>
-                            <th className="px-1.5 py-1.5 font-semibold w-28">Cost Rate</th>
-                            <th className="px-1.5 py-1.5 font-semibold w-12" />
+
+              <div className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-inner" style={{ maxWidth: "100%", overflowY: "hidden" }}>
+                <table className="border-collapse text-[11px]" style={{ width: "max-content" }}>
+                  <thead>
+                    <tr className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 text-left text-[10px] font-bold uppercase tracking-wide text-slate-700">
+                      <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Activity Code</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "200px" }}>Activity Name</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "70px" }}>Mode</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "150px" }}>Origin</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "150px" }}>Dest</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "60px" }}>Qty</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "70px" }}>UOM</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Bill</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Cost</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Curr</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Bill Rate</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Cost Rate</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "210px" }}>Remarks</th>
+                      <th className="px-1.5 py-1.5 text-right" style={{ width: "42px" }}/>
                     </tr>
                   </thead>
                   <tbody>
-                          {details.map((row, index) => (
-                            <>
-                              <tr key={`${row.srno}-main`} className="border-b transition hover:bg-primary/5">
-                              <td className="px-1.5 py-1.5">
-                                <LookupField
-                                  compact
-                    label="Activity Code"
-                                  value={row.act_code}
-                                  valueField="activity_code"
-                                  displayFields={["activity_code", "activity"]}
+                    {details.map((row, index) => (
+                      <tr key={`${row.srno}-main`} className="border-b border-slate-200 bg-white transition hover:bg-slate-50/80 last:border-0">
+                        <td className="px-1.5 py-1.5 align-middle">
+                          <LookupField
+                            compact
+                            label="Activity Code"
+                            value={row.act_code}
+                            displayValue={row.act_code || ""}
+                            valueField="activity_code"
+                            displayFields={["activity_code"]}
                             columns={[
                               { field: "activity_code", header: "Code" },
                               { field: "activity", header: "Activity" },
                               { field: "uom", header: "UOM" },
                               { field: "bill", header: "Bill" },
                               { field: "cost", header: "Cost" },
-                                  ]}
-                                  loadOptions={() => loadActivityLookup(header.company_code)}
-                                  onChange={(value, lookupRow) => applyDetailActivityLookup(index, value, lookupRow)}
-                    placeholder="Activity code"
-                  />
-                              </td>
-                              <td className="px-1.5 py-1.5">
-                                <div className="flex h-8 items-center rounded-md border border-input bg-background px-2 text-[11px] text-foreground">
-                                  {row.activity || "-"}
-                                </div>
-                              </td>
-                              <td className="px-1.5 py-1.5">
-                                <div className="flex h-8 items-center justify-center rounded-md border border-primary/20 bg-primary/5 px-1 text-[10px] font-semibold text-primary">
-                                  {modeLabel(header.transport_mode || row.transport_mode)}
-                                </div>
-                              </td>
-                              <td className="px-1 py-1.5">
-                                <input type="number" value={row.quantity} onChange={(e) => setDetailField(index, "quantity", e.target.value)} className={`${fieldClassName} w-full text-center`} />
-                              </td>
-                              <td className="px-1 py-1.5">
-                                <input value={row.uom} onChange={(e) => setDetailField(index, "uom", e.target.value)} className={fieldClassName} />
-                              </td>
-                              <td className="px-1 py-1.5">
-                                <input type="number" value={row.bill_rate} onChange={(e) => setDetailField(index, "bill_rate", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
-                              </td>
-                              <td className="px-1 py-1.5">
-                                <input type="number" value={row.cost_rate} onChange={(e) => setDetailField(index, "cost_rate", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
-                              </td>
-                        <td className="px-2 py-1.5 text-right">
+                            ]}
+                            loadOptions={() => loadActivityLookup(header.company_code)}
+                            onChange={(value, lookupRow) => applyDetailActivityLookup(index, value, lookupRow)}
+                            placeholder="Activity code"
+                          />
+                        </td>
+                        <td className="px-1.5 py-1.5 align-middle">
+                          <div className="flex h-8 items-center rounded-md border border-slate-200 bg-slate-50 px-2 text-[11px] font-medium text-slate-700">
+                            {row.activity || "-"}
+                          </div>
+                        </td>
+                        <td className="px-1.5 py-1.5 align-middle">
+                          <div className="flex h-8 items-center justify-center rounded-md border border-primary/20 bg-primary/5 px-1 text-[10px] font-bold text-primary">
+                            {modeLabel(header.transport_mode || row.transport_mode)}
+                          </div>
+                        </td>
+                        <td className="px-1 py-1.5 align-middle">
+                          <input type="text" value={row.origin_port} onChange={(e) => setDetailField(index, "origin_port", e.target.value)} className={fieldClassName} />
+                        </td>
+                        <td className="px-1 py-1.5 align-middle">
+                          <input type="text" value={row.destination_port} onChange={(e) => setDetailField(index, "destination_port", e.target.value)} className={fieldClassName} />
+                        </td>
+                        <td className="px-1 py-1.5 align-middle">
+                          <input type="number" value={row.quantity} onChange={(e) => setDetailField(index, "quantity", e.target.value)} className={`${fieldClassName} w-full text-center`} />
+                        </td>
+                        <td className="px-1 py-1.5 align-middle">
+                          <input value={row.uom} onChange={(e) => setDetailField(index, "uom", e.target.value)} className={fieldClassName} />
+                        </td>
+                        <td className="px-1 py-1.5 align-middle">
+                          <input type="number" value={row.bill} onChange={(e) => setDetailField(index, "bill", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
+                        </td>
+                        <td className="px-1 py-1.5 align-middle">
+                          <input type="number" value={row.cost} onChange={(e) => setDetailField(index, "cost", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
+                        </td>
+                        <td className="px-1 py-1.5 align-middle">
+                          <input type="text" value={row.curr_code} onChange={(e) => setDetailField(index, "curr_code", e.target.value)} className={fieldClassName} />
+                        </td>
+                        <td className="px-1 py-1.5 align-middle">
+                          <input type="number" value={row.bill_rate} onChange={(e) => setDetailField(index, "bill_rate", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
+                        </td>
+                        <td className="px-1 py-1.5 align-middle">
+                          <input type="number" value={row.cost_rate} onChange={(e) => setDetailField(index, "cost_rate", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
+                        </td>
+                        <td className="px-1.5 py-1.5 align-middle">
+                          <input type="text" value={row.remarks} onChange={(e) => setDetailField(index, "remarks", e.target.value)} className={fieldClassName} />
+                        </td>
+                        <td className="px-1.5 py-1.5 text-right align-middle">
                           <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={isReadOnly || details.length === 1} onClick={() => removeDetail(index)}>
                             <Trash2 size={14} />
                           </Button>
                         </td>
                       </tr>
-                      <tr key={`${row.srno}-detail`} className="border-b transition hover:bg-primary/5 last:border-0">
-                              <td colSpan={8} className="px-1.5 py-1.5">
-                                <div className="grid grid-cols-12 gap-1">
-                                  <div className="col-span-2">
-                                    <label className="text-[10px] uppercase text-slate-700 font-semibold block mb-0.5">Origin</label>
-                                    <input type="text" value={row.origin_port} onChange={(e) => setDetailField(index, "origin_port", e.target.value)} className={fieldClassName} />
-                                  </div>
-                                  <div className="col-span-2">
-                                    <label className="text-[10px] uppercase text-slate-700 font-semibold block mb-0.5">Destination</label>
-                                    <input type="text" value={row.destination_port} onChange={(e) => setDetailField(index, "destination_port", e.target.value)} className={fieldClassName} />
-                                  </div>
-                                  <div className="col-span-1">
-                                    <label className="text-[10px] uppercase text-slate-700 font-semibold block mb-0.5">Bill</label>
-                                    <input type="number" value={row.bill} onChange={(e) => setDetailField(index, "bill", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
-                                  </div>
-                                  <div className="col-span-1">
-                                    <label className="text-[10px] uppercase text-slate-700 font-semibold block mb-0.5">Cost</label>
-                                    <input type="number" value={row.cost} onChange={(e) => setDetailField(index, "cost", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
-                                  </div>
-                                  <div className="col-span-1">
-                                    <label className="text-[10px] uppercase text-slate-700 font-semibold block mb-0.5">Curr</label>
-                                    <input type="text" value={row.curr_code} onChange={(e) => setDetailField(index, "curr_code", e.target.value)} className={fieldClassName} />
-                                  </div>
-                                  <div className="col-span-5">
-                                    <label className="text-[10px] uppercase text-slate-700 font-semibold block mb-0.5">Remarks</label>
-                                    <input type="text" value={row.remarks} onChange={(e) => setDetailField(index, "remarks", e.target.value)} className={fieldClassName} />
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                            </>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <div className="flex items-center justify-between border-t bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+
+              <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
                 <span>Showing {details.length} activity line{details.length === 1 ? "" : "s"}</span>
               </div>
             </section>
