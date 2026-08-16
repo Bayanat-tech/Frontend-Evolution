@@ -1,9 +1,12 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { createContext, FormEvent, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, FormEvent, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   Ban,
   BriefcaseBusiness,
+  CheckCircle2,
+  Circle,
+  CircleDot,
   Edit2,
   FileText,
   MapPinned,
@@ -148,14 +151,26 @@ function getJobCancelLockMessage(job: JobForm) {
   return "This job cannot be cancelled.";
 }
 
-export function FreightJobPage({ target, initialJob, startMode = "list" }: { target?: FreightWorkspaceTarget; initialJob?: LookupRow | null; startMode?: ViewMode }) {
+export function FreightJobPage({
+  target,
+  initialJob,
+  startMode = "list",
+  onEmbeddedActionsChange,
+  onEmbeddedList,
+}: {
+  target?: FreightWorkspaceTarget;
+  initialJob?: LookupRow | null;
+  startMode?: ViewMode;
+  onEmbeddedActionsChange?: (actions: ReactNode | null) => void;
+  onEmbeddedList?: () => void;
+}) {
   const { user } = useAuth();
   const { toast } = useToast();
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
   const userId = String(userRecord.user_id || userRecord.USER_ID || userRecord.loginid || userRecord.LOGINID || "");
-  const modeKey = target?.mode || "air";
-  const directionKey = target?.direction || "import";
+  const modeKey = (target?.mode || "air") as keyof typeof modeMap;
+  const directionKey = (target?.direction || "import") as keyof typeof directionMap;
   const mode = modeMap[modeKey];
   const direction = directionMap[directionKey];
   const Icon = mode.icon;
@@ -170,7 +185,7 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [editing, setEditing] = useState(false);
-  const embeddedInWorkspace = startMode === "editor";
+  const embeddedInWorkspace = Boolean(onEmbeddedActionsChange);
 
   const notify = useCallback((next: Exclude<Notice, null>) => {
     setNotice(next);
@@ -189,6 +204,7 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
   const isEditLocked = isJobEditLocked(job);
   const cancelLockMessage = getJobCancelLockMessage(job);
   const editLockMessage = isCanceled ? "Cancelled job cannot be edited." : "Invoiced or completed job cannot be edited.";
+  const embeddedFormId = "freight-job-embedded-form";
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -317,6 +333,58 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
     }
   };
 
+  useEffect(() => {
+    if (!embeddedInWorkspace || !onEmbeddedActionsChange || view !== "editor") {
+      onEmbeddedActionsChange?.(null);
+      return undefined;
+    }
+
+    onEmbeddedActionsChange(
+      <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar">
+        {notice && <NoticeChip notice={notice} />}
+        <Button type="button" size="sm" variant="outline" onClick={() => (onEmbeddedList ? onEmbeddedList() : setView("list"))}>
+          <ArrowLeft size={14} /> List
+        </Button>
+        {!editing && !isEditLocked && (
+          <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}>
+            <Edit2 size={14} /> Edit
+          </Button>
+        )}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={cancelJob}
+          disabled={saving || !job.job_no || isCanceled || isCancelLocked}
+          title={isCancelLocked ? cancelLockMessage : "Cancel job"}
+        >
+          <Ban size={14} /> Cancel
+        </Button>
+        {editing && (
+          <Button type="submit" size="sm" disabled={saving || isEditLocked} form={embeddedFormId}>
+            <Save size={14} /> Save
+          </Button>
+        )}
+        <span className={`freight-job-mode-badge ${editing ? "editing" : "viewing"}`}>{editing ? "Edit" : "View"}</span>
+      </div>
+    );
+
+    return () => onEmbeddedActionsChange(null);
+  }, [
+    cancelLockMessage,
+    embeddedInWorkspace,
+    editing,
+    isCancelLocked,
+    isCanceled,
+    isEditLocked,
+    job.job_no,
+    notice,
+    onEmbeddedActionsChange,
+    onEmbeddedList,
+    saving,
+    view,
+  ]);
+
   const copyQuotationToJob = async (quotationNr: string, row: LookupRow | null) => {
     setJob((current) => ({
       ...current,
@@ -371,7 +439,7 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
   }
 
   return (
-    <form className="freight-document-form" onSubmit={saveJob}>
+    <form id={embeddedInWorkspace ? embeddedFormId : undefined} className="freight-document-form" onSubmit={saveJob}>
       {!embeddedInWorkspace && <Header title={`${mode.label} ${direction.label} Job`} subtitle={job.job_no || "New job"} icon={Icon}>
         {notice && <NoticeChip notice={notice} />}
         <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>
@@ -379,49 +447,32 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
         <Button type="button" size="sm" variant="outline" onClick={cancelJob} disabled={saving || !job.job_no || isCanceled || isCancelLocked} title={isCancelLocked ? cancelLockMessage : "Cancel job"}><Ban size={14} />Cancel</Button>
         {editing && <Button type="submit" size="sm" disabled={saving || isEditLocked}><Save size={14} />Save</Button>}
       </Header>}
-      <div className="freight-job-focus-bar freight-job-focus-compact">
-        <div className="freight-job-progress" aria-label="Job status">
-          {buildJobProgress(job).map((step) => (
-            <span key={step.label} className={step.className}>
-              <span className="freight-job-progress-dot" />
-              {step.label}
-            </span>
-          ))}
-        </div>
-        <div className="freight-job-inline-actions">
-          {notice && <NoticeChip notice={notice} />}
-          {embeddedInWorkspace && <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>}
-          {!editing && !isEditLocked && <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}><Edit2 size={14} />Edit</Button>}
-          <Button type="button" size="sm" variant="outline" onClick={cancelJob} disabled={saving || !job.job_no || isCanceled || isCancelLocked} title={isCancelLocked ? cancelLockMessage : "Cancel job"}><Ban size={14} />Cancel</Button>
-          {editing && <Button type="submit" size="sm" disabled={saving || isEditLocked}><Save size={14} />Save</Button>}
-          <span className={`freight-job-mode-badge ${editing ? "editing" : "viewing"}`}>{editing ? "Edit" : "View"}</span>
-        </div>
-      </div>
-      <fieldset disabled={isEditLocked || !editing} className={`freight-document-paper freight-shipment-paper ${editing ? "is-editing" : "is-viewing"}`}>
-        <JobEditContext.Provider value={editing && !isEditLocked}>
-        <div className="freight-shipment-hero">
-          <div className="freight-shipment-hero-item">
-            <span>Booking Ref / Job No</span>
-            <strong>{job.job_no || "New Job"}</strong>
+      <div className="freight-job-editor-shell">
+        <fieldset disabled={isEditLocked || !editing} className={`freight-document-paper freight-shipment-paper ${editing ? "is-editing" : "is-viewing"}`}>
+          <JobEditContext.Provider value={editing && !isEditLocked}>
+          <div className="freight-shipment-hero">
+            <div className="freight-shipment-hero-item">
+              <span>Booking Ref / Job No</span>
+              <strong>{job.job_no || "New Job"}</strong>
+            </div>
+            <div className="freight-shipment-hero-item">
+              <span>{mode.code === "A" ? "HAWB Number" : "House / BL Number"}</span>
+              {editing && !isEditLocked ? (
+                <Input className="freight-shipment-hero-input" value={job.hawb} onChange={(event) => setJobField(setJob, "hawb", event.target.value)} />
+              ) : (
+                <strong>{job.hawb || job.doc_ref || "-"}</strong>
+              )}
+            </div>
           </div>
-          <div className="freight-shipment-hero-item">
-            <span>{mode.code === "A" ? "HAWB Number" : "House / BL Number"}</span>
-            {editing && !isEditLocked ? (
-              <Input className="freight-shipment-hero-input" value={job.hawb} onChange={(event) => setJobField(setJob, "hawb", event.target.value)} />
-            ) : (
-              <strong>{job.hawb || job.doc_ref || "-"}</strong>
-            )}
+          <div className="freight-shipment-quickfacts">
+            <DisplayField label="Shipment Date" value={toDisplayDate(job.job_date)} />
+            <DisplayField label="Shipment Type" value={direction.label} />
+            <DisplayField label="Transport Mode" value={`${mode.label} Freight`} />
+            <DisplayField label="From Quote" value={job.quotation_ref || "-"} />
+            <DisplayField label="Sales Rep" value={job.salesman_code || "-"} />
+            <DisplayField label="Principal" value={job.prin_code || "-"} />
           </div>
-        </div>
-        <div className="freight-shipment-quickfacts">
-          <DisplayField label="Shipment Date" value={toDisplayDate(job.job_date)} />
-          <DisplayField label="Shipment Type" value={direction.label} />
-          <DisplayField label="Transport Mode" value={`${mode.label} Freight`} />
-          <DisplayField label="From Quote" value={job.quotation_ref || "-"} />
-          <DisplayField label="Sales Rep" value={job.salesman_code || "-"} />
-          <DisplayField label="Principal" value={job.prin_code || "-"} />
-        </div>
-        <div className="freight-job-section-grid">
+          <div className="freight-job-section-grid">
           <Panel className="lg:col-span-12" icon={BriefcaseBusiness} title="Job Identity" meta={`${job.job_no || "Auto"} / ${mode.label} / ${direction.label}`}>
             <div className="freight-job-field-grid freight-job-field-grid-8">
               <ReadOnlyField label="Job No" value={job.job_no || "Auto"} />
@@ -474,7 +525,7 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
           <Panel className="lg:col-span-4 freight-job-compact-panel" icon={FileText} title="Bill Of Lading Details" meta={job.doc_ref || job.hawb || "Document refs"}>
             <div className="freight-job-field-grid freight-job-field-grid-2">
               <Field className="sm:col-span-2" label={mode.code === "A" ? "MAWB" : "Master BL No"} value={job.doc_ref} onChange={(value) => setJobField(setJob, "doc_ref", value)} />
-              <Field className="sm:col-span-2" label="Doc Ref 2" value={job.doc_ref2} onChange={(value) => setJobField(setJob, "doc_ref2", value)} />
+              {/* <Field className="sm:col-span-2" label="Doc Ref 2" value={job.doc_ref2} onChange={(value) => setJobField(setJob, "doc_ref2", value)} /> */}
               <Textarea className="sm:col-span-2" label="Cargo Description" value={job.description1} onChange={(value) => setJobField(setJob, "description1", value)} />
               <Textarea className="sm:col-span-2" label="Remarks" value={job.remarks} onChange={(value) => setJobField(setJob, "remarks", value)} />
               <Field label={mode.code === "A" ? "HAWB" : "HBL"} value={job.hawb} onChange={(value) => setJobField(setJob, "hawb", value)} />
@@ -508,7 +559,6 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
             <div className="freight-job-field-grid freight-job-field-grid-2">
               <Lookup label="Forwarder" value={job.forwarder_code} valueField="FORWARDER_CODE" displayFields={["FORWARDER_CODE", "FORWARDER_NAME"]} columns={[{ field: "FORWARDER_CODE", header: "Code" }, { field: "FORWARDER_NAME", header: "Forwarder" }]} loadOptions={(search) => lookup("freight_forwarder", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "forwarder_code", value)} />
               <Lookup label="Sales Rep" value={job.salesman_code} valueField="SALESMAN_CODE" displayFields={["SALESMAN_CODE", "SALESMAN_NAME"]} columns={[{ field: "SALESMAN_CODE", header: "Code" }, { field: "SALESMAN_NAME", header: "Salesman" }]} loadOptions={(search) => lookup("freight_salesman", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "salesman_code", value)} />
-              <Field label="Principal Ref 1" value={job.prin_ref1} onChange={(value) => setJobField(setJob, "prin_ref1", value)} />
               <Field label="Principal Ref 2" value={job.prin_ref2} onChange={(value) => setJobField(setJob, "prin_ref2", value)} />
               <Lookup label="Customer" value={job.cust_code} valueField="CUSTOMER_CODE" displayFields={["CUSTOMER_CODE", "CUSTOMER_NAME"]} columns={[{ field: "CUSTOMER_CODE", header: "Code" }, { field: "CUSTOMER_NAME", header: "Customer" }]} loadOptions={(search) => lookup("freight_customer", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "cust_code", value)} />
               <Lookup label="Broker" value={job.broker_code} valueField="BROKER_CODE" displayFields={["BROKER_CODE", "BROKER_NAME"]} columns={[{ field: "BROKER_CODE", header: "Code" }, { field: "BROKER_NAME", header: "Broker" }]} loadOptions={(search) => lookup("freight_broker", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "broker_code", value)} />
@@ -529,9 +579,11 @@ export function FreightJobPage({ target, initialJob, startMode = "list" }: { tar
             </div>
           </Panel>
 
-        </div>
-        </JobEditContext.Provider>
-      </fieldset>
+          </div>
+          </JobEditContext.Provider>
+        </fieldset>
+        <JobProgressRail job={job} />
+      </div>
     </form>
   );
 }
@@ -542,17 +594,44 @@ function buildJobProgress(job: JobForm) {
   const invoiceDone = job.invoiced === "Y" || Boolean(job.invoice_date);
   const completeDone = job.completed === "Y" || Boolean(job.complete_date);
   const steps = [
-    { label: "Job", done: true },
-    { label: "Pack List", done: packDone },
-    { label: "Confirmed", done: confirmDone },
-    { label: "Invoiced", done: invoiceDone },
-    { label: "Completed", done: completeDone },
+    { label: "Job", done: true, detail: toDisplayDate(job.job_date) },
+    { label: "Pack List", done: packDone, detail: toDisplayDate(job.packdet_date) },
+    { label: "Confirmed", done: confirmDone, detail: toDisplayDate(job.confirm_date) },
+    { label: "Invoiced", done: invoiceDone, detail: toDisplayDate(job.invoice_date) },
+    { label: "Completed", done: completeDone, detail: toDisplayDate(job.complete_date) },
   ];
   const currentIndex = steps.findIndex((step) => !step.done);
   return steps.map((step, index) => ({
     ...step,
     className: step.done ? "done" : index === currentIndex ? "current" : "",
   }));
+}
+
+function JobProgressRail({ job }: { job: JobForm }) {
+  const steps = buildJobProgress(job);
+  const activeStep = steps.find((step) => step.className === "current") || steps[steps.length - 1];
+
+  return (
+    <aside className="freight-job-progress-rail" aria-label="Job status">
+      <div className="freight-job-progress-rail-title">
+        <span>Job Status</span>
+        <strong>{activeStep?.label || "Completed"}</strong>
+      </div>
+      <div className="freight-job-progress-rail-list">
+        {steps.map((step) => (
+          <div key={step.label} className={`freight-job-progress-rail-step ${step.className || "pending"}`}>
+            <span className="freight-job-progress-rail-marker">
+              {step.className === "done" ? <CheckCircle2 size={14} /> : step.className === "current" ? <CircleDot size={14} /> : <Circle size={13} />}
+            </span>
+            <span className="freight-job-progress-rail-copy">
+              <strong>{step.label}</strong>
+              <small>{step.detail || (step.className === "current" ? "Current step" : step.done ? "Done" : "Pending")}</small>
+            </span>
+          </div>
+        ))}
+      </div>
+    </aside>
+  );
 }
 
 function Header({ title, subtitle, icon: Icon, children }: { title: string; subtitle: string; icon: typeof Plane; children: React.ReactNode }) {
@@ -615,37 +694,46 @@ function SelectField({ label, value, options, onChange, required }: { label: str
   );
 }
 
-function DateField({ label, value, onChange, required }: { label: string; value: string; onChange: (value: string) => void  ; required?: boolean }) {
+function DateField({
+  label,
+  value,
+  onChange,
+  required,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+}) {
   const editable = useContext(JobEditContext);
-  const [displayValue, setDisplayValue] = useState(() => toDisplayDate(value));
 
-  useEffect(() => {
-    setDisplayValue(toDisplayDate(value));
-  }, [value]);
-
-  function commit(nextDisplayValue = displayValue) {
-    const parsed = parseDisplayDate(nextDisplayValue);
-    if (parsed || !nextDisplayValue.trim()) onChange(parsed);
-    setDisplayValue(parsed ? toDisplayDate(parsed) : nextDisplayValue);
+  if (!editable) {
+    return <DisplayField label={label} value={toDisplayDate(value)} />;
   }
 
-  if (!editable) return <DisplayField label={label} value={toDisplayDate(value)} />;
+  const inputValue = dateInputValue(value);
 
   return (
     <label className="freight-compact-label">
-      <span>{label}{required && <span style={{ color: "#E24B4A" }}>*</span>}</span>
+      <span>
+        {label}
+        {required && <span style={{ color: "#E24B4A" }}> *</span>}
+      </span>
+
       <Input
         className="h-7 text-xs font-semibold"
-        placeholder="dd/mm/yyyy"
-        value={displayValue}
+        type="date"
+        value={inputValue}
         required={required}
-        onChange={(event) => setDisplayValue(event.target.value)}
-        onBlur={() => commit()}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") commit();
-        }}
-        onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
-        onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")}
+        onChange={(event) => onChange(event.target.value)}
+        onInvalid={(event) =>
+          (event.target as HTMLInputElement).setCustomValidity(
+            `${label} is required`
+          )
+        }
+        onInput={(event) =>
+          (event.target as HTMLInputElement).setCustomValidity("")
+        }
       />
     </label>
   );

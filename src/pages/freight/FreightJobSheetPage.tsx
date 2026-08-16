@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, FileText, Plane, RefreshCw, Search, Ship, Truck, Save, Edit2 } from "lucide-react";
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
@@ -28,13 +28,25 @@ type SheetState = {
   packlist: LookupRow | null;
 };
 
-export function FreightJobSheetPage({ target, initialJob = null, readOnly = false }: { target?: FreightWorkspaceTarget; initialJob?: LookupRow | null; readOnly?: boolean }) {
+export function FreightJobSheetPage({
+  target,
+  initialJob = null,
+  readOnly = false,
+  onEmbeddedActionsChange,
+  onEmbeddedList,
+}: {
+  target?: FreightWorkspaceTarget;
+  initialJob?: LookupRow | null;
+  readOnly?: boolean;
+  onEmbeddedActionsChange?: (actions: ReactNode | null) => void;
+  onEmbeddedList?: () => void;
+}) {
   const { user } = useAuth();
   const { toast } = useToast();
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
-  const modeKey = target?.mode || "air";
-  const directionKey = target?.direction || "import";
+  const modeKey = (target?.mode || "air") as keyof typeof modeMap;
+  const directionKey = (target?.direction || "import") as keyof typeof directionMap;
   const mode = modeMap[modeKey];
   const direction = directionMap[directionKey];
   const Icon = mode.icon;
@@ -47,6 +59,8 @@ export function FreightJobSheetPage({ target, initialJob = null, readOnly = fals
   const [isEditing, setEditing] = useState(false);
   const [draft, setDraft] = useState<LookupRow | null>(null);
   const [saving, setSaving] = useState(false);
+  const embeddedInWorkspace = Boolean(onEmbeddedActionsChange);
+  const activeJob = sheet.header || selectedJob;
 
   const loadRows = useCallback(async () => {
     setListLoading(true);
@@ -94,9 +108,9 @@ export function FreightJobSheetPage({ target, initialJob = null, readOnly = fals
       toast.error("Invoiced or completed job is locked. Job sheet is view only.");
       return;
     }
-    setDraft(job ? { ...job } : null);
+    setDraft(activeJob ? { ...activeJob } : null);
     setEditing(true);
-}
+  }
 
 function cancelEditing() {
   setDraft(null);
@@ -129,6 +143,42 @@ async function saveHeader() {
     setSaving(false);
   }
  }
+
+  useEffect(() => {
+    if (!embeddedInWorkspace || !onEmbeddedActionsChange || !selectedJob) {
+      onEmbeddedActionsChange?.(null);
+      return undefined;
+    }
+
+    onEmbeddedActionsChange(
+      <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar">
+        <Button type="button" size="sm" variant="outline" onClick={() => (onEmbeddedList ? onEmbeddedList() : setSelectedJob(null))}>
+          <ArrowLeft size={14} /> List
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={() => void loadSheet(activeJob || selectedJob)} disabled={loading}>
+          <RefreshCw size={14} /> Refresh
+        </Button>
+        {!isEditing && !readOnly && (
+          <Button type="button" size="sm" variant="outline" onClick={startEditing}>
+            <Edit2 size={14} /> Edit
+          </Button>
+        )}
+        {isEditing && (
+          <Button type="button" size="sm" variant="outline" onClick={cancelEditing}>
+            Cancel
+          </Button>
+        )}
+        {isEditing && !readOnly && (
+          <Button type="button" size="sm" onClick={() => void saveHeader()} disabled={saving || readOnly}>
+            <Save size={14} /> Save
+          </Button>
+        )}
+        <span className={`freight-job-mode-badge ${isEditing ? "editing" : "viewing"}`}>{isEditing ? "Edit" : "View"}</span>
+      </div>
+    );
+
+    return () => onEmbeddedActionsChange(null);
+  }, [activeJob, embeddedInWorkspace, isEditing, loading, onEmbeddedActionsChange, onEmbeddedList, readOnly, saving, selectedJob]);
 
   useEffect(() => {
     const nextJob = initialJob ? normalizeRow(initialJob) : null;
@@ -215,7 +265,7 @@ async function saveHeader() {
     );
   }
 
-  const job = sheet.header || selectedJob;
+  const job = activeJob || selectedJob;
   const pack = sheet.packlist;
   const titleRef = text(job, "job_no") || "Job Sheet";
   const houseRef = text(job, "hawb") || text(pack, "bl_no") || text(job, "doc_ref") || "-";
@@ -223,20 +273,22 @@ async function saveHeader() {
 
   return (
     <section className="freight-document-form">
-      <div className="freight-job-focus-bar freight-job-focus-compact">
-        <div>
-          <p className="m-0 text-xs font-semibold text-primary">Freight Job Sheet / {titleRef}</p>
-          <h2 className="m-0 text-lg font-semibold text-foreground">{mode.label} {direction.label} Operational Sheet</h2>
-          <p className="m-0 text-xs font-semibold text-muted-foreground">{text(job, "prin_name") || text(job, "prin_code") || "Principal pending"} | {houseRef}</p>
+      {!embeddedInWorkspace && (
+        <div className="freight-job-focus-bar freight-job-focus-compact">
+          <div>
+            <p className="m-0 text-xs font-semibold text-primary">Freight Job Sheet / {titleRef}</p>
+            <h2 className="m-0 text-lg font-semibold text-foreground">{mode.label} {direction.label} Operational Sheet</h2>
+            <p className="m-0 text-xs font-semibold text-muted-foreground">{text(job, "prin_name") || text(job, "prin_code") || "Principal pending"} | {houseRef}</p>
+          </div>
+          <div className="freight-job-inline-actions">
+            <Button type="button" size="sm" variant="outline" onClick={() => setSelectedJob(null)}><ArrowLeft size={14} /> Select Job</Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => void loadSheet(job)} disabled={loading}><RefreshCw size={14} /> Refresh</Button>
+            {!isEditing && !readOnly && <Button type="button" size="sm" variant="outline" onClick={startEditing}><Edit2 size={14} /> Edit</Button>}
+            {isEditing && <Button type="button" size="sm" variant="outline" onClick={cancelEditing}>Cancel</Button>}
+            {isEditing && !readOnly && <Button type="button" size="sm" onClick={() => void saveHeader()} disabled={saving || readOnly}><Save size={14} /> Save</Button>}
+          </div>
         </div>
-        <div className="freight-job-inline-actions">
-          <Button type="button" size="sm" variant="outline" onClick={() => setSelectedJob(null)}><ArrowLeft size={14} /> Select Job</Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => void loadSheet(job)} disabled={loading}><RefreshCw size={14} /> Refresh</Button>
-          {!isEditing && !readOnly && <Button type="button" size="sm" variant="outline" onClick={startEditing}><Edit2 size={14} /> Edit</Button>}
-          {isEditing && <Button type="button" size="sm" variant="outline" onClick={cancelEditing}>Cancel</Button>}
-          {isEditing && !readOnly && <Button type="button" size="sm" onClick={() => void saveHeader()} disabled={saving || readOnly}><Save size={14} /> Save</Button>}
-        </div>
-      </div>
+      )}
 
       <div className={`freight-document-paper freight-shipment-paper ${isEditing && !readOnly ? "is-editing" : "is-viewing"}`}>
         <div className="freight-shipment-hero">
@@ -356,7 +408,7 @@ async function saveHeader() {
   );
 }
 
-function SheetSection({ title, meta, children, className = "" }: { title: string; meta?: string; children: React.ReactNode; className?: string }) {
+function SheetSection({ title, meta, children, className = "" }: { title: string; meta?: string; children: ReactNode; className?: string }) {
   return (
     <section className={`freight-info-section ${className}`}>
       <div className="freight-info-title">
