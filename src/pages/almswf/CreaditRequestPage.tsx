@@ -163,9 +163,15 @@ const Credit_Request_page = ({ initialTab = 0 }: CreditRequestPageProps) => {
       },
       {
         accessorKey: "company_name",
-        header: "Description",
+        header: "Company Name",
         size: 600,
         cell: ({ row }) => (row.original as any).COMPANY_NAME || "—",
+      },
+      {
+        accessorKey: "description",
+        header: "Description",
+        size: 600,
+        cell: ({ row }) => (row.original as any).DESCRIPTION || "—",
       },
       {
         accessorKey: "AMOUNT",
