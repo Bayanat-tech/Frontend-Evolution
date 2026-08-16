@@ -251,43 +251,45 @@ const PayUnitDetailForm = ({ formik, disabled = false }: TProps) => {
           </>
         }
       >
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 items-start">
           {/* Dependent Pay Component ID — searchable lookup (replaces Autocomplete) */}
-          <LookupField
-            label="Dependent Pay Comp ID - Desc"
-            compact
-            placeholder="Search..."
-            value={editRow?.pay_comp_id_depend || ''}
-            displayValue={
-              editRow?.pay_comp_id_depend
-                ? `${editRow.pay_comp_id_depend} - ${
-                    dependentPayCompOptions.find((opt) => opt.value_code === editRow.pay_comp_id_depend)?.value_desc || ''
-                  }`
-                : ''
-            }
-            columns={dependentLookupColumns}
-            valueField="value_code"
-            displayFields={['value_code', 'value_desc']}
-            loadOptions={() =>
-              getDynamicLookup({
-                parameter: 'PAY_COMPONENT_DependentPayCompId',
-                loginid: user?.loginid ?? '',
-                code1: user?.company_code ?? ''
-              })
-            }
-            onChange={(val: string, row?: any) =>
-              setEditRow((prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      pay_comp_id_depend: val,
-                      pay_comp_desc: String(row?.VALUE_DESC ?? row?.value_desc ?? '')
-                    }
-                  : prev
-              )
-            }
-            disabled={disabled}
-          />
+          <label className="field">
+            <span>Dependent Pay Comp ID</span>
+            <LookupField
+            
+              placeholder="Search..."
+              value={editRow?.pay_comp_id_depend || ''}
+              displayValue={
+                editRow?.pay_comp_id_depend
+                  ? `${editRow.pay_comp_id_depend} - ${
+                      dependentPayCompOptions.find((opt) => opt.value_code === editRow.pay_comp_id_depend)?.value_desc || ''
+                    }`
+                  : ''
+              }
+              columns={dependentLookupColumns}
+              valueField="value_code"
+              displayFields={['value_code', 'value_desc']}
+              loadOptions={() =>
+                getDynamicLookup({
+                  parameter: 'PAY_COMPONENT_DependentPayCompId',
+                  loginid: user?.loginid ?? '',
+                  code1: user?.company_code ?? ''
+                })
+              }
+              onChange={(val: string, row?: any) =>
+                setEditRow((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        pay_comp_id_depend: val,
+                        pay_comp_desc: String(row?.VALUE_DESC ?? row?.value_desc ?? '')
+                      }
+                    : prev
+                )
+              }
+              disabled={disabled}
+            />
+          </label>
 
           {/* Percent */}
           <label className="field">

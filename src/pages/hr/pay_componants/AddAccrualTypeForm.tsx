@@ -5,6 +5,7 @@ import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
 import { LookupField } from '../../../components/ui/LookupField';
+import { CardHeader } from '../../../components/ui/Card';
 import { useAuth } from '../../../state/AuthContext';
 import { executeDynamicMutationColumn90, getDynamicLookup } from '../../../api/lookups';
 
@@ -78,7 +79,7 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
   const queryClient = useQueryClient();
 
   // ===================== FETCH EXISTING RECORD (edit/view) =====================
-  const { data: existingRecord } = useQuery({
+  const { data: existingRecord, isLoading: existingLoading } = useQuery({
     queryKey: ['accrual-type-detail', companyCode, accrual_type],
     queryFn: async () => {
       const response = await getDynamicLookup({
@@ -217,336 +218,354 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
   });
 
   const disabled = !!isViewMode;
+  const isLoadingData = !!(isEdit && existingLoading);
 
   return (
-    <div className="w-full">
-      <form onSubmit={formik.handleSubmit} className="w-full">
-        <div className="w-full space-y-3">
-          {/* ===== Header Section ===== */}
-          <div className="w-full rounded-md border bg-card">
-            <div className="border-b bg-secondary/40 px-3 py-1.5">
-              <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-primary">Header</p>
-              <h3 className="m-0 text-sm font-semibold leading-tight">Accrual Type Information</h3>
+    <div className="fixed inset-0 z-50 bg-background">
+      <section className="commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]">
+        {/* ===== Top Bar ===== */}
+        <CardHeader className="border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
+          <div className="flex min-h-10 items-center justify-between gap-3">
+            <div>
+              <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
+                {isViewMode ? 'View Document' : isEdit ? 'Edit Document' : 'New Document'}
+              </p>
+              <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">
+                Accrual Type {accrual_type ? `— ${accrual_type}` : ''}
+              </h2>
             </div>
-            <div className="grid w-full grid-cols-12 gap-4 p-3">
-              <div className="col-span-12 md:col-span-2">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Company</label>
-                <Input value={companyCode} disabled />
-              </div>
-
-              <div className="col-span-12 md:col-span-3">
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Accrual Type <span className="text-red-500">*</span>
-                </label>
-                <LookupField
-                //   label="Accrual Type"
-                  value={formik.values.ACCRUAL_TYPE}
-                  onChange={(val: string) => formik.setFieldValue('ACCRUAL_TYPE', val)}
-                  disabled={disabled || isEdit}
-                 
-                  valueField="ACCRUAL_TYPE"
-                  displayFields={['ACCRUAL_TYPE', 'ACCRUAL_DESC']}
-                  columns={[
-                    { field: 'ACCRUAL_TYPE', header: 'Accrual Type' },
-                    { field: 'ACCRUAL_DESC', header: 'Description' }
-                  ]}
-                  loadOptions={loadAccrualTypeOptions}
-                />
-                {formik.touched.ACCRUAL_TYPE && formik.errors.ACCRUAL_TYPE && (
-                  <p className="mt-1 text-xs text-red-500">{formik.errors.ACCRUAL_TYPE}</p>
-                )}
-              </div>
-
-              <div className="col-span-12 md:col-span-5">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Applicable To</label>
-                <Select
-                  name="ELIGIBLITY"
-                  value={formik.values.ELIGIBLITY}
-                  onChange={formik.handleChange}
-                  disabled={disabled}
-                >
-                  <option value="">Select...</option>
-                  {(applicableToData ?? []).map((row: any, idx: number) => (
-                    <option key={idx} value={row.CODE ?? row.ELIGIBLITY}>
-                      {row.DESC ?? row.ELIGIBLITY_DESC}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="col-span-12 md:col-span-6">
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Accrual Description <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  name="ACCRUAL_DESC"
-                  value={formik.values.ACCRUAL_DESC}
-                  onChange={formik.handleChange}
-                  disabled={disabled}
-                />
-              </div>
-
-              <div className="col-span-12 md:col-span-6">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Short Description</label>
-                <Input
-                  name="ACCRUAL_SHORT_DESC"
-                  value={formik.values.ACCRUAL_SHORT_DESC}
-                  onChange={formik.handleChange}
-                  disabled={disabled}
-                />
-              </div>
-
-              
-            </div>
-          </div>
-
-          {/* ===== Accrual Parameters Section ===== */}
-          <div className="w-full rounded-md border bg-card">
-            <div className="border-b bg-secondary/40 px-3 py-1.5">
-              <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-primary">Parameters</p>
-              <h3 className="m-0 text-sm font-semibold leading-tight">Accrual Parameters</h3>
-            </div>
-            <div className="grid w-full grid-cols-12 gap-4 p-3">
-              <div className="col-span-12 md:col-span-6">
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Accrual Unit <span className="text-red-500">*</span>
-                </label>
-                <Select
-                  name="ACCRUAL_UNIT"
-                  value={formik.values.ACCRUAL_UNIT}
-                  onChange={formik.handleChange}
-                  disabled={disabled}
-                >
-                  {ACCRUAL_UNIT_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="col-span-12 md:col-span-6">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Amount Calculation</label>
-                <Select
-                  name="ACCRUAL_CALC_TYPE"
-                  value={formik.values.ACCRUAL_CALC_TYPE}
-                  onChange={formik.handleChange}
-                  disabled={disabled}
-                >
-                  <option value="">Select...</option>
-                  {CALC_FACTOR_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="col-span-12 md:col-span-6">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Calculation Based on</label>
-                <Select
-                  name="CALC_SETUP"
-                  value={formik.values.CALC_SETUP}
-                  onChange={formik.handleChange}
-                  disabled={disabled}
-                >
-                  {CALC_BASED_ON_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="col-span-12 md:col-span-6">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Amount Calculation Factor</label>
-                <Select
-                  name="CALC_AMT"
-                  value={formik.values.CALC_AMT}
-                  onChange={formik.handleChange}
-                  disabled={disabled}
-                >
-                  {CALC_FACTOR_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="col-span-12 md:col-span-6">
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Unit Calculation Factor <span className="text-red-500">*</span>
-                </label>
-                <Select
-                  name="AMOUNT_CALC_FACTOR"
-                  value={formik.values.AMOUNT_CALC_FACTOR}
-                  onChange={formik.handleChange}
-                  disabled={disabled}
-                >
-                  {CALC_FACTOR_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="col-span-12 md:col-span-6">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Accrual Depend to</label>
-                <Select
-                  name="ACCRUAL_DEPENDENCY"
-                  value={formik.values.ACCRUAL_DEPENDENCY}
-                  onChange={formik.handleChange}
-                  disabled={disabled}
-                >
-                  {DEPENDENCY_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="col-span-12 md:col-span-6">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Credit Type</label>
-                <Select
-                  name="CREDIT_TYPE"
-                  value={formik.values.CREDIT_TYPE}
-                  onChange={formik.handleChange}
-                  disabled={disabled}
-                >
-                  {CREDIT_TYPE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            </div>
-          </div>
-
-          {/* ===== Encashment Section ===== */}
-          <div className="w-full rounded-md border bg-card">
-            <div className="border-b bg-secondary/40 px-3 py-1.5">
-              <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-primary">Encashment</p>
-              <h3 className="m-0 text-sm font-semibold leading-tight">Encashment Settings</h3>
-            </div>
-            <div className="grid w-full grid-cols-12 gap-4 p-3">
-              <div className="col-span-12 md:col-span-6">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Allow Encashment</label>
-                <Select
-                  name="ALLOW_ENCASHMENT"
-                  value={formik.values.ALLOW_ENCASHMENT}
-                  onChange={formik.handleChange}
-                  disabled={disabled}
-                >
-                  {YES_NO_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="col-span-12 md:col-span-6">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Auto Encashment</label>
-                <Select
-                  name="AUTO_ENCASHMENT"
-                  value={formik.values.AUTO_ENCASHMENT}
-                  onChange={formik.handleChange}
-                  disabled={disabled}
-                >
-                  {YES_NO_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="col-span-12">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Encashment Pay Unit</label>
-                <LookupField
-                  label="Encashment Pay Unit"
-                  value={formik.values.ENCASHMENT_COMP_ID}
-                  onChange={(val: string) => formik.setFieldValue('ENCASHMENT_COMP_ID', val)}
-                  disabled={disabled}
-                  valueField="PAY_COMP_ID"
-                  displayFields={['PAY_COMP_ID', 'PAY_COMP_DESC']}
-                  columns={[
-                    { field: 'PAY_COMP_ID', header: 'Pay Component ID' },
-                    { field: 'PAY_COMP_DESC', header: 'Description' }
-                  ]}
-                  loadOptions={loadPayUnitOptions}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* ===== Remarks + Status Section ===== */}
-          <div className="w-full rounded-md border bg-card">
-            <div className="border-b bg-secondary/40 px-3 py-1.5">
-              <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-primary">Additional</p>
-              <h3 className="m-0 text-sm font-semibold leading-tight">Remarks &amp; Status</h3>
-            </div>
-            <div className="grid w-full grid-cols-12 gap-4 p-3">
-              <div className="col-span-12">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Remarks</label>
-                <textarea
-                  name="REMARKS"
-                  value={formik.values.REMARKS}
-                  onChange={formik.handleChange}
-                  disabled={disabled}
-                  rows={4}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:bg-gray-100"
-                />
-              </div>
-
-              <div className="col-span-12 md:col-span-4">
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Status <span className="text-red-500">*</span>
-                </label>
-                <Select
-                  name="ACCR_STATUS"
-                  value={formik.values.ACCR_STATUS}
-                  onChange={formik.handleChange}
-                  disabled={disabled}
-                >
-                  {STATUS_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Divider */}
-        <div className="mb-3 mt-3 h-0.5 w-full bg-[#1677ff]" />
-
-        {/* Submit + Actions */}
-        <div className="flex items-center justify-between px-2 pb-1">
-          <div>
-            {!isViewMode && (
-              <Button type="submit" variant="default" disabled={saveMutation.isPending}>
-                {saveMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <FileText size={15} />}{' '}
-                Submit
-              </Button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="inline-flex overflow-hidden rounded-md border">
-              <Button type="button" variant="outline" title="Exit" className="rounded-none border-0" onClick={() => onClose()}>
-                <X size={15} />
+            <div className="flex items-center gap-2">
+              <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={() => onClose()}>
+                <X size={16} />
               </Button>
             </div>
           </div>
+        </CardHeader>
+
+        {/* ===== Scrollable Body ===== */}
+        <div className="min-h-0 overflow-auto p-3">
+          {isLoadingData ? (
+            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">
+              <Loader2 className="mr-2 inline-block h-4 w-4 animate-spin" /> Loading document...
+            </div>
+          ) : (
+            <form id="accrual-type-form" onSubmit={formik.handleSubmit} className="w-full">
+              <div className="w-full space-y-3">
+                {/* ===== Header Section ===== */}
+                <div className="w-full rounded-md border bg-card">
+                  <div className="border-b bg-secondary/40 px-3 py-1.5">
+                    <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-primary">Header</p>
+                    <h3 className="m-0 text-sm font-semibold leading-tight">Accrual Type Information</h3>
+                  </div>
+                  <div className="grid w-full grid-cols-12 gap-4 p-3">
+                    <div className="col-span-12 md:col-span-2">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Company</label>
+                      <Input value={companyCode} disabled />
+                    </div>
+
+                    <div className="col-span-12 md:col-span-3">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Accrual Type <span className="text-red-500">*</span>
+                      </label>
+                      <LookupField
+                        value={formik.values.ACCRUAL_TYPE}
+                        onChange={(val: string) => formik.setFieldValue('ACCRUAL_TYPE', val)}
+                        disabled={disabled || isEdit}
+                        valueField="ACCRUAL_TYPE"
+                        displayFields={['ACCRUAL_TYPE', 'ACCRUAL_DESC']}
+                        columns={[
+                          { field: 'ACCRUAL_TYPE', header: 'Accrual Type' },
+                          { field: 'ACCRUAL_DESC', header: 'Description' }
+                        ]}
+                        loadOptions={loadAccrualTypeOptions}
+                      />
+                      {formik.touched.ACCRUAL_TYPE && formik.errors.ACCRUAL_TYPE && (
+                        <p className="mt-1 text-xs text-red-500">{formik.errors.ACCRUAL_TYPE}</p>
+                      )}
+                    </div>
+
+                    <div className="col-span-12 md:col-span-5">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Applicable To</label>
+                      <Select
+                        name="ELIGIBLITY"
+                        value={formik.values.ELIGIBLITY}
+                        onChange={formik.handleChange}
+                        disabled={disabled}
+                      >
+                        <option value="">Select...</option>
+                        {(applicableToData ?? []).map((row: any, idx: number) => (
+                          <option key={idx} value={row.CODE ?? row.ELIGIBLITY}>
+                            {row.DESC ?? row.ELIGIBLITY_DESC}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div className="col-span-12 md:col-span-6">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Accrual Description <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        name="ACCRUAL_DESC"
+                        value={formik.values.ACCRUAL_DESC}
+                        onChange={formik.handleChange}
+                        disabled={disabled}
+                      />
+                    </div>
+
+                    <div className="col-span-12 md:col-span-6">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Short Description</label>
+                      <Input
+                        name="ACCRUAL_SHORT_DESC"
+                        value={formik.values.ACCRUAL_SHORT_DESC}
+                        onChange={formik.handleChange}
+                        disabled={disabled}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ===== Accrual Parameters Section ===== */}
+                <div className="w-full rounded-md border bg-card">
+                  <div className="border-b bg-secondary/40 px-3 py-1.5">
+                    <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-primary">Parameters</p>
+                    <h3 className="m-0 text-sm font-semibold leading-tight">Accrual Parameters</h3>
+                  </div>
+                  <div className="grid w-full grid-cols-12 gap-4 p-3">
+                    <div className="col-span-12 md:col-span-6">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Accrual Unit <span className="text-red-500">*</span>
+                      </label>
+                      <Select
+                        name="ACCRUAL_UNIT"
+                        value={formik.values.ACCRUAL_UNIT}
+                        onChange={formik.handleChange}
+                        disabled={disabled}
+                      >
+                        {ACCRUAL_UNIT_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div className="col-span-12 md:col-span-6">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Amount Calculation</label>
+                      <Select
+                        name="ACCRUAL_CALC_TYPE"
+                        value={formik.values.ACCRUAL_CALC_TYPE}
+                        onChange={formik.handleChange}
+                        disabled={disabled}
+                      >
+                        <option value="">Select...</option>
+                        {CALC_FACTOR_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div className="col-span-12 md:col-span-6">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Calculation Based on</label>
+                      <Select
+                        name="CALC_SETUP"
+                        value={formik.values.CALC_SETUP}
+                        onChange={formik.handleChange}
+                        disabled={disabled}
+                      >
+                        {CALC_BASED_ON_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div className="col-span-12 md:col-span-6">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Amount Calculation Factor</label>
+                      <Select
+                        name="CALC_AMT"
+                        value={formik.values.CALC_AMT}
+                        onChange={formik.handleChange}
+                        disabled={disabled}
+                      >
+                        {CALC_FACTOR_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div className="col-span-12 md:col-span-6">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Unit Calculation Factor <span className="text-red-500">*</span>
+                      </label>
+                      <Select
+                        name="AMOUNT_CALC_FACTOR"
+                        value={formik.values.AMOUNT_CALC_FACTOR}
+                        onChange={formik.handleChange}
+                        disabled={disabled}
+                      >
+                        {CALC_FACTOR_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div className="col-span-12 md:col-span-6">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Accrual Depend to</label>
+                      <Select
+                        name="ACCRUAL_DEPENDENCY"
+                        value={formik.values.ACCRUAL_DEPENDENCY}
+                        onChange={formik.handleChange}
+                        disabled={disabled}
+                      >
+                        {DEPENDENCY_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div className="col-span-12 md:col-span-6">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Credit Type</label>
+                      <Select
+                        name="CREDIT_TYPE"
+                        value={formik.values.CREDIT_TYPE}
+                        onChange={formik.handleChange}
+                        disabled={disabled}
+                      >
+                        {CREDIT_TYPE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ===== Encashment Section ===== */}
+                <div className="w-full rounded-md border bg-card">
+                  <div className="border-b bg-secondary/40 px-3 py-1.5">
+                    <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-primary">Encashment</p>
+                    <h3 className="m-0 text-sm font-semibold leading-tight">Encashment Settings</h3>
+                  </div>
+                  <div className="grid w-full grid-cols-12 gap-4 p-3">
+                    <div className="col-span-12 md:col-span-6">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Allow Encashment</label>
+                      <Select
+                        name="ALLOW_ENCASHMENT"
+                        value={formik.values.ALLOW_ENCASHMENT}
+                        onChange={formik.handleChange}
+                        disabled={disabled}
+                      >
+                        {YES_NO_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div className="col-span-12 md:col-span-6">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Auto Encashment</label>
+                      <Select
+                        name="AUTO_ENCASHMENT"
+                        value={formik.values.AUTO_ENCASHMENT}
+                        onChange={formik.handleChange}
+                        disabled={disabled}
+                      >
+                        {YES_NO_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div className="col-span-12">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Encashment Pay Unit</label>
+                      <LookupField
+                        value={formik.values.ENCASHMENT_COMP_ID}
+                        onChange={(val: string) => formik.setFieldValue('ENCASHMENT_COMP_ID', val)}
+                        disabled={disabled}
+                        valueField="PAY_COMP_ID"
+                        displayFields={['PAY_COMP_ID', 'PAY_COMP_DESC']}
+                        columns={[
+                          { field: 'PAY_COMP_ID', header: 'Pay Component ID' },
+                          { field: 'PAY_COMP_DESC', header: 'Description' }
+                        ]}
+                        loadOptions={loadPayUnitOptions}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ===== Remarks + Status Section ===== */}
+                <div className="w-full rounded-md border bg-card">
+                  <div className="border-b bg-secondary/40 px-3 py-1.5">
+                    <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-primary">Additional</p>
+                    <h3 className="m-0 text-sm font-semibold leading-tight">Remarks &amp; Status</h3>
+                  </div>
+                  <div className="grid w-full grid-cols-12 gap-4 p-3">
+                    <div className="col-span-12">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Remarks</label>
+                      <textarea
+                        name="REMARKS"
+                        value={formik.values.REMARKS}
+                        onChange={formik.handleChange}
+                        disabled={disabled}
+                        rows={4}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:bg-gray-100"
+                      />
+                    </div>
+
+                    <div className="col-span-12 md:col-span-4">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Status <span className="text-red-500">*</span>
+                      </label>
+                      <Select
+                        name="ACCR_STATUS"
+                        value={formik.values.ACCR_STATUS}
+                        onChange={formik.handleChange}
+                        disabled={disabled}
+                      >
+                        {STATUS_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </form>
+          )}
         </div>
-      </form>
+
+        {/* ===== Bottom Action Bar ===== */}
+        <div className="flex items-center justify-end gap-2 border-t bg-secondary/60 px-4 py-2">
+          {!isViewMode && (
+            <Button
+              type="submit"
+              form="accrual-type-form"
+              variant="default"
+              disabled={saveMutation.isPending}
+            >
+              {saveMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <FileText size={15} />}{' '}
+              Submit
+            </Button>
+          )}
+        </div>
+      </section>
     </div>
   );
 };

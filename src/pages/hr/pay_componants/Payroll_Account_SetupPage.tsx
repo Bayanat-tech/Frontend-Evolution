@@ -1,11 +1,12 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { useQuery } from '@tanstack/react-query';
-import { Save, RotateCcw } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Plus, Save, RotateCcw, Pencil } from 'lucide-react';
 import { useAuth } from '../../../state/AuthContext';
 import { getDynamicLookup, postFinance } from '../../../api/lookups';
 import { Button } from '../../../components/ui/Button';
 import { DataTable } from '../../../components/ui/DataTable';
+import AddPayrollAccountSetupForm from './AddPayrollAccountSetupForm'; // NOTE: adjust path as per your folder structure
 
 // getDynamicLookup returns raw lowercase keys from Oracle — normalize so
 // field reads resolve consistently regardless of case.
@@ -18,9 +19,9 @@ function lowercaseKeys<T extends Record<string, unknown>>(row: T): T {
 }
 
 type TLeaveRow = {
-  leave_type: string;
-  leave_start_date: string;
-  leave_end_date: string;
+  pay_comp_id: string;
+  ac_code_db: string;
+  ac_code_cr: string;
 };
 
 // ─── Columns ──────────────────────────────────────────────────────────────
@@ -31,9 +32,9 @@ const leaveColumns: ColumnDef<TLeaveRow>[] = [
     size: 50,
     cell: ({ row }) => row.index + 1
   },
-  { accessorKey: 'leave_type', header: 'Pay Unit', size: 200 },
-  { accessorKey: 'leave_start_date', header: 'DB Account Code', size: 200 },
-  { accessorKey: 'leave_end_date', header: 'CR Account code *', size: 200 }
+  { accessorKey: 'pay_comp_id', header: 'Pay Component ID', size: 200 },
+  { accessorKey: 'ac_code_db', header: 'DB Account Code', size: 200 },
+  { accessorKey: 'ac_code_cr', header: 'CR Account Code *', size: 200 }
 ];
 
 // ─── Helper ───────────────────────────────────────────────────────────────
@@ -46,6 +47,7 @@ const fetchLookup = async (parameter: string, code1: string, code2 = '', code3 =
 const PayrollAccountSetupPage = () => {
   const { user } = useAuth();
   const gridRef = useRef<any>(null);
+  const queryClient = useQueryClient();
 
   const loginid = user?.loginid ?? '';
   const companyCode = user?.company_code ?? '';
@@ -59,6 +61,10 @@ const PayrollAccountSetupPage = () => {
 
   // ── Form State ────────────────────────────────────────────────────────────
   const [docNo, setDocNo] = useState<any>(null);
+
+  // ── Add/Edit Modal State ─────────────────────────────────────────────────
+  const [showForm, setShowForm] = useState(false);
+  const [editingRow, setEditingRow] = useState<TLeaveRow | null>(null);
 
   // ── Company Query ─────────────────────────────────────────────────────────
   const { data: companyData } = useQuery({
@@ -155,6 +161,53 @@ const PayrollAccountSetupPage = () => {
       // TODO: error message
     }
   };
+
+  // ── Add / Edit Modal Handlers ────────────────────────────────────────────
+  const handleAddClick = () => {
+    setEditingRow(null);
+    setShowForm(true);
+  };
+
+  // const handleRowDoubleClick = (row: TLeaveRow) => {
+  //   setEditingRow(row);
+  //   setShowForm(true);
+  // };
+
+  const handleFormClose = (refetch?: boolean) => {
+    setShowForm(false);
+    setEditingRow(null);
+    if (refetch) {
+      queryClient.invalidateQueries({
+        queryKey: ['pa_setup', company?.company_code, division?.div_code, department?.dept_code, section?.section_code]
+      });
+    }
+  };
+  const handleRowEdit = (row: TLeaveRow) => {
+    setEditingRow(row);
+    setShowForm(true);
+  };
+
+  const columnsWithActions = useMemo<ColumnDef<TLeaveRow>[]>(
+    () => [
+      ...leaveColumns,
+      {
+        id: 'actions',
+        header: '',
+        size: 60,
+        cell: ({ row }) => (
+          <button
+            type="button"
+            onClick={() => handleRowEdit(row.original)}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
+            aria-label="Edit"
+          >
+            <Pencil size={14} />
+          </button>
+        )
+      }
+    ],
+    []
+  );
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -269,21 +322,48 @@ const PayrollAccountSetupPage = () => {
           data={leaveRows}
           height={350}
           density="compact"
-          getRowId={(row: TLeaveRow) => String(row.leave_type)}
+          getRowId={(row: TLeaveRow) => String(row.pay_comp_id)}
+       
         />
 
         {/* Action Buttons */}
         <div className="mt-3 border-t pt-3">
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={handleReset}>
-              <RotateCcw size={15} /> Reset
+          <div className="flex justify-between gap-2">
+            <Button
+              type="button"
+              variant="default"
+              onClick={handleAddClick}
+              disabled={!company || !division || !department || !section}
+            >
+              <Plus size={15} /> Add
             </Button>
-            <Button type="button" variant="default" onClick={handleSave}>
-              <Save size={15} /> Save
-            </Button>
+
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={handleReset}>
+                <RotateCcw size={15} /> Reset
+              </Button>
+              <Button type="button" variant="default" onClick={handleSave}>
+                <Save size={15} /> Save
+              </Button>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          Add / Edit Modal
+      ══════════════════════════════════════════════════════════════════ */}
+      {showForm && (
+        <AddPayrollAccountSetupForm
+          onClose={handleFormClose}
+          isEdit={!!editingRow}
+          company_code={company?.company_code ?? ''}
+          div_code={division?.div_code ?? ''}
+          dept_code={department?.dept_code ?? ''}
+          section_code={section?.section_code ?? ''}
+          pay_comp_id={editingRow?.pay_comp_id}
+        />
+      )}
     </div>
   );
 };
