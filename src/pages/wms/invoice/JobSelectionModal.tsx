@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog } from "../../../components/ui/Dialog";
 import { Button } from "../../../components/ui/Button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/Table";
@@ -10,6 +10,7 @@ type JobSelectionModalProps = {
   invoiceNo: string;
   fromDate?: string | Date | null;
   toDate?: string | Date | null;
+  existingKeys?: string[]; // "job_no||act_code" of jobs already added to the invoice
   onClose: () => void;
   onSelect: (selectedJobs: any[]) => void;
 };
@@ -21,6 +22,7 @@ const normalizeRow = (row: any) => ({
   quantity: row.quantity ?? row.QUANTITY ?? "",
   activity: row.activity ?? row.ACTIVITY ?? "",
   act_code: row.act_code ?? row.ACT_CODE ?? "",
+  act_group_name: row.act_group_name ?? row.ACT_GROUP_NAME ?? "",
   bill: Number(row.bill ?? row.BILL ?? 0),
   actual_cost: Number(row.actual_cost ?? row.ACTUAL_COST ?? 0),
   bill_rate: Number(row.bill_rate ?? row.BILL_RATE ?? 0),
@@ -38,11 +40,16 @@ const toDDMMYYYY = (d?: string | Date | null) => {
   return `${dd}/${mm}/${dt.getFullYear()}`;
 };
 
+function rowKeyOf(row: ReturnType<typeof normalizeRow>) {
+  return `${row.job_no}||${row.act_code}`;
+}
+
 export function JobSelectionModal({
   prinCode,
   invoiceNo,
   fromDate,
   toDate,
+  existingKeys = [],
   onClose,
   onSelect,
 }: JobSelectionModalProps) {
@@ -50,6 +57,9 @@ export function JobSelectionModal({
   const [jobs, setJobs] = useState<ReturnType<typeof normalizeRow>[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+
+  // Jobs already added to the invoice (Job Details grid) — never show these again here.
+  const excludeSet = useMemo(() => new Set(existingKeys), [existingKeys]);
 
   useEffect(() => {
     if (!user?.loginid || !user?.company_code || !prinCode) {
@@ -63,16 +73,20 @@ export function JobSelectionModal({
         const response = await getInvoiceJobSelection({
           loginid: user.loginid ?? "",
           company_code: user.company_code ?? "",
-           prin_code: prinCode,
-             invoice_no: invoiceNo,
+          prin_code: prinCode,
+          invoice_no: invoiceNo,
           from_date: toDDMMYYYY(fromDate),
           to_date: toDDMMYYYY(toDate),
         });
-const normalized = Array.isArray(response)
-  ? response.map(normalizeRow).filter(
-      (row, index, arr) => arr.findIndex((r) => rowKeyOf(r) === rowKeyOf(row)) === index,
-    )
-  : [];        setJobs(normalized);
+        const normalized = Array.isArray(response)
+          ? response
+              .map(normalizeRow)
+              // de-dupe identical job_no + act_code rows returned by the query
+              .filter((row, index, arr) => arr.findIndex((r) => rowKeyOf(r) === rowKeyOf(row)) === index)
+              // drop jobs that are already selected/added on the invoice
+              .filter((row) => !excludeSet.has(rowKeyOf(row)))
+          : [];
+        setJobs(normalized);
         // Pre-check rows already flagged SELECTED = 'Y' by the backend view
         setSelected(new Set(normalized.filter((r) => r.selected).map(rowKeyOf)));
       } catch {
@@ -81,11 +95,7 @@ const normalized = Array.isArray(response)
         setLoading(false);
       }
     })();
-  }, [prinCode, invoiceNo, user?.loginid, user?.company_code]);
-
-  function rowKeyOf(row: ReturnType<typeof normalizeRow>) {
-    return `${row.job_no}||${row.act_code}`;
-  }
+  }, [prinCode, invoiceNo, user?.loginid, user?.company_code, excludeSet]);
 
   const toggleRow = (key: string) => {
     setSelected((prev) => {
@@ -117,6 +127,7 @@ const normalized = Array.isArray(response)
               <TableHead>Job No</TableHead>
               <TableHead>Activity</TableHead>
               <TableHead>Act Code</TableHead>
+              <TableHead>Activity Group</TableHead>
               <TableHead className="text-right">Qty</TableHead>
               <TableHead className="text-right">Bill</TableHead>
               <TableHead className="text-right">Actual Cost</TableHead>
@@ -128,11 +139,11 @@ const normalized = Array.isArray(response)
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={10} className="py-6 text-center text-muted-foreground">Loading...</TableCell>
+                <TableCell colSpan={11} className="py-6 text-center text-muted-foreground">Loading...</TableCell>
               </TableRow>
             ) : jobs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="py-6 text-center text-muted-foreground">No jobs found</TableCell>
+                <TableCell colSpan={11} className="py-6 text-center text-muted-foreground">No jobs found</TableCell>
               </TableRow>
             ) : (
               jobs.map((row) => {
@@ -150,6 +161,7 @@ const normalized = Array.isArray(response)
                     <TableCell>{row.job_no}</TableCell>
                     <TableCell>{row.activity}</TableCell>
                     <TableCell>{row.act_code}</TableCell>
+                    <TableCell>{row.act_group_name}</TableCell>
                     <TableCell className="text-right">{row.quantity}</TableCell>
                     <TableCell className="text-right">{row.bill}</TableCell>
                     <TableCell className="text-right">{row.actual_cost}</TableCell>
