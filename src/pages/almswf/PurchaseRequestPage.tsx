@@ -1,4 +1,4 @@
-// src/pages/almswf/Purchase_Request_page.tsx
+// src/pages/almswf/PurchaseRequestPage.tsx
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../state/AuthContext";
@@ -8,7 +8,7 @@ import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
-import type { TPurchaseSummaryTxn } from "./PurchaseSummary-types";
+import type { TPPOGenerated, TPurchaseSummaryTxn } from "./PurchaseSummary-types";
 import AddPRRequestPage from "./Addprrequestpage";
 import { almsCommonSelect } from "../../api/alms";
 
@@ -24,9 +24,7 @@ function fmtDate(val: unknown): string {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-// Display status derived from LAST_ACTION / FINAL_APPROVED (new schema) —
-// PURCH_STATUS doesn't exist anymore, so the status badge is now computed
-// client-side from whichever tab's data this row came from / its own fields.
+// Display status derived from LAST_ACTION / FINAL_APPROVED
 function statusOf(row: TPurchaseSummaryTxn): string {
   const finalApproved = String((row as any).FINAL_APPROVED ?? "").toUpperCase();
   const lastAction = String((row as any).LAST_ACTION ?? "").toUpperCase();
@@ -88,34 +86,67 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
     selectedFlowCode: "",
   });
 
- 
+  // ── Query with proper typing ──────────────────────────────────────────────
   const activeCode3 = TAB_CODE3[activeTab];
-  const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["purchase-request-page", loginid, companyCode, activeCode3],
-    queryFn: () =>
-      almsCommonSelect<TPurchaseSummaryTxn>({
-        parameter: "PS_PREQUEST_ENTRY_TAB_LIST",
-        loginid,
-        code1: companyCode,
-        code2: loginid,
-        code3: activeCode3,
-        code4: "",
-      }),
-    enabled: !!loginid && !!companyCode,
+  const isPoGeneratedTab = activeCode3 === "POGENERATED";
+
+  // ✅ FIXED: Use separate query for PO Generated tab
+  const prQuery = useQuery({
+    queryKey: ["purchase-request-page", loginid, companyCode, activeCode3, "pr"],
+    queryFn: () => almsCommonSelect<TPurchaseSummaryTxn>({
+      parameter: "PS_PREQUEST_ENTRY_TAB_LIST",
+      loginid,
+      code1: companyCode,
+      code2: loginid,
+      code3: activeCode3,
+      code4: "",
+    }),
+    enabled: !!loginid && !!companyCode && !isPoGeneratedTab,
   });
+
+  const poQuery = useQuery({
+    queryKey: ["purchase-request-page", loginid, companyCode, activeCode3, "po"],
+    queryFn: () => almsCommonSelect<TPPOGenerated>({
+      parameter: "PS_PREQUEST_ENTRY_POGENERATED",
+      loginid,
+      code1: companyCode,
+      code2: loginid,
+      code3: activeCode3,
+      code4: "",
+    }),
+    enabled: !!loginid && !!companyCode && isPoGeneratedTab,
+  });
+
+  // Select correct data based on tab
+  const data = isPoGeneratedTab ? poQuery.data : prQuery.data;
+  const isLoading = isPoGeneratedTab ? poQuery.isLoading : prQuery.isLoading;
+  const isError = isPoGeneratedTab ? poQuery.isError : prQuery.isError;
+  const error = isPoGeneratedTab ? poQuery.error : prQuery.error;
+  const refetch = isPoGeneratedTab ? poQuery.refetch : prQuery.refetch;
 
   const rows = useMemo(() => data ?? [], [data]);
 
-  // ── Client-side search filtering only (tab filtering now happens server-side) ──
+  // ── Client-side search filtering ──────────────────────────────────────────
   const filteredRows = useMemo(() => {
     if (!query.trim()) return rows;
     const q = query.toLowerCase();
-    return rows.filter((row) =>
+
+    // For PO Generated tab, filter PO data
+    if (isPoGeneratedTab) {
+      return (rows as TPPOGenerated[]).filter((row) =>
+        [row.PO_NUMBER, row.PR_NUMBER, row.SUPPLIER_CODE, row.SUPPLIER_NAME, row.PR_DESCRIPTION]
+          .filter(Boolean)
+          .some((field) => String(field).toLowerCase().includes(q))
+      );
+    }
+
+    // For PR tabs
+    return (rows as TPurchaseSummaryTxn[]).filter((row) =>
       [row.REQUEST_NUMBER, (row as any).DESCRIPTION, (row as any).SUPPLIER, (row as any).SUPPLIER_NAME]
         .filter(Boolean)
         .some((field) => String(field).toLowerCase().includes(q))
     );
-  }, [rows, query]);
+  }, [rows, query, isPoGeneratedTab]);
 
   // ── Auto-dismiss notice ────────────────────────────────────────────────────
   useEffect(() => {
@@ -132,12 +163,12 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
     setFlowConfirm({ open: true, loading: true, rows: [], selectedFlowCode: "" });
     try {
       const rawRows = await almsCommonSelect<Record<string, unknown>>({
-        parameter: "PS_PREQUEST_ENTRY_UserFlowCode", // Need to confirm this parameter name with Sir
+        parameter: "PS_PREQUEST_ENTRY_UserFlowCode",
         loginid,
-        code1: companyCode,   // P_CODE1
-        code2: loginid,       // P_CODE2 - logged-in user
-        code3: "Admin",       // P_CODE3 - EMP_ID_LEVEL1 (to be replaced with actual employee code)
-        code4: "",            // P_CODE4
+        code1: companyCode,
+        code2: loginid,
+        code3: "Admin",
+        code4: "",
       });
       const flowRows = rawRows
         .map((row) => ({
@@ -197,10 +228,6 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
   const closePopup = (refresh?: boolean) => {
     setTaskPopup((prev) => ({ ...prev, open: false }));
     if (refresh) {
-      // Invalidate every tab's cached query, not just the active one — the
-      // saved PR might now belong to a different tab than the one open
-      // (e.g. saving as Draft should land it in Pending regardless of which
-      // tab was active when "Add PR" was clicked).
       queryClient.invalidateQueries({ queryKey: ["purchase-request-page", loginid, companyCode] });
       setNotice({ type: "success", message: "Purchase request updated successfully" });
     }
@@ -211,8 +238,29 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
     refetch();
   };
 
-  // ── Columns ──────────────────────────────────────────────────────────────────
-  const columns = useMemo<ColumnDef<TPurchaseSummaryTxn>[]>(
+  // ── View PO Handler ────────────────────────────────────────────────────────
+  const handlePoView = (row: TPPOGenerated) => {
+    // ✅ Handle null PR_NUMBER
+    const prNumber = row.PR_NUMBER || '';
+
+    setTaskPopup({
+      open: true,
+      title: `PO - ${row.PO_NUMBER}`,
+      data: {
+        // ✅ Only pass PR number if it exists
+        existingData: prNumber ? { REQUEST_NUMBER: prNumber } as any : null,
+        isEditMode: false,
+        isViewMode: true,
+        flowCode: "",
+        flowDescription: "",
+        docType: row.DOC_TYPE || "LPO",
+        docNo: String(row.PO_NUMBER),
+      } as any,
+    });
+  };
+
+  // ── PR Columns ─────────────────────────────────────────────────────────────
+  const prColumns = useMemo<ColumnDef<TPurchaseSummaryTxn>[]>(
     () => [
       {
         accessorKey: "REQUEST_NO",
@@ -271,10 +319,16 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
         },
       },
       {
-        accessorKey: "next_action_by",
-        header: "Next Action By",
-        cell: ({ row }) => (row.original as any).NEXT_ACTION_BY || "—",
-      },
+  accessorKey: "next_action_by",
+  header: "Next Action By",
+  cell: ({ row }) => {
+    const r = row.original as any;
+    if (!r.NEXT_ACTION_BY) return "—";
+    return r.NEXT_ACTION_BY_NAME
+      ? `${r.NEXT_ACTION_BY} - ${r.NEXT_ACTION_BY_NAME}`
+      : r.NEXT_ACTION_BY;
+  },
+},
       {
         id: "actions",
         header: "Actions",
@@ -304,55 +358,93 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
     []
   );
 
-  // alag column set sirf PO Generated tab ke liye
-const poColumns = useMemo<ColumnDef<any>[]>(() => [
-  {
-    accessorKey: "REQUEST_NUMBER",
-    header: "Request No",
-    cell: ({ row }) => (
-      <span className="font-semibold text-[#082A89]">{row.original.REQUEST_NUMBER}</span>
-    ),
-  },
-  {
-    accessorKey: "REQUEST_DATE",
-    header: "Request Date",
-    cell: ({ row }) => fmtDate(row.original.REQUEST_DATE),
-  },
-  {
-    accessorKey: "SUPPLIER",
-    header: "Supplier",
-    cell: ({ row }) => {
-      const r = row.original;
-      return r.SUPPLIER_NAME ? `${r.SUPPLIER} - ${r.SUPPLIER_NAME}` : (r.SUPPLIER || "—");
-    },
-  },
-  {
-    id: "actions",
-    header: "Action",
-    enableSorting: false,
-    cell: ({ row }) => (
-      <Button size="icon" variant="ghost" title="Edit" onClick={() => handlePoEdit(row.original)}>
-        <Edit2 size={15} />
-      </Button>
-    ),
-  },
-], []);
+  // ── PO Columns ─────────────────────────────────────────────────────────────
+  // In PurchaseRequestPage.tsx - poColumns
 
-const handlePoEdit = (row: any) => {
-  setTaskPopup({
-    open: true,
-    title: `PO - ${row.DOC_NO}`,
-    data: {
-      existingData: { REQUEST_NUMBER: row.REQUEST_NUMBER } as any,
-      isEditMode: true,
-      isViewMode: false,
-      flowCode: "",
-      flowDescription: "",
-      docType: row.DOC_TYPE,         // NEW
-      docNo: String(row.DOC_NO), // NEW — isi se items scope honge
-    } as any,
-  });
-};
+  const poColumns = useMemo<ColumnDef<TPPOGenerated>[]>(
+    () => [
+      {
+        accessorKey: "PO_NUMBER",
+        header: "PO Number",
+        cell: ({ row }) => (
+          <span className="font-semibold text-[#082A89]">
+            {row.original.PO_NUMBER}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "PO_DATE",
+        header: "PO Date",
+        cell: ({ row }) => row.original.PO_DATE || "NA",
+      },
+      {
+        accessorKey: "SUPPLIER_CODE",
+        header: "Supplier",
+        cell: ({ row }) => {
+          const r = row.original;
+          // ✅ Handle null values
+          if (r.SUPPLIER_CODE && r.SUPPLIER_NAME) {
+            return `${r.SUPPLIER_CODE} - ${r.SUPPLIER_NAME}`;
+          }
+          if (r.SUPPLIER_CODE) {
+            return r.SUPPLIER_CODE;
+          }
+          return "—";
+        },
+      },
+      {
+        accessorKey: "PR_NUMBER",
+        header: "PR Number",
+        cell: ({ row }) => (
+          <span className="font-medium text-blue-600">
+            {row.original.PR_NUMBER || "—"}  {/* ✅ Handle null */}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "PR_DATE",
+        header: "PR Date",
+        cell: ({ row }) => row.original.PR_DATE || "NA",
+      },
+      {
+        accessorKey: "PR_DESCRIPTION",
+        header: "PR Description",
+        cell: ({ row }) => row.original.PR_DESCRIPTION || "—",
+      },
+      {
+        accessorKey: "TOTAL_ITEMS",
+        header: "Items",
+        cell: ({ row }) => row.original.TOTAL_ITEMS || 0,
+      },
+      {
+        accessorKey: "PO_TOTAL_AMOUNT",
+        header: "PO Amount",
+        cell: ({ row }) => {
+          const amt = row.original.PO_TOTAL_AMOUNT || 0;
+          return <span className="font-semibold">{Number(amt).toLocaleString()}</span>;
+        },
+      },
+      {
+        id: "actions",
+        header: "Action",
+        enableSorting: false,
+        cell: ({ row }) => (
+          <Button
+            size="icon"
+            variant="ghost"
+            title="View PO"
+            onClick={() => handlePoView(row.original)}
+          >
+            <Eye size={15} />
+          </Button>
+        ),
+      },
+    ],
+    []
+  );
+
+  // ── Select columns based on tab ──────────────────────────────────────────
+  const columns = isPoGeneratedTab ? poColumns : prColumns;
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -415,26 +507,27 @@ const handlePoEdit = (row: any) => {
       {/* Data Table */}
       <div className="min-h-[650px]">
         <DataTable
-          columns={activeTab === 5 ? poColumns : columns}
+          columns={columns as ColumnDef<any, unknown>[]}
+          key={activeCode3}
           data={filteredRows}
-          title={isLoading ? "Loading" : `${filteredRows.length.toLocaleString()} Purchase Requests`}
-          subtitle="Purchase Request List"
+          title={isLoading ? "Loading" : `${filteredRows.length.toLocaleString()} ${isPoGeneratedTab ? "Purchase Orders" : "Purchase Requests"}`}
+          subtitle={isPoGeneratedTab ? "Generated PO List" : "Purchase Request List"}
           searchValue={query}
           onSearchChange={(value) => {
             setQuery(value);
             setPageIndex(0);
           }}
-          searchPlaceholder="Search request no, description, user..."
+          searchPlaceholder={isPoGeneratedTab ? "Search PO number, PR number, supplier..." : "Search request no, description, user..."}
           loading={isLoading}
-          emptyText="No purchase requests found"
+          emptyText={isPoGeneratedTab ? "No purchase orders generated yet" : "No purchase requests found"}
           height={620}
           minWidth={1000}
           density="grid"
           enablePagination
           manualPagination
           enableExport
-          exportFilename="purchase-requests.csv"
-          initialSorting={[{ id: "request_date", desc: true }]}
+          exportFilename={isPoGeneratedTab ? "purchase-orders.csv" : "purchase-requests.csv"}
+          initialSorting={[{ id: isPoGeneratedTab ? "PO_DATE" : "request_date", desc: true }]}
           pageIndex={pageIndex}
           pageSize={pageSize}
           totalRows={filteredRows.length}
@@ -448,7 +541,7 @@ const handlePoEdit = (row: any) => {
             setPageSize(nextPageSize);
             setPageIndex(0);
           }}
-          getRowId={(row, index) => row.REQUEST_NUMBER || `temp-${index}`}
+          getRowId={(row: any, index) => row.REQUEST_NUMBER || row.PO_NUMBER || `temp-${index}`}
         />
       </div>
 
@@ -529,7 +622,7 @@ const handlePoEdit = (row: any) => {
             }
             flowCode={taskPopup.data.flowCode}
             flowDescription={taskPopup.data.flowDescription}
-            docType={(taskPopup.data as any).docType}   // NEW
+            docType={(taskPopup.data as any).docType}
             docNo={(taskPopup.data as any).docNo}
             onClose={closePopup}
           />
