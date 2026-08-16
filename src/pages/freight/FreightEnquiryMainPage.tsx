@@ -355,9 +355,12 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
     void loadEnquiries();
   }, [screenType, userInfo?.company_code, userInfo?.COMPANY_CODE]);
 
-  const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
-    setHeader((current) => ({ ...current, [field]: value }));
-  };
+const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
+  setHeader((current) => ({ ...current, [field]: value }));
+  if (field === "transport_mode") {
+    setDetails((current) => current.map((row) => ({ ...row, transport_mode: value })));
+  }
+};
 
   // const applyHeaderLookup = (field: keyof EnquiryHeader, value: string, row: LookupRow | null) => {
   //   setHeader((current) => {
@@ -527,10 +530,11 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
         return {
           ...line,
           act_code: value,
-          activity: lookupText(row || {}, "activity") || line.activity,
-          quantity,
-          uom: lookupText(row || {}, "uom") || line.uom,
-          bill_rate: billRate,
+        activity: lookupText(row || {}, "activity") || line.activity,
+        transport_mode: header.transport_mode || line.transport_mode,
+        quantity,
+        uom: lookupText(row || {}, "uom") || line.uom,
+        bill_rate: billRate,
           cost_rate: costRate,
           bill: multiplyText(quantity, billRate),
           cost: multiplyText(quantity, costRate),
@@ -1219,7 +1223,13 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
 
                 <SectionPanel className="lg:col-span-6" icon={Activity} title="Schedule And Sales" meta={header.salesman_code || "Sales executive pending"}>
                   <div className="grid gap-1 sm:grid-cols-2">
-                    <FormInput label="Transit Time" value={header.transit_time} onChange={(value) => setHeaderField("transit_time", value)} />
+                    <FormInput
+                      label="Transit Time"
+                      type="datetime-local"
+                      value={toInputDateTime(header.transit_time)}
+                      onChange={(value) => setHeaderField("transit_time", fromInputDateTime(value))}
+                      inputClassName="font-semibold"
+                    />
                     <FormInput label="Frequency" value={header.frequency} onChange={(value) => setHeaderField("frequency", value)} />
                     <FormLookup label="Sales Executive" value={header.salesman_code} displayValue={headerNames.salesman_name} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Sales Executive" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} />
                     <FormInput label="Ready Date" type="date" value={header.schedule_date} onChange={(value) => setHeaderField("schedule_date", value)} />
@@ -1267,54 +1277,59 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
                 </Button>
               </div>
               <div className="max-h-[calc(100vh-360px)] overflow-auto rounded-md border">
-                <table className="min-w-[1320px] w-full border-collapse text-xs">
-                  <thead>
-                    <tr className="sticky top-0 z-10 border-b bg-muted text-left text-[11px] uppercase text-muted-foreground">
-                      {["Act Code", "Activity", "Mode", "Origin", "Destination", "Qty", "UOM", "Bill Rate", "Cost Rate", "Bill", "Cost", "Currency", "Remarks", ""].map((label) => (
-                        <th key={label} className="px-1.5 py-1.5 font-semibold">{label}</th>
-                      ))}
+        <table className="min-w-[1880px] w-full border-collapse text-xs">
+                        <thead>
+                          <tr className="sticky top-0 z-10 border-b bg-muted text-left text-[11px] uppercase text-muted-foreground">
+              <th className="w-[360px] px-1.5 py-1.5 font-semibold">Activity Code</th>
+              <th className="w-[120px] px-1.5 py-1.5 font-semibold">Mode</th>
+              <th className="w-[130px] px-1.5 py-1.5 font-semibold">Origin</th>
+              <th className="w-[130px] px-1.5 py-1.5 font-semibold">Destination</th>
+              <th className="w-[90px] px-1.5 py-1.5 font-semibold">Qty</th>
+              <th className="w-[90px] px-1.5 py-1.5 font-semibold">UOM</th>
+              <th className="w-[310px] px-1.5 py-1.5 font-semibold">Bill Rate</th>
+              <th className="w-[310px] px-1.5 py-1.5 font-semibold">Cost Rate</th>
+              <th className="w-[290px] px-1.5 py-1.5 font-semibold">Bill</th>
+              <th className="w-[290px] px-1.5 py-1.5 font-semibold">Cost</th>
+                            <th className="w-[110px] px-1.5 py-1.5 font-semibold">Currency</th>
+                            <th className="w-[260px] px-1.5 py-1.5 font-semibold">Remarks</th>
+                            <th className="w-12 px-1.5 py-1.5 font-semibold" />
                     </tr>
                   </thead>
                   <tbody>
                     {details.map((row, index) => (
                       <tr key={row.srno} className="border-b transition hover:bg-primary/5 last:border-0">
-                        <td className="px-1.5 py-1.5">
-                          <LookupField
-                            compact
-                            label="Activity"
-                            value={row.act_code}
-                            valueField="activity_code"
-                            displayFields={["activity_code", "activity"]}
+                              <td className="px-1.5 py-1.5">
+                                <LookupField
+                                  compact
+                    label="Activity Code"
+                                  value={row.act_code}
+                                  valueField="activity_code"
+                                  displayFields={["activity_code", "activity"]}
                             columns={[
                               { field: "activity_code", header: "Code" },
                               { field: "activity", header: "Activity" },
                               { field: "uom", header: "UOM" },
                               { field: "bill", header: "Bill" },
                               { field: "cost", header: "Cost" },
-                            ]}
-                            loadOptions={() => loadActivityLookup(header.company_code)}
-                            onChange={(value, lookupRow) => applyDetailActivityLookup(index, value, lookupRow)}
-                            placeholder="Activity"
-                          />
-                        </td>
-                        <CellInput value={row.activity} onChange={(value) => setDetailField(index, "activity", value)} className="min-w-52" />
-                        <td className="px-2 py-2">
-                          <select
-                            className={fieldClassName}
-                            value={row.transport_mode}
-                            onChange={(event) => setDetailField(index, "transport_mode", event.target.value)}
-                          >
-                            {transportModes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                          </select>
-                        </td>
-                        <CellInput value={row.origin_port} onChange={(value) => setDetailField(index, "origin_port", value)} />
-                        <CellInput value={row.destination_port} onChange={(value) => setDetailField(index, "destination_port", value)} />
-                        <CellInput type="number" value={row.quantity} onChange={(value) => setDetailField(index, "quantity", value)} className="w-24 text-right" />
-                        <CellInput value={row.uom} onChange={(value) => setDetailField(index, "uom", value)} className="w-24" />
-                        <CellInput type="number" value={row.bill_rate} onChange={(value) => setDetailField(index, "bill_rate", value)} className="w-28 text-right" />
-                        <CellInput type="number" value={row.cost_rate} onChange={(value) => setDetailField(index, "cost_rate", value)} className="w-28 text-right" />
-                        <CellInput type="number" value={row.bill} onChange={(value) => setDetailField(index, "bill", value)} className="w-28 text-right" />
-                        <CellInput type="number" value={row.cost} onChange={(value) => setDetailField(index, "cost", value)} className="w-28 text-right" />
+                                  ]}
+                                  loadOptions={() => loadActivityLookup(header.company_code)}
+                                  onChange={(value, lookupRow) => applyDetailActivityLookup(index, value, lookupRow)}
+                    placeholder="Activity code / name"
+                  />
+                </td>
+                <td className="px-1.5 py-1.5">
+                  <div className="flex h-8 w-28 items-center rounded-md border border-primary/20 bg-primary/5 px-2 text-xs font-semibold text-primary">
+                    {modeLabel(row.transport_mode || header.transport_mode)}
+                  </div>
+                </td>
+                <CellInput value={row.origin_port} onChange={(value) => setDetailField(index, "origin_port", value)} className="w-32" />
+                <CellInput value={row.destination_port} onChange={(value) => setDetailField(index, "destination_port", value)} className="w-32" />
+                <CellInput type="number" value={row.quantity} onChange={(value) => setDetailField(index, "quantity", value)} className="w-20 text-right" />
+                <CellInput value={row.uom} onChange={(value) => setDetailField(index, "uom", value)} className="w-20" />
+                <CellInput type="number" value={row.bill_rate} onChange={(value) => setDetailField(index, "bill_rate", value)} className="w-72 text-right" />
+                <CellInput type="number" value={row.cost_rate} onChange={(value) => setDetailField(index, "cost_rate", value)} className="w-72 text-right" />
+                <CellInput type="number" value={row.bill} onChange={(value) => setDetailField(index, "bill", value)} className="w-72 text-right" />
+                <CellInput type="number" value={row.cost} onChange={(value) => setDetailField(index, "cost", value)} className="w-72 text-right" />
                         <CellInput value={row.curr_code} onChange={(value) => setDetailField(index, "curr_code", value)} className="w-24" />
                         <CellInput value={row.remarks} onChange={(value) => setDetailField(index, "remarks", value)} className="min-w-56" />
                         <td className="px-2 py-2 text-right">
@@ -2128,6 +2143,33 @@ function toDateInputValue(input: string) {
   const match = input.match(/^(\d{2})[/-](\d{2})[/-](\d{4})/);
   if (match) return `${match[3]}-${match[2]}-${match[1]}`;
   return "";
+}
+
+function toInputDateTime(value: string) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "";
+
+  const isoMatch = normalized.match(/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}:\d{2})/);
+  if (isoMatch) return `${isoMatch[1]}T${isoMatch[2]}`;
+
+  const ymdMatch = normalized.match(/^(\d{4}-\d{2}-\d{2})$/);
+  if (ymdMatch) return `${ymdMatch[1]}T00:00`;
+
+  const dmyMatch = normalized.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?/);
+  if (dmyMatch) {
+    const [, day, month, year, hour = "00", minute = "00"] = dmyMatch;
+    return `${year}-${month}-${day}T${hour}:${minute}`;
+  }
+
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return "";
+
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`;
+}
+
+function fromInputDateTime(value: string) {
+  return value ? value.replace("T", " ") : "";
 }
 
 function formatDisplayDate(input: string) {
