@@ -1285,19 +1285,19 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
                 <table className="border-collapse text-[11px]" style={{ width: "max-content" }}>
                   <thead>
                     <tr className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 text-left text-[10px] font-bold uppercase tracking-wide text-slate-700">
-                      <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Activity Code</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "90px" }}>Activity Code</th>
                       <th className="px-1.5 py-1.5" style={{ width: "200px" }}>Activity Name</th>
                       <th className="px-1.5 py-1.5" style={{ width: "70px" }}>Mode</th>
-                      <th className="px-1.5 py-1.5" style={{ width: "150px" }}>Origin</th>
-                      <th className="px-1.5 py-1.5" style={{ width: "150px" }}>Dest</th>
-                      <th className="px-1.5 py-1.5" style={{ width: "60px" }}>Qty</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "160px" }}>Origin</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "160px" }}>Dest</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "70px" }}>Qty</th>
                       <th className="px-1.5 py-1.5" style={{ width: "70px" }}>UOM</th>
                       <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Bill</th>
                       <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Cost</th>
                       <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Curr</th>
                       <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Bill Rate</th>
                       <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Cost Rate</th>
-                      <th className="px-1.5 py-1.5" style={{ width: "210px" }}>Remarks</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "200px" }}>Remarks</th>
                       <th className="px-1.5 py-1.5 text-right" style={{ width: "42px" }}/>
                     </tr>
                   </thead>
