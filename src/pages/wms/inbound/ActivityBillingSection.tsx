@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState, useCallback } from "react";
 import { LookupField } from "../../../components/ui/LookupField";
 import { Button } from "../../../components/ui/Button";
-import { Plus, RefreshCw, Save, X } from "lucide-react";
+import { Plus, RefreshCw, Save, X, Pencil, Trash2 } from "lucide-react";
 import { Input } from "../../../components/ui/Input";
 import { DataTable } from "../../../components/ui/DataTable";
 import { type WmsRow, value } from "../../../utils/inboundHelpers"; // adjust path to match your project
@@ -18,6 +18,7 @@ function deriveTaxPercentFromCategory(code: string): number {
 function sqlEscape(str: string) {
   return str.replace(/'/g, "''");
 }
+
 // In the component props, keep using ActivityRow — it's now just WmsRow
 export function ActivityBillingSection({
   companyCode,
@@ -57,6 +58,7 @@ export function ActivityBillingSection({
   executeWmsInboundSql: (sql: string) => Promise<any>;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editIndex, setEditIndex] = useState<number | null>(null);
 
   // ── Queries (unchanged) ──
   const { data: activityData = [] } = useQuery({
@@ -195,52 +197,105 @@ export function ActivityBillingSection({
     });
   }, [setActivityRows, markEdited]);
 
+  // ── Add / Edit Dialog State ──
+  const emptyForm = (): ActivityRow => {
+    const noCompntcatMaster = !txCompntcatCode1Loading && txCompntcatCode1Data.length === 0;
 
-    // ── Add Dialog State ──
-    const emptyForm = (): ActivityRow => {
-        const noCompntcatMaster = !txCompntcatCode1Loading && txCompntcatCode1Data.length === 0;
-
-        return {
-        act_code: "",
-        activity: "",
-        quantity: 0,
-        bill_rate: 0,
-        bill: 0,
-        cost_rate: 0,
-        cost: 0,
-        other_services: "",
-        TX_COMPNT_AMT_1: 0,
-        TX_COMPNT_LCURAMT_1: 0,
-        TX_COMPNT_AMT_1_COST: 0,
-        TX_COMPNT_LCURAMT_1_COST: 0,
-        // always present, just vary by legacy rule
-        TX_COMPNTCAT_CODE_1: noCompntcatMaster ? "11100" : "",
-        TX_COMPNTCAT_CODE_1_COST: noCompntcatMaster ? "11100" : "",
-        TX_COMPNT_PERC_1: noCompntcatMaster ? 5 : 0,
-        TX_COMPNT_PERC_1_COST: noCompntcatMaster ? 5 : 0,
-        TX_CAT_CODE: noCompntcatMaster ? "" : "00",
-        TX_CAT_CODE_COST: noCompntcatMaster ? "" : "00",
-        };
+    return {
+      act_code: "",
+      activity: "",
+      quantity: 0,
+      bill_rate: 0,
+      bill: 0,
+      cost_rate: 0,
+      cost: 0,
+      other_services: "",
+      TX_COMPNT_AMT_1: 0,
+      TX_COMPNT_LCURAMT_1: 0,
+      TX_COMPNT_AMT_1_COST: 0,
+      TX_COMPNT_LCURAMT_1_COST: 0,
+      // always present, just vary by legacy rule
+      TX_COMPNTCAT_CODE_1: noCompntcatMaster ? "11100" : "",
+      TX_COMPNTCAT_CODE_1_COST: noCompntcatMaster ? "11100" : "",
+      TX_COMPNT_PERC_1: noCompntcatMaster ? 5 : 0,
+      TX_COMPNT_PERC_1_COST: noCompntcatMaster ? 5 : 0,
+      TX_CAT_CODE: noCompntcatMaster ? "" : "00",
+      TX_CAT_CODE_COST: noCompntcatMaster ? "" : "00",
     };
+  };
 
   const [formRow, setFormRow] = useState<ActivityRow>(emptyForm());
 
   const openAddDialog = () => {
+    setEditIndex(null);
     setFormRow(emptyForm());
     setDialogOpen(true);
   };
 
+  const openEditDialog = useCallback((index: number) => {
+    setEditIndex(index);
+    setFormRow({ ...activityRows[index] });
+    setDialogOpen(true);
+  }, [activityRows]);
+
+  const handleDelete = useCallback((index: number) => {
+    const row = activityRows[index];
+    const key = String(value(row, "act_code") || `row_${index}`);
+    setActivityEdited((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setActivityRows((cur) => cur.filter((_, i) => i !== index));
+  }, [activityRows, setActivityRows, setActivityEdited]);
+
   const commitFormRow = () => {
     const final = recalcRow(formRow);
-    setActivityRows((cur) => [...cur, final]);
+    if (editIndex !== null) {
+      setActivityRows((cur) => {
+        const next = cur.map((r, i) => (i === editIndex ? final : r));
+        return next;
+      });
+      markEdited(final, editIndex);
+    } else {
+      setActivityRows((cur) => [...cur, final]);
+    }
     setDialogOpen(false);
+    setEditIndex(null);
   };
 
-const columns = useMemo(() => {
+  const columns = useMemo(() => {
     const cellClass = "px-3 py-1.5";
     const textClass = "text-sm text-foreground";
 
     return [
+      {
+        id: "actions",
+        header: "Actions",
+        size: 90,
+        cell: ({ row }: { row: { original: ActivityRow; index: number } }) => (
+          <div className={`${cellClass} flex items-center gap-1`}>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              onClick={() => openEditDialog(row.index)}
+              title="Edit"
+            >
+              <Pencil size={14} />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 text-destructive hover:text-destructive"
+              onClick={() => handleDelete(row.index)}
+              title="Delete"
+            >
+              <Trash2 size={14} />
+            </Button>
+          </div>
+        ),
+      },
       {
         id: "activity",
         header: "Activity",
@@ -440,7 +495,7 @@ const columns = useMemo(() => {
         ),
       },
     ];
-  }, []);
+  }, [openEditDialog, handleDelete]);
 
   // ── Toolbar ──
   const toolbar = (
@@ -458,6 +513,8 @@ const columns = useMemo(() => {
   );
 
   if (!isActivityBilling) return null;
+
+  const isEditing = editIndex !== null;
 
   return (
     <section className="grid gap-3">
@@ -502,14 +559,16 @@ const columns = useMemo(() => {
         )}
       </div>
 
-      {/* ── Add Activity Dialog ── */}
+      {/* ── Add / Edit Activity Dialog ── */}
       {dialogOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 backdrop-blur-[2px]">
           <div className="grid w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-xl border bg-card shadow-2xl">
             {/* Dialog Header */}
             <div className="flex items-center justify-between border-b px-5 py-3">
-              <h3 className="text-sm font-semibold text-foreground">Add Activity</h3>
-              <Button size="icon" variant="ghost" onClick={() => setDialogOpen(false)}>
+              <h3 className="text-sm font-semibold text-foreground">
+                {isEditing ? "Edit Activity" : "Add Activity"}
+              </h3>
+              <Button size="icon" variant="ghost" onClick={() => { setDialogOpen(false); setEditIndex(null); }}>
                 <X size={16} />
               </Button>
             </div>
@@ -775,11 +834,19 @@ const columns = useMemo(() => {
 
             {/* Dialog Footer */}
             <div className="flex items-center justify-end gap-2 px-5 py-3">
-              <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>
+              <Button variant="outline" size="sm" onClick={() => { setDialogOpen(false); setEditIndex(null); }}>
                 Cancel
               </Button>
               <Button size="sm" onClick={commitFormRow}>
-                <Plus size={14} className="mr-1" /> Add to Table
+                {isEditing ? (
+                  <>
+                    <Save size={14} className="mr-1" /> Save Changes
+                  </>
+                ) : (
+                  <>
+                    <Plus size={14} className="mr-1" /> Add to Table
+                  </>
+                )}
               </Button>
             </div>
           </div>
