@@ -159,3 +159,20 @@ export type TPRterm = {
   IS_MANDATORY: 'N';
   REMARKS: '';
 };
+
+
+// In PurchaseSummary-types.ts or a new types file
+export interface TPPOGenerated {
+  PO_NUMBER: number;
+  PO_DATE: string;
+  SUPPLIER_CODE: string | null;      // PR se supplier, null ho sakta hai
+  SUPPLIER_NAME: string | null;      // PR se supplier name, null ho sakta hai
+  PR_NUMBER: string | null;          // PR number, null ho sakta hai
+  PR_DATE: string | null;            // PR date, null ho sakta hai
+  PR_DESCRIPTION: string | null;     // PR description, null ho sakta hai
+  PR_AMOUNT: number | null;          // PR amount, null ho sakta hai
+  DOC_TYPE: string;
+  PO_REMARKS: string | null;
+  TOTAL_ITEMS: number;
+  PO_TOTAL_AMOUNT: number | null;    // PO total, null ho sakta hai
+}
