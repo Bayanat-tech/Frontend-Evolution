@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Plus, Edit2, Save, Send, X, CheckCircle,
-  ChevronLeft, Paperclip, FileText, Trash2,
+  Plus, Save, Send, X, CheckCircle,
+  ChevronLeft, Paperclip, FileText,
   Printer,
 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
@@ -17,7 +17,7 @@ import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 
 import type { TPRHeader, TPRItem } from "./PurchaseSummary-types";
-import { almsCommonSelect, almsSave, almsSavePrequestBulk } from "../../api/alms";
+import { almsCommonSelect, almsGeneratePOFromPR, almsSave, almsSavePrequestBulk } from "../../api/alms";
 import { openPRPurchaseReport } from "../../api/transactions";
 
 type AddPRRequestPageProps = {
@@ -26,6 +26,8 @@ type AddPRRequestPageProps = {
   existingData?: { request_number?: string };
   flowCode?: string;
   flowDescription?: string;
+  docType?: string;   
+  docNo?: string;  
   onClose: (refresh?: boolean) => void;
 };
 
@@ -37,9 +39,6 @@ function fmt3(n: number) {
 function num(v: unknown) { return Number(v) || 0; }
 function newId() { return `${Date.now()}_${Math.random().toString(36).slice(2)}`; }
 
-// =============================================
-// 🔥 NEW: Clean commas from numeric strings
-// =============================================
 function cleanNumericData(data: any): any {
   const numericFields = [
     'AMOUNT', 'CURRENCY_RATE', 'ITEM_RATE', 'ITEM_QTY',
@@ -111,7 +110,7 @@ function blankItem(srNo: number, requestNumber: string, companyCode: string, hdr
   };
 }
 
-const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCode, flowDescription, onClose }: AddPRRequestPageProps) => {
+const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCode, flowDescription, docType = "PR", docNo, onClose }: AddPRRequestPageProps) => {
   const { user } = useAuth();
   const companyCode = user?.company_code ?? "";
   const loginid = user?.loginid ?? "";
@@ -122,39 +121,27 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
   const [requestNumber, setRequestNumber] = useState<string | undefined>(existingData?.request_number);
   const [header, setHeader] = useState<Partial<TPRHeader>>({});
   const [items, setItems] = useState<TPRItem[]>([]);
-
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [sendBackOpen, setSendBackOpen] = useState(false);
   const [remarkText, setRemarkText] = useState("");
   const [selectedSendBackTo, setSelectedSendBackTo] = useState("");
-
-  // ─── Tab State ─────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<"items" | "terms">("items");
-
-  // ─── Supplier Terms state ─────────────────────────────────────────
   const [terms, setTerms] = useState<any[]>([]);
-
-  // ─── Ref for scroll container ─────────────────────────────────────
   const tableContainerRef = useRef<HTMLDivElement>(null);
-
   const disabled = isViewMode || saving;
-
-  // PDO Type mapping - Display values based on backend data
   const PDO_TYPE_MAP: Record<string, string> = {
     'P': 'PDO-OTO',
     'Q': 'PDO-NON-OTO',
     'N': 'NON-PDO'
   };
-
-  // Helper function to get display value from data value
   const getPdoDisplayValue = (dataValue: string | undefined | null): string => {
     if (!dataValue) return '';
     return PDO_TYPE_MAP[dataValue] || dataValue;
   };
 
-  // ─── Lookup Queries ───────────────────────────────────────────────
+
   const { data: itemCodes = [] } = useQuery<LookupItem[]>({
     queryKey: ["pr-items-lookup", companyCode],
     queryFn: () => almsCommonSelect({
@@ -228,7 +215,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     enabled: !!companyCode,
   });
 
-  // ─── Header & Items Queries ──────────────────────────────────────
+  
   const { data: hdrList = [] } = useQuery<TPRHeader[]>({
     queryKey: ["pr-header", requestNumber, companyCode],
     queryFn: () => almsCommonSelect<TPRHeader>({
@@ -249,10 +236,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     if (hdrList.length > 0) {
       setHeader(hdrList[0]);
       setLoading(false);
-    } else if (requestNumber) {
-      setLoading(false);
-      setNotice({ type: "error", message: "Could not load this Purchase Request. It may not exist or DOC_TYPE mismatch." });
-    }
+    } 
   }, [hdrList, isEditMode, isViewMode, requestNumber]);
 
   useEffect(() => {
@@ -265,10 +249,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     }));
   }, [isEditMode, flowCode, flowDescription]);
 
-  // On edit/view load, the header row from PS_PREQUEST_ENTRY_HEADER_PAGE only carries
-  // CURR_CODE / TX_CAT_CODE (no *_NAME columns). Backfill the display names from the
-  // lookup lists once they're available — same pattern as the item-list enrichment below —
-  // so Currency and Tax Category show "CODE - NAME" instead of just the code.
   useEffect(() => {
     if (!header.CURR_CODE && !header.TX_CAT_CODE) return;
     const needsCurrName = !!header.CURR_CODE && !header.CURR_NAME && currencyList.length > 0;
@@ -280,18 +260,21 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       TX_CAT_NAME: prev.TX_CAT_NAME || taxCodes.find((t) => t.TX_CAT_CODE === prev.TX_CAT_CODE)?.TX_CAT_NAME || prev.TX_CAT_NAME,
     }));
   }, [currencyList, taxCodes, header.CURR_CODE, header.TX_CAT_CODE, header.CURR_NAME, header.TX_CAT_NAME]);
+const isPoMode = docType !== "PR";
+  const itemDocType = docType || "PR";
+const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
 
   const { data: itemList = [] } = useQuery<TPRItem[]>({
-    queryKey: ["pr-item-list", requestNumber, companyCode],
+    queryKey: ["pr-item-list",itemDocType, itemDocNo, requestNumber, companyCode],
     queryFn: () => almsCommonSelect<TPRItem>({
       parameter: "PS_PREQUEST_ENTRY_DETAIL_PAGE",
       loginid,
       code1: companyCode,
-      code2: "PR",
-      code3: requestNumber || "",
+      code2: itemDocType,
+      code3: itemDocNo,
       code4: ""
     }),
-    enabled: isEditMode && !!requestNumber,
+    enabled: (isEditMode || isViewMode) && !!itemDocNo,
   });
   useEffect(() => {
     if (itemList.length === 0 || itemCodes.length === 0) return;
@@ -312,7 +295,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     setLoading(false);
   }, [itemList, itemCodes, costCodes, supplierList, taxCodes, currencyList, header.CURRENCY_RATE]);
 
-  // ─── Supplier Terms Query ──────────────────────────────────────────
+
   const { data: termsList = [] } = useQuery<any[]>({
     queryKey: ["pr-terms", requestNumber, companyCode],
     queryFn: () => almsCommonSelect({
@@ -325,18 +308,28 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     }),
     enabled: isEditMode && !!requestNumber,
   });
+
   useEffect(() => {
     if (termsList.length === 0) return;
-    // TTE_PREQUEST_SUPPL / VW_TTE_PREQUEST_SUPPL don't carry SUPPLIER_NAME (only SUPPLIER
-    // code), so backfill the display name from the supplier lookup — same pattern used
-    // for items — otherwise the Supplier column shows only the code on edit/view reload.
     const enriched = termsList.map((row: any) => ({
       ...row,
       id: row.id || newId(),
       SUPPLIER_NAME: row.SUPPLIER_NAME || supplierList.find((s) => s.SUPPLIER_CODE === row.SUPPLIER)?.SUPPLIER_NAME || "",
     }));
-    setTerms(enriched);
+    setTerms((prev) => {
+      const serverSuppliers = new Set(enriched.map((t) => t.SUPPLIER));
+      const localOnly = prev.filter((t) => t.SUPPLIER && !serverSuppliers.has(t.SUPPLIER));
+      return [...enriched, ...localOnly];
+    });
   }, [termsList, supplierList]);
+
+  useEffect(() => {
+    if (!isPoMode) return;
+    setTerms((prev) => {
+      const supplierCodes = new Set(items.map((i) => i.SUPPLIER));
+      return prev.filter((t) => supplierCodes.has(t.SUPPLIER));
+    });
+  }, [isPoMode, items]);
 
   const setHdr = (field: keyof TPRHeader, value: unknown) => setHeader((prev) => ({ ...prev, [field]: value }));
 
@@ -346,7 +339,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
   const totalFinalAmount = items.reduce((s, r) => s + num(r.FINAL_AMOUNT), 0);
   const [headerExpanded, setHeaderExpanded] = useState(true);
 
-  // ─── Save Functions ───────────────────────────────────────────────
   const saveBulk = async (status: string, remark: string = "", overrides: Partial<Record<string, any>> = {}): Promise<{ success: boolean; message?: string;[key: string]: any }> => {
     const headerData = {
       REQUEST_NUMBER: requestNumber || null,
@@ -513,11 +505,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       REQUEST_QUANTITY: item.REQUEST_QUANTITY || 0,
     }));
 
-    // NOTE: terms rows must read the UPPERCASE keys (SUPPLIER, DLVR_TERM, PAYMENT_TERMS,
-    // WARRANTY, REMARKS) because that's what the Terms tab inputs actually write to state
-    // (see blankTerm / upsertTermForSupplier / updateTermField below). Previously this read
-    // lowercase keys (term.supplier, term.remarks, ...) which were never populated, so every
-    // save silently sent empty strings for the whole Terms & Conditions tab.
     const termsData = terms.map((term) => ({
       SUPPLIER: term.SUPPLIER || "",
       REMARKS: term.REMARKS || "",
@@ -530,7 +517,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       DOC_NO: null
     }));
 
-    // 🔥 CLEAN COMMAS BEFORE SENDING
     const cleanedHeader = cleanNumericData(headerData);
     const cleanedDetails = cleanNumericData(detailsData);
     const cleanedTerms = cleanNumericData(termsData);
@@ -545,11 +531,10 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     return result;
   };
 
-  // saving boolean ki jagah, kaunsa action chal raha hai wo track karo
   const [savingAction, setSavingAction] = useState<string | null>(null);
 
   const runAction = async (status: string, successMsg: string, remark: string = "", overrides: Partial<Record<string, any>> = {}) => {
-    if (saving) return;   // ← ek extra safety: agar already koi action chal raha hai to naya click bilkul ignore karo
+    if (saving) return;   
     setSavingAction(status);
     setNotice(null);
     try {
@@ -566,10 +551,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       setSavingAction(null);
     }
   };
-  // NOTE: status string must be "SAVEASDRAFT" to match TRG_TTE_PREQUEST_HDR_BI / _BU,
-  // which only skip the history + approver-notification work for LAST_ACTION = 'SAVEASDRAFT'.
-  // Sending "DRAFT" here made every draft save run the full approval-notification path — that
-  // was the cause of the slow draft save.
+
   const handleSaveDraft = () => runAction("SAVEASDRAFT", "Draft saved successfully!");
   const handleSubmit = () => runAction("SUBMITTED", "PR submitted successfully!");
 
@@ -579,7 +561,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       return;
     }
     openPRPurchaseReport({
-      parameter: "Amlspf_PRReport",
+      parameter: "PS_PREQUEST_ENTRY_PRReport",
       loginid,
       code1: companyCode,
       code2: requestNumber,
@@ -587,22 +569,48 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
   };
 
   const handleApprove = async () => {
-    if (!requestNumber) return setNotice({ type: "error", message: "No PR to approve" });
-    setSaving(true); setNotice(null);
-    try {
-      const result = await saveBulk("APPROVED", "", {
-      FINAL_APPROVED:  header.isFinalApproval ? "Y" : "N"
-    })
-      if (result.success) {
-        setNotice({ type: "success", message: "PR approved successfully!" });
+  if (!requestNumber) return setNotice({ type: "error", message: "No PR to approve" });
+  setSaving(true); setNotice(null);
+  try {
+    const currentLevel = Number(header.FLOW_LEVEL_RUNNING) || 1;
+    const finalLevel = Number(header.FLOW_LEVEL_FINAL) || 1;
+    const nextLevel = currentLevel + 1;
+    const isFinal = nextLevel >= finalLevel ? "Y" : "N";
+ 
+    const result = await saveBulk("APPROVED", "", {
+      FLOW_LEVEL_RUNNING: nextLevel,
+      FINAL_APPROVED: isFinal,
+    });
+ 
+    if (!result.success) {
+      throw new Error(result.message || "Failed to approve");
+    }
+ 
+    if (isFinal === "Y") {
+      const poResult = await almsGeneratePOFromPR({
+        companyCode,
+        requestNumber,
+        docType: "LPO",
+      });
+ 
+      if (!poResult.success) {
+        setNotice({
+          type: "error",
+          message: `PR approved, but PO generation failed: ${poResult.message || "unknown error"}. Please retry PO generation from the Approved tab.`,
+        });
         onClose(true);
-      } else {
-        throw new Error(result.message || "Failed to approve");
+        return;
       }
-    } catch (err) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to approve" });
-    } finally { setSaving(false); }
-  };
+      setNotice({ type: "success", message: "PR approved & PO generated successfully!" });
+    } else {
+      setNotice({ type: "success", message: "PR approved successfully!" });
+    }
+ 
+    onClose(true);
+  } catch (err) {
+    setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to approve" });
+  } finally { setSaving(false); }
+};
   const handleReject = async () => {
     if (!requestNumber) return setNotice({ type: "error", message: "No PR to reject" });
     setSaving(true); setNotice(null);
@@ -695,7 +703,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     } finally { setSaving(false); }
   };
 
-  // ─── Update all items with header values ──────────────────────
+
   const updateAllItemsWithHeader = (overrides: Partial<TPRHeader> = {}) => {
     const hdr = { ...header, ...overrides };
     setItems((prev) =>
@@ -716,7 +724,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     );
   };
 
-  // ─── Inline Item Functions ────────────────────────────────────────
   const addItemLine = () => {
     const srNo = items.length + 1;
     const blank = blankItem(srNo, requestNumber ?? "", companyCode, header);
@@ -730,7 +737,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     (blank as any).id = newId();
     setItems([...items, blank]);
 
-    // Scroll to bottom after adding new row
+
     setTimeout(() => {
       if (tableContainerRef.current) {
         tableContainerRef.current.scrollTop = tableContainerRef.current.scrollHeight;
@@ -798,11 +805,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     });
   };
 
-  // ─── Supplier Terms Inline Functions ───────────────────────────────
-  // NOTE: keys here MUST match the UPPERCASE keys read/written by the Terms tab table
-  // below (term.SUPPLIER, term.DLVR_TERM, etc.) and by saveBulk()'s termsData mapping.
-  // Previously these were lowercase (supplier, dlvr_term, ...) which meant a freshly
-  // created row showed a blank Supplier cell and never actually got saved.
+
   const blankTerm = () => ({
     id: newId(),
     COMPANY_CODE: companyCode,
@@ -824,10 +827,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     setTerms((prev) => prev.map((t) => (t.id === id ? { ...t, [field]: value } : t)));
   };
 
-  // Auto-create a Terms & Conditions row when a supplier is picked on an item line.
-  // One row per distinct supplier — won't duplicate if multiple item lines share a supplier.
-  // Doesn't auto-remove a row if an item's supplier is later changed, since the user may
-  // have already filled in delivery/payment terms for the previous supplier.
+
   const upsertTermForSupplier = (supplierCode: string, supplierName: string) => {
     if (!supplierCode) return;
     setTerms((prev) => {
@@ -850,7 +850,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     });
   };
 
-  // ─── Lookup Column Definitions ───────────────────────────────────
+
   const currencyColumns = [
     { field: "CURR_CODE", header: "Code" },
     { field: "CURR_NAME", header: "Name" },
@@ -910,7 +910,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     return `${day}-${month}-${year}`;
   }
 
-  // ─── Render ───────────────────────────────────────────────────────
+
   return (
     <div className="fixed inset-0 z-50 bg-background">
       <section className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]">
@@ -921,11 +921,11 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                 <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
                   {isEditMode ? "Edit Document" : "New Document"}
                 </p>
-                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Purchase Request</h2>
+                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">{isPoMode ? "Purchase Order" : "Purchase Request"}</h2>
               </div>
               <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
-                <strong className="block text-sm leading-tight text-primary-foreground">{requestNumber || "New"}</strong>
+                <strong className="block text-sm leading-tight text-primary-foreground">{isPoMode ? (docNo || "New") : (requestNumber || "New")}</strong>
               </div>
               <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
@@ -1733,7 +1733,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                       updateTermField(term.id, "SUPPLIER", val);
                                       if (row) {
                                         const supName = row.supplier_name ?? row.SUPPLIER_NAME ?? "";
-                                        updateTermField(term.id, "SUPPLIER_ NAME", supName);
+                                        updateTermField(term.id, "SUPPLIER_NAME", supName);
                                       }
                                     }}
                                     disabled={disabled}
@@ -1831,7 +1831,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
 
         {/* ─── Footer ─── */}
         <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-1">
-          {!isViewMode && (
+          {!isViewMode && !isPoMode &&  (
             <div className="flex items-center gap-2">
               <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-slate-600 hover:bg-slate-700" onClick={handleSaveDraft}> <Save size={15} /> {savingAction === "SAVEASDRAFT" ? "Saving..." : "Save Draft"}</Button>
               <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-blue-600 hover:bg-blue-700" onClick={handleSubmit}>  <Send size={15} /> {savingAction === "SUBMITTED" ? "Submitting..." : "Submit"}</Button>
@@ -1857,7 +1857,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
             <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
               <Paperclip size={15} /> Files
             </Button>
-            {!isViewMode && (
+            {!isViewMode && !isPoMode &&  (
               <Button disabled={saving || !requestNumber} type="button" variant="default" className="min-w-[110px] justify-center bg-indigo-600 hover:bg-indigo-700" onClick={handleGeneratePO}>
                 Generate PO
               </Button>

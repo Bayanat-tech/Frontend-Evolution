@@ -149,7 +149,12 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
   const hasExistingData = !!existingData && Object.keys(existingData).length > 0;
   const consolidatedInvNo = getValue(invoice, "consolidated_invno") || invoiceNo;
 
-  
+  // Jobs already added to the invoice (Job Details grid) — passed to JobSelectionModal
+  // so it can exclude them from the pickable list instead of showing duplicates.
+  const existingJobKeys = useMemo(
+    () => lines.map((row) => `${String(row.job_no ?? "").trim()}||${String(row.act_code ?? "").trim()}`),
+    [lines],
+  );
 
   /* ================= EFFECTS ================= */
   useEffect(() => {
@@ -230,6 +235,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
       const line = {
         srno: lines.length + newLines.length + 1,
         act_code: actCode,
+        act_group_name: job.act_group_name ?? job.ACT_GROUP_NAME ?? "",
         activity: job.activity ?? job.ACTIVITY ?? "",
         invoice_no: job.invoice_no ?? job.INVOICE_NO ?? "",
         job_no: jobNo,
@@ -285,6 +291,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
       const jobSelection = jobSelectionRows.map((row) => ({
         job_no: row.job_no,
         act_code: row.act_code,
+        act_group_name: row.act_group_name,
         activity: row.activity,
         invoice_no: row.invoice_no,
         prin_code: prinCode,
@@ -627,6 +634,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
           invoiceNo={invoiceNo}
           fromDate={fromDate}
           toDate={toDate}
+          existingKeys={existingJobKeys}
           onClose={() => setJobModalOpen(false)}
           onSelect={handleJobSelect}
         />
