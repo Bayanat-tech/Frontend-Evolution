@@ -412,6 +412,9 @@ export function PurchaseOrderEditor({
 
               <PurchaseOrderLinesTable
                 rows={rows}
+                form={form}
+                setdetails={setRows}
+                docType={config.docType}
                 updateRow={updateRow}
                 addRow={addRow}
                 removeRow={removeRow}

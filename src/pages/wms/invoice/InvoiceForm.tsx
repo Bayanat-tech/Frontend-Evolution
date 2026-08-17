@@ -18,6 +18,7 @@ import {
 import JobSelectionModal from "./JobSelectionModal";
 import StorageSelectionModal from "./StorageSelectionModal";
 import { executeWmsInboundSql, getInvocieDetailReport } from "../../../api/wms";
+// import { set } from "react-datepicker/dist/dist/date_utils.js";
 
 type InvoiceFormProps = {
   existingData?: Record<string, unknown>;
@@ -148,6 +149,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
   const [saving, setSaving] = useState(false);
   const [warning, setWarning] = useState("");
   const [printError, setPrintError] = useState("");
+  const [printDialogOpen, setPrintDialogOpen] = useState(false);
 
   /* ================= DERIVED VALUES ================= */
   const prinCode = getValue(invoice, "prin_code") || "";
@@ -156,6 +158,9 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
   const toDate = getValue(invoice, "to_date");
   const hasExistingData = !!existingData && Object.keys(existingData).length > 0;
   const consolidatedInvNo = getValue(invoice, "consolidated_invno") || invoiceNo;
+
+  // Report Print Type
+  const report_type = ['grouped','activitywise']
 
   // Jobs already added to the invoice (Job Details grid) — passed to JobSelectionModal
   // so it can exclude them from the pickable list instead of showing duplicates.
@@ -409,7 +414,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
 
   // Backend returns raw HTML for the report — open it directly in a new tab
   // instead of rendering it inside a dialog/iframe.
-  const handlePrint = async () => {
+  const handlePrint = async (report_type: string) => {
     if (!prinCode || !invoiceNo) return;
     setPrintError("");
 
@@ -426,7 +431,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
     reportWindow.document.close();
 
     try {
-      const html = await getInvocieDetailReport(String(prinCode), String(invoiceNo), String(company_code));
+      const html = await getInvocieDetailReport(String(prinCode), String(invoiceNo), String(company_code), String(report_type));
       if (reportWindow.closed) return; // user closed the tab while we waited
       reportWindow.document.open();
       reportWindow.document.write(html);
@@ -475,7 +480,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
       footer={
         <div className="flex w-full items-center justify-between">
           {hasExistingData ? (
-            <Button variant="outline" onClick={handlePrint}>
+            <Button variant="outline" onClick={()=> setPrintDialogOpen(true)}>
               <Printer size={14} /> Print
             </Button>
           ) : <span />}
@@ -710,6 +715,51 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
           onClose={() => setStorageModalOpen(false)}
           onSelect={handleStorageSelect}
         />
+      )}
+      {printDialogOpen && (
+        <Dialog
+          open
+          title="Print Invoice"
+          onClose={() => setPrintDialogOpen(false)}
+          compact
+        >
+          <div className="grid gap-3 py-1">
+            <p className="m-0 text-sm text-muted-foreground">
+              Choose how you want the invoice report to be generated.
+            </p>
+
+            <div className="grid gap-2">
+              {report_type.map((type) => {
+                const isGrouped = type === "grouped";
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => handlePrint(type)}
+                    className="group flex w-full items-center gap-3 rounded-lg border border-border bg-background px-3 py-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary group-hover:bg-primary/15">
+                      <Printer size={16} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="m-0 text-sm font-semibold text-foreground">
+                        {isGrouped ? "Grouped" : "Activity-wise"}
+                      </p>
+                      <p className="m-0 text-xs text-muted-foreground">
+                        {isGrouped
+                          ? "Summary by activity groups"
+                          : "Detailed breakdown per activity"}
+                      </p>
+                    </div>
+                    <span className="text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
+                      Print →
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </Dialog>
       )}
     </Dialog>
   );
