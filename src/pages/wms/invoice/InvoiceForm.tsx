@@ -9,6 +9,7 @@ import { useAuth } from "../../../state/AuthContext";
 import {
   getPrincipalDropdown,
   getInvoiceDetailLines,
+  getInvoiceJobSelection,
   updateBillingApi,
   TInvoice,
   TInvoiceDetail,
@@ -25,6 +26,14 @@ type InvoiceFormProps = {
 };
 
 const getValue = (obj: any, key: string) => obj?.[key.toLowerCase()] ?? obj?.[key.toUpperCase()];
+const toDDMMYYYY = (d?: string | Date | null) => {
+  if (!d) return undefined;
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return undefined;
+  const dd = String(dt.getDate()).padStart(2, "0");
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${dt.getFullYear()}`;
+};
 const toDateInputValue = (value: unknown): string => {
   if (!value) return "";
   const str = String(value);
@@ -127,7 +136,6 @@ function FieldGrid({ fields, invoice, onChange, disabled }: {
 export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProps) {
   const { user } = useAuth();
   const company_code = user?.company_code ?? "";
-  console.log("InvoiceForm existingData:", existingData);
 
   /* ================= STATE ================= */
   const [tab, setTab] = useState<0 | 1>(0);
@@ -172,6 +180,53 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
         setLines([]);
       }
     })();
+  }, [prinCode, invoiceNo, user?.loginid, user?.company_code]);
+
+  // Re-seed jobSelectionRows from jobs already linked to this invoice (SELECTED = 'Y')
+  // so an edit-and-save (without touching "Select Job") still re-sends them — otherwise
+  // jobSelection stays empty for existing invoices even though Job Details shows rows.
+  useEffect(() => {
+    if (!user?.loginid || !user?.company_code || !prinCode || !invoiceNo) return;
+    (async () => {
+      try {
+        const response = await getInvoiceJobSelection({
+          loginid: user.loginid ?? "",
+          company_code: user.company_code ?? "",
+          prin_code: prinCode,
+          invoice_no: invoiceNo,
+          from_date: toDDMMYYYY(fromDate),
+          to_date: toDDMMYYYY(toDate),
+        });
+        console.log(
+          "[DEBUG] getInvoiceJobSelection raw response for invoiceNo:",
+          invoiceNo,
+          JSON.stringify(response, null, 2),
+        );
+        const alreadyLinked = (Array.isArray(response) ? response : [])
+          .filter((row: any) => (row.selected ?? row.SELECTED) === "Y")
+          .map((row: any) => ({
+            job_no: row.job_no ?? row.JOB_NO ?? "",
+            act_code: row.act_code ?? row.ACT_CODE ?? "",
+            act_group_name: row.act_group_name ?? row.ACT_GROUP_NAME ?? "",
+            activity: row.activity ?? row.ACTIVITY ?? "",
+            invoice_no: row.invoice_no ?? row.INVOICE_NO ?? "",
+            prin_code: row.prin_code ?? row.PRIN_CODE ?? prinCode,
+            quantity: Number(row.quantity ?? row.QUANTITY ?? 0),
+            bill: Number(row.bill ?? row.BILL ?? 0),
+            job_date: row.job_date ?? row.JOB_DATE ?? null,
+            // Real SRNO on the job's own source invoice — required by the proc's
+            // WHERE clause to find and re-link the correct TN_INVOICE_DET row.
+            source_srno: row.srno ?? row.SRNO ?? null,
+          }));
+        console.log("[DEBUG] alreadyLinked (selected=Y, filtered) for jobSelectionRows:", alreadyLinked);
+        setJobSelectionRows(alreadyLinked);
+      } catch {
+        setJobSelectionRows([]);
+      }
+    })();
+    // Only re-run on invoice identity change — new picks via the modal are appended
+    // separately in handleJobSelect and shouldn't be wiped out by this effect re-firing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prinCode, invoiceNo, user?.loginid, user?.company_code]);
 
   /* ================= HANDLERS ================= */
@@ -233,7 +288,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
       existingKeys.add(key);
 
       const line = {
-        srno: lines.length + newLines.length + 1,
+        srno: lines.length + newLines.length + 1, // local UI display order for this invoice's grid
         act_code: actCode,
         act_group_name: job.act_group_name ?? job.ACT_GROUP_NAME ?? "",
         activity: job.activity ?? job.ACTIVITY ?? "",
@@ -248,6 +303,9 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
         other_services: job.other_services ?? "",
         job_date: job.job_date ?? job.JOB_DATE ?? null,
         cancelled: false,
+        // Real SRNO on the job's own source invoice (from JobSelectionModal) — this is
+        // what jobSelection must send, NOT the local `srno` counter above.
+        source_srno: job.srno ?? job.SRNO ?? null,
       };
       newLines.push(line);
       newJobSelectionRows.push(line);
@@ -298,7 +356,9 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
         quantity: row.quantity,
         bill: row.bill,
         job_date: row.job_date,
-        srno: row.srno,
+        // Must be the source job's own SRNO on its own invoice (TN_INVOICE_DET),
+        // not any locally-generated UI sequence number.
+        srno: row.source_srno,
         selected: "Y",
       }));
 
@@ -328,6 +388,8 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
       ].map((row, index) => ({
         ...row,
         srno: index + 1,
+        INV_DESC1: getValue(invoice, "inv_desc1") ?? "",
+        INV_DESC2: getValue(invoice, "inv_desc2") ?? "",
       }));
 
       const result = await updateBillingApi({
@@ -370,7 +432,6 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
       reportWindow.document.write(html);
       reportWindow.document.close();
     } catch (err) {
-      console.error("Invoice report error:", err);
       setPrintError("Failed to load report. Please try again.");
       if (!reportWindow.closed) {
         reportWindow.document.open();
