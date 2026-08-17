@@ -208,7 +208,7 @@ export function HrJoiningPage() {
         parameter: "HR_CAM_JOIN_RPT_DETAIL", // pay components, keyed on (company_code, doc_no)
         loginid,
         code1: companyCode,
-        code2: String(row.doc_no),
+        code2: String(row.cand_no ?? ""), 
         code3: "",
         code4: "",
         number1: 0, number2: 0, number3: 0, number4: 0,

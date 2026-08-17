@@ -464,9 +464,10 @@ export function ProductionJobOrderEditor({
                 rows={rows}
                 form={form}
           
+                setdetails={setRows}
+                docType={PO_DOC_TYPE.JO}
                 ex_rate={form.ex_rate}
                 updateRow={updateRow}
-                docType={PO_DOC_TYPE.JO}
                 addRow={addRow}
                 removeRow={removeRow}
                 headerAndLineDisabled={headerAndLineDisabled}
