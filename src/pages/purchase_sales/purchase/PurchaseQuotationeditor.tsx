@@ -156,7 +156,7 @@ export function PurchaseQuotationEditor({
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
         if (!mounted) return;
-        setError(loadError instanceof Error ? loadError.message : "Unable to load purchase order");
+        setError(loadError instanceof Error ? loadError.message : "Unable to load Purchase Quotation");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -231,7 +231,7 @@ export function PurchaseQuotationEditor({
   const handleSaveAsDraft = () =>
     runAction("draft", async () => {
       await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.PQA, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, "Purchase order saved as draft");
+    }, "Purchase Quotation saved as draft");
 
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
@@ -239,13 +239,13 @@ export function PurchaseQuotationEditor({
     if (!form.curr_code) return setError("Currency is required");
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", PO_DOC_TYPE.PQA, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, editMode ? "Purchase order updated successfully" : "Purchase order created successfully");
+    }, editMode ? "Purchase Quotation updated successfully" : "Purchase Quotation created successfully");
   };
 
   const handleCancel = () =>
     runAction("cancel", async () => {
       await runWorkflow("CANCELED", PO_DOC_TYPE.PQA, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, "Purchase order cancelled");
+    }, "Purchase Quotation cancelled");
 
   // ---- Reject handlers ----
   const openRejectDialog = () => {
@@ -267,7 +267,7 @@ export function PurchaseQuotationEditor({
       const payloadForm: PurchaseOrderForm = { ...form, reject_reason: rejectReason.trim() };
       await runWorkflow("REJECTED", PO_DOC_TYPE.PQA, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setRejectDialogOpen(false);
-    }, "Purchase order rejected");
+    }, "Purchase Quotation rejected");
   };
 
   // ---- Send Back handlers ----
@@ -324,7 +324,7 @@ export function PurchaseQuotationEditor({
       };
       await runWorkflow("SENTBACK", PO_DOC_TYPE.PQA, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setSendBackDialogOpen(false);
-    }, "Purchase order sent back");
+    }, "Purchase Quotation sent back");
   };
 
   const actionBarBusy = actionLoading !== null || saving;
@@ -340,9 +340,9 @@ export function PurchaseQuotationEditor({
             <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
               <div>
                 <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                  {editMode ? "Edit Purchase Order" : "New Purchase Order"}
+                  {editMode ? "Edit Purchase Quotation" : "New Purchase Quotation"}
                 </p>
-                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Purchase Order</h2>
+                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Purchase Quotation</h2>
               </div>
               <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
@@ -377,15 +377,15 @@ export function PurchaseQuotationEditor({
           <div className="cancelled-document-banner" role="status">
             <div>
               <span className="cancelled-document-kicker">Cancelled Document</span>
-              <strong>{form.doc_no || "Purchase Order"}</strong>
+              <strong>{form.doc_no || "Purchase Quotation"}</strong>
             </div>
-            <p>This purchase order is cancelled and opened in read-only mode.</p>
+            <p>This Purchase Quotation is cancelled and opened in read-only mode.</p>
           </div>
         )}
 
         <CardContent className="min-h-0 overflow-auto p-3">
           {loading ? (
-            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading purchase order...</div>
+            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase Quotation...</div>
           ) : (
             <div className="grid gap-3">
               <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
@@ -404,6 +404,9 @@ export function PurchaseQuotationEditor({
 
               <PurchaseOrderLinesTable
                 rows={rows}
+                form={form}
+                setdetails={setRows}
+                docType={PO_DOC_TYPE.PQA}
                 updateRow={updateRow}
                 addRow={addRow}
                 removeRow={removeRow}

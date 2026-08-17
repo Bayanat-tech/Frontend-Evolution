@@ -149,7 +149,9 @@ import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/As
 import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation";
 import StockCountPage from "../pages/wms/stock count/StockCountPage";
 import{ExpenseMasterPage} from "../pages/purchase_sales/Expensemasterpage";
-import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
+import MseProdGroup from "../pages/purchase_sales/MseProdGroup";
+import ProductPurchaseSales from "../pages/purchase_sales/ProductPurchaseSales";
+
 
 
 import {ProductTypePage} from "../pages/purchase_sales/PS_ProductTypePage";
@@ -182,6 +184,7 @@ import AccuralPayUnit from "../pages/hr/AccuralPayUnit";
 import PLSummaryPage from "../pages/purchase_sales/Reports/Plsummarypage";
 import { PurchaseInvoicePage } from "../pages/purchase_sales/purchase/PurchaseInvoicePage";
 import { SalesInvoicePage } from "../pages/purchase_sales/sales/SalesInvoicePage";
+import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -201,6 +204,22 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: 'MSE Prod Group',
+    match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_group"),
+    element: () => <MseProdGroup />,
+  },
+
+  {
+  name: 'Purchase Sales Product Brand',
+  match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_brand"),
+  element: () => <ProductBrandPage />,
+},
+  {
+    name: 'Purchase Sales Product',
+    match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product"),
+    element: () => <ProductPurchaseSales />
+  },
   {
     name: 'HR Accural Pay Unit',
     match: ({pathname}) => pathname.toLowerCase().includes("/hr/hr/transactions/accural_pay_units"),
@@ -1218,11 +1237,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   element: () => <ZoneMasterPage />,
   },
 
-  {
-    name : "Product Brand",
-    match: ({pathname}) => isProductBrandRoute(pathname),
-    element: () => <ProductBrandPage/>
-  },
+  
 
   {
     name : "Expense Master",
@@ -1287,12 +1302,7 @@ function isExpenseMasterRoute(pathname: string) {
   );
 }
 
-function isProductBrandRoute(pathname: string) {
-  const normalized = pathname.toLowerCase();
-  return normalized.includes(
-    "/workspace/purchase_sales/purchase_sales/masters/product_brand"
-  );
-}
+
 
 function isPurchaseSaleSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -1301,6 +1311,12 @@ function isPurchaseSaleSetupRoute(pathname: string) {
   );
 }
 
+function isProductBrandRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/masters/product_brand"
+  );
+}
 
 function isProfitLossSummaryRoute(pathname: string) {
   const normalized = pathname.toLowerCase();

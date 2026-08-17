@@ -147,7 +147,7 @@ export function ProductionJobOrderEditor({
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
         if (!mounted) return;
-        setError(loadError instanceof Error ? loadError.message : "Unable to load purchase order");
+        setError(loadError instanceof Error ? loadError.message : "Unable to load Job Order");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -237,7 +237,7 @@ export function ProductionJobOrderEditor({
           user?.loginid || user?.username || "ADMIN"
         );
       },
-      "Purchase order saved as draft"
+      "Job Order saved as draft"
     );
 
   const handleSubmit = () => {
@@ -256,7 +256,7 @@ export function ProductionJobOrderEditor({
           user?.loginid || user?.username || "ADMIN"
         );
       },
-      editMode ? "Purchase order updated successfully" : "Purchase order created successfully"
+      editMode ? "Job Order updated successfully" : "Job Order created successfully"
     );
   };
 
@@ -273,7 +273,7 @@ export function ProductionJobOrderEditor({
           user?.loginid || user?.username || "ADMIN"
         );
       },
-      "Purchase order cancelled"
+      "Job Order cancelled"
     );
 
   // ---- Reject handlers ----
@@ -306,7 +306,7 @@ export function ProductionJobOrderEditor({
         );
         setRejectDialogOpen(false);
       },
-      "Purchase order rejected"
+      "Job Order rejected"
     );
   };
 
@@ -376,7 +376,7 @@ export function ProductionJobOrderEditor({
         );
         setSendBackDialogOpen(false);
       },
-      "Purchase order sent back"
+      "Job Order sent back"
     );
   };
 
@@ -396,9 +396,9 @@ export function ProductionJobOrderEditor({
             <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
               <div>
                 <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                  {editMode ? "Edit Purchase Order" : "New Purchase Order"}
+                  {editMode ? "Edit Job Order" : "New Job Order"}
                 </p>
-                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Purchase Order</h2>
+                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Job Order</h2>
               </div>
               <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
@@ -435,15 +435,15 @@ export function ProductionJobOrderEditor({
           <div className="cancelled-document-banner" role="status">
             <div>
               <span className="cancelled-document-kicker">Cancelled Document</span>
-              <strong>{form.doc_no || "Purchase Order"}</strong>
+              <strong>{form.doc_no || "Job Order"}</strong>
             </div>
-            <p>This purchase order is cancelled and opened in read-only mode.</p>
+            <p>This Job Order is cancelled and opened in read-only mode.</p>
           </div>
         )}
 
         <CardContent className="min-h-0 overflow-auto p-3">
           {loading ? (
-            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading purchase order...</div>
+            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Job Order...</div>
           ) : (
             <div className="grid gap-3">
               <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
@@ -462,6 +462,9 @@ export function ProductionJobOrderEditor({
 
               <PurchaseOrderLinesTable
                 rows={rows}
+                form={form}
+                setdetails={setRows}
+                docType={PO_DOC_TYPE.JO}
                 ex_rate={form.ex_rate}
                 updateRow={updateRow}
                 addRow={addRow}

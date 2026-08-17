@@ -1,5 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Activity,
   AlertTriangle,
@@ -131,6 +132,28 @@ type QuotationTerm = {
   font_size: string;
 };
 
+type QuotationHeaderNames = {
+  prin_name: string;
+  walkin_prin_name: string;
+  curr_name: string;
+  origin_port_name: string;
+  destination_port_name: string;
+  forwarder_name: string;
+  vehicle_type_name: string;
+  carrier_name: string;
+};
+
+const emptyHeaderNames: QuotationHeaderNames = {
+  prin_name: "",
+  walkin_prin_name: "",
+  curr_name: "",
+  origin_port_name: "",
+  destination_port_name: "",
+  forwarder_name: "",
+  vehicle_type_name: "",
+  carrier_name: "",
+};
+
 type Notice = { type: "success" | "error"; text: string } | null;
 type ViewMode = "list" | "editor";
 export type FreightQuotationInitialTab = "cargo" | "payment" | "charges" | "terms";
@@ -171,6 +194,7 @@ const listStatusTabs: { key: ListStatusTab; label: string }[] = [
 
 export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?: FreightWorkspaceTarget; initialTab?: FreightQuotationInitialTab }) {
   const { user } = useAuth();
+  const location = useLocation();
   const { toast } = useToast();
   const userInfo = user as Record<string, unknown> | null;
   const initialHeader = useMemo(() => buildInitialHeader(userInfo, target), [target, userInfo]);
@@ -191,6 +215,10 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   const formRef = useRef<HTMLFormElement | null>(null);
   const [pendingValidateTab, setPendingValidateTab] = useState<FreightQuotationInitialTab | null>(null);
   const [approvalEnabled, setApprovalEnabled] = useState(false);
+  const [deepOpenDone, setDeepOpenDone] = useState("");
+  const freightSearchRecord = (location.state as { freightSearchRecord?: LookupRow } | null)?.freightSearchRecord;
+  const openRecordNo = new URLSearchParams(location.search).get("open") || "";
+  const [headerNames, setHeaderNames] = useState<QuotationHeaderNames>(emptyHeaderNames);
 
   useEffect(() => {
     if (!notice) return;
@@ -350,7 +378,26 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
     });
   };
 
-  const applyHeaderLookup = (field: keyof QuotationHeader, value: string, row: LookupRow | null) => {
+  // const applyHeaderLookup = (field: keyof QuotationHeader, value: string, row: LookupRow | null) => {
+  //   setHeader((current) => {
+  //     const next = { ...current, [field]: value };
+  //     if (field === "prin_code" && row) {
+  //       next.dept_code = lookupText(row, "prin_dept_code") || next.dept_code;
+  //       next.curr_code = lookupText(row, "curr_code") || next.curr_code;
+  //       next.ex_rate = lookupText(row, "ex_rate") || next.ex_rate;
+  //     }
+  //     if (field === "curr_code" && row) next.ex_rate = lookupText(row, "ex_rate") || next.ex_rate;
+  //     if (field === "origin_port" && row) next.country_origin = lookupText(row, "country_name") || lookupText(row, "country_code") || next.country_origin;
+  //     if (field === "destination_port" && row) next.country_destination = lookupText(row, "country_name") || lookupText(row, "country_code") || next.country_destination;
+  //     if (field === "enquiry_no" && row) {
+  //       next.enquiry_type = lookupText(row, "enquiry_type") || next.enquiry_type;
+  //       void copyFromEnquiry(lookupText(row, "company_code") || current.company_code, lookupText(row, "prin_code"), value, next.enquiry_type);
+  //     }
+  //     return next;
+  //   });
+  // };
+
+ const applyHeaderLookup = (field: keyof QuotationHeader, value: string, row: LookupRow | null) => {
     setHeader((current) => {
       const next = { ...current, [field]: value };
       if (field === "prin_code" && row) {
@@ -364,6 +411,23 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       if (field === "enquiry_no" && row) {
         next.enquiry_type = lookupText(row, "enquiry_type") || next.enquiry_type;
         void copyFromEnquiry(lookupText(row, "company_code") || current.company_code, lookupText(row, "prin_code"), value, next.enquiry_type);
+      }
+      return next;
+    });
+
+    setHeaderNames((current) => {
+      const next = { ...current };
+      if (field === "prin_code") next.prin_name = row ? lookupText(row, "prin_name") : "";
+      if (field === "walkin_prin_code") next.walkin_prin_name = row ? lookupText(row, "prin_name") : "";
+      if (field === "curr_code") next.curr_name = row ? lookupText(row, "curr_name") : "";
+      if (field === "origin_port") next.origin_port_name = row ? lookupText(row, "port_name") : "";
+      if (field === "destination_port") next.destination_port_name = row ? lookupText(row, "port_name") : "";
+      if (field === "forwarder_code") next.forwarder_name = row ? lookupText(row, "forwarder_name") : "";
+      if (field === "vehicle_type") next.vehicle_type_name = row ? lookupText(row, "vtype_name") : "";
+      if (field === "carrier") {
+        next.carrier_name = row
+          ? lookupText(row, "vessel_name") || lookupText(row, "vehicle_desc") || lookupText(row, "airline_name")
+          : "";
       }
       return next;
     });
@@ -440,6 +504,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   const resetForm = () => {
     const fresh = buildInitialHeader(userInfo, target);
     setHeader(fresh);
+    setHeaderNames(emptyHeaderNames); 
     setDetails([buildInitialDetail(fresh, 1)]);
     setTerms([]);
     setNotice(null);
@@ -487,8 +552,21 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       });
       if (response.data?.success === false) throw new Error(response.data.message || "Unable to open quotation");
       const data = response.data?.data;
-      const loadedHeader = toHeaderFromRow(normalizeLookupRow(data?.header || row), userInfo, target);
+      // const loadedHeader = toHeaderFromRow(normalizeLookupRow(data?.header || row), userInfo, target);
+      // setHeader(loadedHeader);
+      const loadedRow = normalizeLookupRow(data?.header || row);
+      const loadedHeader = toHeaderFromRow(loadedRow, userInfo, target);
       setHeader(loadedHeader);
+      setHeaderNames({
+        prin_name: lookupText(loadedRow, "prin_name"),
+        walkin_prin_name: lookupText(loadedRow, "walkin_prin_name"),
+        curr_name: lookupText(loadedRow, "curr_name"),
+        origin_port_name: lookupText(loadedRow, "origin_port_name"),
+        destination_port_name: lookupText(loadedRow, "destination_port_name"),
+        forwarder_name: lookupText(loadedRow, "forwarder_name"),
+        vehicle_type_name: lookupText(loadedRow, "vtype_name"),
+        carrier_name: lookupText(loadedRow, "carrier_name"),
+      });
       setDetails(data?.details?.length ? data.details.map((item, index) => toDetailFromRow(normalizeLookupRow(item), loadedHeader, index + 1)) : [buildInitialDetail(loadedHeader, 1)]);
       setTerms(data?.terms?.length ? data.terms.map((item, index) => toTermFromRow(normalizeLookupRow(item), index + 1)) : []);
       setActiveTab(initialTab);
@@ -499,6 +577,18 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!openRecordNo || deepOpenDone === openRecordNo) return;
+    const recordType = lookupText(freightSearchRecord || {}, "record_type").toUpperCase();
+    if (recordType !== "QUOTATION") return;
+    setDeepOpenDone(openRecordNo);
+    void openQuotation(normalizeLookupRow({
+      company_code: lookupText(freightSearchRecord || {}, "company_code") || header.company_code,
+      prin_code: lookupText(freightSearchRecord || {}, "prin_code"),
+      quotation_nr: openRecordNo,
+    }));
+  }, [deepOpenDone, freightSearchRecord, header.company_code, openRecordNo]);
 
   const copyFromEnquiry = async (companyCode: string, prinCode: string, enquiryNo: string, enquiryType: string) => {
     if (!companyCode || !enquiryNo) return;
@@ -579,6 +669,9 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       applyWorkflowResult(response.data?.data);
       setNotice({ type: "success", text: response.data?.message || "Quotation workflow updated" });
       await loadRows();
+      if (action === "SUBMITTED" || action === "APPROVED" || action === "REJECTED") {
+        setView("list");
+      }
     } catch (error) {
       setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to update quotation workflow" });
     } finally {
@@ -699,9 +792,10 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={17} /></div>
             <div>
-              <p className="eyebrow mb-0.5">Freight Quotation</p>
-              <h1 className="m-0 text-xl font-semibold leading-tight text-foreground">Quotation Listing</h1>
-              <p className="m-0 mt-1 text-xs text-muted-foreground">Build quotations from enquiry/RFQ data and maintain charge lines.</p>
+              <h1 className="m-0 text-xl font-semibold leading-tight text-foreground">Freight Quotation</h1>
+              {/* <p className="eyebrow mb-0.5">Freight Quotation</p> */}
+              {/* <h1 className="m-0 text-xl font-semibold leading-tight text-foreground">Quotation Listing</h1>
+              <p className="m-0 mt-1 text-xs text-muted-foreground">Build quotations from enquiry/RFQ data and maintain charge lines.</p> */}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
@@ -764,17 +858,19 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={15} /></div>
             <div className="min-w-0">
-              <p className="eyebrow m-0 text-lg">Freight Quotation</p>
+              <p className="eyebrow m-1000 text-lg">Freight Quotation</p>
+               {/* <h1 className="m-0 text-xl font-semibold leading-tight text-foreground">Quotation</h1> */}
               <div className="flex flex-wrap items-center gap-1.5">
-                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Quotation</h1>
-                <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">{header.quotation_nr || "New quotation"}</span>
+                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{header.quotation_nr}</h1>
+                {/* <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Quotation</h1> */}
+                {/* <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">{header.quotation_nr || "New quotation"}</span> */}
                 <span className={statusBadgeClass(header.indstatus, header.last_action, header.final_approved)}>{statusLabel(header.indstatus, header.last_action, header.final_approved)}</span>
               </div>
-              <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+              {/* <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground"> */}
                 {/* <span>{modeLabel(header.transport_mode)}</span><span className="h-1 w-1 rounded-full bg-muted-foreground/50" /> */}
                 {/* <span>{jobTypeLabel(header.job_type)}</span><span className="h-1 w-1 rounded-full bg-muted-foreground/50" /> */}
-                <h1>{header.quotation_nr}</h1>
-              </div>
+                {/* <h1>{header.quotation_nr}</h1> */}
+              {/* </div> */}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
@@ -1457,7 +1553,11 @@ const portColumns = [{ field: "port_code", header: "Code" }, { field: "port_name
 
 async function loadPrincipalLookup(companyCode: string) { return loadFreightLookup("freight_principal", companyCode); }
 async function loadWalkinPrincipalLookup(companyCode: string) { return loadFreightLookup("freight_walkin_principal", companyCode); }
-async function loadEnquiryLookup(companyCode: string) { return loadFreightLookup("freight_quotation_source", companyCode); }
+// async function loadEnquiryLookup(companyCode: string) { return loadFreightLookup("freight_quotation_source", companyCode); }
+async function loadEnquiryLookup(companyCode: string) {
+  const rows = await loadFreightLookup("freight_quotation_source", companyCode);
+  return rows.filter((row) => lookupText(row, "enquiry_type") === "EQI");
+}
 async function loadCommodityLookup(companyCode: string) { return loadFreightLookup("freight_commodity", companyCode); }
 async function loadPortLookup(companyCode: string) { return loadFreightLookup("freight_port", companyCode); }
 async function loadCurrencyLookup(companyCode: string) { return loadFreightLookup("freight_currency", companyCode); }
