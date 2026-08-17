@@ -1,7 +1,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Ban, Bell, BrainCircuit, CheckCircle2, ClipboardList, FileText, Info, PackageCheck, Plane, Plus, ReceiptText, RefreshCw, Search, Ship, Truck, WalletCards } from "lucide-react";
+import { ArrowRight, Ban, Bell, BrainCircuit, CheckCircle2, ClipboardList, FileText, Info, PackageCheck, Plane, Plus, ReceiptText, RefreshCw, Search, Ship, Truck, WalletCards } from "lucide-react";
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
@@ -78,10 +78,11 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   const [query, setQuery] = useState("");
   const [selectedJob, setSelectedJob] = useState<LookupRow | null>(null);
   const [activeStatus, setActiveStatus] = useState("in_progress");
+  const [workspaceActions, setWorkspaceActions] = useState<ReactNode>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-  const targetMode = target?.mode || "air";
-  const targetDirection = target?.direction || "import";
+  const targetMode = (target?.mode || "air") as keyof typeof modeLabel;
+  const targetDirection = (target?.direction || "import") as keyof typeof directionLabel;
   const freightSearchRecord = (location.state as { freightSearchRecord?: LookupRow } | null)?.freightSearchRecord;
   const openRecordNo = new URLSearchParams(location.search).get("open") || "";
   const title = useMemo(() => {
@@ -168,6 +169,10 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   const filteredRows = useMemo(() => rows.filter((row) => filterJobByStatus(row, activeStatus)), [activeStatus, rows]);
   const selectedJobReadOnly = isClosedJob(selectedJob);
 
+  useEffect(() => {
+    setWorkspaceActions(null);
+  }, [activeTab]);
+
   function openSteps(row: LookupRow | null, tab: JobTab) {
     setSelectedJob(row ? normalizeLookupRow(row) : null);
     setActiveTab(tab);
@@ -243,23 +248,16 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   return (
     <section className="freight-module-surface">
       <div className="freight-ops-toolbar freight-ops-toolbar-compact freight-ops-toolbar-document">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
+        <div className="freight-workspace-header-shell">
+          <div className="freight-workspace-title-block">
             <p className="m-0 text-xs font-semibold text-primary">Freight Job / {selectedJob ? text(selectedJob, "job_no") : "New"}</p>
             <h1 className="m-0 text-[22px] font-semibold leading-tight text-foreground">{title}</h1>
             <p className="m-0 text-xs font-medium text-muted-foreground">
               {selectedJob ? `${text(selectedJob, "prin_name") || text(selectedJob, "prin_code")} | ${text(selectedJob, "doc_ref") || text(selectedJob, "hawb") || "Reference pending"}` : "New shipment operation"}
             </p>
           </div>
+          <div className="freight-workspace-command-slot">{workspaceActions}</div>
           <div className="freight-workspace-tabs">
-            <button
-              type="button"
-              className="freight-workspace-tab"
-              onClick={() => setMode("list")}
-            >
-              <ArrowLeft size={14} />
-              Listing
-            </button>
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const active = activeTab === tab.key;
@@ -280,14 +278,40 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
         </div>
       </div>
 
-      {activeTab === "job" && <FreightJobPage target={target} initialJob={selectedJob} startMode="editor" />}
-      {activeTab === "packlist" && <FreightPacklistPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="packlist" readOnly={selectedJobReadOnly} />}
-      {activeTab === "jobsheet" && <FreightJobSheetPage target={target} initialJob={selectedJob} readOnly={selectedJobReadOnly} />}
-      {activeTab === "alerts" && <FreightJobFollowupTab target={target} kind="alerts" initialJob={selectedJob} readOnly={selectedJobReadOnly} />}
-      {activeTab === "instructions" && <FreightJobFollowupTab target={target} kind="instructions" initialJob={selectedJob} readOnly={selectedJobReadOnly} />}
-      {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" initialJob={selectedJob} readOnly={selectedJobReadOnly} />}
-      {activeTab === "deposits" && <FreightJobFollowupTab target={target} kind="deposits" initialJob={selectedJob} readOnly={selectedJobReadOnly} />}
-      {activeTab === "activities" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="activities" readOnly={selectedJobReadOnly} />}
+      {activeTab === "job" && (
+        <FreightJobPage
+          target={target}
+          initialJob={selectedJob}
+          startMode="editor"
+          onEmbeddedActionsChange={setWorkspaceActions}
+          onEmbeddedList={() => setMode("list")}
+        />
+      )}
+      {activeTab === "packlist" && (
+        <FreightPacklistPage
+          target={target}
+          initialJob={selectedJob}
+          startMode={selectedJob ? "editor" : "list"}
+          screen="packlist"
+          readOnly={selectedJobReadOnly}
+          onEmbeddedActionsChange={setWorkspaceActions}
+          onEmbeddedList={() => setMode("list")}
+        />
+      )}
+      {activeTab === "jobsheet" && (
+        <FreightJobSheetPage
+          target={target}
+          initialJob={selectedJob}
+          readOnly={selectedJobReadOnly}
+          onEmbeddedActionsChange={setWorkspaceActions}
+          onEmbeddedList={() => setMode("list")}
+        />
+      )}
+      {activeTab === "alerts" && <FreightJobFollowupTab target={target} kind="alerts" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
+      {activeTab === "instructions" && <FreightJobFollowupTab target={target} kind="instructions" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
+      {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
+      {activeTab === "deposits" && <FreightJobFollowupTab target={target} kind="deposits" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
+      {activeTab === "activities" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="activities" readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
 
     </section>
   );

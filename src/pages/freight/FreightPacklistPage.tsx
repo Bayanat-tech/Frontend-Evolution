@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import type { Dispatch, FormEvent, SetStateAction } from "react";
+import type { Dispatch, FormEvent, ReactNode, SetStateAction } from "react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
@@ -143,19 +143,37 @@ const directionMap = {
   reexport: { code: "IRE", label: "Import for Re-export" },
 };
 
-export function FreightPacklistPage({ target, initialJob = null, startMode = "list", screen = "packlist", readOnly = false }: { target?: FreightWorkspaceTarget; initialJob?: LookupRow | null; startMode?: ViewMode; screen?: "packlist" | "jobsheet"; readOnly?: boolean }) {
+export function FreightPacklistPage({
+  target,
+  initialJob = null,
+  startMode = "list",
+  screen = "packlist",
+  readOnly = false,
+  onEmbeddedActionsChange,
+  onEmbeddedList,
+}: {
+  target?: FreightWorkspaceTarget;
+  initialJob?: LookupRow | null;
+  startMode?: ViewMode;
+  screen?: "packlist" | "jobsheet";
+  readOnly?: boolean;
+  onEmbeddedActionsChange?: (actions: ReactNode | null) => void;
+  onEmbeddedList?: () => void;
+}) {
   const { user } = useAuth();
   const { toast } = useToast();
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
   const userId = String(userRecord.user_id || userRecord.USER_ID || userRecord.loginid || userRecord.LOGINID || "");
-  const modeKey = target?.mode || "air";
-  const directionKey = target?.direction || "import";
+  const modeKey = (target?.mode || "air") as keyof typeof modeMap;
+  const directionKey = (target?.direction || "import") as keyof typeof directionMap;
   const mode = modeMap[modeKey];
   const direction = directionMap[directionKey];
   const Icon = mode.icon;
   const screenTitle = screen === "jobsheet" ? "JOB Sheet" : "Pack List";
   const screenSubtitle = screen === "jobsheet" ? "Shipment document and billing summary" : "Bill of lading and cargo packing details";
+  const embeddedInWorkspace = Boolean(onEmbeddedActionsChange);
+  const embeddedFormId = `freight-${screen}-embedded-form`;
 
   const [view, setView] = useState<ViewMode>("list");
   const [rows, setRows] = useState<LookupRow[]>([]);
@@ -217,7 +235,8 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
   }, [initialJob]);
 
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
-    { accessorKey: "seq_number", header: "Pack List", size: 140, cell: ({ row }) => <button type="button" className="font-semibold text-primary hover:underline" onClick={() => openPack(row.original)}>{lookupText(row.original, "seq_number") || `${lookupText(row.original, "job_no")}/${lookupText(row.original, "packlist_no")}`}</button> },
+    { accessorKey: "packlist_no", header: "Pack No", size: 110, cell: ({ row }) => <button type="button" className="font-semibold text-primary hover:underline" onClick={() => openPack(row.original)}>{lookupText(row.original, "packlist_no") || "Auto"}</button> },
+    { accessorKey: "seq_number", header: "Seq", size: 70 },
     { accessorKey: "job_no", header: "Job No", size: 120 },
     { accessorKey: "job_date", header: "Job Date", size: 110, cell: ({ row }) => formatDate(lookupText(row.original, "job_date")) },
     { accessorKey: "prin_code", header: "Principal", size: 90 },
@@ -225,9 +244,13 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
     { accessorKey: "shipper_name", header: "Shipper", size: 200 },
     { accessorKey: "consignee_name", header: "Consignee", size: 200 },
     { accessorKey: "bl_no", header: isAir ? "AWB" : "BL No", size: 130 },
+    { accessorKey: "bl_date", header: "BL Date", size: 110, cell: ({ row }) => formatDate(lookupText(row.original, "bl_date")) },
     { accessorKey: "container_no", header: "Container", size: 130 },
+    { accessorKey: "container_type", header: "Container Type", size: 130 },
     { accessorKey: "gross_wt", header: "Gross Wt", size: 90 },
+    { accessorKey: "volume", header: "Volume", size: 90 },
     { accessorKey: "quantity", header: "Qty", size: 80 },
+    { accessorKey: "shipment_status", header: "Shipment Status", size: 140 },
     { id: "actions", header: "Actions", size: 90, cell: ({ row }) => <div className="flex gap-1"><Button type="button" size="icon" variant="ghost" title="View" onClick={() => openPack(row.original)}><Eye size={14} /></Button><Button type="button" size="icon" variant="ghost" title="Delete" disabled={readOnly} onClick={(event) => { event.stopPropagation(); void deletePack(row.original); }}><Trash2 size={14} /></Button></div> },
   ], [isAir, readOnly]);
 
@@ -243,21 +266,33 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
     setView("editor");
   };
 
-  const openNewPackForCurrentJob = () => {
+  const openNewPackForCurrentJob = useCallback(() => {
     if (readOnly) {
       notify({ type: "error", text: "Invoiced or completed job is locked. Pack list is view only." });
       return;
     }
-    setPack((current) => ({
-      ...current,
-      packlist_no: "",
-      seq_number: "",
-      is_new_packlist: true,
-    }));
+    setPack((current) => {
+      const draft = toPackDraftFromJob(current as unknown as LookupRow, companyCode, userId, mode.code, direction.code);
+      return {
+        ...draft,
+        company_code: current.company_code || draft.company_code,
+        prin_code: current.prin_code || draft.prin_code,
+        prin_name: current.prin_name || draft.prin_name,
+        job_no: current.job_no || draft.job_no,
+        job_date: current.job_date || draft.job_date,
+        transport_mode: current.transport_mode || draft.transport_mode,
+        job_type: current.job_type || draft.job_type,
+        curr_code: current.curr_code || draft.curr_code,
+        ex_rate: current.ex_rate || draft.ex_rate,
+        packlist_no: "",
+        seq_number: "",
+        is_new_packlist: true,
+      };
+    });
     setDimensions([]);
     setNotice(null);
     setEditing(true);
-  };
+  }, [companyCode, direction.code, mode.code, notify, readOnly, userId]);
 
   const loadDimensions = async (row: LookupRow) => {
     const response = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/packlist/dimensions/list", {
@@ -393,6 +428,40 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
     }
   };
 
+  useEffect(() => {
+    if (!embeddedInWorkspace || !onEmbeddedActionsChange || view !== "editor") {
+      onEmbeddedActionsChange?.(null);
+      return undefined;
+    }
+
+    onEmbeddedActionsChange(
+      <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar">
+        {notice && <NoticeChip notice={notice} />}
+        <Button type="button" size="sm" variant="outline" onClick={() => (onEmbeddedList ? onEmbeddedList() : setView("list"))}>
+          <ArrowLeft size={14} /> List
+        </Button>
+        {pack.job_no && !readOnly && (
+          <Button type="button" size="sm" variant="outline" onClick={openNewPackForCurrentJob}>
+            <Plus size={14} /> New {screenTitle}
+          </Button>
+        )}
+        {!editing && !readOnly && (
+          <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}>
+            <Edit2 size={14} /> Edit
+          </Button>
+        )}
+        {editing && !readOnly && (
+          <Button type="submit" size="sm" disabled={saving || !pack.job_no || readOnly} form={embeddedFormId}>
+            <Save size={14} /> Save
+          </Button>
+        )}
+        <span className={`freight-job-mode-badge ${editing ? "editing" : "viewing"}`}>{editing ? "Edit" : "View"}</span>
+      </div>
+    );
+
+    return () => onEmbeddedActionsChange(null);
+  }, [embeddedFormId, embeddedInWorkspace, editing, notice, onEmbeddedActionsChange, onEmbeddedList, openNewPackForCurrentJob, pack.job_no, readOnly, saving, screenTitle, view]);
+
   if (view === "list") {
     return (
       <section className="grid gap-3">
@@ -411,7 +480,7 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
           title={`${rows.length} ${screenTitle}s`}
           subtitle={`${mode.label} / ${direction.label}`}
           height="calc(100vh - 240px)"
-          minWidth={1280}
+          minWidth={1680}
           density="grid"
           enablePagination
           pageSize={50}
@@ -424,31 +493,35 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
   }
 
   return (
-    <form className="freight-document-form" onSubmit={savePack}>
-      <Header title={`${mode.label} ${direction.label} ${screenTitle}`} subtitle={pack.seq_number || `New ${screenTitle.toLowerCase()}`} icon={Icon} screenTitle={screenTitle}>
-        {notice && <NoticeChip notice={notice} />}
-        <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>
-        {!editing && !readOnly && <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}><Edit2 size={14} />Edit</Button>}
-        {pack.job_no && !readOnly && <Button type="button" size="sm" variant="outline" onClick={openNewPackForCurrentJob}><Plus size={14} />New {screenTitle}</Button>}
-        {editing && !readOnly && <Button type="submit" size="sm" disabled={saving || !pack.job_no || readOnly}><Save size={14} />Save</Button>}
-      </Header>
+    <form id={embeddedInWorkspace ? embeddedFormId : undefined} className="freight-document-form" onSubmit={savePack}>
+      {!embeddedInWorkspace && (
+        <>
+          <Header title={`${mode.label} ${direction.label} ${screenTitle}`} subtitle={pack.packlist_no ? `Pack ${pack.packlist_no}` : `New ${screenTitle.toLowerCase()}`} icon={Icon} screenTitle={screenTitle}>
+            {notice && <NoticeChip notice={notice} />}
+            <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>
+            {!editing && !readOnly && <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}><Edit2 size={14} />Edit</Button>}
+            {pack.job_no && !readOnly && <Button type="button" size="sm" variant="outline" onClick={openNewPackForCurrentJob}><Plus size={14} />New {screenTitle}</Button>}
+            {editing && !readOnly && <Button type="submit" size="sm" disabled={saving || !pack.job_no || readOnly}><Save size={14} />Save</Button>}
+          </Header>
 
-      <div className="freight-job-focus-bar freight-job-focus-compact">
-        <div>
-          <span className="freight-job-number">{pack.seq_number || pack.packlist_no || "New Pack List"}</span>
-          <span className="freight-job-route">{pack.job_no || "Job pending"} / {mode.label} / {direction.label}</span>
-        </div>
-        <div className="freight-job-status-strip">
-          <span>BL <strong>{pack.bl_no || "-"}</strong></span>
-          <span>Cargo <strong>{pack.quantity || "0"} {pack.puom}</strong></span>
-          <span>Gross <strong>{pack.gross_wt || "0"}</strong></span>
-        </div>
-      </div>
+          <div className="freight-job-focus-bar freight-job-focus-compact">
+            <div>
+              <span className="freight-job-number">{pack.packlist_no ? `Pack ${pack.packlist_no}` : "New Pack List"}</span>
+              <span className="freight-job-route">{pack.job_no || "Job pending"} / {mode.label} / {direction.label}</span>
+            </div>
+            <div className="freight-job-status-strip">
+              <span>BL <strong>{pack.bl_no || "-"}</strong></span>
+              <span>Cargo <strong>{pack.quantity || "0"} {pack.puom}</strong></span>
+              <span>Gross <strong>{pack.gross_wt || "0"}</strong></span>
+            </div>
+          </div>
+        </>
+      )}
 
       <fieldset disabled={readOnly || !editing} className={`freight-document-paper freight-shipment-paper ${editing && !readOnly ? "is-editing" : "is-viewing"}`}>
         <PackEditContext.Provider value={editing && !readOnly}>
         <div className="freight-job-section-grid">
-        <Panel className="lg:col-span-12" icon={FileSignature} title="Document Reference" meta={`${pack.seq_number || "Auto"} / ${pack.job_no || "Select job"}`}>
+        <Panel className="lg:col-span-12" icon={FileSignature} title="Document Reference" meta={`Pack ${pack.packlist_no || "Auto"} / ${pack.job_no || "Select job"}`}>
           <div className="freight-job-field-grid freight-job-field-grid-8">
             <Lookup label="Freight Job" value={pack.job_no} valueField="JOB_NO" displayFields={["JOB_NO", "PRIN_CODE", "PRIN_NAME"]} columns={jobColumns} loadOptions={() => lookupJobs(companyCode, mode.code, direction.code, pack.job_no)} onChange={(value, row) => selectJob(value, row, setPack, companyCode, userId, mode.code, direction.code)} />
             <ReadOnlyField label="Pack No" value={pack.packlist_no || "Auto"} />
@@ -603,7 +676,7 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
   );
 }
 
-function Header({ title, subtitle, icon: Icon, children, screenTitle = "Pack List" }: { title: string; subtitle: string; icon: typeof Plane; children: React.ReactNode; screenTitle?: string }) {
+function Header({ title, subtitle, icon: Icon, children, screenTitle = "Pack List" }: { title: string; subtitle: string; icon: typeof Plane; children: ReactNode; screenTitle?: string }) {
   return (
     <div className="freight-form-header">
       <div className="flex min-w-0 items-center gap-2">
@@ -619,7 +692,7 @@ function Header({ title, subtitle, icon: Icon, children, screenTitle = "Pack Lis
   );
 }
 
-function Panel({ title, meta, icon: Icon, children, className = "" }: { title: string; meta: string; icon: typeof Plane; children: React.ReactNode; className?: string }) {
+function Panel({ title, meta, icon: Icon, children, className = "" }: { title: string; meta: string; icon: typeof Plane; children: ReactNode; className?: string }) {
   return (
     <section className={`freight-info-section ${className}`}>
       <div className="freight-info-title">
