@@ -555,6 +555,15 @@ async function openReportInTab(endpoint: string, params: ReportParams): Promise<
   }
 }
 
+
+// ── GRN Print Report ───────────────────────────────────────────────────────
+export async function openGrnPrintReport(params: ReportParams) {
+  await openReportInTab(
+    `/api/finance/transactions/reports/getGrnPrintReport/html`,
+    params
+  );
+}
+
 // ── 1. Cheque Book Monitoring ─────────────────────────────────────────────
 // export async function openChequeMonitoringReport(params: ReportParams) {
 //     await openReportInTab(
