@@ -5,6 +5,7 @@ import { Button } from "../../../components/ui/Button";
 import { CardContent, CardHeader } from "../../../components/ui/Card";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 import { getDynamicLookup } from "../../../api/lookups";
+import { openGrnPrintReport } from "../../../api/transactions";
 import { useAuth } from "../../../state/AuthContext";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
@@ -65,7 +66,8 @@ export function PurchaseGRNEditor({
   const [flowLevelRunning, setFlowLevelRunning] = useState<number>(0);
   const [actionLoading, setActionLoading] = useState<ActionKey | null>(null);
 
-  // ---- Send Back dialog state ----
+  const [printing, setPrinting] = useState(false);
+
   const [sendBackDialogOpen, setSendBackDialogOpen] = useState(false);
   const [sendBackUser, setSendBackUser] = useState("");
   const [sendBackUserName, setSendBackUserName] = useState("");
@@ -75,7 +77,6 @@ export function PurchaseGRNEditor({
   const [sendBackUsers, setSendBackUsers] = useState<SendBackUserOption[]>([]);
   const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
 
-  // ---- Reject dialog state ----
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
@@ -98,8 +99,8 @@ export function PurchaseGRNEditor({
       try {
         const docNo = editor.row.doc_no;
         const [headerRaw, detailRows] = await Promise.all([
-          fetchPurchaseOrderHeader(docNo,config, user?.company_code, user?.loginid || user?.username),
-          fetchPurchaseOrderDetail(docNo,config, user?.company_code, user?.loginid || user?.username),
+          fetchPurchaseOrderHeader(docNo, config, user?.company_code, user?.loginid || user?.username),
+          fetchPurchaseOrderDetail(docNo, config, user?.company_code, user?.loginid || user?.username),
         ]);
         if (!mounted) return;
 
@@ -216,10 +217,10 @@ export function PurchaseGRNEditor({
     }
   };
 
- const handleSaveAsDraft = () =>
-  runAction("draft", async () => {
-    await runWorkflow("SAVEASDRAFT",  PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
-  }, "Purchase GRN saved as draft");
+  const handleSaveAsDraft = () =>
+    runAction("draft", async () => {
+      await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
+    }, "Purchase GRN saved as draft");
 
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
@@ -235,7 +236,28 @@ export function PurchaseGRNEditor({
       await runWorkflow("CANCELED", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
     }, "Purchase GRN cancelled");
 
-  // ---- Reject handlers ----
+  const handlePrintGrn = async () => {
+    if (!form.doc_no) {
+      setError("Save the GRN before printing");
+      return;
+    }
+    setPrinting(true);
+    setError("");
+    try {
+      await openGrnPrintReport({
+        parameter: "GRN_Print",
+        loginid: user?.loginid || user?.username || "ADMIN",
+        company_code: user?.company_code,
+        doc_type: PO_DOC_TYPE.GRN,
+        doc_no: form.doc_no,
+      } as any);
+    } catch (printError) {
+      setError(printError instanceof Error ? printError.message : "Error while printing");
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   const openRejectDialog = () => {
     setRejectError("");
     setRejectReason("");
@@ -258,7 +280,6 @@ export function PurchaseGRNEditor({
     }, "Purchase GRN rejected");
   };
 
-  // ---- Send Back handlers ----
   const openSendBackDialog = async () => {
     setSendBackError("");
     setSendBackUser("");
@@ -351,7 +372,9 @@ export function PurchaseGRNEditor({
               {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
               {form.doc_no && (
                 <>
-                  <Button type="button" variant="secondary"><Printer size={15} /> Print</Button>
+                  <Button type="button" variant="secondary" onClick={handlePrintGrn} disabled={printing}>
+                    {printing ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />} Print
+                  </Button>
                   <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
                 </>
               )}
@@ -392,6 +415,9 @@ export function PurchaseGRNEditor({
 
               <PurchaseOrderLinesTable
                 rows={rows}
+                form={form}
+                setdetails={setRows}
+                docType={PO_DOC_TYPE.GRN}
                 updateRow={updateRow}
                 addRow={addRow}
                 removeRow={removeRow}
@@ -405,16 +431,16 @@ export function PurchaseGRNEditor({
           )}
         </CardContent>
 
-      
+
         <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
           <div className="flex flex-wrap gap-3 rounded-2xl bg-gray-50 p-5 shadow-inner">
-           { isPendingTab && (
-             <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
+            {isPendingTab && (
+              <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
                 {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                 {actionLoading === "draft" ? "Saving..." : "Save Draft"}
               </Button>
             )}
-          { isPendingTab && <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
+            {isPendingTab && <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
               {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
               {actionLoading === "submit" ? "Submitting..." : "Submit"}
             </Button>}
@@ -430,13 +456,15 @@ export function PurchaseGRNEditor({
                 {actionLoading === "reject" ? "Rejecting..." : "Reject"}
               </Button>
             )}
-{isPendingTab &&
-            <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
-              {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
-            </Button>}
+            {isPendingTab &&
+              <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
+                {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
+              </Button>}
           </div>
           <div className="flex items-center gap-2">
-            <Button aria-label="Print" type="button" variant="outline" size="icon" disabled={actionDisabled}><Printer size={15} /></Button>
+            <Button aria-label="Print" type="button" variant="outline" size="icon" onClick={handlePrintGrn} disabled={actionDisabled || printing}>
+              {printing ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />}
+            </Button>
             <Button aria-label="Attachment" type="button" variant="outline" size="icon" disabled={actionDisabled}><Paperclip size={15} /></Button>
             <Button aria-label="Download" type="button" variant="outline" size="icon" disabled={actionDisabled}><Download size={15} /></Button>
             <Button type="button" variant="outline" onClick={onClose}>Close</Button>
