@@ -141,6 +141,7 @@ type QuotationHeaderNames = {
   forwarder_name: string;
   vehicle_type_name: string;
   carrier_name: string;
+  dept_name: string;
 };
 
 const emptyHeaderNames: QuotationHeaderNames = {
@@ -152,6 +153,7 @@ const emptyHeaderNames: QuotationHeaderNames = {
   forwarder_name: "",
   vehicle_type_name: "",
   carrier_name: "",
+  dept_name: "", 
 };
 
 type Notice = { type: "success" | "error"; text: string } | null;
@@ -378,25 +380,6 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
     });
   };
 
-  // const applyHeaderLookup = (field: keyof QuotationHeader, value: string, row: LookupRow | null) => {
-  //   setHeader((current) => {
-  //     const next = { ...current, [field]: value };
-  //     if (field === "prin_code" && row) {
-  //       next.dept_code = lookupText(row, "prin_dept_code") || next.dept_code;
-  //       next.curr_code = lookupText(row, "curr_code") || next.curr_code;
-  //       next.ex_rate = lookupText(row, "ex_rate") || next.ex_rate;
-  //     }
-  //     if (field === "curr_code" && row) next.ex_rate = lookupText(row, "ex_rate") || next.ex_rate;
-  //     if (field === "origin_port" && row) next.country_origin = lookupText(row, "country_name") || lookupText(row, "country_code") || next.country_origin;
-  //     if (field === "destination_port" && row) next.country_destination = lookupText(row, "country_name") || lookupText(row, "country_code") || next.country_destination;
-  //     if (field === "enquiry_no" && row) {
-  //       next.enquiry_type = lookupText(row, "enquiry_type") || next.enquiry_type;
-  //       void copyFromEnquiry(lookupText(row, "company_code") || current.company_code, lookupText(row, "prin_code"), value, next.enquiry_type);
-  //     }
-  //     return next;
-  //   });
-  // };
-
  const applyHeaderLookup = (field: keyof QuotationHeader, value: string, row: LookupRow | null) => {
     setHeader((current) => {
       const next = { ...current, [field]: value };
@@ -429,7 +412,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
           ? lookupText(row, "vessel_name") || lookupText(row, "vehicle_desc") || lookupText(row, "airline_name")
           : "";
       }
-      return next;
+      if (field === "dept_code") next.dept_name = row ? lookupText(row, "dept_name") : "";      return next;
     });
   };
 
@@ -566,6 +549,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
         forwarder_name: lookupText(loadedRow, "forwarder_name"),
         vehicle_type_name: lookupText(loadedRow, "vtype_name"),
         carrier_name: lookupText(loadedRow, "carrier_name"),
+        dept_name: lookupText(loadedRow, "dept_name"),
       });
       setDetails(data?.details?.length ? data.details.map((item, index) => toDetailFromRow(normalizeLookupRow(item), loadedHeader, index + 1)) : [buildInitialDetail(loadedHeader, 1)]);
       setTerms(data?.terms?.length ? data.terms.map((item, index) => toTermFromRow(normalizeLookupRow(item), index + 1)) : []);
@@ -985,9 +969,10 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
           <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-11">
             <FormInput label="Quotation No" value={header.quotation_nr} onChange={(value) => setHeaderField("quotation_nr", value)} placeholder="Auto" disabled />
             <FormInput label="Date" type="date" value={header.quotation_date} onChange={(value) => setHeaderField("quotation_date", value)} required />
-            <FormLookup label="Principal" value={header.prin_code} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required className="sm:col-span-2 xl:col-span-2"/>
-            <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }, { field: "prin_telno1", header: "Phone" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} className="sm:col-span-2 xl:col-span-2" />
-            <FormInput label="Department" value={header.dept_code} onChange={(value) => setHeaderField("dept_code", value)} required className="sm:col-span-2 xl:col-span-2" />
+            <FormLookup label="Principal" value={header.prin_code} displayValue={headerNames.prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required className="sm:col-span-2 xl:col-span-2"/>
+            <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayValue={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }, { field: "prin_telno1", header: "Phone" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} className="sm:col-span-2 xl:col-span-2" />
+            {/* <FormInput label="Department" value={header.dept_code} onChange={(value) => setHeaderField("dept_code", value)} required className="sm:col-span-2 xl:col-span-2" /> */}
+            <FormLookup label="Department" value={header.dept_code} displayValue={headerNames.dept_name} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} required className="sm:col-span-2 xl:col-span-2" />
             {!header.quotation_nr ? (
               <FormLookup label="Source Enquiry/RFQ" value={header.enquiry_no} valueField="enquiry_nr" displayFields={["enquiry_nr", "enquiry_date_display"]} columns={[{ field: "enquiry_nr", header: "Enquiry" }, { field: "enquiry_date_display", header: "Date" }, { field: "enquiry_type", header: "Type" }, { field: "prin_code", header: "Principal" }]} loadOptions={() => loadEnquiryLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("enquiry_no", value, row)} className="sm:col-span-2 xl:col-span-2" />
             ) : (
@@ -1029,8 +1014,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                 </SectionPanel>
                 <SectionPanel className="xl:col-span-6" icon={MapPinned} title="Journey" meta={`${header.origin_port || "Origin"} -> ${header.destination_port || "Destination"}`}>
                   <div className="grid gap-1 sm:grid-cols-2">
-                    <FormLookup label="Port of Loading" value={header.origin_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("origin_port", value, row)} required />
-                    <FormLookup label="Port of Destination" value={header.destination_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("destination_port", value, row)} />
+                    <FormLookup label="Port of Loading" value={header.origin_port} displayValue={headerNames.origin_port_name} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("origin_port", value, row)} required />
+                    <FormLookup label="Port of Destination" value={header.destination_port} displayValue={headerNames.destination_port_name} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("destination_port", value, row)} />
                     <FormInput label="Country Origin" value={header.country_origin} onChange={(value) => setHeaderField("country_origin", value)} />
                     <FormInput label="Country Destn" value={header.country_destination} onChange={(value) => setHeaderField("country_destination", value)} />
                     <FormInput label="Via" value={header.via} onChange={(value) => setHeaderField("via", value)} className="sm:col-span-2" />
@@ -1038,8 +1023,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                 </SectionPanel>
                 <SectionPanel className="xl:col-span-12" icon={ShipWheel} title="Carrier And Equipment" meta={`${modeLabel(header.transport_mode)} / ${header.carrier || "Carrier pending"}`}>
                   <div className="grid gap-1 sm:grid-cols-3">
-                    <FormLookup key={`carrier-${header.transport_mode}`} label="Carrier" value={header.carrier} {...carrierLookupProps(header.transport_mode, header.company_code)} onChange={(value, row) => applyHeaderLookup("carrier", value, row)} />
-                    <FormLookup label="Forwarder" value={header.forwarder_code} valueField="forwarder_code" displayFields={["forwarder_code", "forwarder_name"]} columns={[{ field: "forwarder_code", header: "Code" }, { field: "forwarder_name", header: "Forwarder" }]} loadOptions={() => loadForwarderLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("forwarder_code", value, row)} />
+                    <FormLookup key={`carrier-${header.transport_mode}`} label="Carrier" value={header.carrier} displayValue={headerNames.carrier_name} {...carrierLookupProps(header.transport_mode, header.company_code)} onChange={(value, row) => applyHeaderLookup("carrier", value, row)} />
+                    <FormLookup label="Forwarder" value={header.forwarder_code} displayValue={headerNames.forwarder_name} valueField="forwarder_code" displayFields={["forwarder_code", "forwarder_name"]} columns={[{ field: "forwarder_code", header: "Code" }, { field: "forwarder_name", header: "Forwarder" }]} loadOptions={() => loadForwarderLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("forwarder_code", value, row)} />
                     <FormInput label="Transit" value={header.transit_time} onChange={(value) => setHeaderField("transit_time", value)} />
                     <FormInput label="Frequency" value={header.frequency} onChange={(value) => setHeaderField("frequency", value)} />
                     {header.transport_mode === "S" && (
@@ -1049,7 +1034,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                     <FormInput label="T/F" value={header.t_f} onChange={(value) => setHeaderField("t_f", value)} />
                     </>)}
                     {header.transport_mode === "R" && (
-                    <><FormLookup label="Vehicle Type" value={header.vehicle_type} valueField="vtype_code" displayFields={["vtype_code", "vtype_name"]} columns={[{ field: "vtype_code", header: "Code" }, { field: "vtype_name", header: "Vehicle Type" }]} loadOptions={() => loadVehicleTypeLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("vehicle_type", value, row)} />
+                    <><FormLookup label="Vehicle Type" value={header.vehicle_type} displayValue={headerNames.vehicle_type_name} valueField="vtype_code" displayFields={["vtype_code", "vtype_name"]} columns={[{ field: "vtype_code", header: "Code" }, { field: "vtype_name", header: "Vehicle Type" }]} loadOptions={() => loadVehicleTypeLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("vehicle_type", value, row)} />
                     </>)}
                     <FormTextarea label="Cargo Detail" value={header.cargo_detail} onChange={(value) => setHeaderField("cargo_detail", value)} compact />
                   </div>
@@ -1143,32 +1128,25 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                       {details.map((row, index) => (
                         <tr key={`${row.srno}-main`} className="border-b border-slate-200 bg-white transition last:border-0 hover:bg-slate-50/80">
                           <td className="px-1.5 py-1.5 align-middle">
-                            <div className="flex items-center gap-1.5">
-                              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded bg-slate-700 px-1 text-[8px] font-bold text-white">
-                                {index + 1}
-                              </span>
-                              <div className="min-w-0 flex-1">
-                                <LookupField
-                                  compact
-                                  label="Activity"
-                                  value={row.act_code}
-                                  displayValue={row.act_code || ""}
-                                  valueField="activity_code"
-                                  displayFields={["activity_code"]}
-                                  columns={[
-                                    { field: "activity_code", header: "Code" },
-                                    { field: "activity", header: "Activity" },
-                                    { field: "uom", header: "UOM" },
-                                    { field: "bill", header: "Bill" },
-                                    { field: "cost", header: "Cost" },
-                                  ]}
-                                  loadOptions={() => loadActivityLookup(header.company_code)}
-                                  onChange={(value, lookupRow) => applyDetailActivityLookup(index, value, lookupRow)}
-                                  placeholder="Activity"
-                                />
-                              </div>
-                            </div>
-                          </td>
+                           <LookupField
+                              compact
+                              label="Activity"
+                              value={row.act_code}
+                              displayValue={row.act_code || ""}
+                              valueField="activity_code"
+                              displayFields={["activity_code"]}
+                              columns={[
+                               { field: "activity_code", header: "Code" },
+                               { field: "activity", header: "Activity" },
+                               { field: "uom", header: "UOM" },
+                               { field: "bill", header: "Bill" },
+                               { field: "cost", header: "Cost" },
+                              ]}
+                             loadOptions={() => loadActivityLookup(header.company_code)}
+                             onChange={(value, lookupRow) => applyDetailActivityLookup(index, value, lookupRow)}
+                             placeholder="Activity"
+                             />
+                            </td>
                           <CellInput value={row.activity} onChange={(value) => setDetailField(index, "activity", value)} className="min-w-[150px]" />
                           <td className="px-1 py-1.5 align-middle"><select className={`${fieldClassName} h-7`} value={row.transport_mode} onChange={(event) => setDetailField(index, "transport_mode", event.target.value)}>{transportModes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></td>
                           <CellInput value={row.origin_port} onChange={(value) => setDetailField(index, "origin_port", value)} className="w-[90px]" />
@@ -1360,7 +1338,7 @@ function buildInitialHeader(user: Record<string, unknown> | null, target?: Freig
   const mode = target?.mode === "sea" ? "S" : target?.mode === "land" ? "R" : "A";
   const jobType = target?.direction === "import" ? "IMP" : "EXP";
   return {
-    company_code: company, prin_code: "", quotation_nr: "", quotation_date: toInputDate(new Date()), dept_code: "22",
+    company_code: company, prin_code: "", quotation_nr: "", quotation_date: toInputDate(new Date()), dept_code: "",
     job_type: jobType, transport_mode: mode, indstatus: "N", enquiry_no: "", enquiry_type: "", offer_validity: "",
     origin_port: "", destination_port: "", country_origin: "", country_destination: "", via: "", carrier: "", forwarder_code: "",
     salesman_code: "", transit_time: "", frequency: "", commodity: "", cargo_detail: "", remarks: "", l: "", b: "", h: "",
@@ -1589,7 +1567,7 @@ function buildSmartChecks(header: QuotationHeader, details: QuotationDetail[], t
   ];
 }
 
-function FormInput({ label, value, onChange, type = "text", required, placeholder, className = "",disabled }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean; placeholder?: string; className?: string; disabled?: boolean }) {
+function FormInput({ label, value, onChange, type = "text", required, placeholder, className = "",disabled }: { label: string; value: string; displayValue?: string; onChange: (value: string) => void; type?: string; required?: boolean; placeholder?: string; className?: string; disabled?: boolean }) {
   return (
     <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-slate-800 freight-field-label ${className}`}>
       <span>{label} {required && <span style={{ color: "#E24B4A" }}>*</span>}</span>
@@ -1608,12 +1586,18 @@ function FormInput({ label, value, onChange, type = "text", required, placeholde
   );
 }
 
-function FormLookup({ label, value, valueField, displayFields, columns, loadOptions, onChange, required, className = "" }: { label: string; value: string; valueField: string; displayFields: string[]; columns: { field: string; header: string }[]; loadOptions: () => Promise<LookupRow[]>; onChange: (value: string, row: LookupRow | null) => void; required?: boolean; className?: string }) {
+// function FormLookup({ label, value, valueField, displayFields, columns, loadOptions, onChange, required, className = "" }: { label: string; value: string; valueField: string; displayFields: string[]; columns: { field: string; header: string }[]; loadOptions: () => Promise<LookupRow[]>; onChange: (value: string, row: LookupRow | null) => void; required?: boolean; className?: string }) {
+  function FormLookup({ label, value, displayValue, valueField, displayFields, columns, loadOptions, onChange, required, className = "" }: {
+  label: string; value: string; displayValue?: string; valueField: string; displayFields: string[];
+  columns: { field: string; header: string }[]; loadOptions: () => Promise<LookupRow[]>;
+  onChange: (value: string, row: LookupRow | null) => void; required?: boolean; className?: string;
+  }) {
   return (
     <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-slate-800 freight-field-label ${className}`}>
       <span>{label}{required && <span style={{ color: "#E24B4A" }}>*</span>}</span>
       <LookupField
         value={value}
+        displayValue={displayValue}
         valueField={valueField}
         displayFields={displayFields}
         columns={columns}
@@ -1659,6 +1643,7 @@ async function loadDefaultQuotationTerms(companyCode: string) { return loadFreig
 async function loadActivityLookup(companyCode: string) { return loadFreightLookup("freight_activity", companyCode); }
 function carrierLookupProps(mode: string, companyCode: string) { if (mode === "S") return { valueField: "vessel_code", displayFields: ["vessel_code", "vessel_name"], columns: [{ field: "vessel_code", header: "Code" }, { field: "vessel_name", header: "Vessel" }], loadOptions: () => loadFreightLookup("freight_vessel", companyCode) }; if (mode === "R") return { valueField: "vehicle_no", displayFields: ["vehicle_no", "vehicle_desc"], columns: [{ field: "vehicle_no", header: "Vehicle" }, { field: "vehicle_desc", header: "Description" }], loadOptions: () => loadFreightLookup("freight_vehicle", companyCode) }; return { valueField: "airline_code", displayFields: ["airline_code", "airline_name"], columns: [{ field: "airline_code", header: "Code" }, { field: "airline_name", header: "Airline" }], loadOptions: () => loadFreightLookup("freight_airline", companyCode) }; }
 async function loadFreightLookup(parameter: string, companyCode: string, query = "") { return (await freightSelect<LookupRow>({ parameter, code1: companyCode, code2: query || "NULL", number1: 50 })).map(normalizeLookupRow); }
+async function loadDepartmentLookup(companyCode: string) { return loadFreightLookup("freight_department", companyCode); }
 
 function normalizeLookupRow(row: LookupRow): LookupRow {
   return Object.entries(row || {}).reduce<LookupRow>((acc, [key, value]) => {
