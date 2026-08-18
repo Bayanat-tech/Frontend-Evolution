@@ -94,16 +94,31 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
   });
 
   // ===================== APPLICABLE TO lookup =====================
+  // const { data: applicableToData } = useQuery({
+  //   queryKey: ['accrual-applicable-to', companyCode],
+  //   queryFn: async () => {
+  //     // NOTE: verify actual proc/parameter name for "Applicable To" list
+  //     const response = await getDynamicLookup({
+  //       parameter: 'PAY_COMPONENT_accrual_applicable_to',
+  //       code1: companyCode,
+  //       code2: loginid
+  //     });
+  //     const rawRows = (response ?? []) as unknown as Record<string, unknown>[];
+  //     return rawRows.map(uppercaseKeys);
+  //   },
+  //   enabled: !!companyCode
+  // });
+    // ===================== APPLICABLE TO lookup =====================
   const { data: applicableToData } = useQuery({
     queryKey: ['accrual-applicable-to', companyCode],
     queryFn: async () => {
-      // NOTE: verify actual proc/parameter name for "Applicable To" list
-      const response = await getDynamicLookup({
-        parameter: 'HR_ACCRUAL_APPLICABLE_TO',
+      const response: any = await getDynamicLookup({
+        parameter: 'PAY_COMPONENT_accrual_applicable_to',
         code1: companyCode,
         code2: loginid
       });
-      const rawRows = (response ?? []) as unknown as Record<string, unknown>[];
+      // response can be either a plain array OR an envelope { success, data, totalCount }
+      const rawRows = (Array.isArray(response) ? response : response?.data ?? []) as Record<string, unknown>[];
       return rawRows.map(uppercaseKeys);
     },
     enabled: !!companyCode
@@ -190,7 +205,7 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
       // update is being distinguished via the `parameter` name instead.
       // Confirm the exact insert/update proc names on the backend.
       return executeDynamicMutationColumn90({
-        parameter: isEdit ? 'ACCRUAL_TYPE_upd' : 'ACCRUAL_TYPE_ins',
+        parameter: 'accrual_type_ins_upd',
         loginid,
         val1s1: values.COMPANY_CODE,
         val1s2: values.ACCRUAL_TYPE,
@@ -293,11 +308,11 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
                         disabled={disabled}
                       >
                         <option value="">Select...</option>
-                        {(applicableToData ?? []).map((row: any, idx: number) => (
-                          <option key={idx} value={row.CODE ?? row.ELIGIBLITY}>
-                            {row.DESC ?? row.ELIGIBLITY_DESC}
-                          </option>
-                        ))}
+                      {(applicableToData ?? []).map((row: any, idx: number) => (
+  <option key={idx} value={row.VALUE_CODE}>
+    {row.VALUE_CODE} - {row.VALUE_DESC}
+  </option>
+))}
                       </Select>
                     </div>
 

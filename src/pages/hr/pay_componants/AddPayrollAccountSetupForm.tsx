@@ -61,9 +61,7 @@ const AddPayrollAccountSetupForm = ({
   const loginid = user?.loginid ?? '';
   const queryClient = useQueryClient();
 
-  // ===================== FETCH EXISTING RECORD (edit/view) =====================
-  // NOTE: confirm exact backend parameter for single-row detail fetch —
-  // reusing PAY_COMPONENT_AccountSetup and filtering by pay_comp_id client-side for now.
+ 
   const { data: existingRecord, isLoading: existingLoading } = useQuery({
     queryKey: ['pa-setup-detail', company_code, div_code, dept_code, section_code, pay_comp_id],
     queryFn: async () => {
@@ -101,7 +99,7 @@ const AddPayrollAccountSetupForm = ({
   const loadAccountCodeOptions = async (search?: string) => {
     // NOTE: confirm actual parameter name for chart-of-accounts lookup
     const response = await getDynamicLookup({
-      parameter: 'ACCOUNT_CODE_Lookup',
+      parameter: 'AC_PREPAID_GET_DEBIT_AC',
       code1: company_code,
       code2: search ?? ''
     });
@@ -142,7 +140,7 @@ const AddPayrollAccountSetupForm = ({
     mutationFn: async (values: TPayrollAccountForm) => {
       // NOTE: confirm exact insert/update proc names + val1sN column mapping on backend
       return executeDynamicMutationColumn90({
-        parameter: isEdit ? 'PAY_COMPONENT_AccountSetup_upd' : 'PAY_COMPONENT_AccountSetup_ins',
+         parameter: 'Payroll_accountsetup_ins_upd',
         loginid,
         val1s1: values.COMPANY_CODE,
         val1s2: values.DIV_CODE,

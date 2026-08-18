@@ -8,8 +8,7 @@ import { Button } from '../../../components/ui/Button';
 import { DataTable } from '../../../components/ui/DataTable';
 import AddPayrollAccountSetupForm from './AddPayrollAccountSetupForm'; // NOTE: adjust path as per your folder structure
 
-// getDynamicLookup returns raw lowercase keys from Oracle — normalize so
-// field reads resolve consistently regardless of case.
+
 function lowercaseKeys<T extends Record<string, unknown>>(row: T): T {
   const out: Record<string, unknown> = {};
   for (const key in row) {
@@ -144,9 +143,6 @@ const PayrollAccountSetupPage = () => {
     }
 
     try {
-      // NOTE: verify the equivalent of commonServiceInstance.procBuildCommonProcedurewmc
-      // in the new project — postFinance is used here as the generic mutation bridge,
-      // confirm the endpoint name and val1sN mapping against the actual API.
       const response: any = await postFinance('PROC_CANCEL_LEAVE', {
         loginid: user?.loginid ?? '',
         val1s1: docNo?.lve_doc_no ?? '', // LVE_DOC_NO
@@ -168,10 +164,7 @@ const PayrollAccountSetupPage = () => {
     setShowForm(true);
   };
 
-  // const handleRowDoubleClick = (row: TLeaveRow) => {
-  //   setEditingRow(row);
-  //   setShowForm(true);
-  // };
+ 
 
   const handleFormClose = (refetch?: boolean) => {
     setShowForm(false);
@@ -316,8 +309,22 @@ const PayrollAccountSetupPage = () => {
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 2 — Leave Grid Table
       ══════════════════════════════════════════════════════════════════ */}
-      <div className="flex flex-1 flex-col rounded-md border bg-card p-3">
-        <DataTable
+     {/* ══════════════════════════════════════════════════════════════════
+    SECTION 2 — Leave Grid Table
+══════════════════════════════════════════════════════════════════ */}
+<div className="flex flex-1 flex-col rounded-md border bg-card p-3">
+  <div className="mb-3 flex justify-end">
+    <Button
+      type="button"
+      variant="default"
+      onClick={handleAddClick}
+      disabled={!company || !division || !department || !section}
+    >
+      <Plus size={15} /> Add Payroll
+    </Button>
+  </div>
+
+  <DataTable
           columns={leaveColumns}
           data={leaveRows}
           height={350}
@@ -326,30 +333,21 @@ const PayrollAccountSetupPage = () => {
        
         />
 
-        {/* Action Buttons */}
-        <div className="mt-3 border-t pt-3">
-          <div className="flex justify-between gap-2">
-            <Button
-              type="button"
-              variant="default"
-              onClick={handleAddClick}
-              disabled={!company || !division || !department || !section}
-            >
-              <Plus size={15} /> Add
-            </Button>
+        
 
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={handleReset}>
-                <RotateCcw size={15} /> Reset
-              </Button>
-              <Button type="button" variant="default" onClick={handleSave}>
-                <Save size={15} /> Save
-              </Button>
-            </div>
-          </div>
-        </div>
+         
+<div className="mt-3 border-t pt-3">
+  <div className="flex justify-end gap-2">
+    <Button type="button" variant="outline" onClick={handleReset}>
+      <RotateCcw size={15} /> Reset
+    </Button>
+  </div>
+</div>
+
+
+
       </div>
-
+ 
       {/* ══════════════════════════════════════════════════════════════════
           Add / Edit Modal
       ══════════════════════════════════════════════════════════════════ */}
