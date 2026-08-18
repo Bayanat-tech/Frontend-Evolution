@@ -207,7 +207,7 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: 'Company Info Master',
-    match: ({pathname}) => pathname.toLowerCase().includes("/security/security/masters/company_info"),
+    match: ({pathname}) => pathname.toLowerCase().includes("/security/security/masters/gm/com_info"),
     element: () => <CompanyInfo />,
   },
   {
