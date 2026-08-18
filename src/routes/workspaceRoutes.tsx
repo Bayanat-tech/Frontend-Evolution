@@ -188,6 +188,7 @@ import PLSummaryPage from "../pages/purchase_sales/Reports/Plsummarypage";
 import { PurchaseInvoicePage } from "../pages/purchase_sales/purchase/PurchaseInvoicePage";
 import { SalesInvoicePage } from "../pages/purchase_sales/sales/SalesInvoicePage";
 import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
+import CompanyInfo from "../pages/security/CompanyInfo";
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -207,6 +208,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: 'Company Info Master',
+    match: ({pathname}) => pathname.toLowerCase().includes("/security/security/masters/gm/com_info"),
+    element: () => <CompanyInfo />,
+  },
   {
     name: 'MSE Prod Group',
     match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_group"),

@@ -455,9 +455,10 @@ const handleSave = async () => {
         </div>
       </section>
 
-      {/* ── Commercial ── */}
+      
+
 {/* ── Commercial ── */}
-<section className="rounded-md border bg-card shadow-sm overflow-hidden">
+{/* <section className="rounded-md border bg-card shadow-sm overflow-hidden">
   <SectionHeader icon={Banknote} label="Commercial" caption="Currency, sale type and tally type" accent="amber" />
   <div className="grid grid-cols-2 gap-3 p-3">
     {isEditing ? (
@@ -511,25 +512,14 @@ const handleSave = async () => {
       </>
     )}
   </div>
-</section>
+</section> */}
 
-      {/* ── Status Flags (full width) ── */}
-      <section className="col-span-2 rounded-md border bg-card shadow-sm overflow-hidden">
-        <SectionHeader icon={Package} label="Status" caption="Progress flags across the job lifecycle" accent="emerald" />
-        <div className="grid grid-cols-4 md:grid-cols-8 gap-3 p-3">
-          <FlagPill label="Packing Done" isYes={isY(value(job, "packdet"))} />
-          <FlagPill label="Allocated" isYes={isY(value(job, "allocated"))} />
-          <FlagPill label="Confirmed" isYes={isY(value(job, "confirmed"))} />
-          <FlagPill label="Invoiced" isYes={isY(value(job, "invoiced"))} />
-          <FlagPill label="Canceled" isYes={isY(value(job, "canceled"))} />
-          <FlagPill label="Ordered" isYes={isY(value(job, "ordered"))} />
-          <FlagPill label="Picked" isYes={isY(value(job, "picked"))} />
-          <Field label="GRN No" val={value(job, "grn_no")} />
-        </div>
-      </section>
+
 
       {/* ── Remarks (full width) ── */}
-      <section className="col-span-2 rounded-md border bg-card shadow-sm overflow-hidden">
+      {/* <section className="col-span-2 rounded-md border bg-card shadow-sm overflow-hidden"> */}
+              <section className="rounded-md border bg-card shadow-sm overflow-hidden">
+
         <SectionHeader icon={FileText} label="Remarks" caption="Job and GRN notes" accent="blue" />
         <div className="grid grid-cols-2 gap-3 p-3">
           <EditableField
@@ -546,7 +536,20 @@ const handleSave = async () => {
           />
         </div>
       </section>
-
+      {/* ── Status Flags (full width) ── */}
+      <section className="col-span-2 rounded-md border bg-card shadow-sm overflow-hidden">
+        <SectionHeader icon={Package} label="Status" caption="Progress flags across the job lifecycle" accent="emerald" />
+        <div className="grid grid-cols-4 md:grid-cols-8 gap-3 p-3">
+          <FlagPill label="Packing Done" isYes={isY(value(job, "packdet"))} />
+          <FlagPill label="Allocated" isYes={isY(value(job, "allocated"))} />
+          <FlagPill label="Confirmed" isYes={isY(value(job, "confirmed"))} />
+          <FlagPill label="Invoiced" isYes={isY(value(job, "invoiced"))} />
+          <FlagPill label="Canceled" isYes={isY(value(job, "canceled"))} />
+          <FlagPill label="Ordered" isYes={isY(value(job, "ordered"))} />
+          <FlagPill label="Picked" isYes={isY(value(job, "picked"))} />
+          <Field label="GRN No" val={value(job, "grn_no")} />
+        </div>
+      </section>
     </div>
   );
 }

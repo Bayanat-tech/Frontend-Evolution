@@ -186,7 +186,7 @@ const activeTab = availableTabs.some((t: any) => t.value === tab) ? tab : "job_d
 
   const reportReady   = !reportLoading && !reportError && !!reportHtml;
   const hasExcelExport = !!selectedReport?.excelFn;
-
+console.log("job_class:", value(job || {}, "job_class"), "availableTabs:", availableTabs);
   return (
     <section className="grid gap-3">
 
