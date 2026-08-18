@@ -223,7 +223,7 @@ export function LookupField({
               ref={validityRef}
               tabIndex={-1}
               aria-hidden="true"
-              className="pointer-events-none absolute inset-0 h-full w-full border-0 bg-transparent p-0 opacity-0"
+              className="pointer-events-none absolute inset-0 -z-10 h-full w-full border-0 bg-transparent p-0 text-transparent opacity-0"
               value={value}
               required
               onChange={() => {}}

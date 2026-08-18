@@ -3999,6 +3999,12 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   padding: 6.5px;
 }
 
+.freight-dense-form .freight-tabs-shell .freight-tabs-panel {
+  padding: 6.5px;
+  max-height: calc(150vh - 400px);
+  overflow-y: auto;
+}
+
 .freight-dense-form .freight-section-heading {
   margin-bottom: 4px;
 }
