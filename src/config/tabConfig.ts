@@ -204,6 +204,9 @@ export function getInboundTabConfig(tab: string): TabConfig | undefined {
   return tabConfigs[tab];
 }
 
+const JOB_DETAILS_TAB = { value: "job_details", label: "Job Details" };
+
+
 export function getTabsForJob(jobClass: string) {
   const allowed: Record<string, string[]> = {
     M:  ["shipment_details", "putway_manual", "job_confirmation", "activity_billing"],
@@ -212,5 +215,6 @@ export function getTabsForJob(jobClass: string) {
     N:  ["shipment_details", "packing_details", "receiving_details", "quality_clearance", "putway_details", "job_confirmation", "activity_billing"],
   };
   const list = allowed[jobClass];
-  return list ? detailTabs.filter((t) => list.includes(t.value)) : detailTabs;
+  const rest = list ? detailTabs.filter((t) => list.includes(t.value)) : detailTabs;
+  return [JOB_DETAILS_TAB, ...rest];
 }

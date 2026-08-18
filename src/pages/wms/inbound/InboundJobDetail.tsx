@@ -173,9 +173,9 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
 
   useEffect(() => { void loadJob(); }, [jobNo]);
 
-  const availableTabs = getTabsForJob(value(job || {}, "job_class"));
-  const activeTab     = availableTabs.some((t: any) => t.value === tab) ? tab : "shipment_details";
-  console.log("value(job || {}, 'job_class'):", value(job || {}, "job_class"));
+const availableTabs = loading ? [] : getTabsForJob(value(job || {}, "job_class"));
+const activeTab = availableTabs.some((t: any) => t.value === tab) ? tab : "job_details";
+  // console.log("value(job || {}, 'job_class'):", value(job || {}, "job_class"));
 
   const jobStatus   = isCanceled(job || {}) ? "Canceled"
     : hasDate(value(job || {}, "confirm_date")) ? "Confirmed" : "In Progress";
@@ -248,33 +248,40 @@ export function InboundJobDetail({ jobNo, tab }: Props) {
         </div>
       </div>
 
-      {/* ── Tabs ── */}
-      <div className="flex gap-2 overflow-x-auto rounded-md border bg-card p-2">
-        {availableTabs.map((item: any) => (
-          <Link
-            key={item.value}
-            className={
-              item.value === activeTab
-                ? "ui-button ui-button-default ui-button-sm whitespace-nowrap"
-                : "ui-button ui-button-outline ui-button-sm whitespace-nowrap"
-            }
-            to={`${basePath}/${item.value}${locationSearchPrincipal(job)}`}
-            onClick={(e) => {
-              if (item.value === activeTab) return;
-              if (!tabRef.current?.validateBeforeLeave()) {
-                e.preventDefault(); // blocked — the tab component already showed the
-                                    // error toast and opened the fix-it modal
-              }
-            }}
-          >
-            {item.label}
-          </Link>
-        ))}
-      </div>
+{/* ── Tabs ── */}
+<div className="flex gap-2 overflow-x-auto rounded-md border bg-card p-2">
+  {loading ? (
+    // simple skeleton — same height/spacing as real tab buttons, no flash of content
+    <div className="flex gap-2">
+      {[1, 2, 3, 4].map((i) => (
+        <div key={i} className="h-8 w-28 animate-pulse rounded-md bg-muted" />
+      ))}
+    </div>
+  ) : (
+    availableTabs.map((item: any) => (
+      <Link
+        key={item.value}
+        className={
+          item.value === activeTab
+            ? "ui-button ui-button-default ui-button-sm whitespace-nowrap"
+            : "ui-button ui-button-outline ui-button-sm whitespace-nowrap"
+        }
+        to={`${basePath}/${item.value}${locationSearchPrincipal(job)}`}
+        onClick={(e) => {
+          if (item.value === activeTab) return;
+          if (!tabRef.current?.validateBeforeLeave()) {
+            e.preventDefault();
+          }
+        }}
+      >
+        {item.label}
+      </Link>
+    ))
+  )}
+</div>
 
       {/* ── Tab content ── */}
-      <InboundOperationalTab ref={tabRef} job={job} jobNo={jobNo} tab={activeTab} loadingJob={loading} />
-
+<InboundOperationalTab ref={tabRef} job={job} jobNo={jobNo} tab={activeTab} loadingJob={loading} onJobUpdated={loadJob} />
       {/* ── Dialog 1: Report list ── */}
       <Dialog
         open={listOpen}
