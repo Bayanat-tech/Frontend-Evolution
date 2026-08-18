@@ -179,8 +179,8 @@ const PayUnitDependHeaderForm = ({ formik, isEdit, disabled = false, onPayCompId
         parameter: 'PAY_COMP_PAYUNIT_DEPEND_Delete',
         loginid: user?.loginid ?? '',
         code1: user?.company_code ?? '',
-        code2: values.pay_comp_id ?? '',
-        code3: depend_pay_comp_type ?? ''
+        // code2: values.pay_comp_id ?? '',
+        code2: depend_pay_comp_type ?? ''
       } as any);
 
       setFieldValue(

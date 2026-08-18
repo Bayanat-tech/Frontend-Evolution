@@ -113,8 +113,8 @@ const PayUnitDependDetailForm = ({ formik, disabled = false }: TProps) => {
         parameter: 'PAY_COMP_PAYUNIT_DEPEND_DETAIL_Delete',
         loginid: user?.loginid ?? '',
         code1: user?.company_code ?? '',
-        code2: formik.values.pay_comp_id ?? '',
-        code3: nationality ?? ''
+        // code2: formik.values.pay_comp_id ?? '',
+        code2: nationality ?? ''
       } as any);
 
       const updated = details.filter((row) => row.id !== id).map((row, i) => ({ ...row, sort_order: i + 1 }));

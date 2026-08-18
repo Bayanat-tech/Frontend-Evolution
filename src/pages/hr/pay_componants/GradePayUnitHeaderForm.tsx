@@ -214,14 +214,13 @@ const GradePayUnitHeaderForm = ({ formik, disabled = false, onGradeSelect }: TPr
   const handleDeleteHeaderRow = async (id: string, depend_pay_comp_type: string) => {
     if (!window.confirm('Are you sure you want to delete this row?')) return;
     try {
-      // NOTE: verify executeDynamicDelete accepts a code3 field — the original
-      // delete call needed company_code / grade_code / depend_pay_comp_type (3 codes).
+      
       await executeDynamicDelete({
         parameter: 'PAY_COMPONENT_GradePay_Delete',
         loginid: user?.loginid ?? '',
         code1: user?.company_code ?? '',
-        code2: values.grade_code ?? '',
-        code3: depend_pay_comp_type ?? ''
+       // code2: values.grade_code ?? '',
+        code2: depend_pay_comp_type ?? ''
       } as any);
 
       setFieldValue(
