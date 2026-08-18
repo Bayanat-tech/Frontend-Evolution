@@ -555,6 +555,15 @@ async function openReportInTab(endpoint: string, params: ReportParams): Promise<
   }
 }
 
+
+// ── GRN Print Report ───────────────────────────────────────────────────────
+export async function openGrnPrintReport(params: ReportParams) {
+  await openReportInTab(
+    `/api/finance/transactions/reports/getGrnPrintReport/html`,
+    params
+  );
+}
+
 // ── 1. Cheque Book Monitoring ─────────────────────────────────────────────
 // export async function openChequeMonitoringReport(params: ReportParams) {
 //     await openReportInTab(
@@ -949,36 +958,7 @@ export async function getBalanceSheetReportExcelDownload(params: ReportParams): 
   window.URL.revokeObjectURL(url);
 }
 
-// ---------Sales Order Report----------------
 
-export async function getSalesOrderReportHtml(params: ReportParams): Promise<string> {
-  const response = await api.post(
-    `/api/finance/transactions/report/salesorder/html`,
-    params,
-    { responseType: "text" }
-  );
-  return response.data as string;
-}
-
-
-export async function getSalesOrderSheetReportExcelDownload(params: ReportParams): Promise<void> {
-  const response = await api.post(
-    `/api/finance/transactions/report/salesorder/excel`,
-    params,
-    { responseType: "blob" }
-  );
-  const blob = new Blob([response.data], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "BalanceSheet.xlsx";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.URL.revokeObjectURL(url);
-}
 
 // ---------Profit & Loss Report----------------
 
@@ -1160,11 +1140,35 @@ export async function exportTransactionWithoutTransfersExcel(params: ReportParam
   window.URL.revokeObjectURL(url);
 }
 
+//----------PL(Profit/Loss) analysis summary Report----------------
 
+export async function getPLSummaryReportHtml(params: ReportParams): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getPLSummaryReport/html`,      
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
 
-
-
-
+export async function getPLSummaryReportExcel(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getPLSummaryReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "PL_Summary_Report.xlsx";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
 
 // ---------DN Summary Report----------------
 

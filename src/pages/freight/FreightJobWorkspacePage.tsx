@@ -1,6 +1,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, Ban, Bell, BrainCircuit, CheckCircle2, ClipboardList, FileText, Info, PackageCheck, Plane, Plus, ReceiptText, RefreshCw, Search, Ship, Truck, WalletCards } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
+import { ArrowRight, Ban, Bell, BrainCircuit, CheckCircle2, ClipboardList, FileText, Info, PackageCheck, Plane, Plus, ReceiptText, RefreshCw, Search, Ship, Truck, WalletCards } from "lucide-react";
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
@@ -10,6 +11,7 @@ import { useAuth } from "../../state/AuthContext";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
 import { FreightJobPage } from "./FreightJobPage";
 import { FreightPacklistPage } from "./FreightPacklistPage";
+import { FreightJobSheetPage } from "./FreightJobSheetPage";
 import { FreightJobActivitiesPage } from "./FreightJobActivitiesPage";
 import { FreightJobFollowupTab } from "./FreightJobFollowupTabs";
 
@@ -67,6 +69,7 @@ const listingTabs = [
 
 export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target?: FreightWorkspaceTarget; initialTab?: JobTab }) {
   const { user } = useAuth();
+  const location = useLocation();
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
   const [activeTab, setActiveTab] = useState<JobTab>(initialTab);
@@ -75,10 +78,13 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   const [query, setQuery] = useState("");
   const [selectedJob, setSelectedJob] = useState<LookupRow | null>(null);
   const [activeStatus, setActiveStatus] = useState("in_progress");
+  const [workspaceActions, setWorkspaceActions] = useState<ReactNode>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-  const targetMode = target?.mode || "air";
-  const targetDirection = target?.direction || "import";
+  const targetMode = (target?.mode || "air") as keyof typeof modeLabel;
+  const targetDirection = (target?.direction || "import") as keyof typeof directionLabel;
+  const freightSearchRecord = (location.state as { freightSearchRecord?: LookupRow } | null)?.freightSearchRecord;
+  const openRecordNo = new URLSearchParams(location.search).get("open") || "";
   const title = useMemo(() => {
     const modeText = modeLabel[targetMode];
     const direction = directionLabel[targetDirection];
@@ -113,6 +119,18 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
     setMode(initialTab === "job" ? "list" : "steps");
     setSelectedJob(null);
   }, [initialTab, targetDirection, targetMode]);
+
+  useEffect(() => {
+    if (!openRecordNo) return;
+    if (text(freightSearchRecord || {}, "record_type").toUpperCase() !== "JOB") return;
+    const prinCode = text(freightSearchRecord || {}, "prin_code");
+    if (!prinCode) return;
+    openSteps(normalizeLookupRow({
+      company_code: companyCode,
+      prin_code: prinCode,
+      job_no: openRecordNo,
+    }), "job");
+  }, [companyCode, freightSearchRecord, openRecordNo]);
 
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
     {
@@ -149,6 +167,11 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
 
   const health = useMemo(() => buildHealth(rows), [rows]);
   const filteredRows = useMemo(() => rows.filter((row) => filterJobByStatus(row, activeStatus)), [activeStatus, rows]);
+  const selectedJobReadOnly = isClosedJob(selectedJob);
+
+  useEffect(() => {
+    setWorkspaceActions(null);
+  }, [activeTab]);
 
   function openSteps(row: LookupRow | null, tab: JobTab) {
     setSelectedJob(row ? normalizeLookupRow(row) : null);
@@ -158,26 +181,24 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
 
   if (mode === "list") {
     return (
-      <section className="grid gap-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+      <section className="grid gap-2">
+        <div className="freight-job-list-hero">
           <div>
             <p className="eyebrow">Freight Operations</p>
-            <h1 className="m-0 text-2xl font-semibold text-foreground">{title}</h1>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Manage freight jobs, cargo packing, service costing, documents, instructions, alerts, deposits, and closure.
-            </p>
+            <h1 className="m-0 text-xl font-semibold text-foreground">{title}</h1>
+            <p className="mt-0.5 max-w-3xl text-xs text-muted-foreground">Create jobs, complete shipment steps, and close billing follow-up from one compact workspace.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" onClick={() => void loadRows()} disabled={loading}>
+            <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}>
               <RefreshCw size={15} /> Refresh
             </Button>
-            <Button type="button" onClick={() => openSteps(null, "job")}>
+            <Button type="button" size="sm" onClick={() => openSteps(null, "job")}>
               <Plus size={15} /> Add Job
             </Button>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-card p-2">
+        <div className="freight-job-list-filterbar">
           <div className="flex flex-wrap gap-2">
             {listingTabs.map((tab) => (
               <Button key={tab.value} size="sm" variant={activeStatus === tab.value ? "default" : "outline"} onClick={() => setActiveStatus(tab.value)}>
@@ -186,13 +207,13 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
             ))}
           </div>
           <div className="flex min-w-[280px] flex-1 items-center justify-end gap-2">
-            <div className="flex items-center gap-1 rounded-md border bg-muted/40 px-2 py-1 text-xs text-muted-foreground">
+            <div className="freight-job-smart-note">
               <BrainCircuit size={14} className="text-primary" />
               <span>{message || smartAdvice(health)}</span>
             </div>
             <div className="relative w-80 max-w-full">
               <Search className="pointer-events-none absolute left-3 top-2.5 text-muted-foreground" size={15} />
-              <Input className="h-9 pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search job, principal, reference..." />
+              <Input className="h-8 pl-9 text-xs" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search job, principal, reference..." />
             </div>
           </div>
         </div>
@@ -206,7 +227,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           searchValue={query}
           onSearchChange={setQuery}
           searchPlaceholder="Filter visible jobs..."
-          height="calc(100vh - 310px)"
+          height="calc(100vh - 258px)"
           minWidth={1320}
           density="grid"
           enablePagination
@@ -226,24 +247,17 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
 
   return (
     <section className="freight-module-surface">
-      <div className="freight-ops-toolbar">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="m-0 text-sm font-semibold text-primary">Freight Job / {selectedJob ? text(selectedJob, "job_no") : "New"}</p>
-            <h1 className="m-0 text-xl font-semibold text-foreground">{title}</h1>
-            <p className="m-0 text-xs text-muted-foreground">
+      <div className="freight-ops-toolbar freight-ops-toolbar-compact freight-ops-toolbar-document">
+        <div className="freight-workspace-header-shell">
+          <div className="freight-workspace-title-block">
+            <p className="m-0 text-xs font-semibold text-primary">Freight Job / {selectedJob ? text(selectedJob, "job_no") : "New"}</p>
+            <h1 className="m-0 text-[22px] font-semibold leading-tight text-foreground">{title}</h1>
+            <p className="m-0 text-xs font-medium text-muted-foreground">
               {selectedJob ? `${text(selectedJob, "prin_name") || text(selectedJob, "prin_code")} | ${text(selectedJob, "doc_ref") || text(selectedJob, "hawb") || "Reference pending"}` : "New shipment operation"}
             </p>
           </div>
-          <div className="flex flex-wrap gap-1">
-            <button
-              type="button"
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-2.5 text-xs font-semibold text-muted-foreground transition hover:bg-muted/60"
-              onClick={() => setMode("list")}
-            >
-              <ArrowLeft size={14} />
-              Listing
-            </button>
+          <div className="freight-workspace-command-slot">{workspaceActions}</div>
+          <div className="freight-workspace-tabs">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const active = activeTab === tab.key;
@@ -251,9 +265,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
                 <button
                   key={tab.key}
                   type="button"
-                  className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold transition ${
-                    active ? "border-primary bg-primary text-primary-foreground shadow-sm" : "bg-background text-muted-foreground hover:bg-muted/60"
-                  }`}
+                  className={`freight-workspace-tab ${active ? "active" : ""}`}
                   onClick={() => setActiveTab(tab.key)}
                 >
                   <Icon size={14} />
@@ -266,14 +278,40 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
         </div>
       </div>
 
-      {activeTab === "job" && <FreightJobPage target={target} initialJob={selectedJob} startMode="editor" />}
-      {activeTab === "packlist" && <FreightPacklistPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="packlist" />}
-      {activeTab === "jobsheet" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="jobsheet" />}
-      {activeTab === "alerts" && <FreightJobFollowupTab target={target} kind="alerts" initialJob={selectedJob} />}
-      {activeTab === "instructions" && <FreightJobFollowupTab target={target} kind="instructions" initialJob={selectedJob} />}
-      {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" initialJob={selectedJob} />}
-      {activeTab === "deposits" && <FreightJobFollowupTab target={target} kind="deposits" initialJob={selectedJob} />}
-      {activeTab === "activities" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="activities" />}
+      {activeTab === "job" && (
+        <FreightJobPage
+          target={target}
+          initialJob={selectedJob}
+          startMode="editor"
+          onEmbeddedActionsChange={setWorkspaceActions}
+          onEmbeddedList={() => setMode("list")}
+        />
+      )}
+      {activeTab === "packlist" && (
+        <FreightPacklistPage
+          target={target}
+          initialJob={selectedJob}
+          startMode={selectedJob ? "editor" : "list"}
+          screen="packlist"
+          readOnly={selectedJobReadOnly}
+          onEmbeddedActionsChange={setWorkspaceActions}
+          onEmbeddedList={() => setMode("list")}
+        />
+      )}
+      {activeTab === "jobsheet" && (
+        <FreightJobSheetPage
+          target={target}
+          initialJob={selectedJob}
+          readOnly={selectedJobReadOnly}
+          onEmbeddedActionsChange={setWorkspaceActions}
+          onEmbeddedList={() => setMode("list")}
+        />
+      )}
+      {activeTab === "alerts" && <FreightJobFollowupTab target={target} kind="alerts" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
+      {activeTab === "instructions" && <FreightJobFollowupTab target={target} kind="instructions" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
+      {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
+      {activeTab === "deposits" && <FreightJobFollowupTab target={target} kind="deposits" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
+      {activeTab === "activities" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="activities" readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
 
     </section>
   );
@@ -297,6 +335,21 @@ function filterJobByStatus(row: LookupRow, tab: string) {
   if (tab === "confirmed") return !cancelled && confirmed && !invoiced;
   if (tab === "in_progress") return !cancelled && !confirmed && !invoiced;
   return true;
+}
+
+function isClosedJob(row: LookupRow | null | undefined) {
+  if (!row) return false;
+  return Boolean(
+    isTruthy(text(row, "canceled")) ||
+    isTruthy(text(row, "invoiced")) ||
+    isTruthy(text(row, "completed")) ||
+    text(row, "invoice_date") ||
+    text(row, "complete_date")
+  );
+}
+
+function isTruthy(value: string) {
+  return ["Y", "YES", "TRUE", "1"].includes(value.trim().toUpperCase());
 }
 
 function buildHealth(rows: LookupRow[]) {

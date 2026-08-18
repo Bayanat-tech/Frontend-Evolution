@@ -5,6 +5,7 @@ import { Button } from "../../../components/ui/Button";
 import { CardContent, CardHeader } from "../../../components/ui/Card";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 import { getDynamicLookup } from "../../../api/lookups";
+import { openGrnPrintReport } from "../../../api/transactions";
 import { useAuth } from "../../../state/AuthContext";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
@@ -65,7 +66,8 @@ export function PurchaseGRNEditor({
   const [flowLevelRunning, setFlowLevelRunning] = useState<number>(0);
   const [actionLoading, setActionLoading] = useState<ActionKey | null>(null);
 
-  // ---- Send Back dialog state ----
+  const [printing, setPrinting] = useState(false);
+
   const [sendBackDialogOpen, setSendBackDialogOpen] = useState(false);
   const [sendBackUser, setSendBackUser] = useState("");
   const [sendBackUserName, setSendBackUserName] = useState("");
@@ -75,7 +77,6 @@ export function PurchaseGRNEditor({
   const [sendBackUsers, setSendBackUsers] = useState<SendBackUserOption[]>([]);
   const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
 
-  // ---- Reject dialog state ----
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
@@ -98,8 +99,8 @@ export function PurchaseGRNEditor({
       try {
         const docNo = editor.row.doc_no;
         const [headerRaw, detailRows] = await Promise.all([
-          fetchPurchaseOrderHeader(docNo,config, user?.company_code, user?.loginid || user?.username),
-          fetchPurchaseOrderDetail(docNo,config, user?.company_code, user?.loginid || user?.username),
+          fetchPurchaseOrderHeader(docNo, config, user?.company_code, user?.loginid || user?.username),
+          fetchPurchaseOrderDetail(docNo, config, user?.company_code, user?.loginid || user?.username),
         ]);
         if (!mounted) return;
 
@@ -107,29 +108,29 @@ export function PurchaseGRNEditor({
           ...current,
           doc_no: text(headerRaw.doc_no || docNo),
           doc_date: toDateInputValue(headerRaw.doc_date) || current.doc_date,
-          quotn_no: text(headerRaw.quotn_no || current.quotn_no),
-          quotn_date: toDateInputValue(headerRaw.quotn_date) || current.quotn_date,
+          ref_no: text(headerRaw.quotn_no || current.ref_no),
+          ref_date: toDateInputValue(headerRaw.quotn_date) || current.ref_date,
           div_code: text(headerRaw.div_code || current.div_code),
           div_name: text(headerRaw.div_name || current.div_name),
           ac_code: text(headerRaw.ac_code || current.ac_code),
           ac_name: text(headerRaw.ac_name || current.ac_name),
-          address: text(headerRaw.address || current.address),
+          party_address: text(headerRaw.address || current.party_address),
           credit_period: Number(headerRaw.credit_period || current.credit_period || 0),
           dept_code: text(headerRaw.dept_code || current.dept_code),
-          tel: text(headerRaw.tel || current.tel),
-          fax: text(headerRaw.fax || current.fax),
+          party_phone: text(headerRaw.tel || current.party_phone),
+          party_fax: text(headerRaw.fax || current.party_fax),
           buyer: text(headerRaw.buyer || current.buyer),
-          wo_no: text(headerRaw.wo_no || current.wo_no),
+          wo_number: text(headerRaw.wo_number || current.wo_number),
           curr_code: text(headerRaw.curr_code || current.curr_code),
           curr_name: text(headerRaw.curr_name || current.curr_name),
           ex_rate: Number(headerRaw.ex_rate || current.ex_rate || 1),
-          pay_terms: text(headerRaw.pay_terms || current.pay_terms),
-          delivery_term: text(headerRaw.delivery_term || current.delivery_term),
-          delivery_contact: text(headerRaw.delivery_contact || current.delivery_contact),
-          delivery_tel: text(headerRaw.delivery_tel || current.delivery_tel),
-          delivery_email: text(headerRaw.delivery_email || current.delivery_email),
+          payment_terms: text(headerRaw.pay_terms || current.payment_terms),
+          dlvr_term: text(headerRaw.delivery_term || current.dlvr_term),
+          dlvr_contact: text(headerRaw.delivery_contact || current.dlvr_contact),
+          dlvr_mobile: text(headerRaw.delivery_tel || current.dlvr_mobile),
+          dlvr_email: text(headerRaw.delivery_email || current.dlvr_email),
           remarks: text(headerRaw.remarks || current.remarks),
-          disc_amt: Number(headerRaw.disc_amt || 0),
+          disc_price: Number(headerRaw.disc_price || 0),
           disc_pct: Number(headerRaw.disc_pct || 0),
           tax_category: text(headerRaw.tax_category || current.tax_category),
           tax_code: text(headerRaw.tax_code || current.tax_code),
@@ -144,7 +145,7 @@ export function PurchaseGRNEditor({
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
         if (!mounted) return;
-        setError(loadError instanceof Error ? loadError.message : "Unable to load purchase order");
+        setError(loadError instanceof Error ? loadError.message : "Unable to load Purchase GRN");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -187,7 +188,7 @@ export function PurchaseGRNEditor({
     const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
     const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-    return totalAmount - totalDiscPrice - form.disc_amt + totalTaxAmount;
+    return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
   })();
 
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
@@ -216,10 +217,10 @@ export function PurchaseGRNEditor({
     }
   };
 
- const handleSaveAsDraft = () =>
-  runAction("draft", async () => {
-    await runWorkflow("SAVEASDRAFT",  PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
-  }, "Purchase order saved as draft");
+  const handleSaveAsDraft = () =>
+    runAction("draft", async () => {
+      await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
+    }, "Purchase GRN saved as draft");
 
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
@@ -227,15 +228,36 @@ export function PurchaseGRNEditor({
     if (!form.curr_code) return setError("Currency is required");
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, editMode ? "Purchase order updated successfully" : "Purchase order created successfully");
+    }, editMode ? "Purchase GRN updated successfully" : "Purchase GRN created successfully");
   };
 
   const handleCancel = () =>
     runAction("cancel", async () => {
       await runWorkflow("CANCELED", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, "Purchase order cancelled");
+    }, "Purchase GRN cancelled");
 
-  // ---- Reject handlers ----
+  const handlePrintGrn = async () => {
+    if (!form.doc_no) {
+      setError("Save the GRN before printing");
+      return;
+    }
+    setPrinting(true);
+    setError("");
+    try {
+      await openGrnPrintReport({
+        parameter: "GRN_Print",
+        loginid: user?.loginid || user?.username || "ADMIN",
+        company_code: user?.company_code,
+        doc_type: PO_DOC_TYPE.GRN,
+        doc_no: form.doc_no,
+      } as any);
+    } catch (printError) {
+      setError(printError instanceof Error ? printError.message : "Error while printing");
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   const openRejectDialog = () => {
     setRejectError("");
     setRejectReason("");
@@ -255,10 +277,9 @@ export function PurchaseGRNEditor({
       const payloadForm: PurchaseOrderForm = { ...form, reject_reason: rejectReason.trim() };
       await runWorkflow("REJECTED", PO_DOC_TYPE.GRN, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setRejectDialogOpen(false);
-    }, "Purchase order rejected");
+    }, "Purchase GRN rejected");
   };
 
-  // ---- Send Back handlers ----
   const openSendBackDialog = async () => {
     setSendBackError("");
     setSendBackUser("");
@@ -312,7 +333,7 @@ export function PurchaseGRNEditor({
       };
       await runWorkflow("SENTBACK", PO_DOC_TYPE.GRN, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setSendBackDialogOpen(false);
-    }, "Purchase order sent back");
+    }, "Purchase GRN sent back");
   };
 
   const actionBarBusy = actionLoading !== null || saving;
@@ -328,9 +349,9 @@ export function PurchaseGRNEditor({
             <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
               <div>
                 <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                  {editMode ? "Edit Purchase Order" : "New Purchase Order"}
+                  {editMode ? "Edit Purchase GRN" : "New Purchase GRN"}
                 </p>
-                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Purchase Order</h2>
+                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Purchase GRN</h2>
               </div>
               <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
@@ -351,7 +372,9 @@ export function PurchaseGRNEditor({
               {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
               {form.doc_no && (
                 <>
-                  <Button type="button" variant="secondary"><Printer size={15} /> Print</Button>
+                  <Button type="button" variant="secondary" onClick={handlePrintGrn} disabled={printing}>
+                    {printing ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />} Print
+                  </Button>
                   <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
                 </>
               )}
@@ -365,21 +388,22 @@ export function PurchaseGRNEditor({
           <div className="cancelled-document-banner" role="status">
             <div>
               <span className="cancelled-document-kicker">Cancelled Document</span>
-              <strong>{form.doc_no || "Purchase Order"}</strong>
+              <strong>{form.doc_no || "Purchase GRN"}</strong>
             </div>
-            <p>This purchase order is cancelled and opened in read-only mode.</p>
+            <p>This Purchase GRN is cancelled and opened in read-only mode.</p>
           </div>
         )}
 
         <CardContent className="min-h-0 overflow-auto p-3">
           {loading ? (
-            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading purchase order...</div>
+            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Purchase GRN...</div>
           ) : (
             <div className="grid gap-3">
               <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
               <PurchaseOrderHeaderForm
                 form={form}
+                docType={PO_DOC_TYPE.GRN}
                 setForm={setForm}
                 updateField={updateField}
                 disabled={disabled}
@@ -391,11 +415,15 @@ export function PurchaseGRNEditor({
 
               <PurchaseOrderLinesTable
                 rows={rows}
+                form={form}
+                setdetails={setRows}
+                docType={PO_DOC_TYPE.GRN}
                 updateRow={updateRow}
                 addRow={addRow}
                 removeRow={removeRow}
                 headerAndLineDisabled={headerAndLineDisabled}
-                discAmt={form.disc_amt}
+                discAmt={form.disc_price}
+                ex_rate={form.ex_rate}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
               />
@@ -403,36 +431,40 @@ export function PurchaseGRNEditor({
           )}
         </CardContent>
 
+
         <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
           <div className="flex flex-wrap gap-3 rounded-2xl bg-gray-50 p-5 shadow-inner">
-            <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
-              {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              {actionLoading === "draft" ? "Saving..." : "Save Draft"}
-            </Button>
-
-            <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
+            {isPendingTab && (
+              <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
+                {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                {actionLoading === "draft" ? "Saving..." : "Save Draft"}
+              </Button>
+            )}
+            {isPendingTab && <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
               {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
               {actionLoading === "submit" ? "Submitting..." : "Submit"}
-            </Button>
+            </Button>}
 
-            {canSendBackOrReject && (
+            {isPendingTab && canSendBackOrReject && (
               <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
                 {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
               </Button>
             )}
 
-            {canSendBackOrReject && (
+            {isPendingTab && canSendBackOrReject && (
               <Button type="button" onClick={openRejectDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60">
                 {actionLoading === "reject" ? "Rejecting..." : "Reject"}
               </Button>
             )}
-
-            <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
-              {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
-            </Button>
+            {isPendingTab &&
+              <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
+                {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
+              </Button>}
           </div>
           <div className="flex items-center gap-2">
-            <Button aria-label="Print" type="button" variant="outline" size="icon" disabled={actionDisabled}><Printer size={15} /></Button>
+            <Button aria-label="Print" type="button" variant="outline" size="icon" onClick={handlePrintGrn} disabled={actionDisabled || printing}>
+              {printing ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />}
+            </Button>
             <Button aria-label="Attachment" type="button" variant="outline" size="icon" disabled={actionDisabled}><Paperclip size={15} /></Button>
             <Button aria-label="Download" type="button" variant="outline" size="icon" disabled={actionDisabled}><Download size={15} /></Button>
             <Button type="button" variant="outline" onClick={onClose}>Close</Button>

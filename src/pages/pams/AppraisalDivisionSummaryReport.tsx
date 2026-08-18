@@ -11,10 +11,13 @@ import type { LookupRow } from "../../api/lookups";
 interface SummaryRow {
     DIV_CODE: string; DIV_NAME: string;
     DEPT_CODE: string; DEPT_NAME: string;
-    SECTION_CODE: string; SECTION_NAME: string;
     DESG_CODE: string; DESG_NAME: string;
     R1: number; R2: number; R3: number; R4: number; R5: number;
     TOTAL: number;
+    EMPLOYEE_NAMES?: string;
+    PENDING_EMPLOYEE_NAMES?: string;
+    COMPLETED?: number;
+    PENDING?: number;
 }
 interface DropdownItem {
     code: string;
@@ -89,8 +92,8 @@ const BellCurveChart: React.FC<{ ratingCounts: Record<number, number> }> = ({ ra
 // ─── Report Design (printable area) ──────────────────────────
 const ReportDesign = React.forwardRef<HTMLDivElement, {
     rows: SummaryRow[];
-    filters: { div: string; dept: string };
-    filterLabels: { div: string; dept: string };
+    filters: { div: string; dept: string; period: string };
+    filterLabels: { div: string; dept: string; period: string };
 }>(({ rows, filters, filterLabels }, ref) => {
     const totals = useMemo(() => ({
         R1: rows.reduce((s, r) => s + Number(r.R1), 0),
@@ -99,6 +102,8 @@ const ReportDesign = React.forwardRef<HTMLDivElement, {
         R4: rows.reduce((s, r) => s + Number(r.R4), 0),
         R5: rows.reduce((s, r) => s + Number(r.R5), 0),
         TOTAL: rows.reduce((s, r) => s + Number(r.TOTAL), 0),
+        PENDING: rows.reduce((s, r) => s + Number(r.PENDING || 0), 0),
+        COMPLETED: rows.reduce((s, r) => s + Number(r.COMPLETED || 0), 0),
     }), [rows]);
 
     const ratingCounts: Record<number, number> = {
@@ -108,6 +113,8 @@ const ReportDesign = React.forwardRef<HTMLDivElement, {
     const filterLabel = [
         filters.div !== "ALL" && `Division: ${filterLabels.div || filters.div}`,
         filters.dept !== "ALL" && `Dept: ${filterLabels.dept || filters.dept}`,
+        filters.period !== "ALL" && `Period: ${filterLabels.period || filters.period}`,
+        filters.period === "ALL" && `Period: All (Cumulative)`,
     ].filter(Boolean).join("  |  ");
 
     return (
@@ -119,6 +126,7 @@ const ReportDesign = React.forwardRef<HTMLDivElement, {
                 .rpt{font-family:Arial,sans-serif;font-size:8.5px;color:#000;}
                 .rpt-tbl{width:100%;border-collapse:collapse;font-size:8.5px;font-family:Arial,sans-serif;}
                 .rpt-tbl td,.rpt-tbl th{border:1px solid #000;padding:2px 4px;vertical-align:middle;white-space:nowrap;}
+                .rpt-tbl td.wrap{white-space:normal;word-break:break-word;}
                 .hdr{font-weight:bold;background:#c0c0c0;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
                 .shdr{font-weight:bold;background:#d8d8d8;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
                 .ctr{text-align:center;} .bold{font-weight:bold;}
@@ -167,8 +175,8 @@ const ReportDesign = React.forwardRef<HTMLDivElement, {
                             <th className="hdr" rowSpan={2}>SL.No</th>
                             <th className="hdr" rowSpan={2}>Division</th>
                             <th className="hdr" rowSpan={2}>Department</th>
-                            <th className="hdr" rowSpan={2}>Section</th>
                             <th className="hdr" rowSpan={2}>Designation</th>
+                            <th className="hdr" rowSpan={2}>Pending Employee</th>
                             <th className="shdr" colSpan={5}>Rating</th>
                             <th className="hdr" rowSpan={2}>Total</th>
                         </tr>
@@ -180,8 +188,8 @@ const ReportDesign = React.forwardRef<HTMLDivElement, {
                                 <td className="ctr">{idx + 1}</td>
                                 <td>{row.DIV_NAME || row.DIV_CODE}</td>
                                 <td>{row.DEPT_NAME || row.DEPT_CODE}</td>
-                                <td>{row.SECTION_NAME || row.SECTION_CODE}</td>
                                 <td>{row.DESG_NAME || row.DESG_CODE}</td>
+                                <td className="wrap">{row.PENDING_EMPLOYEE_NAMES || "-"}</td>
                                 {[row.R1, row.R2, row.R3, row.R4, row.R5].map((v, i) => (
                                     <td key={i} className={`ctr bold${Number(v) > 0 ? ` r${i + 1}` : ""}`}>{Number(v) || ""}</td>
                                 ))}
@@ -214,7 +222,7 @@ const ReportDesign = React.forwardRef<HTMLDivElement, {
                             ))}
                         </tr>
                         <tr>
-                            <td className="sl">Total Appraised Staff</td>
+                            <td className="sl">Total Appraisals</td>
                             {[1, 2, 3, 4, 5].map(r => <td key={r} className="ctr">{totals.TOTAL}</td>)}
                         </tr>
                         <tr>
@@ -289,6 +297,25 @@ const fetchDropdown = async (
     }
 };
 
+// ─── Fetch periods (separate shape: PERIOD_NUMBER + dates) ───
+interface PeriodItem {
+    code: string;
+    label: string;
+}
+const fetchPeriods = async (loginid: string, company_code: string): Promise<PeriodItem[]> => {
+    try {
+        const res = await pamsSelect({ parameter: "period", loginid, code1: company_code });
+        if (!Array.isArray(res)) return [];
+        return (res as Record<string, unknown>[]).map((r) => ({
+            code: String(r.PERIOD_NUMBER ?? ""),
+            label: String(r.PERIOD_NUMBER ?? "")
+                + (r.PERIOD_FROM_DATE ? ` (${r.PERIOD_FROM_DATE} to ${r.PERIOD_TO_DATE})` : ""),
+        }));
+    } catch {
+        return [];
+    }
+};
+
 // ─── Convert DropdownItem[] → LookupRow[] for LookupField ────
 const toLookupRows = (items: DropdownItem[]): LookupRow[] =>
     items.map(i => ({ CODE: i.code, NAME: i.name } as unknown as LookupRow));
@@ -304,33 +331,49 @@ const AppraisalDivisionSummaryReport = () => {
     // ── Filter codes (sent to API) ────────────────────────────
     const [div, setDiv]   = useState("ALL");
     const [dept, setDept] = useState("ALL");
+    const [period, setPeriod] = useState("ALL");
 
     // ── Filter display names (shown in report header) ─────────
-    const [divLabel, setDivLabel]   = useState("");
-    const [deptLabel, setDeptLabel] = useState("");
+    const [divLabel, setDivLabel]   = useState("All");
+    const [deptLabel, setDeptLabel] = useState("All");
 
     // ── Dropdown option lists ──────────────────────────────────
-    const [divOptions, setDivOptions]   = useState<DropdownItem[]>([]);
-    const [deptOptions, setDeptOptions] = useState<DropdownItem[]>([]);
+    const [divOptions, setDivOptions]   = useState<DropdownItem[]>([{ code: "ALL", name: "All" }]);
+    const [deptOptions, setDeptOptions] = useState<DropdownItem[]>([{ code: "ALL", name: "All" }]);
+    const [periodOptions, setPeriodOptions] = useState<PeriodItem[]>([{ code: "ALL", label: "All Periods (Cumulative)" }]);
 
     const [reportData, setReportData]     = useState<SummaryRow[]>([]);
     const [isFetching, setIsFetching]     = useState(false);
     const [hasGenerated, setHasGenerated] = useState(false);
 
-    // ── Fetch divisions on mount ──────────────────────────────
+    // ── Fetch divisions + periods on mount ─────────────────────
     useEffect(() => {
         if (!loginid) return;
         fetchDropdown("report_divisions", loginid, company_code)
-            .then(data => setDivOptions(data));
+            .then(data => {
+                // Ensure "ALL" is always present
+                const allOption = { code: "ALL", name: "All" };
+                setDivOptions([allOption, ...data]);
+            });
+        fetchPeriods(loginid, company_code)
+            .then(data => {
+                // Ensure "ALL" is always present
+                const allPeriod = { code: "ALL", label: "All Periods (Cumulative)" };
+                setPeriodOptions([allPeriod, ...data]);
+            });
     }, [loginid, company_code]);
 
     // ── Cascade: departments when div changes ─────────────────
     useEffect(() => {
         if (!loginid) return;
         fetchDropdown("report_departments", loginid, company_code, div)
-            .then(data => setDeptOptions(data));
+            .then(data => {
+                // Ensure "ALL" is always present
+                const allOption = { code: "ALL", name: "All" };
+                setDeptOptions([allOption, ...data]);
+            });
         setDept("ALL");
-        setDeptLabel("");
+        setDeptLabel("All");
     }, [div, loginid, company_code]);
 
     // ── Generate report ───────────────────────────────────────
@@ -345,7 +388,7 @@ const AppraisalDivisionSummaryReport = () => {
                 code1: company_code,
                 code2: div,
                 code3: dept,
-                code4: "ALL",
+                code4: period,
             });
             setReportData(Array.isArray(res) ? (res as unknown) as SummaryRow[] : []);
         } catch {
@@ -403,6 +446,25 @@ const AppraisalDivisionSummaryReport = () => {
                 gap: 12,
                 alignItems: "flex-end",
             }}>
+                {/* Period Dropdown */}
+                <div style={{ flex: 1, minWidth: 200 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 4, display: "block" }}>
+                        Period
+                    </label>
+                    <select
+                        value={period}
+                        onChange={(e) => setPeriod(e.target.value)}
+                        style={{
+                            width: "100%", padding: "8px 10px", border: "1px solid #d1d5db",
+                            borderRadius: "6px", fontSize: "13px", background: "#fff", color: "#111827",
+                        }}
+                    >
+                        {periodOptions.map((p, idx) => (
+                            <option key={idx} value={p.code}>{p.label}</option>
+                        ))}
+                    </select>
+                </div>
+
                 {/* Division Lookup */}
                 <div style={{ flex: 1, minWidth: 160 }}>
                     <LookupField
@@ -414,8 +476,8 @@ const AppraisalDivisionSummaryReport = () => {
                         displayFields={["CODE", "NAME"]}
                         loadOptions={() => Promise.resolve(toLookupRows(divOptions))}
                         onChange={(val, row) => {
-                            if (!val) {
-                                setDiv("ALL"); setDivLabel("");
+                            if (!val || val === "ALL") {
+                                setDiv("ALL"); setDivLabel("All");
                             } else {
                                 setDiv(val);
                                 setDivLabel(row ? String((row as Record<string, unknown>).NAME ?? val) : val);
@@ -436,8 +498,8 @@ const AppraisalDivisionSummaryReport = () => {
                         displayFields={["CODE", "NAME"]}
                         loadOptions={() => Promise.resolve(toLookupRows(deptOptions))}
                         onChange={(val, row) => {
-                            if (!val) {
-                                setDept("ALL"); setDeptLabel("");
+                            if (!val || val === "ALL") {
+                                setDept("ALL"); setDeptLabel("All");
                             } else {
                                 setDept(val);
                                 setDeptLabel(row ? String((row as Record<string, unknown>).NAME ?? val) : val);
@@ -475,12 +537,16 @@ const AppraisalDivisionSummaryReport = () => {
                         No data found for selected filters.
                     </div>
                 ) : (
-                    <div style={{ background: "#fff", minWidth: 900, boxShadow: "0 2px 8px rgba(0,0,0,0.12)" }}>
+                    <div style={{ background: "#fff", minWidth: 1200, boxShadow: "0 2px 8px rgba(0,0,0,0.12)" }}>
                         <ReportDesign
                             ref={reportRef}
                             rows={reportData}
-                            filters={{ div, dept }}
-                            filterLabels={{ div: divLabel, dept: deptLabel }}
+                            filters={{ div, dept, period }}
+                            filterLabels={{
+                                div: divLabel,
+                                dept: deptLabel,
+                                period: periodOptions.find(p => p.code === period)?.label || period,
+                            }}
                         />
                     </div>
                 )}

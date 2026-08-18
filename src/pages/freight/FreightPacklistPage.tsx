@@ -1,11 +1,13 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import type { Dispatch, FormEvent, SetStateAction } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import type { Dispatch, FormEvent, ReactNode, SetStateAction } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   Edit2,
+  Eye,
   FileSignature,
   FileText,
+  MapPinned,
   PackageCheck,
   Plane,
   Plus,
@@ -28,6 +30,7 @@ import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
 
 type ViewMode = "list" | "editor";
 type Notice = { type: "success" | "error"; text: string } | null;
+const PackEditContext = createContext(true);
 
 type PackForm = {
   company_code: string;
@@ -35,6 +38,7 @@ type PackForm = {
   job_no: string;
   packlist_no: string;
   seq_number: string;
+  is_new_packlist: boolean;
   transport_mode: string;
   job_type: string;
   job_date: string;
@@ -139,19 +143,37 @@ const directionMap = {
   reexport: { code: "IRE", label: "Import for Re-export" },
 };
 
-export function FreightPacklistPage({ target, initialJob = null, startMode = "list", screen = "packlist" }: { target?: FreightWorkspaceTarget; initialJob?: LookupRow | null; startMode?: ViewMode; screen?: "packlist" | "jobsheet" }) {
+export function FreightPacklistPage({
+  target,
+  initialJob = null,
+  startMode = "list",
+  screen = "packlist",
+  readOnly = false,
+  onEmbeddedActionsChange,
+  onEmbeddedList,
+}: {
+  target?: FreightWorkspaceTarget;
+  initialJob?: LookupRow | null;
+  startMode?: ViewMode;
+  screen?: "packlist" | "jobsheet";
+  readOnly?: boolean;
+  onEmbeddedActionsChange?: (actions: ReactNode | null) => void;
+  onEmbeddedList?: () => void;
+}) {
   const { user } = useAuth();
   const { toast } = useToast();
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
   const userId = String(userRecord.user_id || userRecord.USER_ID || userRecord.loginid || userRecord.LOGINID || "");
-  const modeKey = target?.mode || "air";
-  const directionKey = target?.direction || "import";
+  const modeKey = (target?.mode || "air") as keyof typeof modeMap;
+  const directionKey = (target?.direction || "import") as keyof typeof directionMap;
   const mode = modeMap[modeKey];
   const direction = directionMap[directionKey];
   const Icon = mode.icon;
   const screenTitle = screen === "jobsheet" ? "JOB Sheet" : "Pack List";
   const screenSubtitle = screen === "jobsheet" ? "Shipment document and billing summary" : "Bill of lading and cargo packing details";
+  const embeddedInWorkspace = Boolean(onEmbeddedActionsChange);
+  const embeddedFormId = `freight-${screen}-embedded-form`;
 
   const [view, setView] = useState<ViewMode>("list");
   const [rows, setRows] = useState<LookupRow[]>([]);
@@ -161,13 +183,19 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  const [editing, setEditing] = useState(false);
+
+  const notify = useCallback((next: Exclude<Notice, null>) => {
+    setNotice(next);
+    if (next.type === "success") toast.success(next.text);
+    else toast.error(next.text);
+  }, [toast]);
 
   useEffect(() => {
     if (!notice) return;
-    if (notice.type === "success") toast.success(notice.text);
-    else toast.error(notice.text);
-    setNotice(null);
-  }, [notice, toast]);
+    const timer = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   const isAir = mode.code === "A";
 
@@ -184,11 +212,11 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
       setRows((response.data.data || []).map(normalizeLookupRow));
     } catch (error: any) {
       setRows([]);
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to load pack lists." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to load pack lists." });
     } finally {
       setLoading(false);
     }
-  }, [companyCode, direction.code, mode.code, query]);
+  }, [companyCode, direction.code, mode.code, notify, query]);
 
   useEffect(() => {
     void loadRows();
@@ -198,7 +226,8 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
     setPack(emptyPack(companyCode, userId, mode.code, direction.code));
     setDimensions([]);
     setView(startMode);
-  }, [companyCode, direction.code, mode.code, startMode, userId]);
+    setEditing(!readOnly && startMode === "editor");
+  }, [companyCode, direction.code, mode.code, readOnly, startMode, userId]);
 
   useEffect(() => {
     if (!initialJob) return;
@@ -206,7 +235,8 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
   }, [initialJob]);
 
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
-    { accessorKey: "seq_number", header: "Pack List", size: 140, cell: ({ row }) => <button type="button" className="font-semibold text-primary hover:underline" onClick={() => openPack(row.original)}>{lookupText(row.original, "seq_number") || `${lookupText(row.original, "job_no")}/${lookupText(row.original, "packlist_no")}`}</button> },
+    { accessorKey: "packlist_no", header: "Pack No", size: 110, cell: ({ row }) => <button type="button" className="font-semibold text-primary hover:underline" onClick={() => openPack(row.original)}>{lookupText(row.original, "packlist_no") || "Auto"}</button> },
+    { accessorKey: "seq_number", header: "Seq", size: 70 },
     { accessorKey: "job_no", header: "Job No", size: 120 },
     { accessorKey: "job_date", header: "Job Date", size: 110, cell: ({ row }) => formatDate(lookupText(row.original, "job_date")) },
     { accessorKey: "prin_code", header: "Principal", size: 90 },
@@ -214,18 +244,55 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
     { accessorKey: "shipper_name", header: "Shipper", size: 200 },
     { accessorKey: "consignee_name", header: "Consignee", size: 200 },
     { accessorKey: "bl_no", header: isAir ? "AWB" : "BL No", size: 130 },
+    { accessorKey: "bl_date", header: "BL Date", size: 110, cell: ({ row }) => formatDate(lookupText(row.original, "bl_date")) },
     { accessorKey: "container_no", header: "Container", size: 130 },
+    { accessorKey: "container_type", header: "Container Type", size: 130 },
     { accessorKey: "gross_wt", header: "Gross Wt", size: 90 },
+    { accessorKey: "volume", header: "Volume", size: 90 },
     { accessorKey: "quantity", header: "Qty", size: 80 },
-    { id: "actions", header: "Actions", size: 90, cell: ({ row }) => <div className="flex gap-1"><Button type="button" size="icon" variant="ghost" title="Edit" onClick={() => openPack(row.original)}><Edit2 size={14} /></Button><Button type="button" size="icon" variant="ghost" title="Delete" onClick={(event) => { event.stopPropagation(); void deletePack(row.original); }}><Trash2 size={14} /></Button></div> },
-  ], [isAir]);
+    { accessorKey: "shipment_status", header: "Shipment Status", size: 140 },
+    { id: "actions", header: "Actions", size: 90, cell: ({ row }) => <div className="flex gap-1"><Button type="button" size="icon" variant="ghost" title="View" onClick={() => openPack(row.original)}><Eye size={14} /></Button><Button type="button" size="icon" variant="ghost" title="Delete" disabled={readOnly} onClick={(event) => { event.stopPropagation(); void deletePack(row.original); }}><Trash2 size={14} /></Button></div> },
+  ], [isAir, readOnly]);
 
   const openAdd = () => {
+    if (readOnly) {
+      notify({ type: "error", text: "Invoiced or completed job is locked. Pack list is view only." });
+      return;
+    }
     setPack(emptyPack(companyCode, userId, mode.code, direction.code));
     setDimensions([]);
     setNotice(null);
+    setEditing(true);
     setView("editor");
   };
+
+  const openNewPackForCurrentJob = useCallback(() => {
+    if (readOnly) {
+      notify({ type: "error", text: "Invoiced or completed job is locked. Pack list is view only." });
+      return;
+    }
+    setPack((current) => {
+      const draft = toPackDraftFromJob(current as unknown as LookupRow, companyCode, userId, mode.code, direction.code);
+      return {
+        ...draft,
+        company_code: current.company_code || draft.company_code,
+        prin_code: current.prin_code || draft.prin_code,
+        prin_name: current.prin_name || draft.prin_name,
+        job_no: current.job_no || draft.job_no,
+        job_date: current.job_date || draft.job_date,
+        transport_mode: current.transport_mode || draft.transport_mode,
+        job_type: current.job_type || draft.job_type,
+        curr_code: current.curr_code || draft.curr_code,
+        ex_rate: current.ex_rate || draft.ex_rate,
+        packlist_no: "",
+        seq_number: "",
+        is_new_packlist: true,
+      };
+    });
+    setDimensions([]);
+    setNotice(null);
+    setEditing(true);
+  }, [companyCode, direction.code, mode.code, notify, readOnly, userId]);
 
   const loadDimensions = async (row: LookupRow) => {
     const response = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/packlist/dimensions/list", {
@@ -262,12 +329,14 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
       setPack(toPackDraftFromJob(normalized, companyCode, userId, mode.code, direction.code));
       if (mode.code === "A") await loadDimensions(normalized);
       else setDimensions([]);
+      setEditing(!readOnly);
       setView("editor");
     } catch (error: any) {
       setPack(toPackDraftFromJob(normalized, companyCode, userId, mode.code, direction.code));
       setDimensions([]);
+      setEditing(!readOnly);
       setView("editor");
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to check existing pack list; opened new draft." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to check existing pack list; opened new draft." });
     } finally {
       setLoading(false);
     }
@@ -286,15 +355,20 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
       setPack(toPackForm(normalizeLookupRow(response.data.data || row), companyCode, userId, mode.code, direction.code));
       if (mode.code === "A") await loadDimensions(row);
       else setDimensions([]);
+      setEditing(false);
       setView("editor");
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to open pack list." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to open pack list." });
     } finally {
       setLoading(false);
     }
   };
 
   const deletePack = async (row: LookupRow) => {
+    if (readOnly) {
+      notify({ type: "error", text: "Invoiced or completed job is locked. Pack list is view only." });
+      return;
+    }
     setSaving(true);
     setNotice(null);
     try {
@@ -304,10 +378,10 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
         job_no: lookupText(row, "job_no"),
         packlist_no: lookupText(row, "packlist_no"),
       });
-      setNotice({ type: "success", text: "Pack list deleted." });
+      notify({ type: "success", text: "Pack list deleted." });
       await loadRows();
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to delete pack list." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to delete pack list." });
     } finally {
       setSaving(false);
     }
@@ -315,10 +389,19 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
 
   const savePack = async (event: FormEvent) => {
     event.preventDefault();
+    if (readOnly) {
+      notify({ type: "error", text: "Invoiced or completed job is locked. Pack list is view only." });
+      return;
+    }
     setSaving(true);
     setNotice(null);
     try {
-      const response = await api.post<{ success?: boolean; data?: { packlist_no?: string | number; seq_number?: string }; message?: string }>("/api/freight/packlist/save", { packlist: pack });
+      const payload = {
+        ...pack,
+        packlist_no: pack.is_new_packlist ? null : pack.packlist_no,
+        seq_number: pack.is_new_packlist ? null : pack.seq_number,
+      };
+      const response = await api.post<{ success?: boolean; data?: { packlist_no?: string | number; seq_number?: string }; message?: string }>("/api/freight/packlist/save", { packlist: payload });
       if (isAir && pack.job_no && pack.prin_code) {
         await api.post("/api/freight/packlist/dimensions/save", {
           company_code: companyCode,
@@ -328,20 +411,56 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
           lines: dimensions,
         });
       }
-      setNotice({ type: "success", text: response.data.message || "Pack list saved." });
+      notify({ type: "success", text: response.data.message || "Pack list saved." });
       setPack((current) => ({
         ...current,
         packlist_no: String(response.data.data?.packlist_no || current.packlist_no),
         seq_number: response.data.data?.seq_number || current.seq_number,
+        is_new_packlist: false,
       }));
       await loadRows();
-      setView("list");
+      setEditing(false);
+      setView("editor");
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to save pack list." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to save pack list." });
     } finally {
       setSaving(false);
     }
   };
+
+  useEffect(() => {
+    if (!embeddedInWorkspace || !onEmbeddedActionsChange || view !== "editor") {
+      onEmbeddedActionsChange?.(null);
+      return undefined;
+    }
+
+    onEmbeddedActionsChange(
+      <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar">
+        {notice && <NoticeChip notice={notice} />}
+        <Button type="button" size="sm" variant="outline" onClick={() => (onEmbeddedList ? onEmbeddedList() : setView("list"))}>
+          <ArrowLeft size={14} /> List
+        </Button>
+        {pack.job_no && !readOnly && (
+          <Button type="button" size="sm" variant="outline" onClick={openNewPackForCurrentJob}>
+            <Plus size={14} /> New {screenTitle}
+          </Button>
+        )}
+        {!editing && !readOnly && (
+          <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}>
+            <Edit2 size={14} /> Edit
+          </Button>
+        )}
+        {editing && !readOnly && (
+          <Button type="submit" size="sm" disabled={saving || !pack.job_no || readOnly} form={embeddedFormId}>
+            <Save size={14} /> Save
+          </Button>
+        )}
+        <span className={`freight-job-mode-badge ${editing ? "editing" : "viewing"}`}>{editing ? "Edit" : "View"}</span>
+      </div>
+    );
+
+    return () => onEmbeddedActionsChange(null);
+  }, [embeddedFormId, embeddedInWorkspace, editing, notice, onEmbeddedActionsChange, onEmbeddedList, openNewPackForCurrentJob, pack.job_no, readOnly, saving, screenTitle, view]);
 
   if (view === "list") {
     return (
@@ -349,7 +468,7 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
         <Header title={`${mode.label} ${direction.label} ${screenTitle}`} subtitle={screenSubtitle} icon={Icon} screenTitle={screenTitle}>
           {notice && <NoticeChip notice={notice} />}
           <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}><RefreshCw size={14} />Refresh</Button>
-          <Button type="button" size="sm" onClick={openAdd}><Plus size={14} />Add Job Sheet</Button>
+          {!readOnly && <Button type="button" size="sm" onClick={openAdd}><Plus size={14} />Add {screenTitle}</Button>}
         </Header>
         <DataTable
           columns={columns}
@@ -361,7 +480,7 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
           title={`${rows.length} ${screenTitle}s`}
           subtitle={`${mode.label} / ${direction.label}`}
           height="calc(100vh - 240px)"
-          minWidth={1280}
+          minWidth={1680}
           density="grid"
           enablePagination
           pageSize={50}
@@ -374,16 +493,36 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
   }
 
   return (
-    <form className="freight-document-form" onSubmit={savePack}>
-      <Header title={`${mode.label} ${direction.label} ${screenTitle}`} subtitle={pack.seq_number || `New ${screenTitle.toLowerCase()}`} icon={Icon} screenTitle={screenTitle}>
-        {notice && <NoticeChip notice={notice} />}
-        <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>
-        <Button type="submit" size="sm" disabled={saving || !pack.job_no}><Save size={14} />Save</Button>
-      </Header>
+    <form id={embeddedInWorkspace ? embeddedFormId : undefined} className="freight-document-form" onSubmit={savePack}>
+      {!embeddedInWorkspace && (
+        <>
+          <Header title={`${mode.label} ${direction.label} ${screenTitle}`} subtitle={pack.packlist_no ? `Pack ${pack.packlist_no}` : `New ${screenTitle.toLowerCase()}`} icon={Icon} screenTitle={screenTitle}>
+            {notice && <NoticeChip notice={notice} />}
+            <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>
+            {!editing && !readOnly && <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}><Edit2 size={14} />Edit</Button>}
+            {pack.job_no && !readOnly && <Button type="button" size="sm" variant="outline" onClick={openNewPackForCurrentJob}><Plus size={14} />New {screenTitle}</Button>}
+            {editing && !readOnly && <Button type="submit" size="sm" disabled={saving || !pack.job_no || readOnly}><Save size={14} />Save</Button>}
+          </Header>
 
-      <div className="freight-document-paper grid gap-2 lg:grid-cols-12">
-        <Panel className="lg:col-span-12" icon={FileSignature} title="Document Reference" meta={`${pack.seq_number || "Auto"} / ${pack.job_no || "Select job"}`}>
-          <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-8">
+          <div className="freight-job-focus-bar freight-job-focus-compact">
+            <div>
+              <span className="freight-job-number">{pack.packlist_no ? `Pack ${pack.packlist_no}` : "New Pack List"}</span>
+              <span className="freight-job-route">{pack.job_no || "Job pending"} / {mode.label} / {direction.label}</span>
+            </div>
+            <div className="freight-job-status-strip">
+              <span>BL <strong>{pack.bl_no || "-"}</strong></span>
+              <span>Cargo <strong>{pack.quantity || "0"} {pack.puom}</strong></span>
+              <span>Gross <strong>{pack.gross_wt || "0"}</strong></span>
+            </div>
+          </div>
+        </>
+      )}
+
+      <fieldset disabled={readOnly || !editing} className={`freight-document-paper freight-shipment-paper ${editing && !readOnly ? "is-editing" : "is-viewing"}`}>
+        <PackEditContext.Provider value={editing && !readOnly}>
+        <div className="freight-job-section-grid">
+        <Panel className="lg:col-span-12" icon={FileSignature} title="Document Reference" meta={`Pack ${pack.packlist_no || "Auto"} / ${pack.job_no || "Select job"}`}>
+          <div className="freight-job-field-grid freight-job-field-grid-8">
             <Lookup label="Freight Job" value={pack.job_no} valueField="JOB_NO" displayFields={["JOB_NO", "PRIN_CODE", "PRIN_NAME"]} columns={jobColumns} loadOptions={() => lookupJobs(companyCode, mode.code, direction.code, pack.job_no)} onChange={(value, row) => selectJob(value, row, setPack, companyCode, userId, mode.code, direction.code)} />
             <ReadOnlyField label="Pack No" value={pack.packlist_no || "Auto"} />
             <ReadOnlyField label="Seq No" value={pack.seq_number || "Auto"} />
@@ -397,8 +536,8 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
           </div>
         </Panel>
 
-        <Panel className="lg:col-span-5" icon={UserRound} title="Parties" meta="Shipper / Consignee / Notify">
-          <div className="grid gap-1.5 sm:grid-cols-3">
+        <Panel className="lg:col-span-12" icon={UserRound} title="Parties" meta="Shipper / Consignee / Notify">
+          <div className="freight-job-field-grid freight-job-field-grid-3">
             <Textarea label="Shipper" value={pack.shipper_name} onChange={(value) => setPackField(setPack, "shipper_name", value)} />
             <Textarea label="Consignee" value={pack.consignee_name} onChange={(value) => setPackField(setPack, "consignee_name", value)} />
             <Textarea label="Notify" value={pack.notify_name} onChange={(value) => setPackField(setPack, "notify_name", value)} />
@@ -408,8 +547,8 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
           </div>
         </Panel>
 
-        <Panel className="lg:col-span-4" icon={PackageCheck} title="Cargo And Measures" meta={`${pack.quantity || "0"} ${pack.puom || ""} / ${pack.gross_wt || "0"} kgs`}>
-          <div className="grid gap-1.5 sm:grid-cols-3">
+        <Panel className="lg:col-span-6" icon={PackageCheck} title="Cargo And Measures" meta={`${pack.quantity || "0"} ${pack.puom || ""} / ${pack.gross_wt || "0"} kgs`}>
+          <div className="freight-job-field-grid freight-job-field-grid-3">
             <Field label="Packages" type="number" value={pack.no_of_packings} onChange={(value) => setPackField(setPack, "no_of_packings", value)} />
             <Field label="Quantity" type="number" value={pack.quantity} onChange={(value) => setPackField(setPack, "quantity", value)} />
             <Field label="UOM" value={pack.puom} onChange={(value) => setPackField(setPack, "puom", value)} />
@@ -425,8 +564,17 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
           </div>
         </Panel>
 
-        <Panel className="lg:col-span-3" icon={mode.icon} title={isAir ? "Air Waybill" : "Container / Carrier"} meta={isAir ? pack.flight_info || "Flight pending" : pack.container_no || "Container pending"}>
-          <div className="grid gap-1.5 sm:grid-cols-2">
+        <Panel className="lg:col-span-6" icon={FileText} title="Description And Marks" meta={pack.prod_description || "Cargo description pending"}>
+          <div className="freight-job-field-grid freight-job-field-grid-2">
+            <Textarea label="Marks & Nos" value={pack.marksnos} onChange={(value) => setPackField(setPack, "marksnos", value)} />
+            <Textarea label="Product Description" value={pack.prod_description} onChange={(value) => setPackField(setPack, "prod_description", value)} />
+            <Textarea label="Cargo Details" value={pack.cargo_details} onChange={(value) => setPackField(setPack, "cargo_details", value)} />
+            <Textarea label="Remarks" value={pack.remarks} onChange={(value) => setPackField(setPack, "remarks", value)} />
+          </div>
+        </Panel>
+
+        <Panel className="lg:col-span-12" icon={mode.icon} title={isAir ? "Air Waybill" : "Container / Carrier"} meta={isAir ? pack.flight_info || "Flight pending" : pack.container_no || "Container pending"}>
+          <div className="freight-job-field-grid freight-job-field-grid-4">
             {isAir ? (
               <>
                 <Field label="HAWB" value={pack.hawb} onChange={(value) => setPackField(setPack, "hawb", value)} />
@@ -452,17 +600,8 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
           </div>
         </Panel>
 
-        <Panel className="lg:col-span-6" icon={FileText} title="Description And Marks" meta={pack.prod_description || "Cargo description pending"}>
-          <div className="grid gap-1.5 sm:grid-cols-2">
-            <Textarea label="Marks & Nos" value={pack.marksnos} onChange={(value) => setPackField(setPack, "marksnos", value)} />
-            <Textarea label="Product Description" value={pack.prod_description} onChange={(value) => setPackField(setPack, "prod_description", value)} />
-            <Textarea label="Cargo Details" value={pack.cargo_details} onChange={(value) => setPackField(setPack, "cargo_details", value)} />
-            <Textarea label="Remarks" value={pack.remarks} onChange={(value) => setPackField(setPack, "remarks", value)} />
-          </div>
-        </Panel>
-
-        <Panel className="lg:col-span-6" icon={FileSignature} title="Terms And Handling" meta={pack.terms_of_delivery || "Delivery terms pending"}>
-          <div className="grid gap-1.5 sm:grid-cols-4">
+        <Panel className="lg:col-span-12" icon={FileSignature} title="Terms And Handling" meta={pack.terms_of_delivery || "Delivery terms pending"}>
+          <div className="freight-job-field-grid freight-job-field-grid-4">
             <Field label="Terms" value={pack.terms_of_delivery} onChange={(value) => setPackField(setPack, "terms_of_delivery", value)} />
             <Field label="Ex Rate" type="number" value={pack.ex_rate} onChange={(value) => setPackField(setPack, "ex_rate", value)} />
             <Field label="PO No" value={pack.po_no} onChange={(value) => setPackField(setPack, "po_no", value)} />
@@ -474,7 +613,7 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
 
         {!isAir && (
           <Panel className="lg:col-span-12" icon={Ship} title="Bill Of Lading Route" meta={`${pack.port_code || "Loading"} -> ${pack.destination_port || "Discharge"}`}>
-            <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-6">
+            <div className="freight-job-field-grid freight-job-field-grid-4">
               <Field label="MSWB / Master BL" value={pack.doc_ref} onChange={(value) => setPackField(setPack, "doc_ref", value)} />
               <Field label="PO No" value={pack.po_no} onChange={(value) => setPackField(setPack, "po_no", value)} />
               <Field label="Pre-Carriage By" value={pack.vessel_name} onChange={(value) => setPackField(setPack, "vessel_name", value)} />
@@ -489,8 +628,21 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
         )}
 
         {isAir && (
+          <Panel className="lg:col-span-12" icon={MapPinned} title="Air Routing" meta={pack.routing || `${pack.port_code || "Origin"} -> ${pack.destination_port || "Destination"}`}>
+            <div className="freight-job-field-grid freight-job-field-grid-4">
+              <Field label="Origin" value={pack.port_code} onChange={(value) => setPackField(setPack, "port_code", value)} />
+              <Field label="Destination" value={pack.destination_port} onChange={(value) => setPackField(setPack, "destination_port", value)} />
+              <Field label="Place of Receipt" value={pack.place_receipt} onChange={(value) => setPackField(setPack, "place_receipt", value)} />
+              <Field label="Place of Delivery" value={pack.place_delivery} onChange={(value) => setPackField(setPack, "place_delivery", value)} />
+              <Field label="Routing" value={pack.routing} onChange={(value) => setPackField(setPack, "routing", value)} />
+              <Field label="Flight Info" value={pack.flight_info} onChange={(value) => setPackField(setPack, "flight_info", value)} />
+            </div>
+          </Panel>
+        )}
+
+        {isAir && (
           <Panel className="lg:col-span-12" icon={Plane} title="Air Waybill Accounting" meta="PB AWB valuation, carrier and account fields">
-            <div className="grid gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
+            <div className="freight-job-field-grid freight-job-field-grid-4">
               <Field label="Airline Address" value={pack.airline_address} onChange={(value) => setPackField(setPack, "airline_address", value)} />
               <Field label="Issuing Carrier" value={pack.issuing_carrier} onChange={(value) => setPackField(setPack, "issuing_carrier", value)} />
               <Field label="Carrier Address" value={pack.issuing_carrier_add} onChange={(value) => setPackField(setPack, "issuing_carrier_add", value)} />
@@ -517,12 +669,14 @@ export function FreightPacklistPage({ target, initialJob = null, startMode = "li
             <DimensionGrid rows={dimensions} setRows={setDimensions} />
           </Panel>
         )}
-      </div>
+        </div>
+        </PackEditContext.Provider>
+      </fieldset>
     </form>
   );
 }
 
-function Header({ title, subtitle, icon: Icon, children, screenTitle = "Pack List" }: { title: string; subtitle: string; icon: typeof Plane; children: React.ReactNode; screenTitle?: string }) {
+function Header({ title, subtitle, icon: Icon, children, screenTitle = "Pack List" }: { title: string; subtitle: string; icon: typeof Plane; children: ReactNode; screenTitle?: string }) {
   return (
     <div className="freight-form-header">
       <div className="flex min-w-0 items-center gap-2">
@@ -538,7 +692,7 @@ function Header({ title, subtitle, icon: Icon, children, screenTitle = "Pack Lis
   );
 }
 
-function Panel({ title, meta, icon: Icon, children, className = "" }: { title: string; meta: string; icon: typeof Plane; children: React.ReactNode; className?: string }) {
+function Panel({ title, meta, icon: Icon, children, className = "" }: { title: string; meta: string; icon: typeof Plane; children: ReactNode; className?: string }) {
   return (
     <section className={`freight-info-section ${className}`}>
       <div className="freight-info-title">
@@ -554,23 +708,43 @@ function Panel({ title, meta, icon: Icon, children, className = "" }: { title: s
 }
 
 function Field({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
-  return <label className="grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground">{label}<Input className="h-7 text-xs font-semibold" type={type} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+  const editable = useContext(PackEditContext);
+  if (!editable) return <DisplayField label={label} value={type === "date" ? formatDate(value) : value} />;
+  const safeValue = type === "date" ? normalizeDateInput(value) : value;
+  return <label className="freight-compact-label">{label}<Input className="h-7 text-xs font-semibold" type={type} value={safeValue} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
 function SelectField({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
-  return <label className="grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground">{label}<select className="h-7 rounded-md border bg-background px-2 text-xs font-semibold" value={value} onChange={(event) => onChange(event.target.value)}><option value="">Blank</option>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>;
+  const editable = useContext(PackEditContext);
+  if (!editable) return <DisplayField label={label} value={value} />;
+  return <label className="freight-compact-label">{label}<select className="h-7 rounded-md border bg-background px-2 text-xs font-semibold" value={value} onChange={(event) => onChange(event.target.value)}><option value="">Blank</option>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>;
 }
 
 function Textarea({ label, value, onChange, className = "" }: { label: string; value: string; onChange: (value: string) => void; className?: string }) {
-  return <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground ${className}`}>{label}<textarea className="min-h-8 rounded-md border border-input bg-background px-2 py-1 text-xs font-semibold text-foreground shadow-sm" value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+  const editable = useContext(PackEditContext);
+  if (!editable) return <DisplayField className={className} label={label} value={value} multiline />;
+  return <label className={`freight-compact-label ${className}`}>{label}<textarea className="min-h-8 rounded-md border border-input bg-background px-2 py-1 text-xs font-semibold text-foreground shadow-sm" value={value} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
-  return <div className="grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground">{label}<div className="flex h-7 items-center rounded-md border bg-muted/40 px-2 text-xs font-semibold normal-case text-foreground">{value}</div></div>;
+  const editable = useContext(PackEditContext);
+  if (!editable) return <DisplayField label={label} value={value} strong />;
+  return <div className="freight-compact-label">{label}<div className="flex h-7 items-center rounded-md border bg-muted/40 px-2 text-xs font-semibold normal-case text-foreground">{value}</div></div>;
 }
 
-function Lookup({ label, value, valueField, displayFields, columns, loadOptions, onChange }: { label: string; value: string; valueField: string; displayFields: string[]; columns: { field: string; header: string }[]; loadOptions: () => Promise<LookupRow[]>; onChange: (value: string, row: LookupRow | null) => void }) {
-  return <label className="grid gap-0.5 text-[10px] font-semibold uppercase text-muted-foreground">{label}<LookupField value={value} compact valueField={valueField} displayFields={displayFields} columns={columns} loadOptions={loadOptions} onChange={onChange} /></label>;
+function Lookup({ label, value, valueField, displayFields, columns, loadOptions, onChange }: { label: string; value: string; valueField: string; displayFields: string[]; columns: { field: string; header: string }[]; loadOptions: (query?: string) => Promise<LookupRow[]>; onChange: (value: string, row: LookupRow | null) => void }) {
+  const editable = useContext(PackEditContext);
+  if (!editable) return <DisplayField label={label} value={value} />;
+  return <label className="freight-compact-label">{label}<LookupField value={value} compact valueField={valueField} displayFields={displayFields} columns={columns} loadOptions={loadOptions} onChange={onChange} /></label>;
+}
+
+function DisplayField({ label, value, strong, multiline, className = "" }: { label: string; value: string; strong?: boolean; multiline?: boolean; className?: string }) {
+  return (
+    <div className={`freight-read-field ${multiline ? "multiline" : ""} ${className}`}>
+      <span>{label}</span>
+      <strong className={strong ? "is-strong" : ""}>{value || "-"}</strong>
+    </div>
+  );
 }
 
 function NoticeChip({ notice }: { notice: Exclude<Notice, null> }) {
@@ -584,6 +758,7 @@ function emptyPack(companyCode: string, userId: string, transportMode: string, j
     job_no: "",
     packlist_no: "",
     seq_number: "",
+    is_new_packlist: true,
     transport_mode: transportMode,
     job_type: jobType,
     job_date: "",
@@ -664,7 +839,10 @@ function emptyPack(companyCode: string, userId: string, transportMode: string, j
 
 function toPackForm(row: LookupRow, companyCode: string, userId: string, mode: string, jobType: string): PackForm {
   const base = emptyPack(companyCode, userId, mode, jobType);
-  return Object.fromEntries(Object.keys(base).map((key) => [key, lookupText(row, key) || (base as any)[key]])) as PackForm;
+  return {
+    ...(Object.fromEntries(Object.keys(base).map((key) => [key, lookupText(row, key) || (base as any)[key]])) as PackForm),
+    is_new_packlist: false,
+  };
 }
 
 function emptyDimension(srNo: number): DimensionLine {
@@ -690,13 +868,14 @@ function toDimensionLine(row: LookupRow, index: number): DimensionLine {
 }
 
 function DimensionGrid({ rows, setRows }: { rows: DimensionLine[]; setRows: Dispatch<SetStateAction<DimensionLine[]>> }) {
+  const editable = useContext(PackEditContext);
   const columns: Array<keyof DimensionLine> = ["sr_no", "length", "breadth", "height", "qty", "gross_wt", "chargeable_wt", "volume", "total_qty", "cargo_details", "prod_description"];
   const numeric = new Set<keyof DimensionLine>(["length", "breadth", "height", "qty", "gross_wt", "chargeable_wt", "volume", "total_qty"]);
   return (
     <div className="overflow-hidden rounded-md border bg-background">
       <div className="flex items-center justify-between border-b bg-muted/35 px-2 py-1.5">
         <span className="text-xs font-semibold text-foreground">Air cargo dimensions</span>
-        <Button type="button" size="sm" variant="outline" onClick={() => setRows((current) => [...current, emptyDimension(current.length + 1)])}><Plus size={14} />Line</Button>
+        {editable && <Button type="button" size="sm" variant="outline" onClick={() => setRows((current) => [...current, emptyDimension(current.length + 1)])}><Plus size={14} />Line</Button>}
       </div>
       <div className="overflow-auto">
         <div className="grid min-w-[1180px] grid-cols-[56px_repeat(8,minmax(86px,1fr))_minmax(170px,1.5fr)_minmax(190px,1.7fr)_44px] gap-1 border-b bg-muted/20 px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">
@@ -705,16 +884,20 @@ function DimensionGrid({ rows, setRows }: { rows: DimensionLine[]; setRows: Disp
         {rows.map((row, rowIndex) => (
           <div key={rowIndex} className="grid min-w-[1180px] grid-cols-[56px_repeat(8,minmax(86px,1fr))_minmax(170px,1.5fr)_minmax(190px,1.7fr)_44px] gap-1 border-b px-2 py-1">
             {columns.map((column) => (
-              <Input
-                key={column}
-                className={`h-7 text-xs ${numeric.has(column) ? "text-right" : ""}`}
-                type={numeric.has(column) ? "number" : "text"}
-                value={row[column]}
-                readOnly={column === "sr_no"}
-                onChange={(event) => setRows((current) => current.map((item, index) => index === rowIndex ? { ...item, [column]: event.target.value } : item))}
-              />
+              editable ? (
+                <Input
+                  key={column}
+                  className={`h-7 text-xs ${numeric.has(column) ? "text-right" : ""}`}
+                  type={numeric.has(column) ? "number" : "text"}
+                  value={row[column]}
+                  readOnly={column === "sr_no"}
+                  onChange={(event) => setRows((current) => current.map((item, index) => index === rowIndex ? { ...item, [column]: event.target.value } : item))}
+                />
+              ) : (
+                <span key={column} className={`min-h-7 rounded-sm px-1 py-1 text-xs font-semibold text-foreground ${numeric.has(column) ? "text-right" : ""}`}>{row[column] || "-"}</span>
+              )
             ))}
-            <Button type="button" size="icon" variant="ghost" title="Remove dimension" onClick={() => setRows((current) => current.filter((_, index) => index !== rowIndex).map((item, index) => ({ ...item, sr_no: String(index + 1) })))}><Trash2 size={14} /></Button>
+            {editable ? <Button type="button" size="icon" variant="ghost" title="Remove dimension" onClick={() => setRows((current) => current.filter((_, index) => index !== rowIndex).map((item, index) => ({ ...item, sr_no: String(index + 1) })))}><Trash2 size={14} /></Button> : <span />}
           </div>
         ))}
         {!rows.length && <div className="px-3 py-6 text-center text-sm text-muted-foreground">No air dimension lines. Add length, breadth, height and weight details when needed.</div>}
@@ -733,8 +916,9 @@ function selectJob(value: string, row: LookupRow | null, setPack: (updater: (cur
     ...current,
     ...next,
     job_no: value,
-    packlist_no: current.packlist_no,
-    seq_number: current.seq_number,
+    packlist_no: current.is_new_packlist ? "" : current.packlist_no,
+    seq_number: current.is_new_packlist ? "" : current.seq_number,
+    is_new_packlist: current.is_new_packlist,
     curr_code: lookupText(row, "curr_code") || current.curr_code,
     ex_rate: lookupText(row, "ex_rate") || current.ex_rate,
   }));

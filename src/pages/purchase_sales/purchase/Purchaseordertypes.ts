@@ -10,7 +10,6 @@ export type ActionKey = "draft" | "submit" | "sendBack" | "reject" | "cancel" | 
 export interface PurchaseOrderLineRow {
   id: string;
   div_code: string;
-  zone: string;
   prod_code: string;
   prod_name: string;
   p_uom: string;
@@ -18,56 +17,75 @@ export interface PurchaseOrderLineRow {
   l_uom: string;
   qty_luom: number;
   unit_price: number;
-  disc_pct: number;
-  qty: number;
+  disc_hdr_percent: number;
+  disc_percent: number;
+  disc_price: number;
   tax_pct: number;
   tax_amount: number;
-  lcurr_amount: number;
-  req_date: string;
+  lcur_amount: number;
+  required_dt: string;
   line_remarks: string;
   tax_cat: string;
   tax_code: string;
-  tax_lcurr_amount: number;
-  lcurr_amount_disc: number;
+  tax_lcur_amount: number;
+  lcur_amount_disc: number;
   zone_code?: string;
   zone_name?: string;
   uom_name?: string;
   uom_code?: string;
+  job_no?: string;
+  dept?: string;
+  sign_ind?: number
+  uppp?: number,
+  quantity: number,
+  ex_rate: number
+
 
 }
 
 export interface PurchaseOrderForm {
-  doc_no: string;
+  doc_no: number | string;
   doc_date: string;
   quotn_no: string;
   quotn_date: string;
-  ref_no:string;
-  ref_date:string;
+  ref_no: string;
+  ref_date: string;
   div_code: string;
   div_name: string;
   ac_code: string;
   ac_name: string;
-  address: string;
+  party_address: string;
   credit_period: number;
+  party_name: string;
   dept_code: string;
-  dept_name:string;
-  tel: string;
-  fax: string;
+  dept_name: string;
+  party_phone: string;
+  party_fax: string;
   buyer: string;
   wo_no: string;
+  wo_number: string;
   curr_code: string;
   curr_name: string;
-  ex_rate: number;
-  pay_terms: string;
-  delivery_term: string;
-  delivery_contact: string;
-  delivery_tel: string;
-  delivery_email: string;
-  remarks: string;
-  disc_amt: number;
-  disc_pct: number;
-  tax_category: string;
   tax_code: string;
+  tx_compntcat_code_1: string;
+  tax_code_name: string;
+  tx_cat_name: string;
+  tx_cat_code: string;
+  ex_rate: number;
+  payment_terms: string;
+  dlvr_term: string;
+  dlvr_contact: string;
+  dlvr_mobile: string;
+  dlvr_email: string;
+  remarks: string;
+  disc_hdr_price: number;
+  disc_hdr_percent: number;
+
+
+  disc_price: number;
+  disc_percent: number;
+  tax_category: string;
+
   expense_ac_post: string;
   print_on_letterhead: string;
   project_name: string;
@@ -78,7 +96,15 @@ export interface PurchaseOrderForm {
   next_action_by?: string;
   sentback_reason?: string;
   reject_reason?: string;
-
+  address: string;
+  tel: string;
+  fax: string;
+  pay_terms: string;
+  delivery_term: string;
+  delivery_contact: string;
+  delivery_tel: string;
+  delivery_email: string;
+  grn_no?: number | string;
 
 }
 
@@ -87,7 +113,7 @@ export interface TteJmiConsumType {
   company_code: string;
   doc_type: string;
   doc_no: number;
-
+  uppp: number;
   mi_doc_no: number;
 
   prod_code: string;
@@ -95,9 +121,12 @@ export interface TteJmiConsumType {
 
   quantity: number;
   qty: number;
-
+  disc_percent: number;
+  disc_price: number;
   p_uom: string;
   l_uom: string;
+  tax_code: string;
+  ex_rate: number;
 
   qty_puom: number;
   qty_luom: number;
@@ -117,12 +146,12 @@ export interface TteJmiConsumType {
   unit_price: number;
   tax_pct: number;
   tax_amount: number;
-  lcurr_amount: number;
-  req_date: string;
+  lcur_amount: number;
+  required_dt: string;
   line_remarks: string;
   tax_cat: string;
-  tax_lcurr_amount: number;
-  lcurr_amount_disc: number;
+  tax_lcur_amount: number;
+  lcur_amount_disc: number;
 
   zone_code?: string;
   zone_name?: string;
@@ -131,7 +160,7 @@ export interface TteJmiConsumType {
 }
 
 export interface ExpenseRow {
-    id: string;
+  id: string;
   company_code: string | null;
   doc_type: string | null;
   doc_no: string | null;
@@ -169,22 +198,27 @@ export const PO_DOC_TYPE = {
   PQA: "PQA",
   GRN: "GRN",
   JO: "JO",
-  FGP: "FGP"
+  FGP: "FGP",
+  PIN : "PIN",
+
 } as const;
 export const PROCESS = "purchase_order";
 export const PROCESSQUOTATION = 'purchase_quotation'
 export const PROCESSGRN = 'purchase_grn'
 export const PROCESSJO = 'production_joborder'
 export const PROCESSJP = 'job_production'
-export const EXPENSE_AC_OPTIONS = ["Inventory A/c", "Expense A/c", "Fixed Asset A/c"];
+export const EXPENSE_AC_OPTIONS = [
+  { label: "Inventory A/c", value: "I" },
+  { label: "Direct Expense A/c", value: "D" },
+];
 export type PODocType = typeof PO_DOC_TYPE[keyof typeof PO_DOC_TYPE];
 
 export interface JobProductionConfig {
   docType: PODocType;
   headerParameter: string;
   detailParameter: string;
-  jmiConsumDetails:string;
-  expenseDetails:string
+  jmiConsumDetails: string;
+  expenseDetails: string
 }
 
 export interface PurchaseConfig {
@@ -221,6 +255,12 @@ export const JP_CONFIG: JobProductionConfig = {
   docType: PO_DOC_TYPE.FGP,
   headerParameter: "PS_GRN_ENTRY_HEADER_PAGE",
   detailParameter: "PS_GRN_ENTRY_DETAIL_PAGE",
-  expenseDetails :"PS_GRN_ENTRY_VW_TTE_PGRN_EXP_DET",
-  jmiConsumDetails :"PS_GRN_ENTRY_VW_TTE_JMI_CONSUM"
+  expenseDetails: "PS_GRN_ENTRY_VW_TTE_PGRN_EXP_DET",
+  jmiConsumDetails: "PS_GRN_ENTRY_VW_TTE_JMI_CONSUM"
+};
+
+export const PIN_CONFIG: PurchaseConfig = {
+  docType: PO_DOC_TYPE.PIN,
+  headerParameter: "PS_INVOICE_ENTRY_HEADER_PAGE",
+  detailParameter: "PS_INVOICE_ENTRY_DETAIL_PAGE",
 };

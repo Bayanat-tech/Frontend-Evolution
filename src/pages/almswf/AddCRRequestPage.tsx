@@ -9,6 +9,8 @@ import { AutoDismissAlert } from "../../components/ui/AutoDismissAlert";
 import { CardHeader } from "../../components/ui/Card";
 import { useAuth } from "../../state/AuthContext";
 import { almsSave, almsCommonSelect } from "../../api/alms";
+import { executeDynamicMutationColumn90 } from "../../api/lookups";
+import { AttachmentDialog } from "../../components/ui/AttachmentDialog";
 
 // ─── Type ─────────────────────────────────────────────────────────────────
 export type TCRHeader = {
@@ -26,7 +28,6 @@ export type TCRHeader = {
   CREATE_DATE?: string | Date;
   LAST_ACTION?: string;
   HISTORY_SERIAL?: number;
-  NEXT_ACTION_BY?: string;
 
   COMPANY_NAME?: string;
   AWARE_CUSTOMER_CODE?: string;
@@ -37,7 +38,7 @@ export type TCRHeader = {
   PO_BOX?: string;
   POSTAL_CODE?: number;
   CITY?: string;
-  TEL_NO?: string;
+  OFFICE_TEL_NO?: string;
   FAX_NO?: string;
   WEBSITE?: string;
   EMAIL?: string;
@@ -87,6 +88,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const [header, setHeader] = useState<Partial<TCRHeader>>({});
   const [rejectOpen, setRejectOpen] = useState(false);
   const [sendBackOpen, setSendBackOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [remarkText, setRemarkText] = useState("");
   const [attachOpen, setAttachOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
@@ -94,10 +96,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const disabled = isViewMode || saving;
   const Required = () => <span className="text-destructive ml-0.5">*</span>;
 
-  // ── Fetch existing CR (edit/view mode) ────────────────────────────────────
-  // FIX: was `enabled: isEditMode && !!requestNumber` — this meant View mode
-  // (isEditMode=false, isViewMode=true) never fetched, so the form always
-  // rendered blank even though a valid requestNumber was passed in.
+
   const { data: hdrList = [] } = useQuery<TCRHeader[]>({
     queryKey: ["cr-header", requestNumber, companyCode],
     queryFn: () =>
@@ -115,19 +114,14 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       setHeader(hdrList[0]);
       setLoading(false);
     } else if (!isEditMode && !isViewMode) {
-      // FIX: genuinely a new/create form only when NEITHER edit NOR view —
-      // previously `!isEditMode` alone also matched View mode and cleared
-      // loading before the fetch above ever had a chance to run/resolve.
       setLoading(false);
     }
   }, [hdrList, isEditMode, isViewMode]);
 
   const setHdr = (field: keyof TCRHeader, value: unknown) =>
     setHeader((prev) => ({ ...prev, [field]: value }));
-
-  // ── Save (matches PROC_BUILD_DYNAMIC_INS_UPD_COLUMN90 -> 'capex_req_ins_upd') ──
- const saveHeader = async (status: string, extra: Record<string, unknown> = {}) =>
-    almsSave({
+  const saveHeader = async (status: string, extra: Record<string, unknown> = {}) =>
+    executeDynamicMutationColumn90({
       parameter: "capex_req_ins_upd",
       loginid,
       val1s1: requestNumber || "",
@@ -142,6 +136,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       val1s10: header.CREATE_USER || loginid,
       val1s11: loginid,
       val1s12: status,
+      val1s13: header.FAX_NO || "",
 
       val1s18: header.COMPANY_NAME || "",
       val1s19: header.AWARE_CUSTOMER_CODE || "",
@@ -151,7 +146,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       val1s23: header.LOCATION || "",
       val1s24: header.PO_BOX || "",
       val1s25: header.CITY || "",
-      val1s26: header.TEL_NO || "",
+      val1s26: header.OFFICE_TEL_NO || "",
       val1s27: header.WEBSITE || "",
       val1s28: header.EMAIL || "",
 
@@ -173,11 +168,13 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       val1s40: header.ACCOUNT_ENV_WMS === "Y" ? "Y" : "N",
       val1s41: header.ACCOUNT_ENV_FREIGHT === "Y" ? "Y" : "N",
       val1s42: header.ACCOUNT_NO || "",
-      val1s43: loginid,
-      val1s44: loginid,
-      val1s45: header.NEXT_ACTION_BY || "",
-      val1s46: "",
-      val1s47: "",
+
+
+      val1s43: loginid,   // CREATED_BY 
+      val1s44: loginid,   // UPDATED_BY
+      val1s45: "",        // NEXT_ACTION_BY
+      val1s46: "",        // SENTBACK_REASON 
+      val1s47: "",        // REJECT_REASON 
 
       val1n1: header.FLOW_LEVEL_INITIAL || 1,
       val1n2: header.FLOW_LEVEL_RUNNING || 1,
@@ -187,15 +184,16 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       val1n7: header.CREDIT_LIMIT || 0,
       val1n8: header.REQUESTED_CREDIT_PERIOD || 0,
       val1n9: header.SANCTIONED_CREDIT_LIMIT_AMT || 0,
-      // val1n10: header.SANCTIONED_CREDIT_PERIOD || 0,
-
       val1n10: header.SANCTIONED_CREDIT_PERIOD || 0,
 
-      ...extra,
-  
+      ...extra, // Reject/Send Back override val1s46/47 here
     });
 
   const runAction = async (status: string, successMsg: string) => {
+    if (header.FIN_CONTACT_NUMBER && header.FIN_CONTACT_NUMBER.length !== 10) {
+      setNotice({ type: "error", message: "Tel No must be exactly 10 digits" });
+      return;
+    }
     setSaving(true);
     setNotice(null);
     try {
@@ -215,42 +213,62 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
   const handleSubmit = () => runAction("SUBMITTED", "CR submitted successfully!");
 
   const handleRejectConfirm = async () => {
-  if (!remarkText.trim()) return setNotice({ type: "error", message: "Please enter a reject remark" });
-  setSaving(true);
-  setNotice(null);
-  try {
-    const result = await saveHeader("REJECTED", { val1s47: remarkText });
-    if (result.success) {
-      setNotice({ type: "success", message: "CR rejected successfully!" });
-      setRejectOpen(false);
-      setRemarkText("");
-      onClose(true);
+    if (!remarkText.trim()) return setNotice({ type: "error", message: "Please enter a reject remark" });
+    setSaving(true);
+    setNotice(null);
+    try {
+
+      const result = await saveHeader("REJECTED", { val1s47: remarkText });
+      if (result.success) {
+        setNotice({ type: "success", message: "CR rejected successfully!" });
+        setRejectOpen(false);
+        setRemarkText("");
+        onClose(true);
+      }
+    } catch (err) {
+      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to reject" });
+    } finally {
+      setSaving(false);
     }
-  } catch (err) {
-    setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to reject" });
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   const handleSendBackConfirm = async () => {
-  if (!remarkText.trim()) return setNotice({ type: "error", message: "Please enter a send back reason" });
-  setSaving(true);
-  setNotice(null);
-  try {
-    const result = await saveHeader("SENTBACK", { val1s46: remarkText });
-    if (result.success) {
-      setNotice({ type: "success", message: "CR sent back successfully!" });
-      setSendBackOpen(false);
-      setRemarkText("");
-      onClose(true);
+    if (!remarkText.trim()) return setNotice({ type: "error", message: "Please enter a send back reason" });
+    setSaving(true);
+    setNotice(null);
+    try {
+
+      const result = await saveHeader("SENTBACK", { val1s46: remarkText });
+      if (result.success) {
+        setNotice({ type: "success", message: "CR sent back successfully!" });
+        setSendBackOpen(false);
+        setRemarkText("");
+        onClose(true);
+      }
+    } catch (err) {
+      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to send back" });
+    } finally {
+      setSaving(false);
     }
-  } catch (err) {
-    setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to send back" });
-  } finally {
-    setSaving(false);
-  }
-};
+  };
+
+
+  const handleCancelConfirm = async () => {
+    setSaving(true);
+    setNotice(null);
+    try {
+      const result = await saveHeader("CANCELED");
+      if (result.success) {
+        setNotice({ type: "success", message: "CR canceled successfully!" });
+        setCancelOpen(false);
+        onClose(true);
+      }
+    } catch (err) {
+      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to cancel" });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-background">
@@ -322,7 +340,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                   <label className="field"><span>Po Box<Required /></span><Input disabled={disabled} value={header.PO_BOX || ""} onChange={(e) => setHdr("PO_BOX", e.target.value)} /></label>
                   <label className="field"><span>Postal Code<Required /></span><Input disabled={disabled} type="number" value={header.POSTAL_CODE ?? ""} onChange={(e) => setHdr("POSTAL_CODE", Number(e.target.value))} /></label>
                   <label className="field"><span>City<Required /></span><Input disabled={disabled} value={header.CITY || ""} onChange={(e) => setHdr("CITY", e.target.value)} /></label>
-                  <label className="field"><span>Tel No<Required /></span><Input disabled={disabled} value={header.TEL_NO || ""} onChange={(e) => setHdr("TEL_NO", e.target.value)} /></label>
+                  <label className="field"><span>Tel No<Required /></span><Input disabled={disabled} value={header.OFFICE_TEL_NO || ""} onChange={(e) => setHdr("OFFICE_TEL_NO", e.target.value)} /></label>
 
                   <label className="field"><span>Fax No<Required /></span><Input disabled={disabled} value={header.FAX_NO || ""} onChange={(e) => setHdr("FAX_NO", e.target.value)} /></label>
                   <label className="field"><span>Website<Required /></span><Input disabled={disabled} value={header.WEBSITE || ""} onChange={(e) => setHdr("WEBSITE", e.target.value)} /></label>
@@ -337,12 +355,39 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                 </div>
                 <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-6">
                   <label className="field"><span>Contact Person<Required /></span><Input disabled={disabled} value={header.FIN_CONTACT_PERSON || ""} onChange={(e) => setHdr("FIN_CONTACT_PERSON", e.target.value)} /></label>
-                  <label className="field"><span>Tel No<Required /></span><Input disabled={disabled} value={header.FIN_CONTACT_NUMBER || ""} onChange={(e) => setHdr("FIN_CONTACT_NUMBER", e.target.value)} /></label>
+                  <label className="field"><span>Tel No<Required /></span><Input  disabled={disabled}  type="tel" inputMode="numeric" maxLength={10} value={header.FIN_CONTACT_NUMBER || ""}  onChange={(e) => {
+                   const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 10);
+                        setHdr("FIN_CONTACT_NUMBER", digitsOnly);
+                      }}
+                    />
+                    {header.FIN_CONTACT_NUMBER && header.FIN_CONTACT_NUMBER.length !== 10 && (
+                      <p className="mt-1 text-xs text-destructive">Tel No must be exactly 10 digits</p>
+                    )}
+                  </label>
                   <label className="field"><span>Email<Required /></span><Input disabled={disabled} type="email" value={header.FIN_CONTACT_EMAIL || ""} onChange={(e) => setHdr("FIN_CONTACT_EMAIL", e.target.value)} /></label>
                   <label className="field"><span>Commercial Reg No<Required /></span><Input disabled={disabled} value={header.COMMERCIAL_REG_NO || ""} onChange={(e) => setHdr("COMMERCIAL_REG_NO", e.target.value)} /></label>
                   <label className="field"><span>Business Sector<Required /></span><Input disabled={disabled} value={header.BUSINESS_SECTOR || ""} onChange={(e) => setHdr("BUSINESS_SECTOR", e.target.value)} /></label>
                   <label className="field"><span>Contact Person<Required /></span><Input disabled={disabled} value={header.REMARKS_CONTACT_PERSON || ""} onChange={(e) => setHdr("REMARKS_CONTACT_PERSON", e.target.value)} /></label>
                   <label className="field"><span>Authorized Signatory<Required /></span><Input disabled={disabled} value={header.AUTHORIZED_SIGNATORY || ""} onChange={(e) => setHdr("AUTHORIZED_SIGNATORY", e.target.value)} /></label>
+                </div>
+              </div>
+
+              {/* Comments */}
+              <div className="rounded-md border bg-card">
+                <div className="border-b bg-secondary/40 px-3 py-1">
+                  <h3 className="m-0 text-sm font-semibold leading-tight">Comments</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-3 p-1 md:grid-cols-3">
+                  <label className="field">
+                    <span>Description<Required /></span>
+                    <textarea
+                      disabled={disabled}
+                      rows={2}
+                      value={header.DESCRIPTION || ""}
+                      onChange={(e) => setHdr("DESCRIPTION", e.target.value)}
+                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                    />
+                  </label>
                   <label className="field">
                     <span>Comments<Required /></span>
                     <textarea
@@ -353,7 +398,6 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                       className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                     />
                   </label>
-
                   <label className="field">
                     <span>Remarks<Required /></span>
                     <textarea
@@ -366,35 +410,6 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                   </label>
                 </div>
               </div>
-
-              {/* Comments */}
-              {/* <div className="rounded-md border bg-card">
-                <div className="border-b bg-secondary/40 px-3 py-1">
-                  <h3 className="m-0 text-sm font-semibold leading-tight">Comments</h3>
-                </div>
-                <div className="grid grid-cols-2 gap-3 p-1 md:grid-cols-2">
-                  <label className="field">
-                    <span>Comments<Required /></span>
-                    <textarea
-                      disabled={disabled}
-                      rows={2}
-                      value={header.COMMENTS || ""}
-                      onChange={(e) => setHdr("COMMENTS", e.target.value)}
-                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Remarks<Required /></span>
-                    <textarea
-                      disabled={disabled}
-                      rows={1}
-                      value={header.REMARKS || ""}
-                      onChange={(e) => setHdr("REMARKS", e.target.value)}
-                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                    />
-                  </label>
-                </div>
-              </div> */}
 
               {/* Credit Requested */}
               <div className="rounded-md border bg-card">
@@ -413,7 +428,7 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
                       onChange={(e) => setHdr("CREDIT_FORM_SIGNATURE_DATE", e.target.value)}
                     />
                   </label>
-                   <label className="field"><span>Sanctioned Credit Limit Amt<Required /></span><Input disabled={disabled} type="number" step="0.001" value={header.SANCTIONED_CREDIT_LIMIT_AMT ?? ""} onChange={(e) => setHdr("SANCTIONED_CREDIT_LIMIT_AMT", Number(e.target.value))} /></label>
+                  <label className="field"><span>Sanctioned Credit Limit Amt<Required /></span><Input disabled={disabled} type="number" step="0.001" value={header.SANCTIONED_CREDIT_LIMIT_AMT ?? ""} onChange={(e) => setHdr("SANCTIONED_CREDIT_LIMIT_AMT", Number(e.target.value))} /></label>
                   <label className="field"><span>Sanctioned Credit Period<Required /></span><Input disabled={disabled} type="number" value={header.SANCTIONED_CREDIT_PERIOD ?? ""} onChange={(e) => setHdr("SANCTIONED_CREDIT_PERIOD", Number(e.target.value))} /></label>
                 </div>
               </div>
@@ -465,7 +480,15 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
         <div className="flex items-center justify-end gap-2 border-t bg-secondary/60 px-4 py-2">
           {!isViewMode && (
             <>
-              <Button disabled={saving} type="button" variant="outline" onClick={() => onClose()}>Close</Button>
+              <Button
+                disabled={saving}
+                type="button"
+                variant="outline"
+                onClick={() => setCancelOpen(true)}
+                className="border-red-300 text-red-700 hover:bg-red-50"
+              >
+                <X size={15} /> Cancel
+              </Button>
               <Button disabled={saving} type="button" variant="outline" onClick={handleSaveDraft}>
                 <Save size={15} /> {saving ? "Saving..." : "Save As Draft"}
               </Button>
@@ -524,6 +547,36 @@ const AddCRRequestPage = ({ isEditMode, isViewMode = false, existingData, onClos
       >
         <textarea rows={4} value={remarkText} onChange={(e) => setRemarkText(e.target.value)} placeholder="Enter send back reason..." className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
       </Dialog>
+
+      <Dialog
+        open={cancelOpen}
+        title="Cancel Request"
+        description="Are you sure you want to cancel this credit request? This action cannot be undone."
+        onClose={() => setCancelOpen(false)}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setCancelOpen(false)}>No, Keep It</Button>
+            <Button variant="destructive" disabled={saving} onClick={handleCancelConfirm}>
+              {saving ? "Canceling..." : "Yes, Cancel Request"}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-muted-foreground">
+          Once canceled, this request will move to the "Canceled" tab and no further action can be taken on it.
+        </p>
+      </Dialog>
+      <AttachmentDialog
+        open={attachOpen}
+        onClose={() => setAttachOpen(false)}
+        requestNumber={requestNumber}
+        title="Credit Request Attachments"
+        module="LMS"
+        type="CR"
+        companyCode={companyCode}
+        loginId={loginid}
+        readOnly={isViewMode}
+      />
     </div>
   );
 };

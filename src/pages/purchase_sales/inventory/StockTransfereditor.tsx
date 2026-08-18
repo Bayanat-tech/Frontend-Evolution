@@ -12,29 +12,25 @@ import {
   ActionKey,
   PurchaseConfig,
   PurchaseOrderEditorState,
-  PurchaseOrderLineRow,
   SendBackUserOption,
 } from "../purchase/Purchaseordertypes";
 import {
-  emptyForm,
-  emptyLineRow,
+
   formatAmount,
-  lineAmount,
-  lineDiscPrice,
-  lineNetAmount,
-  lineTaxAmount,
+
+
+
   lowerRecord,
   newId,
   numberOrZero,
   text,
 } from "../purchase/Purchaseorderutils";
-import { PurchaseOrderHeaderForm } from "../purchase/Purchaseorderheaderform";
-import { PurchaseOrderLinesTable } from "../purchase/Purchaseorderlinestable";
 import { SendBackDialog } from "../purchase/Sendbackdialog";
 import { RejectDialog } from "../purchase/Rejectdialog";
-import {  PROCESSST, InventoryConfig, IV_DOC_TYPE, PurchaseOrderForm } from "./Inventorytypes";
-import { fetchSalesOrderDetail, fetchSalesOrderHeader, runWorkflow } from "./Inventoryutils";
+import {  PROCESSST, InventoryConfig, IV_DOC_TYPE, PurchaseOrderForm, InventoryLineRow } from "./Inventorytypes";
+import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, lineAmount, lineDiscPrice, lineTaxAmount, runWorkflow } from "./Inventoryutils";
 import { StockHeaderForm } from "./StockHeaderForm";
+import { StockDetail } from "./StockDetail";
 
 
 export type { PurchaseOrderEditorState };
@@ -55,7 +51,7 @@ export function StockTransferEditor({
   const { user } = useAuth();
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
-  const [rows, setRows] = useState<PurchaseOrderLineRow[]>(() => (editMode ? [] : [emptyLineRow(form.div_code)]));
+  const [rows, setRows] = useState<InventoryLineRow[]>(() => (editMode ? [] : [emptyLineRow(form.div_code)]));
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -145,7 +141,7 @@ export function StockTransferEditor({
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
         if (!mounted) return;
-        setError(loadError instanceof Error ? loadError.message : "Unable to load Sales Order");
+        setError(loadError instanceof Error ? loadError.message : "Unable to load Stock Transfer");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -188,14 +184,14 @@ export function StockTransferEditor({
     const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
     const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
-    return totalAmount - totalDiscPrice - form.disc_amt + totalTaxAmount;
+    return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
   })();
 
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const updateRow = (id: string, patch: Partial<PurchaseOrderLineRow>) => {
+  const updateRow = (id: string, patch: Partial<InventoryLineRow>) => {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
 
@@ -220,21 +216,19 @@ export function StockTransferEditor({
  const handleSaveAsDraft = () =>
   runAction("draft", async () => {
     await runWorkflow("SAVEASDRAFT",  IV_DOC_TYPE.STR, form, rows, user?.company_code, user?.loginid || user?.username);
-  }, "Sales Order saved as draft");
+  }, "Stock Transfer saved as draft");
 
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
-    if (!form.ac_code) return setError("A/c Code is required");
-    if (!form.curr_code) return setError("Currency is required");
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", IV_DOC_TYPE.STR, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, editMode ? "Sales Order updated successfully" : "Sales Order created successfully");
+    }, editMode ? "Stock Transfer updated successfully" : "Stock Transfer created successfully");
   };
 
   const handleCancel = () =>
     runAction("cancel", async () => {
       await runWorkflow("CANCELED", IV_DOC_TYPE.STR, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, "Sales Order cancelled");
+    }, "Stock Transfer cancelled");
 
   // ---- Reject handlers ----
   const openRejectDialog = () => {
@@ -256,7 +250,7 @@ export function StockTransferEditor({
       const payloadForm: PurchaseOrderForm = { ...form, reject_reason: rejectReason.trim() };
       await runWorkflow("REJECTED", IV_DOC_TYPE.STR, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setRejectDialogOpen(false);
-    }, "Sales Order rejected");
+    }, "Stock Transfer rejected");
   };
 
   // ---- Send Back handlers ----
@@ -277,15 +271,18 @@ export function StockTransferEditor({
       });
       const options: SendBackUserOption[] = (rows || []).map((raw) => {
         const row = lowerRecord(raw as Record<string, unknown>);
+        const level = row.level_no ?? row.level ?? row.levelno ?? row.level_no;
+        const name = row.description ?? row.desc ?? row.name ?? row.username;
         return {
-          code: text(row.level_no),
-          name: text(row.description),
-          level_no: numberOrZero(row.level_no),
+          code: text(level),
+          name: text(name),
+          level_no: numberOrZero(level),
         };
       }).filter((option) => option.code);
       setSendBackUsers(options);
-    } catch {
+    } catch (error) {
       setSendBackUsers([]);
+      setSendBackError(error instanceof Error ? error.message : "Unable to load send-back users");
     } finally {
       setSendBackUsersLoading(false);
     }
@@ -313,10 +310,11 @@ export function StockTransferEditor({
       };
       await runWorkflow("SENTBACK", IV_DOC_TYPE.STR, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
       setSendBackDialogOpen(false);
-    }, "Sales Order sent back");
+    }, "Stock Transfer sent back");
   };
 
   const actionBarBusy = actionLoading !== null || saving;
+  console.log("flowLevelRunning------------------>",flowLevelRunning)
 
   return (
     <>
@@ -329,9 +327,9 @@ export function StockTransferEditor({
             <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
               <div>
                 <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                  {editMode ? "Edit Sales Order" : "New Sales Order"}
+                  {editMode ? "Edit Stock Transfer" : "New Stock Transfer"}
                 </p>
-                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Sales Order</h2>
+                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Stock Transfer</h2>
               </div>
               <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
@@ -366,15 +364,15 @@ export function StockTransferEditor({
           <div className="cancelled-document-banner" role="status">
             <div>
               <span className="cancelled-document-kicker">Cancelled Document</span>
-              <strong>{form.doc_no || "Sales Order"}</strong>
+              <strong>{form.doc_no || "Stock Transfer"}</strong>
             </div>
-            <p>This Sales Order is cancelled and opened in read-only mode.</p>
+            <p>This Stock Transfer is cancelled and opened in read-only mode.</p>
           </div>
         )}
 
         <CardContent className="min-h-0 overflow-auto p-3">
           {loading ? (
-            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Sales Order...</div>
+            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Stock Transfer...</div>
           ) : (
             <div className="grid gap-3">
               <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
@@ -390,15 +388,15 @@ export function StockTransferEditor({
                 loginid={user?.loginid || user?.username}
               />
 
-              <PurchaseOrderLinesTable
+              <StockDetail
                 rows={rows}
                 updateRow={updateRow}
                 addRow={addRow}
                 removeRow={removeRow}
                 headerAndLineDisabled={headerAndLineDisabled}
-                discAmt={form.disc_amt}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
+                docType={config.docType}
               />
             </div>
           )}
@@ -406,31 +404,32 @@ export function StockTransferEditor({
 
         <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
           <div className="flex flex-wrap gap-3 rounded-2xl bg-gray-50 p-5 shadow-inner">
-            <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
-              {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              {actionLoading === "draft" ? "Saving..." : "Save Draft"}
-            </Button>
-
-            <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
+           { isPendingTab && (
+             <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
+                {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                {actionLoading === "draft" ? "Saving..." : "Save Draft"}
+              </Button>
+            )}
+          { isPendingTab && <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
               {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
               {actionLoading === "submit" ? "Submitting..." : "Submit"}
-            </Button>
+            </Button>}
 
-            {canSendBackOrReject && (
+            {isPendingTab && canSendBackOrReject && (
               <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
                 {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
               </Button>
             )}
 
-            {canSendBackOrReject && (
+            {isPendingTab && canSendBackOrReject && (
               <Button type="button" onClick={openRejectDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60">
                 {actionLoading === "reject" ? "Rejecting..." : "Reject"}
               </Button>
             )}
-
+{isPendingTab &&
             <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
               {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
-            </Button>
+            </Button>}
           </div>
           <div className="flex items-center gap-2">
             <Button aria-label="Print" type="button" variant="outline" size="icon" disabled={actionDisabled}><Printer size={15} /></Button>

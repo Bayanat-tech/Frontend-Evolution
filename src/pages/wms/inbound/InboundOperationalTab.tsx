@@ -17,19 +17,22 @@ import { useToast } from "../../../components/ui/AlertToast";
 import { type FormField, type DropdownOption } from "../../../config/formFields";
 import { getInboundTabConfig } from "../../../config/tabConfig";
 import {
-  type WmsRow,
-  value, normalizeRow, sqlEscape, stripUiFields, recalcQuantity, makeColumns,
+  type WmsRow, value, normalizeRow, sqlEscape, stripUiFields, recalcQuantity, makeColumns,
 } from "../../../utils/inboundHelpers";
 import { useDebounce } from "../../../hooks/useDebounce";
 import { Upload, AlertTriangle } from "lucide-react";
 import * as XLSX from "xlsx";
 import { FileSpreadsheet, Download, CheckCircle2 as CheckCircle2Icon } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ActivityBillingSection } from "./ActivityBillingSection";
+import { InboundJobDetailsTab } from "./InboundJobDetailTab"; 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Props = {
   job:        WmsRow | null;
   jobNo:      string;
   tab:        string;
   loadingJob: boolean;
+  onJobUpdated?: () => void | Promise<void>;   // ← add this
 };
 
 type TallySubTab = "pallet" | "product" | "serial";
@@ -47,9 +50,15 @@ export type InboundOperationalTabHandle = {
   validateBeforeLeave: () => boolean;
 };
 
+// ── Tax component-category codes that carry a 5% rate; everything else is 0%.
+// Mirrors legacy rule: if TX_COMPNTCAT_CODE_1 in ('10100','11100') then 5 else 0.
+const TAX_FIVE_PERCENT_CODES = ["10100", "11100"];
+const deriveTaxPercentFromCategory = (taxCompntcatCode: unknown): number =>
+  TAX_FIVE_PERCENT_CODES.includes(String(taxCompntcatCode ?? "")) ? 5 : 0;
+
 // ─── Component ────────────────────────────────────────────────────────────────
 export const InboundOperationalTab = forwardRef<InboundOperationalTabHandle, Props>(
-  function InboundOperationalTab({ job, jobNo, tab, loadingJob }, ref) {
+  function InboundOperationalTab({ job, jobNo, tab, loadingJob, onJobUpdated }, ref) {
     const { user }    = useAuth();
     const { toast }   = useToast();
     const prinCode    = value(job || {}, "prin_code");
@@ -66,6 +75,7 @@ const [ediDragActive, setEdiDragActive] = useState(false);
     const isTallyDetails  = tab === "tally_details";
     const isPackingDetails = tab === "packing_details";
     const isActivityBilling = tab === "activity_billing";
+    const isJobDetails      = tab === "job_details";
     // ── activity billing state ──────────────────────────────────────────────
 const [activityRows,    setActivityRows]    = useState<WmsRow[]>([]);
 const [activityLoading, setActivityLoading] = useState(false);
@@ -77,22 +87,33 @@ const loadActivityBilling = useCallback(async () => {
   setActivityLoading(true);
   try {
     const sql = `
-      SELECT
-        tid.PRIN_CODE,
-        tid.JOB_NO,
-        tid.ACT_CODE,
-        tid.ACT_CODE || '-' || ma.ACTIVITY AS ACTIVITY,
-        tid.QUANTITY,
-        tid.BILL_RATE,
-        tid.BILL,
-        tid.COST_RATE,
-        tid.COST,
-        tid.OTHER_SERVICES
+      SELECT 
+        tid.PRIN_CODE, 
+        tid.JOB_NO, 
+        tid.ACT_CODE, 
+        tid.ACT_CODE || '-' || ma.ACTIVITY AS ACTIVITY, 
+        tid.QUANTITY, 
+        tid.TX_COMPNTCAT_CODE_1, 
+        tid.TX_CAT_CODE,
+        tid.BILL_RATE, 
+        tid.BILL, 
+        tid.TX_COMPNT_PERC_1, 
+        tid.TX_COMPNT_AMT_1, 
+        tid.TX_COMPNT_LCURAMT_1, 
+        tid.COST_RATE, 
+        tid.TX_COMPNTCAT_CODE_1_COST, 
+        tid.TX_CAT_CODE_COST, 
+        tid.TX_COMPNT_PERC_1_COST, 
+        tid.TX_COMPNT_AMT_1_COST, 
+        tid.TX_COMPNT_LCURAMT_1_COST, 
+        tid.COST, 
+        tid.OTHER_SERVICES 
       FROM TN_INVOICE_DET tid
-      JOIN MS_ACTIVITY ma
+      JOIN MS_ACTIVITY ma 
         ON tid.ACT_CODE = ma.ACTIVITY_CODE
       WHERE tid.PRIN_CODE = '${sqlEscape(prinCode)}'
-        AND tid.JOB_NO    = '${sqlEscape(jobNo)}'`;
+        AND tid.JOB_NO = '${sqlEscape(jobNo)}'
+    `;
     const data = await executeWmsInboundSql(sql);
     setActivityRows(data.map(normalizeRow));
     setActivityEdited({});
@@ -108,13 +129,17 @@ useEffect(() => {
 }, [isActivityBilling, loadingJob, jobNo, prinCode]);
 
 const activityTotals = useMemo(() => {
-  const totalBill = activityRows.reduce((sum, r) => sum + Number(value(r, "bill") ?? 0), 0);
-  const totalCost = activityRows.reduce((sum, r) => sum + Number(value(r, "cost") ?? 0), 0);
-  return { totalBill, totalCost };
+  const totalBill   = activityRows.reduce((sum, r) => sum + Number(value(r, "bill") ?? 0), 0);
+  const totalTax    = activityRows.reduce((sum, r) => sum + Number(value(r, "TX_COMPNT_AMT_1") ?? 0), 0);
+  const totalAmount = activityRows.reduce((sum, r) => sum + Number(value(r, "TX_COMPNT_LCURAMT_1") ?? 0), 0);
+  const totalCost   = activityRows.reduce((sum, r) => sum + Number(value(r, "cost") ?? 0), 0);
+  const totalCostTax    = activityRows.reduce((sum, r) => sum + Number(value(r, "TX_COMPNT_AMT_1_COST") ?? 0), 0);
+  const totalCostAmount = activityRows.reduce((sum, r) => sum + Number(value(r, "TX_COMPNT_LCURAMT_1_COST") ?? 0), 0);
+  return { totalBill, totalTax, totalAmount, totalCost, totalCostTax, totalCostAmount };
 }, [activityRows]);
 
 // recompute BILL/COST locally as rates are edited, and track which rows changed
-const handleActivityRateChange = (row: WmsRow, field: "bill_rate" | "cost_rate", raw: string) => {
+const handleActivityRateChange = (row: WmsRow, field:"quantity" | "bill_rate" | "cost_rate" | "TX_COMPNT_PERC_1", raw: string) => {
   const num = raw === "" ? 0 : Number(raw);
   const actCode = String(value(row, "act_code") ?? "");
   setActivityRows((prev) =>
@@ -122,8 +147,14 @@ const handleActivityRateChange = (row: WmsRow, field: "bill_rate" | "cost_rate",
       if (String(value(r, "act_code") ?? "") !== actCode) return r;
       const updated: WmsRow = { ...r, [field]: num };
       const qty = Number(value(updated, "quantity") ?? 0);
-      updated.bill = qty * Number(value(updated, "bill_rate") ?? 0);
+      const billRate = Number(value(updated, "bill_rate") ?? 0);
+      const taxPercent = Number(value(updated, "TX_COMPNT_PERC_1") ?? 0);
+      const bill = qty * billRate;
+      const taxAmount = bill * (taxPercent / 100);
+      updated.bill = bill;
       updated.cost = qty * Number(value(updated, "cost_rate") ?? 0);
+      updated.TX_COMPNT_AMT_1 = taxAmount;
+      updated.TX_COMPNT_LCURAMT_1 = bill + taxAmount;
       setActivityEdited((prevEdited) => ({ ...prevEdited, [actCode]: updated }));
       return updated;
     })
@@ -131,28 +162,75 @@ const handleActivityRateChange = (row: WmsRow, field: "bill_rate" | "cost_rate",
 };
 
 const handleActivityBillingSubmit = async () => {
-  const editedList = Object.values(activityEdited);
-  if (!editedList.length) { toast.error("No changes to update"); return; }
+  // if (!Object.keys(activityEdited).length) { toast.error("No changes to update"); return; }
   setActivitySaving(true);
   try {
-    for (const row of editedList) {
-      const qty      = Number(value(row, "quantity") ?? 0);
-      const billRate = Number(value(row, "bill_rate") ?? 0);
-      const costRate = Number(value(row, "cost_rate") ?? 0);
-      const actCode  = String(value(row, "act_code") ?? "");
-      const updateSql = `
-        UPDATE TN_INVOICE_DET
-        SET
-          QUANTITY  = ${qty},
-          BILL_RATE = ${billRate},
-          COST_RATE = ${costRate},
-          BILL      = ${qty} * ${billRate},
-          COST      = ${qty} * ${costRate}
-        WHERE PRIN_CODE = '${sqlEscape(prinCode)}'
-          AND JOB_NO    = '${sqlEscape(jobNo)}'
-          AND ACT_CODE  = '${sqlEscape(actCode)}'`;
-      await executeWmsInboundSql(updateSql);
-    }
+    const userId = String(user?.USERNAME || user?.username || "");
+
+    // Look up whatever invoice already exists for this job/principal, if any.
+    // If none exists, `existingHeader` stays null and every header field
+    // below falls back to null/defaults - PROC_INS_UPD_TN_INVOICE treats a
+    // null/absent INVOICE_NO as "create a new invoice" and just inserts it.
+    const headerSql = `
+      SELECT
+        INVOICE_NO, INVOICE_DATE, INV_TYPE, INV_TO, CURR_CODE, EX_RATE,
+        ALLOCATED, DESPATCHED, JOB_TYPE, INV_PRINT_COUNT, INV_PRINTED,
+        INV_GRP_PRINT_COUNT, INV_GRP_PRINTED, FA_UPLOADED
+      FROM TN_INVOICE
+      WHERE COMPANY_CODE = '${sqlEscape(companyCode)}'
+        AND PRIN_CODE    = '${sqlEscape(prinCode)}'
+        AND JOB_NO       = '${sqlEscape(jobNo)}'`;
+    const headerRows = await executeWmsInboundSql(headerSql);
+    const existingHeader: any = headerRows?.[0] ? normalizeRow(headerRows[0]) : {};
+
+    const detailRows = activityRows
+      .filter((row) => String(value(row, "act_code") || "").trim() !== "") // drop blank "Add Activity" rows
+      .map((row) => ({
+        ACT_CODE: String(value(row, "act_code") ?? ""),
+        QUANTITY: Number(value(row, "quantity") ?? 0),
+        BILL_RATE: Number(value(row, "bill_rate") ?? 0),
+        TX_COMPNTCAT_CODE_1: value(row, "TX_COMPNTCAT_CODE_1") || null,
+        TX_CAT_CODE: value(row, "TX_CAT_CODE") || null,
+        TX_COMPNT_PERC_1: Number(value(row, "TX_COMPNT_PERC_1") ?? 0),
+        TX_COMPNT_AMT_1: Number(value(row, "TX_COMPNT_AMT_1") ?? 0),
+        TX_COMPNT_LCURAMT_1: Number(value(row, "TX_COMPNT_LCURAMT_1") ?? 0),
+        OTHER_SERVICES: value(row, "other_services") || null,
+        USER_ID: userId,
+        COST_RATE: Number(value(row, "cost_rate") ?? 0),
+        TX_COMPNTCAT_CODE_1_COST: value(row, "TX_COMPNTCAT_CODE_1_COST") || null,
+        TX_CAT_CODE_COST: value(row, "TX_CAT_CODE_COST") || null,
+        TX_COMPNT_PERC_1_COST: Number(value(row, "TX_COMPNT_PERC_1_COST") ?? 0),
+        TX_COMPNT_AMT_1_COST: Number(value(row, "TX_COMPNT_AMT_1_COST") ?? 0),
+        TX_COMPNT_LCURAMT_1_COST: Number(value(row, "TX_COMPNT_LCURAMT_1_COST") ?? 0),
+        COST: Number(value(row, "cost") ?? 0),
+      }));
+
+    const payload = {
+      header: {
+        INVOICE_NO: value(existingHeader, "invoice_no") ?? null,
+        INVOICE_DATE: value(existingHeader, "invoice_date") ?? null,
+        JOB_NO: jobNo,
+        INV_TYPE: value(existingHeader, "inv_type") ?? null,
+        PRIN_CODE: prinCode,
+        INV_TO: value(existingHeader, "inv_to") ?? null,
+        CURR_CODE: value(existingHeader, "curr_code") ?? null,
+        EX_RATE: Number(value(existingHeader, "ex_rate") ?? 1),
+        ALLOCATED: value(existingHeader, "allocated") ?? null,
+        USER_ID: userId,
+        DESPATCHED: value(existingHeader, "despatched") ?? null,
+        COMPANY_CODE: companyCode,
+        JOB_TYPE: value(existingHeader, "job_type") ?? null,
+        INV_PRINT_COUNT: Number(value(existingHeader, "inv_print_count") ?? 0),
+        INV_PRINTED: value(existingHeader, "inv_printed") ?? null,
+        INV_GRP_PRINT_COUNT: Number(value(existingHeader, "inv_grp_print_count") ?? 0),
+        INV_GRP_PRINTED: value(existingHeader, "inv_grp_printed") ?? null,
+        FA_UPLOADED: value(existingHeader, "fa_uploaded") ?? null,
+      },
+      details: detailRows,
+    };
+
+    await api.post("/api/finance/insUpdTnInvoiceBulk", payload); // adjust to your actual route path
+
     toast.success("Activity billing updated successfully");
     setActivityEdited({});
     await loadActivityBilling();
@@ -812,137 +890,36 @@ const openEdiImportModal = () => {
       } finally { setEditSaving(false); }
     };
 
+if (isJobDetails) {
+  return (
+    <InboundJobDetailsTab
+      job={job}
+      loadingJob={loadingJob}
+      companyCode={companyCode}
+      jobNo={jobNo}
+      onSaved={onJobUpdated}
+    />
+  );
+}
+
 if (isActivityBilling) {
   return (
-    <section className="grid gap-3">
-      {/* ── Toolbar (matches DataTable's toolbar row) ── */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-card px-4 py-3 shadow-sm">
-        <div>
-          <div className="text-sm font-semibold text-foreground">
-            {activityLoading ? "Loading" : `${activityRows.length} Rows`}
-          </div>
-          <div className="text-xs text-muted-foreground">
-            Activity Billing — adjust bill / cost rates per activity, then submit to update.
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="outline" onClick={loadActivityBilling}>
-            <RefreshCw size={14} /> Refresh
-          </Button>
-          <Button size="sm" onClick={handleActivityBillingSubmit} disabled={activitySaving}>
-            <Save size={14} /> {activitySaving ? "Saving..." : "Submit"}
-          </Button>
-        </div>
-      </div>
-
-      {/* ── Table card (matches DataTable's bordered/sticky-header look) ── */}
-      <div
-        className="overflow-auto rounded-md border bg-card shadow-sm"
-        style={{ maxHeight: "calc(100vh - 365px)" }}
-      >
-        <table className="min-w-full divide-y divide-border text-sm">
-          <thead className="sticky top-0 z-10 bg-muted/50">
-            <tr>
-              <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Activity
-              </th>
-              <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Quantity
-              </th>
-              <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Bill Rate
-              </th>
-              <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Bill
-              </th>
-              <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Cost Rate
-              </th>
-              <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Cost
-              </th>
-              <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Other Services
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {activityLoading ? (
-              <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-sm text-muted-foreground">
-                  Loading...
-                </td>
-              </tr>
-            ) : activityRows.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-sm text-muted-foreground">
-                  No records found
-                </td>
-              </tr>
-            ) : (
-              activityRows.map((row, i) => (
-                <tr key={`${String(value(row, "act_code") ?? "")}_${i}`} className="hover:bg-muted/30">
-                  <td className="px-3 py-2.5 text-foreground">{String(value(row, "activity") || "")}</td>
-                  <td className="px-3 py-2.5 text-right font-medium text-foreground">
-                    {Number(value(row, "quantity") ?? 0)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right">
-                    <input
-                      type="number" min="0" step="0.01"
-                      className="h-8 w-24 rounded-md border border-input bg-background px-2 text-right text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/40"
-                      value={String(value(row, "bill_rate") ?? 0)}
-                      onChange={(e) => handleActivityRateChange(row, "bill_rate", e.target.value)}
-                    />
-                  </td>
-                  <td className="px-3 py-2.5 text-right font-medium text-foreground">
-                    {Number(value(row, "bill") ?? 0).toFixed(2)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right">
-                    <input
-                      type="number" min="0" step="0.01"
-                      className="h-8 w-24 rounded-md border border-input bg-background px-2 text-right text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/40"
-                      value={String(value(row, "cost_rate") ?? 0)}
-                      onChange={(e) => handleActivityRateChange(row, "cost_rate", e.target.value)}
-                    />
-                  </td>
-                  <td className="px-3 py-2.5 text-right font-medium text-foreground">
-                    {Number(value(row, "cost") ?? 0).toFixed(2)}
-                  </td>
-                  <td className="px-3 py-2.5 text-muted-foreground">
-                    {String(value(row, "other_services") || "")}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-          {activityRows.length > 0 && (
-            <tfoot className="sticky bottom-0 border-t bg-primary/5">
-              <tr>
-                <td className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-primary">Total</td>
-                <td className="px-3 py-2.5" />
-                <td className="px-3 py-2.5" />
-                <td className="px-3 py-2.5 text-right text-sm font-semibold text-primary">
-                  {activityTotals.totalBill.toFixed(2)}
-                </td>
-                <td className="px-3 py-2.5" />
-                <td className="px-3 py-2.5 text-right text-sm font-semibold text-primary">
-                  {activityTotals.totalCost.toFixed(2)}
-                </td>
-                <td className="px-3 py-2.5" />
-              </tr>
-            </tfoot>
-          )}
-        </table>
-      </div>
-
-      {/* ── Footer bar (matches DataTable's "Showing X-Y of Z" footer) ── */}
-      <div className="flex items-center justify-between px-1 text-xs text-muted-foreground">
-        <span>Showing {activityRows.length === 0 ? 0 : 1}-{activityRows.length} of {activityRows.length}</span>
-        {Object.keys(activityEdited).length > 0 && (
-          <span className="font-medium text-primary">{Object.keys(activityEdited).length} unsaved change(s)</span>
-        )}
-      </div>
-    </section>
+    <ActivityBillingSection
+      companyCode={companyCode}
+      prinCode={prinCode}
+      jobNo={jobNo}
+      isActivityBilling={isActivityBilling}
+      activityLoading={activityLoading}
+      activitySaving={activitySaving}
+      activityRows={activityRows}
+      setActivityRows={setActivityRows}
+      activityEdited={activityEdited}
+      setActivityEdited={setActivityEdited}
+      activityTotals={activityTotals}
+      loadActivityBilling={loadActivityBilling}
+      handleActivityBillingSubmit={handleActivityBillingSubmit}
+      executeWmsInboundSql={executeWmsInboundSql}
+    />
   );
 }
 

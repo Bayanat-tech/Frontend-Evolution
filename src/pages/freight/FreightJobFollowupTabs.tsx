@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bell, CheckSquare, FileText, Info, Paperclip, Plus, RefreshCw, Save, Search, Trash2, WalletCards } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Bell, CheckSquare, FileText, Info, Paperclip, Plus, RefreshCw, Save, Search, Trash2, WalletCards } from "lucide-react";
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
@@ -23,7 +23,21 @@ const meta = {
 const modeMap = { air: "A", sea: "S", land: "R" };
 const directionMap = { import: "IMP", export: "EXP", reexport: "IRE" };
 
-export function FreightJobFollowupTab({ target, kind, initialJob = null }: { target?: FreightWorkspaceTarget; kind: FollowupKind; initialJob?: LookupRow | null }) {
+export function FreightJobFollowupTab({
+  target,
+  kind,
+  initialJob = null,
+  readOnly = false,
+  onEmbeddedActionsChange,
+  onEmbeddedList,
+}: {
+  target?: FreightWorkspaceTarget;
+  kind: FollowupKind;
+  initialJob?: LookupRow | null;
+  readOnly?: boolean;
+  onEmbeddedActionsChange?: (actions: ReactNode | null) => void;
+  onEmbeddedList?: () => void;
+}) {
   const cfg = meta[kind];
   const Icon = cfg.icon;
   const { toast } = useToast();
@@ -37,16 +51,24 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null }: { tar
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
   const userId = String(userRecord.user_id || userRecord.USER_ID || userRecord.loginid || userRecord.LOGINID || "Admin");
-  const mode = modeMap[target?.mode || "air"];
-  const jobType = directionMap[target?.direction || "import"];
+  const modeKey = (target?.mode || "air") as keyof typeof modeMap;
+  const directionKey = (target?.direction || "import") as keyof typeof directionMap;
+  const mode = modeMap[modeKey];
+  const jobType = directionMap[directionKey];
   const stats = useMemo(() => getStats(kind, rows), [kind, rows]);
+  const embeddedInWorkspace = Boolean(onEmbeddedActionsChange);
+
+  const notify = useCallback((next: Exclude<Notice, null>) => {
+    setNotice(next);
+    if (next.type === "success") toast.success(next.text);
+    else toast.error(next.text);
+  }, [toast]);
 
   useEffect(() => {
     if (!notice) return;
-    if (notice.type === "success") toast.success(notice.text);
-    else toast.error(notice.text);
-    setNotice(null);
-  }, [notice, toast]);
+    const timer = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   const loadRows = useCallback(async (selected = job) => {
     if (!selected) return;
@@ -58,11 +80,11 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null }: { tar
       setRows((response.data.data || []).map(normalizeLookupRow));
     } catch (error: any) {
       setRows([]);
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || `Unable to load ${cfg.title}.` });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || `Unable to load ${cfg.title}.` });
     } finally {
       setLoading(false);
     }
-  }, [cfg.endpoint, cfg.title, companyCode, job]);
+  }, [cfg.endpoint, cfg.title, companyCode, job, notify]);
 
   useEffect(() => {
     setJob(null);
@@ -78,13 +100,17 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null }: { tar
 
   async function initRows() {
     if (!job) return;
+    if (readOnly) {
+      notify({ type: "error", text: "Invoiced or completed job is locked. Follow-up rows are view only." });
+      return;
+    }
     setSaving(true);
     try {
       await api.post(`/api/freight/${cfg.endpoint}/init`, { ...jobPayload(companyCode, job), user_id: userId, op_type: jobType === "EXP" ? "EXP" : "IMP", op_mode: mode });
       await loadRows(job);
-      setNotice({ type: "success", text: `${cfg.title} initialized from freight masters.` });
+      notify({ type: "success", text: `${cfg.title} initialized from freight masters.` });
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || `Unable to initialize ${cfg.title}.` });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || `Unable to initialize ${cfg.title}.` });
     } finally {
       setSaving(false);
     }
@@ -92,14 +118,18 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null }: { tar
 
   async function saveRows() {
     if (!job) return;
+    if (readOnly) {
+      notify({ type: "error", text: "Invoiced or completed job is locked. Follow-up rows are view only." });
+      return;
+    }
     setSaving(true);
     try {
       const bodyKey = kind === "documents" ? "docs" : "lines";
       await api.post(`/api/freight/${cfg.endpoint}/save`, { ...jobPayload(companyCode, job), user_id: userId, [bodyKey]: rows });
-      setNotice({ type: "success", text: `${cfg.title} saved.` });
+      notify({ type: "success", text: `${cfg.title} saved.` });
       await loadRows(job);
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || `Unable to save ${cfg.title}.` });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || `Unable to save ${cfg.title}.` });
     } finally {
       setSaving(false);
     }
@@ -107,23 +137,52 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null }: { tar
 
   async function deleteRow(row: LookupRow) {
     if (!job) return;
+    if (readOnly) {
+      notify({ type: "error", text: "Invoiced or completed job is locked. Follow-up rows are view only." });
+      return;
+    }
     const key = kind === "documents" ? { doc_nr: text(row, "doc_nr") } : kind === "deposits" ? { sr_no: text(row, "sr_no") } : { op_code: text(row, "op_code") };
     setSaving(true);
     try {
       await api.post(`/api/freight/${cfg.endpoint}/delete`, { ...jobPayload(companyCode, job), ...key });
       await loadRows(job);
-      setNotice({ type: "success", text: "Line deleted." });
+      notify({ type: "success", text: "Line deleted." });
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to delete line." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to delete line." });
     } finally {
       setSaving(false);
     }
   }
 
+  useEffect(() => {
+    if (!onEmbeddedActionsChange) return;
+    onEmbeddedActionsChange(
+      <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar">
+        {notice && <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>{notice.text}</span>}
+        <Button type="button" size="sm" variant="outline" onClick={onEmbeddedList}>
+          <ArrowLeft size={14} />List
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={!job || loading}>
+          <RefreshCw size={14} />Refresh
+        </Button>
+        {kind !== "deposits" && (
+          <Button type="button" size="sm" variant="outline" onClick={() => void initRows()} disabled={!job || saving || readOnly}>
+            <Search size={14} />Init
+          </Button>
+        )}
+        <Button type="button" size="sm" onClick={() => void saveRows()} disabled={!job || saving || readOnly}>
+          <Save size={14} />Save
+        </Button>
+        <span className="freight-job-mode-badge viewing">View</span>
+      </div>
+    );
+    return () => onEmbeddedActionsChange(null);
+  }, [job, kind, loading, notice, onEmbeddedActionsChange, onEmbeddedList, readOnly, saving, loadRows]);
+
   return (
-    <section className="grid gap-2">
-      <div className="rounded-md border bg-card px-3 py-2 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+    <section className="grid gap-2 freight-job-ops-screen">
+      {!embeddedInWorkspace && <div className="freight-form-header">
+        <div className="flex flex-wrap items-center justify-between gap-2 w-full">
           <div className="flex items-center gap-2">
             <span className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary"><Icon size={18} /></span>
             <div><p className="eyebrow mb-0.5">Job Follow-up</p><h2 className="m-0 text-lg font-semibold">{cfg.title}</h2><p className="m-0 text-xs text-muted-foreground">Select a freight job and maintain operational follow-up rows.</p></div>
@@ -131,16 +190,19 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null }: { tar
           <div className="flex flex-wrap items-center gap-1.5">
             {notice && <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"}`}>{notice.text}</span>}
             <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={!job || loading}><RefreshCw size={14} />Refresh</Button>
-            {kind !== "deposits" && <Button type="button" size="sm" variant="outline" onClick={() => void initRows()} disabled={!job || saving}><Search size={14} />Init</Button>}
-            <Button type="button" size="sm" onClick={() => void saveRows()} disabled={!job || saving}><Save size={14} />Save</Button>
+            {kind !== "deposits" && <Button type="button" size="sm" variant="outline" onClick={() => void initRows()} disabled={!job || saving || readOnly}><Search size={14} />Init</Button>}
+            <Button type="button" size="sm" onClick={() => void saveRows()} disabled={!job || saving || readOnly}><Save size={14} />Save</Button>
           </div>
         </div>
-      </div>
+      </div>}
 
       <div className="grid gap-2 lg:grid-cols-[minmax(360px,520px)_1fr_1fr]">
-        <div className="rounded-md border bg-card p-2 shadow-sm">
+        <div className="freight-job-metric-card freight-job-selector-card">
           {initialJob ? (
-            <Metric label="Selected Freight Job" value={`${text(job || undefined, "job_no") || "-"} / ${text(job || undefined, "prin_name") || text(job || undefined, "prin_code") || "-"}`} />
+            <>
+              <div>Selected Freight Job</div>
+              <strong>{`${text(job || undefined, "job_no") || "-"} / ${text(job || undefined, "prin_name") || text(job || undefined, "prin_code") || "-"}`}</strong>
+            </>
           ) : (
             <label className="grid gap-1 text-[10px] font-semibold uppercase text-muted-foreground">Freight Job
               <LookupField
@@ -163,10 +225,10 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null }: { tar
         <Metric label={cfg.summary} value={stats} />
       </div>
 
-      {kind === "documents" && <DocumentsGrid rows={rows} setRows={setRows} deleteRow={deleteRow} onAttach={setDocAttachmentRow} />}
-      {kind === "instructions" && <InstructionGrid rows={rows} setRows={setRows} deleteRow={deleteRow} />}
-      {kind === "alerts" && <AlertGrid rows={rows} setRows={setRows} deleteRow={deleteRow} />}
-      {kind === "deposits" && <DepositGrid rows={rows} setRows={setRows} deleteRow={deleteRow} />}
+      {kind === "documents" && <DocumentsGrid rows={rows} setRows={setRows} deleteRow={deleteRow} onAttach={setDocAttachmentRow} readOnly={readOnly} />}
+      {kind === "instructions" && <InstructionGrid rows={rows} setRows={setRows} deleteRow={deleteRow} readOnly={readOnly} />}
+      {kind === "alerts" && <AlertGrid rows={rows} setRows={setRows} deleteRow={deleteRow} readOnly={readOnly} />}
+      {kind === "deposits" && <DepositGrid rows={rows} setRows={setRows} deleteRow={deleteRow} readOnly={readOnly} />}
 
       <FreightAttachmentDialog
         open={Boolean(docAttachmentRow)}
@@ -178,46 +240,48 @@ export function FreightJobFollowupTab({ target, kind, initialJob = null }: { tar
         docNr={text(docAttachmentRow || undefined, "doc_nr")}
         context="DOC"
         loginId={userId}
-        readOnly={!job || !docAttachmentRow}
+        readOnly={!job || !docAttachmentRow || readOnly}
       />
     </section>
   );
 }
 
-function DocumentsGrid({ rows, setRows, deleteRow, onAttach }: GridProps & { onAttach: (row: LookupRow) => void }) {
-  return <EditableGrid columns={["doc_nr", "doc_desc", "mandatory", "collected", "doc_received_dt", "doc_received_by", "document_type", "remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} onAttach={onAttach} />;
+function DocumentsGrid({ rows, setRows, deleteRow, onAttach, readOnly }: GridProps & { onAttach: (row: LookupRow) => void }) {
+  return <EditableGrid columns={["doc_nr", "doc_desc", "mandatory", "collected", "doc_received_dt", "doc_received_by", "document_type", "remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} onAttach={onAttach} readOnly={readOnly} />;
 }
 
-function InstructionGrid({ rows, setRows, deleteRow }: GridProps) {
-  return <EditableGrid columns={["op_code", "op_desc", "op_assigned", "op_date", "op_remarks", "end_date", "end_remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} addFactory={() => ({ OP_CODE: "", OP_DESC: "", OP_ASSIGNED: "", OP_DATE: "", OP_REMARKS: "", END_DATE: "", END_REMARKS: "" })} />;
+function InstructionGrid({ rows, setRows, deleteRow, readOnly }: GridProps) {
+  return <EditableGrid columns={["op_code", "op_desc", "op_assigned", "op_date", "op_remarks", "end_date", "end_remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} addFactory={() => ({ OP_CODE: "", OP_DESC: "", OP_ASSIGNED: "", OP_DATE: "", OP_REMARKS: "", END_DATE: "", END_REMARKS: "" })} readOnly={readOnly}  labels={{ op_code: "Instruction Code", op_desc: "Instruction", op_assigned: " Instruction Assigned To", op_date: "Instruction Date", op_remarks: "Remarks" }} />;
 }
 
-function AlertGrid({ rows, setRows, deleteRow }: GridProps) {
-  return <EditableGrid columns={["op_desc", "op_date", "op_yesno", "op_count", "remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} />;
+function AlertGrid({ rows, setRows, deleteRow, readOnly }: GridProps) {
+  return <EditableGrid columns={["op_desc", "op_date", "remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} readOnly={readOnly} labels={{ op_desc: "Alert Description", op_date: "Alert Date", remarks: "Remarks" }} />;
 }
 
-function DepositGrid({ rows, setRows, deleteRow }: GridProps) {
-  return <EditableGrid columns={["sr_no", "deposit_type", "amount", "currency", "deposit_date", "deposit_expiry_date", "status", "be_no", "claim_ref_no", "deposit_remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} addFactory={() => ({ SR_NO: String(rows.length + 1), TXN_TYPE: "JOB", DEPOSIT_TYPE: "CNTRLNR", AMOUNT: "0", CURRENCY: "OMR", STATUS: "D" })} />;
+function DepositGrid({ rows, setRows, deleteRow, readOnly }: GridProps) {
+  return <EditableGrid columns={["sr_no", "deposit_type", "amount", "currency", "deposit_date", "deposit_expiry_date", "status", "be_no", "claim_ref_no", "deposit_remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} addFactory={() => ({ SR_NO: String(rows.length + 1), TXN_TYPE: "JOB", DEPOSIT_TYPE: "CNTRLNR", AMOUNT: "0", CURRENCY: "OMR", STATUS: "D" })} readOnly={readOnly} />;
 }
 
-type GridProps = { rows: LookupRow[]; setRows: (updater: (rows: LookupRow[]) => LookupRow[]) => void; deleteRow: (row: LookupRow) => void; addFactory?: () => LookupRow };
+// type GridProps = { rows: LookupRow[]; setRows: (updater: (rows: LookupRow[]) => LookupRow[]) => void; deleteRow: (row: LookupRow) => void; addFactory?: () => LookupRow; readOnly?: boolean };
+type GridProps = { rows: LookupRow[]; setRows: (updater: (rows: LookupRow[]) => LookupRow[]) => void; deleteRow: (row: LookupRow) => void; addFactory?: () => LookupRow; readOnly?: boolean; labels?: Record<string, string> };
 
-function EditableGrid({ columns, rows, setRows, deleteRow, addFactory, onAttach }: GridProps & { columns: string[]; onAttach?: (row: LookupRow) => void }) {
+function EditableGrid({ columns, rows, setRows, deleteRow, addFactory, onAttach, readOnly = false, labels }: GridProps & { columns: string[]; onAttach?: (row: LookupRow) => void }) {
   return (
-    <div className="overflow-hidden rounded-md border bg-card shadow-sm">
-      <div className="flex items-center justify-between border-b bg-muted/40 px-2 py-1.5">
+    <div className="freight-job-table-shell">
+      <div className="flex items-center justify-between border-b bg-[#f8fbff] px-2 py-1.5">
         <div className="text-xs font-semibold text-foreground">{rows.length} lines</div>
-        {addFactory && <Button type="button" size="sm" variant="outline" onClick={() => setRows((current) => [...current, normalizeLookupRow(addFactory())])}><Plus size={14} />Line</Button>}
+        {addFactory && !readOnly && <Button type="button" size="sm" variant="outline" onClick={() => setRows((current) => [...current, normalizeLookupRow(addFactory())])}><Plus size={14} />Line</Button>}
       </div>
       <div className="max-h-[calc(100vh-330px)] overflow-auto">
-        <div className={`grid min-w-[1100px] gap-1 border-b bg-muted/25 px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground`} style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(105px, 1fr)) ${onAttach ? "44px " : ""}44px` }}>
-          {columns.map((column) => <span key={column}>{label(column)}</span>)}{onAttach && <span>Files</span>}<span />
+        <div className="freight-job-table-head grid min-w-[1100px] gap-1 px-2 py-1" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(105px, 1fr)) ${onAttach ? "44px " : ""}44px` }}>
+          {columns.map((column) => <span key={column}>{labels?.[column] ?? label(column)}</span>)}{onAttach && <span>Files</span>}<span />
+          {/* {columns.map((column) => <span key={column}>{label(column)}</span>)}{onAttach && <span>Files</span>}<span /> */}
         </div>
         {rows.map((row, rowIndex) => (
-          <div key={rowIndex} className="grid min-w-[1100px] gap-1 border-b px-2 py-1" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(105px, 1fr)) ${onAttach ? "44px " : ""}44px` }}>
-            {columns.map((column) => <Cell key={column} row={row} column={column} onChange={(value) => setRows((current) => current.map((item, index) => index === rowIndex ? { ...item, [column.toUpperCase()]: value } : item))} />)}
+          <div key={rowIndex} className="freight-job-table-row grid min-w-[1100px] gap-1 px-2 py-1" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(105px, 1fr)) ${onAttach ? "44px " : ""}44px` }}>
+            {columns.map((column) => <Cell key={column} row={row} column={column} readOnly={readOnly} onChange={(value) => setRows((current) => current.map((item, index) => index === rowIndex ? { ...item, [column.toUpperCase()]: value } : item))} />)}
             {onAttach && <Button type="button" size="icon" variant="ghost" title="Document attachments" onClick={() => onAttach(row)}><Paperclip size={14} /></Button>}
-            <Button type="button" size="icon" variant="ghost" title="Delete" onClick={() => deleteRow(row)}><Trash2 size={14} /></Button>
+            <Button type="button" size="icon" variant="ghost" title="Delete" disabled={readOnly} onClick={() => deleteRow(row)}><Trash2 size={14} /></Button>
           </div>
         ))}
         {!rows.length && <div className="px-3 py-8 text-center text-sm text-muted-foreground">No rows yet. Select job and initialize or add a line.</div>}
@@ -226,17 +290,22 @@ function EditableGrid({ columns, rows, setRows, deleteRow, addFactory, onAttach 
   );
 }
 
-function Cell({ row, column, onChange }: { row: LookupRow; column: string; onChange: (value: string) => void }) {
+
+
+function Cell({ row, column, onChange, readOnly = false }: { row: LookupRow; column: string; onChange: (value: string) => void; readOnly?: boolean }) {
   const value = text(row, column);
-  if (column.includes("date")) return <Input className="h-7 text-xs" type="date" value={dateValue(value)} onChange={(event) => onChange(event.target.value)} />;
+  const normalizedColumn = column.toLowerCase();
+  const isDateField = normalizedColumn.includes("date") || normalizedColumn.endsWith("_dt") || normalizedColumn.includes("_dt");
+
+  if (isDateField) return <Input className="h-7 text-xs" type="date" value={dateValue(value)} disabled={readOnly} onChange={(event) => onChange(event.target.value)} />;
   if (column === "op_desc") return <Input className="h-7 bg-muted/35 text-xs font-semibold" value={value} readOnly />;
-  if (["mandatory", "collected"].includes(column)) return <select className="h-7 rounded-md border bg-background px-1 text-xs" value={value || "N"} onChange={(event) => onChange(event.target.value)}><option value="Y">Y</option><option value="N">N</option></select>;
-  if (column === "op_yesno") return <select className="h-7 rounded-md border bg-background px-1 text-xs" value={value || ""} onChange={(event) => onChange(event.target.value)}><option value="">Blank</option><option value="Yes">Yes</option><option value="No">No</option></select>;
-  return <Input className="h-7 text-xs" value={value} onChange={(event) => onChange(event.target.value)} />;
+  if (["mandatory", "collected"].includes(column)) return <select className="h-7 rounded-md border bg-background px-1 text-xs" value={value || "N"} disabled={readOnly} onChange={(event) => onChange(event.target.value)}><option value="Y">Y</option><option value="N">N</option></select>;
+  if (column === "op_yesno") return <select className="h-7 rounded-md border bg-background px-1 text-xs" value={value || ""} disabled={readOnly} onChange={(event) => onChange(event.target.value)}><option value="">Blank</option><option value="Yes">Yes</option><option value="No">No</option></select>;
+  return <Input className="h-7 text-xs" value={value} disabled={readOnly} onChange={(event) => onChange(event.target.value)} />;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-md border bg-card px-3 py-2 shadow-sm"><div className="text-[10px] font-semibold uppercase text-muted-foreground">{label}</div><div className="truncate text-lg font-semibold text-foreground">{value}</div></div>;
+  return <div className="freight-job-metric-card"><div>{label}</div><strong>{value}</strong></div>;
 }
 
 async function loadJobs(companyCode: string, mode: string, jobType: string) {
