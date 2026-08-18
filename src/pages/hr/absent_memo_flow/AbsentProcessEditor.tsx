@@ -37,15 +37,36 @@ export function AbsentProcessEditor({ editor, onClose, onSaved }: AbsentProcessE
     (async () => {
       setLoading(true);
       try {
-        const response = await getDynamicLookup({
-          parameter: "PS_ABSENT_PROCESS_ENTRY_GET",
-          code1: user?.company_code,
-          code2: docNo,
-        });
+        const docType = editor.row.doc_type || "ABM";
+
+        const [headerRes, detailRes] = await Promise.all([
+          getDynamicLookup({
+            parameter: "ABSENT_MEMO_ENTRY_HEADER_PAGE",
+            code1: user?.company_code,
+            code2: docType,
+            code3: docNo,
+          }),
+          getDynamicLookup({
+            parameter: "ABSENT_MEMO_ENTRY_DETAIL_PAGE",
+            code1: user?.company_code,
+            code2: docType,
+            code3: docNo,
+          }),
+        ]);
+
         if (!mounted) return;
-        const data = response as unknown as { header: AbsentHeaderData; details: AbsentDetailRow[] };
-        setHeader(data.header);
-        setRows(data.details?.length ? data.details : [emptyAbsentRow(1)]);
+
+        const headerRows = headerRes as unknown as AbsentHeaderData[];
+        const detailRows = detailRes as unknown as AbsentDetailRow[];
+
+        const headerData = headerRows?.[0] ?? emptyAbsentHeader();
+        const detailData = detailRows?.length ? detailRows : [emptyAbsentRow(1)];
+
+        setHeader({
+          ...headerData,
+          employee_code: headerData.employee_code || detailData[0]?.employee_code || "",
+        });
+        setRows(detailData);
       } catch (error) {
         setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load document" });
       } finally {
@@ -68,10 +89,12 @@ export function AbsentProcessEditor({ editor, onClose, onSaved }: AbsentProcessE
   const handleReverse = async () => {
     if (!header.doc_no) return;
     try {
+      // TODO: replace with the real reverse endpoint/parameter — this currently reuses the detail-page lookup, which is likely a placeholder bug.
       await getDynamicLookup({
-        parameter: "PS_ABSENT_PROCESS_REVERSE",
+        parameter: "ABSENT_MEMO_ENTRY_DETAIL_PAGE",
         code1: user?.company_code,
-        code2: header.doc_no,
+        code2: header.doc_type,
+        code3: header.doc_no.toLocaleString(),
       });
       setHeader((prev) => ({ ...prev, is_reversed: true }));
       setNotice({ type: "success", message: `Document ${header.doc_no} reversed` });
@@ -84,9 +107,8 @@ export function AbsentProcessEditor({ editor, onClose, onSaved }: AbsentProcessE
     setHeader((prev) => ({
       ...emptyAbsentHeader(),
       employee_code: prev.employee_code,
-      employee_name: prev.employee_name,
     }));
-    setRows(rows.map((row, i) => ({ ...emptyAbsentRow(i + 1), pay_unit: row.pay_unit, description: row.description })));
+    setRows(rows.map((row, i) => ({ ...emptyAbsentRow(i + 1), employee_code: row.employee_code })));
     setNotice({ type: "success", message: "Copied into a new draft document" });
   };
 

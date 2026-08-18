@@ -26,32 +26,39 @@ export interface AbsentProcessRow {
 
 export interface AbsentDetailRow {
   serial_no: number;
-  pay_unit: string;
-  description: string;
-  effective_from: string;
-  absent_from_date: string;
-  absent_to_date: string;
-  no_of_days: number;
+  employee_code: string;
   amount: number;
-  ref_leave_doc_no: string;
-  is_canceled: boolean;
+  allocated_amt: number;
+  balance_amt: number;
+  deduct_from_leave: string;
+  deduct_noof_leavedays: number;
+  ref_leave_doc_no: string | null;
+  cancel_status: string | null;
+  sys_gen?: string;
+  pay_unit?: string;
+  recover_from_dt?: Date | null;
 }
-
 export interface AbsentHeaderData {
-  doc_no: string;
+  company_code: string;
+  doc_no: number | string;
   doc_date: string;
   doc_type: string;
   ref_no: string;
-  employee_code: string;
-  employee_name: string;
   name_from: string;
   addr_from: string;
-  letter_subject: string;
-  remarks1: string;
-  remarks2: string;
+  name_to: string;
+  addr_to: string;
+  lettr_subject: string;
+  remarks_1: string;
+  remarks_2: string;
+  remarks_3: string;
   signatory_name: string;
   signatory_position: string;
-  is_reversed: boolean;
+  employee_code: string;
+  request_number: string;
+  next_action_by: string;
+  doc_status: string;
+  is_reversed?: boolean;
 }
 
 export type AbsentProcessEditorState =
@@ -59,35 +66,47 @@ export type AbsentProcessEditorState =
   | { mode: "create"; divCode?: string; divName?: string }
   | { mode: "edit"; row: AbsentProcessRow };
 
-export const emptyAbsentHeader = (): AbsentHeaderData => ({
-  doc_no: "",
-  doc_date: "",
-  doc_type: "",
-  ref_no: "",
-  employee_code: "",
-  employee_name: "",
-  name_from: "",
-  addr_from: "",
-  letter_subject: "",
-  remarks1: "",
-  remarks2: "",
-  signatory_name: "",
-  signatory_position: "",
-  is_reversed: false,
-});
+export function emptyAbsentHeader(): AbsentHeaderData {
+  return {
+    company_code: "",
+    doc_no: "",
+    doc_date: "",
+    doc_type: "ABM",
+    ref_no: "",
+    name_from: "",
+    addr_from: "",
+    name_to: "",
+    addr_to: "",
+    lettr_subject: "",
+    remarks_1: "",
+    remarks_2: "",
+    remarks_3: "",
+    signatory_name: "",
+    signatory_position: "",
+    employee_code: "",
+    request_number: "",
+    next_action_by: "",
+    doc_status: "P",
+    is_reversed: false,
+  };
+}
 
-export const emptyAbsentRow = (serial_no: number): AbsentDetailRow => ({
-  serial_no,
-  pay_unit: "",
-  description: "",
-  effective_from: "",
-  absent_from_date: "",
-  absent_to_date: "",
-  no_of_days: 0,
-  amount: 0,
-  ref_leave_doc_no: "",
-  is_canceled: false,
-});
+
+export function emptyAbsentRow(serial: number): AbsentDetailRow {
+  return {
+    serial_no: serial,
+    employee_code: "",
+    amount: 0,
+    allocated_amt: 0,
+    balance_amt: 0,
+    deduct_from_leave: "N",
+    deduct_noof_leavedays: 0,
+    ref_leave_doc_no: "",
+    cancel_status: null,
+  };
+}
+
+
 
 // Re-exported so callers of this module don't need a second import for the division type.
 export type { Division };

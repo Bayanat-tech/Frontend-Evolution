@@ -1,7 +1,6 @@
 import { Download, Edit2, Plus, Printer, RefreshCw } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { useEffect, useMemo, useState } from "react";
-import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
@@ -11,14 +10,14 @@ import { TabStrip } from "../../vendor/components";
 import { AbsentProcessEditor } from "./AbsentProcessEditor";
 import { AbsentProcessEditorState, AbsentProcessRow } from "./Absentprocesstypes";
 
-type AbsentProcessTab = "ACTIVE" | "REVERSED";
+type RequestTab = "PENDING" | "INPROGRESS" | "CLOSED" | "CANCELED" | "REJECTED" | "SENDBACK";
 
 export function AbsentProcessPage() {
   const { user } = useAuth();
   const [rows, setRows] = useState<AbsentProcessRow[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<AbsentProcessTab>("ACTIVE");
+  const [tab, setTab] = useState<RequestTab>("PENDING");
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(100);
   const [totalRows, setTotalRows] = useState(0);
@@ -31,7 +30,7 @@ export function AbsentProcessPage() {
     if (clearNotice) setNotice(null);
     try {
       const response = await getDynamicLookup({
-        parameter: "PS_ABSENT_PROCESS_ENTRY_TAB_List",
+        parameter: "ABSENT_MEMO_ENTRY_TAB_List",
         code1: user?.company_code,
         code2: user?.loginid || user?.username || "ADMIN",
         code3: tab,
@@ -57,31 +56,19 @@ export function AbsentProcessPage() {
         header: "Doc No",
         cell: ({ row }) => <span className="font-semibold">{row.original.doc_no}</span>,
       },
+      { accessorKey: "doc_type", header: "Doc Type" },
       { accessorKey: "doc_date", header: "Doc Date", cell: ({ getValue }) => formatDate(getValue()) },
-      { accessorKey: "employee_code", header: "Employee Code" },
-      { accessorKey: "employee_name", header: "Employee Name" },
-      { accessorKey: "letter_subject", header: "Subject" },
+      { accessorKey: "immediate_supervisor_id", header: "Supervisor" },
+      { accessorKey: "immediate_dept_head", header: "Department Head" },
+      { accessorKey: "immediate_hod", header: "Head of Department" },
       {
         accessorKey: "total_days",
         header: "Days",
         cell: ({ getValue }) => <span className="tabular-nums">{Number(getValue() || 0)}</span>,
       },
       {
-        accessorKey: "total_amount",
-        header: "Amount",
-        cell: ({ getValue }) => <span className="tabular-nums">{Number(getValue() || 0).toFixed(2)}</span>,
-      },
-      {
-        accessorKey: "canceled",
+        accessorKey: "last_action",
         header: "Status",
-        cell: ({ getValue }) =>
-          String(getValue() || "N") === "Y" ? (
-            <Badge variant="outline" className="border-destructive text-destructive">
-              Reversed
-            </Badge>
-          ) : (
-            <Badge>Active</Badge>
-          ),
       },
       {
         id: "actions",
@@ -116,7 +103,7 @@ export function AbsentProcessPage() {
           <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
             <RefreshCw size={15} />
           </Button>
-          {tab === "ACTIVE" && (
+          {tab === "PENDING" && (
             <Button title="Add Absent Process" onClick={() => setEditor({ mode: "create" })}>
               <Plus size={15} /> Add
             </Button>
@@ -128,10 +115,13 @@ export function AbsentProcessPage() {
 
       <TabStrip
         value={tab}
-        onChange={(value) => setTab(value as AbsentProcessTab)}
+        onChange={(value) => setTab(value as RequestTab)}
         tabs={[
-          { label: "Active", value: "ACTIVE", icon: "pending" },
-          { label: "Reversed", value: "REVERSED", icon: "canceled" as const },
+          { label: "Pending", value: "PENDING", icon: "pending" },
+          { label: "In Progress", value: "INPROGRESS", icon: "inProgress" },
+          { label: "Closed", value: "CLOSED", icon: "closed" },
+          { label: "Canceled", value: "CANCELED", icon: "canceled" as const },
+          { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
         ]}
       />
 

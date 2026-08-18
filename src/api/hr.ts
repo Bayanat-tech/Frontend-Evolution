@@ -326,3 +326,25 @@ export async function upsertAccrualAcctSetupApi(paycompAc: TAccrualAcctSetupPayl
   if (!response.data.success) throw new Error(response.data.message || "Unable to save accrual account setup");
   return response.data;
 }
+
+// api/absentProcess.ts
+export async function generateAbsentMemoDaily(params: {
+  company_code?: string;
+  user_id?: string;
+  doc_type?: string;
+  record_date?: string;
+}) {
+  const response = await fetch("/api/hr/gm/absentmemo", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok || !data.success) {
+    throw new Error(data.message || "Failed to generate Absent Memo documents");
+  }
+
+  return data;
+}
