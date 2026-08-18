@@ -11,7 +11,6 @@ import type { LookupRow } from "../../api/lookups";
 interface SummaryRow {
     DIV_CODE: string; DIV_NAME: string;
     DEPT_CODE: string; DEPT_NAME: string;
-    SECTION_CODE: string; SECTION_NAME: string;
     DESG_CODE: string; DESG_NAME: string;
     R1: number; R2: number; R3: number; R4: number; R5: number;
     TOTAL: number;
@@ -176,8 +175,8 @@ const ReportDesign = React.forwardRef<HTMLDivElement, {
                             <th className="hdr" rowSpan={2}>SL.No</th>
                             <th className="hdr" rowSpan={2}>Division</th>
                             <th className="hdr" rowSpan={2}>Department</th>
-                            <th className="hdr" rowSpan={2}>Section</th>
                             <th className="hdr" rowSpan={2}>Designation</th>
+                            <th className="hdr" rowSpan={2}>Pending Employee</th>
                             <th className="shdr" colSpan={5}>Rating</th>
                             <th className="hdr" rowSpan={2}>Total</th>
                         </tr>
@@ -189,8 +188,8 @@ const ReportDesign = React.forwardRef<HTMLDivElement, {
                                 <td className="ctr">{idx + 1}</td>
                                 <td>{row.DIV_NAME || row.DIV_CODE}</td>
                                 <td>{row.DEPT_NAME || row.DEPT_CODE}</td>
-                                <td>{row.SECTION_NAME || row.SECTION_CODE}</td>
                                 <td>{row.DESG_NAME || row.DESG_CODE}</td>
+                                <td className="wrap">{row.PENDING_EMPLOYEE_NAMES || "-"}</td>
                                 {[row.R1, row.R2, row.R3, row.R4, row.R5].map((v, i) => (
                                     <td key={i} className={`ctr bold${Number(v) > 0 ? ` r${i + 1}` : ""}`}>{Number(v) || ""}</td>
                                 ))}
@@ -335,13 +334,13 @@ const AppraisalDivisionSummaryReport = () => {
     const [period, setPeriod] = useState("ALL");
 
     // ── Filter display names (shown in report header) ─────────
-    const [divLabel, setDivLabel]   = useState("");
-    const [deptLabel, setDeptLabel] = useState("");
+    const [divLabel, setDivLabel]   = useState("All");
+    const [deptLabel, setDeptLabel] = useState("All");
 
     // ── Dropdown option lists ──────────────────────────────────
-    const [divOptions, setDivOptions]   = useState<DropdownItem[]>([]);
-    const [deptOptions, setDeptOptions] = useState<DropdownItem[]>([]);
-    const [periodOptions, setPeriodOptions] = useState<PeriodItem[]>([]);
+    const [divOptions, setDivOptions]   = useState<DropdownItem[]>([{ code: "ALL", name: "All" }]);
+    const [deptOptions, setDeptOptions] = useState<DropdownItem[]>([{ code: "ALL", name: "All" }]);
+    const [periodOptions, setPeriodOptions] = useState<PeriodItem[]>([{ code: "ALL", label: "All Periods (Cumulative)" }]);
 
     const [reportData, setReportData]     = useState<SummaryRow[]>([]);
     const [isFetching, setIsFetching]     = useState(false);
@@ -351,18 +350,30 @@ const AppraisalDivisionSummaryReport = () => {
     useEffect(() => {
         if (!loginid) return;
         fetchDropdown("report_divisions", loginid, company_code)
-            .then(data => setDivOptions(data));
+            .then(data => {
+                // Ensure "ALL" is always present
+                const allOption = { code: "ALL", name: "All" };
+                setDivOptions([allOption, ...data]);
+            });
         fetchPeriods(loginid, company_code)
-            .then(data => setPeriodOptions(data));
+            .then(data => {
+                // Ensure "ALL" is always present
+                const allPeriod = { code: "ALL", label: "All Periods (Cumulative)" };
+                setPeriodOptions([allPeriod, ...data]);
+            });
     }, [loginid, company_code]);
 
     // ── Cascade: departments when div changes ─────────────────
     useEffect(() => {
         if (!loginid) return;
         fetchDropdown("report_departments", loginid, company_code, div)
-            .then(data => setDeptOptions(data));
+            .then(data => {
+                // Ensure "ALL" is always present
+                const allOption = { code: "ALL", name: "All" };
+                setDeptOptions([allOption, ...data]);
+            });
         setDept("ALL");
-        setDeptLabel("");
+        setDeptLabel("All");
     }, [div, loginid, company_code]);
 
     // ── Generate report ───────────────────────────────────────
@@ -448,7 +459,6 @@ const AppraisalDivisionSummaryReport = () => {
                             borderRadius: "6px", fontSize: "13px", background: "#fff", color: "#111827",
                         }}
                     >
-                        <option value="ALL">All Periods (Cumulative)</option>
                         {periodOptions.map((p, idx) => (
                             <option key={idx} value={p.code}>{p.label}</option>
                         ))}
@@ -466,8 +476,8 @@ const AppraisalDivisionSummaryReport = () => {
                         displayFields={["CODE", "NAME"]}
                         loadOptions={() => Promise.resolve(toLookupRows(divOptions))}
                         onChange={(val, row) => {
-                            if (!val) {
-                                setDiv("ALL"); setDivLabel("");
+                            if (!val || val === "ALL") {
+                                setDiv("ALL"); setDivLabel("All");
                             } else {
                                 setDiv(val);
                                 setDivLabel(row ? String((row as Record<string, unknown>).NAME ?? val) : val);
@@ -488,8 +498,8 @@ const AppraisalDivisionSummaryReport = () => {
                         displayFields={["CODE", "NAME"]}
                         loadOptions={() => Promise.resolve(toLookupRows(deptOptions))}
                         onChange={(val, row) => {
-                            if (!val) {
-                                setDept("ALL"); setDeptLabel("");
+                            if (!val || val === "ALL") {
+                                setDept("ALL"); setDeptLabel("All");
                             } else {
                                 setDept(val);
                                 setDeptLabel(row ? String((row as Record<string, unknown>).NAME ?? val) : val);

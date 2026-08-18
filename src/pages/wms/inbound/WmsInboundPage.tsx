@@ -11,7 +11,7 @@ export function WmsInboundPage() {
   return (
     <ToastProvider>
       {view.jobNo
-        ? <InboundJobDetail jobNo={view.jobNo} tab={view.tab || "shipment_details"} />
+        ? <InboundJobDetail jobNo={view.jobNo} tab={view.tab || "job_details"} />
         : <InboundJobListing />
       }
     </ToastProvider>

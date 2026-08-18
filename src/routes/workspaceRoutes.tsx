@@ -187,6 +187,7 @@ import { SalesInvoicePage } from "../pages/purchase_sales/sales/SalesInvoicePage
 import { AbsentProcessEditor } from "../pages/hr/absent_memo_flow/AbsentProcessEditor";
 import { AbsentProcessPage } from "../pages/hr/absent_memo_flow/Absentprocesspage";
 import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
+import CompanyInfo from "../pages/security/CompanyInfo";
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -210,6 +211,9 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "Absent Memo",
     match: ({ pathname }) => pathname.toLowerCase().includes("hcm/hcm/memos/absent_flow"), 
     element: () => <AbsentProcessPage />,
+    name: 'Company Info Master',
+    match: ({pathname}) => pathname.toLowerCase().includes("/security/security/masters/gm/com_info"),
+    element: () => <CompanyInfo />,
   },
   {
     name: 'MSE Prod Group',
