@@ -224,7 +224,7 @@ export function PurchaseOrderHeaderForm({
                   // Populate header fields immediately from the selected row
                   setForm((current) => ({
                     ...current,
-                    doc_no: value,
+                
                     ac_code: text(getLookupValue(row || {}, "ac_code")),
                     ac_name: text(getLookupValue(row || {}, "ac_name")),
                     dept_code: text(getLookupValue(row || {}, "dept_code")),

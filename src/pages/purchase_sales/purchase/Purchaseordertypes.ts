@@ -105,6 +105,7 @@ export interface PurchaseOrderForm {
   delivery_tel: string;
   delivery_email: string;
   grn_no?: number | string;
+  ref_doc_no?: number | string;
 
 }
 
