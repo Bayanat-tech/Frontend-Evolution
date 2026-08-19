@@ -24,6 +24,7 @@ const STICKY_COLS = {
   div: { width: 90, left: 50 },
   zone: { width: 180, left: 140 },
   GRN: { width: 180, left: 320 },
+  PO: { width: 180, left: 320 },
   product: {
     width: 260,
     left: 320,
@@ -32,31 +33,39 @@ const STICKY_COLS = {
 
 function hasGrnColumn(docType?: string | null): boolean {
   const code = String(docType ?? "").trim().toUpperCase();
-  return code === "PIN" || code === "SIN" || code === "SON";
+  return code === "PIN" || code === "SIN";
+}
+function hasPoColumn(docType?: string | null): boolean {
+  const code = String(docType ?? "").trim().toUpperCase();
+  return code === "GRN" ;
+}
+
+function hasExtraStickyColumn(docType?: string | null): boolean {
+  const code = String(docType ?? "").trim().toUpperCase();
+  return code === "PIN" || code === "GRN" || code === "SIN";
 }
 
 function stickyStyle(col: keyof typeof STICKY_COLS, docType?: string | null): React.CSSProperties {
-  const showGrn = hasGrnColumn(docType);
+  const showExtraCol = hasExtraStickyColumn(docType);
 
   const { width, left } =
     col === "product"
-      ? { width: STICKY_COLS.product.width, left: showGrn ? 500 : STICKY_COLS.product.left }
+      ? { width: STICKY_COLS.product.width, left: showExtraCol ? 500 : STICKY_COLS.product.left }
       : STICKY_COLS[col];
 
   return { position: "sticky", left, width, minWidth: width, maxWidth: width, zIndex: 2, backgroundColor: "var(--card, #fff)" };
 }
 
 function stickyHeaderStyle(col: keyof typeof STICKY_COLS, docType?: string | null): React.CSSProperties {
-  const showGrn = hasGrnColumn(docType);
+  const showExtraCol = hasExtraStickyColumn(docType);
 
   const { width, left } =
     col === "product"
-      ? { width: STICKY_COLS.product.width, left: showGrn ? 500 : STICKY_COLS.product.left }
+      ? { width: STICKY_COLS.product.width, left: showExtraCol ? 500 : STICKY_COLS.product.left }
       : STICKY_COLS[col];
 
   return { position: "sticky", top: 0, left, width, minWidth: width, maxWidth: width, zIndex: 3, backgroundColor: "var(--primary, #1d4ed8)" };
 }
-
 const plainHeaderStyle: React.CSSProperties = { position: "sticky", top: 0, zIndex: 1, backgroundColor: "var(--primary, #1d4ed8)", width: "100%" };
 
 const TABLE_COLUMN_COUNT = 24;
@@ -141,7 +150,10 @@ export function PurchaseOrderLinesTable({
               {hasGrnColumn(docType) && (
                 <th className="finance-sticky-col px-2 py-2 text-left w-32" style={stickyHeaderStyle("GRN")}>GRN</th>
               )}
-              <th className="finance-sticky-col px-2 py-2 text-left" style={stickyHeaderStyle("product")}>Product Code</th>
+                  {hasPoColumn(docType) && (
+                <th className="finance-sticky-col px-2 py-2 text-left w-32" style={stickyHeaderStyle("PO")}>PO</th>
+              )}
+              <th className="finance-sticky-col px-2 py-2 text-left" style={stickyHeaderStyle("product",docType)}>Product Code</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-64" style={plainHeaderStyle}>P Uom</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Qty Puom</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>L Uom</th>
@@ -286,7 +298,94 @@ export function PurchaseOrderLinesTable({
                       </div>
                     </td>
                   )}
-                  <td className="finance-sticky-col finance-account-cell bg-card px-2 py-1" style={stickyStyle("product")}>
+                      {hasPoColumn(docType) && (
+                    <td className="finance-sticky-col bg-card px-2 py-1" style={stickyStyle("PO", docType)}>
+                      <div>
+                        <LookupField
+                          label="PO No"
+                          compact
+                          placeholder="PO No"
+                          value={String(form.doc_no ?? "")}
+                          displayValue={String(form.doc_no ?? "")}
+                          columns={[
+                            { field: "doc_no", header: "PO No" },
+                            { field: "ac_code", header: "A/c Code" },
+                            { field: "ac_name", header: "A/c Name" },
+                            { field: "address", header: "Address" },
+                            { field: "tel", header: "Tel" },
+                            { field: "fax", header: "Fax" },
+                          ]}
+                          valueField="doc_no"
+                          displayFields={["doc_no"]}
+                          loadOptions={() =>
+                            getDynamicLookup({
+                              parameter: "PS_GRN_ENTRY_PO_NO_DETAIL",
+                              code1: companyCode,
+                              code2: form.div_code,
+                              code3: "LPO"
+                            })
+                          }
+                          onChange={async (value, row) => {
+                            try {
+                              const details = await getDynamicLookup({
+                                parameter: "PS_GRN_ENTRY_PO_NO_DETAIL_DET",
+                                code1: companyCode,
+                                code2: form.div_code,
+                                code3: 'LPO',
+                                number1: Number(value),
+                              });
+
+                              console.log("PO NO:", value);
+                              console.log("PO DETAILS RESPONSE:", details);
+
+                              const mappedDetails = (details || []).map(
+                                (item: any, index: number) => ({
+                                  id: `${value}-${index + 1}`,
+                                  div_code: text(getLookupValue(row || {}, "div_code")),
+                                  prod_code: text(getLookupValue(item, "prod_code")),
+                                  prod_name: text(getLookupValue(item, "prod_name")),
+                                  p_uom: text(getLookupValue(item, "p_uom")),
+                                  qty_puom: numberOrZero(getLookupValue(item, "qty_puom")),
+                                  l_uom: text(getLookupValue(item, "l_uom")),
+                                  qty_luom: numberOrZero(getLookupValue(item, "qty_luom")),
+                                  unit_price: numberOrZero(getLookupValue(item, "unit_price")),
+                                  disc_hdr_percent: numberOrZero(getLookupValue(item, "disc_hdr_percent")),
+                                  disc_percent: numberOrZero(getLookupValue(item, "disc_percent")),
+                                  disc_price: numberOrZero(getLookupValue(item, "disc_price")),
+                                  tax_pct: numberOrZero(getLookupValue(item, "tax_pct")),
+                                  tax_amount: numberOrZero(getLookupValue(item, "tax_amount")),
+                                  lcur_amount: numberOrZero(getLookupValue(item, "lcur_amount")),
+                                  required_dt: text(getLookupValue(item, "required_dt")),
+                                  line_remarks: text(getLookupValue(item, "remarks")),
+                                  tax_cat: text(getLookupValue(item, "tx_cat_code")),
+                                  tax_code: text(getLookupValue(item, "tx_compntcat_code_1")),
+                                  tax_lcur_amount: numberOrZero(getLookupValue(item, "tx_compnt_lcuramt_1")),
+                                  lcur_amount_disc: numberOrZero(getLookupValue(item, "lcur_amount_discounted")),
+                                  zone_code: text(getLookupValue(item, "zone_code")),
+                                  zone_name: text(getLookupValue(item, "zone_name")),
+                                  uom_name: text(getLookupValue(item, "uom_name")),
+                                  uom_code: text(getLookupValue(item, "uom_code")),
+                                  job_no: text(getLookupValue(item, "job_no")),
+                                  dept: text(getLookupValue(item, "dept_code")),
+                                  sign_ind: numberOrZero(getLookupValue(item, "sign_ind")),
+                                  uppp: numberOrZero(getLookupValue(item, "uppp")),
+                                  quantity: numberOrZero(getLookupValue(item, "quantity")),
+                                  ex_rate: numberOrZero(getLookupValue(item, "ex_rate")),
+                                })
+                              );
+
+                              console.log("MAPPED GRN DETAILS:", mappedDetails);
+                              setdetails?.(mappedDetails);
+                            } catch (error) {
+                              console.error("ERROR LOADING GRN DETAILS:", error);
+                              setdetails?.([]);
+                            }
+                          }}
+                        />
+                      </div>
+                    </td>
+                  )}
+                  <td className="finance-sticky-col finance-account-cell bg-card px-2 py-1" style={stickyStyle("product" , docType)}>
                     <LookupField
                       label=""
                       value={row.prod_code || ""}

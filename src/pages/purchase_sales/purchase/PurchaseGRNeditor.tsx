@@ -411,6 +411,7 @@ export function PurchaseGRNEditor({
                 editMode={editMode}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
+                setdetails={setRows}
               />
 
               <PurchaseOrderLinesTable
