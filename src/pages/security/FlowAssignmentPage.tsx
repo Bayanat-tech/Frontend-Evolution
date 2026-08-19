@@ -368,7 +368,7 @@ export function FlowAssignmentPage() {
     }
   };
 
-  const handleSaveRole = async () => {
+const handleSaveRole = async () => {
     if (!selectedRole) {
       setNotice({ type: "error", message: "Please select a role first." });
       return;
@@ -388,6 +388,7 @@ export function FlowAssignmentPage() {
         const rowLoginid = val(rec, "loginid");
         return {
           company_code: companyCode,
+          role_id: selectedRole,
           loginid: rowLoginid,
           serial_no_or_role_id: selectedRole,
           userid: rowLoginid,
@@ -395,7 +396,13 @@ export function FlowAssignmentPage() {
         };
       });
 
-      const result = await insSecRoleFunctionAccessUser(rows);
+      // Payload now sends the whole row set plus top-level role_id/company_code,
+      // matching the updated insSecRoleFunctionAccessUser backend signature.
+      const result = await insSecRoleFunctionAccessUser({
+        rows,
+        role_id: selectedRole,
+        company_code: companyCode,
+      });
 
       if (result?.success) {
         setNotice({ type: "success", message: "Role saved successfully." });
@@ -412,7 +419,7 @@ export function FlowAssignmentPage() {
     } finally {
       setSavingRole(false);
     }
-  };
+};
 
   // Removes a row from the grid only — nothing is sent to the backend until
   // Save Role is clicked, at which point the row's absence is what deletes it.

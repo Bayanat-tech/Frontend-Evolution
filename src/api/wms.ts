@@ -347,23 +347,53 @@ export const saveFlowAssignLevels = async (
 };
 // ─── Add / Remove user from role ──────────────────────────────────────────
 export async function addUserToRole(companyCode: string, roleId: string, loginidToAdd: string, actorLoginId: string) {
-  const res = await insSecRoleFunctionAccessUser([
-    {
-      company_code: companyCode,
-      loginid: loginidToAdd,
-      serial_no_or_role_id: roleId,
-      userid: loginidToAdd,
-      create_user: actorLoginId,
-    },
-  ]);
+  const res = await insSecRoleFunctionAccessUser({
+    rows: [
+      {
+        company_code: companyCode,
+        role_id: roleId,
+        loginid: loginidToAdd,
+        serial_no_or_role_id: roleId,
+        userid: loginidToAdd,
+        create_user: actorLoginId,
+      },
+    ],
+    role_id: roleId,
+    company_code: companyCode,
+  });
   if (!res?.success) throw new Error(res?.message || "Unable to add user to role");
   return res;
 }
-
- export const insSecRoleFunctionAccessUser = async (rows: any[]) => {
-  const res = await api.post("/api/finance/insSecRoleFunctionAccessUser", { rows });
+export async function insSecRoleFunctionAccessUser(payload: {
+  rows: {
+    company_code: string;
+    role_id: string;
+    loginid: string;
+    serial_no_or_role_id: string;
+    userid: string;
+    create_user: string;
+  }[];
+  role_id: string;
+  company_code: string;
+}) {
+  const res = await api.post("/api/finance/insSecRoleFunctionAccessUser", payload);
   return res.data;
-};
+}
+// export async function insSecRoleFunctionAccessUser(payload: {
+//   rows: {
+//     company_code: string;
+//     role_id: string;
+//     loginid: string;
+//     serial_no_or_role_id: string;
+//     userid: string;
+//     create_user: string;
+//   }[];
+//   role_id: string;
+//   company_code: string;
+// }) {
+//   const res = await api.post("/api/finance/insSecRoleFunctionAccessUser", payload);
+//   return res.data;
+// };
 export async function removeUserFromRole(companyCode: string, roleId: string, loginid: string, actorLoginId: string) {
   const response = await api.post<ApiResponse<unknown>>(
     "/api/wms/common/proc_build_dynamic_del_common", // TODO: confirm route + parameter name with backend

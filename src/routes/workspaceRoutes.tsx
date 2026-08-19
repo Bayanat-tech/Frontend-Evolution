@@ -185,6 +185,8 @@ import PLSummaryPage from "../pages/purchase_sales/Reports/Plsummarypage";
 import { PurchaseInvoicePage } from "../pages/purchase_sales/purchase/PurchaseInvoicePage";
 import { SalesInvoicePage } from "../pages/purchase_sales/sales/SalesInvoicePage";
 import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
+import CompanyInfo from "../pages/security/CompanyInfo";
+import HolidayCalendarPage from "../pages/hr/masters/HolidayCalendarPage"; 
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -204,6 +206,11 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: 'Company Info Master',
+    match: ({pathname}) => pathname.toLowerCase().includes("/security/security/masters/gm/com_info"),
+    element: () => <CompanyInfo />,
+  },
   {
     name: 'MSE Prod Group',
     match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_group"),
@@ -1213,6 +1220,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <LeaveTypesPage />,
   },
   {
+    name: "HR Holiday Calendar",
+    match: ({ pathname }) => isHrHolidayCalendarRoute(pathname),
+    element: () => <HolidayCalendarPage />,
+  },
+  {
     name: "HR Master",
     match: (context) => Boolean(getHrMasterConfig(context)),
     element: (context) => <HrMasterPage config={getHrMasterConfig(context)!} />,
@@ -1282,6 +1294,16 @@ function isStorageComputationRoute(pathname: string) {
   return pathname.toLowerCase().includes("wms/activity/request/storage_computation");
 }
 
+function isHrHolidayCalendarRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hr/general_master/source/holiday_calendar") ||
+    normalized.includes("/hcm/hr/general%20master/source/holiday_calendar") ||
+    compact.includes("generalmastersourceholidaycalendar") ||
+    compact.includes("holidaycalendar")
+  );
+}
 
 function isHrLeaveTypeRoute(pathname: string) {
   const normalized = decodeRouteText(pathname).toLowerCase();

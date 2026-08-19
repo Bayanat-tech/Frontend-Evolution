@@ -223,6 +223,8 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     sentback_reason: form.sentback_reason || undefined,
     reject_reason: form.reject_reason || undefined,
     flow_level_running: form.flow_level_running || 0,
+    ref_doc_no:numberOrZero( form.doc_no) || undefined,
+    grn_no: numberOrZero( form.doc_no) || undefined,
   };
 }
 
