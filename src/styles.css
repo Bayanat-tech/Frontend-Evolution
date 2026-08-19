@@ -5778,6 +5778,26 @@ freight-dense-form .freight-form-card {
   -webkit-appearance: none;
 }
 
+.finance-page input[type="number"],
+.finance-list-page input[type="number"],
+.payment-workbench input[type="number"],
+.commercial-editor input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.finance-page input[type="number"]::-webkit-outer-spin-button,
+.finance-page input[type="number"]::-webkit-inner-spin-button,
+.finance-list-page input[type="number"]::-webkit-outer-spin-button,
+.finance-list-page input[type="number"]::-webkit-inner-spin-button,
+.payment-workbench input[type="number"]::-webkit-outer-spin-button,
+.payment-workbench input[type="number"]::-webkit-inner-spin-button,
+.commercial-editor input[type="number"]::-webkit-outer-spin-button,
+.commercial-editor input[type="number"]::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
 .commercial-editor table thead {
   box-shadow: 0 1px 0 rgba(15, 23, 42, 0.08);
 }

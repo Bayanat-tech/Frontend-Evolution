@@ -590,6 +590,7 @@ saveEndpoint: (form, { editMode, original }) => {
       { name: "prin_addr4", label: "Address 4", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS", maxLength: 50 },
       { name: "territory_code", label: "Territory", dropdownParam: "DROP_DOWN_TERRITORY", dropdownCodeMap: { country_code: "code1" },dropdownDisplayFields: ["territory_code", "territory_name"], dropdownValueKey: "territory_code", tab: "basic-info", section: "COMPANY DETAILS" },
       { name: "sector_code", label: "Sector", tab: "basic-info", section: "COMPANY DETAILS" },
+      { name: "salesman_code", label: "Salesman Code", tab: "basic-info", section: "COMPANY DETAILS", dropdownParam: "DROP_DOWN_SALESMAN", dropdownDisplayFields: ["salesman_code", "salesman_name"], dropdownValueKey: "salesman_code" },
       // Basic Info Tab - Contact Information
       { name: "acc_email", label: "Email Account", type: "email", tab: "contact-info", section: "CONTACT INFORMATION" },
       { name: "prin_email1", label: "Email 1", type: "email", tab: "contact-info", section: "CONTACT INFORMATION" },
