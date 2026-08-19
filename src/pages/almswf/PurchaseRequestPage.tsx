@@ -155,58 +155,58 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
 
 
   // ── Popup handlers ──────────────────────────────────────────────────────────
- const openAddPopup = async () => {
-  setFlowConfirm({ open: true, loading: true, rows: [], selectedFlowCode: "" });
-  try {
-    const rawRows = await almsCommonSelect<Record<string, unknown>>({
-      parameter: "PS_PREQUEST_ENTRY_UserFlowCode",
-      loginid,
-      code1: companyCode,
-      code2: loginid,
-      code3: "Admin",
-      code4: "",
-    });
+  const openAddPopup = async () => {
+    setFlowConfirm({ open: true, loading: true, rows: [], selectedFlowCode: "" });
+    try {
+      const rawRows = await almsCommonSelect<Record<string, unknown>>({
+        parameter: "PS_PREQUEST_ENTRY_UserFlowCode",
+        loginid,
+        code1: companyCode,
+        code2: loginid,
+        code3: "Admin",
+        code4: "",
+      });
 
-    // Fetch divisions
-    const divisions = await almsCommonSelect({
-      parameter: "PS_PREQUEST_ENTRY_DIVISION",
-      loginid,
-      code1: companyCode,
-      code2: loginid,
-      code3: "",
-      code4: ""
-    });
+      // Fetch divisions
+      const divisions = await almsCommonSelect({
+        parameter: "PS_PREQUEST_ENTRY_DIVISION",
+        loginid,
+        code1: companyCode,
+        code2: loginid,
+        code3: "",
+        code4: ""
+      });
 
-    const flowRows = rawRows
-      .map((row) => {
-        const flowCode = String(row.FLOW_CODE ?? row.flow_code ?? "");
-        const flowDivCode = String(row.DIV_CODE ?? "");
-        const div = divisions.find((d: any) => d.DIV_CODE === flowDivCode);
-        return {
-          flowCode: flowCode,
-          flowDescription: String(row.FLOW_DESCRIPTION ?? row.flow_description ?? ""),
-          divCode: flowDivCode,
-          divName: div ? String(div.DIV_NAME || "") : "",
-        };
-      })
-      .filter((row) => row.flowCode);
+      const flowRows = rawRows
+        .map((row) => {
+          const flowCode = String(row.FLOW_CODE ?? row.flow_code ?? "");
+          const flowDivCode = String(row.DIV_CODE ?? "");
+          const div = divisions.find((d: any) => d.DIV_CODE === flowDivCode);
+          return {
+            flowCode: flowCode,
+            flowDescription: String(row.FLOW_DESCRIPTION ?? row.flow_description ?? ""),
+            divCode: flowDivCode,
+            divName: div ? String(div.DIV_NAME || "") : "",
+          };
+        })
+        .filter((row) => row.flowCode);
 
-    if (flowRows.length === 0) {
+      if (flowRows.length === 0) {
+        setFlowConfirm({ open: false, loading: false, rows: [], selectedFlowCode: "" });
+        setNotice({ type: "error", message: "No approval flow found for this user." });
+        return;
+      }
+      setFlowConfirm({
+        open: true,
+        loading: false,
+        rows: flowRows,
+        selectedFlowCode: flowRows.length === 1 ? flowRows[0].flowCode : "",
+      });
+    } catch (err) {
       setFlowConfirm({ open: false, loading: false, rows: [], selectedFlowCode: "" });
-      setNotice({ type: "error", message: "No approval flow found for this user." });
-      return;
+      setNotice({ type: "error", message: err instanceof Error ? err.message : "Unable to determine approval flow" });
     }
-    setFlowConfirm({
-      open: true,
-      loading: false,
-      rows: flowRows,
-      selectedFlowCode: flowRows.length === 1 ? flowRows[0].flowCode : "",
-    });
-  } catch (err) {
-    setFlowConfirm({ open: false, loading: false, rows: [], selectedFlowCode: "" });
-    setNotice({ type: "error", message: err instanceof Error ? err.message : "Unable to determine approval flow" });
-  }
-};
+  };
 
   const confirmFlowAndOpenPR = () => {
     const selected = flowConfirm.rows.find((row) => row.flowCode === flowConfirm.selectedFlowCode);
@@ -558,75 +558,75 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
 
       {/* ─── Approval Flow confirmation popup ─── */}
       // ─── Approval Flow confirmation popup ───
-{/* ─── Approval Flow confirmation popup ─── */}
-<Dialog
-  open={flowConfirm.open}
-  wide={false}
-  title="Select Approval Flow"
-  description="Choose the approval flow for this purchase request"
-  onClose={() => setFlowConfirm((prev) => ({ ...prev, open: false }))}
-  footer={
-    <>
-      <Button variant="outline" size="sm" onClick={() => setFlowConfirm((prev) => ({ ...prev, open: false }))}>
-        Cancel
-      </Button>
-      <Button disabled={flowConfirm.loading || !flowConfirm.selectedFlowCode} size="sm" onClick={confirmFlowAndOpenPR}>
-        OK
-      </Button>
-    </>
-  }
->
-  {flowConfirm.loading ? (
-    <p className="m-0 text-sm text-muted-foreground">Loading approval flow...</p>
-  ) : (
-    <div className="max-h-[320px] overflow-auto rounded-md border">
-      <table className="w-full text-xs">
-        <thead className="sticky top-0 bg-muted text-[10px] uppercase tracking-wide text-muted-foreground">
-          <tr>
-            <th className="w-8 px-2 py-1.5 text-center"></th>
-            <th className="px-2 py-1.5 text-left whitespace-nowrap">Flow Code</th>
-            <th className="px-2 py-1.5 text-left whitespace-nowrap">Description</th>
-            <th className="px-2 py-1.5 text-left whitespace-nowrap">Division</th>
-          </tr>
-        </thead>
-        <tbody>
-          {flowConfirm.rows.length === 0 ? (
-            <tr>
-              <td className="px-3 py-4 text-center text-muted-foreground" colSpan={4}>No approval flow found</td>
-            </tr>
-          ) : flowConfirm.rows.map((row) => (
-            <tr
-              key={row.flowCode}
-              className="cursor-pointer border-t odd:bg-muted/20 hover:bg-accent"
-              onClick={() => setFlowConfirm((prev) => ({ ...prev, selectedFlowCode: row.flowCode }))}
-            >
-              <td className="px-2 py-1.5 text-center">
-                <input
-                  type="radio"
-                  name="flow-code"
-                  className="h-3 w-3"
-                  checked={flowConfirm.selectedFlowCode === row.flowCode}
-                  onChange={() => setFlowConfirm((prev) => ({ ...prev, selectedFlowCode: row.flowCode }))}
-                />
-              </td>
-              <td className="px-2 py-1.5 font-semibold whitespace-nowrap">{row.flowCode}</td>
-              <td className="px-2 py-1.5 whitespace-nowrap">{row.flowDescription || "—"}</td>
-              <td className="px-2 py-1.5 whitespace-nowrap">
-                {row.divCode ? (
-                  <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-800 whitespace-nowrap">
-                    {row.divCode} {row.divName ? `- ${row.divName}` : ""}
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )}
-</Dialog>
+      {/* ─── Approval Flow confirmation popup ─── */}
+      <Dialog
+        open={flowConfirm.open}
+        wide={false}
+        title="Select Approval Flow"
+        description="Choose the approval flow for this purchase request"
+        onClose={() => setFlowConfirm((prev) => ({ ...prev, open: false }))}
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setFlowConfirm((prev) => ({ ...prev, open: false }))}>
+              Cancel
+            </Button>
+            <Button disabled={flowConfirm.loading || !flowConfirm.selectedFlowCode} size="sm" onClick={confirmFlowAndOpenPR}>
+              OK
+            </Button>
+          </>
+        }
+      >
+        {flowConfirm.loading ? (
+          <p className="m-0 text-sm text-muted-foreground">Loading approval flow...</p>
+        ) : (
+          <div className="max-h-[320px] overflow-auto rounded-md border">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-muted text-[10px] uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="w-8 px-2 py-1.5 text-center"></th>
+                  <th className="px-2 py-1.5 text-left whitespace-nowrap">Flow Code</th>
+                  <th className="px-2 py-1.5 text-left whitespace-nowrap">Description</th>
+                  <th className="px-2 py-1.5 text-left whitespace-nowrap">Division</th>
+                </tr>
+              </thead>
+              <tbody>
+                {flowConfirm.rows.length === 0 ? (
+                  <tr>
+                    <td className="px-3 py-4 text-center text-muted-foreground" colSpan={4}>No approval flow found</td>
+                  </tr>
+                ) : flowConfirm.rows.map((row) => (
+                  <tr
+                    key={row.flowCode}
+                    className="cursor-pointer border-t odd:bg-muted/20 hover:bg-accent"
+                    onClick={() => setFlowConfirm((prev) => ({ ...prev, selectedFlowCode: row.flowCode }))}
+                  >
+                    <td className="px-2 py-1.5 text-center">
+                      <input
+                        type="radio"
+                        name="flow-code"
+                        className="h-3 w-3"
+                        checked={flowConfirm.selectedFlowCode === row.flowCode}
+                        onChange={() => setFlowConfirm((prev) => ({ ...prev, selectedFlowCode: row.flowCode }))}
+                      />
+                    </td>
+                    <td className="px-2 py-1.5 font-semibold whitespace-nowrap">{row.flowCode}</td>
+                    <td className="px-2 py-1.5 whitespace-nowrap">{row.flowDescription || "—"}</td>
+                    <td className="px-2 py-1.5 whitespace-nowrap">
+                      {row.divCode ? (
+                        <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-800 whitespace-nowrap">
+                          {row.divCode} {row.divName ? `- ${row.divName}` : ""}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Dialog>
 
       {/* Add / Edit / View Dialog */}
       <Dialog

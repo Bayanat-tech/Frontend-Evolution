@@ -345,7 +345,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       setLoading(false);
       return;
     }
-    
+
     if (hdrList.length > 0) {
       const headerData = hdrList[0];
       setHeader({
@@ -380,7 +380,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       }
       return;
     }
-    
+
     const enriched = itemList.map((row) => ({
       ...row,
       id: (row as any).id || newId(),
@@ -405,7 +405,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       }
       return;
     }
-    
+
     const enriched = termsList.map((row: any) => ({
       ...row,
       id: row.id || newId(),
@@ -639,14 +639,14 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
 
   const runAction = async (status: string, successMsg: string, remark: string = "", overrides: Partial<Record<string, any>> = {}) => {
     if (saving) return;
-    
+
     // Validate before any action except SAVEASDRAFT
     if (status !== "SAVEASDRAFT") {
       if (!validateAndShowErrors()) {
         return;
       }
     }
-    
+
     setSavingAction(status);
     setNotice(null);
     try {
@@ -673,7 +673,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     }
     runAction("SAVEASDRAFT", "Draft saved successfully!");
   };
-  
+
   const handleSubmit = () => runAction("SUBMITTED", "PR submitted successfully!");
 
   const handlePrint = () => {
@@ -694,13 +694,13 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       toast.error("No PR to approve", 5000);
       return;
     }
-    
+
     // Validate before approve
     if (!validateAndShowErrors()) {
       return;
     }
-    
-    setSaving(true); 
+
+    setSaving(true);
     setNotice(null);
     try {
       const currentLevel = Number(header.FLOW_LEVEL_RUNNING) || 1;
@@ -763,12 +763,12 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
 
   const sendBackOptions = useMemo(() => {
     const opts: { loginid: string; label: string; level: number }[] = [];
-    
+
     // Only show the previous users (not the current user)
     if (header.USER_ID) {
       opts.push({ loginid: String(header.USER_ID), label: `${header.USER_ID} (Creator)`, level: 0 });
     }
-    
+
     const seen = new Set(opts.map((o) => o.loginid));
     sendBackTargets.forEach((row: any) => {
       const lg = String(row.LOGINID || "");
@@ -790,7 +790,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       toast.warning("Please enter a send back reason", 4000);
       return;
     }
-    
+
     const target = sendBackOptions.find((o) => o.loginid === selectedSendBackTo);
     await runAction("SENDBACK", "PR sent back successfully!", remarkText, {
       FLOW_LEVEL_RUNNING: target?.level ?? 0,
@@ -806,12 +806,12 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       toast.warning("Please enter a rejection reason", 4000);
       return;
     }
-    
+
     // Validate before reject
     if (!validateAndShowErrors()) {
       return;
     }
-    
+
     setRejectOpen(false);
     const reason = remarkText;
     await runAction("REJECTED", "PR rejected successfully!", reason, {
@@ -825,7 +825,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       toast.error("No PR to generate PO", 5000);
       return;
     }
-    setSaving(true); 
+    setSaving(true);
     setNotice(null);
     try {
       await almsSave({
@@ -1338,59 +1338,59 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
 
                     {/* ── REMARKS box ── */}
                     {/* ── REMARKS box ── */}
-<div className="rounded-md border w-full lg:col-span-2">
-  <div className="border-b bg-muted/40 px-3 py-1.5">
-    <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Description &amp; Remarks</p>
-  </div>
-  <div className="flex flex-col gap-2.5 p-3">
-    <label className="field">
-      <span>Description / Reason *</span>
-      <textarea
-        disabled={disabled}
-        value={String(header.DESCRIPTION || "")}
-        onChange={(e) => {
-          setHdr("DESCRIPTION", e.target.value);
-          // Auto-resize
-          const target = e.target;
-          target.style.height = 'auto';
-          target.style.height = target.scrollHeight + 'px';
-        }}
-        className="w-full rounded-md border bg-background px-3 py-2 text-sm resize-none overflow-hidden min-h-[40px]"
-        placeholder="Enter description or reason..."
-        rows={1}
-        style={{ height: 'auto' }}
-        onInput={(e) => {
-          const target = e.target as HTMLTextAreaElement;
-          target.style.height = 'auto';
-          target.style.height = target.scrollHeight + 'px';
-        }}
-      />
-      
-    </label>
-    <label className="field">
-      <span>Remarks *</span>
-      <textarea
-        disabled={disabled}
-        value={String(header.REMARKS || "")}
-        onChange={(e) => {
-          setHdr("REMARKS", e.target.value);
-          const target = e.target;
-          target.style.height = 'auto';
-          target.style.height = target.scrollHeight + 'px';
-        }}
-        className="w-full rounded-md border bg-background px-3 py-2 text-sm resize-none overflow-hidden min-h-[40px]"
-        placeholder="Enter remarks..."
-        rows={1}
-        style={{ height: 'auto' }}
-        onInput={(e) => {
-          const target = e.target as HTMLTextAreaElement;
-          target.style.height = 'auto';
-          target.style.height = target.scrollHeight + 'px';
-        }}
-      />
-    </label>
-  </div>
-</div>
+                    <div className="rounded-md border w-full lg:col-span-2">
+                      <div className="border-b bg-muted/40 px-3 py-1.5">
+                        <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Description &amp; Remarks</p>
+                      </div>
+                      <div className="flex flex-col gap-2.5 p-3">
+                        <label className="field">
+                          <span>Description / Reason *</span>
+                          <textarea
+                            disabled={disabled}
+                            value={String(header.DESCRIPTION || "")}
+                            onChange={(e) => {
+                              setHdr("DESCRIPTION", e.target.value);
+                              // Auto-resize
+                              const target = e.target;
+                              target.style.height = 'auto';
+                              target.style.height = target.scrollHeight + 'px';
+                            }}
+                            className="w-full rounded-md border bg-background px-3 py-2 text-sm resize-none overflow-hidden min-h-[40px]"
+                            placeholder="Enter description or reason..."
+                            rows={1}
+                            style={{ height: 'auto' }}
+                            onInput={(e) => {
+                              const target = e.target as HTMLTextAreaElement;
+                              target.style.height = 'auto';
+                              target.style.height = target.scrollHeight + 'px';
+                            }}
+                          />
+
+                        </label>
+                        <label className="field">
+                          <span>Remarks *</span>
+                          <textarea
+                            disabled={disabled}
+                            value={String(header.REMARKS || "")}
+                            onChange={(e) => {
+                              setHdr("REMARKS", e.target.value);
+                              const target = e.target;
+                              target.style.height = 'auto';
+                              target.style.height = target.scrollHeight + 'px';
+                            }}
+                            className="w-full rounded-md border bg-background px-3 py-2 text-sm resize-none overflow-hidden min-h-[40px]"
+                            placeholder="Enter remarks..."
+                            rows={1}
+                            style={{ height: 'auto' }}
+                            onInput={(e) => {
+                              const target = e.target as HTMLTextAreaElement;
+                              target.style.height = 'auto';
+                              target.style.height = target.scrollHeight + 'px';
+                            }}
+                          />
+                        </label>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-3 py-2 text-sm text-muted-foreground">
@@ -1422,7 +1422,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                       : 'border-transparent text-muted-foreground hover:text-foreground'
                       }`}
                   >
-                    Details Items 
+                    Details Items
                   </button>
                   <button
                     onClick={() => setActiveTab("terms")}
