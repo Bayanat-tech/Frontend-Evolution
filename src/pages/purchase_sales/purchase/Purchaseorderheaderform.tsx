@@ -77,15 +77,12 @@ export function PurchaseOrderHeaderForm({
                 label="GRN No"
                 compact
                 placeholder="GRN No"
-                value={String(form.doc_no ?? "")}
-                displayValue={String(form.doc_no ?? "")}
+                value={String(form.grn_no ?? "")}
+                displayValue={String(form.grn_no ?? "")}
                 columns={[
                   { field: "doc_no", header: "GRN No" },
                   { field: "ac_code", header: "A/c Code" },
-                  { field: "ac_name", header: "A/c Name" },
-                  { field: "address", header: "Address" },
-                  { field: "tel", header: "Tel" },
-                  { field: "fax", header: "Fax" },
+                   { field: "party_name", header: "A/c Name" },
                 ]}
                 valueField="doc_no"
                 displayFields={["doc_no"]}
@@ -103,7 +100,7 @@ export function PurchaseOrderHeaderForm({
                   // Populate header fields immediately from the selected row
                   setForm((current) => ({
                     ...current,
-                    doc_no: value,
+                    grn_no: value,
                     ac_code: text(getLookupValue(row || {}, "ac_code")),
                     ac_name: text(getLookupValue(row || {}, "ac_name")),
                     dept_code: text(getLookupValue(row || {}, "dept_code")),
@@ -198,15 +195,12 @@ export function PurchaseOrderHeaderForm({
                 label="PO No"
                 compact
                 placeholder="PO No"
-                value={String(form.doc_no ?? "")}
-                displayValue={String(form.doc_no ?? "")}
+                value={String(form.ref_doc_no ?? "")}
+                displayValue={String(form.ref_doc_no ?? "")}
                 columns={[
                   { field: "doc_no", header: "GRN No" },
                   { field: "ac_code", header: "A/c Code" },
-                  { field: "ac_name", header: "A/c Name" },
-                  { field: "address", header: "Address" },
-                  { field: "tel", header: "Tel" },
-                  { field: "fax", header: "Fax" },
+                  { field: "party_name", header: "A/c Name" },
                 ]}
                 valueField="doc_no"
                 displayFields={["doc_no"]}
@@ -223,8 +217,8 @@ export function PurchaseOrderHeaderForm({
                 onChange={async (value, row) => {
                   // Populate header fields immediately from the selected row
                   setForm((current) => ({
+                    ref_doc_no: value,
                     ...current,
-                
                     ac_code: text(getLookupValue(row || {}, "ac_code")),
                     ac_name: text(getLookupValue(row || {}, "ac_name")),
                     dept_code: text(getLookupValue(row || {}, "dept_code")),
