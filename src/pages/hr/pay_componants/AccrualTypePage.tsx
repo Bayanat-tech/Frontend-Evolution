@@ -104,7 +104,7 @@ const AccrualTypePage = () => {
     });
 
     await executeDynamicDelete({
-      parameter: 'ACCRUAL_TYPE_delete',
+      parameter: 'PAY_COMP_accrual_type_delete',
       loginid,
       code1: row.COMPANY_CODE,
       code2: row.ACCRUAL_TYPE

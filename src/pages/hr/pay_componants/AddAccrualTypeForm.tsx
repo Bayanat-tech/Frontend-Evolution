@@ -45,31 +45,22 @@ type Props = {
   accrual_type?: string;
 };
 
-const ACCRUAL_UNIT_OPTIONS = [{ value: 'DAYS', label: 'Days' }, { value: 'HOURS', label: 'Hours' }];
-const CALC_BASED_ON_OPTIONS = [
-  { value: 'PAY_UNIT', label: 'Pay Unit' },
-  { value: 'FIXED', label: 'Fixed Amount' }
-];
-const CALC_FACTOR_OPTIONS = [
-  { value: 'MONTHLY_30', label: 'Monthly(30)' },
-  { value: 'MONTHLY_30D', label: 'Monthly(30 Days)' },
-  { value: 'ACTUAL', label: 'Actual Days' }
-];
-const DEPENDENCY_OPTIONS = [
-  { value: 'NONE', label: 'None' },
-  { value: 'SERVICE_DAYS', label: 'Service Days' }
-];
-const CREDIT_TYPE_OPTIONS = [
-  { value: 'YEARLY', label: 'Yearly' },
-  { value: 'MONTHLY', label: 'Monthly' }
-];
+// const ACCRUAL_UNIT_OPTIONS = [{ value: 'DAYS', label: 'Days' }, { value: 'HOURS', label: 'Hours' }];
+
+// const CALC_FACTOR_OPTIONS = [
+//   { value: 'MONTHLY_30', label: 'Monthly(30)' },
+//   { value: 'MONTHLY_30D', label: 'Monthly(30 Days)' },
+//   { value: 'ACTUAL', label: 'Actual Days' }
+// ];
+
+
 const YES_NO_OPTIONS = [
   { value: 'N', label: 'No' },
   { value: 'Y', label: 'Yes' }
 ];
 const STATUS_OPTIONS = [
-  { value: 'ACTIVE', label: 'Active' },
-  { value: 'INACTIVE', label: 'Inactive' }
+  { value: 'A', label: 'Active' },
+  { value: 'I', label: 'Inactive' }
 ];
 
 const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual_type }: Props) => {
@@ -79,36 +70,30 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
   const queryClient = useQueryClient();
 
   // ===================== FETCH EXISTING RECORD (edit/view) =====================
-  const { data: existingRecord, isLoading: existingLoading } = useQuery({
+    const { data: existingRecord, isLoading: existingLoading } = useQuery({
     queryKey: ['accrual-type-detail', companyCode, accrual_type],
     queryFn: async () => {
-      const response = await getDynamicLookup({
-        parameter: 'PAY_UNIT_ACCRUAL_TYPE',
+      const response: any = await getDynamicLookup({
+        parameter: 'PAY_COMPONENT_ACCRUAL_TYPE',
         code1: companyCode,
         code2: accrual_type
       });
-      const rawRows = (response ?? []) as unknown as Record<string, unknown>[];
-      return rawRows.length ? uppercaseKeys(rawRows[0]) : null;
-    },
-    enabled: !!(isEdit && companyCode && accrual_type)
-  });
+      const allRows = (Array.isArray(response) ? response : response?.data ?? []) as Record<string, unknown>[];
 
+      // sirf wahi record chahiye jiska ACCRUAL_TYPE match karta ho
+      const matched = allRows.find((row: any) => {
+        const type = String(row.ACCRUAL_TYPE ?? row.accrual_type ?? '').trim();
+        return type === String(accrual_type ?? '').trim();
+      });
+
+      return matched ? uppercaseKeys(matched) : null;
+    },
+    enabled: !!(isEdit && companyCode && accrual_type),
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always'
+  });
   // ===================== APPLICABLE TO lookup =====================
-  // const { data: applicableToData } = useQuery({
-  //   queryKey: ['accrual-applicable-to', companyCode],
-  //   queryFn: async () => {
-  //     // NOTE: verify actual proc/parameter name for "Applicable To" list
-  //     const response = await getDynamicLookup({
-  //       parameter: 'PAY_COMPONENT_accrual_applicable_to',
-  //       code1: companyCode,
-  //       code2: loginid
-  //     });
-  //     const rawRows = (response ?? []) as unknown as Record<string, unknown>[];
-  //     return rawRows.map(uppercaseKeys);
-  //   },
-  //   enabled: !!companyCode
-  // });
-    // ===================== APPLICABLE TO lookup =====================
   const { data: applicableToData } = useQuery({
     queryKey: ['accrual-applicable-to', companyCode],
     queryFn: async () => {
@@ -118,6 +103,68 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
         code2: loginid
       });
       // response can be either a plain array OR an envelope { success, data, totalCount }
+      const rawRows = (Array.isArray(response) ? response : response?.data ?? []) as Record<string, unknown>[];
+      return rawRows.map(uppercaseKeys);
+    },
+    enabled: !!companyCode
+  });
+
+  // ===================== UNIT CALCULATION FACTOR lookup =====================
+  const { data: unitCalcFactorData } = useQuery({
+    queryKey: ['unit-calc-factor', companyCode],
+    queryFn: async () => {
+      const response: any = await getDynamicLookup({
+        parameter: 'PAY_COMPONENT_unit_calculation_factor',
+        code1: companyCode,
+        code2: loginid
+      });
+      const rawRows = (Array.isArray(response) ? response : response?.data ?? []) as Record<string, unknown>[];
+      return rawRows.map(uppercaseKeys);
+    },
+    enabled: !!companyCode
+  });
+
+
+  const { data: accrualUnitData } = useQuery({
+    queryKey: ['accrual-unit', companyCode],
+    queryFn: async () => {
+      const response: any = await getDynamicLookup({
+        parameter: 'PAY_COMPONENT_accrual_unit',
+        code1: companyCode,
+        code2: loginid
+      });
+      const rawRows = (Array.isArray(response) ? response : response?.data ?? []) as Record<string, unknown>[];
+      return rawRows.map(uppercaseKeys);
+    },
+    enabled: !!companyCode
+  });
+
+  // ===================== ACCRUAL DEPEND TO lookup =====================
+  const { data: accrualDependData } = useQuery({
+    queryKey: ['accrual-depend', companyCode],
+    queryFn: async () => {
+      const response: any = await getDynamicLookup({
+        parameter: 'PAY_COMPONENT_accrual_depend',
+        code1: companyCode,
+        code2: loginid
+      });
+      const rawRows = (Array.isArray(response) ? response : response?.data ?? []) as Record<string, unknown>[];
+      return rawRows.map(uppercaseKeys);
+    },
+    enabled: !!companyCode
+  });
+
+
+
+  // ===================== CALCULATION BASED ON lookup =====================
+  const { data: calcBasedOnData } = useQuery({
+    queryKey: ['calc-based-on', companyCode],
+    queryFn: async () => {
+      const response: any = await getDynamicLookup({
+        parameter: 'PAY_COMPONENT_calculation_based',
+        code1: companyCode,
+        code2: loginid
+      });
       const rawRows = (Array.isArray(response) ? response : response?.data ?? []) as Record<string, unknown>[];
       return rawRows.map(uppercaseKeys);
     },
@@ -142,7 +189,7 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
   // ===================== LOOKUP: Accrual Type (search icon field) =====================
   const loadAccrualTypeOptions = async (search?: string) => {
     const response = await getDynamicLookup({
-      parameter: 'PAY_COMPONENT_ACCRUAL_TYPE',
+      parameter: 'PAY_COMPONENT_ACCRUAL',
       code1: companyCode,
       code2: search ?? ''
     });
@@ -162,6 +209,51 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
     );
   };
 
+  // ===================== CREDIT TYPE lookup =====================
+  const { data: creditTypeData } = useQuery({
+    queryKey: ['credit-type', companyCode],
+    queryFn: async () => {
+      const response: any = await getDynamicLookup({
+        parameter: 'PAY_COMPONENT_Credit_Type',
+        code1: companyCode,
+        code2: loginid
+      });
+      const rawRows = (Array.isArray(response) ? response : response?.data ?? []) as Record<string, unknown>[];
+      return rawRows.map(uppercaseKeys);
+    },
+    enabled: !!companyCode
+  });
+
+  // ===================== AMOUNT CALCULATION lookup (ACCRUAL_CALC_TYPE) =====================
+  const { data: accrualCalcTypeData } = useQuery({
+    queryKey: ['accrual-calc-type', companyCode],
+    queryFn: async () => {
+      const response: any = await getDynamicLookup({
+        parameter: 'PAY_COMPONENT_amount_calculation',
+        code1: companyCode,
+        code2: loginid
+      });
+      const rawRows = (Array.isArray(response) ? response : response?.data ?? []) as Record<string, unknown>[];
+      return rawRows.map(uppercaseKeys);
+    },
+    enabled: !!companyCode
+  });
+
+
+  // ===================== AMOUNT CALCULATION FACTOR lookup (CALC_AMT) =====================
+  const { data: calcAmtData } = useQuery({
+    queryKey: ['calc-amt', companyCode],
+    queryFn: async () => {
+      const response: any = await getDynamicLookup({
+        parameter: 'PAY_COMPONENT_amount_calculationFactor',
+        code1: companyCode,
+        code2: loginid
+      });
+      const rawRows = (Array.isArray(response) ? response : response?.data ?? []) as Record<string, unknown>[];
+      return rawRows.map(uppercaseKeys);
+    },
+    enabled: !!companyCode
+  });
   // ===================== FORM =====================
   const formik = useFormik<TAccrualTypeForm>({
     enableReinitialize: true,
@@ -182,7 +274,7 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
       AUTO_ENCASHMENT: (existingRecord?.AUTO_ENCASHMENT as string) ?? 'N',
       ENCASHMENT_COMP_ID: (existingRecord?.ENCASHMENT_COMP_ID as string) ?? '',
       REMARKS: (existingRecord?.REMARKS as string) ?? '',
-      ACCR_STATUS: (existingRecord?.ACCR_STATUS as string) ?? 'ACTIVE'
+      ACCR_STATUS: (existingRecord?.ACCR_STATUS as string) ?? 'A'
     },
     validate: (values) => {
       const errors: Partial<Record<keyof TAccrualTypeForm, string>> = {};
@@ -240,7 +332,7 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
       <section className="commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]">
         {/* ===== Top Bar ===== */}
         <CardHeader className="border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
-          <div className="flex min-h-10 items-center justify-between gap-3">
+          <div className="flex min-h-10 items-center justify-between gap-2">
             <div>
               <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
                 {isViewMode ? 'View Document' : isEdit ? 'Edit Document' : 'New Document'}
@@ -273,12 +365,12 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
                     <h3 className="m-0 text-sm font-semibold leading-tight">Accrual Type Information</h3>
                   </div>
                   <div className="grid w-full grid-cols-12 gap-4 p-3">
-                    <div className="col-span-12 md:col-span-2">
+                    {/* <div className="col-span-12 md:col-span-2">
                       <label className="mb-1 block text-sm font-medium text-gray-700">Company</label>
                       <Input value={companyCode} disabled />
-                    </div>
+                    </div> */}
 
-                    <div className="col-span-12 md:col-span-3">
+                    <div className="col-span-12 md:col-span-2">
                       <label className="mb-1 block text-sm font-medium text-gray-700">
                         Accrual Type <span className="text-red-500">*</span>
                       </label>
@@ -299,7 +391,7 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
                       )}
                     </div>
 
-                    <div className="col-span-12 md:col-span-5">
+                    <div className="col-span-12 md:col-span-2">
                       <label className="mb-1 block text-sm font-medium text-gray-700">Applicable To</label>
                       <Select
                         name="ELIGIBLITY"
@@ -308,15 +400,15 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
                         disabled={disabled}
                       >
                         <option value="">Select...</option>
-                      {(applicableToData ?? []).map((row: any, idx: number) => (
-  <option key={idx} value={row.VALUE_CODE}>
-    {row.VALUE_CODE} - {row.VALUE_DESC}
-  </option>
-))}
+                        {(applicableToData ?? []).map((row: any, idx: number) => (
+                          <option key={idx} value={row.VALUE_CODE}>
+                            {row.VALUE_CODE} - {row.VALUE_DESC}
+                          </option>
+                        ))}
                       </Select>
                     </div>
 
-                    <div className="col-span-12 md:col-span-6">
+                    <div className="col-span-12 md:col-span-5">
                       <label className="mb-1 block text-sm font-medium text-gray-700">
                         Accrual Description <span className="text-red-500">*</span>
                       </label>
@@ -328,7 +420,7 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
                       />
                     </div>
 
-                    <div className="col-span-12 md:col-span-6">
+                    <div className="col-span-12 md:col-span-3">
                       <label className="mb-1 block text-sm font-medium text-gray-700">Short Description</label>
                       <Input
                         name="ACCRUAL_SHORT_DESC"
@@ -347,25 +439,28 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
                     <h3 className="m-0 text-sm font-semibold leading-tight">Accrual Parameters</h3>
                   </div>
                   <div className="grid w-full grid-cols-12 gap-4 p-3">
-                    <div className="col-span-12 md:col-span-6">
+                    <div className="col-span-12 md:col-span-2">
                       <label className="mb-1 block text-sm font-medium text-gray-700">
                         Accrual Unit <span className="text-red-500">*</span>
                       </label>
+
+
                       <Select
                         name="ACCRUAL_UNIT"
                         value={formik.values.ACCRUAL_UNIT}
                         onChange={formik.handleChange}
                         disabled={disabled}
                       >
-                        {ACCRUAL_UNIT_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
+                        <option value="">Select...</option>
+                        {(accrualUnitData ?? []).map((row: any, idx: number) => (
+                          <option key={idx} value={row.VALUE_CODE}>
+                            {row.VALUE_CODE} - {row.VALUE_DESC}
                           </option>
                         ))}
                       </Select>
                     </div>
 
-                    <div className="col-span-12 md:col-span-6">
+                    <div className="col-span-12 md:col-span-2">
                       <label className="mb-1 block text-sm font-medium text-gray-700">Amount Calculation</label>
                       <Select
                         name="ACCRUAL_CALC_TYPE"
@@ -374,15 +469,14 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
                         disabled={disabled}
                       >
                         <option value="">Select...</option>
-                        {CALC_FACTOR_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
+                        {(accrualCalcTypeData ?? []).map((row: any, idx: number) => (
+                          <option key={idx} value={row.VALUE_CODE}>
+                            {row.VALUE_CODE} - {row.VALUE_DESC}
                           </option>
                         ))}
                       </Select>
                     </div>
-
-                    <div className="col-span-12 md:col-span-6">
+                    <div className="col-span-12 md:col-span-2">
                       <label className="mb-1 block text-sm font-medium text-gray-700">Calculation Based on</label>
                       <Select
                         name="CALC_SETUP"
@@ -390,15 +484,16 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
                         onChange={formik.handleChange}
                         disabled={disabled}
                       >
-                        {CALC_BASED_ON_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
+                        <option value="">Select...</option>
+                        {(calcBasedOnData ?? []).map((row: any, idx: number) => (
+                          <option key={idx} value={row.VALUE_CODE}>
+                            {row.VALUE_CODE} - {row.VALUE_DESC}
                           </option>
                         ))}
                       </Select>
                     </div>
 
-                    <div className="col-span-12 md:col-span-6">
+                    <div className="col-span-12 md:col-span-2">
                       <label className="mb-1 block text-sm font-medium text-gray-700">Amount Calculation Factor</label>
                       <Select
                         name="CALC_AMT"
@@ -406,15 +501,16 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
                         onChange={formik.handleChange}
                         disabled={disabled}
                       >
-                        {CALC_FACTOR_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
+                        <option value="">Select...</option>
+                        {(calcAmtData ?? []).map((row: any, idx: number) => (
+                          <option key={idx} value={row.VALUE_CODE}>
+                            {row.VALUE_CODE} - {row.VALUE_DESC}
                           </option>
                         ))}
                       </Select>
                     </div>
 
-                    <div className="col-span-12 md:col-span-6">
+                    <div className="col-span-12 md:col-span-2">
                       <label className="mb-1 block text-sm font-medium text-gray-700">
                         Unit Calculation Factor <span className="text-red-500">*</span>
                       </label>
@@ -424,15 +520,15 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
                         onChange={formik.handleChange}
                         disabled={disabled}
                       >
-                        {CALC_FACTOR_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
+                        <option value="">Select...</option>
+                        {(unitCalcFactorData ?? []).map((row: any, idx: number) => (
+                          <option key={idx} value={row.VALUE_CODE}>
+                            {row.VALUE_CODE} - {row.VALUE_DESC}
                           </option>
                         ))}
                       </Select>
                     </div>
-
-                    <div className="col-span-12 md:col-span-6">
+                    <div className="col-span-12 md:col-span-2">
                       <label className="mb-1 block text-sm font-medium text-gray-700">Accrual Depend to</label>
                       <Select
                         name="ACCRUAL_DEPENDENCY"
@@ -440,15 +536,16 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
                         onChange={formik.handleChange}
                         disabled={disabled}
                       >
-                        {DEPENDENCY_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
+                        <option value="">Select...</option>
+                        {(accrualDependData ?? []).map((row: any, idx: number) => (
+                          <option key={idx} value={row.VALUE_CODE}>
+                            {row.VALUE_CODE} - {row.VALUE_DESC}
                           </option>
                         ))}
                       </Select>
                     </div>
 
-                    <div className="col-span-12 md:col-span-6">
+                    <div className="col-span-12 md:col-span-2">
                       <label className="mb-1 block text-sm font-medium text-gray-700">Credit Type</label>
                       <Select
                         name="CREDIT_TYPE"
@@ -456,9 +553,10 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
                         onChange={formik.handleChange}
                         disabled={disabled}
                       >
-                        {CREDIT_TYPE_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
+                        <option value="">Select...</option>
+                        {(creditTypeData ?? []).map((row: any, idx: number) => (
+                          <option key={idx} value={row.VALUE_CODE}>
+                            {row.VALUE_CODE} - {row.VALUE_DESC}
                           </option>
                         ))}
                       </Select>
@@ -473,7 +571,7 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
                     <h3 className="m-0 text-sm font-semibold leading-tight">Encashment Settings</h3>
                   </div>
                   <div className="grid w-full grid-cols-12 gap-4 p-3">
-                    <div className="col-span-12 md:col-span-6">
+                    <div className="col-span-12 md:col-span-2">
                       <label className="mb-1 block text-sm font-medium text-gray-700">Allow Encashment</label>
                       <Select
                         name="ALLOW_ENCASHMENT"
@@ -489,7 +587,7 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
                       </Select>
                     </div>
 
-                    <div className="col-span-12 md:col-span-6">
+                    <div className="col-span-12 md:col-span-2">
                       <label className="mb-1 block text-sm font-medium text-gray-700">Auto Encashment</label>
                       <Select
                         name="AUTO_ENCASHMENT"
@@ -505,7 +603,7 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
                       </Select>
                     </div>
 
-                    <div className="col-span-12">
+                    <div className="col-span-3">
                       <label className="mb-1 block text-sm font-medium text-gray-700">Encashment Pay Unit</label>
                       <LookupField
                         value={formik.values.ENCASHMENT_COMP_ID}
@@ -526,23 +624,23 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
                 {/* ===== Remarks + Status Section ===== */}
                 <div className="w-full rounded-md border bg-card">
                   <div className="border-b bg-secondary/40 px-3 py-1.5">
-                    <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-primary">Additional</p>
-                    <h3 className="m-0 text-sm font-semibold leading-tight">Remarks &amp; Status</h3>
+                    {/* <p className="m-0 text-[11px] font-semibold uppercase tracking-wide text-primary">Additional</p> */}
+                    {/* <h3 className="m-0 text-sm font-semibold leading-tight">Remarks &amp; Status</h3> */}
                   </div>
                   <div className="grid w-full grid-cols-12 gap-4 p-3">
-                    <div className="col-span-12">
+                    <div className="col-span-5">
                       <label className="mb-1 block text-sm font-medium text-gray-700">Remarks</label>
                       <textarea
                         name="REMARKS"
                         value={formik.values.REMARKS}
                         onChange={formik.handleChange}
                         disabled={disabled}
-                        rows={4}
+                        rows={2}
                         className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:bg-gray-100"
                       />
                     </div>
 
-                    <div className="col-span-12 md:col-span-4">
+                    <div className="col-span-3 md:col-span-3">
                       <label className="mb-1 block text-sm font-medium text-gray-700">
                         Status <span className="text-red-500">*</span>
                       </label>
@@ -567,7 +665,7 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
         </div>
 
         {/* ===== Bottom Action Bar ===== */}
-        <div className="flex items-center justify-end gap-2 border-t bg-secondary/60 px-4 py-2">
+        <div className="flex items-center justify-end gap-7 border-t bg-secondary/30 px-4 py-8">
           {!isViewMode && (
             <Button
               type="submit"
@@ -582,7 +680,7 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
         </div>
       </section>
     </div>
-  );
+  ); 
 };
 
 export default AddAccrualTypeForm;
