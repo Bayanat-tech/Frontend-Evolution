@@ -16,9 +16,11 @@ import { useAuth } from "../../state/AuthContext";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 
+
 import type { TPRHeader, TPRItem } from "./PurchaseSummary-types";
 import { almsCommonSelect, almsGeneratePOFromPR, almsSave, almsSavePrequestBulk } from "../../api/alms";
 import { openPRPurchaseReport } from "../../api/transactions";
+import { useToast } from "../../components/ui/AlertToast";
 
 type AddPRRequestPageProps = {
   isEditMode: boolean;
@@ -26,8 +28,8 @@ type AddPRRequestPageProps = {
   existingData?: { request_number?: string };
   flowCode?: string;
   flowDescription?: string;
-  docType?: string;   
-  docNo?: string;  
+  docType?: string;
+  docNo?: string;
   onClose: (refresh?: boolean) => void;
 };
 
@@ -110,10 +112,58 @@ function blankItem(srNo: number, requestNumber: string, companyCode: string, hdr
   };
 }
 
+// ─── Validation Function ──────────────────────────────────────────────────────
+function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any[]): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  // Header validations
+  if (!header.DESCRIPTION || header.DESCRIPTION.trim() === "") {
+    errors.push("Description / Reason is required");
+  }
+  if (!header.REMARKS || header.REMARKS.trim() === "") {
+    errors.push("Remarks is required");
+  }
+  if (!header.PDO_TYPE) {
+    errors.push("POD Type is required");
+  }
+  if (!header.CURR_CODE) {
+    errors.push("Currency is required");
+  }
+
+  // Items validations
+  if (items.length === 0) {
+    errors.push("At least one item is required");
+  } else {
+    items.forEach((item, index) => {
+      if (!item.ITEM_CODE) {
+        errors.push(`Item ${index + 1}: Item Code is required`);
+      }
+      if (!item.ITEM_DESP) {
+        errors.push(`Item ${index + 1}: Item Description is required`);
+      }
+      if (!item.SUPPLIER) {
+        errors.push(`Item ${index + 1}: Supplier is required`);
+      }
+      if (num(item.ALLOCATED_APPROVED_QUANTITY) <= 0) {
+        errors.push(`Item ${index + 1}: Approved Quantity must be greater than 0`);
+      }
+      if (num(item.ITEM_RATE) <= 0) {
+        errors.push(`Item ${index + 1}: Rate must be greater than 0`);
+      }
+      if (!item.COST_CODE) {
+        errors.push(`Item ${index + 1}: Cost Code is required`);
+      }
+    });
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
 const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCode, flowDescription, docType = "PR", docNo, onClose }: AddPRRequestPageProps) => {
   const { user } = useAuth();
   const companyCode = user?.company_code ?? "";
   const loginid = user?.loginid ?? "";
+  const { toast } = useToast();
 
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -136,12 +186,8 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     'Q': 'PDO-NON-OTO',
     'N': 'NON-PDO'
   };
-  const getPdoDisplayValue = (dataValue: string | undefined | null): string => {
-    if (!dataValue) return '';
-    return PDO_TYPE_MAP[dataValue] || dataValue;
-  };
 
-
+  // ─── Lookup Queries ──────────────────────────────────────────────
   const { data: itemCodes = [] } = useQuery<LookupItem[]>({
     queryKey: ["pr-items-lookup", companyCode],
     queryFn: () => almsCommonSelect({
@@ -154,6 +200,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     }),
     enabled: !!companyCode,
   });
+
   const { data: costCodes = [] } = useQuery<LookupItem[]>({
     queryKey: ["pr-cost-lookup", companyCode],
     queryFn: () => almsCommonSelect({
@@ -166,6 +213,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     }),
     enabled: !!companyCode,
   });
+
   const { data: taxCodes = [] } = useQuery<LookupItem[]>({
     queryKey: ["pr-tax-lookup", companyCode],
     queryFn: () => almsCommonSelect({
@@ -178,6 +226,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     }),
     enabled: !!companyCode,
   });
+
   const { data: supplierList = [] } = useQuery<LookupItem[]>({
     queryKey: ["pr-supplier-lookup", companyCode],
     queryFn: () => almsCommonSelect({
@@ -190,18 +239,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     }),
     enabled: !!companyCode,
   });
-  const { data: compntCatCode = [] } = useQuery<LookupItem[]>({
-    queryKey: ["pr-tax-component-lookup", companyCode],
-    queryFn: () => almsCommonSelect({
-      parameter: "PS_PREQUEST_ENTRY_TAX_COMPONENT",
-      loginid,
-      code1: companyCode,
-      code2: loginid,
-      code3: "",
-      code4: ""
-    }),
-    enabled: !!companyCode,
-  });
+
   const { data: currencyList = [] } = useQuery<LookupItem[]>({
     queryKey: ["pr-currency-lookup", companyCode],
     queryFn: () => almsCommonSelect({
@@ -215,7 +253,20 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     enabled: !!companyCode,
   });
 
-  
+  const { data: divisionList = [] } = useQuery<LookupItem[]>({
+    queryKey: ["pr-division-lookup", companyCode],
+    queryFn: () => almsCommonSelect({
+      parameter: "PS_PREQUEST_ENTRY_DIVISION",
+      loginid,
+      code1: companyCode,
+      code2: loginid,
+      code3: "",
+      code4: ""
+    }),
+    enabled: !!companyCode,
+  });
+
+  // ─── Fetch Header Data ────────────────────────────────────────────
   const { data: hdrList = [] } = useQuery<TPRHeader[]>({
     queryKey: ["pr-header", requestNumber, companyCode],
     queryFn: () => almsCommonSelect<TPRHeader>({
@@ -226,58 +277,110 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       code3: requestNumber || "",
       code4: ""
     }),
-    enabled: isEditMode && !!requestNumber,
+    enabled: (isEditMode || isViewMode) && !!requestNumber,
   });
+
+  // ─── Fetch Items Data ────────────────────────────────────────────
+  const { data: itemList = [] } = useQuery<TPRItem[]>({
+    queryKey: ["pr-item-list", requestNumber, companyCode],
+    queryFn: () => almsCommonSelect<TPRItem>({
+      parameter: "PS_PREQUEST_ENTRY_DETAIL_PAGE",
+      loginid,
+      code1: companyCode,
+      code2: "PR",
+      code3: requestNumber || "",
+      code4: ""
+    }),
+    enabled: (isEditMode || isViewMode) && !!requestNumber,
+  });
+
+  // ─── Fetch Terms Data ────────────────────────────────────────────
+  const { data: termsList = [] } = useQuery<any[]>({
+    queryKey: ["pr-terms", requestNumber, companyCode],
+    queryFn: () => almsCommonSelect({
+      parameter: "PS_PREQUEST_ENTRY_TERMS",
+      loginid,
+      code1: companyCode,
+      code2: requestNumber || "",
+      code3: "",
+      code4: "",
+    }),
+    enabled: (isEditMode || isViewMode) && !!requestNumber,
+  });
+
+  // ─── Fetch Flow Details for DIV_CODE ────────────────────────────
+  const { data: flowDetailData } = useQuery<LookupItem[]>({
+    queryKey: ["pr-flow-details", flowCode, companyCode],
+    queryFn: () => almsCommonSelect({
+      parameter: "PS_PREQUEST_ENTRY_GET_FLOW_DETAILS",
+      loginid,
+      code1: companyCode,
+      code2: flowCode || "",
+      code3: "",
+      code4: ""
+    }),
+    enabled: !!flowCode && !!companyCode && !isEditMode && !isViewMode,
+  });
+
+  // ─── Auto-populate Division from Flow ────────────────────────────
+  useEffect(() => {
+    if (isEditMode || isViewMode) return;
+    if (!flowDetailData || flowDetailData.length === 0) return;
+
+    const flow = flowDetailData[0];
+    const divCode = flow.DIV_CODE || "";
+
+    if (divCode) {
+      setHdr("DIV_CODE", divCode);
+      const div = divisionList.find((d: any) => d.DIV_CODE === divCode);
+      if (div) {
+        setHdr("DIV_NAME", div.DIV_NAME || "");
+      }
+    }
+  }, [flowDetailData, divisionList, isEditMode, isViewMode]);
+
+  // ─── Set Header Data ─────────────────────────────────────────────
   useEffect(() => {
     if (!isEditMode && !isViewMode) {
       setLoading(false);
       return;
     }
+    
     if (hdrList.length > 0) {
-      setHeader(hdrList[0]);
+      const headerData = hdrList[0];
+      setHeader({
+        ...headerData,
+        DIV_CODE: (headerData as any).DIV_CODE || "",
+        DIV_NAME: (headerData as any).DIV_NAME || "",
+        DEPT_CODE_FLOW: (headerData as any).DEPT_CODE_FLOW || "",
+        DEPT_NAME: (headerData as any).DEPT_NAME || "",
+      });
       setLoading(false);
-    } 
+    } else if (!loading) {
+      setLoading(false);
+    }
   }, [hdrList, isEditMode, isViewMode, requestNumber]);
 
+  // ─── Set Flow Code for New Document ─────────────────────────────
   useEffect(() => {
-    if (isEditMode) return;
+    if (isEditMode || isViewMode) return;
     if (!flowCode && !flowDescription) return;
     setHeader((prev) => ({
       ...prev,
       FLOW_CODE: flowCode || (prev as any).FLOW_CODE,
       FLOW_DESCRIPTION: flowDescription || (prev as any).FLOW_DESCRIPTION,
     }));
-  }, [isEditMode, flowCode, flowDescription]);
+  }, [isEditMode, isViewMode, flowCode, flowDescription]);
 
+  // ─── Set Items Data ──────────────────────────────────────────────
   useEffect(() => {
-    if (!header.CURR_CODE && !header.TX_CAT_CODE) return;
-    const needsCurrName = !!header.CURR_CODE && !header.CURR_NAME && currencyList.length > 0;
-    const needsTaxName = !!header.TX_CAT_CODE && !header.TX_CAT_NAME && taxCodes.length > 0;
-    if (!needsCurrName && !needsTaxName) return;
-    setHeader((prev) => ({
-      ...prev,
-      CURR_NAME: prev.CURR_NAME || currencyList.find((c) => c.CURR_CODE === prev.CURR_CODE)?.CURR_NAME || prev.CURR_NAME,
-      TX_CAT_NAME: prev.TX_CAT_NAME || taxCodes.find((t) => t.TX_CAT_CODE === prev.TX_CAT_CODE)?.TX_CAT_NAME || prev.TX_CAT_NAME,
-    }));
-  }, [currencyList, taxCodes, header.CURR_CODE, header.TX_CAT_CODE, header.CURR_NAME, header.TX_CAT_NAME]);
-const isPoMode = docType !== "PR";
-  const itemDocType = docType || "PR";
-const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
-
-  const { data: itemList = [] } = useQuery<TPRItem[]>({
-    queryKey: ["pr-item-list",itemDocType, itemDocNo, requestNumber, companyCode],
-    queryFn: () => almsCommonSelect<TPRItem>({
-      parameter: "PS_PREQUEST_ENTRY_DETAIL_PAGE",
-      loginid,
-      code1: companyCode,
-      code2: itemDocType,
-      code3: itemDocNo,
-      code4: ""
-    }),
-    enabled: (isEditMode || isViewMode) && !!itemDocNo,
-  });
-  useEffect(() => {
-    if (itemList.length === 0 || itemCodes.length === 0) return;
+    if (itemList.length === 0) {
+      if (isViewMode && requestNumber) {
+        setItems([]);
+      }
+      return;
+    }
+    
     const enriched = itemList.map((row) => ({
       ...row,
       id: (row as any).id || newId(),
@@ -292,44 +395,24 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
     }));
     const renumbered = enriched.map((item, idx) => ({ ...item, ITEM_SRNO: idx + 1 }));
     setItems(renumbered);
-    setLoading(false);
-  }, [itemList, itemCodes, costCodes, supplierList, taxCodes, currencyList, header.CURRENCY_RATE]);
+  }, [itemList, itemCodes, costCodes, supplierList, taxCodes, currencyList, header.CURRENCY_RATE, isViewMode, requestNumber]);
 
-
-  const { data: termsList = [] } = useQuery<any[]>({
-    queryKey: ["pr-terms", requestNumber, companyCode],
-    queryFn: () => almsCommonSelect({
-      parameter: "PS_PREQUEST_ENTRY_TERMS",
-      loginid,
-      code1: companyCode,
-      code2: requestNumber || "",
-      code3: "",
-      code4: "",
-    }),
-    enabled: isEditMode && !!requestNumber,
-  });
-
+  // ─── Set Terms Data ──────────────────────────────────────────────
   useEffect(() => {
-    if (termsList.length === 0) return;
+    if (termsList.length === 0) {
+      if (isViewMode && requestNumber) {
+        setTerms([]);
+      }
+      return;
+    }
+    
     const enriched = termsList.map((row: any) => ({
       ...row,
       id: row.id || newId(),
       SUPPLIER_NAME: row.SUPPLIER_NAME || supplierList.find((s) => s.SUPPLIER_CODE === row.SUPPLIER)?.SUPPLIER_NAME || "",
     }));
-    setTerms((prev) => {
-      const serverSuppliers = new Set(enriched.map((t) => t.SUPPLIER));
-      const localOnly = prev.filter((t) => t.SUPPLIER && !serverSuppliers.has(t.SUPPLIER));
-      return [...enriched, ...localOnly];
-    });
-  }, [termsList, supplierList]);
-
-  useEffect(() => {
-    if (!isPoMode) return;
-    setTerms((prev) => {
-      const supplierCodes = new Set(items.map((i) => i.SUPPLIER));
-      return prev.filter((t) => supplierCodes.has(t.SUPPLIER));
-    });
-  }, [isPoMode, items]);
+    setTerms(enriched);
+  }, [termsList, supplierList, isViewMode, requestNumber]);
 
   const setHdr = (field: keyof TPRHeader, value: unknown) => setHeader((prev) => ({ ...prev, [field]: value }));
 
@@ -339,6 +422,23 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
   const totalFinalAmount = items.reduce((s, r) => s + num(r.FINAL_AMOUNT), 0);
   const [headerExpanded, setHeaderExpanded] = useState(true);
 
+  // ─── Validate Before Action ──────────────────────────────────────
+  const validateAndShowErrors = (): boolean => {
+    const { valid, errors } = validatePRForm(header, items, terms);
+    if (!valid) {
+      // Show first error as toast
+      toast.error(errors[0], 5000);
+      // Also show all errors in notice
+      setNotice({
+        type: "error",
+        message: errors.join(". ")
+      });
+      return false;
+    }
+    return true;
+  };
+
+  // ─── Save Functions ──────────────────────────────────────────────
   const saveBulk = async (status: string, remark: string = "", overrides: Partial<Record<string, any>> = {}): Promise<{ success: boolean; message?: string;[key: string]: any }> => {
     const headerData = {
       REQUEST_NUMBER: requestNumber || null,
@@ -439,7 +539,11 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
       SENTBACK_REASON: status === "SENDBACK" ? remark : "",
       REJECT_REASON: status === "REJECTED" ? remark : "",
       DOC_NO: header.DOC_NO ?? null,
-      ...overrides, // This will override any other fields passed in overrides
+      DIV_CODE: header.DIV_CODE || "",
+      DIV_NAME: header.DIV_NAME || "",
+      DEPT_CODE_FLOW: header.DEPT_CODE_FLOW || "",
+      DEPT_NAME: header.DEPT_NAME || "",
+      ...overrides,
     };
 
     const detailsData = items.map((item) => ({
@@ -534,30 +638,47 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
   const [savingAction, setSavingAction] = useState<string | null>(null);
 
   const runAction = async (status: string, successMsg: string, remark: string = "", overrides: Partial<Record<string, any>> = {}) => {
-    if (saving) return;   
+    if (saving) return;
+    
+    // Validate before any action except SAVEASDRAFT
+    if (status !== "SAVEASDRAFT") {
+      if (!validateAndShowErrors()) {
+        return;
+      }
+    }
+    
     setSavingAction(status);
     setNotice(null);
     try {
       const result = await saveBulk(status, remark, overrides);
       if (result.success) {
-        setNotice({ type: "success", message: successMsg });
+        toast.success(successMsg, 4000);
         onClose(true);
       } else {
         throw new Error(result.message || "Failed to save");
       }
     } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Action failed", 5000);
       setNotice({ type: "error", message: err instanceof Error ? err.message : "Action failed" });
     } finally {
       setSavingAction(null);
     }
   };
 
-  const handleSaveDraft = () => runAction("SAVEASDRAFT", "Draft saved successfully!");
+  const handleSaveDraft = () => {
+    // Draft doesn't need validation, but check if at least some data exists
+    if (!header.DESCRIPTION && items.length === 0) {
+      toast.warning("Please add at least a description or an item before saving draft", 4000);
+      return;
+    }
+    runAction("SAVEASDRAFT", "Draft saved successfully!");
+  };
+  
   const handleSubmit = () => runAction("SUBMITTED", "PR submitted successfully!");
 
   const handlePrint = () => {
     if (!requestNumber) {
-      setNotice({ type: "error", message: "Please save the request before printing." });
+      toast.warning("Please save the request before printing.", 4000);
       return;
     }
     openPRPurchaseReport({
@@ -569,62 +690,62 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
   };
 
   const handleApprove = async () => {
-  if (!requestNumber) return setNotice({ type: "error", message: "No PR to approve" });
-  setSaving(true); setNotice(null);
-  try {
-    const currentLevel = Number(header.FLOW_LEVEL_RUNNING) || 1;
-    const finalLevel = Number(header.FLOW_LEVEL_FINAL) || 1;
-    const nextLevel = currentLevel + 1;
-    const isFinal = nextLevel >= finalLevel ? "Y" : "N";
- 
-    const result = await saveBulk("APPROVED", "", {
-      FLOW_LEVEL_RUNNING: nextLevel,
-      FINAL_APPROVED: isFinal,
-    });
- 
-    if (!result.success) {
-      throw new Error(result.message || "Failed to approve");
+    if (!requestNumber) {
+      toast.error("No PR to approve", 5000);
+      return;
     }
- 
-    if (isFinal === "Y") {
-      const poResult = await almsGeneratePOFromPR({
-        companyCode,
-        requestNumber,
-        docType: "LPO",
-      });
- 
-      if (!poResult.success) {
-        setNotice({
-          type: "error",
-          message: `PR approved, but PO generation failed: ${poResult.message || "unknown error"}. Please retry PO generation from the Approved tab.`,
-        });
-        onClose(true);
-        return;
-      }
-      setNotice({ type: "success", message: "PR approved & PO generated successfully!" });
-    } else {
-      setNotice({ type: "success", message: "PR approved successfully!" });
+    
+    // Validate before approve
+    if (!validateAndShowErrors()) {
+      return;
     }
- 
-    onClose(true);
-  } catch (err) {
-    setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to approve" });
-  } finally { setSaving(false); }
-};
-  const handleReject = async () => {
-    if (!requestNumber) return setNotice({ type: "error", message: "No PR to reject" });
-    setSaving(true); setNotice(null);
+    
+    setSaving(true); 
+    setNotice(null);
     try {
-      const result = await saveBulk("REJECTED");
-      if (result.success) {
-        setNotice({ type: "success", message: "PR rejected successfully!" });
-        onClose(true);
-      } else {
-        throw new Error(result.message || "Failed to reject");
+      const currentLevel = Number(header.FLOW_LEVEL_RUNNING) || 1;
+      const finalLevel = Number(header.FLOW_LEVEL_FINAL) || 1;
+      const nextLevel = currentLevel + 1;
+      const isFinal = nextLevel >= finalLevel ? "Y" : "N";
+
+      const result = await saveBulk("APPROVED", "", {
+        FLOW_LEVEL_RUNNING: nextLevel,
+        FINAL_APPROVED: isFinal,
+      });
+
+      if (!result.success) {
+        throw new Error(result.message || "Failed to approve");
       }
+
+      if (isFinal === "Y") {
+        const poResult = await almsGeneratePOFromPR({
+          companyCode,
+          requestNumber,
+          docType: "LPO",
+        });
+
+        if (!poResult.success) {
+          toast.error(`PR approved, but PO generation failed: ${poResult.message || "unknown error"}`, 5000);
+          onClose(true);
+          return;
+        }
+        toast.success("PR approved & PO generated successfully!", 4000);
+      } else {
+        toast.success("PR approved successfully!", 4000);
+      }
+
+      onClose(true);
     } catch (err) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to reject" });
+      toast.error(err instanceof Error ? err.message : "Failed to approve", 5000);
     } finally { setSaving(false); }
+  };
+
+  const handleReject = async () => {
+    if (!requestNumber) {
+      toast.error("No PR to reject", 5000);
+      return;
+    }
+    // Validation will be done in handleRejectConfirm
   };
 
   const { data: sendBackTargets = [] } = useQuery<LookupItem[]>({
@@ -642,23 +763,34 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
 
   const sendBackOptions = useMemo(() => {
     const opts: { loginid: string; label: string; level: number }[] = [];
+    
+    // Only show the previous users (not the current user)
     if (header.USER_ID) {
       opts.push({ loginid: String(header.USER_ID), label: `${header.USER_ID} (Creator)`, level: 0 });
     }
+    
     const seen = new Set(opts.map((o) => o.loginid));
     sendBackTargets.forEach((row: any) => {
       const lg = String(row.LOGINID || "");
-      if (lg && !seen.has(lg)) {
+      // Don't show current user in sendback targets
+      if (lg && !seen.has(lg) && lg !== loginid) {
         seen.add(lg);
         opts.push({ loginid: lg, label: `${lg} (Level ${row.FLOW_LEVEL_RUNNING})`, level: Number(row.FLOW_LEVEL_RUNNING) || 0 });
       }
     });
     return opts;
-  }, [header.USER_ID, sendBackTargets]);
+  }, [header.USER_ID, sendBackTargets, loginid]);
 
   const handleSendBackConfirm = async () => {
-    if (!selectedSendBackTo) return setNotice({ type: "error", message: "Please select who to send this back to" });
-    if (!remarkText.trim()) return setNotice({ type: "error", message: "Please enter a send back reason" });
+    if (!selectedSendBackTo) {
+      toast.warning("Please select who to send this back to", 4000);
+      return;
+    }
+    if (!remarkText.trim()) {
+      toast.warning("Please enter a send back reason", 4000);
+      return;
+    }
+    
     const target = sendBackOptions.find((o) => o.loginid === selectedSendBackTo);
     await runAction("SENDBACK", "PR sent back successfully!", remarkText, {
       FLOW_LEVEL_RUNNING: target?.level ?? 0,
@@ -671,9 +803,15 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
 
   const handleRejectConfirm = async () => {
     if (!remarkText.trim()) {
-      setNotice({ type: "error", message: "Please enter a rejection reason" });
+      toast.warning("Please enter a rejection reason", 4000);
       return;
     }
+    
+    // Validate before reject
+    if (!validateAndShowErrors()) {
+      return;
+    }
+    
     setRejectOpen(false);
     const reason = remarkText;
     await runAction("REJECTED", "PR rejected successfully!", reason, {
@@ -682,11 +820,13 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
     setRemarkText("");
   };
 
-
-
   const handleGeneratePO = async () => {
-    if (!requestNumber) return;
-    setSaving(true); setNotice(null);
+    if (!requestNumber) {
+      toast.error("No PR to generate PO", 5000);
+      return;
+    }
+    setSaving(true); 
+    setNotice(null);
     try {
       await almsSave({
         parameter: "Amlspf_GeneratePO",
@@ -696,14 +836,14 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
         code3: header.FINAL_APPROVED || "YES",
         code4: ""
       });
-      setNotice({ type: "success", message: "PO generated successfully!" });
+      toast.success("PO generated successfully!", 4000);
       onClose(true);
     } catch (err) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Failed to generate PO" });
+      toast.error(err instanceof Error ? err.message : "Failed to generate PO", 5000);
     } finally { setSaving(false); }
   };
 
-
+  // ─── Rest of the component remains the same ─────────────────────
   const updateAllItemsWithHeader = (overrides: Partial<TPRHeader> = {}) => {
     const hdr = { ...header, ...overrides };
     setItems((prev) =>
@@ -736,7 +876,6 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
     blank.TX_COMPNT_PERC_1 = header.TX_COMPNT_PERC_1 || 0;
     (blank as any).id = newId();
     setItems([...items, blank]);
-
 
     setTimeout(() => {
       if (tableContainerRef.current) {
@@ -805,7 +944,6 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
     });
   };
 
-
   const blankTerm = () => ({
     id: newId(),
     COMPANY_CODE: companyCode,
@@ -826,7 +964,6 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
   const updateTermField = (id: string, field: string, value: unknown) => {
     setTerms((prev) => prev.map((t) => (t.id === id ? { ...t, [field]: value } : t)));
   };
-
 
   const upsertTermForSupplier = (supplierCode: string, supplierName: string) => {
     if (!supplierCode) return;
@@ -850,7 +987,7 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
     });
   };
 
-
+  // ─── Column Definitions ──────────────────────────────────────────
   const currencyColumns = [
     { field: "CURR_CODE", header: "Code" },
     { field: "CURR_NAME", header: "Name" },
@@ -884,33 +1021,7 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
   ];
   const capexOptions = ["CAPEX", "OPEX", "NON-OPEX"];
 
-  function formatDateToDDMMYYYY(USER_DT: any): string {
-    if (USER_DT == null) return "";
-    if (Array.isArray(USER_DT)) {
-      return USER_DT.length > 0 ? String(USER_DT[0]) : "";
-    }
-
-    const raw = String(USER_DT).trim();
-    if (!raw) return "";
-
-    if (/^\d{2}-\d{2}-\d{4}$/.test(raw)) return raw;
-
-    const date = new Date(raw);
-    if (Number.isNaN(date.getTime())) {
-      const ymd = raw.match(/^(\d{4})[-/]?(\d{2})[-/]?(\d{2})$/);
-      if (ymd) {
-        return `${ymd[3]}-${ymd[2]}-${ymd[1]}`;
-      }
-      return "";
-    }
-
-    const day = String(date.getDate()).padStart(2, "0");
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const year = String(date.getFullYear());
-    return `${day}-${month}-${year}`;
-  }
-
-
+  // ─── Render ──────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 bg-background">
       <section className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]">
@@ -919,13 +1030,17 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
             <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
               <div>
                 <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                  {isEditMode ? "Edit Document" : "New Document"}
+                  {isViewMode ? "View Document" : isEditMode ? "Edit Document" : "New Document"}
                 </p>
-                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">{isPoMode ? "Purchase Order" : "Purchase Request"}</h2>
+                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">
+                  {docType !== "PR" ? "Purchase Order" : "Purchase Request"}
+                </h2>
               </div>
               <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
-                <strong className="block text-sm leading-tight text-primary-foreground">{isPoMode ? (docNo || "New") : (requestNumber || "New")}</strong>
+                <strong className="block text-sm leading-tight text-primary-foreground">
+                  {docType !== "PR" ? (docNo || "New") : (requestNumber || "New")}
+                </strong>
               </div>
               <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
@@ -1026,27 +1141,32 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
                             />
                           </label>
                         </div>
-                        <div className="col-span-1">
-                          <label className="field">
-                            <span>Flow Code</span>
-                            <Input
-                              disabled
-                              value={String(header.FLOW_CODE || "")}
-                              placeholder="Flow Code"
-                              className="w-full bg-muted/50"
-                            />
-                          </label>
-                        </div>
-                        <div className="col-span-1">
-                          <label className="field">
-                            <span>Flow Description</span>
-                            <Input
-                              disabled
-                              value={String((header as any).FLOW_DESCRIPTION || "")}
-                              placeholder="Flow Description"
-                              className="w-full bg-muted/50"
-                            />
-                          </label>
+                        <div className="col-span-2 grid grid-cols-3 gap-3">
+                          <div className="col-span-1">
+                            <label className="field">
+                              <span>Flow Code</span>
+                              <Input
+                                disabled
+                                value={String(header.FLOW_CODE || "")}
+                                placeholder="Flow Code"
+                                className="w-full bg-muted/50"
+                              />
+                            </label>
+                          </div>
+                          <div className="col-span-2">
+                            <label className="field">
+                              <span>Division</span>
+                              <Input
+                                disabled
+                                value={
+                                  header.DIV_CODE && header.DIV_NAME
+                                    ? `${header.DIV_CODE} - ${header.DIV_NAME}`
+                                    : header.DIV_CODE || "—"
+                                }
+                                className="w-full bg-muted/50 text-blue-700 font-medium"
+                              />
+                            </label>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1217,29 +1337,60 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
                     </div>
 
                     {/* ── REMARKS box ── */}
-                    <div className="rounded-md border w-full lg:col-span-2">
-                      <div className="border-b bg-muted/40 px-3 py-1.5">
-                        <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Description &amp; Remarks</p>
-                      </div>
-                      <div className="flex flex-col gap-2.5 p-3">
-                        <label className="field">
-                          <span>Description / Reason</span>
-                          <Input
-                            disabled={disabled}
-                            value={String(header.DESCRIPTION || "")}
-                            onChange={(e) => setHdr("DESCRIPTION", e.target.value)}
-                          />
-                        </label>
-                        <label className="field">
-                          <span>Remarks *</span>
-                          <Input
-                            disabled={disabled}
-                            value={String(header.REMARKS || "")}
-                            onChange={(e) => setHdr("REMARKS", e.target.value)}
-                          />
-                        </label>
-                      </div>
-                    </div>
+                    {/* ── REMARKS box ── */}
+<div className="rounded-md border w-full lg:col-span-2">
+  <div className="border-b bg-muted/40 px-3 py-1.5">
+    <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Description &amp; Remarks</p>
+  </div>
+  <div className="flex flex-col gap-2.5 p-3">
+    <label className="field">
+      <span>Description / Reason *</span>
+      <textarea
+        disabled={disabled}
+        value={String(header.DESCRIPTION || "")}
+        onChange={(e) => {
+          setHdr("DESCRIPTION", e.target.value);
+          // Auto-resize
+          const target = e.target;
+          target.style.height = 'auto';
+          target.style.height = target.scrollHeight + 'px';
+        }}
+        className="w-full rounded-md border bg-background px-3 py-2 text-sm resize-none overflow-hidden min-h-[40px]"
+        placeholder="Enter description or reason..."
+        rows={1}
+        style={{ height: 'auto' }}
+        onInput={(e) => {
+          const target = e.target as HTMLTextAreaElement;
+          target.style.height = 'auto';
+          target.style.height = target.scrollHeight + 'px';
+        }}
+      />
+      
+    </label>
+    <label className="field">
+      <span>Remarks *</span>
+      <textarea
+        disabled={disabled}
+        value={String(header.REMARKS || "")}
+        onChange={(e) => {
+          setHdr("REMARKS", e.target.value);
+          const target = e.target;
+          target.style.height = 'auto';
+          target.style.height = target.scrollHeight + 'px';
+        }}
+        className="w-full rounded-md border bg-background px-3 py-2 text-sm resize-none overflow-hidden min-h-[40px]"
+        placeholder="Enter remarks..."
+        rows={1}
+        style={{ height: 'auto' }}
+        onInput={(e) => {
+          const target = e.target as HTMLTextAreaElement;
+          target.style.height = 'auto';
+          target.style.height = target.scrollHeight + 'px';
+        }}
+      />
+    </label>
+  </div>
+</div>
                   </div>
                 ) : (
                   <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-3 py-2 text-sm text-muted-foreground">
@@ -1263,7 +1414,6 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
 
               {/* ─── Tabs Container ─── */}
               <div className="flex min-h-0 flex-1 flex-col rounded-md border bg-card overflow-hidden">
-                {/* Tab Headers - Simple buttons like original UI */}
                 <div className="flex flex-none items-center border-b bg-secondary/40">
                   <button
                     onClick={() => setActiveTab("items")}
@@ -1272,7 +1422,7 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
                       : 'border-transparent text-muted-foreground hover:text-foreground'
                       }`}
                   >
-                    Details Items
+                    Details Items 
                   </button>
                   <button
                     onClick={() => setActiveTab("terms")}
@@ -1312,15 +1462,15 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
                               No
                             </th>
                             <th className="sticky left-[45px] z-40 bg-primary px-2 py-2 text-left w-[450px] min-w-[450px] max-w-[450px] border-r border-primary-foreground/10">
-                              Item
+                              Item *
                             </th>
-                            <th className="px-2 py-2 text-left w-[280px] min-w-[300px] max-w-[280px]">Cost Code</th>
+                            <th className="px-2 py-2 text-left w-[280px] min-w-[300px] max-w-[280px]">Cost Code *</th>
                             <th className="px-2 py-2 text-center w-[80px] min-w-[150px] max-w-[80px]">Req Qty</th>
-                            <th className="px-2 py-2 text-center w-[80px] min-w-[150px] max-w-[80px]">Appr Qty</th>
-                            <th className="px-2 py-2 text-right w-[90px] min-w-[150px] max-w-[90px]">Rate</th>
+                            <th className="px-2 py-2 text-center w-[80px] min-w-[150px] max-w-[80px]">Appr Qty *</th>
+                            <th className="px-2 py-2 text-right w-[90px] min-w-[150px] max-w-[90px]">Rate *</th>
                             <th className="px-2 py-2 text-center w-[75px] min-w-[220px] max-w-[75px]">Currency</th>
                             <th className="px-2 py-2 text-right w-[80px] min-w-[150px] max-w-[80px]">Ex Rate</th>
-                            <th className="px-2 py-2 text-left w-[250px] min-w-[550px] max-w-[250px]">Supplier</th>
+                            <th className="px-2 py-2 text-left w-[250px] min-w-[550px] max-w-[250px]">Supplier *</th>
                             <th className="finance-amount-cell px-2 py-2 text-right w-[100px] min-w-[150px] max-w-[100px]">Amount</th>
                             <th className="finance-amount-cell px-2 py-2 text-right w-[100px] min-w-[150px] max-w-[100px]">Base Amt</th>
                             <th className="px-2 py-2 text-center w-[100px] min-w-[150px] max-w-[100px]">Tax Code</th>
@@ -1370,7 +1520,7 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
                                   <LookupField
                                     label=""
                                     compact
-                                    placeholder="Search Item"
+                                    placeholder="Search Item *"
                                     value={item.ITEM_CODE || ""}
                                     displayValue={itemDisplay}
                                     columns={itemCodeColumns}
@@ -1397,7 +1547,7 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
                                   <LookupField
                                     label=""
                                     compact
-                                    placeholder="Cost Code"
+                                    placeholder="Cost Code *"
                                     value={item.COST_CODE || ""}
                                     displayValue={costDisplay}
                                     columns={costCodeColumns}
@@ -1484,7 +1634,7 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
                                   <LookupField
                                     label=""
                                     compact
-                                    placeholder="Supplier"
+                                    placeholder="Supplier *"
                                     value={item.SUPPLIER || ""}
                                     displayValue={supplierDisplay}
                                     columns={supplierColumns}
@@ -1509,10 +1659,8 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
                                         updateItemField(itemId, "SUPPLIER_NAME", supName);
                                         updateItemField(itemId, "SUPPLIER_CODE", row.supplier_code ?? val);
 
-                                        // Add new supplier row
                                         upsertTermForSupplier(val, supName as any);
 
-                                        // Remove old supplier row if no other item uses it
                                         if (oldSupplier && oldSupplier !== val) {
                                           const stillUsed = items.some(
                                             i =>
@@ -1696,14 +1844,12 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
                             <th className="px-2 py-2 text-left w-[220px] min-w-[220px]">Payment Terms</th>
                             <th className="px-2 py-2 text-left w-[160px] min-w-[160px]">Warranty</th>
                             <th className="px-2 py-2 text-left w-[360px] min-w-[360px]">Remarks</th>
-                            {/* <th className="px-2 py-2 text-left w-[110px] min-w-[110px]">User ID</th>
-                            <th className="px-2 py-2 text-left w-[120px] min-w-[120px]">User Date</th> */}
                             <th className="px-2 py-2 text-center w-[55px] min-w-[55px]">Action</th>
                           </tr>
                         </thead>
                         <tbody>
                           {terms.length === 0 ? (
-                            <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={8}>No terms yet. Click "Add Line" to add supplier terms, or pick a supplier on an item line to add one automatically.</td></tr>
+                            <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={6}>No terms yet.</td></tr>
                           ) : terms.map((term) => {
                             const termSupplierDisplay = term.SUPPLIER && term.SUPPLIER_NAME
                               ? `${term.SUPPLIER} - ${term.SUPPLIER_NAME}`
@@ -1775,33 +1921,6 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
                                     placeholder="Remarks"
                                   />
                                 </td>
-                                {/* <td className="px-2 py-1 w-[110px] min-w-[110px]">
-                                <Input
-                                  value={term.USER_ID || ""}
-                                  onChange={(e) => updateTermField(term.id, "USER_ID", e.target.value)}
-                                  disabled={disabled}
-                                  className="h-9 text-sm"
-                                  placeholder="User ID"
-                                />
-                              </td>
-                              <td className="px-2 py-1 w-[120px] min-w-[120px]">
-                                <Input
-                                  value={term.USER_DT ? formatDateToDDMMYYYY(term.USER_DT) : ""}
-                                  onChange={(e) => {
-                                    const formattedDate = e.target.value;
-                                    if (formattedDate) {
-                                      const [day, month, year] = formattedDate.split('-');
-                                      const isoDate = `${year}-${month}-${day}T00:00:00.000Z`;
-                                      updateTermField(term.id, "USER_DT", isoDate);
-                                    } else {
-                                      updateTermField(term.id, "USER_DT", "");
-                                    }
-                                  }}
-                                  disabled={disabled}
-                                  className="h-9 text-sm"
-                                  placeholder="DD-MM-YYYY"
-                                />
-                              </td> */}
                                 <td className="px-2 py-1 text-center w-[55px] min-w-[55px]">
                                   {!isViewMode && (
                                     <Button
@@ -1831,7 +1950,7 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
 
         {/* ─── Footer ─── */}
         <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-1">
-          {!isViewMode && !isPoMode &&  (
+          {!isViewMode && !(docType !== "PR") && (
             <div className="flex items-center gap-2">
               <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-slate-600 hover:bg-slate-700" onClick={handleSaveDraft}> <Save size={15} /> {savingAction === "SAVEASDRAFT" ? "Saving..." : "Save Draft"}</Button>
               <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-blue-600 hover:bg-blue-700" onClick={handleSubmit}>  <Send size={15} /> {savingAction === "SUBMITTED" ? "Submitting..." : "Submit"}</Button>
@@ -1848,7 +1967,8 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
                 }}
               >
                 <X size={15} /> {savingAction === "REJECTED" ? "Rejecting..." : "Reject"}
-              </Button>            </div>
+              </Button>
+            </div>
           )}
           <div className="flex items-center gap-2">
             <Button disabled={saving} type="button" variant="default" className="min-w-[100px] justify-center bg-gray-600 hover:bg-gray-700" onClick={handlePrint}>
@@ -1857,7 +1977,7 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
             <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
               <Paperclip size={15} /> Files
             </Button>
-            {!isViewMode && !isPoMode &&  (
+            {!isViewMode && !(docType !== "PR") && (
               <Button disabled={saving || !requestNumber} type="button" variant="default" className="min-w-[110px] justify-center bg-indigo-600 hover:bg-indigo-700" onClick={handleGeneratePO}>
                 Generate PO
               </Button>
@@ -1890,7 +2010,15 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
           </>
         }
       >
-        <textarea rows={4} value={remarkText} onChange={(e) => setRemarkText(e.target.value)} placeholder="Enter reject remark..." className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
+        <div className="flex flex-col gap-2">
+          <label className="field">
+            <span>Rejection Reason *</span>
+            <textarea rows={4} value={remarkText} onChange={(e) => setRemarkText(e.target.value)} placeholder="Enter reject remark..." className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
+          </label>
+          {!remarkText.trim() && (
+            <span className="text-xs text-red-500">Rejection reason is required</span>
+          )}
+        </div>
       </Dialog>
 
       {/* ─── Send Back Dialog ─── */}
@@ -1902,7 +2030,7 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
         footer={
           <>
             <Button variant="outline" onClick={() => setSendBackOpen(false)}>Cancel</Button>
-            <Button disabled={saving} onClick={handleSendBackConfirm} variant="default">Confirm Send Back</Button>
+            <Button disabled={saving || !selectedSendBackTo || !remarkText.trim()} onClick={handleSendBackConfirm} variant="default">Confirm Send Back</Button>
           </>
         }
       >
@@ -1919,14 +2047,23 @@ const itemDocNo = isPoMode ? (docNo || "") : (requestNumber || "");
                 <option key={o.loginid} value={o.loginid}>{o.label}</option>
               ))}
             </Select>
+            {!selectedSendBackTo && (
+              <span className="text-xs text-red-500">Please select a user to send back</span>
+            )}
           </label>
-          <textarea
-            rows={4}
-            value={remarkText}
-            onChange={(e) => setRemarkText(e.target.value)}
-            placeholder="Enter send back reason..."
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-          />
+          <label className="field">
+            <span>Send Back Reason *</span>
+            <textarea
+              rows={4}
+              value={remarkText}
+              onChange={(e) => setRemarkText(e.target.value)}
+              placeholder="Enter send back reason..."
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            />
+            {!remarkText.trim() && (
+              <span className="text-xs text-red-500">Send back reason is required</span>
+            )}
+          </label>
         </div>
       </Dialog>
     </div>
