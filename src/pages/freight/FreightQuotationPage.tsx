@@ -305,6 +305,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
 
   const requiredFieldChecks: { tab: FreightQuotationInitialTab; test: () => boolean; label: string }[] = [
   { tab: "cargo", test: () => Boolean(header.prin_code), label: "Principal" },
+  { tab: "cargo", test: () => Boolean(header.dept_code), label: "Department" },
   { tab: "cargo", test: () => Boolean(header.origin_port), label: "Port of Loading" },
   { tab: "payment", test: () => Boolean(header.curr_code), label: "Currency" },
   { tab: "payment", test: () => Number(header.ex_rate || 0) > 0, label: "Exchange Rate" },
@@ -786,45 +787,16 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
     } else {
       formRef.current?.reportValidity();
     }
+    setNotice({ type: "error", text: `${failedCheck.label} is required` });
     return;
   }
-    // setSaving(true);
-    // setNotice(null);
-    // try {
-    //   const payload = {
-    //     header: { ...header, userid: loginId, user_date: new Date().toISOString(), quotation_type: "QTN" },
-    //     details: details.filter((row) => row.act_code.trim()).map((row, index) => ({
-    //       ...row,
-    //       srno: index + 1,
-    //       company_code: header.company_code,
-    //       prin_code: header.prin_code,
-    //       quotation_nr: header.quotation_nr || "0",
-    //       curr_code: row.curr_code || header.curr_code,
-    //       ex_rate: row.ex_rate || header.ex_rate,
-    //       transport_mode: row.transport_mode || header.transport_mode,
-    //       origin_port: row.origin_port || header.origin_port,
-    //       destination_port: row.destination_port || header.destination_port,
-    //       userid: loginId,
-    //       user_dt: new Date().toISOString(),
-    //     })),
-    //     terms,
-    //   };
-    //   const response = await api.post<{ success?: boolean; message?: string; data?: { quotation_nr?: string } }>("/api/freight/quotation/save", payload);
-    //   if (response.data?.success === false) throw new Error(response.data.message || "Unable to save quotation");
-    //   if (response.data?.data?.quotation_nr) setHeaderField("quotation_nr", response.data.data.quotation_nr);
-    //   setNotice({ type: "success", text: response.data?.message || "Quotation saved" });
-    //   await loadRows();
-    // } catch (error) {
-    //   setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to save quotation. Confirm Oracle quotation SP/types are created." });
-    // } finally {
-    //   setSaving(false);
-    // }
+    
     setSaving(true);
     setNotice(null);
     try {
       await persistQuotation();
-      setNotice({ type: "success", text: "Quotation saved" });
       await loadRows();
+      setNotice({ type: "success", text: "Quotation saved" });
     } catch (error) {
       setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to save quotation. Confirm Oracle quotation SP/types are created." });
     } finally {
@@ -899,8 +871,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
 
   return (
     <>
-      {/* <form className="freight-dense-form" onSubmit={saveQuotation}> */}
-      <form ref={formRef} className="freight-dense-form" onSubmit={saveQuotation}>
+      <form ref={formRef} className="freight-dense-form" onSubmit={saveQuotation}> 
         <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={15} /></div>
@@ -913,11 +884,6 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                 {/* <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">{header.quotation_nr || "New quotation"}</span> */}
                 <span className={statusBadgeClass(header.indstatus, header.last_action, header.final_approved)}>{statusLabel(header.indstatus, header.last_action, header.final_approved)}</span>
               </div>
-              {/* <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground"> */}
-                {/* <span>{modeLabel(header.transport_mode)}</span><span className="h-1 w-1 rounded-full bg-muted-foreground/50" /> */}
-                {/* <span>{jobTypeLabel(header.job_type)}</span><span className="h-1 w-1 rounded-full bg-muted-foreground/50" /> */}
-                {/* <h1>{header.quotation_nr}</h1> */}
-              {/* </div> */}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
