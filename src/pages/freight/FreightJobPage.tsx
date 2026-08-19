@@ -4,9 +4,6 @@ import {
   ArrowLeft,
   Ban,
   BriefcaseBusiness,
-  CheckCircle2,
-  Circle,
-  CircleDot,
   Edit2,
   FileText,
   MapPinned,
@@ -665,12 +662,8 @@ function JobProgressRail({ job }: { job: JobForm }) {
       <div className="freight-job-progress-rail-list">
         {steps.map((step) => (
           <div key={step.label} className={`freight-job-progress-rail-step ${step.className || "pending"}`}>
-            <span className="freight-job-progress-rail-marker">
-              {step.className === "done" ? <CheckCircle2 size={14} /> : step.className === "current" ? <CircleDot size={14} /> : <Circle size={13} />}
-            </span>
             <span className="freight-job-progress-rail-copy">
               <strong>{step.label}</strong>
-              <small>{step.detail || (step.className === "current" ? "Current step" : step.done ? "Done" : "Pending")}</small>
             </span>
           </div>
         ))}
