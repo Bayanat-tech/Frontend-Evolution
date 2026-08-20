@@ -1150,7 +1150,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                   {terms.length === 0 && <div className="rounded-md border border-dashed bg-muted/25 p-6 text-center text-sm text-muted-foreground">No terms added. Oracle save procedure can also copy defaults from `MS_QUOTE_TERMS`.</div>}
                   {terms.map((term, index) => (
                     <div key={term.serial_no} className="grid gap-2 rounded-md border bg-background p-2 sm:grid-cols-[90px_120px_1fr_40px]">
-                      <FormInput label="Sr No" value={term.sr_no} onChange={(value) => setTermField(index, "sr_no", value)} />
+                      {/* <FormInput label="Sr No" value={term.serial_no} onChange={(value) => setTermField(index, "serial_no", value)} /> */}
+                      <FormInput label="Sr No" value={String(term.serial_no)} onChange={(value) => {}} disabled />
                       <FormInput label="Type" value={term.type_ind} onChange={(value) => setTermField(index, "type_ind", value)} />
                       <FormTextarea label="Description" value={term.description} onChange={(value) => setTermField(index, "description", value)} compact />
                       <div className="grid place-items-end"><Button type="button" size="icon" variant="ghost" title="Remove term" onClick={() => removeTerm(index)}><Trash2 size={14} /></Button></div>

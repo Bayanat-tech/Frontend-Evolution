@@ -3592,7 +3592,7 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .freight-shipment-hero-item strong {
   min-width: 0;
   color: #111827;
-  font-size: 27px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.1;
   overflow-wrap: anywhere;
@@ -8963,9 +8963,19 @@ freight-dense-form .freight-form-card {
   padding-left: 46px !important;
 }
 
-.freight-dense-form :where(.freight-form-card, .freight-panel-body) label > span:first-child,
+/* .freight-dense-form :where(.freight-form-card, .freight-panel-body) label > span:first-child,
 .freight-dense-form .freight-compact-label > span:first-child {
   color: #64748b !important;
+  font-family: var(--app-font-family) !important;
+  font-size: 10.25px !important;
+  font-weight: 750 !important;
+  letter-spacing: 0.015em;
+  text-transform: uppercase;
+} */
+
+.freight-dense-form :where(.freight-form-card, .freight-panel-body) label > span:first-child,
+.freight-dense-form .freight-compact-label > span:first-child {
+  color: #1e293b !important;   /* was #64748b — now matches text-slate-800 */
   font-family: var(--app-font-family) !important;
   font-size: 10.25px !important;
   font-weight: 750 !important;
