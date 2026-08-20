@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import {
     Printer,
     RotateCcw,
@@ -10,6 +10,12 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../../state/AuthContext";
 import { getDynamicLookupaccount, getLookupText, getLookupValue, LookupRow } from "../../../api/lookups";
+import {
+    getPLSummaryReportHtml,
+    getPLSummaryReportExcel
+} from "../../../api/transactions";
+import { useEffect } from "react";
+
 interface PLSummaryReportParams {
     parameter: string;
     loginid: string;
@@ -25,58 +31,19 @@ interface PLSummaryReportParams {
     prodtype: string;
     manu: string;
     cust: string;
+    [key: string]: any;
 }
-
-const PL_API_BASE = "/api/reports/pl-summary";
-
-async function getPLSummaryReportHtml(params: PLSummaryReportParams): Promise<string> {
-    const res = await fetch(`${PL_API_BASE}/html`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(params),
-    });
-    if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.message || "Failed to generate report");
-    }
-    return res.text();
-}
-
-async function getPLSummaryReportExcelDownload(params: PLSummaryReportParams): Promise<void> {
-    const res = await fetch(`${PL_API_BASE}/excel`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(params),
-    });
-    if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.message || "Failed to export Excel");
-    }
-    const blob = await res.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "PL_Summary_Report.xlsx";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.URL.revokeObjectURL(url);
-}
-
 
 const LOOKUP_PARAMS = {
-    group:        "PURCHASE_SALE_MSE_PRODGROUP",     // CONFIRM
-    brand:        "PURCHASE_SALE_MSE_PRODBRAND",
-    category:     "PURCHASE_SALE_MSE_PRODCATEGORY",
-    type:         "PURCHASE_SALE_MSE_PRODTYPE",
-    manufacturer: "PURCHASE_SALE_MSE_MANUFACTURER",  // CONFIRM
-    customer:     "PURCHASE_SALE_MSE_CUSTOMER",      // CONFIRM
-    salesman:     "PURCHASE_SALE_MSE_SALESMAN",      // CONFIRM
+    group: "PURCHASE_SALE_MSE_PRODGROUP",
+    brand: "PURCHASE_SALE_MSE_PRODBRAND",
+    category: "PURCHASE_SALE_MSE_PRODCATEGORY",
+    type: "PURCHASE_SALE_MSE_PRODTYPE",
+    manufacturer: "PURCHASE_SALE_MSE_MANUFACTURER",
+    customer: "PURCHASE_SALE_MSE_CUSTOMER",
+    salesman: "PURCHASE_SALE_MSE_SALESMAN",
+    docno: "PURCHASE_SALE_SALESINVOICE_DOCNO", // ← new lookup added in procedure
 } as const;
-
-// ─── Types ────────────────────────────────────────────────────────────────
 
 export type ReportMode =
     | "invoicewise"
@@ -86,9 +53,9 @@ export type ReportMode =
     | "groupcustomerwise";
 
 const MODE_OPTIONS: { value: ReportMode; label: string }[] = [
-    { value: "invoicewise",      label: "Invoice wise" },
-    { value: "customerwise",     label: "Customer wise" },
-    { value: "salesmanwise",     label: "Salesman wise" },
+    { value: "invoicewise", label: "Invoice wise" },
+    { value: "customerwise", label: "Customer wise" },
+    { value: "salesmanwise", label: "Salesman wise" },
     { value: "customergroupwise", label: "Customer-Group wise" },
     { value: "groupcustomerwise", label: "Group-Customer wise" },
 ];
@@ -96,12 +63,12 @@ const MODE_OPTIONS: { value: ReportMode; label: string }[] = [
 type TabKey = "group" | "brand" | "category" | "type" | "manufacturer" | "customer";
 
 const TABS: { key: TabKey; label: string; lookupParam: string; valueField: string; nameField: string }[] = [
-    { key: "group",        label: "Group",        lookupParam: LOOKUP_PARAMS.group,        valueField: "group_code",    nameField: "group_name" },
-    { key: "brand",        label: "Brand",        lookupParam: LOOKUP_PARAMS.brand,        valueField: "brand_code",    nameField: "brand_name" },
-    { key: "category",     label: "Category",     lookupParam: LOOKUP_PARAMS.category,     valueField: "category_code", nameField: "category_name" },
-    { key: "type",         label: "Type",         lookupParam: LOOKUP_PARAMS.type,         valueField: "prodtype_code", nameField: "prodtype_name" },
-    { key: "manufacturer", label: "Manufacturer", lookupParam: LOOKUP_PARAMS.manufacturer, valueField: "manu_code",     nameField: "manu_name" },
-    { key: "customer",     label: "Customer",     lookupParam: LOOKUP_PARAMS.customer,     valueField: "ac_code",       nameField: "ac_name" },
+    { key: "group", label: "Group", lookupParam: LOOKUP_PARAMS.group, valueField: "group_code", nameField: "group_name" },
+    { key: "brand", label: "Brand", lookupParam: LOOKUP_PARAMS.brand, valueField: "brand_code", nameField: "brand_name" },
+    { key: "category", label: "Category", lookupParam: LOOKUP_PARAMS.category, valueField: "category_code", nameField: "category_name" },
+    { key: "type", label: "Type", lookupParam: LOOKUP_PARAMS.type, valueField: "prodtype_code", nameField: "prodtype_name" },
+    { key: "manufacturer", label: "Manufacturer", lookupParam: LOOKUP_PARAMS.manufacturer, valueField: "manu_code", nameField: "manu_name" },
+    { key: "customer", label: "Customer", lookupParam: LOOKUP_PARAMS.customer, valueField: "ac_code", nameField: "ac_name" },
 ];
 
 interface Selections {
@@ -118,15 +85,6 @@ const EMPTY_SELECTIONS: Selections = {
 };
 
 // ─── Shared styles ─────────────────────────────────────────────────────────
-
-const fieldLabelStyle: React.CSSProperties = {
-    fontSize: 11,
-    fontWeight: 500,
-    color: "#6b7280",
-    marginBottom: 2,
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-};
 
 const inputStyle: React.CSSProperties = {
     width: "100%",
@@ -173,11 +131,11 @@ const DateField: React.FC<{
     />
 );
 
-// ─── Single-select searchable lookup (Sales Person) ───────────────────────
+// ─── Single-select searchable lookup (Sales Person / Invoice No) ──────────
 
 type SingleLookupProps = {
     label: string;
-    value: string;          // "" = All
+    value: string;
     onChange: (v: string) => void;
     loadOptions: () => Promise<LookupRow[]>;
     valueField: string;
@@ -274,7 +232,6 @@ function SingleSelectLookup({ label, value, onChange, loadOptions, valueField, d
     );
 }
 
-
 const ALL_SENTINEL = "__ALL__";
 
 type MultiSelectDropdownProps = {
@@ -364,13 +321,13 @@ function MultiSelectDropdown({
     const displayText = isAllSelected
         ? "All"
         : selected.length === 0
-        ? placeholder
-        : selected.length === 1
-        ? (() => {
-              const row = rows.find((r) => String(getLookupValue(r, valueField) ?? "") === selected[0]);
-              return row ? getLookupText(row, displayFields.length ? displayFields : [valueField]) : selected[0];
-          })()
-        : `${selected.length} selected`;
+            ? placeholder
+            : selected.length === 1
+                ? (() => {
+                    const row = rows.find((r) => String(getLookupValue(r, valueField) ?? "") === selected[0]);
+                    return row ? getLookupText(row, displayFields.length ? displayFields : [valueField]) : selected[0];
+                })()
+                : `${selected.length} selected`;
 
     return (
         <div ref={wrapRef} style={{ position: "relative" }}>
@@ -503,7 +460,6 @@ function MultiSelectDropdown({
     );
 }
 
-
 function toApiCodeString(selected: string[]): string {
     if (selected.length === 0) return "All";
     if (selected.includes(ALL_SENTINEL)) return "All";
@@ -526,7 +482,7 @@ export default function PLSummaryPage() {
 
     const [fromDateIso, setFromDateIso] = useState("");
     const [toDateIso, setToDateIso] = useState("");
-    const [invoiceNo, setInvoiceNo] = useState("");
+    const [invoiceNo, setInvoiceNo] = useState(""); // ← ata doc_no value store hoto (dropdown selected)
     const [salesman, setSalesman] = useState("");
     const [mode, setMode] = useState<ReportMode>("invoicewise");
     const [selections, setSelections] = useState<Selections>(EMPTY_SELECTIONS);
@@ -610,7 +566,7 @@ export default function PLSummaryPage() {
         }
         setExporting(true);
         try {
-            await getPLSummaryReportExcelDownload(lastRequestRef.current);
+            await getPLSummaryReportExcel(lastRequestRef.current);
         } catch (err) {
             console.error("Excel export error:", err);
             alert("Excel export failed. Please try again.");
@@ -656,7 +612,7 @@ export default function PLSummaryPage() {
                         </div>
                     )}
 
-                    {/* ── Top fields + Report Criteria (matches image1) ── */}
+                    {/* ── Top fields + Report Criteria ── */}
                     <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
                         <div className="field-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                             <FloatLabel label="Date From" bgColor={BG}>
@@ -665,15 +621,26 @@ export default function PLSummaryPage() {
                             <FloatLabel label="Date To" bgColor={BG}>
                                 <DateField value={toDateIso} onChange={setToDateIso} min={fromDateIso || undefined} />
                             </FloatLabel>
-                            <FloatLabel label="Invoice No" bgColor={BG}>
-                                <input
-                                    type="text"
-                                    value={invoiceNo}
-                                    onChange={(e) => setInvoiceNo(e.target.value)}
-                                    placeholder="All"
-                                    style={inputStyle}
-                                />
-                            </FloatLabel>
+
+                            {/* Invoice No — ata SingleSelectLookup dropdown */}
+                            <SingleSelectLookup
+                                label="Invoice No"
+                                bgColor={BG}
+                                value={invoiceNo}
+                                onChange={setInvoiceNo}
+                                valueField="doc_no"
+                                displayFields={["inv_no"]}
+                                loadOptions={() =>
+                                    getDynamicLookupaccount({
+                                        parameter: LOOKUP_PARAMS.docno,
+                                        loginid: loginId,
+                                        code1: companyCode,
+                                        code2: "", code3: "", code4: "",
+                                        number1: 0, number2: 0, number3: 0, number4: 0,
+                                        date1: null, date2: null, date3: null, date4: null,
+                                    })
+                                }
+                            />
                             <SingleSelectLookup
                                 label="Sales Person"
                                 bgColor={BG}
@@ -709,7 +676,6 @@ export default function PLSummaryPage() {
                     </div>
 
                     {/* ── Group / Brand / Category / Type / Manufacturer / Customer ── */}
-                    {/* Same checkbox-dropdown pattern as your DN Summary Report's Principal field */}
                     <div className="field-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 12 }}>
                         {TABS.map((t) => (
                             <MultiSelectDropdown

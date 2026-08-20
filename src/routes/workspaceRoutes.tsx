@@ -149,7 +149,9 @@ import AssetInventoryMainPage from "../pages/oxmaint/asset-inventory-tailwind/As
 import { KpiEmployeeInformationPage } from "../pages/pams/KpiEmployeeInformation";
 import StockCountPage from "../pages/wms/stock count/StockCountPage";
 import{ExpenseMasterPage} from "../pages/purchase_sales/Expensemasterpage";
-import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
+import MseProdGroup from "../pages/purchase_sales/MseProdGroup";
+import ProductPurchaseSales from "../pages/purchase_sales/ProductPurchaseSales";
+
 
 
 import {ProductTypePage} from "../pages/purchase_sales/PS_ProductTypePage";
@@ -186,6 +188,11 @@ import PayUnitDependentPage from "../pages/hr/pay_componants/PayUnitDependentPag
 import PayrollAccountSetupPage from "../pages/hr/pay_componants/Payroll_Account_SetupPage";
 import AccrualTypePage from "../pages/hr/pay_componants/AccrualTypePage";
 import AttendanceTypesPage from "../pages/hr/pay_componants/AttendanceTypePage";
+import { PurchaseInvoicePage } from "../pages/purchase_sales/purchase/PurchaseInvoicePage";
+import { SalesInvoicePage } from "../pages/purchase_sales/sales/SalesInvoicePage";
+import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
+import CompanyInfo from "../pages/security/CompanyInfo";
+import HolidayCalendarPage from "../pages/hr/masters/HolidayCalendarPage"; 
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -205,6 +212,27 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: 'Company Info Master',
+    match: ({pathname}) => pathname.toLowerCase().includes("/security/security/masters/gm/com_info"),
+    element: () => <CompanyInfo />,
+  },
+  {
+    name: 'MSE Prod Group',
+    match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_group"),
+    element: () => <MseProdGroup />,
+  },
+
+  {
+  name: 'Purchase Sales Product Brand',
+  match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_brand"),
+  element: () => <ProductBrandPage />,
+},
+  {
+    name: 'Purchase Sales Product',
+    match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product"),
+    element: () => <ProductPurchaseSales />
+  },
   {
     name: 'HR Accural Pay Unit',
     match: ({pathname}) => pathname.toLowerCase().includes("/hr/hr/transactions/accural_pay_units"),
@@ -837,6 +865,21 @@ export const workspaceRoutes: WorkspaceRoute[] = [
       throw new Error("Function not implemented.");
     } }  />,
   },
+    {
+    name: "Purchase Invoice Setup",
+    match: ({ pathname }) => isPurchaseInvoiceSetupRoute(pathname),
+    element: () => <PurchaseInvoicePage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
+
+      {
+    name: "Sales Invoice Setup",
+    match: ({ pathname }) => isSalesInvoiceSetupRoute(pathname),
+    element: () => <SalesInvoicePage onClose={function (): void {
+      throw new Error("Function not implemented.");
+    } }  />,
+  },
 
     {
     name: "Purchase Quotation Setup",
@@ -1203,6 +1246,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <LeaveTypesPage />,
   },
   {
+    name: "HR Holiday Calendar",
+    match: ({ pathname }) => isHrHolidayCalendarRoute(pathname),
+    element: () => <HolidayCalendarPage />,
+  },
+  {
     name: "HR Master",
     match: (context) => Boolean(getHrMasterConfig(context)),
     element: (context) => <HrMasterPage config={getHrMasterConfig(context)!} />,
@@ -1227,11 +1275,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   element: () => <ZoneMasterPage />,
   },
 
-  {
-    name : "Product Brand",
-    match: ({pathname}) => isProductBrandRoute(pathname),
-    element: () => <ProductBrandPage/>
-  },
+  
 
   {
     name : "Expense Master",
@@ -1276,6 +1320,16 @@ function isStorageComputationRoute(pathname: string) {
   return pathname.toLowerCase().includes("wms/activity/request/storage_computation");
 }
 
+function isHrHolidayCalendarRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hr/general_master/source/holiday_calendar") ||
+    normalized.includes("/hcm/hr/general%20master/source/holiday_calendar") ||
+    compact.includes("generalmastersourceholidaycalendar") ||
+    compact.includes("holidaycalendar")
+  );
+}
 
 function isHrLeaveTypeRoute(pathname: string) {
   const normalized = decodeRouteText(pathname).toLowerCase();
@@ -1296,12 +1350,7 @@ function isExpenseMasterRoute(pathname: string) {
   );
 }
 
-function isProductBrandRoute(pathname: string) {
-  const normalized = pathname.toLowerCase();
-  return normalized.includes(
-    "/workspace/purchase_sales/purchase_sales/masters/product_brand"
-  );
-}
+
 
 function isPurchaseSaleSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -1310,6 +1359,12 @@ function isPurchaseSaleSetupRoute(pathname: string) {
   );
 }
 
+function isProductBrandRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/masters/product_brand"
+  );
+}
 
 function isProfitLossSummaryRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
@@ -1374,6 +1429,18 @@ function isPurchaseSalesSetupRoute(pathname: string) {
   
     return (normalized.includes("purchase_sales/purchase/purchase_order"))
 }
+function isPurchaseInvoiceSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/purchase/purchase_invoice"))
+}
+
+function isSalesInvoiceSetupRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  
+    return (normalized.includes("purchase_sales/sales/sales_invoice"))
+}
+
 
 function isPurchaseQuotationSetupRoute(pathname: string) {
   const normalized = pathname.toLowerCase();

@@ -50,7 +50,7 @@ export function InboundJobListing() {
     setLoading(true);
     try {
       const data = await executeWmsInboundSql(
-        "SELECT * FROM VW_TI_JOB WHERE JOB_TYPE = 'IMP' ORDER BY JOB_NO DESC",
+        `SELECT * FROM VW_TI_JOB WHERE JOB_TYPE = 'IMP' AND COMPANY_CODE = '${sqlEscape(companyCode)}' ORDER BY JOB_NO DESC`,
       );
       setRows(data.map(normalizeRow));
     } catch (error) {
@@ -109,7 +109,7 @@ export function InboundJobListing() {
         cell: ({ row }) => (
           <div className="flex items-center gap-1">
             <Button size="icon" variant="ghost" title="Open job"
-              onClick={() => navigate(`view/${value(row.original, "job_no")}/shipment_details?principal_code=${value(row.original, "prin_code")}`)}>
+              onClick={() => navigate(`view/${value(row.original, "job_no")}/job_details?principal_code=${value(row.original, "prin_code")}`)}>
               <Eye size={14} />
             </Button>
             {activeTab !== "cancel" && (

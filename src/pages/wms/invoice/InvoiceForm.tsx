@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FileText, LoaderCircle, Package, Printer, Receipt, Save, Trash2, X } from "lucide-react";
 import { Dialog } from "../../../components/ui/Dialog";
 import { Button } from "../../../components/ui/Button";
@@ -9,6 +9,7 @@ import { useAuth } from "../../../state/AuthContext";
 import {
   getPrincipalDropdown,
   getInvoiceDetailLines,
+  getInvoiceJobSelection,
   updateBillingApi,
   TInvoice,
   TInvoiceDetail,
@@ -17,6 +18,7 @@ import {
 import JobSelectionModal from "./JobSelectionModal";
 import StorageSelectionModal from "./StorageSelectionModal";
 import { executeWmsInboundSql, getInvocieDetailReport } from "../../../api/wms";
+// import { set } from "react-datepicker/dist/dist/date_utils.js";
 
 type InvoiceFormProps = {
   existingData?: Record<string, unknown>;
@@ -25,6 +27,14 @@ type InvoiceFormProps = {
 };
 
 const getValue = (obj: any, key: string) => obj?.[key.toLowerCase()] ?? obj?.[key.toUpperCase()];
+const toDDMMYYYY = (d?: string | Date | null) => {
+  if (!d) return undefined;
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return undefined;
+  const dd = String(dt.getDate()).padStart(2, "0");
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${dt.getFullYear()}`;
+};
 const toDateInputValue = (value: unknown): string => {
   if (!value) return "";
   const str = String(value);
@@ -69,6 +79,25 @@ const CURRENCY_FIELDS: FieldDef[] = [
   { label: "Exchange Rate", key: "ex_rate", disabled: true },
 ];
 
+// Tiny placeholder pages shown in the new tab while the report loads / if it fails.
+const REPORT_LOADING_HTML = `<!DOCTYPE html>
+<html>
+  <head><meta charset="utf-8" /><title>Loading report...</title></head>
+  <body style="font-family:Arial,Helvetica,sans-serif;display:flex;align-items:center;
+    justify-content:center;height:100vh;margin:0;color:#555;">
+    Loading invoice report...
+  </body>
+</html>`;
+
+const reportErrorHtml = (message: string) => `<!DOCTYPE html>
+<html>
+  <head><meta charset="utf-8" /><title>Error</title></head>
+  <body style="font-family:Arial,Helvetica,sans-serif;display:flex;align-items:center;
+    justify-content:center;height:100vh;margin:0;color:#c0392b;">
+    ${message}
+  </body>
+</html>`;
+
 function SectionHeader({ icon: Icon, title, subtitle }: { icon: any; title: string; subtitle: string }) {
   return (
     <div className="mb-2 flex items-center gap-2 border-b pb-1">
@@ -107,7 +136,7 @@ function FieldGrid({ fields, invoice, onChange, disabled }: {
 
 export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProps) {
   const { user } = useAuth();
-  console.log("InvoiceForm existingData:", existingData);
+  const company_code = user?.company_code ?? "";
 
   /* ================= STATE ================= */
   const [tab, setTab] = useState<0 | 1>(0);
@@ -119,13 +148,9 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
   const [storageModalOpen, setStorageModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [warning, setWarning] = useState("");
-  const [reportOpen, setReportOpen] = useState(false);
-  const [reportHtml, setReportHtml] = useState("");
-  const [reportLoading, setReportLoading] = useState(false);
-  const [reportError, setReportError] = useState("");
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [printError, setPrintError] = useState("");
+  const [printDialogOpen, setPrintDialogOpen] = useState(false);
 
-  const reportReady = !reportLoading && !reportError && !!reportHtml;
   /* ================= DERIVED VALUES ================= */
   const prinCode = getValue(invoice, "prin_code") || "";
   const invoiceNo = getValue(invoice, "invoice_no") || "";
@@ -134,7 +159,15 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
   const hasExistingData = !!existingData && Object.keys(existingData).length > 0;
   const consolidatedInvNo = getValue(invoice, "consolidated_invno") || invoiceNo;
 
-  
+  // Report Print Type
+  const report_type = ['grouped','activitywise']
+
+  // Jobs already added to the invoice (Job Details grid) — passed to JobSelectionModal
+  // so it can exclude them from the pickable list instead of showing duplicates.
+  const existingJobKeys = useMemo(
+    () => lines.map((row) => `${String(row.job_no ?? "").trim()}||${String(row.act_code ?? "").trim()}`),
+    [lines],
+  );
 
   /* ================= EFFECTS ================= */
   useEffect(() => {
@@ -152,6 +185,53 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
         setLines([]);
       }
     })();
+  }, [prinCode, invoiceNo, user?.loginid, user?.company_code]);
+
+  // Re-seed jobSelectionRows from jobs already linked to this invoice (SELECTED = 'Y')
+  // so an edit-and-save (without touching "Select Job") still re-sends them — otherwise
+  // jobSelection stays empty for existing invoices even though Job Details shows rows.
+  useEffect(() => {
+    if (!user?.loginid || !user?.company_code || !prinCode || !invoiceNo) return;
+    (async () => {
+      try {
+        const response = await getInvoiceJobSelection({
+          loginid: user.loginid ?? "",
+          company_code: user.company_code ?? "",
+          prin_code: prinCode,
+          invoice_no: invoiceNo,
+          from_date: toDDMMYYYY(fromDate),
+          to_date: toDDMMYYYY(toDate),
+        });
+        console.log(
+          "[DEBUG] getInvoiceJobSelection raw response for invoiceNo:",
+          invoiceNo,
+          JSON.stringify(response, null, 2),
+        );
+        const alreadyLinked = (Array.isArray(response) ? response : [])
+          .filter((row: any) => (row.selected ?? row.SELECTED) === "Y")
+          .map((row: any) => ({
+            job_no: row.job_no ?? row.JOB_NO ?? "",
+            act_code: row.act_code ?? row.ACT_CODE ?? "",
+            act_group_name: row.act_group_name ?? row.ACT_GROUP_NAME ?? "",
+            activity: row.activity ?? row.ACTIVITY ?? "",
+            invoice_no: row.invoice_no ?? row.INVOICE_NO ?? "",
+            prin_code: row.prin_code ?? row.PRIN_CODE ?? prinCode,
+            quantity: Number(row.quantity ?? row.QUANTITY ?? 0),
+            bill: Number(row.bill ?? row.BILL ?? 0),
+            job_date: row.job_date ?? row.JOB_DATE ?? null,
+            // Real SRNO on the job's own source invoice — required by the proc's
+            // WHERE clause to find and re-link the correct TN_INVOICE_DET row.
+            source_srno: row.srno ?? row.SRNO ?? null,
+          }));
+        console.log("[DEBUG] alreadyLinked (selected=Y, filtered) for jobSelectionRows:", alreadyLinked);
+        setJobSelectionRows(alreadyLinked);
+      } catch {
+        setJobSelectionRows([]);
+      }
+    })();
+    // Only re-run on invoice identity change — new picks via the modal are appended
+    // separately in handleJobSelect and shouldn't be wiped out by this effect re-firing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prinCode, invoiceNo, user?.loginid, user?.company_code]);
 
   /* ================= HANDLERS ================= */
@@ -213,8 +293,9 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
       existingKeys.add(key);
 
       const line = {
-        srno: lines.length + newLines.length + 1,
+        srno: lines.length + newLines.length + 1, // local UI display order for this invoice's grid
         act_code: actCode,
+        act_group_name: job.act_group_name ?? job.ACT_GROUP_NAME ?? "",
         activity: job.activity ?? job.ACTIVITY ?? "",
         invoice_no: job.invoice_no ?? job.INVOICE_NO ?? "",
         job_no: jobNo,
@@ -227,6 +308,9 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
         other_services: job.other_services ?? "",
         job_date: job.job_date ?? job.JOB_DATE ?? null,
         cancelled: false,
+        // Real SRNO on the job's own source invoice (from JobSelectionModal) — this is
+        // what jobSelection must send, NOT the local `srno` counter above.
+        source_srno: job.srno ?? job.SRNO ?? null,
       };
       newLines.push(line);
       newJobSelectionRows.push(line);
@@ -270,13 +354,16 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
       const jobSelection = jobSelectionRows.map((row) => ({
         job_no: row.job_no,
         act_code: row.act_code,
+        act_group_name: row.act_group_name,
         activity: row.activity,
         invoice_no: row.invoice_no,
         prin_code: prinCode,
         quantity: row.quantity,
         bill: row.bill,
         job_date: row.job_date,
-        srno: row.srno,
+        // Must be the source job's own SRNO on its own invoice (TN_INVOICE_DET),
+        // not any locally-generated UI sequence number.
+        srno: row.source_srno,
         selected: "Y",
       }));
 
@@ -306,6 +393,8 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
       ].map((row, index) => ({
         ...row,
         srno: index + 1,
+        INV_DESC1: getValue(invoice, "inv_desc1") ?? "",
+        INV_DESC2: getValue(invoice, "inv_desc2") ?? "",
       }));
 
       const result = await updateBillingApi({
@@ -323,31 +412,38 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
     }
   };
 
-  const handlePrint = async () => {
+  // Backend returns raw HTML for the report — open it directly in a new tab
+  // instead of rendering it inside a dialog/iframe.
+  const handlePrint = async (report_type: string) => {
     if (!prinCode || !invoiceNo) return;
-    setReportOpen(true);
-    setReportHtml("");
-    setReportError("");
-    setReportLoading(true);
-    try {
-      const html = await getInvocieDetailReport(String(prinCode), String(invoiceNo));
-      setReportHtml(html);
-    } catch (err) {
-      console.error("Invoice report error:", err);
-      setReportError("Failed to load report. Please try again.");
-    } finally {
-      setReportLoading(false);
+    setPrintError("");
+
+    // Open the tab synchronously, inside the click handler, before the
+    // await — otherwise most browsers' popup blockers will silently kill it.
+    const reportWindow = window.open("", "_blank");
+    if (!reportWindow) {
+      setPrintError("Please allow pop-ups for this site to view the report.");
+      return;
     }
-  };
 
-  const handleIframePrint = () => {
-    iframeRef.current?.contentWindow?.postMessage("print", "*");
-  };
+    reportWindow.document.open();
+    reportWindow.document.write(REPORT_LOADING_HTML);
+    reportWindow.document.close();
 
-  const closeReportDialog = () => {
-    setReportOpen(false);
-    setReportHtml("");
-    setReportError("");
+    try {
+      const html = await getInvocieDetailReport(String(prinCode), String(invoiceNo), String(company_code), String(report_type));
+      if (reportWindow.closed) return; // user closed the tab while we waited
+      reportWindow.document.open();
+      reportWindow.document.write(html);
+      reportWindow.document.close();
+    } catch (err) {
+      setPrintError("Failed to load report. Please try again.");
+      if (!reportWindow.closed) {
+        reportWindow.document.open();
+        reportWindow.document.write(reportErrorHtml("Failed to load report. Please try again."));
+        reportWindow.document.close();
+      }
+    }
   };
 
   useEffect(() => {
@@ -384,7 +480,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
       footer={
         <div className="flex w-full items-center justify-between">
           {hasExistingData ? (
-            <Button variant="outline" onClick={handlePrint}>
+            <Button variant="outline" onClick={()=> setPrintDialogOpen(true)}>
               <Printer size={14} /> Print
             </Button>
           ) : <span />}
@@ -421,6 +517,12 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
       {warning && (
         <div className="mb-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
           {warning}
+        </div>
+      )}
+
+      {printError && (
+        <div className="mb-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
+          {printError}
         </div>
       )}
 
@@ -598,6 +700,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
           invoiceNo={invoiceNo}
           fromDate={fromDate}
           toDate={toDate}
+          existingKeys={existingJobKeys}
           onClose={() => setJobModalOpen(false)}
           onSelect={handleJobSelect}
         />
@@ -613,48 +716,51 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
           onSelect={handleStorageSelect}
         />
       )}
-      {reportOpen && (
-  <Dialog
-    open={reportOpen}
-    title="Invoice Detail Report"
-    wide
-    onClose={closeReportDialog}
-  >
-    <div className="flex flex-col" style={{ height: "75vh" }}>
+      {printDialogOpen && (
+        <Dialog
+          open
+          title="Print Invoice"
+          onClose={() => setPrintDialogOpen(false)}
+          compact
+        >
+          <div className="grid gap-3 py-1">
+            <p className="m-0 text-sm text-muted-foreground">
+              Choose how you want the invoice report to be generated.
+            </p>
 
-      {reportReady && (
-        <div className="flex shrink-0 items-center gap-2 border-b bg-muted/40 px-3 py-2">
-          <Button size="sm" variant="outline" onClick={handleIframePrint}>
-            <Printer size={13} /> Print / Save as PDF
-          </Button>
-        </div>
+            <div className="grid gap-2">
+              {report_type.map((type) => {
+                const isGrouped = type === "grouped";
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => handlePrint(type)}
+                    className="group flex w-full items-center gap-3 rounded-lg border border-border bg-background px-3 py-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary group-hover:bg-primary/15">
+                      <Printer size={16} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="m-0 text-sm font-semibold text-foreground">
+                        {isGrouped ? "Grouped" : "Activity-wise"}
+                      </p>
+                      <p className="m-0 text-xs text-muted-foreground">
+                        {isGrouped
+                          ? "Summary by activity groups"
+                          : "Detailed breakdown per activity"}
+                      </p>
+                    </div>
+                    <span className="text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
+                      Print →
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </Dialog>
       )}
-
-      {reportLoading && (
-        <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
-          <LoaderCircle size={14} className="animate-spin" />
-          Loading report…
-        </div>
-      )}
-
-      {!reportLoading && reportError && (
-        <div className="flex flex-1 items-center justify-center text-sm text-red-600">
-          {reportError}
-        </div>
-      )}
-
-      {reportReady && (
-        <iframe
-          ref={iframeRef}
-          srcDoc={reportHtml}
-          title="Invoice Detail Report"
-          className="flex-1 w-full rounded border-0"
-          style={{ minHeight: 0 }}
-        />
-      )}
-    </div>
-  </Dialog>
-)}
     </Dialog>
   );
 }

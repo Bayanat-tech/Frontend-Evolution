@@ -33,7 +33,11 @@ export type TPurchaseSummaryTxn = {
   REQ_DIV_CODE?: string;
   CANCEL_FLAG?: string;
   REQUEST_HOD_USER?: string;
-  
+  // Division & Department fields
+  DIV_CODE?: string;
+  DIV_NAME?: string;
+  DEPT_CODE_FLOW?: string;
+  DEPT_NAME?: string;
 };
 
 export interface TPRHeader {
@@ -55,59 +59,46 @@ export interface TPRHeader {
   FLOW_DESCRIPTION?: string;
   COMPANY_CODE: string;
   CURRENCY_RATE: number | null;
-
-
   USER_DT: string | null;
   USER_ID: string | null;
-
   FINAL_APPROVED: string | null;
   isFinalApproval: boolean | null;
   CURR_CODE: string | null;
-
   CREATE_USER: string | null;
   CREATE_DATE: string | null;
   LAST_UPDATED: string | null;
   LAST_ACTION: string | null;
- 
-
   PO_AMOUNT: number | null;
   DOC_DATE: string | null;
-
   CANCEL_FLAG: string | null;
   CANCEL_DATE: string | null;
   CANCEL_USER: string | null;
-
   FA_USER: string | null;
   HOD_USER: string | null;
-
   PDO_TYPE: string | null;
   TAX_TYPE: string | null;
   CURR_NAME: string | null;
-  TX_CAT_NAME : string | null;
+  TX_CAT_NAME: string | null;
   TX_COMPNT_PERC_1: number | null;
+  // Division & Department fields
+  DIV_CODE?: string;
+  DIV_NAME?: string;
+  DEPT_CODE_FLOW?: string;
+  DEPT_NAME?: string;
 }
 
 export type TPRItem = {
-  // === IDENTIFIERS ===
   ID?: string;
   REQUEST_NUMBER: string;
   ITEM_SRNO: number;
   COMPANY_CODE: string;
-
-  // === ITEM INFO ===
   ITEM_CODE: string;
   ITEM_DESP: string;
-
-  // === COST ===
   COST_CODE: string;
   COST_NAME: string;
-
-  // === SUPPLIER ===
   SUPPLIER: string;
   SUPPLIER_CODE: string;
   SUPPLIER_NAME: string;
-
-  // === QUANTITY & PRICING ===
   REQUEST_QUANTITY: number;
   ALLOCATED_APPROVED_QUANTITY: number;
   ITEM_QTY: number;
@@ -116,17 +107,11 @@ export type TPRItem = {
   FINAL_RATE: number;
   AMOUNT: number;
   LCURR_AMT: number;
-
-  // === DERIVED AMOUNTS ===
   BASE_AMOUNT: number;
   FINAL_AMOUNT: number;
-
-  // === CURRENCY ===
   CURR_CODE: string;
   CURR_NAME: string;
   CURRENCY_RATE: number;
-
-  // === TAX ===
   TX_CAT_CODE: string;
   TX_CAT_NAME: string;
   TX_COMPNTCAT_CODE_1: string;
@@ -134,17 +119,11 @@ export type TPRItem = {
   TX_COMPNT_AMT_1: number;
   TX_COMPNT_LCURAMT_1: number;
   CAPEX_OPEX_NON_OPEX: string;
-
-  // === TAX TYPE ===
   TAX_TYPE: string;
-
-  // === TAX (optional display fields) ===
   TAX_CAT_NAME?: string;
   TAX_CODE_NAME?: string;
   TX_COMPNTCAT_CODE?: string;
   TX_COMPNTCAT_NAME?: string;
-
-  // === META ===
   USER_DT: string | null;
   USER_ID: string;
   REMARKS?: string;
@@ -159,3 +138,18 @@ export type TPRterm = {
   IS_MANDATORY: 'N';
   REMARKS: '';
 };
+
+export interface TPPOGenerated {
+  PO_NUMBER: number;
+  PO_DATE: string;
+  SUPPLIER_CODE: string | null;
+  SUPPLIER_NAME: string | null;
+  PR_NUMBER: string | null;
+  PR_DATE: string | null;
+  PR_DESCRIPTION: string | null;
+  PR_AMOUNT: number | null;
+  DOC_TYPE: string;
+  PO_REMARKS: string | null;
+  TOTAL_ITEMS: number;
+  PO_TOTAL_AMOUNT: number | null;
+}

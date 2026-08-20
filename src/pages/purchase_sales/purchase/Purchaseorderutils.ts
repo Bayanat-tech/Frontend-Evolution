@@ -1,5 +1,6 @@
 import { getDynamicLookup } from "../../../api/lookups";
 import { upsertBulkPurchaseEntryApi } from "../../../api/purchaseSales";
+import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 import {
   EXPENSE_AC_OPTIONS,
   PO_DOC_TYPE,
@@ -164,7 +165,7 @@ export async function fetchPurchaseOrderDetail(
       tax_pct: numberOrZero(row.tax_pct ?? row.tax_percent),
       tax_amount: numberOrZero(row.tax_amount),
       lcur_amount: numberOrZero(row.lcur_amount),
-      required_dt: text(row.required_dt),
+    required_dt: toDateInputValue(raw.required_dt) || "",
       line_remarks: text(row.remarks ?? row.line_remarks),
       tax_cat: text(row.tax_cat ?? row.tax_category),
       tax_code: text(row.tax_code),
@@ -179,7 +180,7 @@ export async function fetchPurchaseOrderDetail(
 
 export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: PODocType) {
   return {
-    doc_no: form.doc_no || undefined,
+    doc_no:numberOrZero( form.doc_no )|| undefined,
     doc_type: docType,
     doc_date: form.doc_date,
     ref_no: form.ref_no,
@@ -222,6 +223,8 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     sentback_reason: form.sentback_reason || undefined,
     reject_reason: form.reject_reason || undefined,
     flow_level_running: form.flow_level_running || 0,
+    ref_doc_no:numberOrZero( form.doc_no) || undefined,
+    grn_no: numberOrZero( form.doc_no) || undefined,
   };
 }
 

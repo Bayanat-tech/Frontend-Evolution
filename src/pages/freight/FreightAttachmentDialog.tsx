@@ -5,6 +5,7 @@ import { uploadAccountFile } from "../../api/files";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Input } from "../../components/ui/Input";
+import { useToast } from "../../components/ui/AlertToast";
 
 type FreightAttachmentContext = "JOB" | "DOC";
 
@@ -41,6 +42,7 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
 export function FreightAttachmentDialog({ open, onClose, title, companyCode, prinCode, jobNo, docNr = "", context, loginId, readOnly }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const { toast } = useToast();
   const [files, setFiles] = useState<FreightAttachment[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -49,6 +51,18 @@ export function FreightAttachmentDialog({ open, onClose, title, companyCode, pri
   const [previewFile, setPreviewFile] = useState<FreightAttachment | null>(null);
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const canUpload = Boolean(companyCode && prinCode && jobNo && !readOnly);
+
+  const notify = (next: { type: "success" | "error"; text: string }) => {
+    setNotice(next);
+    if (next.type === "success") toast.success(next.text);
+    else toast.error(next.text);
+  };
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   const loadFiles = async () => {
     if (!open || !jobNo) {
@@ -67,7 +81,7 @@ export function FreightAttachmentDialog({ open, onClose, title, companyCode, pri
       });
       setFiles(response.data.data || []);
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to load attachments." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to load attachments." });
     } finally {
       setLoading(false);
     }
@@ -84,7 +98,7 @@ export function FreightAttachmentDialog({ open, onClose, title, companyCode, pri
 
     const oversized = selected.filter((file) => file.size > MAX_FILE_SIZE);
     const incoming = selected.filter((file) => file.size <= MAX_FILE_SIZE);
-    if (oversized.length) setNotice({ type: "error", text: `Skipped files over 5 MB: ${oversized.map((file) => file.name).join(", ")}` });
+    if (oversized.length) notify({ type: "error", text: `Skipped files over 5 MB: ${oversized.map((file) => file.name).join(", ")}` });
     if (!incoming.length) return;
 
     setUploading(true);
@@ -128,9 +142,9 @@ export function FreightAttachmentDialog({ open, onClose, title, companyCode, pri
         });
       }
       setFiles((current) => [...savedRows, ...current]);
-      setNotice({ type: "success", text: "Attachments uploaded." });
+      notify({ type: "success", text: "Attachments uploaded." });
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to upload attachments." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to upload attachments." });
     } finally {
       setUploading(false);
     }
@@ -143,9 +157,9 @@ export function FreightAttachmentDialog({ open, onClose, title, companyCode, pri
       setFiles((current) => current.map((item) => fileKey(item) === fileKey(file) ? { ...item, USER_FILE_NAME: editName.trim() } : item));
       setEditingKey("");
       setEditName("");
-      setNotice({ type: "success", text: "File renamed." });
+      notify({ type: "success", text: "File renamed." });
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to rename file." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to rename file." });
     }
   };
 
@@ -153,15 +167,15 @@ export function FreightAttachmentDialog({ open, onClose, title, companyCode, pri
     try {
       await api.post("/api/freight/attachments/delete", attachmentKeyPayload(file, { user_id: loginId }));
       setFiles((current) => current.filter((item) => fileKey(item) !== fileKey(file)));
-      setNotice({ type: "success", text: "Attachment deleted." });
+      notify({ type: "success", text: "Attachment deleted." });
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to delete attachment." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to delete attachment." });
     }
   };
 
   const openPreview = (file: FreightAttachment) => {
     if (!fileUrl(file)) {
-      setNotice({ type: "error", text: "No preview URL available for this attachment." });
+      notify({ type: "error", text: "No preview URL available for this attachment." });
       return;
     }
     setPreviewFile(file);

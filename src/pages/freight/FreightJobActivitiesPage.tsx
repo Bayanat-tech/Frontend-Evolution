@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Calculator, CheckCircle2, Edit2, Plus, RefreshCw, Save, Trash2, TrendingUp } from "lucide-react";
 import { api } from "../../api/client";
 import { freightSelect } from "../../api/freight";
@@ -59,14 +59,32 @@ const directionMap = {
   reexport: { code: "IRE", label: "Import for Re-export" },
 };
 
-export function FreightJobActivitiesPage({ target, initialJob = null, startMode = "list", screen = "activities" }: { target?: FreightWorkspaceTarget; initialJob?: LookupRow | null; startMode?: ViewMode; screen?: ActivityScreen }) {
+export function FreightJobActivitiesPage({
+  target,
+  initialJob = null,
+  startMode = "list",
+  screen = "activities",
+  readOnly = false,
+  onEmbeddedActionsChange,
+  onEmbeddedList,
+}: {
+  target?: FreightWorkspaceTarget;
+  initialJob?: LookupRow | null;
+  startMode?: ViewMode;
+  screen?: ActivityScreen;
+  readOnly?: boolean;
+  onEmbeddedActionsChange?: (actions: ReactNode | null) => void;
+  onEmbeddedList?: () => void;
+}) {
   const { user } = useAuth();
   const { toast } = useToast();
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
   const userId = String(userRecord.user_id || userRecord.USER_ID || userRecord.loginid || userRecord.LOGINID || "");
-  const mode = modeMap[target?.mode || "air"];
-  const direction = directionMap[target?.direction || "import"];
+  const modeKey = (target?.mode || "air") as keyof typeof modeMap;
+  const directionKey = (target?.direction || "import") as keyof typeof directionMap;
+  const mode = modeMap[modeKey];
+  const direction = directionMap[directionKey];
   const copy = screen === "jobsheet"
     ? { eyebrow: "Freight Job Sheet", title: "JOB Sheet", subtitle: "Revenue, cost, profit and billing activity lines" }
     : { eyebrow: "Freight Service", title: "Service & Activities", subtitle: "Operational services, vendor cost and customer billing lines" };
@@ -80,14 +98,29 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
 
+  const notify = useCallback((next: Exclude<Notice, null>) => {
+    setNotice(next);
+    if (next.type === "success") toast.success(next.text);
+    else toast.error(next.text);
+  }, [toast]);
+
   useEffect(() => {
     if (!notice) return;
-    if (notice.type === "success") toast.success(notice.text);
-    else toast.error(notice.text);
-    setNotice(null);
-  }, [notice, toast]);
+    const timer = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   const totals = useMemo(() => calculateTotals(lines), [lines]);
+  const isConfirmed = Boolean(lookupText(header, "confirm_date"));
+  const isClosed = readOnly || Boolean(
+    isTruthy(lookupText(header, "canceled")) ||
+    isTruthy(lookupText(header, "invoiced")) ||
+    isTruthy(lookupText(header, "completed")) ||
+    lookupText(header, "invoice_date") ||
+    lookupText(header, "complete_date")
+  );
+  const isLineLocked = isConfirmed || isClosed;
+  const embeddedInWorkspace = Boolean(onEmbeddedActionsChange);
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -102,11 +135,11 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
       setRows((response.data.data || []).map(normalizeLookupRow).filter((row) => matchesCurrentJobBucket(row, mode.code, direction.code)));
     } catch (error: any) {
       setRows([]);
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to load freight jobs." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to load freight jobs." });
     } finally {
       setLoading(false);
     }
-  }, [companyCode, direction.code, mode.code, query]);
+  }, [companyCode, direction.code, mode.code, notify, query]);
 
   useEffect(() => {
     if (view === "list") void loadRows();
@@ -149,7 +182,7 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
       setLines((response.data.data?.lines || []).map(toLine));
       setView("editor");
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to open job activities." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to open job activities." });
     } finally {
       setLoading(false);
     }
@@ -157,6 +190,10 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
 
   async function saveLines() {
     if (!header) return;
+    if (isLineLocked) {
+      notify({ type: "error", text: "Confirmed, invoiced, or completed job is locked. Activities are view only." });
+      return;
+    }
     setSaving(true);
     setNotice(null);
     try {
@@ -167,10 +204,10 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
         user_id: userId,
         lines,
       });
-      setNotice({ type: "success", text: "Job activities saved." });
+      notify({ type: "success", text: "Job activities saved." });
       await loadRows();
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to save job activities." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to save job activities." });
     } finally {
       setSaving(false);
     }
@@ -178,6 +215,10 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
 
   async function confirmJob() {
     if (!header) return;
+    if (isClosed) {
+      notify({ type: "error", text: "Invoiced or completed job is locked. Activities are view only." });
+      return;
+    }
     setSaving(true);
     setNotice(null);
     try {
@@ -187,14 +228,41 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
         job_no: lookupText(header, "job_no"),
         user_id: userId,
       });
-      setNotice({ type: "success", text: "Job activities confirmed." });
+      notify({ type: "success", text: "Job activities confirmed." });
       await openJob(header);
     } catch (error: any) {
-      setNotice({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to confirm job activities." });
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to confirm job activities." });
     } finally {
       setSaving(false);
     }
   }
+
+  useEffect(() => {
+    if (!onEmbeddedActionsChange) return;
+    if (view !== "editor") {
+      onEmbeddedActionsChange(null);
+      return () => onEmbeddedActionsChange(null);
+    }
+    onEmbeddedActionsChange(
+      <div className="freight-job-inline-actions freight-job-inline-actions-header freight-job-commandbar">
+        {notice && <NoticeChip notice={notice} />}
+        <Button type="button" size="sm" variant="outline" onClick={onEmbeddedList || (() => setView("list"))}>
+          <ArrowLeft size={14} />List
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={addLine} disabled={isLineLocked}>
+          <Plus size={14} />Line
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={() => void confirmJob()} disabled={saving || isClosed || !lines.length || Boolean(lookupText(header, "confirm_date"))}>
+          <CheckCircle2 size={14} />{lookupText(header, "confirm_date") ? "Confirmed" : "Confirm"}
+        </Button>
+        <Button type="button" size="sm" onClick={() => void saveLines()} disabled={saving || isLineLocked}>
+          <Save size={14} />Save
+        </Button>
+        <span className="freight-job-mode-badge viewing">View</span>
+      </div>
+    );
+    return () => onEmbeddedActionsChange(null);
+  }, [header, isClosed, isLineLocked, lines.length, notice, onEmbeddedActionsChange, onEmbeddedList, saving, view]);
 
   if (view === "list") {
     return (
@@ -227,13 +295,16 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
 
   return (
     <section className="grid gap-2 freight-job-ops-screen">
-      <Header eyebrow={copy.eyebrow} title={copy.title} subtitle={`${lookupText(header, "job_no")} / ${lookupText(header, "prin_name") || lookupText(header, "prin_code")}`}>
+      {!embeddedInWorkspace && <Header eyebrow={copy.eyebrow} title={copy.title} subtitle={`${lookupText(header, "job_no")} / ${lookupText(header, "prin_name") || lookupText(header, "prin_code")}`}>
         {notice && <NoticeChip notice={notice} />}
         {!initialJob && <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>}
-        <Button type="button" size="sm" variant="outline" onClick={addLine}><Plus size={14} />Line</Button>
-        <Button type="button" size="sm" variant="outline" onClick={() => void confirmJob()} disabled={saving || !lines.length}><CheckCircle2 size={14} />Confirm</Button>
-        <Button type="button" size="sm" onClick={() => void saveLines()} disabled={saving}><Save size={14} />Save</Button>
-      </Header>
+        <Button type="button" size="sm" variant="outline" onClick={addLine} disabled={isLineLocked}><Plus size={14} />Line</Button>
+        {/* <Button type="button" size="sm" variant="outline" onClick={() => void confirmJob()} disabled={saving || !lines.length}><CheckCircle2 size={14} />Confirm</Button> */}
+       <Button type="button" size="sm" variant="outline" onClick={() => void confirmJob()} disabled={saving || isClosed || !lines.length || Boolean(lookupText(header, "confirm_date"))}>
+           <CheckCircle2 size={14} />{lookupText(header, "confirm_date") ? "Confirmed" : "Confirm"}
+        </Button>
+        <Button type="button" size="sm" onClick={() => void saveLines()} disabled={saving || isLineLocked}><Save size={14} />Save</Button>
+      </Header>}
 
       <div className="grid gap-2 lg:grid-cols-4">
         <Metric label="Revenue" value={money(totals.revenue)} />
@@ -251,30 +322,30 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
             <div key={`${line.srno}-${index}`} className="freight-job-table-row">
               <div className="grid grid-cols-[42px_90px_minmax(190px,1fr)_76px_94px_105px_105px_90px_105px_90px_105px_50px] items-center gap-1 px-2 py-1">
                 <span className="text-xs font-semibold text-muted-foreground">{index + 1}</span>
-                <ActivityLookup value={line.act_code} companyCode={companyCode} onChange={(value, row) => updateLine(index, { act_code: value, activity: lookupText(row || undefined, "activity"), other_services: lookupText(row || undefined, "activity") || line.other_services, bill_rate: lookupText(row || undefined, "bill") || line.bill_rate, actual_cost: lookupText(row || undefined, "cost") || line.actual_cost })} />
-                <Input className="h-7 text-xs" value={line.other_services} onChange={(event) => updateLine(index, { other_services: event.target.value })} />
-                <MoneyInput value={line.quantity} onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))} />
-                <MoneyInput value={line.bill_rate} onChange={(value) => updateLine(index, recalc({ ...line, bill_rate: value }))} />
-                <MoneyInput value={line.bill} onChange={(value) => updateLine(index, { bill: value })} />
-                <MoneyInput value={line.actual_cost} onChange={(value) => updateLine(index, { actual_cost: value })} />
-                <Input className="h-7 text-xs" value={line.broker_code} onChange={(event) => updateLine(index, { broker_code: event.target.value })} />
-                <MoneyInput value={line.partners_price} onChange={(value) => updateLine(index, { partners_price: value })} />
-                <Input className="h-7 text-xs" value={line.transporter_code} onChange={(event) => updateLine(index, { transporter_code: event.target.value })} />
-                <MoneyInput value={line.transport_price} onChange={(value) => updateLine(index, { transport_price: value })} />
-                <Button type="button" size="icon" variant="ghost" title="Remove line" onClick={() => removeLine(index)}><Trash2 size={14} /></Button>
+                <ActivityLookup value={line.act_code} companyCode={companyCode} disabled={isLineLocked} onChange={(value, row) => updateLine(index, { act_code: value, activity: lookupText(row || undefined, "activity"), other_services: lookupText(row || undefined, "activity") || line.other_services, bill_rate: lookupText(row || undefined, "bill") || line.bill_rate, actual_cost: lookupText(row || undefined, "cost") || line.actual_cost })} />
+                <Input className="h-7 text-xs" value={line.other_services} disabled={isLineLocked} onChange={(event) => updateLine(index, { other_services: event.target.value })} />
+                <MoneyInput value={line.quantity} disabled={isLineLocked}onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))} />
+                <MoneyInput value={line.bill_rate} disabled={isLineLocked} onChange={(value) => updateLine(index, recalc({ ...line, bill_rate: value }))} />
+                <MoneyInput value={line.bill} disabled={isLineLocked} onChange={(value) => updateLine(index, { bill: value })} />
+                <MoneyInput value={line.actual_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, { actual_cost: value })} />
+                <Input className="h-7 text-xs" value={line.broker_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { broker_code: event.target.value })} />
+                <MoneyInput value={line.partners_price} disabled={isLineLocked} onChange={(value) => updateLine(index, { partners_price: value })} />
+                <Input className="h-7 text-xs" value={line.transporter_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { transporter_code: event.target.value })} />
+                <MoneyInput value={line.transport_price} disabled={isLineLocked} onChange={(value) => updateLine(index, { transport_price: value })} />
+                <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={isLineLocked} onClick={() => removeLine(index)}><Trash2 size={14} /></Button>
               </div>
               <div className="freight-job-table-subrow grid grid-cols-[42px_repeat(10,minmax(88px,1fr))] gap-1 px-2 pb-1">
                 <span className="self-center text-[10px] font-semibold uppercase text-muted-foreground">Tax</span>
-                <Input title="Sale tax category" placeholder="Sale Cat" className="h-7 text-xs" value={line.tx_cat_code} onChange={(event) => updateLine(index, { tx_cat_code: event.target.value })} />
-                <Input title="Sale tax component" placeholder="Sale Comp" className="h-7 text-xs" value={line.tx_compntcat_code_1} onChange={(event) => updateLine(index, { tx_compntcat_code_1: event.target.value })} />
-                <MoneyInput value={line.tx_compnt_perc_1} onChange={(value) => updateLine(index, { tx_compnt_perc_1: value })} />
-                <MoneyInput value={line.tx_compnt_amt_1} onChange={(value) => updateLine(index, { tx_compnt_amt_1: value })} />
-                <MoneyInput value={line.tx_compnt_lcuramt_1} onChange={(value) => updateLine(index, { tx_compnt_lcuramt_1: value })} />
-                <Input title="Cost tax category" placeholder="Cost Cat" className="h-7 text-xs" value={line.tx_cat_code_cost} onChange={(event) => updateLine(index, { tx_cat_code_cost: event.target.value })} />
-                <Input title="Cost tax component" placeholder="Cost Comp" className="h-7 text-xs" value={line.tx_compntcat_code_1_cost} onChange={(event) => updateLine(index, { tx_compntcat_code_1_cost: event.target.value })} />
-                <MoneyInput value={line.tx_compnt_perc_1_cost} onChange={(value) => updateLine(index, { tx_compnt_perc_1_cost: value })} />
-                <MoneyInput value={line.tx_compnt_amt_1_cost} onChange={(value) => updateLine(index, { tx_compnt_amt_1_cost: value })} />
-                <MoneyInput value={line.tx_compnt_lcuramt_1_cost} onChange={(value) => updateLine(index, { tx_compnt_lcuramt_1_cost: value })} />
+                <TaxCategoryLookup companyCode={companyCode} value={line.tx_cat_code} disabled={isLineLocked} placeholder="Sale Cat" onChange={(value) => updateLine(index, { tx_cat_code: value })} />
+                <TaxCodeLookup companyCode={companyCode} value={line.tx_compntcat_code_1} disabled={isLineLocked} placeholder="Sale Code" onChange={(value, row) => updateLine(index, { tx_compntcat_code_1: value, tx_cat_code: lookupText(row, "tx_cat_code") || line.tx_cat_code, tx_compnt_perc_1: lookupText(row, "tx_percnt") || line.tx_compnt_perc_1 })} />
+                <MoneyInput value={line.tx_compnt_perc_1} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_perc_1: value })} />
+                <MoneyInput value={line.tx_compnt_amt_1} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_amt_1: value })} />
+                <MoneyInput value={line.tx_compnt_lcuramt_1} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_lcuramt_1: value })} />
+                <TaxCategoryLookup companyCode={companyCode} value={line.tx_cat_code_cost} disabled={isLineLocked} placeholder="Cost Cat" onChange={(value) => updateLine(index, { tx_cat_code_cost: value })} />
+                <TaxCodeLookup companyCode={companyCode} value={line.tx_compntcat_code_1_cost} disabled={isLineLocked} placeholder="Cost Code" onChange={(value, row) => updateLine(index, { tx_compntcat_code_1_cost: value, tx_cat_code_cost: lookupText(row, "tx_cat_code") || line.tx_cat_code_cost, tx_compnt_perc_1_cost: lookupText(row, "tx_percnt") || line.tx_compnt_perc_1_cost })} />
+                <MoneyInput value={line.tx_compnt_perc_1_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_perc_1_cost: value })} />
+                <MoneyInput value={line.tx_compnt_amt_1_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_amt_1_cost: value })} />
+                <MoneyInput value={line.tx_compnt_lcuramt_1_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_lcuramt_1_cost: value })} />
               </div>
             </div>
           ))}
@@ -285,16 +356,26 @@ export function FreightJobActivitiesPage({ target, initialJob = null, startMode 
   );
 
   function addLine() {
+    if (isLineLocked) {
+      notify({ type: "error", text: "Confirmed, invoiced, or completed job is locked. Activities are view only." });
+      return;
+    }
     setLines((current) => [...current, emptyLine(current.length + 1)]);
   }
 
   function removeLine(index: number) {
+    if (isLineLocked) return;
     setLines((current) => current.filter((_, rowIndex) => rowIndex !== index).map((line, rowIndex) => ({ ...line, srno: String(rowIndex + 1) })));
   }
 
   function updateLine(index: number, patch: Partial<ActivityLine>) {
+    if (isLineLocked) return;
     setLines((current) => current.map((line, rowIndex) => rowIndex === index ? { ...line, ...patch, srno: String(index + 1) } : line));
   }
+}
+
+function isTruthy(value: string) {
+  return ["Y", "YES", "TRUE", "1"].includes(value.trim().toUpperCase());
 }
 
 function Header({ eyebrow, title, subtitle, children }: { eyebrow: string; title: string; subtitle: string; children: React.ReactNode }) {
@@ -314,7 +395,7 @@ function Metric({ label, value, tone = "neutral" }: { label: string; value: stri
   return <div className={`freight-job-metric-card${toneClass}`}><div><TrendingUp size={12} />{label}</div><strong>{value}</strong></div>;
 }
 
-function ActivityLookup({ companyCode, value, onChange }: { companyCode: string; value: string; onChange: (value: string, row: LookupRow | null) => void }) {
+function ActivityLookup({ companyCode, value, onChange, disabled }: { companyCode: string; value: string; onChange: (value: string, row: LookupRow | null) => void; disabled?: boolean }) {
   return (
     <LookupField
       value={value}
@@ -322,14 +403,47 @@ function ActivityLookup({ companyCode, value, onChange }: { companyCode: string;
       valueField="ACT_CODE"
       displayFields={["ACT_CODE", "ACTIVITY"]}
       columns={[{ field: "ACT_CODE", header: "Code" }, { field: "ACTIVITY", header: "Activity" }, { field: "BILL", header: "Bill" }, { field: "COST", header: "Cost" }]}
-      loadOptions={() => loadFreightLookup("freight_activity", companyCode)}
+      loadOptions={(query) => loadFreightLookup("freight_activity", companyCode, query)}
       onChange={onChange}
+      disabled={disabled}
     />
   );
 }
 
-function MoneyInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  return <Input className="h-7 text-right text-xs" type="number" value={value} onChange={(event) => onChange(event.target.value)} />;
+function TaxCategoryLookup({ companyCode, value, onChange, disabled, placeholder }: { companyCode: string; value: string; onChange: (value: string, row: LookupRow | null) => void; disabled?: boolean; placeholder: string }) {
+  return (
+    <LookupField
+      value={value}
+      compact
+      placeholder={placeholder}
+      valueField="TX_CAT_CODE"
+      displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]}
+      columns={[{ field: "TX_CAT_CODE", header: "Code" }, { field: "TX_CAT_NAME", header: "Tax Category" }]}
+      loadOptions={(query) => loadFreightLookup("freight_tax_category", companyCode, query)}
+      onChange={onChange}
+      disabled={disabled}
+    />
+  );
+}
+
+function TaxCodeLookup({ companyCode, value, onChange, disabled, placeholder }: { companyCode: string; value: string; onChange: (value: string, row: LookupRow | null) => void; disabled?: boolean; placeholder: string }) {
+  return (
+    <LookupField
+      value={value}
+      compact
+      placeholder={placeholder}
+      valueField="TX_COMPNTCAT_CODE"
+      displayFields={["TX_COMPNTCAT_CODE", "TX_COMPNTCAT_NAME"]}
+      columns={[{ field: "TX_COMPNTCAT_CODE", header: "Code" }, { field: "TX_COMPNTCAT_NAME", header: "Tax Code" }, { field: "TX_CAT_CODE", header: "Tax Category" }, { field: "TX_PERCNT", header: "Tax %" }]}
+      loadOptions={(query) => loadFreightLookup("freight_tax_code", companyCode, query)}
+      onChange={onChange}
+      disabled={disabled}
+    />
+  );
+}
+
+function MoneyInput({ value, onChange, disabled }: { value: string; onChange: (value: string) => void; disabled?: boolean }) {
+  return <Input className="h-7 text-right text-xs tabular-nums" type="text" inputMode="decimal" value={value} disabled={disabled} onChange={(event) => onChange(normalizeMoneyInput(event.target.value))} />;
 }
 
 function NoticeChip({ notice }: { notice: Exclude<Notice, null> }) {
@@ -346,7 +460,7 @@ function toLine(row: LookupRow, index: number): ActivityLine {
 }
 
 function recalc(line: ActivityLine) {
-  return { bill: String(numberValue(line.quantity) * numberValue(line.bill_rate)) };
+  return { ...line, bill: String(numberValue(line.quantity) * numberValue(line.bill_rate)) };
 }
 
 function calculateTotals(lines: ActivityLine[]) {
@@ -384,6 +498,15 @@ function lookupText(row: LookupRow | null | undefined, key: string) {
 function numberValue(input: unknown) {
   const number = Number(input || 0);
   return Number.isFinite(number) ? number : 0;
+}
+
+function normalizeMoneyInput(value: string) {
+  const withoutCommas = value.replace(/,/g, "");
+  const numericOnly = withoutCommas.replace(/[^\d.-]/g, "");
+  const sign = numericOnly.startsWith("-") ? "-" : "";
+  const unsigned = numericOnly.replace(/-/g, "");
+  const [whole = "", ...decimal] = unsigned.split(".");
+  return `${sign}${whole}${decimal.length ? `.${decimal.join("")}` : ""}`;
 }
 
 function money(input: unknown) {
