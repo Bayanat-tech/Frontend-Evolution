@@ -193,6 +193,7 @@ import { SalesInvoicePage } from "../pages/purchase_sales/sales/SalesInvoicePage
 import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
 import CompanyInfo from "../pages/security/CompanyInfo";
 import HolidayCalendarPage from "../pages/hr/masters/HolidayCalendarPage"; 
+import PoOrderRegisterPage from "../pages/purchase_sales/Reports/PoOrderRegister";
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -1314,6 +1315,14 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   element: () => <PLSummaryPage />,
 },
   
+{
+  name: "Profit & Loss Summary Report",
+  match: ({ pathname }) => isPoOrderRegisterRoute(pathname),
+  element: () => <PoOrderRegisterPage />,
+}
+
+
+
 ];
 
 function isStorageComputationRoute(pathname: string) {
@@ -1373,6 +1382,12 @@ function isProfitLossSummaryRoute(pathname: string) {
   );
 }
 
+function isPoOrderRegisterRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/reports/po_order_register"
+  );
+}
 
 
 function isStockAdjViewRoute(pathname: string) {
