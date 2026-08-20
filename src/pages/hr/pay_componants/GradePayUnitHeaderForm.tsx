@@ -2,7 +2,6 @@ import { Edit2, Trash2, Plus } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { FormikProps } from 'formik';
 import { useEffect, useMemo, useState } from 'react';
-// import useAuth from 'hooks/useAuth';
 import { useAuth } from '../../../state/AuthContext';
 import { getDynamicLookup, executeDynamicDelete } from '../../../api/lookups';
 import { TGradeFormValues } from './AddGradePayUnitForm';
@@ -11,13 +10,12 @@ import { Input } from '../../../components/ui/Input';
 import { Dialog } from '../../../components/ui/Dialog';
 import { DataTable } from '../../../components/ui/DataTable';
 
-// Lightweight id generator — replaces the missing 'uuid' package
+
 function newId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
 
-// getDynamicLookup returns raw lowercase keys from Oracle — normalize so
-// UPPERCASE field reads resolve correctly.
+
 function uppercaseKeys<T extends Record<string, unknown>>(row: T): T {
   const out: Record<string, unknown> = {};
   for (const key in row) {
@@ -214,12 +212,11 @@ const GradePayUnitHeaderForm = ({ formik, disabled = false, onGradeSelect }: TPr
   const handleDeleteHeaderRow = async (id: string, depend_pay_comp_type: string) => {
     if (!window.confirm('Are you sure you want to delete this row?')) return;
     try {
-      
+
       await executeDynamicDelete({
         parameter: 'PAY_COMPONENT_GradePay_Delete',
         loginid: user?.loginid ?? '',
         code1: user?.company_code ?? '',
-       // code2: values.grade_code ?? '',
         code2: depend_pay_comp_type ?? ''
       } as any);
 
@@ -435,11 +432,11 @@ const GradePayUnitHeaderForm = ({ formik, disabled = false, onGradeSelect }: TPr
                 setEditHeaderRow((prev) =>
                   prev
                     ? {
-                        ...prev,
-                        depend_pay_comp_type: selected?.pay_comp_id ?? '',
-                        depend_pay_comp_desc: selected?.pay_comp_desc ?? '',
-                        depend_pay_comp_short_desc: selected?.pay_comp_short_desc ?? ''
-                      }
+                      ...prev,
+                      depend_pay_comp_type: selected?.pay_comp_id ?? '',
+                      depend_pay_comp_desc: selected?.pay_comp_desc ?? '',
+                      depend_pay_comp_short_desc: selected?.pay_comp_short_desc ?? ''
+                    }
                     : prev
                 );
               }}

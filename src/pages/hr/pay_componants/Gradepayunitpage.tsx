@@ -5,10 +5,7 @@ import { getDynamicLookup } from '../../../api/lookups';
 import { Button } from '../../../components/ui/Button';
 import { Dialog } from '../../../components/ui/Dialog';
 import AddGradePayUnitForm from './AddGradePayUnitForm';
-// import AddGradePayUnitForm from './AddGradePayUnitForm';
 
-// getDynamicLookup returns raw lowercase keys from Oracle — normalize so
-// UPPERCASE field reads resolve correctly.
 function uppercaseKeys<T extends Record<string, unknown>>(row: T): T {
   const out: Record<string, unknown> = {};
   for (const key in row) {
@@ -59,20 +56,11 @@ const GradePayUnitPage = () => {
         <span className="text-foreground">Grade Pay Unit</span>
       </nav>
 
-      {/* ===================== DIVISION DIALOG ===================== */}
-      {/* <Dialog
+      <Dialog
         open={openDivision}
         title="Select Division"
-        onClose={() => {
-          if (selectedDiv) setOpenDivision(false);
-        }}
-      > */}
-
-      <Dialog
-  open={openDivision}
-  title="Select Division"
-  onClose={() => setOpenDivision(false)}
->
+        onClose={() => setOpenDivision(false)}
+      >
         <div className="flex h-[60vh] w-full flex-col">
           <div className="flex-1 overflow-y-auto">
             {(divisionData?.tableData ?? []).map((item: any, index: number) => (
@@ -93,7 +81,7 @@ const GradePayUnitPage = () => {
       {selectedDiv && (
         <AddGradePayUnitForm
           key={selectedDiv.div_code}
-          onClose={() => {}}
+          onClose={() => { }}
           isEdit={false}
           isViewMode={false}
           div_code={selectedDiv.div_code}

@@ -6,7 +6,7 @@ import { useAuth } from '../../../state/AuthContext';
 import { getDynamicLookup, postFinance } from '../../../api/lookups';
 import { Button } from '../../../components/ui/Button';
 import { DataTable } from '../../../components/ui/DataTable';
-import AddPayrollAccountSetupForm from './AddPayrollAccountSetupForm'; // NOTE: adjust path as per your folder structure
+import AddPayrollAccountSetupForm from './AddPayrollAccountSetupForm';
 
 
 function lowercaseKeys<T extends Record<string, unknown>>(row: T): T {
@@ -126,7 +126,7 @@ const PayrollAccountSetupPage = () => {
 
   const leaveRows: TLeaveRow[] = (leaveData?.tableData ?? []) as TLeaveRow[];
 
-  // ── Reset ──────────────────────────────────────────────────────────────────
+
   const handleReset = () => {
     setCompany(null);
     setDivision(null);
@@ -164,7 +164,7 @@ const PayrollAccountSetupPage = () => {
     setShowForm(true);
   };
 
- 
+
 
   const handleFormClose = (refetch?: boolean) => {
     setShowForm(false);
@@ -306,51 +306,45 @@ const PayrollAccountSetupPage = () => {
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════════
-          SECTION 2 — Leave Grid Table
-      ══════════════════════════════════════════════════════════════════ */}
-     {/* ══════════════════════════════════════════════════════════════════
-    SECTION 2 — Leave Grid Table
-══════════════════════════════════════════════════════════════════ */}
-<div className="flex flex-1 flex-col rounded-md border bg-card p-3">
-  <div className="mb-3 flex justify-end">
-    <Button
-      type="button"
-      variant="default"
-      onClick={handleAddClick}
-      disabled={!company || !division || !department || !section}
-    >
-      <Plus size={15} /> Add Payroll
-    </Button>
-  </div>
 
-  <DataTable
+      <div className="flex flex-1 flex-col rounded-md border bg-card p-3">
+        <div className="mb-3 flex justify-end">
+          <Button
+            type="button"
+            variant="default"
+            onClick={handleAddClick}
+            disabled={!company || !division || !department || !section}
+          >
+            <Plus size={15} /> Add Payroll
+          </Button>
+        </div>
+
+        <DataTable
           columns={leaveColumns}
           data={leaveRows}
           height={350}
           density="compact"
           getRowId={(row: TLeaveRow) => String(row.pay_comp_id)}
-       
+
         />
 
-        
 
-         
-<div className="mt-3 border-t pt-3">
-  <div className="flex justify-end gap-2">
-    <Button type="button" variant="outline" onClick={handleReset}>
-      <RotateCcw size={15} /> Reset
-    </Button>
-  </div>
-</div>
+
+
+        <div className="mt-3 border-t pt-3">
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={handleReset}>
+              <RotateCcw size={15} /> Reset
+            </Button>
+          </div>
+        </div>
 
 
 
       </div>
- 
-      {/* ══════════════════════════════════════════════════════════════════
-          Add / Edit Modal
-      ══════════════════════════════════════════════════════════════════ */}
+
+      {/*
+          Add / Edit Modal*/}
       {showForm && (
         <AddPayrollAccountSetupForm
           onClose={handleFormClose}

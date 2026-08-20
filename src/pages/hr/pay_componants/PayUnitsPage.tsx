@@ -27,7 +27,7 @@ export type TPayUnitsHeader = {
   DIV_NAME?: string;
 };
 
-// Local popup-state shape (replaces the missing TUniversalDialogProps type)
+
 type TPayUnitsPopup = {
   open: boolean;
   title: string;
@@ -63,9 +63,6 @@ const PayUnitsPage = () => {
   const { data: payUnitsData } = useQuery({
     queryKey: ['pay-units-header', companyCode],
     queryFn: async () => {
-      // NOTE: verify P_CODE1/P_CODE2 mapping against the PAY_COMPONENT_PAY_UNITS
-      // stored procedure — this mirrors the code1=company_code / code2=loginid
-      // pattern used elsewhere in this codebase, but confirm it matches this proc.
       const response = await getDynamicLookup({
         parameter: 'PAY_COMPONENT_PAY_UNITS',
         code1: companyCode,
@@ -277,11 +274,11 @@ const PayUnitsPage = () => {
       />
 
       {payUnitsPopup.open && (
-        <Dialog open={payUnitsPopup.open} 
-         wide={payUnitsPopup.wide}
-         title={payUnitsPopup.title} 
-         onClose={() => togglePopup(true)}>
-          
+        <Dialog open={payUnitsPopup.open}
+          wide={payUnitsPopup.wide}
+          title={payUnitsPopup.title}
+          onClose={() => togglePopup(true)}>
+
           <AddPayUnitsForm
             key={payUnitsPopup.data.existingData?.PAY_COMP_ID || 'new'}
             onClose={() => togglePopup(true)}

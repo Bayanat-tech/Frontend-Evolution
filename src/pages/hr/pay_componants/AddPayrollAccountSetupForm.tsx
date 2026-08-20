@@ -10,7 +10,7 @@ import { useAuth } from '../../../state/AuthContext';
 import { executeDynamicMutationColumn90, getDynamicLookup } from '../../../api/lookups';
 import { useState } from 'react';
 import { AutoDismissAlert } from '../../../components/ui/AutoDismissAlert';
-// import { AutoDismissAlert } from '../../../components/ui/AutoDismissAlert';
+
 
 function uppercaseKeys<T extends Record<string, unknown>>(row: T): T {
   const out: Record<string, unknown> = {};
@@ -42,7 +42,7 @@ type Props = {
   div_code: string;
   dept_code: string;
   section_code: string;
-  pay_comp_id?: string; // required when isEdit = true
+  pay_comp_id?: string;
 };
 
 const EARN_DED_OPTIONS = [
@@ -65,7 +65,7 @@ const AddPayrollAccountSetupForm = ({
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
- 
+
   const { data: existingRecord, isLoading: existingLoading } = useQuery({
     queryKey: ['pa-setup-detail', company_code, div_code, dept_code, section_code, pay_comp_id],
     queryFn: async () => {
@@ -86,7 +86,7 @@ const AddPayrollAccountSetupForm = ({
   // ===================== LOOKUP: Pay Component (search icon field) =====================
   const loadPayComponentOptions = async (search?: string) => {
     const response = await getDynamicLookup({
-      parameter: 'PAY_COMPONENT_Encashment', // NOTE: confirm this is the correct pay-component master lookup
+      parameter: 'PAY_COMPONENT_Encashment',
       code1: company_code,
       code2: loginid
     });
@@ -101,7 +101,6 @@ const AddPayrollAccountSetupForm = ({
 
   // ===================== LOOKUP: Account Code (DB / CR — search icon field) =====================
   const loadAccountCodeOptions = async (search?: string) => {
-    // NOTE: confirm actual parameter name for chart-of-accounts lookup
     const response = await getDynamicLookup({
       parameter: 'AC_PREPAID_GET_DEBIT_AC',
       code1: company_code,
@@ -142,9 +141,8 @@ const AddPayrollAccountSetupForm = ({
   // ===================== SAVE =====================
   const saveMutation = useMutation({
     mutationFn: async (values: TPayrollAccountForm) => {
-      // NOTE: confirm exact insert/update proc names + val1sN column mapping on backend
       return executeDynamicMutationColumn90({
-         parameter: 'Payroll_accountsetup_ins_upd',
+        parameter: 'Payroll_accountsetup_ins_upd',
         loginid,
         val1s1: values.COMPANY_CODE,
         val1s2: values.DIV_CODE,
@@ -155,16 +153,16 @@ const AddPayrollAccountSetupForm = ({
         val1s7: values.AC_CODE_CR,
         val1s8: values.EXP_TYPE_CODE,
         val1s9: values.EXP_SUBTYPE_CODE,
-        val1s10: 'P', // PAY_COMP_TYPE — fixed as per existing SELECT filter
+        val1s10: 'P',
         val1s11: values.PAY_COMP_EARN_DED,
         val1s12: values.REMARKS
       });
     },
-   onSuccess: () => {
-  queryClient.invalidateQueries({ queryKey: ['pa_setup'] });
-  setNotice({ type: 'success', message: 'Payroll account setup saved successfully.' });
-  setTimeout(() => onClose(true), 1200); // let the success message show before closing
-},
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pa_setup'] });
+      setNotice({ type: 'success', message: 'Payroll account setup saved successfully.' });
+      setTimeout(() => onClose(true), 1200);
+    },
     onError: () => {
       setNotice({ type: 'error', message: 'Failed to save payroll account setup.' });
     }
@@ -175,8 +173,8 @@ const AddPayrollAccountSetupForm = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-  <section className="commercial-editor grid w-full max-w-6xl h-[55dvh] grid-rows-[auto_minmax(0,1fr)_auto] rounded-lg bg-background shadow-xl">
-     <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
+      <section className="commercial-editor grid w-full max-w-6xl h-[55dvh] grid-rows-[auto_minmax(0,1fr)_auto] rounded-lg bg-background shadow-xl">
+        <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
         {/* ===== Top Bar ===== */}
         <CardHeader className="border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
           <div className="flex min-h-10 items-center justify-between gap-3">
@@ -299,53 +297,7 @@ const AddPayrollAccountSetupForm = ({
                       )}
                     </div>
 
-                    {/* <div className="col-span-12 md:col-span-3">
-                      <label className="mb-1 block text-sm font-medium text-gray-700">Expense Type</label>
-                      <Input
-                        name="EXP_TYPE_CODE"
-                        value={formik.values.EXP_TYPE_CODE}
-                        onChange={formik.handleChange}
-                        disabled={disabled}
-                      />
-                    </div> */}
 
-                    {/* <div className="col-span-12 md:col-span-3">
-                      <label className="mb-1 block text-sm font-medium text-gray-700">Expense Subtype</label>
-                      <Input
-                        name="EXP_SUBTYPE_CODE"
-                        value={formik.values.EXP_SUBTYPE_CODE}
-                        onChange={formik.handleChange}
-                        disabled={disabled}
-                      />
-                    </div> */}
-
-                    {/* <div className="col-span-12 md:col-span-3">
-                      <label className="mb-1 block text-sm font-medium text-gray-700">Earn / Deduction</label>
-                      <Select
-                        name="PAY_COMP_EARN_DED"
-                        value={formik.values.PAY_COMP_EARN_DED}
-                        onChange={formik.handleChange}
-                        disabled={disabled}
-                      >
-                        {EARN_DED_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </Select>
-                    </div> */}
-
-                    {/* <div className="col-span-12">
-                      <label className="mb-1 block text-sm font-medium text-gray-700">Remarks</label>
-                      <textarea
-                        name="REMARKS"
-                        value={formik.values.REMARKS}
-                        onChange={formik.handleChange}
-                        disabled={disabled}
-                        rows={3}
-                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:bg-gray-100"
-                      />
-                    </div> */}
                   </div>
                 </div>
               </div>

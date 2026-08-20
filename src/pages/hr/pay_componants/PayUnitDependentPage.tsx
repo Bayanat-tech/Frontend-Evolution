@@ -6,8 +6,7 @@ import { Button } from '../../../components/ui/Button';
 import { Dialog } from '../../../components/ui/Dialog';
 import AddPayUnitDependentForm from './AddPayUnitDependentForm';
 
-// getDynamicLookup returns raw lowercase keys from Oracle — normalize so
-// UPPERCASE field reads resolve correctly.
+
 function uppercaseKeys<T extends Record<string, unknown>>(row: T): T {
   const out: Record<string, unknown> = {};
   for (const key in row) {
@@ -82,7 +81,7 @@ const PayUnitDependentPage = () => {
       {selectedDiv && (
         <AddPayUnitDependentForm
           key={selectedDiv.div_code}
-          onClose={() => {}}
+          onClose={() => { }}
           isEdit={false}
           isViewMode={false}
           div_code={selectedDiv.div_code}

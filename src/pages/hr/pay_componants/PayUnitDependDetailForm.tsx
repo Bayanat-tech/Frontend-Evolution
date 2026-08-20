@@ -10,14 +10,11 @@ import { Input } from '../../../components/ui/Input';
 import { Dialog } from '../../../components/ui/Dialog';
 import { DataTable } from '../../../components/ui/DataTable';
 import { AutoDismissAlert } from '../../../components/ui/AutoDismissAlert';
-
-// Lightweight id generator — replaces the missing 'uuid' package
 function newId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
 
-// getDynamicLookup returns raw lowercase keys from Oracle — normalize so
-// UPPERCASE field reads resolve correctly.
+
 function uppercaseKeys<T extends Record<string, unknown>>(row: T): T {
   const out: Record<string, unknown> = {};
   for (const key in row) {
@@ -107,13 +104,11 @@ const PayUnitDependDetailForm = ({ formik, disabled = false }: TProps) => {
   const handleDeleteDetail = async (id: string, nationality: string) => {
     if (!window.confirm('Are you sure you want to delete this row?')) return;
     try {
-      // NOTE: verify executeDynamicDelete accepts a code3 field — the original
-      // delete call needed company_code / pay_comp_id / nationality (3 codes).
+
       await executeDynamicDelete({
         parameter: 'PAY_COMP_PAYUNIT_DEPEND_DETAIL_Delete',
         loginid: user?.loginid ?? '',
         code1: user?.company_code ?? '',
-        // code2: formik.values.pay_comp_id ?? '',
         code2: nationality ?? ''
       } as any);
 
@@ -173,9 +168,6 @@ const PayUnitDependDetailForm = ({ formik, disabled = false }: TProps) => {
     setOpen(false);
     setEditRow(null);
   };
-
-  // Keep editRow's live edits reflected in the detail array immediately (matches
-  // original behavior of writing into formik on every keystroke, not just on Save)
   const updateEditRow = (patch: Partial<TPayUnitDetail>) => {
     if (!editRow) return;
     const updatedRow = { ...editRow, ...patch };

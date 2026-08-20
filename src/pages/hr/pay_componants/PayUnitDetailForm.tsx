@@ -11,7 +11,7 @@ import { Dialog } from '../../../components/ui/Dialog';
 import { DataTable } from '../../../components/ui/DataTable';
 import { LookupField } from '../../../components/ui/LookupField';
 
-// Lightweight id generator — replaces the missing 'uuid' package
+
 function newId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
@@ -124,13 +124,13 @@ const PayUnitDetailForm = ({ formik, disabled = false }: TProps) => {
     const updated = details.map((d) =>
       d.id === editRow.id
         ? {
-            ...d,
-            pay_comp_id_depend: editRow.pay_comp_id_depend,
-            pay_comp_desc: editRow.pay_comp_desc,
-            percent: editRow.percent,
-            sort_order: editRow.sort_order,
-            isEditMode: true
-          }
+          ...d,
+          pay_comp_id_depend: editRow.pay_comp_id_depend,
+          pay_comp_desc: editRow.pay_comp_desc,
+          percent: editRow.percent,
+          sort_order: editRow.sort_order,
+          isEditMode: true
+        }
         : d
     );
 
@@ -256,14 +256,13 @@ const PayUnitDetailForm = ({ formik, disabled = false }: TProps) => {
           <label className="field">
             <span>Dependent Pay Comp ID</span>
             <LookupField
-            
+
               placeholder="Search..."
               value={editRow?.pay_comp_id_depend || ''}
               displayValue={
                 editRow?.pay_comp_id_depend
-                  ? `${editRow.pay_comp_id_depend} - ${
-                      dependentPayCompOptions.find((opt) => opt.value_code === editRow.pay_comp_id_depend)?.value_desc || ''
-                    }`
+                  ? `${editRow.pay_comp_id_depend} - ${dependentPayCompOptions.find((opt) => opt.value_code === editRow.pay_comp_id_depend)?.value_desc || ''
+                  }`
                   : ''
               }
               columns={dependentLookupColumns}
@@ -280,10 +279,10 @@ const PayUnitDetailForm = ({ formik, disabled = false }: TProps) => {
                 setEditRow((prev) =>
                   prev
                     ? {
-                        ...prev,
-                        pay_comp_id_depend: val,
-                        pay_comp_desc: String(row?.VALUE_DESC ?? row?.value_desc ?? '')
-                      }
+                      ...prev,
+                      pay_comp_id_depend: val,
+                      pay_comp_desc: String(row?.VALUE_DESC ?? row?.value_desc ?? '')
+                    }
                     : prev
                 )
               }

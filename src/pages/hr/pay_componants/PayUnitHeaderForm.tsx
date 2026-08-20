@@ -18,10 +18,10 @@ const PAY_COMP_TYPE_OPTIONS = [
 ];
 const YES_NO_OPTIONS = ['Y', 'N'];
 
-// ✅ TCodeOption type — above component
+
 type TCodeOption = { value_code: string; value_desc: string };
 
-// ✅ useCodeOptions hook — above component
+
 const useCodeOptions = (parameter: string) => {
   const { user } = useAuth();
   const [options, setOptions] = useState<TCodeOption[]>([]);
@@ -63,7 +63,6 @@ function FieldHint({ error, helper }: { error?: string; helper?: string }) {
 const PayUnitHeaderForm = ({ formik, disabled = false }: TProps) => {
   const { values, errors, touched, handleChange, handleBlur } = formik;
 
-  // ✅ dynamic dropdown options
   const earnDedOptions = useCodeOptions('PAY_COMPONENT_EAR_DED_CodeValue');
   const payCompDependentOptions = useCodeOptions('PAY_COMPONENT_DEPENDENT_CodeValue');
   const periodicityOptions = useCodeOptions('PAY_COMPONENT_PERIODICITY_CodeValue');

@@ -263,8 +263,7 @@ const AddAttendanceTypeForm = ({ onClose, isEdit, isViewMode, company_code, atte
                                             />
                                         </div>
 
-                                        {/* NOTE: confirm if Category/Periodicity should be dropdowns
-                        from a code-value master rather than free text. */}
+
                                         <div className="col-span-12 md:col-span-4">
                                             <label className="mb-1 block text-sm font-medium text-gray-700">Category</label>
                                             <Select

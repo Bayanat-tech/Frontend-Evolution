@@ -163,13 +163,13 @@ const AddGradePayUnitForm = ({ onClose, isViewMode = false, div_code, div_name }
   /* ================= EFFECTS ================= */
   useEffect(() => {
     if (user?.company_code) formik.setFieldValue('company_code', user.company_code);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [user]);
 
   useEffect(() => {
     if (div_code) formik.setFieldValue('div_code', div_code);
     if (div_name) formik.setFieldValue('div_name', div_name);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [div_code, div_name]);
 
   /* ================= RENDER ================= */

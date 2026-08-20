@@ -9,14 +9,11 @@ import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Dialog } from '../../../components/ui/Dialog';
 import { DataTable } from '../../../components/ui/DataTable';
-
-// Lightweight id generator — replaces the missing 'uuid' package
 function newId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
 
-// getDynamicLookup returns raw lowercase keys from Oracle — normalize so
-// UPPERCASE field reads resolve correctly.
+
 function uppercaseKeys<T extends Record<string, unknown>>(row: T): T {
   const out: Record<string, unknown> = {};
   for (const key in row) {
@@ -173,8 +170,6 @@ const PayUnitDependHeaderForm = ({ formik, isEdit, disabled = false, onPayCompId
     if (!window.confirm('Are you sure you want to delete this row?')) return;
 
     try {
-      // NOTE: verify executeDynamicDelete accepts a code3 field — the original
-      // delete call needed company_code / pay_comp_id / depend_pay_comp_type (3 codes).
       await executeDynamicDelete({
         parameter: 'PAY_COMP_PAYUNIT_DEPEND_Delete',
         loginid: user?.loginid ?? '',
@@ -369,11 +364,11 @@ const PayUnitDependHeaderForm = ({ formik, isEdit, disabled = false, onPayCompId
                 setEditHeaderRow((prev) =>
                   prev
                     ? {
-                        ...prev,
-                        depend_pay_comp_type: selected?.pay_comp_id ?? '',
-                        depend_pay_comp_desc: selected?.pay_comp_desc ?? '',
-                        depend_pay_comp_short_desc: selected?.pay_comp_short_desc ?? ''
-                      }
+                      ...prev,
+                      depend_pay_comp_type: selected?.pay_comp_id ?? '',
+                      depend_pay_comp_desc: selected?.pay_comp_desc ?? '',
+                      depend_pay_comp_short_desc: selected?.pay_comp_short_desc ?? ''
+                    }
                     : prev
                 );
               }}
