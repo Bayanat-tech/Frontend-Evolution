@@ -365,10 +365,7 @@ const AddAccrualTypeForm = ({ onClose, isEdit, isViewMode, company_code, accrual
                     <h3 className="m-0 text-sm font-semibold leading-tight">Accrual Type Information</h3>
                   </div>
                   <div className="grid w-full grid-cols-12 gap-4 p-3">
-                    {/* <div className="col-span-12 md:col-span-2">
-                      <label className="mb-1 block text-sm font-medium text-gray-700">Company</label>
-                      <Input value={companyCode} disabled />
-                    </div> */}
+                    
 
                     <div className="col-span-12 md:col-span-2">
                       <label className="mb-1 block text-sm font-medium text-gray-700">

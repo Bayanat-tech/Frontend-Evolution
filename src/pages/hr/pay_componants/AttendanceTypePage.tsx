@@ -3,13 +3,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { executeDynamicDelete, getDynamicLookup } from '../../../api/lookups';
-// import AddAccrualTypeForm from './AddAccrualTypeForm';
+// import AddAttendanceTypeForm from './AddAttendanceTypeForm';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Dialog } from '../../../components/ui/Dialog';
 import { DataTable } from '../../../components/ui/DataTable';
 import { useAuth } from '../../../state/AuthContext';
-import AddAccrualTypeForm from './AddAccrualTypeForm';
+import AddAttendanceTypeForm from './AddAttendanceTypeForm';
 
 function uppercaseKeys<T extends Record<string, unknown>>(row: T): T {
   const out: Record<string, unknown> = {};
@@ -19,26 +19,29 @@ function uppercaseKeys<T extends Record<string, unknown>>(row: T): T {
   return out as T;
 }
 
-export type TAccrualTypeHeader = {
+export type TAttendanceTypeRow = {
   COMPANY_CODE: string;
-  ACCRUAL_TYPE: string;
-  ACCRUAL_DESC: string;
-  ACCRUAL_SHORT_DESC?: string;
+  ATTEND_TYPE: string;
+  ATTEND_DESC: string;
+  ATTEND_SHORT_DESC?: string;
+  STATUS?: string;
+  ATTENDANCE_CATEGORY?: string;
+  ATTEND_PERIODICITY?: string;
+  REMARKS?: string;
 };
 
-// Local popup-state shape (replaces the missing TUniversalDialogProps type)
-type TAccrualTypePopup = {
+type TAttendanceTypePopup = {
   open: boolean;
   title: string;
   wide: boolean;
   data: {
-    existingData: Partial<TAccrualTypeHeader>;
+    existingData: Partial<TAttendanceTypeRow>;
     isEditMode: boolean;
     isViewMode: boolean;
   };
 };
 
-const AccrualTypePage = () => {
+const AttendanceTypesPage = () => {
   const { user } = useAuth();
   const companyCode = user?.company_code ?? '';
   const loginid = user?.loginid ?? '';
@@ -46,29 +49,35 @@ const AccrualTypePage = () => {
 
   const [globalFilter, setGlobalFilter] = useState('');
 
-  const [accrualTypePopup, setAccrualTypePopup] = useState<TAccrualTypePopup>({
+  const [attendancePopup, setAttendancePopup] = useState<TAttendanceTypePopup>({
     open: false,
-    title: 'Add Accrual Type',
+    title: 'Add Attendance Type',
     wide: true,
     data: { existingData: {}, isEditMode: false, isViewMode: false }
   });
 
   // ===================== FETCH DATA =====================
-  const { data: accrualTypeData } = useQuery({
-    queryKey: ['accrual-type-header', companyCode],
+  const { data: attendanceData } = useQuery({
+    queryKey: ['attendance-types', companyCode],
     queryFn: async () => {
+      // NOTE: confirm this stored-procedure WHEN block returns ALL rows for
+      // the company (list mode), not a single ATTEND_TYPE record.
       const response = await getDynamicLookup({
-        parameter: 'PAY_COMPONENT_ACCRUAL_TYPE',
+        parameter: 'PAY_COMPONENT_ATTENDANCE_TYPE',
         code1: companyCode,
-        code2: ''
+        code2: loginid
       });
 
       const rawRows = (response ?? []) as unknown as Record<string, unknown>[];
       const tableData = rawRows.map(uppercaseKeys).map((row: any) => ({
         COMPANY_CODE: row.COMPANY_CODE,
-        ACCRUAL_TYPE: row.ACCRUAL_TYPE,
-        ACCRUAL_DESC: row.ACCRUAL_DESC,
-        ACCRUAL_SHORT_DESC: row.ACCRUAL_SHORT_DESC ?? ''
+        ATTEND_TYPE: row.ATTEND_TYPE,
+        ATTEND_DESC: row.ATTEND_DESC,
+        ATTEND_SHORT_DESC: row.ATTEND_SHORT_DESC,
+        STATUS: row.STATUS,
+        ATTENDANCE_CATEGORY: row.ATTENDANCE_CATEGORY,
+        ATTEND_PERIODICITY: row.ATTEND_PERIODICITY,
+        REMARKS: row.REMARKS
       }));
 
       return { tableData, count: tableData.length };
@@ -78,53 +87,54 @@ const AccrualTypePage = () => {
 
   // ===================== FILTER DATA =====================
   const filteredData = useMemo(() => {
-    const rows = accrualTypeData?.tableData ?? [];
+    const rows = attendanceData?.tableData ?? [];
     const trimmed = globalFilter.trim().toLowerCase();
     if (!trimmed) return rows;
     return rows.filter((row) =>
-      [row.ACCRUAL_TYPE, row.ACCRUAL_DESC, row.ACCRUAL_SHORT_DESC].some((val) =>
+      [row.ATTEND_TYPE, row.ATTEND_DESC, row.ATTEND_SHORT_DESC].some((val) =>
         String(val ?? '')
           .toLowerCase()
           .includes(trimmed)
       )
     );
-  }, [accrualTypeData?.tableData, globalFilter]);
+  }, [attendanceData?.tableData, globalFilter]);
 
   // ===================== DELETE =====================
-  const handleDelete = async (row: TAccrualTypeHeader) => {
+  const handleDelete = async (row: TAttendanceTypeRow) => {
     if (!window.confirm('Are you sure you want to delete this record?')) return;
 
-    queryClient.setQueryData(['accrual-type-header', companyCode], (oldData: any) => {
+    queryClient.setQueryData(['attendance-types', companyCode], (oldData: any) => {
       if (!oldData) return { tableData: [], count: 0 };
       return {
         ...oldData,
-        tableData: oldData.tableData.filter((item: any) => item.ACCRUAL_TYPE !== row.ACCRUAL_TYPE),
+        tableData: oldData.tableData.filter((item: any) => item.ATTEND_TYPE !== row.ATTEND_TYPE),
         count: oldData.count - 1
       };
     });
 
+    // NOTE: confirm exact delete proc parameter name on backend
     await executeDynamicDelete({
-      parameter: 'PAY_COMP_accrual_type_delete',
+      parameter: 'PAY_COMP_ATTENDANCE_TYPE_delete',
       loginid,
       code1: row.COMPANY_CODE,
-      code2: row.ACCRUAL_TYPE
+      code2: row.ATTEND_TYPE
     });
   };
 
   // ===================== ACTIONS =====================
-  const handleActions = (actionType: 'edit' | 'view' | 'delete', row: TAccrualTypeHeader) => {
+  const handleActions = (actionType: 'edit' | 'view' | 'delete', row: TAttendanceTypeRow) => {
     if (actionType === 'edit') {
-      setAccrualTypePopup({
+      setAttendancePopup({
         open: true,
-        title: 'Edit Accrual Type',
+        title: 'Edit Attendance Type',
         wide: true,
         data: { existingData: row, isEditMode: true, isViewMode: false }
       });
     }
     if (actionType === 'view') {
-      setAccrualTypePopup({
+      setAttendancePopup({
         open: true,
-        title: 'View Accrual Type',
+        title: 'View Attendance Type',
         wide: true,
         data: { existingData: row, isEditMode: true, isViewMode: true }
       });
@@ -134,33 +144,35 @@ const AccrualTypePage = () => {
     }
   };
 
-  const togglePopup = (refetch?: boolean) => {
-    setAccrualTypePopup((prev) => ({
-      ...prev,
-      open: false,
-      data: { existingData: {}, isEditMode: false, isViewMode: false }
-    }));
-    if (refetch) {
-      queryClient.invalidateQueries({ queryKey: ['accrual-type-header', companyCode] });
-    }
-  };
-
-  const handleAddNew = () => {
-    setAccrualTypePopup({
+  const handleAddClick = () => {
+    setAttendancePopup({
       open: true,
-      title: 'Add Accrual Type',
+      title: 'Add Attendance Type',
       wide: true,
       data: { existingData: {}, isEditMode: false, isViewMode: false }
     });
   };
 
+  const togglePopup = (refetch?: boolean) => {
+    setAttendancePopup((prev) => ({
+      ...prev,
+      open: false,
+      data: { existingData: {}, isEditMode: false, isViewMode: false }
+    }));
+    if (refetch) {
+      queryClient.invalidateQueries({ queryKey: ['attendance-types', companyCode] });
+    }
+  };
+
   // ===================== COLUMNS =====================
-  const columns = useMemo<ColumnDef<TAccrualTypeHeader>[]>(
+  const columns = useMemo<ColumnDef<TAttendanceTypeRow>[]>(
     () => [
-      // { accessorKey: 'COMPANY_CODE', header: 'Company Code', size: 130 },
-      { accessorKey: 'ACCRUAL_TYPE', header: 'Accrual Type', size: 150 },
-      { accessorKey: 'ACCRUAL_DESC', header: 'Description', size: 300 },
-      { accessorKey: 'ACCRUAL_SHORT_DESC', header: 'Short Description', size: 220 },
+      { accessorKey: 'ATTEND_TYPE', header: 'Attend Type', size: 130 },
+      { accessorKey: 'ATTEND_DESC', header: 'Description', size: 260 },
+      { accessorKey: 'ATTEND_SHORT_DESC', header: 'Short Description', size: 180 },
+      { accessorKey: 'ATTENDANCE_CATEGORY', header: 'Category', size: 150 },
+      { accessorKey: 'ATTEND_PERIODICITY', header: 'Periodicity', size: 150 },
+      { accessorKey: 'STATUS', header: 'Status', size: 100 },
       {
         id: 'actions',
         header: 'Actions',
@@ -198,7 +210,7 @@ const AccrualTypePage = () => {
           Home
         </a>
         <span>/</span>
-        <span className="text-foreground">Accrual Type</span>
+        <span className="text-foreground">Attendance Types</span>
       </nav>
 
       <div className="flex justify-end space-x-2">
@@ -212,9 +224,9 @@ const AccrualTypePage = () => {
           />
         </div>
 
-        {/* <Button type="button" variant="default" onClick={handleAddNew}>
-          <Plus size={15} /> Create Accrual Type
-        </Button> */}
+        <Button type="button" variant="default" onClick={handleAddClick}>
+          <Plus size={15} /> Add Attendance Type
+        </Button>
       </div>
 
       <DataTable
@@ -225,28 +237,25 @@ const AccrualTypePage = () => {
         density="compact"
         enablePagination
         pageSize={100}
-        getRowId={(row, index) => row.ACCRUAL_TYPE || `temp-${index}`}
+        getRowId={(row, index) => row.ATTEND_TYPE || `temp-${index}`}
       />
 
-      {accrualTypePopup.open && (
-        <Dialog
-          open={accrualTypePopup.open}
-          wide={accrualTypePopup.wide}
-          title={accrualTypePopup.title}
-          onClose={() => togglePopup(true)}
-        >
-          <AddAccrualTypeForm
-            key={accrualTypePopup.data.existingData?.ACCRUAL_TYPE || 'new'}
-            onClose={() => togglePopup(true)}
-            isEdit={accrualTypePopup.data.isEditMode}
-            isViewMode={accrualTypePopup.data.isViewMode}
-            company_code={accrualTypePopup.data.existingData?.COMPANY_CODE || undefined}
-            accrual_type={accrualTypePopup.data.existingData?.ACCRUAL_TYPE || undefined}
-          />
-        </Dialog>
-      )}
+     {attendancePopup.open && (
+  <AddAttendanceTypeForm
+    key={attendancePopup.data.existingData?.ATTEND_TYPE || 'new'}
+    onClose={() => togglePopup(true)}
+    isEdit={attendancePopup.data.isEditMode}
+    isViewMode={attendancePopup.data.isViewMode}
+    company_code={companyCode}
+    attend_type={attendancePopup.data.existingData?.ATTEND_TYPE || undefined}
+  />
+)}
+
+
+
+
     </div>
   );
 };
 
-export default AccrualTypePage;
+export default AttendanceTypesPage;

@@ -8,6 +8,9 @@ import { LookupField } from '../../../components/ui/LookupField';
 import { CardHeader } from '../../../components/ui/Card';
 import { useAuth } from '../../../state/AuthContext';
 import { executeDynamicMutationColumn90, getDynamicLookup } from '../../../api/lookups';
+import { useState } from 'react';
+import { AutoDismissAlert } from '../../../components/ui/AutoDismissAlert';
+// import { AutoDismissAlert } from '../../../components/ui/AutoDismissAlert';
 
 function uppercaseKeys<T extends Record<string, unknown>>(row: T): T {
   const out: Record<string, unknown> = {};
@@ -60,6 +63,7 @@ const AddPayrollAccountSetupForm = ({
   const { user } = useAuth();
   const loginid = user?.loginid ?? '';
   const queryClient = useQueryClient();
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
  
   const { data: existingRecord, isLoading: existingLoading } = useQuery({
@@ -156,9 +160,13 @@ const AddPayrollAccountSetupForm = ({
         val1s12: values.REMARKS
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pa_setup'] });
-      onClose(true);
+   onSuccess: () => {
+  queryClient.invalidateQueries({ queryKey: ['pa_setup'] });
+  setNotice({ type: 'success', message: 'Payroll account setup saved successfully.' });
+  setTimeout(() => onClose(true), 1200); // let the success message show before closing
+},
+    onError: () => {
+      setNotice({ type: 'error', message: 'Failed to save payroll account setup.' });
     }
   });
 
@@ -166,8 +174,9 @@ const AddPayrollAccountSetupForm = ({
   const isLoadingData = !!(isEdit && existingLoading);
 
   return (
-    <div className="fixed inset-0 z-50 bg-background">
-      <section className="commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+  <section className="commercial-editor grid w-full max-w-6xl h-[55dvh] grid-rows-[auto_minmax(0,1fr)_auto] rounded-lg bg-background shadow-xl">
+     <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
         {/* ===== Top Bar ===== */}
         <CardHeader className="border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
           <div className="flex min-h-10 items-center justify-between gap-3">
