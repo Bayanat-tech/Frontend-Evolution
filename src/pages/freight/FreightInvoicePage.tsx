@@ -146,6 +146,7 @@ export function FreightInvoicePage() {
   }
 
   // async function loadCandidateJobs(search = candidateSearch, prinCode = form.prin_code) {
+  //   try {
   //     const response = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/invoice/job-selection", {
   //       company_code: companyCode,
   //       prin_code: prinCode,
