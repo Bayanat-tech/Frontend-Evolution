@@ -19,7 +19,8 @@ import {
   ShipWheel,
   Sparkles,
   Trash2,
-  CreditCard
+  CreditCard,
+  X
 } from "lucide-react";
 import { api } from "../../api/client";
 import { freightSelect } from "../../api/freight";
@@ -212,6 +213,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   const [saving, setSaving] = useState(false);
   const [approving, setApproving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const cancelRowRef = useRef<LookupRow | null>(null);
   const [assistOpen, setAssistOpen] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -343,16 +346,51 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
         );
       },
     },
-    {
+  //   {
+  //     id: "actions",
+  //     header: "Actions",
+  //     size: 80,
+  //     enableColumnFilter: false,
+  //     cell: ({ row }) => (
+  //       <Button type="button" size="icon" variant="ghost" title="Open quotation" onClick={() => openQuotation(row.original)}>
+  //         <Eye size={14} />
+  //       </Button>
+  //     ),
+  //   },
+  // ], []);
+
+      {
       id: "actions",
       header: "Actions",
-      size: 80,
+      size: 110,
       enableColumnFilter: false,
-      cell: ({ row }) => (
-        <Button type="button" size="icon" variant="ghost" title="Open quotation" onClick={() => openQuotation(row.original)}>
-          <Eye size={14} />
-        </Button>
-      ),
+      cell: ({ row }) => {
+        const status = lookupText(row.original, "indstatus");
+        const action = lookupText(row.original, "last_action");
+        const finalApproved = lookupText(row.original, "final_approved");
+        const cancelDisabled = status === "A" || finalApproved === "Y" || status === "R" || action === "REJECTED";
+        return (
+          <div className="flex items-center justify-end gap-1">
+            <Button type="button" size="icon" variant="ghost" title="Open quotation" onClick={() => openQuotation(row.original)}>
+              <Eye size={14} />
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              title={cancelDisabled ? `${statusLabel(status, action, finalApproved)} quotation cannot be cancelled` : "Cancel quotation"}
+              className="text-red-600 hover:text-red-700"
+              disabled={cancelDisabled}
+              onClick={(event) => {
+                event.stopPropagation();
+                requestCancelRow(row.original);
+              }}
+            >
+              <X size={14} />
+            </Button>
+          </div>
+        );
+      },
     },
   ], []);
 
@@ -697,8 +735,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   };
 
   const approveQuotation = () => {
-    const remarks = window.prompt("Approval remarks", "") || "";
-    void runWorkflowAction("APPROVED", remarks);
+    // const remarks = window.prompt("Approval remarks", "") || "";
+    void runWorkflowAction("APPROVED", "");
   };
 
   const sendBackQuotation = () => {
@@ -741,6 +779,63 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
     } finally {
       setApproving(false);
     }
+  };
+
+    const confirmCancel = async () => {
+    const rowTarget = cancelRowRef.current;
+    const companyCode = rowTarget ? lookupText(rowTarget, "company_code") || header.company_code : header.company_code;
+    const prinCode = rowTarget ? lookupText(rowTarget, "prin_code") || header.prin_code : header.prin_code;
+    const quotationNr = rowTarget ? lookupText(rowTarget, "quotation_nr") : header.quotation_nr;
+
+    setCancelling(true);
+    setNotice(null);
+    try {
+      const response = await api.post<{ success?: boolean; message?: string }>("/api/freight/quotation/delete", {
+        company_code: companyCode,
+        prin_code: prinCode,
+        quotation_nr: quotationNr,
+        cancel_by: loginId,
+        cancel_remarks: "",
+      });
+      if (response.data?.success === false) {
+        throw new Error(response.data.message || "Unable to cancel quotation");
+      }
+      if (!rowTarget) {
+        setHeader((current) => ({ ...current, indstatus: "C" }));
+      }
+      cancelRowRef.current = null;
+      setNotice({ type: "success", text: response.data?.message || "Quotation cancelled" });
+      await loadRows();
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to cancel quotation" });
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const requestCancel = () => {
+    if (!header.quotation_nr) {
+      setView("list");
+      return;
+    }
+    if (isReadOnly) {
+      setNotice({ type: "error", text: `${statusLabel(header.indstatus, header.last_action, header.final_approved)} quotation cannot be cancelled` });
+      return;
+    }
+    cancelRowRef.current = null;
+    void confirmCancel();
+  };
+
+  const requestCancelRow = (row: LookupRow) => {
+    const status = lookupText(row, "indstatus");
+    const action = lookupText(row, "last_action");
+    const finalApproved = lookupText(row, "final_approved");
+    if (status === "A" || finalApproved === "Y" || status === "R" || action === "REJECTED") {
+      setNotice({ type: "error", text: `${statusLabel(status, action, finalApproved)} quotation cannot be cancelled` });
+      return;
+    }
+    cancelRowRef.current = row;
+    void confirmCancel();
   };
 
   const addDetail = () => setDetails((current) => [...current, buildInitialDetail(header, current.length + 1)]);
