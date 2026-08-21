@@ -559,29 +559,32 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
     );
   };
 
-  const applyDetailActivityLookup = (index: number, value: string, row: LookupRow | null) => {
-    setDetails((current) =>
-      current.map((line, rowIndex) => {
-        if (rowIndex !== index) return line;
-        const activityCode = value || lookupText(row || {}, "activity_code") || "";
-        const quantity = lookupText(row || {}, "quantity") || line.quantity || "1";
-        const billRate = lookupText(row || {}, "bill") || line.bill_rate || "0";
-        const costRate = lookupText(row || {}, "cost") || line.cost_rate || "0";
-        return {
-          ...line,
-          act_code: activityCode,
-          activity: lookupText(row || {}, "activity") || line.activity,
-          transport_mode: header.transport_mode || line.transport_mode,
-          quantity,
-          uom: lookupText(row || {}, "uom") || line.uom,
-          bill_rate: billRate,
-          cost_rate: costRate,
-          bill: multiplyText(quantity, billRate),
-          cost: multiplyText(quantity, costRate),
-        };
-      }),
-    );
-  };
+const applyDetailActivityLookup = (index: number, value: string, row: LookupRow | null) => {
+  setDetails((current) =>
+    current.map((line, rowIndex) => {
+      if (rowIndex !== index) return line;
+      const lookupRow = row || {};
+      const activityCode = value || lookupFirstText(lookupRow, "activity_code", "ACTIVITY_CODE", "act_code", "ACT_CODE");
+      const activityName = lookupFirstText(lookupRow, "activity", "ACTIVITY", "other_services", "OTHER_SERVICES", "act_name", "ACT_NAME");
+      const quantity = lookupFirstText(lookupRow, "quantity", "QUANTITY") || line.quantity || "1";
+      const billRate = lookupFirstText(lookupRow, "bill", "BILL", "bill_rate", "BILL_RATE") || line.bill_rate || "0";
+      const costRate = lookupFirstText(lookupRow, "cost", "COST", "cost_rate", "COST_RATE") || line.cost_rate || "0";
+      return {
+        ...line,
+        act_code: activityCode || line.act_code,
+        activity: activityName || line.activity,
+        transport_mode: header.transport_mode || line.transport_mode,
+        quantity,
+        uom: lookupFirstText(lookupRow, "uom", "UOM") || line.uom,
+        bill_rate: billRate,
+        cost_rate: costRate,
+        bill: multiplyText(quantity, billRate),
+        cost: multiplyText(quantity, costRate),
+        curr_code: line.curr_code || header.curr_code || "OMR",
+      };
+    }),
+  );
+};
 
   const loadEnquiries = async () => {
     const companyCode = String(userInfo?.company_code || userInfo?.COMPANY_CODE || header.company_code || "");
@@ -2411,6 +2414,14 @@ function normalizeLookupRow(row: LookupRow): LookupRow {
 
 function lookupText(row: LookupRow, field: string) {
   return String(getLookupValue(row, field) ?? "").trim();
+}
+
+function lookupFirstText(row: LookupRow, ...fields: string[]) {
+  for (const field of fields) {
+    const value = lookupText(row, field);
+    if (value) return value;
+  }
+  return "";
 }
 
 function multiplyText(quantity: string, rate: string) {
