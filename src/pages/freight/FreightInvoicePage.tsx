@@ -145,21 +145,42 @@ export function FreightInvoicePage() {
     }
   }
 
-  async function loadCandidateJobs(search = candidateSearch, prinCode = form.prin_code) {
-    try {
-      const response = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/invoice/job-selection", {
-        company_code: companyCode,
-        prin_code: prinCode,
-        from_date: form.from_date || filterFromDate,
-        to_date: form.to_date || filterToDate,
-        search,
-      });
-      setCandidateRows((response.data.data || []).map(normalizeRow));
-    } catch (error: any) {
-      toast.error(error?.response?.data?.details || error?.response?.data?.message || "Unable to load billable freight jobs.");
-      setCandidateRows([]);
-    }
+  // async function loadCandidateJobs(search = candidateSearch, prinCode = form.prin_code) {
+  //   try {
+  //     const response = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/invoice/job-selection", {
+  //       company_code: companyCode,
+  //       prin_code: prinCode,
+  //       from_date: form.from_date || filterFromDate,
+  //       to_date: form.to_date || filterToDate,
+  //       search,
+  //     });
+  //     setCandidateRows((response.data.data || []).map(normalizeRow));
+  //   } catch (error: any) {
+  //     toast.error(error?.response?.data?.details || error?.response?.data?.message || "Unable to load billable freight jobs.");
+  //     setCandidateRows([]);
+  //   }
+  // }
+
+  async function loadCandidateJobs(
+  search = candidateSearch,
+  prinCode = form.prin_code,
+  fromDate = form.from_date,
+  toDate = form.to_date
+) {
+  try {
+    const response = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/invoice/job-selection", {
+      company_code: companyCode,
+      prin_code: prinCode,
+      from_date: fromDate,
+      to_date: toDate,
+      search,
+    });
+    setCandidateRows((response.data.data || []).map(normalizeRow));
+  } catch (error: any) {
+    toast.error(error?.response?.data?.details || error?.response?.data?.message || "Unable to load billable freight jobs.");
+    setCandidateRows([]);
   }
+}
 
   function toggleCandidate(row: LookupRow) {
     const key = lineKey(row);
@@ -364,8 +385,8 @@ export function FreightInvoicePage() {
           <div className="grid gap-2 p-3 md:grid-cols-6">
             <Field label="Invoice No"><Input value={form.invoice_no || "Auto"} disabled /></Field>
             <Field label="Invoice Date"><Input type="date" value={form.invoice_date} disabled={readOnly} onChange={(event) => setFormField("invoice_date", event.target.value)} /></Field>
-            <Field label="From Date"><Input type="date" value={form.from_date} disabled={readOnly} onChange={(event) => setFormField("from_date", event.target.value)} /></Field>
-            <Field label="To Date"><Input type="date" value={form.to_date} disabled={readOnly} onChange={(event) => setFormField("to_date", event.target.value)} /></Field>
+            <Field label="From Date"><Input type="date" value={form.from_date} disabled={readOnly} onChange={(event) => {setFormField("from_date", event.target.value); void loadCandidateJobs(candidateSearch, form.prin_code, event.target.value, form.to_date);}}/></Field>
+            <Field label="To Date"><Input type="date" value={form.to_date} disabled={readOnly} onChange={(event) => {setFormField("to_date", event.target.value); void loadCandidateJobs(candidateSearch, form.prin_code, form.from_date, event.target.value);}} /></Field>
             <Field label="Principal">
               <LookupField
                 compact
@@ -379,6 +400,7 @@ export function FreightInvoicePage() {
                 onChange={(value, row) => {
                   setForm((prev) => ({ ...prev, prin_code: value, prin_name: text(row?.prin_name ?? row?.PRIN_NAME), curr_code: text(row?.curr_code ?? row?.CURR_CODE) || prev.curr_code }));
                   setCandidateRows([]);
+                  void loadCandidateJobs(candidateSearch, value);
                 }}
                 placeholder="Select principal"
               />
