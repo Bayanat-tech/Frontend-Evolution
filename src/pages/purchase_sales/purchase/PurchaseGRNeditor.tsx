@@ -39,6 +39,8 @@ import { PurchaseOrderHeaderForm } from "./Purchaseorderheaderform";
 import { PurchaseOrderLinesTable } from "./Purchaseorderlinestable";
 import { SendBackDialog } from "./Sendbackdialog";
 import { RejectDialog } from "./Rejectdialog";
+import { PurchaseGrnHeaderForm } from "./PurchaseGrnheaderForm";
+import { PurchaseGrnDetailsTable } from "./PurchaseGrnDetails";
 
 
 export type { PurchaseOrderEditorState };
@@ -141,6 +143,14 @@ export function PurchaseGRNEditor({
           scope_of_work: text(headerRaw.scope_of_work || current.scope_of_work),
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
+          // --- PO-reference fields, missing until now ---
+          po_doc_no: text(headerRaw.po_doc_no || current.po_doc_no),
+          po_doc_date: toDateInputValue(headerRaw.po_doc_date) || current.po_doc_date,
+          po_div_code: text(headerRaw.po_div_code || current.po_div_code),
+          po_ac_code: text(headerRaw.po_ac_code || current.po_ac_code),
+          po_payment_terms: text(headerRaw.po_payment_terms || current.po_payment_terms),
+          po_dlvr_term: text(headerRaw.po_dlvr_term || current.po_dlvr_term),
+          total_po_amount: numberOrZero(headerRaw.total_po_amount) || current.total_po_amount,
         }));
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
@@ -401,7 +411,7 @@ export function PurchaseGRNEditor({
             <div className="grid gap-3">
               <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
-              <PurchaseOrderHeaderForm
+              <PurchaseGrnHeaderForm
                 form={form}
                 docType={PO_DOC_TYPE.GRN}
                 setForm={setForm}
@@ -414,7 +424,7 @@ export function PurchaseGRNEditor({
                 setdetails={setRows}
               />
 
-              <PurchaseOrderLinesTable
+              <PurchaseGrnDetailsTable
                 rows={rows}
                 form={form}
                 setdetails={setRows}

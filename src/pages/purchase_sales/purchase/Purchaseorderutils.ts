@@ -61,7 +61,15 @@ export const emptyLineRow = (divCode: string): PurchaseOrderLineRow => ({
   ex_rate:1,
   tx_compnt_perc_1:0,
   tx_compnt_amt_1:0,
-  tx_compnt_1_expmt:""
+  tx_compnt_1_expmt:"",
+  po_prod_code: "",
+  po_prod_name: "",
+  po_p_uom: "",
+  po_qty_puom: 0,
+  po_l_uom: "",
+  po_qty_luom: 0,
+  po_quantity:0
+
 });
 
 export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
@@ -179,7 +187,16 @@ export async function fetchPurchaseOrderDetail(
       tx_compntcat_code_1:text(row.tx_compntcat_code_1),
       tx_compnt_perc_1:numberOrZero(row.tx_compnt_perc_1),
       tx_compnt_amt_1: numberOrZero(row.tx_compnt_amt_1),
-      tx_compnt_1_expmt: text(row.tx_compnt_1_expmt)
+      tx_compnt_1_expmt: text(row.tx_compnt_1_expmt),
+       po_prod_code: text(row.po_prod_code),
+      po_prod_name: text(row.po_prod_name),
+      po_p_uom: text(row.po_p_uom),
+      po_qty_puom: numberOrZero(row.po_qty_puom),
+      po_l_uom: text(row.po_l_uom),
+      po_qty_luom: numberOrZero(row.po_qty_luom),
+      po_quantity: numberOrZero(row.po_quantity),
+      po_unit_price:numberOrZero(row.po_unit_price),
+      po_div_code:text(row.po_div_code),
     } satisfies PurchaseOrderLineRow;
   });
 }
@@ -227,7 +244,7 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     sentback_reason: form.sentback_reason || undefined,
     reject_reason: form.reject_reason || undefined,
     flow_level_running: form.flow_level_running || 0,
-    ref_doc_no:numberOrZero( form.doc_no) || undefined,
+    ref_doc_no:numberOrZero( form.po_doc_no) || undefined,
     grn_no: numberOrZero( form.doc_no) || undefined,
   };
 }
@@ -242,6 +259,13 @@ export function isSameUom(row: PurchaseOrderLineRow): boolean {
 export function computeQuantity(row: PurchaseOrderLineRow): number {
   const qtyPuom = numberOrZero(row.qty_puom);
   const qtyLuom = numberOrZero(row.qty_luom);
+  const uppp = numberOrZero(row.uppp);
+  return isSameUom(row) ? qtyLuom : qtyPuom * uppp + qtyLuom;
+}
+
+export function computePoQuantity(row: PurchaseOrderLineRow): number {
+  const qtyPuom = numberOrZero(row.po_qty_puom);
+  const qtyLuom = numberOrZero(row.po_qty_luom);
   const uppp = numberOrZero(row.uppp);
   return isSameUom(row) ? qtyLuom : qtyPuom * uppp + qtyLuom;
 }
@@ -314,7 +338,20 @@ export function buildDetailsPayload(rows: PurchaseOrderLineRow[], ex_rate?: numb
     lcur_amount_disc: row.lcur_amount_disc,
     tx_compnt_amt_1 :lineTaxAmount(row),
     tx_compnt_perc_1: row.tx_compnt_perc_1,
-    tx_compnt_1_expmt: row.tx_compnt_1_expmt
+    tx_compnt_1_expmt: row.tx_compnt_1_expmt,
+    po_p_uom: row.po_p_uom,
+  po_qty_puom:row.po_qty_puom,
+  po_l_uom: row.po_l_uom,
+  po_qty_luom:row.po_qty_luom,
+  po_unit_price:row.po_unit_price,
+  po_quantity:row.po_quantity,
+  po_prod_code: row.po_prod_code,
+  po_prod_name:row.po_prod_name,
+  po_div_code: row.po_div_code,
+   po_zone_code: row.po_zone_code,
+  po_zone_name:row.po_zone_name,
+   ref_doc_no:numberOrZero( row.po_doc_no) || undefined,
+
   }));
 }
 

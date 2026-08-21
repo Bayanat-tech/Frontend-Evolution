@@ -37,14 +37,27 @@ export interface PurchaseOrderLineRow {
   uppp?: number,
   quantity: number,
   ex_rate: number,
-   tx_cat_code:string,
-    tx_compntcat_code_1: string,
-    tx_compnt_perc_1: number,
-    tx_compnt_amt_1:number,
-    tx_compnt_1_expmt:string,
-    tx_cat_name?: string
-    tx_compntcat_name_1?:string
-    
+  tx_cat_code: string,
+  tx_compntcat_code_1: string,
+  tx_compnt_perc_1: number,
+  tx_compnt_amt_1: number,
+  tx_compnt_1_expmt: string,
+  tx_cat_name?: string
+  tx_compntcat_name_1?: string
+
+  po_p_uom?: string;
+  po_qty_puom?: number;
+  po_l_uom?: string;
+  po_qty_luom?: number;
+  po_unit_price?: number;
+  po_quantity?: number,
+  po_prod_code?: string;
+  po_prod_name?: string;
+  po_div_code?: string;
+   po_zone_code?: string;
+  po_zone_name?: string;
+  po_doc_no?:string
+
 
 
 
@@ -113,7 +126,17 @@ export interface PurchaseOrderForm {
   delivery_email: string;
   grn_no?: number | string;
   ref_doc_no?: number | string;
-    tx_compntcat_name_1?:string
+  ref_doc_dt?: string;
+  tx_compntcat_name_1?: string;
+  po_company_code?: string;
+  po_doc_no?: number | string;
+  po_payment_terms?: string;
+  po_dlvr_term?: string;
+  po_doc_date?: string;
+  total_po_amount?: number
+  po_ac_code?:string;
+  po_div_code?: string
+
 
 }
 
@@ -208,7 +231,7 @@ export const PO_DOC_TYPE = {
   GRN: "GRN",
   JO: "JO",
   FGP: "FGP",
-  PIN : "PIN",
+  PIN: "PIN",
 
 } as const;
 export const PROCESS = "purchase_order";
