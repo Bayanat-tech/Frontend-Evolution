@@ -7,32 +7,47 @@ type ApiResponse<T> = {
 };
 
 export type AccountFile = {
+  COMPANY_CODE?: string;
   company_code?: string;
   companyCode?: string;
+  REQUEST_NUMBER?: string;
   request_number?: string;
   requestNumber?: string;
+  SR_NO?: number;
   sr_no?: number;
   srNo?: number;
+  FILE_NAME?: string;
   file_name?: string;
   fileName?: string;
+  ORG_FILE_NAME?: string;
   org_file_name?: string;
   orgFileName?: string;
+  AWS_FILE_LOCN?: string;
   aws_file_locn?: string;
   awsFileLocn?: string;
+  FLOW_LEVEL?: number;
   flow_level?: number;
   flowLevel?: number;
+  MODULES?: string;
   modules?: string;
+  UPDATED_BY?: string;
   updated_by?: string;
   updatedBy?: string;
+  CREATED_BY?: string;
   created_by?: string;
   createdBy?: string;
+  EXTENSIONS?: string;
   extensions?: string;
+  USER_FILE_NAME?: string;
   user_file_name?: string;
   userFileName?: string;
+  CREATED_AT?: string;
   created_at?: string;
   createdAt?: string;
+  UPDATED_AT?: string;
   updated_at?: string;
   updatedAt?: string;
+  TYPE?: string;
   type?: string;
 };
 
@@ -54,31 +69,18 @@ export type NormalizedFile = {
 
 export async function getAccountFiles(requestNumber: string) {
   if (!requestNumber) return [];
-  const response = await api.get<ApiResponse<AccountFile[]>>(
-    `/api/files/accountFiles/${encodeProxySafePathSegment(requestNumber)}`,
-    {
-      params: { _: Date.now() },
-      headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
-    },
-  );
+  const response = await api.get<ApiResponse<AccountFile[]>>(`/api/files/accountFiles/${encodeProxySafePathSegment(requestNumber)}`);
   if (!response.data.success) throw new Error(response.data.message || "Unable to load attachments");
   return (response.data.data || []).map(normalizeFile);
 }
 
 export async function getFreightAccountFiles(requestNumber: string) {
   if (!requestNumber) return [];
-  try {
-    const response = await api.post<ApiResponse<AccountFile[]>>("/api/freight/account-attachments/list", {
-      request_number: requestNumber,
-    });
-    if (!response.data.success) throw new Error(response.data.message || "Unable to load freight attachments");
-    return (response.data.data || []).map(normalizeFile);
-  } catch (error: any) {
-    // Keep Freight functional while older backend deployments do not yet have
-    // the tenant-safe POST endpoint. Do not mask authorization/server errors.
-    if (error?.response?.status !== 404) throw error;
-    return getAccountFiles(requestNumber);
-  }
+  const response = await api.post<ApiResponse<AccountFile[]>>("/api/freight/account-attachments/list", {
+    request_number: requestNumber,
+  });
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load freight attachments");
+  return (response.data.data || []).map(normalizeFile);
 }
 
 export async function uploadAccountFile(file: File, requestNumber: string, type: string) {
@@ -150,19 +152,19 @@ export function makeFileRow(options: {
 
 export function normalizeFile(file: AccountFile): NormalizedFile {
   return {
-    company_code: text(file.company_code ?? file.companyCode),
-    request_number: text(file.request_number ?? file.requestNumber),
-    sr_no: numberValue(file.sr_no ?? file.srNo),
-    file_name: text(file.file_name ?? file.fileName),
-    org_file_name: text(file.org_file_name ?? file.orgFileName),
-    aws_file_locn: text(file.aws_file_locn ?? file.awsFileLocn),
-    flow_level: numberValue(file.flow_level ?? file.flowLevel) ?? 0,
-    modules: text(file.modules),
-    updated_by: text(file.updated_by ?? file.updatedBy),
-    created_by: text(file.created_by ?? file.createdBy),
-    extensions: text(file.extensions),
-    user_file_name: text(file.user_file_name ?? file.userFileName ?? file.org_file_name ?? file.orgFileName),
-    type: text(file.type),
+    company_code: text(file.company_code ?? file.companyCode ?? file.COMPANY_CODE),
+    request_number: text(file.request_number ?? file.requestNumber ?? file.REQUEST_NUMBER),
+    sr_no: numberValue(file.sr_no ?? file.srNo ?? file.SR_NO),
+    file_name: text(file.file_name ?? file.fileName ?? file.FILE_NAME),
+    org_file_name: text(file.org_file_name ?? file.orgFileName ?? file.ORG_FILE_NAME),
+    aws_file_locn: text(file.aws_file_locn ?? file.awsFileLocn ?? file.AWS_FILE_LOCN),
+    flow_level: numberValue(file.flow_level ?? file.flowLevel ?? file.FLOW_LEVEL) ?? 0,
+    modules: text(file.modules ?? file.MODULES),
+    updated_by: text(file.updated_by ?? file.updatedBy ?? file.UPDATED_BY),
+    created_by: text(file.created_by ?? file.createdBy ?? file.CREATED_BY),
+    extensions: text(file.extensions ?? file.EXTENSIONS),
+    user_file_name: text(file.user_file_name ?? file.userFileName ?? file.USER_FILE_NAME ?? file.org_file_name ?? file.orgFileName ?? file.ORG_FILE_NAME),
+    type: text(file.type ?? file.TYPE),
   };
 }
 

@@ -1,4 +1,4 @@
-import { Download, FileText, Paperclip, Pencil, Trash2, UploadCloud, X } from "lucide-react";
+import { Download, Eye, FileText, Paperclip, Pencil, Trash2, UploadCloud, X } from "lucide-react";
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   deleteAccountFile,
@@ -153,7 +153,7 @@ export function AttachmentDialog({
   return (
     <Dialog
       open={open}
-      wide
+      contentClassName="w-[min(96vw,1100px)] max-h-[86vh]"
       title={title}
       description={requestNumber ? `Linked to ${requestNumber}${relatedRequestNumbers.length ? " with source files shown" : ""}` : "Save the record first, then attach files."}
       onClose={onClose}
@@ -233,8 +233,13 @@ export function AttachmentDialog({
                       <td className="px-3 py-2">
                         <div className="flex justify-end gap-1">
                           {file.aws_file_locn && (
-                            <Button asChild size="icon" variant="ghost" title="Open file">
-                              <a href={file.aws_file_locn} target="_blank" rel="noreferrer"><Download size={14} /></a>
+                            <Button asChild size="icon" variant="ghost" title="View file">
+                              <a href={file.aws_file_locn} target="_blank" rel="noreferrer"><Eye size={14} /></a>
+                            </Button>
+                          )}
+                          {file.aws_file_locn && (
+                            <Button asChild size="icon" variant="ghost" title="Download file">
+                              <a href={file.aws_file_locn} download={file.user_file_name || file.org_file_name}><Download size={14} /></a>
                             </Button>
                           )}
                           {!readOnly && primary && editing ? (
