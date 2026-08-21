@@ -19,7 +19,8 @@ import {
   ShipWheel,
   Sparkles,
   Trash2,
-  CreditCard
+  CreditCard,
+  X
 } from "lucide-react";
 import { api } from "../../api/client";
 import { freightSelect } from "../../api/freight";
@@ -212,6 +213,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   const [saving, setSaving] = useState(false);
   const [approving, setApproving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const cancelRowRef = useRef<LookupRow | null>(null);
   const [assistOpen, setAssistOpen] = useState(false);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -305,6 +308,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
 
   const requiredFieldChecks: { tab: FreightQuotationInitialTab; test: () => boolean; label: string }[] = [
   { tab: "cargo", test: () => Boolean(header.prin_code), label: "Principal" },
+  { tab: "cargo", test: () => Boolean(header.dept_code), label: "Department" },
   { tab: "cargo", test: () => Boolean(header.origin_port), label: "Port of Loading" },
   { tab: "payment", test: () => Boolean(header.curr_code), label: "Currency" },
   { tab: "payment", test: () => Number(header.ex_rate || 0) > 0, label: "Exchange Rate" },
@@ -342,16 +346,51 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
         );
       },
     },
-    {
+  //   {
+  //     id: "actions",
+  //     header: "Actions",
+  //     size: 80,
+  //     enableColumnFilter: false,
+  //     cell: ({ row }) => (
+  //       <Button type="button" size="icon" variant="ghost" title="Open quotation" onClick={() => openQuotation(row.original)}>
+  //         <Eye size={14} />
+  //       </Button>
+  //     ),
+  //   },
+  // ], []);
+
+      {
       id: "actions",
       header: "Actions",
-      size: 80,
+      size: 110,
       enableColumnFilter: false,
-      cell: ({ row }) => (
-        <Button type="button" size="icon" variant="ghost" title="Open quotation" onClick={() => openQuotation(row.original)}>
-          <Eye size={14} />
-        </Button>
-      ),
+      cell: ({ row }) => {
+        const status = lookupText(row.original, "indstatus");
+        const action = lookupText(row.original, "last_action");
+        const finalApproved = lookupText(row.original, "final_approved");
+        const cancelDisabled = status === "A" || finalApproved === "Y" || status === "R" || action === "REJECTED";
+        return (
+          <div className="flex items-center justify-end gap-1">
+            <Button type="button" size="icon" variant="ghost" title="Open quotation" onClick={() => openQuotation(row.original)}>
+              <Eye size={14} />
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              title={cancelDisabled ? `${statusLabel(status, action, finalApproved)} quotation cannot be cancelled` : "Cancel quotation"}
+              className="text-red-600 hover:text-red-700"
+              disabled={cancelDisabled}
+              onClick={(event) => {
+                event.stopPropagation();
+                requestCancelRow(row.original);
+              }}
+            >
+              <X size={14} />
+            </Button>
+          </div>
+        );
+      },
     },
   ], []);
 
@@ -696,8 +735,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   };
 
   const approveQuotation = () => {
-    const remarks = window.prompt("Approval remarks", "") || "";
-    void runWorkflowAction("APPROVED", remarks);
+    // const remarks = window.prompt("Approval remarks", "") || "";
+    void runWorkflowAction("APPROVED", "");
   };
 
   const sendBackQuotation = () => {
@@ -740,6 +779,63 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
     } finally {
       setApproving(false);
     }
+  };
+
+    const confirmCancel = async () => {
+    const rowTarget = cancelRowRef.current;
+    const companyCode = rowTarget ? lookupText(rowTarget, "company_code") || header.company_code : header.company_code;
+    const prinCode = rowTarget ? lookupText(rowTarget, "prin_code") || header.prin_code : header.prin_code;
+    const quotationNr = rowTarget ? lookupText(rowTarget, "quotation_nr") : header.quotation_nr;
+
+    setCancelling(true);
+    setNotice(null);
+    try {
+      const response = await api.post<{ success?: boolean; message?: string }>("/api/freight/quotation/delete", {
+        company_code: companyCode,
+        prin_code: prinCode,
+        quotation_nr: quotationNr,
+        cancel_by: loginId,
+        cancel_remarks: "",
+      });
+      if (response.data?.success === false) {
+        throw new Error(response.data.message || "Unable to cancel quotation");
+      }
+      if (!rowTarget) {
+        setHeader((current) => ({ ...current, indstatus: "C" }));
+      }
+      cancelRowRef.current = null;
+      setNotice({ type: "success", text: response.data?.message || "Quotation cancelled" });
+      await loadRows();
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to cancel quotation" });
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const requestCancel = () => {
+    if (!header.quotation_nr) {
+      setView("list");
+      return;
+    }
+    if (isReadOnly) {
+      setNotice({ type: "error", text: `${statusLabel(header.indstatus, header.last_action, header.final_approved)} quotation cannot be cancelled` });
+      return;
+    }
+    cancelRowRef.current = null;
+    void confirmCancel();
+  };
+
+  const requestCancelRow = (row: LookupRow) => {
+    const status = lookupText(row, "indstatus");
+    const action = lookupText(row, "last_action");
+    const finalApproved = lookupText(row, "final_approved");
+    if (status === "A" || finalApproved === "Y" || status === "R" || action === "REJECTED") {
+      setNotice({ type: "error", text: `${statusLabel(status, action, finalApproved)} quotation cannot be cancelled` });
+      return;
+    }
+    cancelRowRef.current = row;
+    void confirmCancel();
   };
 
   const addDetail = () => setDetails((current) => [...current, buildInitialDetail(header, current.length + 1)]);
@@ -786,45 +882,16 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
     } else {
       formRef.current?.reportValidity();
     }
+    setNotice({ type: "error", text: `${failedCheck.label} is required` });
     return;
   }
-    // setSaving(true);
-    // setNotice(null);
-    // try {
-    //   const payload = {
-    //     header: { ...header, userid: loginId, user_date: new Date().toISOString(), quotation_type: "QTN" },
-    //     details: details.filter((row) => row.act_code.trim()).map((row, index) => ({
-    //       ...row,
-    //       srno: index + 1,
-    //       company_code: header.company_code,
-    //       prin_code: header.prin_code,
-    //       quotation_nr: header.quotation_nr || "0",
-    //       curr_code: row.curr_code || header.curr_code,
-    //       ex_rate: row.ex_rate || header.ex_rate,
-    //       transport_mode: row.transport_mode || header.transport_mode,
-    //       origin_port: row.origin_port || header.origin_port,
-    //       destination_port: row.destination_port || header.destination_port,
-    //       userid: loginId,
-    //       user_dt: new Date().toISOString(),
-    //     })),
-    //     terms,
-    //   };
-    //   const response = await api.post<{ success?: boolean; message?: string; data?: { quotation_nr?: string } }>("/api/freight/quotation/save", payload);
-    //   if (response.data?.success === false) throw new Error(response.data.message || "Unable to save quotation");
-    //   if (response.data?.data?.quotation_nr) setHeaderField("quotation_nr", response.data.data.quotation_nr);
-    //   setNotice({ type: "success", text: response.data?.message || "Quotation saved" });
-    //   await loadRows();
-    // } catch (error) {
-    //   setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to save quotation. Confirm Oracle quotation SP/types are created." });
-    // } finally {
-    //   setSaving(false);
-    // }
+    
     setSaving(true);
     setNotice(null);
     try {
       await persistQuotation();
-      setNotice({ type: "success", text: "Quotation saved" });
       await loadRows();
+      setNotice({ type: "success", text: "Quotation saved" });
     } catch (error) {
       setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to save quotation. Confirm Oracle quotation SP/types are created." });
     } finally {
@@ -899,8 +966,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
 
   return (
     <>
-      {/* <form className="freight-dense-form" onSubmit={saveQuotation}> */}
-      <form ref={formRef} className="freight-dense-form" onSubmit={saveQuotation}>
+      <form ref={formRef} className="freight-dense-form" onSubmit={saveQuotation}> 
         <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={15} /></div>
@@ -913,11 +979,6 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                 {/* <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">{header.quotation_nr || "New quotation"}</span> */}
                 <span className={statusBadgeClass(header.indstatus, header.last_action, header.final_approved)}>{statusLabel(header.indstatus, header.last_action, header.final_approved)}</span>
               </div>
-              {/* <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground"> */}
-                {/* <span>{modeLabel(header.transport_mode)}</span><span className="h-1 w-1 rounded-full bg-muted-foreground/50" /> */}
-                {/* <span>{jobTypeLabel(header.job_type)}</span><span className="h-1 w-1 rounded-full bg-muted-foreground/50" /> */}
-                {/* <h1>{header.quotation_nr}</h1> */}
-              {/* </div> */}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
@@ -1184,7 +1245,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                   {terms.length === 0 && <div className="rounded-md border border-dashed bg-muted/25 p-6 text-center text-sm text-muted-foreground">No terms added. Oracle save procedure can also copy defaults from `MS_QUOTE_TERMS`.</div>}
                   {terms.map((term, index) => (
                     <div key={term.serial_no} className="grid gap-2 rounded-md border bg-background p-2 sm:grid-cols-[90px_120px_1fr_40px]">
-                      <FormInput label="Sr No" value={term.sr_no} onChange={(value) => setTermField(index, "sr_no", value)} />
+                      {/* <FormInput label="Sr No" value={term.serial_no} onChange={(value) => setTermField(index, "serial_no", value)} /> */}
+                      <FormInput label="Sr No" value={String(term.serial_no)} onChange={(value) => {}} disabled />
                       <FormInput label="Type" value={term.type_ind} onChange={(value) => setTermField(index, "type_ind", value)} />
                       <FormTextarea label="Description" value={term.description} onChange={(value) => setTermField(index, "description", value)} compact />
                       <div className="grid place-items-end"><Button type="button" size="icon" variant="ghost" title="Remove term" onClick={() => removeTerm(index)}><Trash2 size={14} /></Button></div>

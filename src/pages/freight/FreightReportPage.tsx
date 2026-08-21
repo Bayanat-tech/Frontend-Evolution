@@ -1529,7 +1529,7 @@ function writeReportWindow(win: Window | null, html: string) {
 
 function reportLoadingHtml(title: string) {
   return `<!doctype html><html><head><title>${escapeHtml(title)}</title><style>
-    body{margin:0;font-family:Arial,sans-serif;background:#eef3f9;color:#0f172a}
+    body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#eef3f9;color:#0f172a}
     .bar{height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:white;border-bottom:1px solid #dbe3ef;box-shadow:0 8px 22px rgba(15,23,42,.06)}
     .bar strong{font-size:16px}.bar span{font-size:12px;color:#64748b}
     .loading{height:calc(100vh - 58px);display:grid;place-items:center;text-align:center}
@@ -1542,7 +1542,7 @@ function reportLoadingHtml(title: string) {
 
 function reportErrorHtml(title: string, message: string) {
   return `<!doctype html><html><head><title>${escapeHtml(title)}</title><style>
-    body{margin:0;font-family:Arial,sans-serif;background:#f8fafc;color:#0f172a}.wrap{height:100vh;display:grid;place-items:center}.card{max-width:720px;border:1px solid #fecdd3;background:white;border-radius:10px;padding:24px;box-shadow:0 12px 30px rgba(15,23,42,.08)}
+    body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f8fafc;color:#0f172a}.wrap{height:100vh;display:grid;place-items:center}.card{max-width:720px;border:1px solid #fecdd3;background:white;border-radius:10px;padding:24px;box-shadow:0 12px 30px rgba(15,23,42,.08)}
     h1{margin:0 0 8px;font-size:22px;color:#be123c}pre{white-space:pre-wrap;color:#475569;background:#f8fafc;border:1px solid #e2e8f0;padding:12px;border-radius:8px}
     button{height:34px;border:1px solid #cbd5e1;border-radius:8px;background:white;font-weight:700;padding:0 14px;cursor:pointer}
   </style></head><body><div class="wrap"><div class="card"><h1>Report failed</h1><p>Oracle did not return the report data.</p><pre>${escapeHtml(message)}</pre><button onclick="window.close()">Close</button></div></div></body></html>`;
@@ -1564,7 +1564,7 @@ function reportHtml(
   const generatedAt = formatReportDateTime(new Date());
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(config.title)}</title><style>
     @page{size:landscape;margin:14mm}
-    body{font-family:Arial,sans-serif;margin:0;color:#0f172a;background:${interactive ? "#eef3f9" : "#fff"}}
+    body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;color:#0f172a;background:${interactive ? "#eef3f9" : "#fff"}}
     .viewerbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff;border-bottom:1px solid #dbe3ef;padding:10px 18px;box-shadow:0 8px 22px rgba(15,23,42,.06)}
     .viewerbar h1{margin:0;font-size:16px}.viewerbar p{margin:2px 0 0;color:#64748b;font-size:12px}.actions{display:flex;gap:8px}.actions button{height:34px;border:1px solid #cbd5e1;border-radius:8px;background:white;color:#0f172a;font-weight:700;padding:0 13px;cursor:pointer}.actions button.primary{background:#0b4ca1;border-color:#0b4ca1;color:white}
     .sheet{padding:${interactive ? "18px" : "0"}}.paper{max-width:1280px;margin:0 auto;background:white;padding:14px;${interactive ? "border:1px solid #dbe3ef;box-shadow:0 18px 42px rgba(15,23,42,.08)" : ""}}

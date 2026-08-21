@@ -250,9 +250,12 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
       <div className="freight-ops-toolbar freight-ops-toolbar-compact freight-ops-toolbar-document">
         <div className="freight-workspace-header-shell">
           <div className="freight-workspace-title-block">
-            <p className="m-0 text-xs font-semibold text-primary">Freight Job / {selectedJob ? text(selectedJob, "job_no") : "New"}</p>
-            <h1 className="m-0 text-[22px] font-semibold leading-tight text-foreground">{title}</h1>
-            <p className="m-0 text-xs font-medium text-muted-foreground">
+            {/* <p className="m-0 text-xs bold text-primary">Freight Job / {selectedJob ? text(selectedJob, "job_no") : "New"}</p>
+            <h1 className="m-0 text-[22px] font-semibold leading-tight text-foreground">{title}</h1> */}
+            <h1 className="m-0 text-[22px] font-semibold leading-tight text-foreground">
+              Job No: {selectedJob ? text(selectedJob, "job_no") : "New"}
+            </h1>
+            <p className="m-0 text-xs font-medium text-blue-600">
               {selectedJob ? `${text(selectedJob, "prin_name") || text(selectedJob, "prin_code")} | ${text(selectedJob, "doc_ref") || text(selectedJob, "hawb") || "Reference pending"}` : "New shipment operation"}
             </p>
           </div>

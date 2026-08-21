@@ -209,6 +209,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelRemarks, setCancelRemarks] = useState("");
+  const cancelRowRef = useRef<EnquiryListRow | null>(null);
   const [headerNames, setHeaderNames] = useState<EnquiryHeaderNames>(emptyHeaderNames);
   const [approvalEnabled, setApprovalEnabled] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -336,16 +337,51 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
           );
         },
       },
-      {
+      // {
+      //   id: "actions",
+      //   header: "Actions",
+      //   size: 90,
+      //   enableColumnFilter: false,
+      //   cell: ({ row }) => (
+      //     <Button type="button" size="icon" variant="ghost" title={`Open ${enquiryLabel}`} onClick={() => openEnquiry(row.original)}>
+      //       <Eye size={14} />
+      //     </Button>
+      //   ),
+      // },
+        
+           {
         id: "actions",
         header: "Actions",
-        size: 90,
+        size: 110,
         enableColumnFilter: false,
-        cell: ({ row }) => (
-          <Button type="button" size="icon" variant="ghost" title={`Open ${enquiryLabel}`} onClick={() => openEnquiry(row.original)}>
-            <Eye size={14} />
-          </Button>
-        ),
+        cell: ({ row }) => {
+          const status = lookupText(row.original, "indstatus");
+          const action = lookupText(row.original, "last_action");
+          const finalApproved = lookupText(row.original, "final_approved");
+          // const cancelDisabled = status === "A" || finalApproved === "Y" || status === "C" || status === "R" || action === "REJECTED";
+          const cancelDisabled = status === "A" || finalApproved === "Y" || status === "R" || action === "REJECTED";
+          return (
+            <div className="flex items-center justify-end gap-1">
+              <Button type="button" size="icon" variant="ghost" title={`Open ${enquiryLabel}`} onClick={() => openEnquiry(row.original)}>
+                <Eye size={14} />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                title={cancelDisabled ? `${statusLabel(status, action, finalApproved)} ${enquiryLabel.toLowerCase()} cannot be cancelled` : `Cancel ${enquiryLabel}`}
+                className="text-red-600 hover:text-red-700"
+                disabled={cancelDisabled}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  requestCancelRow(row.original);
+                }}
+              >
+                <X size={14} />
+              </Button>
+            </div>
+          );
+        },
       },
     ],
     [enquiryLabel],
@@ -359,6 +395,9 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
   setHeader((current) => ({ ...current, [field]: value }));
   if (field === "transport_mode") {
     setDetails((current) => current.map((row) => ({ ...row, transport_mode: value })));
+  }
+  if (field === "origin_port" || field === "destination_port") {
+    setDetails((current) => current.map((row) => ({ ...row, [field]: value })));
   }
 };
 
@@ -520,29 +559,32 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
     );
   };
 
-  const applyDetailActivityLookup = (index: number, value: string, row: LookupRow | null) => {
-    setDetails((current) =>
-      current.map((line, rowIndex) => {
-        if (rowIndex !== index) return line;
-        const activityCode = value || lookupText(row || {}, "activity_code") || "";
-        const quantity = lookupText(row || {}, "quantity") || line.quantity || "1";
-        const billRate = lookupText(row || {}, "bill") || line.bill_rate || "0";
-        const costRate = lookupText(row || {}, "cost") || line.cost_rate || "0";
-        return {
-          ...line,
-          act_code: activityCode,
-          activity: lookupText(row || {}, "activity") || line.activity,
-          transport_mode: header.transport_mode || line.transport_mode,
-          quantity,
-          uom: lookupText(row || {}, "uom") || line.uom,
-          bill_rate: billRate,
-          cost_rate: costRate,
-          bill: multiplyText(quantity, billRate),
-          cost: multiplyText(quantity, costRate),
-        };
-      }),
-    );
-  };
+const applyDetailActivityLookup = (index: number, value: string, row: LookupRow | null) => {
+  setDetails((current) =>
+    current.map((line, rowIndex) => {
+      if (rowIndex !== index) return line;
+      const lookupRow = row || {};
+      const activityCode = value || lookupFirstText(lookupRow, "activity_code", "ACTIVITY_CODE", "act_code", "ACT_CODE");
+      const activityName = lookupFirstText(lookupRow, "activity", "ACTIVITY", "other_services", "OTHER_SERVICES", "act_name", "ACT_NAME");
+      const quantity = lookupFirstText(lookupRow, "quantity", "QUANTITY") || line.quantity || "1";
+      const billRate = lookupFirstText(lookupRow, "bill", "BILL", "bill_rate", "BILL_RATE") || line.bill_rate || "0";
+      const costRate = lookupFirstText(lookupRow, "cost", "COST", "cost_rate", "COST_RATE") || line.cost_rate || "0";
+      return {
+        ...line,
+        act_code: activityCode || line.act_code,
+        activity: activityName || line.activity,
+        transport_mode: header.transport_mode || line.transport_mode,
+        quantity,
+        uom: lookupFirstText(lookupRow, "uom", "UOM") || line.uom,
+        bill_rate: billRate,
+        cost_rate: costRate,
+        bill: multiplyText(quantity, billRate),
+        cost: multiplyText(quantity, costRate),
+        curr_code: line.curr_code || header.curr_code || "OMR",
+      };
+    }),
+  );
+};
 
   const loadEnquiries = async () => {
     const companyCode = String(userInfo?.company_code || userInfo?.COMPANY_CODE || header.company_code || "");
@@ -576,7 +618,45 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
     setView("editor");
   };
 
-  const requestCancel = () => {
+  // const requestCancel = () => {
+  //   if (!header.enquiry_nr) {
+  //     setView("list");
+  //     return;
+  //   }
+  //   if (isReadOnly) {
+  //     setNotice({ type: "error", text: `${statusLabel(header.indstatus, header.last_action, header.final_approved)} ${enquiryLabel.toLowerCase()} cannot be cancelled` });
+  //     return;
+  //   }
+  //   setCancelOpen(true);
+  // };
+
+  //   const requestCancel = () => {
+  //   if (!header.enquiry_nr) {
+  //     setView("list");
+  //     return;
+  //   }
+  //   if (isReadOnly) {
+  //     setNotice({ type: "error", text: `${statusLabel(header.indstatus, header.last_action, header.final_approved)} ${enquiryLabel.toLowerCase()} cannot be cancelled` });
+  //     return;
+  //   }
+  //   cancelRowRef.current = null;
+  //   setCancelOpen(true);
+  // };
+
+  // const requestCancelRow = (row: EnquiryListRow) => {
+  //   const status = lookupText(row, "indstatus");
+  //   const action = lookupText(row, "last_action");
+  //   const finalApproved = lookupText(row, "final_approved");
+  //   if (status === "A" || finalApproved === "Y" || status === "C" || status === "R" || action === "REJECTED") {
+  //     setNotice({ type: "error", text: `${statusLabel(status, action, finalApproved)} ${enquiryLabel.toLowerCase()} cannot be cancelled` });
+  //     return;
+  //   }
+  //   cancelRowRef.current = row;
+  //   setCancelRemarks("");
+  //   setCancelOpen(true);
+  // };
+
+      const requestCancel = () => {
     if (!header.enquiry_nr) {
       setView("list");
       return;
@@ -585,23 +665,70 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
       setNotice({ type: "error", text: `${statusLabel(header.indstatus, header.last_action, header.final_approved)} ${enquiryLabel.toLowerCase()} cannot be cancelled` });
       return;
     }
-    setCancelOpen(true);
+    cancelRowRef.current = null;
+    void confirmCancel();
   };
 
-  const confirmCancel = async () => {
-    if (!cancelRemarks.trim()) {
-      setNotice({ type: "error", text: "Please enter cancellation remarks" });
+  const requestCancelRow = (row: EnquiryListRow) => {
+    const status = lookupText(row, "indstatus");
+    const action = lookupText(row, "last_action");
+    const finalApproved = lookupText(row, "final_approved");
+    if (status === "A" || finalApproved === "Y" || status === "R" || action === "REJECTED") {
+      setNotice({ type: "error", text: `${statusLabel(status, action, finalApproved)} ${enquiryLabel.toLowerCase()} cannot be cancelled` });
       return;
     }
+    cancelRowRef.current = row;
+    void confirmCancel();
+  };
+
+  // const confirmCancel = async () => {
+  //   if (!cancelRemarks.trim()) {
+  //     setNotice({ type: "error", text: "Please enter cancellation remarks" });
+  //     return;
+  //   }
+  //   setCancelling(true);
+  //   setNotice(null);
+  //   try {
+  //     const response = await api.post<{ success?: boolean; message?: string }>(
+  //       isRfq ? "/api/freight/rfq/cancel" : "/api/freight/enquiry/cancel",
+  //       {
+  //         company_code: header.company_code,
+  //         enquiry_type: header.enquiry_type,
+  //         enquiry_nr: header.enquiry_nr,
+  //         cancel_by: loginId,
+  //         cancel_remarks: cancelRemarks.trim(),
+  //       },
+  //     );
+  //     if (response.data?.success === false) {
+  //       throw new Error(response.data.message || `Unable to cancel ${enquiryLabel}`);
+  //     }
+  //     setHeaderField("indstatus", "C");
+  //     setCancelOpen(false);
+  //     setCancelRemarks("");
+  //     setNotice({ type: "success", text: response.data?.message || `${enquiryLabel} cancelled` });
+  //     await loadEnquiries();
+  //   } catch (error) {
+  //     setNotice({ type: "error", text: error instanceof Error ? error.message : `Unable to cancel ${enquiryLabel}` });
+  //   } finally {
+  //     setCancelling(false);
+  //   }
+  // };
+
+    const confirmCancel = async () => {
+    const rowTarget = cancelRowRef.current;
+    const companyCode = rowTarget ? lookupText(rowTarget, "company_code") || header.company_code : header.company_code;
+    const enquiryType = rowTarget ? lookupText(rowTarget, "enquiry_type") || header.enquiry_type : header.enquiry_type;
+    const enquiryNr = rowTarget ? lookupText(rowTarget, "enquiry_nr") : header.enquiry_nr;
+
     setCancelling(true);
     setNotice(null);
     try {
       const response = await api.post<{ success?: boolean; message?: string }>(
         isRfq ? "/api/freight/rfq/cancel" : "/api/freight/enquiry/cancel",
         {
-          company_code: header.company_code,
-          enquiry_type: header.enquiry_type,
-          enquiry_nr: header.enquiry_nr,
+          company_code: companyCode,
+          enquiry_type: enquiryType,
+          enquiry_nr: enquiryNr,
           cancel_by: loginId,
           cancel_remarks: cancelRemarks.trim(),
         },
@@ -609,9 +736,12 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
       if (response.data?.success === false) {
         throw new Error(response.data.message || `Unable to cancel ${enquiryLabel}`);
       }
-      setHeaderField("indstatus", "C");
+      if (!rowTarget) {
+        setHeaderField("indstatus", "C");
+      }
       setCancelOpen(false);
       setCancelRemarks("");
+      cancelRowRef.current = null;
       setNotice({ type: "success", text: response.data?.message || `${enquiryLabel} cancelled` });
       await loadEnquiries();
     } catch (error) {
@@ -714,16 +844,35 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
   };
 
   const approveEnquiry = () => {
-    const remarks = window.prompt("Approval remarks", "") || "";
-    void runWorkflowAction("APPROVED", remarks);
+    // const remarks = window.prompt("Approval remarks", "") || "";
+    void runWorkflowAction("APPROVED","");
   };
 
-  const directApproveEnquiry = async () => {
+  // const directApproveEnquiry = async () => {
+  //   if (!header.enquiry_nr) {
+  //     setNotice({ type: "error", text: `Save ${enquiryLabel.toLowerCase()} before approval` });
+  //     return;
+  //   }
+  //   const remarks = window.prompt("Approval remarks", "") || "";
+  //   setApproving(true);
+  //   setNotice(null);
+  //   try {
+  //     const response = await api.post<{ success?: boolean; message?: string }>(
+  //       isRfq ? "/api/freight/rfq/approve" : "/api/freight/enquiry/approve",
+  //       {
+  //         company_code: header.company_code,
+  //         enquiry_type: header.enquiry_type,
+  //         enquiry_nr: header.enquiry_nr,
+  //         approved_by: loginId,
+  //         approval_remarks: remarks,
+  //       },
+  //     );
+
+    const directApproveEnquiry = async () => {
     if (!header.enquiry_nr) {
       setNotice({ type: "error", text: `Save ${enquiryLabel.toLowerCase()} before approval` });
       return;
     }
-    const remarks = window.prompt("Approval remarks", "") || "";
     setApproving(true);
     setNotice(null);
     try {
@@ -734,9 +883,10 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
           enquiry_type: header.enquiry_type,
           enquiry_nr: header.enquiry_nr,
           approved_by: loginId,
-          approval_remarks: remarks,
+          approval_remarks: "",
         },
       );
+
       if (response.data?.success === false) {
         throw new Error(response.data.message || `Unable to approve ${enquiryLabel}`);
       }
@@ -1391,13 +1541,14 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
                       <th className="px-1.5 py-1.5" style={{ width: "70px" }}>Mode</th>
                       <th className="px-1.5 py-1.5" style={{ width: "160px" }}>Origin</th>
                       <th className="px-1.5 py-1.5" style={{ width: "160px" }}>Dest</th>
-                      <th className="px-1.5 py-1.5" style={{ width: "70px" }}>Qty</th>
                       <th className="px-1.5 py-1.5" style={{ width: "70px" }}>UOM</th>
-                      <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Bill</th>
-                      <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Cost</th>
-                      <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Curr</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "70px" }}>Qty</th>
                       <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Bill Rate</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Bill</th>
+                      {/* <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Cost</th> */}
                       <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Cost Rate</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Curr</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Cost</th>
                       <th className="px-1.5 py-1.5" style={{ width: "200px" }}>Remarks</th>
                       <th className="px-1.5 py-1.5 text-right" style={{ width: "42px" }}/>
                     </tr>
@@ -1441,26 +1592,32 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
                         <td className="px-1 py-1.5 align-middle">
                           <input type="text" value={row.destination_port} onChange={(e) => setDetailField(index, "destination_port", e.target.value)} className={fieldClassName} />
                         </td>
-                        <td className="px-1 py-1.5 align-middle">
-                          <input type="number" value={row.quantity} onChange={(e) => setDetailField(index, "quantity", e.target.value)} className={`${fieldClassName} w-full text-center`} />
-                        </td>
-                        <td className="px-1 py-1.5 align-middle">
+                         <td className="px-1 py-1.5 align-middle">
                           <input value={row.uom} onChange={(e) => setDetailField(index, "uom", e.target.value)} className={fieldClassName} />
                         </td>
                         <td className="px-1 py-1.5 align-middle">
-                          <input type="number" value={row.bill} onChange={(e) => setDetailField(index, "bill", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
-                        </td>
-                        <td className="px-1 py-1.5 align-middle">
-                          <input type="number" value={row.cost} onChange={(e) => setDetailField(index, "cost", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
-                        </td>
-                        <td className="px-1 py-1.5 align-middle">
-                          <input type="text" value={row.curr_code} onChange={(e) => setDetailField(index, "curr_code", e.target.value)} className={fieldClassName} />
+                          <input type="number" value={row.quantity} onChange={(e) => setDetailField(index, "quantity", e.target.value)} className={`${fieldClassName} w-full text-center`} />
                         </td>
                         <td className="px-1 py-1.5 align-middle">
                           <input type="number" value={row.bill_rate} onChange={(e) => setDetailField(index, "bill_rate", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
                         </td>
                         <td className="px-1 py-1.5 align-middle">
+                          <input type="number" value={row.bill} onChange={(e) => setDetailField(index, "bill", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
+                        </td>
+                         <td className="px-1 py-1.5 align-middle">
                           <input type="number" value={row.cost_rate} onChange={(e) => setDetailField(index, "cost_rate", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
+                        </td>
+                        {/* <td className="px-1 py-1.5 align-middle">
+                          <input type="number" value={row.cost} onChange={(e) => setDetailField(index, "cost", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
+                        </td> */}
+                        <td className="px-1 py-1.5 align-middle">
+                          <input type="text" value={row.curr_code} onChange={(e) => setDetailField(index, "curr_code", e.target.value)} className={fieldClassName} />
+                        </td>
+                        {/* <td className="px-1 py-1.5 align-middle">
+                          <input type="number" value={row.cost_rate} onChange={(e) => setDetailField(index, "cost_rate", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
+                        </td> */}
+                        <td className="px-1 py-1.5 align-middle">
+                          <input type="number" value={row.cost} onChange={(e) => setDetailField(index, "cost", e.target.value)} className={`${fieldClassName} text-right tabular-nums`} />
                         </td>
                         <td className="px-1.5 py-1.5 align-middle">
                           <input type="text" value={row.remarks} onChange={(e) => setDetailField(index, "remarks", e.target.value)} className={fieldClassName} />
@@ -1503,7 +1660,8 @@ const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
       compact
       title={`Cancel ${enquiryLabel}`}
       description="This marks the record as cancelled and keeps the enquiry history."
-      onClose={() => setCancelOpen(false)}
+      // onClose={() => setCancelOpen(false)}
+      onClose={() => { setCancelOpen(false); cancelRowRef.current = null; }}
       footer={
         <>
           <Button type="button" variant="outline" onClick={() => setCancelOpen(false)} disabled={cancelling}>Close</Button>
@@ -2256,6 +2414,14 @@ function normalizeLookupRow(row: LookupRow): LookupRow {
 
 function lookupText(row: LookupRow, field: string) {
   return String(getLookupValue(row, field) ?? "").trim();
+}
+
+function lookupFirstText(row: LookupRow, ...fields: string[]) {
+  for (const field of fields) {
+    const value = lookupText(row, field);
+    if (value) return value;
+  }
+  return "";
 }
 
 function multiplyText(quantity: string, rate: string) {
