@@ -1,8 +1,9 @@
-import { Download, FileText, Paperclip, Pencil, Trash2, UploadCloud, X } from "lucide-react";
+import { Download, Eye, FileText, Paperclip, Pencil, Trash2, UploadCloud, X } from "lucide-react";
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   deleteAccountFile,
   getAccountFiles,
+  getFreightAccountFiles,
   makeFileRow,
   NormalizedFile,
   renameAccountFile,
@@ -69,7 +70,8 @@ export function AttachmentDialog({
     setLoading(true);
     setNotice(null);
     try {
-      const groups = await Promise.all(allRequestNumbers.map((item) => getAccountFiles(item)));
+      const loadAccountFiles = module.toUpperCase() === "FREIGHT" ? getFreightAccountFiles : getAccountFiles;
+      const groups = await Promise.all(allRequestNumbers.map((item) => loadAccountFiles(item)));
       setFiles(groups.flat());
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load attachments" });
@@ -151,7 +153,7 @@ export function AttachmentDialog({
   return (
     <Dialog
       open={open}
-      wide
+      contentClassName="w-[min(96vw,1100px)] max-h-[86vh]"
       title={title}
       description={requestNumber ? `Linked to ${requestNumber}${relatedRequestNumbers.length ? " with source files shown" : ""}` : "Save the record first, then attach files."}
       onClose={onClose}
@@ -231,8 +233,13 @@ export function AttachmentDialog({
                       <td className="px-3 py-2">
                         <div className="flex justify-end gap-1">
                           {file.aws_file_locn && (
-                            <Button asChild size="icon" variant="ghost" title="Open file">
-                              <a href={file.aws_file_locn} target="_blank" rel="noreferrer"><Download size={14} /></a>
+                            <Button asChild size="icon" variant="ghost" title="View file">
+                              <a href={file.aws_file_locn} target="_blank" rel="noreferrer"><Eye size={14} /></a>
+                            </Button>
+                          )}
+                          {file.aws_file_locn && (
+                            <Button asChild size="icon" variant="ghost" title="Download file">
+                              <a href={file.aws_file_locn} download={file.user_file_name || file.org_file_name}><Download size={14} /></a>
                             </Button>
                           )}
                           {!readOnly && primary && editing ? (
