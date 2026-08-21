@@ -54,7 +54,7 @@ export type NormalizedFile = {
 
 export async function getAccountFiles(requestNumber: string) {
   if (!requestNumber) return [];
-  const response = await api.get<ApiResponse<AccountFile[]>>(`/api/files/accountFiles/${encodeURIComponent(requestNumber)}`);
+  const response = await api.get<ApiResponse<AccountFile[]>>(`/api/files/accountFiles/${encodeProxySafePathSegment(requestNumber)}`);
   if (!response.data.success) throw new Error(response.data.message || "Unable to load attachments");
   return (response.data.data || []).map(normalizeFile);
 }
@@ -93,7 +93,7 @@ export async function renameAccountFile(requestNumber: string, awsFileLocn: stri
 }
 
 export async function deleteAccountFile(requestNumber: string, srNo: number, awsFileLocn: string) {
-  const response = await api.delete<ApiResponse<unknown>>(`/api/files/deleteAF/${encodeURIComponent(requestNumber)}/${srNo}`, {
+  const response = await api.delete<ApiResponse<unknown>>(`/api/files/deleteAF/${encodeProxySafePathSegment(requestNumber)}/${srNo}`, {
     data: { aws_file_locn: awsFileLocn },
   });
   if (!response.data.success) throw new Error(response.data.message || "Unable to delete file");
@@ -147,6 +147,11 @@ export function normalizeFile(file: AccountFile): NormalizedFile {
 function extensionFromFile(file: File) {
   const byName = file.name.includes(".") ? file.name.split(".").pop() : "";
   return byName || file.type.split("/").pop() || "";
+}
+
+
+function encodeProxySafePathSegment(value: string) {
+  return encodeURIComponent(value).replace(/%2F/gi, "%252F");
 }
 
 function text(value: unknown) {
