@@ -52,13 +52,16 @@ export const emptyLineRow = (divCode: string): PurchaseOrderLineRow => ({
   lcur_amount: 0,
   required_dt: "",
   line_remarks: "",
-  tax_cat: "",
-  tax_code: "",
+  tx_cat_code: "",
+  tx_compntcat_code_1: "",
   tax_lcur_amount: 0,
   lcur_amount_disc: 0,
   uppp:0,
   quantity:0,
-  ex_rate:1
+  ex_rate:1,
+  tx_compnt_perc_1:0,
+  tx_compnt_amt_1:0,
+  tx_compnt_1_expmt:""
 });
 
 export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
@@ -167,13 +170,16 @@ export async function fetchPurchaseOrderDetail(
       lcur_amount: numberOrZero(row.lcur_amount),
     required_dt: toDateInputValue(raw.required_dt) || "",
       line_remarks: text(row.remarks ?? row.line_remarks),
-      tax_cat: text(row.tax_cat ?? row.tax_category),
-      tax_code: text(row.tax_code),
       tax_lcur_amount: numberOrZero(row.tax_lcur_amount),
       lcur_amount_disc: numberOrZero(row.lcur_amount_disc ?? row.lcur_amount_discount),
       uppp:numberOrZero(row.uppp),
       quantity:numberOrZero(row.quantity),
       ex_rate:numberOrZero(row.ex_rate),
+      tx_cat_code:text(row.tx_cat_code),
+      tx_compntcat_code_1:text(row.tx_compntcat_code_1),
+      tx_compnt_perc_1:numberOrZero(row.tx_compnt_perc_1),
+      tx_compnt_amt_1: numberOrZero(row.tx_compnt_amt_1),
+      tx_compnt_1_expmt: text(row.tx_compnt_1_expmt)
     } satisfies PurchaseOrderLineRow;
   });
 }
@@ -209,8 +215,6 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     disc_hdr_price: form.disc_hdr_price,
     disc_hdr_percent: form.disc_hdr_percent,
     tx_cat_code: form.tx_cat_code,
-    
-  
     tx_compntcat_code_1: form.tx_compntcat_code_1,
     purchase_actype: form.expense_ac_post,
     project_name: form.project_name,
@@ -265,7 +269,7 @@ export function lineNetAmount(row: PurchaseOrderLineRow) {
 }
 
 export function lineTaxAmount(row: PurchaseOrderLineRow) {
-  return lineNetAmount(row) * (row.tax_pct / 100);
+  return lineNetAmount(row) * (row.tx_compnt_perc_1 / 100);
 }
 
 // Lcurr = net amount converted at ex_rate (was net * finalRate * ex_rate — double rate applied)
@@ -304,10 +308,13 @@ export function buildDetailsPayload(rows: PurchaseOrderLineRow[], ex_rate?: numb
     lcur_amount: lineLcurrAmount(row,ex_rate), // <-- fixed, was row.lcur_amount (always 0)
     required_dt: row.required_dt,
     remarks: row.line_remarks,
-    tax_cat: row.tax_cat,
-    tax_code: row.tax_code,
+   tx_cat_code: row.tx_cat_code,
+    tx_compntcat_code_1: row.tx_compntcat_code_1,
     tax_lcur_amount: taxLcurrAmount(row,ex_rate),
     lcur_amount_disc: row.lcur_amount_disc,
+    tx_compnt_amt_1 :lineTaxAmount(row),
+    tx_compnt_perc_1: row.tx_compnt_perc_1,
+    tx_compnt_1_expmt: row.tx_compnt_1_expmt
   }));
 }
 

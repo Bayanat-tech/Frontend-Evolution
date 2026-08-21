@@ -1,5 +1,6 @@
 import { getDynamicLookup } from "../../../api/lookups";
 import { upsertBulkPurchaseEntryApi, upsertBulkSaleseEntryApi } from "../../../api/purchaseSales";
+import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 import {
   EXPENSE_AC_OPTIONS,
   PO_DOC_TYPE,
@@ -175,21 +176,24 @@ export async function fetchSalesOrderDetail(
       l_uom: text(row.l_uom),
       qty_luom: numberOrZero(row.qty_luom),
       unit_price: numberOrZero(row.unit_price),
+      disc_hdr_percent: numberOrZero(row.disc_hdr_percent),
       disc_percent: numberOrZero(row.disc_percent),
-      disc_hdr_percent: numberOrZero(row.disc_hdr_percent ?? row.disc_percent),
       disc_price: numberOrZero(row.disc_price),
       tax_pct: numberOrZero(row.tax_pct ?? row.tax_percent),
       tax_amount: numberOrZero(row.tax_amount),
       lcur_amount: numberOrZero(row.lcur_amount),
-      required_dt: text(row.required_dt),
+      required_dt: toDateInputValue(raw.required_dt) || "",
       line_remarks: text(row.remarks ?? row.line_remarks),
-      tax_cat: text(row.tax_cat ?? row.tax_category),
-      tax_code: text(row.tax_code),
       tax_lcur_amount: numberOrZero(row.tax_lcur_amount),
       lcur_amount_disc: numberOrZero(row.lcur_amount_disc ?? row.lcur_amount_discount),
       uppp: numberOrZero(row.uppp),
       quantity: numberOrZero(row.quantity),
       ex_rate: numberOrZero(row.ex_rate),
+      tx_cat_code: text(row.tx_cat_code),
+      tx_compntcat_code_1: text(row.tx_compntcat_code_1),
+      tx_compnt_perc_1: numberOrZero(row.tx_compnt_perc_1),
+      tx_compnt_amt_1: numberOrZero(row.tx_compnt_amt_1),
+      tx_compnt_1_expmt: text(row.tx_compnt_1_expmt)
     } satisfies PurchaseOrderLineRow;
   });
 }
@@ -303,10 +307,14 @@ export function buildDetailsPayload(rows: PurchaseOrderLineRow[], ex_rate?: numb
     lcur_amount: lineLcurrAmount(row, ex_rate),
     required_dt: row.required_dt,
     remarks: row.line_remarks,
-    tax_cat: row.tax_cat,
-    tax_code: row.tax_code,
+    tx_cat_code: row.tx_cat_code,
+    tx_compntcat_code_1: row.tx_compntcat_code_1,
     tax_lcur_amount: taxLcurrAmount(row, ex_rate),
     lcur_amount_disc: row.lcur_amount_disc,
+    tx_compnt_amt_1: lineTaxAmount(row),
+    tx_compnt_perc_1: row.tx_compnt_perc_1,
+    tx_compnt_1_expmt: row.tx_compnt_1_expmt,
+
   }));
 }
 

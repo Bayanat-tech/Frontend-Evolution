@@ -85,6 +85,20 @@ export function SalesOrderEditor({
   }, [editor]);
 
   useEffect(() => {
+    if (!form.tx_compntcat_code_1 && !form.tx_cat_code && !form.disc_hdr_percent && !form.disc_hdr_price) return;
+    setRows((current) =>
+      current.map((row) => ({
+        ...row,
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        tx_cat_code: `${form.tx_cat_code || ""}`,
+        disc_price: row.disc_price || form.disc_hdr_price,
+        disc_percent: row.disc_percent || form.disc_hdr_percent,
+      }))
+    );
+  }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price]);
+
+
+  useEffect(() => {
     let mounted = true;
     async function loadExisting() {
       if (!editMode || editor?.mode !== "edit") return;
@@ -193,8 +207,17 @@ export function SalesOrderEditor({
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
 
-  const addRow = () => setRows((current) => [...current, emptyLineRow(form.div_code)]);
-  const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
+  const addRow = () =>
+    setRows((current) => [
+      ...current,
+      {
+        ...emptyLineRow(form.div_code),
+        tax_code: form.tx_compntcat_code_1,
+        tax_cat: form.tx_cat_name,
+        disc_price: form.disc_hdr_price,
+        disc_percent: form.disc_hdr_percent,
+      },
+    ]);  const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
 
   const runAction = async (key: ActionKey, action: () => Promise<void> | void, successMessage?: string) => {
     setActionLoading(key);

@@ -25,8 +25,6 @@ export interface PurchaseOrderLineRow {
   lcur_amount: number;
   required_dt: string;
   line_remarks: string;
-  tax_cat: string;
-  tax_code: string;
   tax_lcur_amount: number;
   lcur_amount_disc: number;
   zone_code?: string;
@@ -38,7 +36,16 @@ export interface PurchaseOrderLineRow {
   sign_ind?: number
   uppp?: number,
   quantity: number,
-  ex_rate: number
+  ex_rate: number,
+   tx_cat_code:string,
+    tx_compntcat_code_1: string,
+    tx_compnt_perc_1: number,
+    tx_compnt_amt_1:number,
+    tx_compnt_1_expmt:string,
+    tx_cat_name?: string
+    tx_compntcat_name_1?:string
+    
+
 
 
 }
@@ -106,6 +113,7 @@ export interface PurchaseOrderForm {
   delivery_email: string;
   grn_no?: number | string;
   ref_doc_no?: number | string;
+    tx_compntcat_name_1?:string
 
 }
 

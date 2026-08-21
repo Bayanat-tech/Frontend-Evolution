@@ -90,16 +90,18 @@ export function PurchaseInvoiceEditor({
     setLoading(editor.mode === "edit");
   }, [editor]);
 
-  useEffect(() => {
-    if (!form.tax_code && !form.tax_category) return;
-    setRows((current) =>
-      current.map((row) => ({
-        ...row,
-        tax_code: form.tax_code || row.tax_code,
-        tax_cat: form.tax_category || row.tax_cat,
-      }))
-    );
-  }, [form.tax_code, form.tax_category]);
+ useEffect(() => {
+  if (!form.tx_compntcat_code_1 && !form.tx_cat_code && !form.disc_hdr_percent && !form.disc_hdr_price) return;
+  setRows((current) =>
+    current.map((row) => ({
+      ...row,
+      tax_code: form.tx_compntcat_code_1 ,
+      tax_cat: form.tx_cat_code ,
+      disc_price: row.disc_price || form.disc_hdr_price,
+      disc_percent: row.disc_percent || form.disc_hdr_percent,
+    }))
+  );
+}, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price]);
 
   useEffect(() => {
     let mounted = true;

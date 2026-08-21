@@ -18,6 +18,7 @@ import {
   taxLcurrAmount,
 } from "./Purchaseorderutils";
 import { SODocType } from "../sales/SalesOrdertypes";
+import { Select } from "../../../components/ui/Select";
 
 const STICKY_COLS = {
   sno: { width: 50, left: 0 },
@@ -37,7 +38,7 @@ function hasGrnColumn(docType?: string | null): boolean {
 }
 function hasPoColumn(docType?: string | null): boolean {
   const code = String(docType ?? "").trim().toUpperCase();
-  return code === "GRN" ;
+  return code === "GRN";
 }
 
 function hasExtraStickyColumn(docType?: string | null): boolean {
@@ -73,7 +74,7 @@ const TABLE_COLUMN_COUNT = 24;
 // Final Rate = Unit Price - (Unit Price * Disc % / 100)  [matches lineNetAmount / "Final Rate" in the sheet]
 function finalRate(row: PurchaseOrderLineRow): number {
   const price = numberOrZero(row.unit_price);
-  
+
   const discPct = numberOrZero(row.disc_percent);
   return price - (price * discPct) / 100;
 }
@@ -150,10 +151,10 @@ export function PurchaseOrderLinesTable({
               {hasGrnColumn(docType) && (
                 <th className="finance-sticky-col px-2 py-2 text-left w-32" style={stickyHeaderStyle("GRN")}>GRN</th>
               )}
-                  {hasPoColumn(docType) && (
+              {hasPoColumn(docType) && (
                 <th className="finance-sticky-col px-2 py-2 text-left w-32" style={stickyHeaderStyle("PO")}>PO</th>
               )}
-              <th className="finance-sticky-col px-2 py-2 text-left" style={stickyHeaderStyle("product",docType)}>Product Code</th>
+              <th className="finance-sticky-col px-2 py-2 text-left" style={stickyHeaderStyle("product", docType)}>Product Code</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-64" style={plainHeaderStyle}>P Uom</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Qty Puom</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>L Uom</th>
@@ -166,10 +167,12 @@ export function PurchaseOrderLinesTable({
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Unit price Net Amt</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Amount</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Lcurr Amount</th>
+              <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax Type</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax %</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Tax Amount</th>
               <th className="px-2 py-2 text-left w-32" style={plainHeaderStyle}>Req Date</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-40" style={plainHeaderStyle}>Remarks</th>
+
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax Cat</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax code</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Tax Lcurr amount</th>
@@ -187,8 +190,8 @@ export function PurchaseOrderLinesTable({
 
               const sameUom = isSameUom(row);
               const quantity = computeQuantity(row);
-              const lcurrAmountValue = lineLcurrAmount(row,ex_rate);
-              const taxLcurrAmountValue = taxLcurrAmount(row,ex_rate);
+              const lcurrAmountValue = lineLcurrAmount(row, ex_rate);
+              const taxLcurrAmountValue = taxLcurrAmount(row, ex_rate);
 
               return (
                 <tr className="border-t odd:bg-muted/20" key={row.id}>
@@ -270,8 +273,7 @@ export function PurchaseOrderLinesTable({
                                   lcur_amount: numberOrZero(getLookupValue(item, "lcur_amount")),
                                   required_dt: text(getLookupValue(item, "required_dt")),
                                   line_remarks: text(getLookupValue(item, "remarks")),
-                                  tax_cat: text(getLookupValue(item, "tx_cat_code")),
-                                  tax_code: text(getLookupValue(item, "tx_compntcat_code_1")),
+
                                   tax_lcur_amount: numberOrZero(getLookupValue(item, "tx_compnt_lcuramt_1")),
                                   lcur_amount_disc: numberOrZero(getLookupValue(item, "lcur_amount_discounted")),
                                   zone_code: text(getLookupValue(item, "zone_code")),
@@ -284,6 +286,12 @@ export function PurchaseOrderLinesTable({
                                   uppp: numberOrZero(getLookupValue(item, "uppp")),
                                   quantity: numberOrZero(getLookupValue(item, "quantity")),
                                   ex_rate: numberOrZero(getLookupValue(item, "ex_rate")),
+                                  tx_cat_code: text(getLookupValue(item, "tx_cat_code")),
+                                  tx_compntcat_code_1: text(getLookupValue(item, "tx_compntcat_code_1")),
+                                  tx_compnt_amt_1: numberOrZero(getLookupValue(item, "tx_compnt_amt_1")),
+                                  tx_compnt_perc_1: numberOrZero(getLookupValue(item, "tx_compnt_prec_1")),
+                                  tx_compnt_1_expmt: text(getLookupValue(item, "tx_compnt_1_expmt"))
+
                                 })
                               );
 
@@ -298,7 +306,7 @@ export function PurchaseOrderLinesTable({
                       </div>
                     </td>
                   )}
-                      {hasPoColumn(docType) && (
+                  {hasPoColumn(docType) && (
                     <td className="finance-sticky-col bg-card px-2 py-1" style={stickyStyle("PO", docType)}>
                       <div>
                         <LookupField
@@ -357,8 +365,8 @@ export function PurchaseOrderLinesTable({
                                   lcur_amount: numberOrZero(getLookupValue(item, "lcur_amount")),
                                   required_dt: text(getLookupValue(item, "required_dt")),
                                   line_remarks: text(getLookupValue(item, "remarks")),
-                                  tax_cat: text(getLookupValue(item, "tx_cat_code")),
-                                  tax_code: text(getLookupValue(item, "tx_compntcat_code_1")),
+                                  tx_cat_code: text(getLookupValue(item, "tx_cat_code")),
+                                  tx_compntcat_code_1: text(getLookupValue(item, "tx_compntcat_code_1")),
                                   tax_lcur_amount: numberOrZero(getLookupValue(item, "tx_compnt_lcuramt_1")),
                                   lcur_amount_disc: numberOrZero(getLookupValue(item, "lcur_amount_discounted")),
                                   zone_code: text(getLookupValue(item, "zone_code")),
@@ -371,6 +379,10 @@ export function PurchaseOrderLinesTable({
                                   uppp: numberOrZero(getLookupValue(item, "uppp")),
                                   quantity: numberOrZero(getLookupValue(item, "quantity")),
                                   ex_rate: numberOrZero(getLookupValue(item, "ex_rate")),
+                                  tx_compnt_amt_1: numberOrZero(getLookupValue(item, "tx_compnt_amt_1")),
+                                  tx_compnt_perc_1: numberOrZero(getLookupValue(item, "tx_compnt_perc_1")),
+                                  tx_compnt_1_expmt: text(getLookupValue(item, "tx_compnt_1_expmt"))
+
                                 })
                               );
 
@@ -385,7 +397,7 @@ export function PurchaseOrderLinesTable({
                       </div>
                     </td>
                   )}
-                  <td className="finance-sticky-col finance-account-cell bg-card px-2 py-1" style={stickyStyle("product" , docType)}>
+                  <td className="finance-sticky-col finance-account-cell bg-card px-2 py-1" style={stickyStyle("product", docType)}>
                     <LookupField
                       label=""
                       value={row.prod_code || ""}
@@ -550,27 +562,110 @@ export function PurchaseOrderLinesTable({
                   <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineDiscPrice(row))}</td>
                   <td className="finance-amount-cell px-2 py-1 text-right">{formatAmount(finalRate(row))}</td>
                   <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineAmount(row))}</td>
-                    <td className="finance-amount-cell w-32 px-2 py-1 text-right">
+                  <td className="finance-amount-cell w-32 px-2 py-1 text-right">
                     {formatAmount(lcurrAmountValue)}
                   </td>
+                  <td className="w-40 px-2 py-1">
+                    <Select
+                      value={row.tx_compnt_1_expmt || "N"}
+                      onChange={(event) => {
+                        const taxType = event.target.value;
+                        const taxPerc = taxType === "S" ? 5 : 0;
+                        const taxAmt = taxType === "S" ? (Number(lineAmount) || 0) * (taxPerc / 100) : 0;
+                        updateRow(row.id, {
+                          tx_compnt_1_expmt: taxType,
+                          tx_compnt_perc_1: taxPerc,
+                          tx_compnt_amt_1: taxAmt,
+                        });
+                      }}
+                    >
+                      <option value="N">No Tax</option>
+                      <option value="S">Std Tax</option>
+                      <option value="Z">Zero</option>
+                      <option value="E">Exempt</option>
+                    </Select>
+                  </td>
                   <td className="finance-amount-cell w-24 px-2 py-1">
-                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.tax_pct} onChange={(event) => updateRow(row.id, { tax_pct: Number(event.target.value || 0) })} />
+                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.tx_compnt_perc_1} onChange={(event) => updateRow(row.id, { tx_compnt_perc_1: Number(event.target.value || 0) })} />
                   </td>
                   <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineTaxAmount(row))}</td>
-                
+
                   <td className="w-32 px-2 py-1">
                     <Input type="date" disabled={headerAndLineDisabled} value={row.required_dt} onChange={(event) => updateRow(row.id, { required_dt: event.target.value })} />
                   </td>
                   <td className="w-40 px-2 py-1 border border-gray-300 rounded-md">
                     <textarea disabled={headerAndLineDisabled} value={row.line_remarks} onChange={(event) => updateRow(row.id, { line_remarks: event.target.value })} />
                   </td>
+
+
                   <td className="w-32 px-2 py-1">
-                    <Input disabled={headerAndLineDisabled} value={row.tax_cat} onChange={(event) => updateRow(row.id, { tax_cat: event.target.value })} />
+                    <LookupField
+                      label="Tax Category"
+                      compact
+                      placeholder="Tax code"
+                      value={row.tx_cat_code || ""}
+                      displayValue={
+                        row.tx_cat_name
+                          ? `${row.tx_cat_code} - ${row.tx_cat_name}`
+                          : row.tx_cat_code || ""
+                      }
+                      columns={[
+                        { field: "tx_cat_code", header: "Code" },
+                        { field: "tx_cat_name", header: "Name" }
+                      ]}
+                      valueField="tx_cat_code"
+                      displayFields={["tx_cat_code", "tx_cat_name"]}
+                      loadOptions={() =>
+                        getDynamicLookup({
+                          parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CATEGORY",
+                          code1: companyCode
+                        })
+                      }
+                      onChange={(value, selectedRow) => {
+                        updateRow(row.id, {
+                          tx_cat_code: text(value),
+                          // tx_cat_name: text(
+                          //   getLookupValue(selectedRow || {}, "tx_cat_name")
+                          // ),
+                        });
+                      }}
+                    />
                   </td>
                   <td className="w-32 px-2 py-1">
-                    <Input disabled={headerAndLineDisabled} value={row.tax_code} onChange={(event) => updateRow(row.id, { tax_code: event.target.value })} />
+                    <LookupField
+                      label="Tax Code"
+                      compact
+                      placeholder="Tax code"
+                      value={row.tx_compntcat_code_1 || ""}
+                      displayValue={
+                        row.tx_compntcat_name_1
+                          ? `${row.tx_compntcat_code_1} - ${row.tx_compntcat_name_1}`
+                          : row.tx_compntcat_code_1 || ""
+                      }
+                      columns={[
+                        { field: "tx_compntcat_code", header: "Code" },
+                        { field: "tx_compntcat_name", header: "Name" }
+                      ]}
+                      valueField="tx_compntcat_code"
+                      displayFields={["tx_compntcat_code", "tx_compntcat_name"]}
+                      loadOptions={() =>
+                        getDynamicLookup({
+                          parameter: "DEBIT_NOTE_DROP_DOWN_TAX_CODE",
+                          code1: companyCode
+                        })
+                      }
+                      disabled={headerAndLineDisabled}
+                      onChange={(value, selectedRow) => {
+                        updateRow(row.id, {
+                          tx_compntcat_code_1: text(value),
+                          // tx_compntcat_name_1: text(
+                          //   getLookupValue(selectedRow || {}, "tx_compntcat_name")
+                          // ),
+                        });
+                      }}
+                    />
                   </td>
-                      <td className="finance-amount-cell w-32 px-2 py-1 text-right">
+                  <td className="finance-amount-cell w-32 px-2 py-1 text-right">
                     {formatAmount(taxLcurrAmountValue)}
                   </td>
                   <td className="finance-amount-cell w-32 px-2 py-1">

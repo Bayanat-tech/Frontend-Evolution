@@ -1,5 +1,6 @@
 import { getDynamicLookup } from "../../../api/lookups";
 import { upsertBulkJobProductionEntryApi } from "../../../api/purchaseSales"; // removed unused upsertBulkPurchaseEntryApi
+import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 import {
     EXPENSE_AC_OPTIONS, // ensure this is exported from Purchaseordertypes or define it locally; we'll define it if missing
     ExpenseRow,
@@ -12,6 +13,7 @@ import {
     PurchaseOrderLineRow,
     TteJmiConsumType,
 } from "../purchase/Purchaseordertypes";
+import { taxLcurrAmount } from "../purchase/Purchaseorderutils";
 
 // If EXPENSE_AC_OPTIONS is not exported from Purchaseordertypes, define it here:
 // (Assuming it's an array of { value: string; label: string })
@@ -172,32 +174,36 @@ export async function fetchPurchaseOrderDetail(
 
     return (rows || []).map((raw) => {
         const row = lowerRecord(raw as Record<string, unknown>);
-        return {
-            id: newId(),
-            div_code: text(row.div_code),
-            zone_code: text(row.zone),
-            prod_code: text(row.prod_code),
-            prod_name: text(row.prod_name),
-            p_uom: text(row.p_uom),
-            qty_puom: numberOrZero(row.qty_puom),
-            l_uom: text(row.l_uom),
-            qty_luom: numberOrZero(row.qty_luom),
-            unit_price: numberOrZero(row.unit_price),
-            disc_price: numberOrZero(row.disc_price),
-            quantity: numberOrZero(row.qty ?? row.quantity),
-            tax_pct: numberOrZero(row.tax_pct ?? row.tax_percent),
-            tax_amount: numberOrZero(row.tax_amount),
-            lcur_amount: numberOrZero(row.lcurr_amount),
-            required_dt: text(row.req_date),
-            line_remarks: text(row.remarks ?? row.line_remarks),
-            tax_cat: text(row.tax_cat ?? row.tax_category),
-            tax_code: text(row.tax_code),
-            tax_lcur_amount: numberOrZero(row.tax_lcurr_amount),
-            lcur_amount_disc: numberOrZero(row.lcurr_amount_disc ?? row.lcurr_amount_discount),
-            ex_rate: numberOrZero(row.ex_rate ?? 1),
-            disc_percent: numberOrZero(row.disc_pct ?? row.disc_percent),
-            disc_hdr_percent: numberOrZero(row.disc_hdr_percent ?? row.disc_pct ?? row.disc_percent),
-        } satisfies PurchaseOrderLineRow;
+       return {
+      id: newId(),
+      div_code: text(row.div_code),
+      zone_code: text(row.zone_code),
+      prod_code: text(row.prod_code),
+      prod_name: text(row.prod_name),
+      p_uom: text(row.p_uom),
+      qty_puom: numberOrZero(row.qty_puom),
+      l_uom: text(row.l_uom),
+      qty_luom: numberOrZero(row.qty_luom),
+      unit_price: numberOrZero(row.unit_price),
+      disc_hdr_percent: numberOrZero(row.disc_hdr_percent),
+      disc_percent: numberOrZero(row.disc_percent),
+       disc_price: numberOrZero(row.disc_price),
+      tax_pct: numberOrZero(row.tax_pct ?? row.tax_percent),
+      tax_amount: numberOrZero(row.tax_amount),
+      lcur_amount: numberOrZero(row.lcur_amount),
+    required_dt: toDateInputValue(raw.required_dt) || "",
+      line_remarks: text(row.remarks ?? row.line_remarks),
+      tax_lcur_amount: numberOrZero(row.tax_lcur_amount),
+      lcur_amount_disc: numberOrZero(row.lcur_amount_disc ?? row.lcur_amount_discount),
+      uppp:numberOrZero(row.uppp),
+      quantity:numberOrZero(row.quantity),
+      ex_rate:numberOrZero(row.ex_rate),
+      tx_cat_code:text(row.tx_cat_code),
+      tx_compntcat_code_1:text(row.tx_compntcat_code_1),
+      tx_compnt_perc_1:numberOrZero(row.tx_compnt_perc_1),
+      tx_compnt_amt_1: numberOrZero(row.tx_compnt_amt_1),
+      tx_compnt_1_expmt: text(row.tx_compnt_1_expmt)
+    } satisfies PurchaseOrderLineRow;
     });
 }
 
@@ -378,7 +384,7 @@ export function lineTaxAmount(row: PurchaseOrderLineRow) {
     return lineNetAmount(row) * (row.tax_pct / 100);
 }
 
-export function buildDetailsPayload(rows: PurchaseOrderLineRow[]) {
+export function buildDetailsPayload(rows: PurchaseOrderLineRow[] ,ex_rate?: number) {
     return rows.map((row) => ({
         div_code: row.div_code,
         zone_code: row.zone_code,
@@ -399,10 +405,13 @@ export function buildDetailsPayload(rows: PurchaseOrderLineRow[]) {
         lcur_amount: row.lcur_amount,
         required_dt: row.required_dt,
         remarks: row.line_remarks,
-        tax_cat: row.tax_cat,
-        tax_code: row.tax_code,
-        tax_lcur_amount: row.tax_lcur_amount,
-        lcur_amount_disc: row.lcur_amount_disc,
+   tx_cat_code: row.tx_cat_code,
+    tx_compntcat_code_1: row.tx_compntcat_code_1,
+    tax_lcur_amount: taxLcurrAmount(row,ex_rate),
+    lcur_amount_disc: row.lcur_amount_disc,
+    tx_compnt_amt_1 :lineTaxAmount(row),
+    tx_compnt_perc_1: row.tx_compnt_perc_1,
+    tx_compnt_1_expmt: row.tx_compnt_1_expmt
     }));
 }
 
