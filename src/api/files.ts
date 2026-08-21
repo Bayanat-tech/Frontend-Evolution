@@ -59,6 +59,15 @@ export async function getAccountFiles(requestNumber: string) {
   return (response.data.data || []).map(normalizeFile);
 }
 
+export async function getFreightAccountFiles(requestNumber: string) {
+  if (!requestNumber) return [];
+  const response = await api.post<ApiResponse<AccountFile[]>>("/api/freight/account-attachments/list", {
+    request_number: requestNumber,
+  });
+  if (!response.data.success) throw new Error(response.data.message || "Unable to load freight attachments");
+  return (response.data.data || []).map(normalizeFile);
+}
+
 export async function uploadAccountFile(file: File, requestNumber: string, type: string) {
   const formData = new FormData();
   formData.append("file", file);

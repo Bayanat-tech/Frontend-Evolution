@@ -3,6 +3,7 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   deleteAccountFile,
   getAccountFiles,
+  getFreightAccountFiles,
   makeFileRow,
   NormalizedFile,
   renameAccountFile,
@@ -69,7 +70,8 @@ export function AttachmentDialog({
     setLoading(true);
     setNotice(null);
     try {
-      const groups = await Promise.all(allRequestNumbers.map((item) => getAccountFiles(item)));
+      const loadAccountFiles = module.toUpperCase() === "FREIGHT" ? getFreightAccountFiles : getAccountFiles;
+      const groups = await Promise.all(allRequestNumbers.map((item) => loadAccountFiles(item)));
       setFiles(groups.flat());
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load attachments" });
