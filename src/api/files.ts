@@ -54,18 +54,31 @@ export type NormalizedFile = {
 
 export async function getAccountFiles(requestNumber: string) {
   if (!requestNumber) return [];
-  const response = await api.get<ApiResponse<AccountFile[]>>(`/api/files/accountFiles/${encodeProxySafePathSegment(requestNumber)}`);
+  const response = await api.get<ApiResponse<AccountFile[]>>(
+    `/api/files/accountFiles/${encodeProxySafePathSegment(requestNumber)}`,
+    {
+      params: { _: Date.now() },
+      headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+    },
+  );
   if (!response.data.success) throw new Error(response.data.message || "Unable to load attachments");
   return (response.data.data || []).map(normalizeFile);
 }
 
 export async function getFreightAccountFiles(requestNumber: string) {
   if (!requestNumber) return [];
-  const response = await api.post<ApiResponse<AccountFile[]>>("/api/freight/account-attachments/list", {
-    request_number: requestNumber,
-  });
-  if (!response.data.success) throw new Error(response.data.message || "Unable to load freight attachments");
-  return (response.data.data || []).map(normalizeFile);
+  try {
+    const response = await api.post<ApiResponse<AccountFile[]>>("/api/freight/account-attachments/list", {
+      request_number: requestNumber,
+    });
+    if (!response.data.success) throw new Error(response.data.message || "Unable to load freight attachments");
+    return (response.data.data || []).map(normalizeFile);
+  } catch (error: any) {
+    // Keep Freight functional while older backend deployments do not yet have
+    // the tenant-safe POST endpoint. Do not mask authorization/server errors.
+    if (error?.response?.status !== 404) throw error;
+    return getAccountFiles(requestNumber);
+  }
 }
 
 export async function uploadAccountFile(file: File, requestNumber: string, type: string) {
