@@ -2,11 +2,13 @@ import { Download, Eye, FileText, Paperclip, Pencil, Trash2, UploadCloud, X } fr
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   deleteAccountFile,
+  deleteFreightAccountFile,
   getAccountFiles,
   getFreightAccountFiles,
   makeFileRow,
   NormalizedFile,
   renameAccountFile,
+  renameFreightAccountFile,
   saveAccountFileRows,
   uploadAccountFile,
 } from "../../api/files";
@@ -127,9 +129,14 @@ export function AttachmentDialog({
   };
 
   const saveRename = async (file: NormalizedFile) => {
-    if (!requestNumber || !file.aws_file_locn || !editName.trim()) return;
+    if (!requestNumber || !file.sr_no || !editName.trim()) return;
     try {
-      await renameAccountFile(requestNumber, file.aws_file_locn, editName.trim());
+      if (module.toUpperCase() === "FREIGHT") {
+        await renameFreightAccountFile(requestNumber, file.sr_no, editName.trim());
+      } else {
+        if (!file.aws_file_locn) return;
+        await renameAccountFile(requestNumber, file.aws_file_locn, editName.trim());
+      }
       setFiles((current) => current.map((item) => fileKey(item) === fileKey(file) ? { ...item, user_file_name: editName.trim() } : item));
       setEditingKey("");
       setEditName("");
@@ -140,9 +147,15 @@ export function AttachmentDialog({
   };
 
   const removeFile = async (file: NormalizedFile) => {
-    if (!requestNumber || !file.sr_no || !file.aws_file_locn) return;
+    if (!requestNumber || !file.sr_no) return;
+    if (!window.confirm(`Delete ${file.user_file_name || file.org_file_name || "this attachment"}? This also removes it from OCI Object Storage.`)) return;
     try {
-      await deleteAccountFile(requestNumber, file.sr_no, file.aws_file_locn);
+      if (module.toUpperCase() === "FREIGHT") {
+        await deleteFreightAccountFile(requestNumber, file.sr_no);
+      } else {
+        if (!file.aws_file_locn) return;
+        await deleteAccountFile(requestNumber, file.sr_no, file.aws_file_locn);
+      }
       setFiles((current) => current.filter((item) => fileKey(item) !== fileKey(file)));
       setNotice({ type: "success", message: "Attachment deleted." });
     } catch (error) {

@@ -116,11 +116,30 @@ export async function renameAccountFile(requestNumber: string, awsFileLocn: stri
   return response.data;
 }
 
+export async function renameFreightAccountFile(requestNumber: string, srNo: number, userFileName: string) {
+  const response = await api.post<ApiResponse<unknown>>("/api/freight/account-attachments/rename", {
+    request_number: requestNumber,
+    sr_no: srNo,
+    user_file_name: userFileName,
+  });
+  if (!response.data.success) throw new Error(response.data.message || "Unable to rename freight attachment");
+  return response.data;
+}
+
 export async function deleteAccountFile(requestNumber: string, srNo: number, awsFileLocn: string) {
   const response = await api.delete<ApiResponse<unknown>>(`/api/files/deleteAF/${encodeProxySafePathSegment(requestNumber)}/${srNo}`, {
     data: { aws_file_locn: awsFileLocn },
   });
   if (!response.data.success) throw new Error(response.data.message || "Unable to delete file");
+  return response.data;
+}
+
+export async function deleteFreightAccountFile(requestNumber: string, srNo: number) {
+  const response = await api.post<ApiResponse<unknown>>("/api/freight/account-attachments/delete", {
+    request_number: requestNumber,
+    sr_no: srNo,
+  });
+  if (!response.data.success) throw new Error(response.data.message || "Unable to delete freight attachment");
   return response.data;
 }
 
