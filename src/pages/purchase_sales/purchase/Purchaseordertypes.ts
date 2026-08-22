@@ -54,9 +54,34 @@ export interface PurchaseOrderLineRow {
   po_prod_code?: string;
   po_prod_name?: string;
   po_div_code?: string;
-   po_zone_code?: string;
+  po_zone_code?: string;
   po_zone_name?: string;
-  po_doc_no?:string
+  po_doc_no?: string,
+  pi_doc_no?: string
+
+  porder_p_uom?: string;
+  porder_qty_puom?: number;
+  porder_l_uom?: string;
+  porder_qty_luom?: number;
+  porder_unit_price?: number;
+  porder_quantity?: number,
+  porder_prod_code?: string;
+  porder_prod_name?: string;
+  porder_div_code?: string;
+  porder_zone_code?: string;
+  porder_zone_name?: string;
+  porder_doc_no?: string,
+   porder_disc_percent?: number;
+   porder_disc_price?: number;
+     porder_tx_cat_code?: string,
+   porder_tx_compntcat_code_1?: string,
+   porder_tx_compnt_perc_1?: number,
+   porder_tx_compnt_amt_1?: number,
+   porder_tx_compnt_1_expmt?: string,
+   porder_tx_cat_name?: string
+   porder_tx_compntcat_name_1?: string,
+   porder_required_dt?: string;
+   serial_no?: number
 
 
 
@@ -65,6 +90,7 @@ export interface PurchaseOrderLineRow {
 
 export interface PurchaseOrderForm {
   doc_no: number | string;
+  doc_type?: string
   doc_date: string;
   quotn_no: string;
   quotn_date: string;
@@ -134,9 +160,115 @@ export interface PurchaseOrderForm {
   po_dlvr_term?: string;
   po_doc_date?: string;
   total_po_amount?: number
-  po_ac_code?:string;
-  po_div_code?: string
-
+  po_ac_code?: string;
+  po_div_code?: string;
+  grn_company_code?: string;
+  grn_doc_no?: number | string;
+  grn_payment_terms?: string;
+  grn_dlvr_term?: string;
+  grn_doc_date?: string;
+  grn_ac_code?: string;
+  grn_div_code?: string;
+  po_ref_no?: string;
+  po_ref_date?: string;
+  po_div_name?: string;
+  po_ac_name?: string;
+  po_party_address?: string;
+  po_credit_period?: number;
+  po_party_name?: string;
+  po_dept_code?: string;
+  po_dept_name?: string;
+  po_party_phone?: string;
+  po_party_fax?: string;
+  po_buyer?: string;
+  po_wo_no?: string;
+  po_wo_number?: string;
+  po_curr_code?: string;
+  po_curr_name?: string;
+  po_tax_code?: string;
+  po_tx_compntcat_code_1?: string;
+  po_tax_code_name?: string;
+  po_tx_cat_name?: string;
+  po_tx_cat_code?: string;
+  po_ex_rate?: number;
+  po_dlvr_contact?: string;
+  po_dlvr_mobile?: string;
+  po_dlvr_email?: string;
+  po_remarks?: string;
+  po_disc_hdr_price?: number;
+  po_disc_hdr_percent?: number;
+  po_disc_price?: number;
+  po_disc_percent?: number;
+  po_tax_category?: string;
+  po_expense_ac_post?: string;
+  po_print_on_letterhead?: string;
+  po_project_name?: string;
+  po_pr_no?: string;
+  po_scope_of_work?: string;
+  pi_doc_no?: number | string;
+  pi_doc_type?: string;
+  pi_doc_date?: string;
+  pi_quotn_no?: string;
+  pi_quotn_date?: string;
+  pi_ref_no?: string;
+  pi_ref_date?: string;
+  pi_div_code?: string;
+  pi_div_name?: string;
+  pi_ac_code?: string;
+  pi_ac_name?: string;
+  pi_party_address?: string;
+  pi_credit_period?: number;
+  pi_party_name?: string;
+  pi_dept_code?: string;
+  pi_dept_name?: string;
+  pi_party_phone?: string;
+  pi_party_fax?: string;
+  pi_buyer?: string;
+  pi_wo_no?: string;
+  pi_wo_number?: string;
+  pi_curr_code?: string;
+  pi_curr_name?: string;
+  pi_tax_code?: string;
+  pi_tx_compntcat_code_1?: string;
+  pi_tax_code_name?: string;
+  pi_tx_cat_name?: string;
+  pi_tx_cat_code?: string;
+  pi_ex_rate?: number;
+  pi_payment_terms?: string;
+  pi_dlvr_term?: string;
+  pi_dlvr_contact?: string;
+  pi_dlvr_mobile?: string;
+  pi_dlvr_email?: string;
+  pi_remarks?: string;
+  pi_disc_hdr_price?: number;
+  pi_disc_hdr_percent?: number;
+  pi_disc_price?: number;
+  pi_disc_percent?: number;
+  pi_tax_category?: string;
+  pi_expense_ac_post?: string;
+  pi_print_on_letterhead?: string;
+  pi_project_name?: string;
+  pi_pr_no?: string;
+  pi_scope_of_work?: string;
+  pi_canceled?: string;
+  pi_flow_level_running?: number;
+  pi_next_action_by?: string;
+  pi_sentback_reason?: string;
+  pi_reject_reason?: string;
+  pi_address?: string;
+  pi_tel?: string;
+  pi_fax?: string;
+  pi_pay_terms?: string;
+  pi_delivery_term?: string;
+  pi_delivery_contact?: string;
+  pi_delivery_tel?: string;
+  pi_delivery_email?: string;
+  pi_grn_no?: number | string;
+  pi_ref_doc_no?: number | string;
+  pi_ref_doc_dt?: string;
+  pi_tx_compntcat_name_1?: string;
+  inv_no?: string;
+  inv_date?: string
 
 }
 

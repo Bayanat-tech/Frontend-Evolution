@@ -137,9 +137,9 @@ export function PurchaseGrnHeaderForm({
                                         div_code: text(getLookupValue(item, "div_code")),
                                         prod_code: text(getLookupValue(item, "prod_code")),
                                         prod_name: text(getLookupValue(item, "prod_name")),
-                                        p_uom: text(getLookupValue(item, "po_p_uom")),
+                                        p_uom: text(getLookupValue(item, "p_uom")),
                                         qty_puom: numberOrZero(getLookupValue(item, "qty_puom")),
-                                        l_uom: text(getLookupValue(item, "po_l_uom")),
+                                        l_uom: text(getLookupValue(item, "l_uom")),
                                         qty_luom: numberOrZero(getLookupValue(item, "qty_luom")),
                                         unit_price: numberOrZero(getLookupValue(item, "unit_price")),
                                         po_div_code: text(getLookupValue(item, "po_div_code")),
@@ -176,6 +176,7 @@ export function PurchaseGrnHeaderForm({
                                         ref_doc_dt: text(getLookupValue(row || {}, "ref_date")),
                                          po_zone_code: text(getLookupValue(item, "po_zone_code")),
                                         po_zone_name: text(getLookupValue(item, "po_zone_name")),
+                                       serial_no: numberOrZero(getLookupValue(item, "serial_no")),
                                     }));
                                     console.log("Mapped length:", mappedDetails?.length);
                                     setdetails?.(mappedDetails);

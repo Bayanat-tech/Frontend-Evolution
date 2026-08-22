@@ -1,3 +1,4 @@
+
 import { Plus, X } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
@@ -15,6 +16,7 @@ import {
     lineLcurrAmount,   // add
     computeQuantity,   // add
     isSameUom,
+    isSamePoUom,
     taxLcurrAmount,
     computePoQuantity,
 } from "./Purchaseorderutils";
@@ -114,7 +116,7 @@ export function PurchaseGrnDetailsTable({
     const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
     const grandTotal = totalAmount - totalDiscPrice - discAmt;
     const finalTotal = grandTotal + totalTaxAmount;
-    
+
 
     // Quantity is always derived, never typed directly:
     // - same UOM: quantity mirrors qty_luom
@@ -162,10 +164,11 @@ export function PurchaseGrnDetailsTable({
                         ) : rows.map((row, index) => {
                             const qtyPuomNum = numberOrZero(row.qty_puom);
                             const qtyLuomNum = numberOrZero(row.qty_luom);
-                             const qtyPoLuomNum = numberOrZero(row.po_qty_luom);
+                            const qtyPoLuomNum = numberOrZero(row.po_qty_luom);
                             const upppNum = numberOrZero(row.uppp);
 
                             const sameUom = isSameUom(row);
+                            const samePoUom = isSamePoUom(row);
                             const quantity = computeQuantity(row);
                             const po_quantity = computePoQuantity(row);
                             const lcurrAmountValue = lineLcurrAmount(row, ex_rate);
@@ -177,13 +180,13 @@ export function PurchaseGrnDetailsTable({
                                     <td className="finance-sticky-col bg-card px-2 py-1 text-xs" style={stickyStyle("div")}>
                                         <Input disabled={headerAndLineDisabled} value={row.po_div_code} onChange={(event) => updateRow(row.id, { po_div_code: event.target.value })} />
                                     </td>
-                                
+
 
                                     <td className="finance-sticky-col finance-account-cell bg-card px-2 py-1" style={stickyStyle("product", docType)}>
                                         <LookupField
                                             label=""
-                                            value={row.po_prod_code || ""}
-                                            displayValue={row.po_prod_name ? `${row.po_prod_code} - ${row.po_prod_name}` : row.po_prod_code}
+                                            value={row.prod_code || ""}
+                                            displayValue={row.prod_name ? `${row.prod_code} - ${row.prod_name}` : row.prod_code}
                                             columns={[{ field: "prod_code", header: "Code" }, { field: "prod_name", header: "Name" }, { field: "p_uom", header: "P Uom" }, { field: "unit_price", header: "Unit Price" }]}
                                             valueField="prod_code"
                                             displayFields={["prod_code", "prod_name"]}
@@ -194,15 +197,15 @@ export function PurchaseGrnDetailsTable({
                                                 const newLUom = text(getLookupValue(selectedRow || {}, "l_uom")) || row.po_l_uom;
                                                 const newUppp = numberOrZero(getLookupValue(selectedRow || {}, "uppp")) || row.uppp;
                                                 const patch: Partial<PurchaseOrderLineRow> = {
-                                                    po_prod_code: value,
-                                                    po_prod_name: text(getLookupValue(selectedRow || {}, "prod_name")),
+                                                    prod_code: value,
+                                                    prod_name: text(getLookupValue(selectedRow || {}, "prod_name")),
                                                     po_p_uom: newPUom,
                                                     po_l_uom: newLUom,
                                                     uppp: newUppp,
                                                     po_unit_price: numberOrZero(getLookupValue(selectedRow || {}, "unit_price")) || row.unit_price,
                                                 };
                                                 const merged = { ...row, ...patch };
-                                                if (isSameUom(merged)) {
+                                                if (isSamePoUom(merged)) {
                                                     patch.po_qty_puom = row.po_qty_luom;
                                                 }
                                                 patch.po_quantity = computePoQuantity({ ...row, ...patch });
@@ -239,7 +242,7 @@ export function PurchaseGrnDetailsTable({
                                                     uom_name: text(getLookupValue(selectedRow || {}, "uom_name")) || row.uom_name,
                                                 };
                                                 const merged = { ...row, ...patch };
-                                                if (isSameUom(merged)) {
+                                                if (isSamePoUom(merged)) {
                                                     patch.po_qty_puom = qtyPoLuomNum;
                                                 }
                                                 patch.po_quantity = computePoQuantity({ ...row, ...patch });
@@ -250,7 +253,7 @@ export function PurchaseGrnDetailsTable({
                                     <td className="finance-amount-cell px-2 py-1">
                                         <Input
                                             className="finance-money-input"
-                                            disabled={headerAndLineDisabled || sameUom}
+                                            disabled={headerAndLineDisabled || samePoUom}
                                             type="number"
                                             style={{ textAlign: "right" }}
                                             step="0.001"
@@ -293,7 +296,7 @@ export function PurchaseGrnDetailsTable({
                                                     uom_name: text(getLookupValue(selectedRow || {}, "uom_name")) || row.uom_name,
                                                 };
                                                 const merged = { ...row, ...patch };
-                                                if (isSameUom(merged)) {
+                                                if (isSamePoUom(merged)) {
                                                     patch.po_qty_luom = qtyPoLuomNum;
                                                 }
                                                 patch.po_quantity = computePoQuantity({ ...row, ...patch });
@@ -305,7 +308,7 @@ export function PurchaseGrnDetailsTable({
                                         <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.001" value={row.po_qty_luom} onChange={(event) => {
                                             const newQtyLuom = Number(event.target.value || 0);
                                             const patch: Partial<PurchaseOrderLineRow> = { po_qty_luom: newQtyLuom };
-                                            if (sameUom) {
+                                            if (samePoUom) {
                                                 patch.po_qty_puom = newQtyLuom;
                                                 patch.po_quantity = newQtyLuom;
                                             } else {
@@ -326,7 +329,7 @@ export function PurchaseGrnDetailsTable({
                                                 const newUppp = Number(event.target.value || 0);
                                                 updateRow(row.id, {
                                                     uppp: Number(newUppp),
-                                                    quantity: computePoQuantity({ ...row, ...{ uppp: Number(newUppp) } }),
+                                                    po_quantity: computePoQuantity({ ...row, ...{ uppp: Number(newUppp) } }),
                                                 });
                                             }}
                                         />
