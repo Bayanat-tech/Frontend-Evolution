@@ -57,7 +57,9 @@ export function LeaveFlowTable({
   const [viewRow, setViewRow] = useState<LeaveFlowRow | null>(null);
   const [notice, setNotice] = useState<ToastNotice>(null);
 
-  const loginId = String(user?.loginid1 || user?.LOGINID1 || user?.loginid || user?.LOGINID || user?.username || "");
+  const loginId = String (user?.LOGINID1 || user?.loginid1  || user?.loginid || user?.LOGINID || user?.username || "");
+
+  console.log('leaveflowtable loginId',loginId);
 
   const loadRows = async (clearNotice = true) => {
     if (clearNotice) setNotice(null);
