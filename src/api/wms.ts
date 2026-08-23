@@ -8,6 +8,14 @@ type ApiResponse<T> = {
   data?: T;
   message?: string;
 };
+export type HolidayCalendarFilters = {
+  companyCode: string;
+  divCode?: string;
+  holidayType?: string;
+  gradeCode?: string;
+  yearFrom: string;
+  yearTo: string;
+};
 
 export type WmsMasterResponse = {
   tableData: LookupRow[];
@@ -140,7 +148,59 @@ export async function getStockAdjustmentDetails(
 export async function createAdjHeader(payload: AdjHeaderCreatePayload) {
   return postWmsStockAdjustment("createAdjHeader", payload as unknown as Record<string, unknown>);
 }
+export type HolidayCalendarApiRow = {
+  DATEID: string;
+  HOLIDAY_DATE: string; // ISO string from backend, parse before display
+  HOLIDAY_REASON: string | null;
+  COMPANY_CODE: string;
+  HOLIDAY_TYPE: string | null;
+  HALF_DAY: string | null;
+  DIV_CODE: string;
+  REMARKS: string | null;
+  GRADE_CODE: string | null;
+};
 
+export async function fetchHolidayCalendar(
+  filters: HolidayCalendarFilters,
+): Promise<HolidayCalendarApiRow[]> {
+  const { data } = await api.post<HolidayCalendarApiRow[]>(
+    "/api/gm/hr/holiday-calendar",
+    filters,
+  );
+  return data;
+}
+export type HolidayCalendarUpdateDetail = {
+  dateid: string;
+  holiday_date: string;
+  holiday_reason?: string | null;
+  holiday_type: string;
+  company_code: string;
+  div_code: string;
+  grade_code: string;
+  half_day?: string | null;
+  remarks?: string | null;
+  user_id?: string | null;
+};
+
+export type HolidayCalendarUpdatePayload = {
+  details: HolidayCalendarUpdateDetail[];
+};
+
+export type HolidayCalendarUpdateResponse = {
+  success: boolean;
+  message: string;
+  recordsProcessed?: number;
+};
+
+export async function updateHolidayCalendar(
+  payload: HolidayCalendarUpdatePayload,
+): Promise<HolidayCalendarUpdateResponse> {
+  const { data } = await api.post<HolidayCalendarUpdateResponse>(
+    "/api/hr/holiday-calendar",
+    payload,
+  );
+  return data;
+}
 /** POST create adjustment detail line */
 export async function createAdjDetail(payload: AdjDetailPayload) {
   return postWmsStockAdjustment("createAdjDetail", payload as unknown as Record<string, unknown>);
