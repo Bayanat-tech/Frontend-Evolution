@@ -6,7 +6,7 @@ export type THrEmpLanguageDetail = {
   employee_id:  string;
   lang_code:    string;
   to_read:      string;
-  to_write:     string;
+  to_write:     string;   
   to_speak:     string;
   remarks:      string;
   status_flag:  string; // "A" | "I" | "D"
@@ -33,9 +33,18 @@ class HrEmpLanguageService {
       if (!params?.company_code) return false;
       if (!params?.language_details || !Array.isArray(params.language_details)) return false;
 
-      await postFinance("upsertHrEmpLanguage", {
+      // FIX: backend route is registered as "insUpdHrEmpLanguages"
+      // (see finance.routes.ts), NOT "upsertHrEmpLanguage". The old name
+      // here caused a 404 (Cannot POST /api/finance/upsertHrEmpLanguage)
+      // since no matching route existed.
+      //
+      // FIX: controller (insUpdHrEmpLanguages.ts) reads `req.body?.details`,
+      // NOT `req.body.language_details`. Sending the array under the wrong
+      // key made the controller see an empty/undefined array and return
+      // "Language details are required" even though rows were sent.
+      await postFinance("insUpdHrEmpLanguages", {
         company_code: params.company_code,
-        language_details: params.language_details,
+        details: params.language_details,
         loginid: params.loginid,
       });
 

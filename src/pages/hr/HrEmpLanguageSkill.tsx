@@ -16,19 +16,29 @@ import hrEmpLanguageServiceInstance from "./Upserthremplanguage";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type DivisionOption     = { div_code: string;     div_name: string };
-type DeptOption         = { dept_code: string;    dept_name: string };
-type SectionOption      = { section_code: string; section_name: string };
-type EmployeeOption     = { employee_id: string;  employee_name: string };
-type LanguageOption     = { lang_code: string;    lang_desc: string };
-type StatusOption       = { value_code: string;   value_desc: string };
+type DivisionOption = { div_code: string;     div_name: string };
+type DeptOption     = { dept_code: string;    dept_name: string };
+type SectionOption  = { section_code: string; section_name: string };
+type EmployeeOption = { employee_id: string;  employee_name: string };
+type LanguageOption = { lang_code: string;    lang_desc: string };
+type StatusOption   = { value_code: string;   value_desc: string };
 
-// FIX: TO_READ / TO_WRITE / TO_SPEAK are stored as plain proficiency codes in
-// HR_EMP_LANGUAGES. No dedicated lookup was supplied for these, so a static
-// list is used here. If a HR_CODE_VALUES group exists for proficiency levels,
-// swap PROFICIENCY_OPTIONS below for a getDynamicLookup call the same way
-// eduLevelOpts / eduDiscOpts are wired up.
-const PROFICIENCY_OPTIONS = ["Basic", "Intermediate", "Fluent", "Expert"];
+// FIX: WMSTST.HR_EMP_LANGUAGES_OBJ.TO_READ / TO_WRITE / TO_SPEAK are
+// VARCHAR2(1) columns in Oracle (confirmed via NJS-142 error: "value too
+// large for attribute TO_READ ... maximum: 1"). The grid must display full
+// proficiency labels to the user but SEND only the single-char code to the
+// backend. `code` here is what gets saved to Oracle; `label` is what shows
+// in the dropdown.
+//
+// NOTE: codes below (B/I/F/E) are a best guess. Confirm against your actual
+// HR_CODE_VALUES / business standard and adjust if the DB expects different
+// single-char codes (e.g. a different letter set for read/write/speak scale).
+const PROFICIENCY_OPTIONS: { code: string; label: string }[] = [
+  { code: "B", label: "Basic" },
+  { code: "I", label: "Intermediate" },
+  { code: "F", label: "Fluent" },
+  { code: "E", label: "Expert" },
+];
 
 type LangRow = {
   _rowId:        string;
@@ -227,6 +237,9 @@ export function HrEmpLanguagePage() {
           _isPersisted: true,
           lang_code:    String(r.lang_code ?? ""),
           lang_desc:    String(r.lang_desc ?? ""),
+          // FIX: values coming back from Oracle are already the single-char
+          // codes (B/I/F/E) since that's all the column can hold — no
+          // conversion needed here, EditableSelectCell matches on `code`.
           to_read:      String(r.to_read   ?? ""),
           to_write:     String(r.to_write  ?? ""),
           to_speak:     String(r.to_speak  ?? ""),
@@ -250,6 +263,10 @@ export function HrEmpLanguagePage() {
   });
 
   // ── Cascade resets ─────────────────────────────────────────────────────────
+  // NOTE: this is the OTHER half of the cascade (clearing children when a
+  // parent changes). The `key` props below (which embed each parent's
+  // current code) are what force a fresh remount + refetch on every field —
+  // matching HrEmpEducationPage's current (no `disabled`) structure exactly.
   useEffect(() => {
     setDepartment(null);
     setSection(null);
@@ -356,7 +373,7 @@ export function HrEmpLanguagePage() {
         cell:        ({ row }) => (
           <EditableSelectCell
             value={row.original.to_read}
-            options={PROFICIENCY_OPTIONS.map((p) => ({ code: p, label: p }))}
+            options={PROFICIENCY_OPTIONS}
             onChange={(v) => updateRowSelect(row.original._rowId, "to_read", v)}
           />
         ),
@@ -368,7 +385,7 @@ export function HrEmpLanguagePage() {
         cell:        ({ row }) => (
           <EditableSelectCell
             value={row.original.to_write}
-            options={PROFICIENCY_OPTIONS.map((p) => ({ code: p, label: p }))}
+            options={PROFICIENCY_OPTIONS}
             onChange={(v) => updateRowSelect(row.original._rowId, "to_write", v)}
           />
         ),
@@ -380,7 +397,7 @@ export function HrEmpLanguagePage() {
         cell:        ({ row }) => (
           <EditableSelectCell
             value={row.original.to_speak}
-            options={PROFICIENCY_OPTIONS.map((p) => ({ code: p, label: p }))}
+            options={PROFICIENCY_OPTIONS}
             onChange={(v) => updateRowSelect(row.original._rowId, "to_speak", v)}
           />
         ),
@@ -496,6 +513,8 @@ export function HrEmpLanguagePage() {
     [loginid, companyCode],
   );
 
+  // Department: scoped by Division when one is picked. Empty div_code =>
+  // all departments for the company (EDUCATION_QUALIFICATION_DEPARTMENT_DEPTCODE).
   const loadDepartments = useCallback(
     () =>
       getDynamicLookup(
@@ -509,36 +528,58 @@ export function HrEmpLanguagePage() {
     [loginid, companyCode, division?.div_code],
   );
 
- const loadSections = useCallback(
-  () =>
-    getDynamicLookup(
-      buildParams(
-        "EDUCATION_QUALIFICATION_LANG_SECTION_LIST",
-        loginid,
-        companyCode,
-        division?.div_code    ?? "", // code2 — DIV_CODE  (optional)
-        department?.dept_code ?? "", // code3 — DEPT_CODE (optional)
+  // Section: same shape as HrEmpEducationPage's loadSections — code2 =
+  // DIV_CODE (optional), code3 = DEPT_CODE (optional). No `disabled` gate,
+  // matching Education's current structure — the field is always clickable,
+  // and the `key` below (embedding division + department codes) forces a
+  // remount + fresh fetch whenever a parent filter changes.
+  const loadSections = useCallback(
+    () =>
+      getDynamicLookup(
+        buildParams(
+          "EDUCATION_QUALIFICATION_MS_HR_SECTION",
+          loginid,
+          companyCode,
+          division?.div_code    ?? "", // code2 — DIV_CODE  (optional)
+          department?.dept_code ?? "", // code3 — DEPT_CODE (optional)
+        ),
       ),
-    ),
-  [loginid, companyCode, division?.div_code, department?.dept_code],
-);
+    [loginid, companyCode, division?.div_code, department?.dept_code],
+  );
 
-  // Division and section are optional filters — only department narrows the
-  // employee list as the primary filter (code2). Division goes to code3,
-  // section to code4.
+  // Employee: same shape as HrEmpEducationPage's loadEmployees — no
+  // `disabled` gate, `key` embeds every parent code so any upstream change
+  // forces a remount + fresh fetch.
+  //
+  // NOTE: code slot order intentionally differs from Education's employee
+  // loader. Education's stored-proc branch treats DIV_CODE/DEPT_CODE/
+  // SECTION_CODE as fully optional (OR-empty pattern), so any slot order
+  // works there. Language's stored-proc branch
+  // (EDUCATION_QUALIFICATION_LANG_EMPLOYEE_LIST) has DEPT_CODE as a
+  // mandatory hard equality on P_CODE2 — so department must stay in the
+  // code2 slot here, or the query silently returns zero rows whenever
+  // department is empty. To get identical code-slot ordering to Education
+  // too, the backend proc's WHERE clause needs DEPT_CODE wrapped in the
+  // same optional OR-pattern used for DIV_CODE/SECTION_CODE first.
   const loadEmployees = useCallback(
     () =>
       getDynamicLookup(
         buildParams(
-          "EDUCATION_QUALIFICATION_LANG_EMPLOYEE_LIST",
+          "EDUCATION_QUALIFICATION_HR_EMPLOYEE_LIST_WITH_MANAGER",
           loginid,
           companyCode,
-          department?.dept_code ?? "", // code2 — primary filter
-          division?.div_code    ?? "", // code3 — optional
-          section?.section_code ?? "", // code4 — optional
+          department?.dept_code ?? "", // code2 — DEPT_CODE (mandatory in proc)
+          division?.div_code    ?? "", // code3 — DIV_CODE  (optional)
+          section?.section_code ?? "", // code4 — SECTION_CODE (optional)
         ),
       ),
-    [loginid, companyCode, department?.dept_code, division?.div_code, section?.section_code],
+    [
+      loginid,
+      companyCode,
+      department?.dept_code,
+      division?.div_code,
+      section?.section_code,
+    ],
   );
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -601,9 +642,9 @@ export function HrEmpLanguagePage() {
             <h2 className="m-0 text-sm font-semibold">Select Employee</h2>
           </div>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
 
-          {/* Division — optional, narrows employee list */}
+          {/* Division — top of the chain, always enabled */}
           <label className="field">
             <span>Division</span>
             <LookupField
@@ -629,11 +670,13 @@ export function HrEmpLanguagePage() {
             />
           </label>
 
-          {/* Department — optional but recommended */}
+          {/* Department — key includes division.div_code so picking a
+              Division forces a remount and re-fetches departments scoped
+              to it. */}
           <label className="field">
             <span>Department</span>
             <LookupField
-              key={`department-${resetKey}`}
+              key={`department-${resetKey}-${division?.div_code ?? ""}`}
               compact
               label="Department"
               value={department?.dept_code ?? ""}
@@ -655,11 +698,14 @@ export function HrEmpLanguagePage() {
             />
           </label>
 
-          {/* Section — fully optional */}
+          {/* Section — key includes division.div_code + department.dept_code:
+              any change up the chain forces a remount, so loadSections()
+              always runs fresh and scoped correctly. Matches Education's
+              current (no `disabled`) structure. */}
           <label className="field">
             <span>Section</span>
             <LookupField
-              key={`section-${resetKey}`}
+              key={`section-${resetKey}-${division?.div_code ?? ""}-${department?.dept_code ?? ""}`}
               compact
               label="Section"
               value={section?.section_code ?? ""}
@@ -671,7 +717,6 @@ export function HrEmpLanguagePage() {
               valueField="section_code"
               displayFields={["section_code", "section_name"]}
               loadOptions={loadSections}
-   
               onChange={(_, row) => {
                 setSection(
                   row
@@ -685,13 +730,17 @@ export function HrEmpLanguagePage() {
             />
           </label>
 
-          {/* Employee — only requires department, not division */}
+          {/* Employee — key includes department.dept_code + division.div_code
+              + section.section_code: any change up the chain forces a
+              remount, so loadEmployees() always runs fresh and scoped
+              correctly. Matches Education's current (no `disabled`)
+              structure. */}
           <label className="field">
             <span>
               Employee <strong className="text-destructive">*</strong>
             </span>
             <LookupField
-              key={`employee-${resetKey}`}
+              key={`employee-${resetKey}-${department?.dept_code ?? ""}-${division?.div_code ?? ""}-${section?.section_code ?? ""}`}
               compact
               label="Employee"
               value={employee?.employee_id ?? ""}
@@ -707,7 +756,6 @@ export function HrEmpLanguagePage() {
               valueField="employee_id"
               displayFields={["employee_id", "employee_name"]}
               loadOptions={loadEmployees}
-              disabled={false}
               onChange={(_, row) => {
                 setEmployee(
                   row
