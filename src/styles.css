@@ -3592,7 +3592,7 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .freight-shipment-hero-item strong {
   min-width: 0;
   color: #111827;
-  font-size: 27px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.1;
   overflow-wrap: anywhere;
@@ -5668,6 +5668,26 @@ freight-dense-form .freight-form-card {
 .commercial-editor .commercial-number-input::-webkit-inner-spin-button,
 .finance-money-input::-webkit-outer-spin-button,
 .finance-money-input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.finance-page input[type="number"],
+.finance-list-page input[type="number"],
+.payment-workbench input[type="number"],
+.commercial-editor input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.finance-page input[type="number"]::-webkit-outer-spin-button,
+.finance-page input[type="number"]::-webkit-inner-spin-button,
+.finance-list-page input[type="number"]::-webkit-outer-spin-button,
+.finance-list-page input[type="number"]::-webkit-inner-spin-button,
+.payment-workbench input[type="number"]::-webkit-outer-spin-button,
+.payment-workbench input[type="number"]::-webkit-inner-spin-button,
+.commercial-editor input[type="number"]::-webkit-outer-spin-button,
+.commercial-editor input[type="number"]::-webkit-inner-spin-button {
   margin: 0;
   -webkit-appearance: none;
 }
@@ -8943,9 +8963,19 @@ freight-dense-form .freight-form-card {
   padding-left: 46px !important;
 }
 
-.freight-dense-form :where(.freight-form-card, .freight-panel-body) label > span:first-child,
+/* .freight-dense-form :where(.freight-form-card, .freight-panel-body) label > span:first-child,
 .freight-dense-form .freight-compact-label > span:first-child {
   color: #64748b !important;
+  font-family: var(--app-font-family) !important;
+  font-size: 10.25px !important;
+  font-weight: 750 !important;
+  letter-spacing: 0.015em;
+  text-transform: uppercase;
+} */
+
+.freight-dense-form :where(.freight-form-card, .freight-panel-body) label > span:first-child,
+.freight-dense-form .freight-compact-label > span:first-child {
+  color: #1e293b !important;   /* was #64748b — now matches text-slate-800 */
   font-family: var(--app-font-family) !important;
   font-size: 10.25px !important;
   font-weight: 750 !important;
@@ -8994,7 +9024,7 @@ freight-dense-form .freight-form-card {
 
 @media (min-width: 1281px) {
   .freight-job-editor-shell {
-    grid-template-columns: minmax(0, 1fr) 212px;
+    grid-template-columns: minmax(0, 1fr) 176px;
     align-items: stretch;
   }
 }
@@ -9002,7 +9032,7 @@ freight-dense-form .freight-form-card {
 .freight-job-progress-rail {
   position: sticky;
   top: 76px;
-  width: 212px;
+  width: 176px;
   min-height: 0;
   height: 390px;
   max-height: 390px;
@@ -9046,8 +9076,8 @@ freight-dense-form .freight-form-card {
 
 .freight-job-progress-rail-step {
   position: relative;
-  grid-template-columns: 25px minmax(0, 1fr);
-  gap: 7px;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 5px;
   min-height: 0;
   padding: 0;
 }
@@ -9105,7 +9135,7 @@ freight-dense-form .freight-form-card {
 
 .freight-job-progress-rail-copy strong {
   color: #172033;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 850;
   line-height: 1.1;
 }
@@ -9121,9 +9151,187 @@ freight-dense-form .freight-form-card {
 .freight-job-progress-rail-copy small {
   margin-top: 2px;
   color: #7a8aa1;
-  font-size: 8.5px;
+  font-size: 8px;
   font-weight: 750;
   line-height: 1.1;
+}
+
+/* Desktop job layout: keep the status timeline vertical in a compact right rail. */
+@media (min-width: 1281px) {
+  .freight-job-editor-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 62px;
+    gap: 0;
+    align-items: start;
+  }
+
+  .freight-job-editor-shell .freight-document-paper {
+    order: initial;
+    width: auto;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail {
+    order: initial;
+    position: sticky;
+    top: 64px;
+    z-index: 4;
+    width: 62px;
+    height: calc(100vh - 72px);
+    max-height: none;
+    min-height: 0;
+    align-self: start;
+    overflow: visible;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-title {
+    display: none;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-title span,
+  .freight-job-editor-shell .freight-job-progress-rail-title strong {
+    width: min-content;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    white-space: nowrap;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-list {
+    position: relative;
+    display: flex;
+    height: 100%;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 0;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-list::before {
+    content: "";
+    position: absolute;
+    top: 42px;
+    bottom: 42px;
+    left: 50%;
+    width: 2px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #07996f 0 18%, #075fca 18% 38%, #cbd5e1 38% 100%);
+    transform: translateX(-50%);
+    opacity: 0.8;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-step {
+    display: block;
+    min-height: 84px;
+    padding: 10px 4px;
+    border: 1px solid #e1e8f2;
+    border-right: 0;
+    border-radius: 18px 0 0 18px;
+    background: rgba(255, 255, 255, 0.82);
+    transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+    position: relative;
+    z-index: 1;
+    box-shadow: -4px 4px 10px rgba(15, 23, 42, 0.04);
+    isolation: isolate;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-step::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: -5px;
+    width: 9px;
+    height: 24px;
+    border-radius: 0 8px 8px 0;
+    background: #cbd5e1;
+    transform: translateY(-50%);
+    z-index: -1;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-step:hover {
+    transform: translateX(-3px);
+    border-color: #b8cde5;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-copy {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    min-width: 0;
+    padding: 0;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-copy strong,
+  .freight-job-editor-shell .freight-job-progress-rail-copy small {
+    flex: 0 0 auto;
+    margin-top: 0;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    white-space: nowrap;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-copy strong {
+    font-size: 11.5px;
+    font-weight: 850;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-copy small {
+    font-size: 7.5px;
+    font-weight: 800;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-marker,
+  .freight-job-editor-shell .freight-job-progress-rail-marker::after {
+    display: none;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-step.done {
+    border-color: #9ed8c5;
+    background: linear-gradient(135deg, #f4fdf8 0%, #e8f8f1 100%);
+    border-right: 3px solid #07996f;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-step.done::before {
+    background: #07996f;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-step.current {
+    border-color: #8ab9ed;
+    background: linear-gradient(135deg, #f3f8ff 0%, #e4f0ff 100%);
+    box-shadow: -6px 5px 16px rgba(7, 95, 202, 0.16);
+    border-right: 3px solid #075fca;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-step.current::before {
+    background: #075fca;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-step.pending {
+    background: linear-gradient(135deg, #ffffff 0%, #f3f6fa 100%);
+    border-right: 3px solid #cbd5e1;
+  }
+}
+
+@media (max-width: 700px) {
+  .freight-job-editor-shell .freight-job-progress-rail {
+    position: static;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-list {
+    display: flex;
+    gap: 18px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-step {
+    flex: 0 0 126px;
+  }
 }
 
 @media (max-width: 1280px) {

@@ -1,11 +1,14 @@
-import { Download, FileText, Paperclip, Pencil, Trash2, UploadCloud, X } from "lucide-react";
+import { Download, Eye, FileText, Paperclip, Pencil, Trash2, UploadCloud, X } from "lucide-react";
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   deleteAccountFile,
+  deleteFreightAccountFile,
   getAccountFiles,
+  getFreightAccountFiles,
   makeFileRow,
   NormalizedFile,
   renameAccountFile,
+  renameFreightAccountFile,
   saveAccountFileRows,
   uploadAccountFile,
 } from "../../api/files";
@@ -69,7 +72,8 @@ export function AttachmentDialog({
     setLoading(true);
     setNotice(null);
     try {
-      const groups = await Promise.all(allRequestNumbers.map((item) => getAccountFiles(item)));
+      const loadAccountFiles = module.toUpperCase() === "FREIGHT" ? getFreightAccountFiles : getAccountFiles;
+      const groups = await Promise.all(allRequestNumbers.map((item) => loadAccountFiles(item)));
       setFiles(groups.flat());
     } catch (error) {
       setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load attachments" });
@@ -125,9 +129,14 @@ export function AttachmentDialog({
   };
 
   const saveRename = async (file: NormalizedFile) => {
-    if (!requestNumber || !file.aws_file_locn || !editName.trim()) return;
+    if (!requestNumber || !file.sr_no || !editName.trim()) return;
     try {
-      await renameAccountFile(requestNumber, file.aws_file_locn, editName.trim());
+      if (module.toUpperCase() === "FREIGHT") {
+        await renameFreightAccountFile(requestNumber, file.sr_no, editName.trim());
+      } else {
+        if (!file.aws_file_locn) return;
+        await renameAccountFile(requestNumber, file.aws_file_locn, editName.trim());
+      }
       setFiles((current) => current.map((item) => fileKey(item) === fileKey(file) ? { ...item, user_file_name: editName.trim() } : item));
       setEditingKey("");
       setEditName("");
@@ -138,9 +147,15 @@ export function AttachmentDialog({
   };
 
   const removeFile = async (file: NormalizedFile) => {
-    if (!requestNumber || !file.sr_no || !file.aws_file_locn) return;
+    if (!requestNumber || !file.sr_no) return;
+    if (!window.confirm(`Delete ${file.user_file_name || file.org_file_name || "this attachment"}? This also removes it from OCI Object Storage.`)) return;
     try {
-      await deleteAccountFile(requestNumber, file.sr_no, file.aws_file_locn);
+      if (module.toUpperCase() === "FREIGHT") {
+        await deleteFreightAccountFile(requestNumber, file.sr_no);
+      } else {
+        if (!file.aws_file_locn) return;
+        await deleteAccountFile(requestNumber, file.sr_no, file.aws_file_locn);
+      }
       setFiles((current) => current.filter((item) => fileKey(item) !== fileKey(file)));
       setNotice({ type: "success", message: "Attachment deleted." });
     } catch (error) {
@@ -151,7 +166,7 @@ export function AttachmentDialog({
   return (
     <Dialog
       open={open}
-      wide
+      contentClassName="w-[min(96vw,1100px)] max-h-[86vh]"
       title={title}
       description={requestNumber ? `Linked to ${requestNumber}${relatedRequestNumbers.length ? " with source files shown" : ""}` : "Save the record first, then attach files."}
       onClose={onClose}
@@ -231,8 +246,13 @@ export function AttachmentDialog({
                       <td className="px-3 py-2">
                         <div className="flex justify-end gap-1">
                           {file.aws_file_locn && (
-                            <Button asChild size="icon" variant="ghost" title="Open file">
-                              <a href={file.aws_file_locn} target="_blank" rel="noreferrer"><Download size={14} /></a>
+                            <Button asChild size="icon" variant="ghost" title="View file">
+                              <a href={file.aws_file_locn} target="_blank" rel="noreferrer"><Eye size={14} /></a>
+                            </Button>
+                          )}
+                          {file.aws_file_locn && (
+                            <Button asChild size="icon" variant="ghost" title="Download file">
+                              <a href={file.aws_file_locn} download={file.user_file_name || file.org_file_name}><Download size={14} /></a>
                             </Button>
                           )}
                           {!readOnly && primary && editing ? (
