@@ -80,7 +80,7 @@ export function parseInboundView(pathname: string) {
 export function inboundJobDetailPath(row: WmsRow): string {
   const jobNo         = encodeURIComponent(value(row, "job_no"));
   const principalCode = encodeURIComponent(value(row, "prin_code"));
-  return `${inboundJobsPath}/view/${jobNo}/shipment_details${principalCode ? `?principal_code=${principalCode}` : ""}`;
+  return `${inboundJobsPath}/view/${jobNo}/job_details${principalCode ? `?principal_code=${principalCode}` : ""}`;
 }
 
 export function locationSearchPrincipal(job: WmsRow | null): string {
