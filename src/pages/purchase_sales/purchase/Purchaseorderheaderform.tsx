@@ -404,12 +404,12 @@ export function PurchaseOrderHeaderForm({
 
 
       <CompactSection label="Order, Currency & Tax">
-        <CField label="Buyer">
+      {(String(docType ?? "").trim().toUpperCase() === "LPO" &&  <CField label="Buyer">
           <Input className="text-right" type="number" disabled={headerAndLineDisabled} value={form.buyer} onChange={(event) => updateField("buyer", event.target.value)} />
-        </CField>
-        <CField label="WO No">
+        </CField>)}
+       { (String(docType ?? "").trim().toUpperCase() === "LPO" &&<CField label="WO No">
           <Input className="text-right" type="number" disabled={headerAndLineDisabled} value={form.wo_number} onChange={(event) => updateField("wo_number", event.target.value)} />
-        </CField>
+        </CField>)}
 
         <div className="col-span-2">
           <LookupField
@@ -525,15 +525,15 @@ export function PurchaseOrderHeaderForm({
       </CompactSection>
 
       <CompactSection label="Project, Scope & Delivery" className="border-b-0">
-        <CField label="Project Name" className="col-span-2">
+       { (String(docType ?? "").trim().toUpperCase() === "LPO" &&<CField label="Project Name" className="col-span-2">
           <Input disabled={headerAndLineDisabled} value={form.project_name} onChange={(event) => updateField("project_name", event.target.value)} />
-        </CField>
-        <CField label="PR No">
+        </CField>)}
+       { (String(docType ?? "").trim().toUpperCase() === "LPO" &&<CField label="PR No">
           <Input className="text-right" type="number" disabled={headerAndLineDisabled} value={form.pr_no} onChange={(event) => updateField("pr_no", event.target.value)} />
-        </CField>
-        <CField label="Scope of Work" className="col-span-2">
+        </CField>)}
+      {(String(docType ?? "").trim().toUpperCase() === "LPO" &&  <CField label="Scope of Work" className="col-span-2">
           <Input disabled={headerAndLineDisabled} value={form.scope_of_work} onChange={(event) => updateField("scope_of_work", event.target.value)} />
-        </CField>
+        </CField>)}
         <CField label="Delivery Contact">
           <Input disabled={headerAndLineDisabled} value={form.dlvr_contact} onChange={(event) => updateField("dlvr_contact", event.target.value)} />
         </CField>

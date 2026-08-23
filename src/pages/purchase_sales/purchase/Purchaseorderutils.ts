@@ -222,6 +222,7 @@ export async function fetchPurchaseOrderDetail(
       porder_tx_compnt_perc_1: numberOrZero(row.porder_tx_compnt_perc_1),
       porder_tx_compnt_amt_1: numberOrZero(row.porder_tx_compnt_amt_1),
       porder_tx_compnt_1_expmt: text(row.porder_tx_compnt_1_expmt),
+      porder_remarks : text(row.porder_remarks),
       serial_no: numberOrZero(row.serial_no),
     } satisfies PurchaseOrderLineRow;
   });
@@ -371,34 +372,33 @@ export function computePQuantity(row: PurchaseOrderLineRow): number {
 
 // Total discount for the whole line (was missing * quantity before)
 export function lineDiscPrice(row: PurchaseOrderLineRow) {
-  // return row.unit_price * (row.disc_hdr_percent / 100) ;
-  return row.unit_price * (row.disc_percent / 100);
+  return row.unit_price * computeQuantity(row) * (row.disc_percent / 100);
 }
 
 export function lineDiscPoPrice(row: PurchaseOrderLineRow) {
-  return (row.porder_unit_price ?? 0) * ((row.porder_disc_percent ?? 0) / 100);
+  return (row.porder_unit_price ?? 0) * computeQuantity(row) * ((row.porder_disc_percent ?? 0) / 100);
 }
 
 export function finalRate(row: PurchaseOrderLineRow) {
-  return Math.abs(lineDiscPrice(row) - row.unit_price);
+  return row.unit_price * (1 - row.disc_percent / 100);
 }
 
 export function finalPORate(row: PurchaseOrderLineRow) {
-  return Math.abs(lineDiscPoPrice(row) - (row.porder_unit_price ?? 0));
+  return (row.porder_unit_price ?? 0) * (1 - (row.porder_disc_percent ?? 0) / 100);
 }
 
 export function lineAmount(row: PurchaseOrderLineRow) {
-  return finalRate(row) * computeQuantity(row);
+  return row.unit_price * computeQuantity(row);
 }
 
 export function linePOAmount(row: PurchaseOrderLineRow) {
-  return finalPORate(row) * computeQuantity(row);
+  return (row.porder_unit_price ?? 0) * computeQuantity(row);
 }
 
 
 // Net = gross - discount (single subtraction, no double-counting)
 export function lineNetAmount(row: PurchaseOrderLineRow) {
-  return lineAmount(row) - lineDiscPrice(row);
+  return lineAmount(row);
 }
 
 export function lineNetPOAmount(row: PurchaseOrderLineRow) {
@@ -414,11 +414,11 @@ export function lineTaxpoAmount(row: PurchaseOrderLineRow) {
 
 // Lcurr = net amount converted at ex_rate (was net * finalRate * ex_rate — double rate applied)
 export function lineLcurrAmount(row: PurchaseOrderLineRow, ex_rate?: number) {
-  return lineAmount(row) * (ex_rate || 1);
+  return lineNetAmount(row) * (ex_rate || 1);
 }
 
 export function lineLcurrPOAmount(row: PurchaseOrderLineRow, ex_rate?: number) {
-  return linePOAmount(row) * (ex_rate || 1);
+  return lineNetPOAmount(row) * (ex_rate || 1);
 }
 
 
@@ -431,6 +431,10 @@ export function taxLcurrpoAmount(row: PurchaseOrderLineRow, ex_rate?: number) {
   return lineTaxpoAmount(row) * (ex_rate || 1);
 
 }
+export function LcurrDisAmount(row: PurchaseOrderLineRow, ex_rate?: number) {
+  return lineLcurrAmount(row, ex_rate) + taxLcurrAmount(row, ex_rate);
+}
+
 
 // buildDetailsPayload — use computed values instead of stale row.qty / row.lcur_amount
 export function buildDetailsPayload(
@@ -439,14 +443,6 @@ export function buildDetailsPayload(
   docType?: string
 ) {
   return rows.map((row) => ({
-    // div_code: docType === "GRN" ? row.po_div_code : row.div_code,
-
-    // zone_code: docType === "GRN" ? row.po_zone_code : row.zone_code,
-
-    // prod_code: docType === "GRN" ? row.po_prod_code : row.prod_code,
-
-    // prod_name: docType === "GRN" ? row.po_prod_name : row.prod_name,
-// AFTER
     div_code: row.div_code,
     zone_code: row.zone_code,
     prod_code: row.prod_code,
@@ -484,7 +480,7 @@ export function buildDetailsPayload(
 
     tax_lcur_amount: taxLcurrAmount(row, ex_rate),
 
-    lcur_amount_disc: row.lcur_amount_disc,
+    lcur_amount_disc: LcurrDisAmount(row),
 
     tx_compnt_amt_1: lineTaxAmount(row),
     tx_compnt_perc_1: row.tx_compnt_perc_1,

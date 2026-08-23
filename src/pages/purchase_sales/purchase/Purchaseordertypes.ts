@@ -81,7 +81,8 @@ export interface PurchaseOrderLineRow {
    porder_tx_cat_name?: string
    porder_tx_compntcat_name_1?: string,
    porder_required_dt?: string;
-   serial_no?: number
+   serial_no?: number;
+   porder_remarks?: string
 
 
 

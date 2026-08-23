@@ -430,7 +430,7 @@ export function PurchaseInvoiceLinesTable({
                     <Input type="date" disabled={headerAndLineDisabled} value={row.porder_required_dt} onChange={(event) => updateRow(row.id, { porder_required_dt: event.target.value })} />
                   </td>
                   <td className="w-40 px-2 py-1 border border-gray-300 rounded-md">
-                    <textarea disabled={headerAndLineDisabled} value={row.line_remarks} onChange={(event) => updateRow(row.id, { line_remarks: event.target.value })} />
+                    <textarea disabled={headerAndLineDisabled} value={row.porder_remarks} onChange={(event) => updateRow(row.id, { porder_remarks: event.target.value })} />
                   </td>
 
 

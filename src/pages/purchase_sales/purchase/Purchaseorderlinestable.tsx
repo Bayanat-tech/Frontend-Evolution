@@ -16,6 +16,7 @@ import {
   computeQuantity,   // add
   isSameUom,
   taxLcurrAmount,
+  LcurrDisAmount,
 } from "./Purchaseorderutils";
 import { SODocType } from "../sales/SalesOrdertypes";
 import { Select } from "../../../components/ui/Select";
@@ -667,8 +668,8 @@ export function PurchaseOrderLinesTable({
                   <td className="finance-amount-cell w-32 px-2 py-1 text-right">
                     {formatAmount(taxLcurrAmountValue)}
                   </td>
-                  <td className="finance-amount-cell w-32 px-2 py-1">
-                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.lcur_amount_disc} onChange={(event) => updateRow(row.id, { lcur_amount_disc: Number(event.target.value || 0) })} />
+                   <td className="finance-amount-cell w-32 px-2 py-1 text-right">
+                    {formatAmount(LcurrDisAmount(row, ex_rate))}
                   </td>
                   <td className="px-2 py-1">
                     <Button disabled={headerAndLineDisabled} size="icon" type="button" variant="ghost" onClick={() => removeRow(row.id)}><X size={14} /></Button>

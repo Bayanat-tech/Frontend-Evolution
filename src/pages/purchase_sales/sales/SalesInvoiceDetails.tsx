@@ -414,7 +414,7 @@ export function SalesInvoiceLinesTable({
                     <Input type="date" disabled={headerAndLineDisabled} value={row.sorder_required_dt} onChange={(event) => updateRow(row.id, { sorder_required_dt: event.target.value })} />
                   </td>
                   <td className="w-40 px-2 py-1 border border-gray-300 rounded-md">
-                    <textarea disabled={headerAndLineDisabled} value={row.line_remarks} onChange={(event) => updateRow(row.id, { line_remarks: event.target.value })} />
+                    <textarea disabled={headerAndLineDisabled} value={row.sorder_remarks} onChange={(event) => updateRow(row.id, { sorder_remarks: event.target.value })} />
                   </td>
 
 

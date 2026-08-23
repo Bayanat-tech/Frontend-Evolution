@@ -90,6 +90,7 @@ export interface SalesOrderLineRow {
   sorder_tx_compnt_1_expmt?: string;
   sorder_tx_cat_name?: string;
   sorder_tx_compntcat_name_1?: string;
+  sorder_remarks?:string
 
   sorder_required_dt?: string;
 

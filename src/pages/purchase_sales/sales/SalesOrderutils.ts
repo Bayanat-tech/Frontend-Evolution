@@ -227,6 +227,7 @@ export async function fetchSalesOrderDetail(
       sorder_tx_compnt_amt_1: numberOrZero(row.sorder_tx_compnt_amt_1),
       sorder_tx_compnt_1_expmt: text(row.sorder_tx_compnt_1_expmt),
       serial_no: numberOrZero(row.serial_no),
+      sorder_remarks: text(row.sorder_remarks),
     } satisfies SalesOrderLineRow;
   });
 }
@@ -446,6 +447,11 @@ export function taxLcurrAmount(row: SalesOrderLineRow, ex_rate?: number) {
 
 export function taxLcurrpoAmount(row: SalesOrderLineRow, ex_rate?: number) {
   return lineTaxpoAmount(row) * (ex_rate || 1);
+
+}
+
+export function LcurrDisAmount(row: SalesOrderLineRow) {
+  return lineLcurrAmount(row) + taxLcurrAmount(row)
 
 }
 
