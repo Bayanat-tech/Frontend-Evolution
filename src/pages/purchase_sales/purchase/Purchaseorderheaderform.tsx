@@ -82,7 +82,7 @@ export function PurchaseOrderHeaderForm({
                 columns={[
                   { field: "doc_no", header: "GRN No" },
                   { field: "ac_code", header: "A/c Code" },
-                   { field: "party_name", header: "A/c Name" },
+                  { field: "party_name", header: "A/c Name" },
                 ]}
                 valueField="doc_no"
                 displayFields={["doc_no"]}
@@ -188,126 +188,126 @@ export function PurchaseOrderHeaderForm({
             </div>
           )}
 
-            {(String(docType ?? "").trim().toUpperCase() === "GRN"&&
-            <div>
-              <label>PO No</label>
-              <LookupField
-                label="PO No"
-                compact
-                placeholder="PO No"
-                value={String(form.ref_doc_no ?? "")}
-                displayValue={String(form.ref_doc_no ?? "")}
-                columns={[
-                  { field: "doc_no", header: "GRN No" },
-                  { field: "ac_code", header: "A/c Code" },
-                  { field: "party_name", header: "A/c Name" },
-                ]}
-                valueField="doc_no"
-                displayFields={["doc_no"]}
-                loadOptions={() =>
-                  getDynamicLookup({
-                    parameter: "PS_GRN_ENTRY_PO_NO_DETAIL",
+        {(String(docType ?? "").trim().toUpperCase() === "GRN" &&
+          <div>
+            <label>PO No</label>
+            <LookupField
+              label="PO No"
+              compact
+              placeholder="PO No"
+              value={String(form.ref_doc_no ?? "")}
+              displayValue={String(form.ref_doc_no ?? "")}
+              columns={[
+                { field: "doc_no", header: "GRN No" },
+                { field: "ac_code", header: "A/c Code" },
+                { field: "party_name", header: "A/c Name" },
+              ]}
+              valueField="doc_no"
+              displayFields={["doc_no"]}
+              loadOptions={() =>
+                getDynamicLookup({
+                  parameter: "PS_GRN_ENTRY_PO_NO_DETAIL",
+                  code1: companyCode,
+                  loginid: loginIdOrAdmin,
+                  code2: form.div_code,
+                  code3: "LPO"
+                })
+              }
+              disabled={disabled}
+              onChange={async (value, row) => {
+                // Populate header fields immediately from the selected row
+                setForm((current) => ({
+                  ref_doc_no: value,
+                  ...current,
+                  ac_code: text(getLookupValue(row || {}, "ac_code")),
+                  ac_name: text(getLookupValue(row || {}, "ac_name")),
+                  dept_code: text(getLookupValue(row || {}, "dept_code")),
+                  remarks: text(getLookupValue(row || {}, "remarks")),
+                  ref_no: text(getLookupValue(row || {}, "ref_no")),
+                  ref_date: text(getLookupValue(row || {}, "ref_date")),
+                  curr_code: text(getLookupValue(row || {}, "curr_code")),
+                  ex_rate: numberOrZero(getLookupValue(row || {}, "ex_rate")),
+                  other_expense_cost: numberOrZero(getLookupValue(row || {}, "other_expense_cost")),
+                  disc_hdr_percent: numberOrZero(getLookupValue(row || {}, "disc_hdr_percent")),
+                  disc_hdr_price: numberOrZero(getLookupValue(row || {}, "disc_hdr_price")),
+                  payment_terms: text(getLookupValue(row || {}, "payment_terms")),
+                  credit_period: numberOrZero(getLookupValue(row || {}, "credit_period")),
+                  due_date: getLookupValue(row || {}, "due_date"),
+                  party_name: text(getLookupValue(row || {}, "party_name")),
+                  party_address: text(getLookupValue(row || {}, "party_address")),
+                  party_phone: text(getLookupValue(row || {}, "party_phone")),
+                  party_fax: text(getLookupValue(row || {}, "party_fax")),
+                  delivery_to: text(getLookupValue(row || {}, "delivery_to")),
+                  dlvr_contact: text(getLookupValue(row || {}, "dlvr_contact")),
+                  dlvr_email: text(getLookupValue(row || {}, "dlvr_email")),
+                  dlvr_mobile: text(getLookupValue(row || {}, "dlvr_mobile")),
+                  dlvr_term: text(getLookupValue(row || {}, "dlvr_term")),
+                  salesman_code: text(getLookupValue(row || {}, "salesman_code")),
+                  zone_code: text(getLookupValue(row || {}, "zone_code")),
+                  tx_compntcat_code_1: text(getLookupValue(row || {}, "tx_compntcat_code_1")),
+                  tx_cat_code: `${text(getLookupValue(row || {}, "tx_cat_code"))} - ${text(
+                    getLookupValue(row || {}, "tx_cat_name")
+                  )}`,
+                  project_name: text(getLookupValue(row || {}, "project_name")),
+                  pr_no: text(getLookupValue(row || {}, "pr_no")),
+                  scope_of_work: text(getLookupValue(row || {}, "scope_of_work")),
+                }));
+
+                // Fetch and populate line details — same logic as the lines table
+                try {
+                  const divCodeForFetch = text(getLookupValue(row || {}, "div_code")) || form.div_code;
+
+                  const details = await getDynamicLookup({
+                    parameter: "PS_GRN_ENTRY_PO_NO_DETAIL_DET",
                     code1: companyCode,
-                    loginid: loginIdOrAdmin,
-                    code2: form.div_code,
-                    code3: "LPO"
-                  })
-                }
-                disabled={disabled}
-                onChange={async (value, row) => {
-                  // Populate header fields immediately from the selected row
-                  setForm((current) => ({
-                    ref_doc_no: value,
-                    ...current,
-                    ac_code: text(getLookupValue(row || {}, "ac_code")),
-                    ac_name: text(getLookupValue(row || {}, "ac_name")),
-                    dept_code: text(getLookupValue(row || {}, "dept_code")),
-                    remarks: text(getLookupValue(row || {}, "remarks")),
-                    ref_no: text(getLookupValue(row || {}, "ref_no")),
-                    ref_date: text(getLookupValue(row || {}, "ref_date")),
-                    curr_code: text(getLookupValue(row || {}, "curr_code")),
-                    ex_rate: numberOrZero(getLookupValue(row || {}, "ex_rate")),
-                    other_expense_cost: numberOrZero(getLookupValue(row || {}, "other_expense_cost")),
-                    disc_hdr_percent: numberOrZero(getLookupValue(row || {}, "disc_hdr_percent")),
-                    disc_hdr_price: numberOrZero(getLookupValue(row || {}, "disc_hdr_price")),
-                    payment_terms: text(getLookupValue(row || {}, "payment_terms")),
-                    credit_period: numberOrZero(getLookupValue(row || {}, "credit_period")),
-                    due_date: getLookupValue(row || {}, "due_date"),
-                    party_name: text(getLookupValue(row || {}, "party_name")),
-                    party_address: text(getLookupValue(row || {}, "party_address")),
-                    party_phone: text(getLookupValue(row || {}, "party_phone")),
-                    party_fax: text(getLookupValue(row || {}, "party_fax")),
-                    delivery_to: text(getLookupValue(row || {}, "delivery_to")),
-                    dlvr_contact: text(getLookupValue(row || {}, "dlvr_contact")),
-                    dlvr_email: text(getLookupValue(row || {}, "dlvr_email")),
-                    dlvr_mobile: text(getLookupValue(row || {}, "dlvr_mobile")),
-                    dlvr_term: text(getLookupValue(row || {}, "dlvr_term")),
-                    salesman_code: text(getLookupValue(row || {}, "salesman_code")),
-                    zone_code: text(getLookupValue(row || {}, "zone_code")),
-                    tx_compntcat_code_1: text(getLookupValue(row || {}, "tx_compntcat_code_1")),
-                    tx_cat_code: `${text(getLookupValue(row || {}, "tx_cat_code"))} - ${text(
-                      getLookupValue(row || {}, "tx_cat_name")
-                    )}`,
-                    project_name: text(getLookupValue(row || {}, "project_name")),
-                    pr_no: text(getLookupValue(row || {}, "pr_no")),
-                    scope_of_work: text(getLookupValue(row || {}, "scope_of_work")),
+                    code2: divCodeForFetch,
+                    code3: 'LPO',
+                    number1: Number(value),
+                  });
+
+                  const mappedDetails = (details || []).map((item: any, index: number) => ({
+                    id: `${value}-${index + 1}`,
+                    div_code: text(getLookupValue(item, "div_code")),
+                    prod_code: text(getLookupValue(item, "prod_code")),
+                    prod_name: text(getLookupValue(item, "prod_name")),
+                    p_uom: text(getLookupValue(item, "p_uom")),
+                    qty_puom: numberOrZero(getLookupValue(item, "qty_puom")),
+                    l_uom: text(getLookupValue(item, "l_uom")),
+                    qty_luom: numberOrZero(getLookupValue(item, "qty_luom")),
+                    unit_price: numberOrZero(getLookupValue(item, "unit_price")),
+                    disc_hdr_percent: numberOrZero(getLookupValue(item, "disc_hdr_percent")),
+                    disc_percent: numberOrZero(getLookupValue(item, "disc_percent")),
+                    disc_price: numberOrZero(getLookupValue(item, "disc_price")),
+                    tax_pct: numberOrZero(getLookupValue(item, "tax_pct")),
+                    tax_amount: numberOrZero(getLookupValue(item, "tax_amount")),
+                    lcur_amount: numberOrZero(getLookupValue(item, "lcur_amount")),
+                    required_dt: text(getLookupValue(item, "required_dt")),
+                    line_remarks: text(getLookupValue(item, "remarks")),
+                    tax_cat: text(getLookupValue(item, "tx_cat_code")),
+                    tax_code: text(getLookupValue(item, "tx_compntcat_code_1")),
+                    tax_lcur_amount: numberOrZero(getLookupValue(item, "tx_compnt_lcuramt_1")),
+                    lcur_amount_disc: numberOrZero(getLookupValue(item, "lcur_amount_discounted")),
+                    zone_code: text(getLookupValue(item, "zone_code")),
+                    zone_name: text(getLookupValue(item, "zone_name")),
+                    uom_name: text(getLookupValue(item, "uom_name")),
+                    uom_code: text(getLookupValue(item, "uom_code")),
+                    job_no: text(getLookupValue(item, "job_no")),
+                    dept: text(getLookupValue(item, "dept_code")),
+                    sign_ind: numberOrZero(getLookupValue(item, "sign_ind")),
+                    uppp: numberOrZero(getLookupValue(item, "uppp")),
+                    quantity: numberOrZero(getLookupValue(item, "quantity")),
+                    ex_rate: numberOrZero(getLookupValue(item, "ex_rate")),
                   }));
-
-                  // Fetch and populate line details — same logic as the lines table
-                  try {
-                    const divCodeForFetch = text(getLookupValue(row || {}, "div_code")) || form.div_code;
-
-                    const details = await getDynamicLookup({
-                      parameter: "PS_GRN_ENTRY_PO_NO_DETAIL_DET",
-                      code1: companyCode,
-                      code2: divCodeForFetch,
-                      code3: 'LPO',
-                      number1: Number(value),
-                    });
-
-                    const mappedDetails = (details || []).map((item: any, index: number) => ({
-                      id: `${value}-${index + 1}`,
-                      div_code: text(getLookupValue(item, "div_code")),
-                      prod_code: text(getLookupValue(item, "prod_code")),
-                      prod_name: text(getLookupValue(item, "prod_name")),
-                      p_uom: text(getLookupValue(item, "p_uom")),
-                      qty_puom: numberOrZero(getLookupValue(item, "qty_puom")),
-                      l_uom: text(getLookupValue(item, "l_uom")),
-                      qty_luom: numberOrZero(getLookupValue(item, "qty_luom")),
-                      unit_price: numberOrZero(getLookupValue(item, "unit_price")),
-                      disc_hdr_percent: numberOrZero(getLookupValue(item, "disc_hdr_percent")),
-                      disc_percent: numberOrZero(getLookupValue(item, "disc_percent")),
-                      disc_price: numberOrZero(getLookupValue(item, "disc_price")),
-                      tax_pct: numberOrZero(getLookupValue(item, "tax_pct")),
-                      tax_amount: numberOrZero(getLookupValue(item, "tax_amount")),
-                      lcur_amount: numberOrZero(getLookupValue(item, "lcur_amount")),
-                      required_dt: text(getLookupValue(item, "required_dt")),
-                      line_remarks: text(getLookupValue(item, "remarks")),
-                      tax_cat: text(getLookupValue(item, "tx_cat_code")),
-                      tax_code: text(getLookupValue(item, "tx_compntcat_code_1")),
-                      tax_lcur_amount: numberOrZero(getLookupValue(item, "tx_compnt_lcuramt_1")),
-                      lcur_amount_disc: numberOrZero(getLookupValue(item, "lcur_amount_discounted")),
-                      zone_code: text(getLookupValue(item, "zone_code")),
-                      zone_name: text(getLookupValue(item, "zone_name")),
-                      uom_name: text(getLookupValue(item, "uom_name")),
-                      uom_code: text(getLookupValue(item, "uom_code")),
-                      job_no: text(getLookupValue(item, "job_no")),
-                      dept: text(getLookupValue(item, "dept_code")),
-                      sign_ind: numberOrZero(getLookupValue(item, "sign_ind")),
-                      uppp: numberOrZero(getLookupValue(item, "uppp")),
-                      quantity: numberOrZero(getLookupValue(item, "quantity")),
-                      ex_rate: numberOrZero(getLookupValue(item, "ex_rate")),
-                    }));
-                    console.log("Mapped length:", mappedDetails?.length);
-                    setdetails?.(mappedDetails);
-                  } catch (error) {
-                    console.error("ERROR LOADING GRN DETAILS FROM HEADER:", error);
-                    setdetails?.([]);
-                  }
-                }}
-              />
-            </div>
-          )}
+                  console.log("Mapped length:", mappedDetails?.length);
+                  setdetails?.(mappedDetails);
+                } catch (error) {
+                  console.error("ERROR LOADING GRN DETAILS FROM HEADER:", error);
+                  setdetails?.([]);
+                }
+              }}
+            />
+          </div>
+        )}
         <CField label="Quotn No">
           <Input className="text-right" type="number" disabled={headerAndLineDisabled} value={form.ref_no} onChange={(event) => updateField("ref_no", event.target.value)} />
         </CField>
@@ -444,6 +444,28 @@ export function PurchaseOrderHeaderForm({
           <Input disabled={headerAndLineDisabled} type="number" step="0.01" value={form.disc_percent} onChange={(event) => updateField("disc_percent", Number(event.target.value || 0))} />
         </CField> */}
         <div>
+          <label>Tax Type</label>
+
+          <Select
+            value={form.tx_compnt_1_expmt || "N"}
+            onChange={(event) => {
+              const taxType = event.target.value;
+
+              setForm((current) => ({
+                ...current,
+                tx_compnt_1_expmt: taxType,
+                tx_compnt_1_pct: taxType === "S" ? 5 : 0,
+              }));
+            }}
+          >
+            <option value="N">No Tax</option>
+            <option value="S">Std Tax</option>
+            <option value="Z">Zero</option>
+            <option value="E">Exempt</option>
+          </Select>
+        </div>
+        <div>
+
           <label >Tax Category</label>
           <LookupField
             label="Tax Category"
@@ -480,7 +502,7 @@ export function PurchaseOrderHeaderForm({
             onChange={(value) => setForm((current) => ({ ...current, tx_compntcat_code_1: value }))}
           />
         </div>
-       
+
 
         <CField label="Pay Terms" className="col-span-2">
           <Input disabled={headerAndLineDisabled} value={form.payment_terms} onChange={(event) => updateField("payment_terms", event.target.value)} />

@@ -268,7 +268,8 @@ export interface PurchaseOrderForm {
   pi_ref_doc_dt?: string;
   pi_tx_compntcat_name_1?: string;
   inv_no?: string;
-  inv_date?: string
+  inv_date?: string;
+  tx_compnt_1_expmt?: string
 
 }
 

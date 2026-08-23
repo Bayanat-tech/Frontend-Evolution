@@ -83,7 +83,6 @@ export function SalesOrderEditor({
     setError("");
     setLoading(editor.mode === "edit");
   }, [editor]);
-
   useEffect(() => {
     if (!form.tx_compntcat_code_1 && !form.tx_cat_code && !form.disc_hdr_percent && !form.disc_hdr_price) return;
     setRows((current) =>
@@ -93,9 +92,11 @@ export function SalesOrderEditor({
         tx_cat_code: `${form.tx_cat_code || ""}`,
         disc_price: row.disc_price || form.disc_hdr_price,
         disc_percent: row.disc_percent || form.disc_hdr_percent,
+        tx_compnt_1_expmt: row.tx_compnt_1_expmt
       }))
     );
-  }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price]);
+  }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price , form.tx_compnt_1_expmt]);
+
 
 
   useEffect(() => {
@@ -216,8 +217,10 @@ export function SalesOrderEditor({
         tax_cat: form.tx_cat_name,
         disc_price: form.disc_hdr_price,
         disc_percent: form.disc_hdr_percent,
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
       },
-    ]);  const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
+    ]);
+     const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
 
   const runAction = async (key: ActionKey, action: () => Promise<void> | void, successMessage?: string) => {
     setActionLoading(key);

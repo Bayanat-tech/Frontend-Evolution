@@ -12,8 +12,8 @@ import {
   ActionKey,
   PurchaseConfig,
   PurchaseOrderEditorState,
-  PurchaseOrderForm,
-  PurchaseOrderLineRow,
+  
+
   SendBackUserOption,
 } from "../../purchase_sales/purchase/Purchaseordertypes";
 import {
@@ -31,8 +31,10 @@ import { PurchaseOrderHeaderForm } from "../../purchase_sales/purchase/Purchaseo
 import { PurchaseOrderLinesTable } from "../../purchase_sales/purchase/Purchaseorderlinestable";
 import { SendBackDialog } from "../../purchase_sales/purchase/Sendbackdialog";
 import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
-import {  PROCESSSO, SalesConfig, SO_DOC_TYPE } from "./SalesOrdertypes";
+import {  PROCESSSO, PurchaseOrderForm, SalesConfig, SalesOrderLineRow, SO_DOC_TYPE } from "./SalesOrdertypes";
 import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, runWorkflow } from "./SalesOrderutils";
+import { SalesInvoiceHeaderForm } from "./salesInvoiceHeader";
+import { SalesInvoiceLinesTable } from "./SalesInvoiceDetails";
 
 
 export type { PurchaseOrderEditorState };
@@ -53,7 +55,7 @@ export function SalesInvoiceEditor({
   const { user } = useAuth();
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
-  const [rows, setRows] = useState<PurchaseOrderLineRow[]>(() => (editMode ? [] : [emptyLineRow(form.div_code)]));
+  const [rows, setRows] = useState<SalesOrderLineRow[]>(() => (editMode ? [] : [emptyLineRow(form.div_code)]));
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -135,6 +137,40 @@ export function SalesInvoiceEditor({
           scope_of_work: text(headerRaw.scope_of_work || current.scope_of_work),
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
+
+            so_doc_no: text(headerRaw.so_doc_no),
+          so_doc_date: toDateInputValue(headerRaw.so_doc_date),
+          so_ac_code: text(headerRaw.so_ac_code),
+          so_ac_name: text(headerRaw.so_party_name),
+          so_dept_code: text(headerRaw.so_dept_code),
+          so_remarks: text(headerRaw.so_remarks),
+          so_ref_no: text(headerRaw.so_ref_no),
+          so_ref_date: text(headerRaw.so_ref_date),
+          so_curr_code: text(headerRaw.so_curr_code),
+          so_ex_rate: numberOrZero(headerRaw.so_ex_rate),
+          so_disc_hdr_percent: numberOrZero(headerRaw.so_disc_hdr_percent),
+          so_disc_hdr_price: numberOrZero(headerRaw.so_disc_hdr_price),
+          so_payment_terms: text(headerRaw.so_payment_terms),
+          so_credit_period: numberOrZero(headerRaw.so_credit_period),
+          so_party_name: text(headerRaw.so_party_name),
+          so_party_address: text(headerRaw.so_party_address),
+          so_party_phone: text(headerRaw.so_party_phone),
+          so_party_fax: text(headerRaw.so_party_fax),
+          so_dlvr_contact: text(headerRaw.so_dlvr_contact),
+          so_dlvr_email: text(headerRaw.so_dlvr_email),
+          so_dlvr_mobile: text(headerRaw.so_dlvr_mobile),
+          so_dlvr_term: text(headerRaw.so_dlvr_term),
+          so_tx_compntcat_code_1: text(headerRaw.so_tx_compntcat_code_1),
+          so_tx_cat_code: text(headerRaw.so_tx_cat_code),
+          so_wo_number: text(headerRaw.so_wo_number),
+          so_project_name: text(headerRaw.so_project_name),
+          so_pr_no: text(headerRaw.so_pr_no),
+          so_scope_of_work: text(headerRaw.so_scope_of_work),
+          so_buyer: text(headerRaw.so_buyer),
+          total_so_amount: numberOrZero(headerRaw.total_so_amount),
+
+          pi_doc_no: text(headerRaw.pi_doc_no),
+          pi_doc_date: toDateInputValue(headerRaw.pi_doc_date),
         }));
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
@@ -189,7 +225,7 @@ export function SalesInvoiceEditor({
     setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const updateRow = (id: string, patch: Partial<PurchaseOrderLineRow>) => {
+  const updateRow = (id: string, patch: Partial<SalesOrderLineRow>) => {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
 
@@ -373,7 +409,7 @@ export function SalesInvoiceEditor({
             <div className="grid gap-3">
               <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
-              <PurchaseOrderHeaderForm
+              <SalesInvoiceHeaderForm
                 form={form}
                 docType={config.docType}
                 setForm={setForm}
@@ -383,9 +419,10 @@ export function SalesInvoiceEditor({
                 editMode={editMode}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
+                setdetails={setRows}
               />
 
-              <PurchaseOrderLinesTable
+              <SalesInvoiceLinesTable
                 rows={rows}
                 form={form}
                 setdetails={setRows}

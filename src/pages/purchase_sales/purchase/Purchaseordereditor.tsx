@@ -98,9 +98,10 @@ export function PurchaseOrderEditor({
         tx_cat_code: `${form.tx_cat_code || ""}`,
         disc_price: row.disc_price || form.disc_hdr_price,
         disc_percent: row.disc_percent || form.disc_hdr_percent,
+        tx_compnt_1_expmt: row.tx_compnt_1_expmt
       }))
     );
-  }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price]);
+  }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price , form.tx_compnt_1_expmt]);
 
   useEffect(() => {
     let mounted = true;
@@ -221,6 +222,7 @@ export function PurchaseOrderEditor({
         tax_cat: form.tx_cat_name,
         disc_price: form.disc_hdr_price,
         disc_percent: form.disc_hdr_percent,
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
