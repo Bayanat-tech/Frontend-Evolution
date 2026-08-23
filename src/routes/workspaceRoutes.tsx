@@ -195,6 +195,8 @@ import CompanyInfo from "../pages/security/CompanyInfo";
 import HolidayCalendarPage from "../pages/hr/masters/HolidayCalendarPage"; 
 import LeaveSlapPage from "../pages/hr/LeaveSlab";
 import TravelFare from "../pages/hr/TravelFare";
+import { HrEmpLanguagePage } from "../pages/hr/HrEmpLanguageSkill";
+
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -1262,6 +1264,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isHrHolidayCalendarRoute(pathname),
     element: () => <HolidayCalendarPage />,
   },
+
+  {
+  name : "Hr Employee Language Skills",
+  match: ({pathname}) => isHrEmpLanguageSkillRoute(pathname),
+  element: () => <HrEmpLanguagePage/>
+},
+  
   {
     name: "HR Master",
     match: (context) => Boolean(getHrMasterConfig(context)),
@@ -1287,7 +1296,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   element: () => <ZoneMasterPage />,
   },
 
-  
+ 
 
   {
     name : "Expense Master",
@@ -1330,6 +1339,16 @@ export const workspaceRoutes: WorkspaceRoute[] = [
 
 function isStorageComputationRoute(pathname: string) {
   return pathname.toLowerCase().includes("wms/activity/request/storage_computation");
+}
+
+
+
+function isHrEmpLanguageSkillRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  return (
+    normalized.includes("/hcm/hcm/employee/language_skills") ||
+    normalized.includes("/hcm/hcm/employee/language%20skills")
+  );
 }
 
 function isHrHolidayCalendarRoute(pathname: string) {
