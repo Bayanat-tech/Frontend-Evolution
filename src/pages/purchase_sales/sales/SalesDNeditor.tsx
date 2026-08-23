@@ -32,6 +32,7 @@ import { PROCESSSDN, PROCESSSO, PurchaseOrderForm, SalesConfig, SalesOrderLineRo
 import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, lineAmount, lineDiscPrice, lineTaxAmount, runWorkflow } from "./SalesOrderutils";
 import { SalesDNHeaderForm } from "./SaleDNHeaderfrom";
 import { SalesDnDetailsTable } from "./salesDNDetails";
+import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 
 
 export type { PurchaseOrderEditorState };
@@ -68,6 +69,7 @@ export function SalesDNEditor({
   const [sendBackError, setSendBackError] = useState("");
   const [sendBackUsers, setSendBackUsers] = useState<SendBackUserOption[]>([]);
   const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
+    const [attachmentOpen, setAttachmentOpen] = useState(false);
 
   // ---- Reject dialog state ----
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -356,7 +358,9 @@ export function SalesDNEditor({
                   <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
                 </>
               )}
-              <Button type="button" variant="secondary"><Paperclip size={15} /> Files</Button>
+                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                <Paperclip size={15} /> Files
+              </Button>
               <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
             </div>
           </div>
@@ -477,6 +481,18 @@ export function SalesDNEditor({
         onClearError={() => setRejectError("")}
         onClose={closeRejectDialog}
         onConfirm={confirmReject}
+      />
+
+       <AttachmentDialog
+        open={attachmentOpen}
+        onClose={() => setAttachmentOpen(false)}
+        requestNumber={form.doc_no ? String(form.doc_no) : ""}
+        title="Sales DN Attachments"
+        module="SDN"
+        type="Purchase DN"
+        companyCode={user?.company_code || ""}
+        loginId={user?.loginid || ""}
+        flowLevel={effectiveFlowLevel}
       />
     </>
   );
