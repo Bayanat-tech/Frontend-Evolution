@@ -32,10 +32,10 @@ export function EmployeeMasterPage() {
     setLoading(true);
     try {
       const response = await getDynamicLookup({
-        parameter: "HR_TRANSACTIONS_MS_HR_EMPLOYEE",
+        parameter: "MSEHR_TRANSACTIONS_MS_HR_EMPLOYEE",
         loginid: user?.loginid ?? "",
         code1: user?.company_code,
-        code2: user?.loginid ?? "",
+        // code2: user?.loginid ?? "",
       });
       const tableData = (Array.isArray(response) ? response : []) as Record<string, unknown>[];
         setRows(tableData.map(mapEmployeeHr));

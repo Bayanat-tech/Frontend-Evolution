@@ -4,9 +4,6 @@ import {
   ArrowLeft,
   Ban,
   BriefcaseBusiness,
-  CheckCircle2,
-  Circle,
-  CircleDot,
   Edit2,
   FileText,
   MapPinned,
@@ -34,17 +31,23 @@ type Notice = { type: "success" | "error"; text: string } | null;
 type JobForm = {
   company_code: string;
   prin_code: string;
+  prin_name: string;
   job_no: string;
   job_date: string;
   job_type: string;
   job_class: string;
   transport_mode: string;
   dept_code: string;
+  dept_name: string;
   div_code: string;
+  div_name: string;
   job_category: string;
+  job_category_name: string;
   member_type: string;
+  member_type_name: string;
   sale_type: string;
   tx_cat_code: string;
+  tx_cat_name: string;
   quotation_ref: string;
   doc_ref: string;
   doc_ref2: string;
@@ -60,6 +63,7 @@ type JobForm = {
   driver_ref: string;
   driver_remarks: string;
   forwarder_code: string;
+  forwarder_name: string;
   eta: string;
   ata: string;
   etd: string;
@@ -80,6 +84,7 @@ type JobForm = {
   description1: string;
   description2: string;
   salesman_code: string;
+  salesman_name: string;
   be_no: string;
   be_date: string;
   country_origin: string;
@@ -481,6 +486,7 @@ export function FreightJobPage({
               <Lookup
                 label="Principal"
                 value={job.prin_code}
+                displayValue={job.prin_name}
                 valueField="PRIN_CODE"
                 displayFields={["PRIN_CODE", "PRIN_NAME"]}
                 columns={[{ field: "PRIN_CODE", header: "Code" }, { field: "PRIN_NAME", header: "Principal" }]}
@@ -516,12 +522,11 @@ export function FreightJobPage({
                   disabled={!job.prin_code}
                   placeholder="Principal is not selected"
                  />
-              <Lookup label="Department" value={job.dept_code} valueField="DEPT_CODE" displayFields={["DEPT_CODE", "DEPT_NAME"]} columns={[{ field: "DEPT_CODE", header: "Code" }, { field: "DEPT_NAME", header: "Department" }, { field: "DIV_CODE", header: "Div" }]} loadOptions={(search) => lookup("freight_department", companyCode, "NULL", "NULL", search)} onChange={(value, row) => setJob((current) => ({ ...current, dept_code: value, div_code: lookupText(row || undefined, "DIV_CODE") || current.div_code }))} required/>
-              <Lookup label="Division" value={job.div_code} valueField="DIV_CODE" displayFields={["DIV_CODE", "DIV_NAME"]} columns={[{ field: "DIV_CODE", header: "Code" }, { field: "DIV_NAME", header: "Division" }]} loadOptions={(search) => lookup("freight_division", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "div_code", value)} required />
-              <Lookup label="Job Category" value={job.job_category} valueField="JOB_CATEGORY" displayFields={["JOB_CATEGORY", "JOB_CATEGORY_NAME"]} columns={[{ field: "JOB_CATEGORY", header: "Code" }, { field: "JOB_CATEGORY_NAME", header: "Category" }]} loadOptions={(search) => lookup("freight_job_category", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "job_category", value)} required/>
-              <Lookup label="Member Type" value={job.member_type} valueField="MEMBER_TYPE" displayFields={["MEMBER_TYPE", "MEMBER_TYPE_NAME"]} columns={[{ field: "MEMBER_TYPE", header: "Code" }, { field: "MEMBER_TYPE_NAME", header: "Member Type" }]} loadOptions={(search) => lookup("freight_member_type", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "member_type", value)} />
-              <Lookup label="Tax Category" value={job.tx_cat_code} valueField="TX_CAT_CODE" displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]} columns={[{ field: "TX_CAT_CODE", header: "Code" }, { field: "TX_CAT_NAME", header: "Tax Category" }]} loadOptions={(search) => lookup("freight_tax_category", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "tx_cat_code", value)} />
-              <Lookup label="Sale Type" value={job.sale_type} valueField="SALE_TYPE" displayFields={["SALE_TYPE", "SALE_TYPE_NAME"]} columns={[{ field: "SALE_TYPE", header: "Code" }, { field: "SALE_TYPE_NAME", header: "Sale Type" }]} loadOptions={(search) => lookup("freight_sale_type", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "sale_type", value)} />
+              <Lookup label="Department" value={job.dept_code} displayValue={job.dept_name} valueField="DEPT_CODE" displayFields={["DEPT_CODE", "DEPT_NAME"]} columns={[{ field: "DEPT_CODE", header: "Code" }, { field: "DEPT_NAME", header: "Department" }, { field: "DIV_CODE", header: "Div" }]} loadOptions={(search) => lookup("freight_department", companyCode, "NULL", "NULL", search)} onChange={(value, row) => setJob((current) => ({ ...current, dept_code: value, div_code: lookupText(row || undefined, "DIV_CODE") || current.div_code }))} required/>
+              <Lookup label="Division" value={job.div_code} displayValue={job.div_name} valueField="DIV_CODE" displayFields={["DIV_CODE", "DIV_NAME"]} columns={[{ field: "DIV_CODE", header: "Code" }, { field: "DIV_NAME", header: "Division" }]} loadOptions={(search) => lookup("freight_division", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "div_code", value)} required />
+              <Lookup label="Job Category" value={job.job_category} displayValue={job.job_category_name} valueField="JOB_CATEGORY" displayFields={["JOB_CATEGORY", "JOB_CATEGORY_NAME"]} columns={[{ field: "JOB_CATEGORY", header: "Code" }, { field: "JOB_CATEGORY_NAME", header: "Category" }]} loadOptions={(search) => lookup("freight_job_category", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "job_category", value)} required/>
+              <Lookup label="Member Type" value={job.member_type} displayValue={job.member_type_name} valueField="MEMBER_TYPE" displayFields={["MEMBER_TYPE", "MEMBER_TYPE_NAME"]} columns={[{ field: "MEMBER_TYPE", header: "Code" }, { field: "MEMBER_TYPE_NAME", header: "Member Type" }]} loadOptions={(search) => lookup("freight_member_type", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "member_type", value)} />
+              <Lookup label="Tax Category" value={job.tx_cat_code} displayValue={job.tx_cat_name} valueField="TX_CAT_CODE" displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]} columns={[{ field: "TX_CAT_CODE", header: "Code" }, { field: "TX_CAT_NAME", header: "Tax Category" }]} loadOptions={(search) => lookup("freight_tax_category", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "tx_cat_code", value)} />
               <Field label="Job Class" value={job.job_class} onChange={(value) => setJobField(setJob, "job_class", value)} />
             </div>
           </Panel>
@@ -539,7 +544,7 @@ export function FreightJobPage({
 
           <Panel className="lg:col-span-4 freight-job-compact-panel" icon={MapPinned} title="Journey" meta={`${job.port_code || "Origin"} -> ${job.destination_port || "Destination"}`}>
             <div className="freight-job-field-grid freight-job-field-grid-4">
-              <Lookup label={direction.code === "EXP" ? "Port of Loading" : "Origin Port"} value={job.port_code} valueField="PORT_CODE" displayFields={["PORT_CODE", "PORT_NAME"]} columns={portColumns} loadOptions={(search) => lookup("freight_port", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "port_code", value)} required/>
+              <Lookup label={direction.code === "EXP" ? "Port of Loading" : "Origin Port"} value={job.port_code}  valueField="PORT_CODE" displayFields={["PORT_CODE", "PORT_NAME"]} columns={portColumns} loadOptions={(search) => lookup("freight_port", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "port_code", value)} required/>
               <Lookup label={direction.code === "EXP" ? "Port of Destination" : "Destination Port"} value={job.destination_port} valueField="PORT_CODE" displayFields={["PORT_CODE", "PORT_NAME"]} columns={portColumns} loadOptions={(search) => lookup("freight_port", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "destination_port", value)} required/>
               <Field label="Place of Receipt" value={job.place_receipt} onChange={(value) => setJobField(setJob, "place_receipt", value)} />
               <Field label="Place of Delivery" value={job.place_delivery} onChange={(value) => setJobField(setJob, "place_delivery", value)} />
@@ -657,12 +662,8 @@ function JobProgressRail({ job }: { job: JobForm }) {
       <div className="freight-job-progress-rail-list">
         {steps.map((step) => (
           <div key={step.label} className={`freight-job-progress-rail-step ${step.className || "pending"}`}>
-            <span className="freight-job-progress-rail-marker">
-              {step.className === "done" ? <CheckCircle2 size={14} /> : step.className === "current" ? <CircleDot size={14} /> : <Circle size={13} />}
-            </span>
             <span className="freight-job-progress-rail-copy">
               <strong>{step.label}</strong>
-              <small>{step.detail || (step.className === "current" ? "Current step" : step.done ? "Done" : "Pending")}</small>
             </span>
           </div>
         ))}
@@ -788,10 +789,11 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return <div className="freight-compact-label">{label}<div className="flex h-7 items-center rounded-md border bg-muted/40 px-2 text-xs font-semibold normal-case text-foreground">{value}</div></div>;
 }
 
-function Lookup({ label, value, valueField, displayFields, columns, loadOptions, onChange, required, disabled, placeholder }: { label: string; value: string; valueField: string; displayFields: string[]; columns: { field: string; header: string }[]; loadOptions: (query?: string) => Promise<LookupRow[]>; onChange: (value: string, row: LookupRow | null) => void; required?: boolean; disabled?: boolean; placeholder?: string }) {
+function Lookup({ label, value, displayValue, valueField, displayFields, columns, loadOptions, onChange, required, disabled, placeholder }: { label: string; value: string; displayValue?: string; valueField: string; displayFields: string[]; columns: { field: string; header: string }[]; loadOptions: (query?: string) => Promise<LookupRow[]>; onChange: (value: string, row: LookupRow | null) => void; required?: boolean; disabled?: boolean; placeholder?: string }) {
   const editable = useContext(JobEditContext);
-  if (!editable) return <DisplayField label={label} value={value} />;
-  return <label className="freight-compact-label"><span>{label} {required && <span style={{ color: "#E24B4A" }}>*</span>}</span><LookupField value={value} compact valueField={valueField} displayFields={displayFields} columns={columns} loadOptions={loadOptions} onChange={onChange} required={required} enforceRequired={required} disabled={disabled} placeholder={placeholder} /></label>;
+  // if (!editable) return <DisplayField label={label} value={value} />;
+  if (!editable) return <DisplayField label={label} value={displayValue || value} />;
+  return <label className="freight-compact-label"><span>{label} {required && <span style={{ color: "#E24B4A" }}>*</span>}</span><LookupField value={value} displayValue={displayValue} compact valueField={valueField} displayFields={displayFields} columns={columns} loadOptions={loadOptions} onChange={onChange} required={required} enforceRequired={required} disabled={disabled} placeholder={placeholder} /></label>;
 }
 
 function DisplayField({ label, value, strong, multiline, className = "" }: { label: string; value: string; strong?: boolean; multiline?: boolean; className?: string }) {
@@ -817,17 +819,23 @@ function emptyJob(companyCode: string, userId: string, transportMode: string, jo
   return {
     company_code: companyCode,
     prin_code: "",
+    prin_name: "",
     job_no: "",
     job_date: today(),
     job_type: jobType,
     job_class: "",
     transport_mode: transportMode,
     dept_code: "",
+    dept_name: "",
     div_code: "",
+    div_name: "",
     job_category: "N/A",
+    job_category_name: "",
     member_type: "",
+    member_type_name: "",
     sale_type: "Normal",
     tx_cat_code: "",
+    tx_cat_name: "",
     quotation_ref: "",
     doc_ref: "",
     doc_ref2: "",
@@ -843,6 +851,7 @@ function emptyJob(companyCode: string, userId: string, transportMode: string, jo
     driver_ref: "",
     driver_remarks: "",
     forwarder_code: "",
+    forwarder_name: "",
     eta: "",
     ata: "",
     etd: "",
@@ -863,6 +872,7 @@ function emptyJob(companyCode: string, userId: string, transportMode: string, jo
     description1: "",
     description2: "",
     salesman_code: "",
+    salesman_name: "",
     be_no: "",
     be_date: "",
     country_origin: "",

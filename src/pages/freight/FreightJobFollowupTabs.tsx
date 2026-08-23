@@ -255,7 +255,8 @@ function InstructionGrid({ rows, setRows, deleteRow, readOnly }: GridProps) {
 }
 
 function AlertGrid({ rows, setRows, deleteRow, readOnly }: GridProps) {
-  return <EditableGrid columns={["op_desc", "op_date", "remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} readOnly={readOnly} labels={{ op_desc: "Alert Description", op_date: "Alert Date", remarks: "Remarks" }} />;
+  // return <EditableGrid columns={["op_desc", "op_date", "remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} readOnly={readOnly} labels={{ op_desc: "Alert Description", op_date: "Alert Date", remarks: "Remarks" }} />;
+  return <EditableGrid columns={["op_desc", "op_date", "op_yesno", "remarks"]} rows={rows} setRows={setRows} deleteRow={deleteRow} readOnly={readOnly} labels={{ op_desc: "Alert Description", op_date: "Alert Date", remarks: "Remarks"  }}/>;
 }
 
 function DepositGrid({ rows, setRows, deleteRow, readOnly }: GridProps) {

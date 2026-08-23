@@ -90,12 +90,13 @@ export function LeaveRequestDialog({ open, initialRow, readOnly = false, onClose
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [notice, setNotice] = useState<ToastNotice>(null);
 
-  const loginId = String(user?.loginid1 || user?.LOGINID1 || user?.loginid || user?.LOGINID || user?.username || "");
+  const loginId = String( user?.LOGINID1 || user?.loginid1 || user?.loginid || user?.LOGINID || user?.username || "");
   const companyCode = String(user?.company_code || user?.COMPANY_CODE || "BSG");
   const userRecord = (user || {}) as Record<string, unknown>;
   const fallbackEmployeeName = String(userRecord.RPT_NAME || userRecord.rpt_name || user?.username || user?.USERNAME || loginId || "Current User");
 
   useEffect(() => {
+    console.log('user',user);
     if (!open) return;
     const initialRequestNumber = getRowString(initialRow, "REQUEST_NUMBER", "requestNumber");
     setForm(initialRow ? formFromRow(initialRow) : { ...initialForm, requestDate: today() });
@@ -226,7 +227,7 @@ export function LeaveRequestDialog({ open, initialRow, readOnly = false, onClose
         EMPLOYEE_NAME: form.employeeName,
         CREATED_BY: loginId,
         UPDATED_BY: loginId,
-        LAST_ACTION: action,
+        LAST_ACTION: action ,
         REQUEST_NUMBER: requestNumber,
         REQUEST_DATE: form.requestDate,
         EMPLOYEE_CODE: form.employeeCode,
@@ -256,6 +257,9 @@ export function LeaveRequestDialog({ open, initialRow, readOnly = false, onClose
         DUTY_RESUME_DATE: "",
         UUID: getUuid(),
       });
+
+      console.log('save',save);
+
       const savedRequestNumber = getSavedRequestNumber(saveResult);
       if (savedRequestNumber) {
         setRequestNumber(savedRequestNumber);
