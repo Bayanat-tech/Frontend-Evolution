@@ -25,6 +25,16 @@ type AuthState = {
 const AuthContext = createContext<AuthState | null>(null);
 
 const TOKEN_KEY = "bayanat_service_token";
+const AUTH_HYDRATION_TIMEOUT_MS = 10000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => reject(new Error("Authentication check timed out")), timeoutMs);
+    }),
+  ]);
+}
 
 function normalizeUser(user: UserProfile, tenantId?: string): UserProfile {
   return {
@@ -55,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       setAuthToken(token);
-      const me = await meRequest();
+      const me = await withTimeout(meRequest(), AUTH_HYDRATION_TIMEOUT_MS);
       if (me.success) {
         setUser(normalizeUser(me.data.user, me.data.tenantId));
         setMenuTree(

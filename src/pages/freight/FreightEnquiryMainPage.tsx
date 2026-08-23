@@ -1205,7 +1205,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
             <ShipWheel size={15} />
           </div>
           <div className="min-w-0">
-            <p className="eyebrow mb-10"> {isRfq ? "Request For Quote" : "Freight Enquiry"}
+            <p className="eyebrow mb-0.5"> {isRfq ? "Request For Quote" : "Freight Enquiry"}
               {/* {isRfq ? "Freight RFQ" : "Freight Enquiry"} */}
               </p>
             <div className="flex flex-wrap items-center gap-2">

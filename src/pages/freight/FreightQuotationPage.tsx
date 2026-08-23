@@ -971,7 +971,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={15} /></div>
             <div className="min-w-0">
-              <p className="eyebrow m-1000 text-lg">Freight Quotation</p>
+              <p className="eyebrow mb-0.5">Freight Quotation</p>
                {/* <h1 className="m-0 text-xl font-semibold leading-tight text-foreground">Quotation</h1> */}
               <div className="flex flex-wrap items-center gap-1.5">
                 <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{header.quotation_nr}</h1>
