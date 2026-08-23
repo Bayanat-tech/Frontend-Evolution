@@ -2585,11 +2585,6 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .freight-module-surface {
   display: grid;
   gap: 5px;
-  font-family: var(--app-font-family);
-}
-
-.freight-module-surface :where(button, input, select, textarea, table, dialog) {
-  font-family: inherit;
 }
 
 .freight-ops-toolbar {
@@ -3179,7 +3174,7 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 }
 
 .freight-job-ops-screen {
-  font-family: var(--app-font-family);
+  font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
 }
 
 .freight-job-metric-card {
