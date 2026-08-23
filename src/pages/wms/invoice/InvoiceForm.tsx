@@ -489,7 +489,10 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
               <X size={14} /> Cancel
             </Button>
             {!viewMode && (
-              <Button onClick={handleSave} disabled={saving}>
+              <Button
+                onClick={handleSave}
+                disabled={saving || (lines.length === 0 && storageLines.length === 0)}
+              >
                 {saving ? <LoaderCircle size={14} className="animate-spin" /> : <Save size={14} />} Save Invoice
               </Button>
             )}
