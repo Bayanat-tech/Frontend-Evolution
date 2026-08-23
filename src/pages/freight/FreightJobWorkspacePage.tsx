@@ -90,6 +90,12 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
     const direction = directionLabel[targetDirection];
     return `${modeText} ${direction} Job Workspace`;
   }, [targetDirection, targetMode]);
+  const selectedPrincipalLabel = selectedJob
+    ? text(selectedJob, "prin_name") || text(selectedJob, "prin_code") || "Pending"
+    : "";
+  const selectedReferenceLabel = selectedJob
+    ? text(selectedJob, "doc_ref") || text(selectedJob, "hawb") || "Pending"
+    : "";
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -255,8 +261,10 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
             <h1 className="m-0 text-[22px] font-semibold leading-tight text-foreground">
               Job No: {selectedJob ? text(selectedJob, "job_no") : "New"}
             </h1>
-            <p className="m-0 text-xs font-medium text-blue-600">
-              {selectedJob ? `${text(selectedJob, "prin_name") || text(selectedJob, "prin_code")} | ${text(selectedJob, "doc_ref") || text(selectedJob, "hawb") || "Reference pending"}` : "New shipment operation"}
+            <p className="m-0 text-xs font-semibold text-slate-600">
+              {selectedJob
+                ? `Principal: ${selectedPrincipalLabel} | Reference: ${selectedReferenceLabel}`
+                : "New shipment operation"}
             </p>
           </div>
           <div className="freight-workspace-command-slot">{workspaceActions}</div>
