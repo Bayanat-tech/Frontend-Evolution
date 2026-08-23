@@ -314,6 +314,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => isHrRoute(context) && isHrLeaveResumptionRoute(context),
     element: () => <LeaveResumptionWorkspacePage />,
   },
+    {
+    name: "Employee Master",
+    match: ({pathname})=> pathname.toLocaleLowerCase().includes("/hcm/hr/employee/employee_master"),
+    element: () => <EmployeeMasterPage />
+  },
   {
     name: "HR Employee Profile",
     match: (context) => isHrRoute(context) && isHrEmployeeProfileRoute(context),
@@ -368,11 +373,6 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "HR Leave Encashmen",
     match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/leave_encashment"),
     element: () => <LeaveEncashmentPage />
-  },
-  {
-    name: "Employee Master",
-    match: ({pathname})=> pathname.toLocaleLowerCase().includes("/hr/hr/employee/employee_master"),
-    element: () => <EmployeeMasterPage />
   },
   {
     name: "Vendor System",
