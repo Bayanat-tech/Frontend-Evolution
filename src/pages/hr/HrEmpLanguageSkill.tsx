@@ -11,64 +11,57 @@ import { Select } from "../../components/ui/Select";
 import { LookupField } from "../../components/ui/LookupField";
 import { NoticeToast } from "../../components/ui/NoticeToast";
 import { useAuth } from "../../state/AuthContext";
-import hrEmpEducationServiceInstance from "./upsertHrEmpEducation";
 import type { ColumnDef } from "@tanstack/react-table";
+import hrEmpLanguageServiceInstance from "./Upserthremplanguage";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type DivisionOption = { div_code: string;     div_name: string };
-type DeptOption     = { dept_code: string;    dept_name: string };
-type SectionOption  = { section_code: string; section_name: string };
-type EmployeeOption = { employee_id: string;  employee_name: string };
-type EduLevelOption = { edu_level_code: string; edu_level_desc: string };
-type EduDiscOption  = { edu_disc_code: string;  edu_disc_desc: string };
+type DivisionOption     = { div_code: string;     div_name: string };
+type DeptOption         = { dept_code: string;    dept_name: string };
+type SectionOption      = { section_code: string; section_name: string };
+type EmployeeOption     = { employee_id: string;  employee_name: string };
+type LanguageOption     = { lang_code: string;    lang_desc: string };
+type StatusOption       = { value_code: string;   value_desc: string };
 
-type EduRow = {
-  _rowId:          string;
-  // FIX: track whether this row already exists on the server. Rows loaded
-  // from the API are "persisted" — if the user removes one of these from
-  // the grid, we can't just drop it from local state, because the next
-  // save's payload would simply omit it and the backend (an upsert API)
-  // would never know to delete/deactivate it. So persisted rows that get
-  // "removed" are kept in state with status_flag flipped to "D" and sent
-  // to the server on save, then truly dropped from the grid afterwards.
-  _isPersisted:    boolean;
-  edu_desc_code:   string;
-  edu_disc_desc:   string;
-  edu_level_code:  string;
-  edu_level_desc:  string;
-  start_date:      string;
-  end_date:        string;
-  year_of_passing: string;
-  studied_at:      string;
-  status_flag:     string;
+// FIX: TO_READ / TO_WRITE / TO_SPEAK are stored as plain proficiency codes in
+// HR_EMP_LANGUAGES. No dedicated lookup was supplied for these, so a static
+// list is used here. If a HR_CODE_VALUES group exists for proficiency levels,
+// swap PROFICIENCY_OPTIONS below for a getDynamicLookup call the same way
+// eduLevelOpts / eduDiscOpts are wired up.
+const PROFICIENCY_OPTIONS = ["Basic", "Intermediate", "Fluent", "Expert"];
+
+type LangRow = {
+  _rowId:        string;
+  // FIX: same reasoning as HrEmpEducationPage — rows loaded from the API are
+  // "persisted". Removing one of these from the grid must not simply drop it
+  // from local state, because the save payload would then omit it and the
+  // backend (an upsert API) would never know to delete/deactivate it.
+  // Persisted rows that get "removed" are kept in state with status_flag
+  // flipped to "D" and sent to the server on save, then dropped from the
+  // grid afterwards.
+  _isPersisted:  boolean;
+  lang_code:     string;
+  lang_desc:     string;
+  to_read:       string;
+  to_write:      string;
+  to_speak:      string;
+  remarks:       string;
+  status_flag:   string;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function toIsoDate(value: string): string {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-function makeRow(): EduRow {
+function makeRow(): LangRow {
   return {
-    _rowId:          `row_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-    _isPersisted:    false,
-    edu_desc_code:   "",
-    edu_disc_desc:   "",
-    edu_level_code:  "",
-    edu_level_desc:  "",
-    start_date:      "",
-    end_date:        "",
-    year_of_passing: "",
-    studied_at:      "",
-    status_flag:     "A",
+    _rowId:       `row_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    _isPersisted: false,
+    lang_code:    "",
+    lang_desc:    "",
+    to_read:      "",
+    to_write:     "",
+    to_speak:     "",
+    remarks:      "",
+    status_flag:  "A",
   };
 }
 
@@ -96,11 +89,9 @@ function buildParams(
 
 function EditableTextCell({
   initialValue,
-  type = "text",
   onBlur,
 }: {
   initialValue: string;
-  type?: string;
   onBlur: (value: string) => void;
 }) {
   const ref = useRef<HTMLInputElement>(null);
@@ -112,7 +103,7 @@ function EditableTextCell({
   return (
     <Input
       ref={ref}
-      type={type}
+      type="text"
       defaultValue={initialValue}
       onBlur={(e) => onBlur(e.target.value)}
     />
@@ -127,10 +118,10 @@ function EditableSelectCell({
   disabled = false,
   onChange,
 }: {
-  value:    string;
-  options:  { code: string; label: string }[];
+  value:     string;
+  options:   { code: string; label: string }[];
   disabled?: boolean;
-  onChange: (value: string) => void;
+  onChange:  (value: string) => void;
 }) {
   return (
     <Select
@@ -150,10 +141,15 @@ function EditableSelectCell({
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
-export function HrEmpEducationPage() {
+export function HrEmpLanguagePage() {
   const { user }    = useAuth();
   const queryClient = useQueryClient();
   const loginid     = user?.loginid      ?? "";
+  // FIX: company_code is intentionally NOT rendered anywhere in the UI
+  // (per requirement — the image's Company field is dropped). It is still
+  // required by every backend query, so it's read silently from the
+  // authenticated user and threaded through buildParams()/save exactly like
+  // before.
   const companyCode = user?.company_code ?? "";
 
   // ── Filter state ───────────────────────────────────────────────────────────
@@ -169,79 +165,73 @@ export function HrEmpEducationPage() {
   const [resetKey, setResetKey] = useState(0);
 
   // ── Grid / notice state ────────────────────────────────────────────────────
-  const [rows,   setRows]   = useState<EduRow[]>([]);
+  const [rows,   setRows]   = useState<LangRow[]>([]);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   // FIX: guards against the post-save refetch clobbering rows the user just
-  // edited/deleted locally. We only want the query's setRows(data) to run
-  // for a genuine "employee changed / first load" fetch, not for the
-  // invalidate-on-success refetch (where we already know the authoritative
-  // state because we just sent it).
-  //
-  // FIX #2: this now stores the employee_id the skip applies to (not just a
-  // bare boolean). A bare boolean was a bug — if the user saved for Employee
-  // A and then switched to Employee B (or reselected A after a Refresh)
-  // before the post-save refetch for A had fired, the skip flag would still
-  // be `true` and would incorrectly swallow the hydration for whichever
-  // employee's fetch ran next, making the grid look like it "didn't fetch"
-  // even though the network request went through fine.
+  // edited/deleted locally. Scoped to the employee_id the skip applies to
+  // (not a bare boolean) so switching employees before the post-save refetch
+  // fires doesn't swallow a different employee's legitimate hydration.
   const skipHydrateForEmployeeRef = useRef<string | null>(null);
 
-  // ── Master data — edu level + discipline ───────────────────────────────────
-  const { data: eduLevelOpts = [] } = useQuery<EduLevelOption[]>({
-    queryKey: ["edu-level", companyCode],
+  // ── Master data — languages + status ───────────────────────────────────────
+  const { data: languageOpts = [] } = useQuery<LanguageOption[]>({
+    queryKey: ["hr-language", companyCode],
     staleTime: 10 * 60 * 1000,
     queryFn: async () => {
       const res = await getDynamicLookup(
-        buildParams("EDUCATION_QUALIFICATION_HR_EDUCATIONAL_LEVEL_SELECT", loginid, companyCode),
+        buildParams("EDUCATION_QUALIFICATION_LANG_LANG_SELECT", loginid, companyCode),
       );
-      return res as EduLevelOption[];
+      return res as LanguageOption[];
     },
   });
 
-  const { data: eduDiscOpts = [] } = useQuery<EduDiscOption[]>({
-    queryKey: ["edu-discipline", companyCode],
+  // Status : SELECT VALUE_DESC, VALUE_CODE FROM HR_CODE_VALUES
+  //          WHERE GROUP_CODE = 6 AND STATUS = 'A' ORDER BY SORT_ORDER ASC
+  const { data: statusOpts = [] } = useQuery<StatusOption[]>({
+    queryKey: ["hr-language-status", companyCode],
     staleTime: 10 * 60 * 1000,
     queryFn: async () => {
       const res = await getDynamicLookup(
-        buildParams("EDUCATION_QUALIFICATION_HR_EDU_DISCIPLINE", loginid, companyCode),
+        buildParams("EDUCATION_QUALIFICATION_LANG_STATUS_SELECT", loginid, companyCode),
       );
-      return res as EduDiscOption[];
+      return res as StatusOption[];
     },
   });
 
-  // ── Employee education data ────────────────────────────────────────────────
-  const eduQuery = useQuery({
-    queryKey: ["education-data", employee?.employee_id],
+  // ── Employee language data ──────────────────────────────────────────────────
+  // SELECT EMPLOYEE_ID, LANG_CODE, TO_READ, TO_WRITE, TO_SPEAK, REMARKS,
+  //        STATUS_FLAG, USER_ID, USER_DT, COMPANY_CODE
+  // FROM HR_EMP_LANGUAGES
+  // WHERE COMPANY_CODE = :as_companycode AND EMPLOYEE_ID = :as_employee_id
+  const langQuery = useQuery({
+    queryKey: ["language-data", employee?.employee_id],
     enabled:  !!employee?.employee_id,
     // FIX: always treat cached data as stale on (re)enable, so re-selecting
-    // the same employee after a Refresh (which resets local filter state
-    // but doesn't touch this query's cache) reliably triggers a real network
+    // the same employee after a Refresh reliably triggers a real network
     // fetch instead of silently reusing a previous result.
     refetchOnMount: "always",
     queryFn:  async () => {
       const currentEmployeeId = employee?.employee_id ?? "";
       const res = await getDynamicLookup(
         buildParams(
-          "EDUCATION_QUALIFICATION_EMP_EDUCATION_SELECT",
+          "EDUCATION_QUALIFICATION_LANG_SELECT",
           loginid,
           companyCode,
           currentEmployeeId,
         ),
       );
-      const data: EduRow[] = (Array.isArray(res) ? res : []).map(
+      const data: LangRow[] = (Array.isArray(res) ? res : []).map(
         (r: Record<string, unknown>, i: number) => ({
-          _rowId:          `row_${i}`,
-          _isPersisted:    true,
-          edu_desc_code:   String(r.edu_desc_code   ?? ""),
-          edu_disc_desc:   String(r.edu_disc_desc   ?? ""),
-          edu_level_code:  String(r.edu_level_code  ?? ""),
-          edu_level_desc:  String(r.edu_level_desc  ?? ""),
-          start_date:      toIsoDate(String(r.start_date      ?? "")),
-          end_date:        toIsoDate(String(r.end_date        ?? "")),
-          year_of_passing: String(r.year_of_passing ?? ""),
-          studied_at:      String(r.studied_at      ?? ""),
-          status_flag:     String(r.status_flag     ?? "A"),
+          _rowId:       `row_${i}`,
+          _isPersisted: true,
+          lang_code:    String(r.lang_code ?? ""),
+          lang_desc:    String(r.lang_desc ?? ""),
+          to_read:      String(r.to_read   ?? ""),
+          to_write:     String(r.to_write  ?? ""),
+          to_speak:     String(r.to_speak  ?? ""),
+          remarks:      String(r.remarks   ?? ""),
+          status_flag:  String(r.status_flag ?? "A"),
         }),
       );
 
@@ -260,10 +250,6 @@ export function HrEmpEducationPage() {
   });
 
   // ── Cascade resets ─────────────────────────────────────────────────────────
-  // NOTE: this is the OTHER half of the cascade (clearing children when a
-  // parent changes). It already worked correctly before — the missing piece
-  // was only the `disabled` gating below, which is what actually stops the
-  // user from opening Section/Employee before their parent is chosen.
   useEffect(() => {
     setDepartment(null);
     setSection(null);
@@ -288,27 +274,23 @@ export function HrEmpEducationPage() {
 
   // ── Row update helpers ─────────────────────────────────────────────────────
   const updateRowSelect = useCallback(
-    (rowId: string, field: keyof EduRow, value: string) => {
+    (rowId: string, field: keyof LangRow, value: string) => {
       setRows((prev) =>
         prev.map((r) => {
           if (r._rowId !== rowId) return r;
-          if (field === "edu_desc_code") {
-            const opt = eduDiscOpts.find((x) => x.edu_disc_code === value);
-            return { ...r, edu_desc_code: value, edu_disc_desc: opt?.edu_disc_desc ?? "" };
-          }
-          if (field === "edu_level_code") {
-            const opt = eduLevelOpts.find((x) => x.edu_level_code === value);
-            return { ...r, edu_level_code: value, edu_level_desc: opt?.edu_level_desc ?? "" };
+          if (field === "lang_code") {
+            const opt = languageOpts.find((x) => x.lang_code === value);
+            return { ...r, lang_code: value, lang_desc: opt?.lang_desc ?? "" };
           }
           return { ...r, [field]: value };
         }),
       );
     },
-    [eduDiscOpts, eduLevelOpts],
+    [languageOpts],
   );
 
   const updateRowText = useCallback(
-    (rowId: string, field: keyof EduRow, value: string) => {
+    (rowId: string, field: keyof LangRow, value: string) => {
       setRows((prev) =>
         prev.map((r) => (r._rowId === rowId ? { ...r, [field]: value } : r)),
       );
@@ -316,14 +298,12 @@ export function HrEmpEducationPage() {
     [],
   );
 
-  // FIX: deleteRow no longer just filters the row out of state.
-  // - If the row was never saved (new/unpersisted), it's safe to drop it
-  //   entirely, same as before.
-  // - If the row came from the server (_isPersisted), we mark it as
-  //   status_flag "D" (deleted) but KEEP it in state so it's included in
-  //   the next save payload — the backend needs to know it was removed,
-  //   otherwise it stays in the DB and reappears on the post-save refetch.
-  //   We hide it from the visible grid via the `visibleRows` filter below.
+  // FIX: deleteRow doesn't just filter the row out of state.
+  // - Unpersisted (new) rows are dropped entirely.
+  // - Persisted rows are marked status_flag "D" but kept in state so the
+  //   next save payload carries them — the backend needs to know they were
+  //   removed, otherwise they stay in the DB and reappear on refetch. They
+  //   are hidden from the visible grid via `visibleRows` below.
   const deleteRow = useCallback((rowId: string) => {
     setRows((prev) =>
       prev
@@ -336,115 +316,98 @@ export function HrEmpEducationPage() {
     );
   }, []);
 
-  // FIX: rows marked for deletion are kept in `rows` (so save can send
-  // them) but hidden from the visible grid the user interacts with.
+  // FIX: rows marked for deletion stay in `rows` (so save can send them) but
+  // are hidden from the visible grid the user interacts with.
   const visibleRows = useMemo(
     () => rows.filter((r) => r.status_flag !== "D"),
     [rows],
   );
 
   // ── Columns ────────────────────────────────────────────────────────────────
-  const columns = useMemo<ColumnDef<EduRow>[]>(
+  const columns = useMemo<ColumnDef<LangRow>[]>(
     () => [
       {
         id:     "index",
-        header: "#",
-        size:   50,
+        header: "SlNo",
+        size:   60,
         cell:   ({ row }) => (
           <span className="text-muted-foreground text-xs">{row.index + 1}</span>
         ),
       },
       {
-        accessorKey: "edu_desc_code",
-        header:      "Educational Discipline *",
-        size:        240,
-        cell:        ({ row }) => (
-          <EditableSelectCell
-            value={row.original.edu_desc_code}
-            options={eduDiscOpts.map((o) => ({
-              code:  o.edu_disc_code,
-              label: o.edu_disc_desc,
-            }))}
-            onChange={(v) => updateRowSelect(row.original._rowId, "edu_desc_code", v)}
-          />
-        ),
-      },
-      {
-        accessorKey: "edu_level_code",
-        header:      "Educational Level *",
-        size:        200,
-        cell:        ({ row }) => (
-          <EditableSelectCell
-            value={row.original.edu_level_code}
-            options={eduLevelOpts.map((o) => ({
-              code:  o.edu_level_code,
-              label: o.edu_level_desc,
-            }))}
-            onChange={(v) => updateRowSelect(row.original._rowId, "edu_level_code", v)}
-          />
-        ),
-      },
-      {
-        accessorKey: "start_date",
-        header:      "Start Date *",
-        size:        160,
-        cell:        ({ row }) => (
-          <EditableTextCell
-            initialValue={row.original.start_date}
-            type="date"
-            onBlur={(v) => updateRowText(row.original._rowId, "start_date", v)}
-          />
-        ),
-      },
-      {
-        accessorKey: "end_date",
-        header:      "End Date",
-        size:        160,
-        cell:        ({ row }) => (
-          <EditableTextCell
-            initialValue={row.original.end_date}
-            type="date"
-            onBlur={(v) => updateRowText(row.original._rowId, "end_date", v)}
-          />
-        ),
-      },
-      {
-        accessorKey: "year_of_passing",
-        header:      "Year Passed *",
-        size:        120,
-        cell:        ({ row }) => (
-          <EditableTextCell
-            initialValue={row.original.year_of_passing}
-            onBlur={(v) => {
-              const clean = v.replace(/\D/g, "").slice(0, 4);
-              updateRowText(row.original._rowId, "year_of_passing", clean);
-            }}
-          />
-        ),
-      },
-      {
-        accessorKey: "studied_at",
-        header:      "University / Institution *",
+        accessorKey: "lang_code",
+        header:      "Language *",
         size:        220,
         cell:        ({ row }) => (
-          <EditableTextCell
-            initialValue={row.original.studied_at}
-            onBlur={(v) => updateRowText(row.original._rowId, "studied_at", v)}
+          <EditableSelectCell
+            value={row.original.lang_code}
+            options={languageOpts.map((o) => ({
+              code:  o.lang_code,
+              label: o.lang_desc,
+            }))}
+            onChange={(v) => updateRowSelect(row.original._rowId, "lang_code", v)}
+          />
+        ),
+      },
+      {
+        accessorKey: "to_read",
+        header:      "Read *",
+        size:        150,
+        cell:        ({ row }) => (
+          <EditableSelectCell
+            value={row.original.to_read}
+            options={PROFICIENCY_OPTIONS.map((p) => ({ code: p, label: p }))}
+            onChange={(v) => updateRowSelect(row.original._rowId, "to_read", v)}
+          />
+        ),
+      },
+      {
+        accessorKey: "to_write",
+        header:      "Write *",
+        size:        150,
+        cell:        ({ row }) => (
+          <EditableSelectCell
+            value={row.original.to_write}
+            options={PROFICIENCY_OPTIONS.map((p) => ({ code: p, label: p }))}
+            onChange={(v) => updateRowSelect(row.original._rowId, "to_write", v)}
+          />
+        ),
+      },
+      {
+        accessorKey: "to_speak",
+        header:      "Speak *",
+        size:        150,
+        cell:        ({ row }) => (
+          <EditableSelectCell
+            value={row.original.to_speak}
+            options={PROFICIENCY_OPTIONS.map((p) => ({ code: p, label: p }))}
+            onChange={(v) => updateRowSelect(row.original._rowId, "to_speak", v)}
           />
         ),
       },
       {
         accessorKey: "status_flag",
         header:      "Status *",
-        size:        130,
+        size:        140,
         cell:        ({ row }) => (
           <EditableSelectCell
             value={row.original.status_flag}
-            options={[
-              { code: "A", label: "Active"   },
-              { code: "I", label: "Inactive" },
-            ]}
+            options={statusOpts.map((o) => ({
+              code:  o.value_code,
+              label: o.value_desc,
+            }))}
             onChange={(v) => updateRowSelect(row.original._rowId, "status_flag", v)}
+          />
+        ),
+      },
+      {
+        accessorKey: "remarks",
+        header:      "Remarks",
+        size:        240,
+        cell:        ({ row }) => (
+          <EditableTextCell
+            initialValue={row.original.remarks}
+            onBlur={(v) => updateRowText(row.original._rowId, "remarks", v)}
           />
         ),
       },
@@ -465,45 +428,44 @@ export function HrEmpEducationPage() {
         ),
       },
     ],
-    [eduDiscOpts, eduLevelOpts, updateRowSelect, updateRowText, deleteRow],
+    [languageOpts, statusOpts, updateRowSelect, updateRowText, deleteRow],
   );
 
   // ── Save ───────────────────────────────────────────────────────────────────
   const mutation = useMutation({
     mutationFn: async () => {
       if (!employee?.employee_id) throw new Error("Please select an employee");
-      // FIX: validate against the visible (non-deleted) rows, not the raw
-      // `rows` array, since `rows` may now contain status_flag "D" entries
-      // pending deletion that shouldn't block saving an otherwise-empty grid.
+      // FIX: validate against visible (non-deleted) rows, not the raw `rows`
+      // array, since `rows` may contain status_flag "D" entries pending
+      // deletion that shouldn't block saving an otherwise-empty grid.
       if (visibleRows.length === 0 && rows.every((r) => r.status_flag === "D")) {
-        throw new Error("Add at least one education record");
+        throw new Error("Add at least one language record");
       }
 
       // FIX: send ALL rows, including ones marked status_flag "D", so the
       // backend can actually remove/deactivate the records the user deleted.
-      const education_details = rows.map((r) => ({
-        employee_id:     employee.employee_id,
-        edu_desc_code:   r.edu_desc_code,
-        edu_level_code:  r.edu_level_code,
-        start_date:      toIsoDate(r.start_date),
-        end_date:        r.end_date ? toIsoDate(r.end_date) : null,
-        year_of_passing: Number(r.year_of_passing) || 0,
-        studied_at:      r.studied_at,
-        status_flag:     r.status_flag,
-        company_code:    companyCode,
-        user_id:         loginid,
+      const language_details = rows.map((r) => ({
+        employee_id:  employee.employee_id,
+        lang_code:    r.lang_code,
+        to_read:      r.to_read,
+        to_write:     r.to_write,
+        to_speak:     r.to_speak,
+        remarks:      r.remarks,
+        status_flag:  r.status_flag,
+        company_code: companyCode,
+        user_id:      loginid,
       }));
 
-      const success = await hrEmpEducationServiceInstance.upsertHrEmpEducationApi({
-        company_code:      companyCode,
-        education_details,
+      const success = await hrEmpLanguageServiceInstance.upsertHrEmpLanguageApi({
+        company_code:     companyCode,
+        language_details,
         loginid,
       });
 
       if (!success) throw new Error("Save failed. Please try again.");
     },
     onSuccess: () => {
-      setNotice({ type: "success", message: "Education details saved successfully." });
+      setNotice({ type: "success", message: "Language details saved successfully." });
 
       // FIX: drop rows we just told the server to delete, and mark the
       // remaining rows as persisted (they now exist server-side too).
@@ -513,17 +475,15 @@ export function HrEmpEducationPage() {
           .map((r) => ({ ...r, _isPersisted: true })),
       );
 
-      // FIX: tell the next education-data fetch FOR THIS SPECIFIC EMPLOYEE
-      // to skip re-hydrating `rows` from the server response — we already
-      // have the correct local state and don't want a race/shape mismatch
-      // to bring back a row the user just deleted. Scoping this to the
-      // employee id (instead of a bare boolean) prevents it from
-      // accidentally swallowing a different employee's legitimate fetch.
+      // FIX: tell the next language-data fetch FOR THIS SPECIFIC EMPLOYEE to
+      // skip re-hydrating `rows` from the server response — we already have
+      // the correct local state. Scoping to employee_id (instead of a bare
+      // boolean) prevents it from swallowing a different employee's fetch.
       skipHydrateForEmployeeRef.current = employee?.employee_id ?? null;
-      queryClient.invalidateQueries({ queryKey: ["education-data", employee?.employee_id] });
+      queryClient.invalidateQueries({ queryKey: ["language-data", employee?.employee_id] });
     },
     onError: (err: Error) => {
-      setNotice({ type: "error", message: err.message ?? "Failed to save education details." });
+      setNotice({ type: "error", message: err.message ?? "Failed to save language details." });
     },
   });
 
@@ -531,14 +491,11 @@ export function HrEmpEducationPage() {
   const loadDivisions = useCallback(
     () =>
       getDynamicLookup(
-        buildParams("EDUCATION_QUALIFICATION_DIVISION_LIST", loginid, companyCode),
+        buildParams("EDUCATION_QUALIFICATION_LANG_DIVISION_LIST", loginid, companyCode),
       ),
     [loginid, companyCode],
   );
 
-  // Department: scoped by Division when one is picked (procedure branch
-  // EDUCATION_QUALIFICATION_DEPARTMENT_DEPTCODE — P_CODE2 = DIV_CODE,
-  // optional: empty => all departments for the company).
   const loadDepartments = useCallback(
     () =>
       getDynamicLookup(
@@ -552,49 +509,36 @@ export function HrEmpEducationPage() {
     [loginid, companyCode, division?.div_code],
   );
 
-  // Section: HARD-depends on Department (see `disabled={!department}` on
-  // the field below). Uses EDUCATION_QUALIFICATION_MS_HR_SECTION —
-  // P_CODE2 = DIV_CODE (optional extra narrowing), P_CODE3 = DEPT_CODE
-  // (the field is disabled until this is set, so it's effectively always
-  // present once the call fires).
-  const loadSections = useCallback(
-    () =>
-      getDynamicLookup(
-        buildParams(
-          "EDUCATION_QUALIFICATION_MS_HR_SECTION",
-          loginid,
-          companyCode,
-          division?.div_code   ?? "",  // code2 — DIV_CODE (optional)
-          department?.dept_code ?? "", // code3 — DEPT_CODE (drives the fetch)
-        ),
+ const loadSections = useCallback(
+  () =>
+    getDynamicLookup(
+      buildParams(
+        "EDUCATION_QUALIFICATION_LANG_SECTION_LIST",
+        loginid,
+        companyCode,
+        division?.div_code    ?? "", // code2 — DIV_CODE  (optional)
+        department?.dept_code ?? "", // code3 — DEPT_CODE (optional)
       ),
-    [loginid, companyCode, division?.div_code, department?.dept_code],
-  );
+    ),
+  [loginid, companyCode, division?.div_code, department?.dept_code],
+);
 
-  // Employee: HARD-depends on Section (see `disabled={!section}` on the
-  // field below). Uses EDUCATION_QUALIFICATION_HR_EMPLOYEE_LIST_WITH_MANAGER
-  // — P_CODE2 = DIV_CODE, P_CODE3 = DEPT_CODE, P_CODE4 = SECTION_CODE (the
-  // field is disabled until Section is set, so all three are present by
-  // the time this call fires).
+  // Division and section are optional filters — only department narrows the
+  // employee list as the primary filter (code2). Division goes to code3,
+  // section to code4.
   const loadEmployees = useCallback(
     () =>
       getDynamicLookup(
         buildParams(
-          "EDUCATION_QUALIFICATION_HR_EMPLOYEE_LIST_WITH_MANAGER",
+          "EDUCATION_QUALIFICATION_LANG_EMPLOYEE_LIST",
           loginid,
           companyCode,
-          division?.div_code    ?? "", // code2 — DIV_CODE
-          department?.dept_code ?? "", // code3 — DEPT_CODE
-          section?.section_code ?? "", // code4 — SECTION_CODE (drives the fetch)
+          department?.dept_code ?? "", // code2 — primary filter
+          division?.div_code    ?? "", // code3 — optional
+          section?.section_code ?? "", // code4 — optional
         ),
       ),
-    [
-      loginid,
-      companyCode,
-      division?.div_code,
-      department?.dept_code,
-      section?.section_code,
-    ],
+    [loginid, companyCode, department?.dept_code, division?.div_code, section?.section_code],
   );
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -605,10 +549,10 @@ export function HrEmpEducationPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="m-0 text-2xl font-semibold text-foreground">
-            Employee Educational Qualifications
+            HR Employee - Language Skills
           </h1>
           <p className="m-0 mt-1 text-sm text-muted-foreground">
-            Maintain education history for employees across divisions and departments.
+            Maintain language proficiency records for employees across divisions and departments.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -623,19 +567,18 @@ export function HrEmpEducationPage() {
               setEmployee(null);
               setRows([]);
               setNotice(null);
-              // Force every LookupField to remount so it reloads its
-              // option list fresh instead of showing a stale cached list.
+              // Force every LookupField to remount so it reloads its option
+              // list fresh instead of showing a stale cached list.
               setResetKey((k) => k + 1);
-              // Also refresh the master dropdown data (edu level / discipline).
-              void queryClient.invalidateQueries({ queryKey: ["edu-level", companyCode] });
-              void queryClient.invalidateQueries({ queryKey: ["edu-discipline", companyCode] });
-              // FIX: fully remove any cached education-data results (for
-              // every employee, not just the currently selected one) so
+              // Refresh master dropdown data (languages / status).
+              void queryClient.invalidateQueries({ queryKey: ["hr-language", companyCode] });
+              void queryClient.invalidateQueries({ queryKey: ["hr-language-status", companyCode] });
+              // Fully remove any cached language-data results (for every
+              // employee, not just the currently selected one) so
               // re-selecting an employee after Refresh always triggers a
-              // genuine fresh fetch instead of potentially reusing a
-              // previous result from the query cache.
+              // genuine fresh fetch instead of reusing a previous result.
               queryClient.removeQueries({
-                predicate: (query) => query.queryKey[0] === "education-data",
+                predicate: (query) => query.queryKey[0] === "language-data",
               });
               skipHydrateForEmployeeRef.current = null;
             }}
@@ -648,6 +591,9 @@ export function HrEmpEducationPage() {
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
       {/* ── Filter Bar ───────────────────────────────────────────────────── */}
+      {/* NOTE: Company field intentionally omitted from the UI — companyCode
+          is still read from the authenticated user and passed to every API
+          call under the hood. */}
       <Card>
         <CardHeader>
           <div>
@@ -655,14 +601,9 @@ export function HrEmpEducationPage() {
             <h2 className="m-0 text-sm font-semibold">Select Employee</h2>
           </div>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
 
-          {/* <label className="field">
-            <span>Company</span>
-            <Input disabled value={companyCode} />
-          </label> */}
-
-          {/* Division — top of the chain, always enabled */}
+          {/* Division — optional, narrows employee list */}
           <label className="field">
             <span>Division</span>
             <LookupField
@@ -688,13 +629,11 @@ export function HrEmpEducationPage() {
             />
           </label>
 
-          {/* Department — optional (works with or without Division), but
-              its `key` includes division.div_code so picking a Division
-              forces a remount and re-fetches departments scoped to it. */}
+          {/* Department — optional but recommended */}
           <label className="field">
             <span>Department</span>
             <LookupField
-              key={`department-${resetKey}-${division?.div_code ?? ""}`}
+              key={`department-${resetKey}`}
               compact
               label="Department"
               value={department?.dept_code ?? ""}
@@ -716,18 +655,11 @@ export function HrEmpEducationPage() {
             />
           </label>
 
-          {/* Section — HARD depends on Department.
-              - disabled={!department}: field can't be opened until a
-                Department is selected.
-              - key includes division.div_code + department.dept_code:
-                any change up the chain forces a remount, so loadSections()
-                always runs fresh and scoped correctly. */}
+          {/* Section — fully optional */}
           <label className="field">
-            <span>
-              Section <strong className="text-destructive">*</strong>
-            </span>
+            <span>Section</span>
             <LookupField
-              key={`section-${resetKey}-${division?.div_code ?? ""}-${department?.dept_code ?? ""}`}
+              key={`section-${resetKey}`}
               compact
               label="Section"
               value={section?.section_code ?? ""}
@@ -739,7 +671,7 @@ export function HrEmpEducationPage() {
               valueField="section_code"
               displayFields={["section_code", "section_name"]}
               loadOptions={loadSections}
-            
+   
               onChange={(_, row) => {
                 setSection(
                   row
@@ -753,19 +685,13 @@ export function HrEmpEducationPage() {
             />
           </label>
 
-          {/* Employee — HARD depends on Section.
-              - disabled={!section}: field can't be opened until a Section
-                is selected.
-              - key includes department.dept_code + division.div_code +
-                section.section_code: any change up the chain forces a
-                remount, so loadEmployees() always runs fresh and scoped
-                correctly. */}
+          {/* Employee — only requires department, not division */}
           <label className="field">
             <span>
               Employee <strong className="text-destructive">*</strong>
             </span>
             <LookupField
-              key={`employee-${resetKey}-${department?.dept_code ?? ""}-${division?.div_code ?? ""}-${section?.section_code ?? ""}`}
+              key={`employee-${resetKey}`}
               compact
               label="Employee"
               value={employee?.employee_id ?? ""}
@@ -781,16 +707,14 @@ export function HrEmpEducationPage() {
               valueField="employee_id"
               displayFields={["employee_id", "employee_name"]}
               loadOptions={loadEmployees}
-            
+              disabled={false}
               onChange={(_, row) => {
                 setEmployee(
                   row
                     ? {
-                        employee_id: String(
-                          row.employee_id ?? "",
-                        ),
-                        // guard both rpt_name and employee_name — API may
-                        // return either depending on the lookup
+                        employee_id: String(row.employee_id ?? ""),
+                        // Guard both rpt_name and employee_name — the API
+                        // may return either depending on the lookup.
                         employee_name: String(
                           row.employee_name ?? row.rpt_name ?? "",
                         ),
@@ -804,18 +728,18 @@ export function HrEmpEducationPage() {
         </CardContent>
       </Card>
 
-      {/* ── Education Grid ───────────────────────────────────────────────── */}
+      {/* ── Language Grid ────────────────────────────────────────────────── */}
       <DataTable
         columns={columns}
-        // FIX: render only visibleRows (excludes rows pending deletion)
-        // so a removed row stays gone from the UI, while the underlying
-        // `rows` state still carries it (status_flag "D") for the save call.
+        // Renders only visibleRows (excludes rows pending deletion) so a
+        // removed row stays gone from the UI, while the underlying `rows`
+        // state still carries it (status_flag "D") for the save call.
         data={visibleRows}
         title={`${visibleRows.length} Record${visibleRows.length !== 1 ? "s" : ""}`}
-        subtitle="Education Records"
-        searchPlaceholder="Search discipline, level, institution..."
+        subtitle="Language Records"
+        searchPlaceholder="Search language, status, remarks..."
         height={420}
-        minWidth={1280}
+        minWidth={1080}
         density="grid"
         enablePagination={false}
         getRowId={(row) => row._rowId}

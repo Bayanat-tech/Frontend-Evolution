@@ -185,6 +185,8 @@ import PLSummaryPage from "../pages/purchase_sales/Reports/Plsummarypage";
 import { PurchaseInvoicePage } from "../pages/purchase_sales/purchase/PurchaseInvoicePage";
 import { SalesInvoicePage } from "../pages/purchase_sales/sales/SalesInvoicePage";
 import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
+import { HrEmpLanguagePage } from "../pages/hr/HrEmpLanguageSkill";
+
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -1212,6 +1214,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isHrLeaveTypeRoute(pathname),
     element: () => <LeaveTypesPage />,
   },
+
+  {
+  name : "Hr Employee Language Skills",
+  match: ({pathname}) => isHrEmpLanguageSkillRoute(pathname),
+  element: () => <HrEmpLanguagePage/>
+},
+  
   {
     name: "HR Master",
     match: (context) => Boolean(getHrMasterConfig(context)),
@@ -1237,7 +1246,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   element: () => <ZoneMasterPage />,
   },
 
-  
+ 
 
   {
     name : "Expense Master",
@@ -1280,6 +1289,16 @@ export const workspaceRoutes: WorkspaceRoute[] = [
 
 function isStorageComputationRoute(pathname: string) {
   return pathname.toLowerCase().includes("wms/activity/request/storage_computation");
+}
+
+
+
+function isHrEmpLanguageSkillRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  return (
+    normalized.includes("/hcm/hcm/employee/language_skills") ||
+    normalized.includes("/hcm/hcm/employee/language%20skills")
+  );
 }
 
 
