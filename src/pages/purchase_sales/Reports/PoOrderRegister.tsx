@@ -187,7 +187,7 @@ export default function PoOrderRegisterPage() {
 
     const BG = "#EEF5FD";
     return (
-        <div style={{ background: "#f3f4f6", padding: "6px 10px", fontFamily: "system-ui, sans-serif", minHeight: "100vh" }}>
+        <div style={{ background: "#f3f4f6", padding: "33px 10px", fontFamily: "system-ui, sans-serif", minHeight: "100vh" }}>
             <style>{`
                 .action-btn-primary:hover { background: #1e40af !important; }
                 .action-btn-excel:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
