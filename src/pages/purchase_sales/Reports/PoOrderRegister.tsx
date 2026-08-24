@@ -176,7 +176,7 @@ export default function PoOrderRegisterPage() {
         }
         setExporting(true);
         try {
-           // await getPoOrderRegisterReportExcel(lastRequestRef.current);
+            // await getPoOrderRegisterReportExcel(lastRequestRef.current);
         } catch (err) {
             console.error("Excel export error:", err);
             alert("Excel export failed. Please try again.");
@@ -223,56 +223,90 @@ export default function PoOrderRegisterPage() {
                     )}
 
                     {/* ── Filter fields ── */}
-                    <div className="field-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: 10 }}>
-                        <FloatLabel label="Date From" bgColor={BG}>
-                            <DateField value={fromDateIso} onChange={setFromDateIso} max={toDateIso || undefined} />
-                        </FloatLabel>
-                        <FloatLabel label="Date To" bgColor={BG}>
-                            <DateField value={toDateIso} onChange={setToDateIso} min={fromDateIso || undefined} />
-                        </FloatLabel>
+                    {/* ── Filter fields ── */}
+                    <div
+                        className="field-row"
+                        style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr",
+                            gap: 10,
+                            alignItems: "end",   // ← sagle fields khalun align hotil
+                        }}
+                    >
+                        <div style={{ minWidth: 0 }}>
+                            <FloatLabel label="Date From" bgColor={BG}>
+                                <DateField value={fromDateIso} onChange={setFromDateIso} max={toDateIso || undefined} />
+                            </FloatLabel>
+                        </div>
 
-                        {/* Supplier — LookupField using Account_AC_CODE_Serach_HDR */}
-                        <LookupField
-                            label="Supplier"
-                            value={acCode}
-                            displayValue={acName ? `${acCode} - ${acName}` : acCode}
-                            columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "address", header: "Address" }, { field: "tel", header: "Tel" }, { field: "fax", header: "Fax" }]}
-                            valueField="ac_code"
-                            displayFields={["ac_code", "ac_name"]}
-                            loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_HDR", code1: companyCode, loginid: loginId })}
-                            disabled={false}
-                            onChange={(value: string, row: any) => {
-                                setAcCode(value);
-                                setAcName(text(getLookupValue(row || {}, "ac_name")));
-                            }}
-                        />
+                        <div style={{ minWidth: 0 }}>
+                            <FloatLabel label="Date To" bgColor={BG}>
+                                <DateField value={toDateIso} onChange={setToDateIso} min={fromDateIso || undefined} />
+                            </FloatLabel>
+                        </div>
 
-                        {/* PO Number — manual entry */}
-                        <FloatLabel label="PO Number" bgColor={BG}>
-                            <input
-                                type="text"
-                                value={poNumber}
-                                onChange={(e) => setPoNumber(e.target.value)}
-                                //placeholder="All"
-                                style={inputStyle}
+                        <div style={{ minWidth: 0 }}>
+                            <LookupField
+                                label="Supplier"
+                                value={acCode}
+                                displayValue={acName ? `${acCode} - ${acName}` : acCode}
+                                columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "address", header: "Address" }, { field: "tel", header: "Tel" }, { field: "fax", header: "Fax" }]}
+                                valueField="ac_code"
+                                displayFields={["ac_code", "ac_name"]}
+                                loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_HDR", code1: companyCode, loginid: loginId })}
+                                disabled={false}
+                                onChange={(value: string, row: any) => {
+                                    setAcCode(value);
+                                    setAcName(text(getLookupValue(row || {}, "ac_name")));
+                                }}
                             />
-                        </FloatLabel>
+                        </div>
 
-                        {/* Product — LookupField using PS_POORDER_ENTRY_PRODUCT_LIST */}
-                        <LookupField
-                            label="Product Code"
-                            value={prodCode}
-                            displayValue={prodName ? `${prodCode} - ${prodName}` : prodCode}
-                            columns={[{ field: "prod_code", header: "Code" }, { field: "prod_name", header: "Name" }, { field: "p_uom", header: "P Uom" }, { field: "unit_price", header: "Unit Price" }]}
-                            valueField="prod_code"
-                            displayFields={["prod_code", "prod_name"]}
-                            loadOptions={() => getDynamicLookup({ parameter: "PS_POORDER_ENTRY_PRODUCT_LIST", code1: companyCode, loginid: loginId })}
-                            disabled={false}
-                            onChange={(value: string, row: any) => {
-                                setProdCode(value);
-                                setProdName(text(getLookupValue(row || {}, "prod_name")));
-                            }}
-                        />
+                        <div style={{ minWidth: 0 }}>
+                            <FloatLabel label="PO Number" bgColor={BG}>
+                                <input
+                                    type="text"
+                                    value={poNumber}
+                                    onChange={(e) => setPoNumber(e.target.value)}
+                                    placeholder="All"
+                                    style={inputStyle}
+                                />
+                            </FloatLabel>
+                        </div>
+
+                        <div style={{ minWidth: 0 }}>
+                            <LookupField
+                                label="Product From"
+                                value={prodCode}
+                                displayValue={prodName ? `${prodCode} - ${prodName}` : prodCode}
+                                columns={[{ field: "prod_code", header: "Code" }, { field: "prod_name", header: "Name" }, { field: "p_uom", header: "P Uom" }, { field: "unit_price", header: "Unit Price" }]}
+                                valueField="prod_code"
+                                displayFields={["prod_code", "prod_name"]}
+                                loadOptions={() => getDynamicLookup({ parameter: "PS_POORDER_ENTRY_PRODUCT_LIST", code1: companyCode, loginid: loginId })}
+                                disabled={false}
+                                onChange={(value: string, row: any) => {
+                                    setProdCode(value);
+                                    setProdName(text(getLookupValue(row || {}, "prod_name")));
+                                }}
+                            />
+                        </div>
+
+                        <div style={{ minWidth: 0 }}>
+                            <LookupField
+                                label="Product To"
+                                value={prodCode}
+                                displayValue={prodName ? `${prodCode} - ${prodName}` : prodCode}
+                                columns={[{ field: "prod_code", header: "Code" }, { field: "prod_name", header: "Name" }, { field: "p_uom", header: "P Uom" }, { field: "unit_price", header: "Unit Price" }]}
+                                valueField="prod_code"
+                                displayFields={["prod_code", "prod_name"]}
+                                loadOptions={() => getDynamicLookup({ parameter: "PS_POORDER_ENTRY_PRODUCT_LIST", code1: companyCode, loginid: loginId })}
+                                disabled={false}
+                                onChange={(value: string, row: any) => {
+                                    setProdCode(value);
+                                    setProdName(text(getLookupValue(row || {}, "prod_name")));
+                                }}
+                            />
+                        </div>
                     </div>
 
                     <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4, marginLeft: 4 }}>
@@ -320,7 +354,7 @@ export default function PoOrderRegisterPage() {
                                     Generating...
                                 </>
                             ) : (
-                                <><Eye size={13} /> View Report</>
+                                <><Eye size={13} /> Generate Report</>
                             )}
                         </button>
                     </div>
