@@ -193,6 +193,10 @@ import { SalesInvoicePage } from "../pages/purchase_sales/sales/SalesInvoicePage
 import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
 import CompanyInfo from "../pages/security/CompanyInfo";
 import HolidayCalendarPage from "../pages/hr/masters/HolidayCalendarPage"; 
+import LeaveSlapPage from "../pages/hr/LeaveSlab";
+import TravelFare from "../pages/hr/TravelFare";
+import { HrEmpLanguagePage } from "../pages/hr/HrEmpLanguageSkill";
+
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -212,6 +216,16 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name: 'HR Leave Slap Page',
+    match: ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/setup/pay%20units/leave_slab"),
+    element: () => <LeaveSlapPage />,
+  },
+  {
+    name: 'Travel Fare Page',
+    match: ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/setup/pay%20units/travel_fare"),
+    element: () => <TravelFare />,
+  },
   {
     name: 'Company Info Master',
     match: ({pathname}) => pathname.toLowerCase().includes("/security/security/masters/gm/com_info"),
@@ -327,6 +341,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => isHrRoute(context) && isHrLeaveResumptionRoute(context),
     element: () => <LeaveResumptionWorkspacePage />,
   },
+    {
+    name: "Employee Master",
+    match: ({pathname})=> pathname.toLocaleLowerCase().includes("/hcm/hr/employee/employee_master"),
+    element: () => <EmployeeMasterPage />
+  },
   {
     name: "HR Employee Profile",
     match: (context) => isHrRoute(context) && isHrEmployeeProfileRoute(context),
@@ -381,11 +400,6 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: "HR Leave Encashmen",
     match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/leave_encashment"),
     element: () => <LeaveEncashmentPage />
-  },
-  {
-    name: "Employee Master",
-    match: ({pathname})=> pathname.toLocaleLowerCase().includes("/hr/hr/employee/employee_master"),
-    element: () => <EmployeeMasterPage />
   },
   {
     name: "Vendor System",
@@ -1250,6 +1264,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({ pathname }) => isHrHolidayCalendarRoute(pathname),
     element: () => <HolidayCalendarPage />,
   },
+
+  {
+  name : "Hr Employee Language Skills",
+  match: ({pathname}) => isHrEmpLanguageSkillRoute(pathname),
+  element: () => <HrEmpLanguagePage/>
+},
+  
   {
     name: "HR Master",
     match: (context) => Boolean(getHrMasterConfig(context)),
@@ -1275,7 +1296,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   element: () => <ZoneMasterPage />,
   },
 
-  
+ 
 
   {
     name : "Expense Master",
@@ -1318,6 +1339,16 @@ export const workspaceRoutes: WorkspaceRoute[] = [
 
 function isStorageComputationRoute(pathname: string) {
   return pathname.toLowerCase().includes("wms/activity/request/storage_computation");
+}
+
+
+
+function isHrEmpLanguageSkillRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  return (
+    normalized.includes("/hcm/hcm/employee/language_skills") ||
+    normalized.includes("/hcm/hcm/employee/language%20skills")
+  );
 }
 
 function isHrHolidayCalendarRoute(pathname: string) {
