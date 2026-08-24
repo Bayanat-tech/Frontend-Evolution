@@ -1,8 +1,9 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Calculator, Eye, FileText, Plus, RefreshCw, Save, Search, Trash2 } from "lucide-react";
+import { Calculator, Eye, Pencil, Plus, Printer, RefreshCw, Save, Search, Trash2 } from "lucide-react";
 import { api } from "../../api/client";
 import { freightSelect } from "../../api/freight";
+import { getInvocieDetailReport } from "../../api/wms";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
@@ -11,8 +12,9 @@ import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { useToast } from "../../components/ui/AlertToast";
 import { useAuth } from "../../state/AuthContext";
+import InvoiceForm from "../wms/invoice/InvoiceForm";
 
-type InvoiceEditorMode = "add" | "view";
+type InvoiceEditorMode = "add" | "edit" | "view";
 
 type InvoiceFormState = {
   invoice_no: string;
@@ -36,10 +38,6 @@ export function FreightInvoicePage() {
 
   const [rows, setRows] = useState<LookupRow[]>([]);
   const [query, setQuery] = useState("");
-  const [filterPrincipal, setFilterPrincipal] = useState("");
-  const [filterPrincipalName, setFilterPrincipalName] = useState("");
-  const [filterFromDate, setFilterFromDate] = useState("");
-  const [filterToDate, setFilterToDate] = useState("");
   const [loading, setLoading] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<InvoiceEditorMode>("add");
@@ -48,6 +46,7 @@ export function FreightInvoicePage() {
   const [selectedRows, setSelectedRows] = useState<LookupRow[]>([]);
   const [candidateSearch, setCandidateSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  const [printDialogOpen, setPrintDialogOpen] = useState(false);
 
   const selectedTotal = useMemo(
     () => selectedRows.reduce((sum, row) => sum + number(row, "bill"), 0),
@@ -59,10 +58,6 @@ export function FreightInvoicePage() {
     try {
       const response = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/invoice/list", {
         company_code: companyCode,
-        prin_code: filterPrincipal,
-        from_date: filterFromDate,
-        to_date: filterToDate,
-        search: query,
       });
       setRows((response.data.data || []).map(normalizeRow));
     } catch (error: any) {
@@ -71,7 +66,7 @@ export function FreightInvoicePage() {
     } finally {
       setLoading(false);
     }
-  }, [companyCode, filterFromDate, filterPrincipal, filterToDate, query, toast]);
+  }, [companyCode, toast]);
 
   useEffect(() => {
     void loadRows();
@@ -83,25 +78,34 @@ export function FreightInvoicePage() {
       header: "Invoice No",
       size: 150,
       cell: ({ row }) => (
-        <button type="button" className="font-semibold text-primary hover:underline" onClick={() => void openExisting(row.original)}>
+        <button type="button" className="font-semibold text-primary hover:underline" onClick={() => void openExisting(row.original, "view")}>
           {text(row.original.invoice_no)}
         </button>
       ),
     },
     { accessorKey: "invoice_date", header: "Date", size: 120, cell: ({ row }) => formatDate(text(row.original.invoice_date)) },
+    { accessorKey: "from_date", header: "From Date", size: 120, cell: ({ row }) => formatDate(text(row.original.from_date)) },
+    { accessorKey: "to_date", header: "To Date", size: 120, cell: ({ row }) => formatDate(text(row.original.to_date)) },
     { accessorKey: "prin_code", header: "Principal", size: 100 },
     { accessorKey: "prin_name", header: "Principal Name", size: 260, cell: ({ row }) => text(row.original.prin_name) || "-" },
+    { accessorKey: "job_no", header: "Job No", size: 110, cell: ({ row }) => text(row.original.job_no) || "-" },
+    { accessorKey: "cust_code", header: "Customer Code", size: 120, cell: ({ row }) => text(row.original.cust_code) || "-" },
     { accessorKey: "job_count", header: "Jobs", size: 80, cell: ({ row }) => centered(text(row.original.job_count) || "0") },
     { accessorKey: "line_count", header: "Lines", size: 80, cell: ({ row }) => centered(text(row.original.line_count) || "0") },
     { accessorKey: "curr_code", header: "Currency", size: 90 },
     { accessorKey: "inv_amount", header: "Amount", size: 130, cell: ({ row }) => money(number(row.original, "inv_amount")) },
-    { accessorKey: "inv_status", header: "Status", size: 90, cell: ({ row }) => statusChip(text(row.original.inv_status)) },
+    { accessorKey: "inv_status", header: "Status", size: 90, cell: ({ row }) => text(row.original.inv_status) || "-" },
     {
       id: "actions",
       header: "Actions",
       size: 80,
       enableColumnFilter: false,
-      cell: ({ row }) => <Button type="button" size="icon" variant="ghost" title="View invoice" onClick={() => void openExisting(row.original)}><Eye size={14} /></Button>,
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1">
+          <Button type="button" size="icon" variant="ghost" title="View invoice" onClick={() => void openExisting(row.original, "view")}><Eye size={14} /></Button>
+          <Button type="button" size="icon" variant="ghost" title="Edit invoice" onClick={() => void openExisting(row.original, "edit")}><Pencil size={14} /></Button>
+        </div>
+      ),
     },
   ], []);
 
@@ -112,11 +116,10 @@ export function FreightInvoicePage() {
     setCandidateRows([]);
     setCandidateSearch("");
     setEditorOpen(true);
-    void loadCandidateJobs("", "");
   }
 
-  async function openExisting(row: LookupRow) {
-    setEditorMode("view");
+  async function openExisting(row: LookupRow, mode: Exclude<InvoiceEditorMode, "add">) {
+    setEditorMode(mode);
     setSaving(true);
     try {
       const response = await api.post<{ success?: boolean; data?: { header?: LookupRow; jobSelection?: LookupRow[] } }>("/api/freight/invoice/get", {
@@ -137,6 +140,7 @@ export function FreightInvoicePage() {
       });
       setSelectedRows(jobs);
       setCandidateRows([]);
+      setCandidateSearch("");
       setEditorOpen(true);
     } catch (error: any) {
       toast.error(error?.response?.data?.details || error?.response?.data?.message || "Unable to open freight invoice.");
@@ -165,7 +169,8 @@ export function FreightInvoicePage() {
   search = candidateSearch,
   prinCode = form.prin_code,
   fromDate = form.from_date,
-  toDate = form.to_date
+  toDate = form.to_date,
+  invoiceNo = form.invoice_no
 ) {
   try {
     const response = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/invoice/job-selection", {
@@ -173,6 +178,7 @@ export function FreightInvoicePage() {
       prin_code: prinCode,
       from_date: fromDate,
       to_date: toDate,
+      invoice_no: invoiceNo || undefined,
       search,
     });
     setCandidateRows((response.data.data || []).map(normalizeRow));
@@ -277,62 +283,39 @@ export function FreightInvoicePage() {
   const selectedKeys = useMemo(() => new Set(selectedRows.map(lineKey)), [selectedRows]);
   const readOnly = editorMode === "view";
 
-  return (
-    <section className="grid gap-3">
-      <div className="rounded-md border bg-card px-4 py-3 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-              <FileText size={20} />
-            </div>
-            <div>
-              <p className="eyebrow m-0">Freight Billing</p>
-              <h1 className="m-0 text-2xl font-semibold text-foreground">Freight Invoice</h1>
-              <p className="m-0 mt-1 text-sm text-muted-foreground">Create invoices from confirmed Freight job activity lines.</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" onClick={() => void loadRows()} disabled={loading}><RefreshCw size={15} />Refresh</Button>
-            <Button type="button" onClick={openNew}><Plus size={15} />Add Invoice</Button>
-          </div>
-        </div>
-      </div>
+  async function printInvoice(reportType: "grouped" | "activitywise") {
+    if (!form.prin_code || !form.invoice_no) return;
+    const reportWindow = window.open("", "_blank");
+    if (!reportWindow) {
+      toast.error("Please allow pop-ups for this site to view the report.");
+      return;
+    }
+    reportWindow.document.write("<p style='font-family:Arial;padding:24px'>Loading invoice report...</p>");
+    try {
+      const html = await getInvocieDetailReport(form.prin_code, form.invoice_no, companyCode, reportType);
+      if (reportWindow.closed) return;
+      reportWindow.document.open();
+      reportWindow.document.write(html);
+      reportWindow.document.close();
+      setPrintDialogOpen(false);
+    } catch {
+      reportWindow.close();
+      toast.error("Failed to load invoice report.");
+    }
+  }
 
-      <div className="rounded-md border bg-card p-3 shadow-sm">
-        <div className="grid gap-2 md:grid-cols-[170px_170px_minmax(260px,1fr)_auto_auto]">
-          <Field label="From"><Input type="date" value={filterFromDate} onChange={(event) => setFilterFromDate(event.target.value)} /></Field>
-          <Field label="To"><Input type="date" value={filterToDate} onChange={(event) => setFilterToDate(event.target.value)} /></Field>
-          <Field label="Principal">
-            <LookupField
-              compact
-              value={filterPrincipal}
-              displayValue={filterPrincipal ? [filterPrincipal, filterPrincipalName].filter(Boolean).join(" - ") : ""}
-              valueField="prin_code"
-              displayFields={["prin_code", "prin_name"]}
-              columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]}
-              loadOptions={(search) => loadFreightLookup("freight_principal", companyCode, search)}
-              onChange={(value, row) => {
-                setFilterPrincipal(value);
-                setFilterPrincipalName(text(row?.prin_name ?? row?.PRIN_NAME));
-              }}
-              placeholder="All principals"
-            />
-          </Field>
-          <Button type="button" className="self-end" onClick={() => void loadRows()} disabled={loading}><Search size={14} />Run</Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="self-end"
-            onClick={() => {
-              setFilterFromDate("");
-              setFilterToDate("");
-              setFilterPrincipal("");
-              setFilterPrincipalName("");
-              setQuery("");
-            }}
-          >
-            Clear
-          </Button>
+  return (
+    <section className="grid gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="m-0 text-2xl font-semibold text-foreground">Freight Invoice Listing</h1>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Create and manage invoices for confirmed freight jobs.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" onClick={() => void loadRows()} disabled={loading}><RefreshCw size={15} /> Refresh</Button>
+          <Button type="button" onClick={openNew}><Plus size={15} /> Create Invoice</Button>
         </div>
       </div>
 
@@ -343,9 +326,8 @@ export function FreightInvoicePage() {
         searchValue={query}
         onSearchChange={setQuery}
         searchPlaceholder="Search invoice, principal, job..."
-        title={`${rows.length} Freight Invoices`}
-        subtitle="Invoice register"
-        height="calc(100vh - 340px)"
+        subtitle="Invoices"
+        height="calc(100vh - 260px)"
         minWidth={1100}
         density="grid"
         enablePagination
@@ -353,20 +335,35 @@ export function FreightInvoicePage() {
         enableExport
         exportFilename="freight-invoice-list.csv"
         getRowId={(row, index) => text(row.invoice_no) || String(index)}
-        onRowClick={(row) => void openExisting(row)}
       />
 
+      {editorOpen && (
+        <InvoiceForm
+          mode="freight"
+          existingData={editorMode === "add" ? undefined : form as unknown as Record<string, unknown>}
+          viewMode={readOnly}
+          onClose={(shouldRefetch) => {
+            setEditorOpen(false);
+            setPrintDialogOpen(false);
+            if (shouldRefetch) void loadRows();
+          }}
+        />
+      )}
+
       <Dialog
-        open={editorOpen}
+        open={false}
         wide
-        title={readOnly ? "View Freight Invoice" : "Add Freight Invoice"}
-        description={readOnly ? form.invoice_no : "Select confirmed Freight service lines and create an invoice."}
-        onClose={() => setEditorOpen(false)}
+        title={readOnly ? "View Freight Invoice" : editorMode === "edit" ? "Edit Freight Invoice" : "Create Freight Invoice"}
+        description={form.invoice_no || "Select confirmed freight service lines and create an invoice."}
+        onClose={() => { setEditorOpen(false); setPrintDialogOpen(false); }}
         footer={
-          <>
-            <Button type="button" variant="outline" onClick={() => setEditorOpen(false)}>Close</Button>
+          <div className="flex w-full items-center justify-between">
+            {form.invoice_no ? <Button type="button" variant="outline" onClick={() => setPrintDialogOpen(true)}><Printer size={14} /> Print</Button> : <span />}
+            <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" onClick={() => { setEditorOpen(false); setPrintDialogOpen(false); }}>{readOnly ? "Close" : "Cancel"}</Button>
             {!readOnly && <Button type="button" onClick={() => void saveInvoice()} disabled={saving || !selectedRows.length}><Save size={14} />{saving ? "Saving" : "Save Invoice"}</Button>}
-          </>
+            </div>
+          </div>
         }
       >
         <div className="grid gap-3">
@@ -498,6 +495,16 @@ export function FreightInvoicePage() {
           </div>
         </div>
       </Dialog>
+
+      {printDialogOpen && (
+        <Dialog open compact title="Print Invoice" onClose={() => setPrintDialogOpen(false)}>
+          <div className="grid gap-3 py-1">
+            <p className="m-0 text-sm text-muted-foreground">Choose how you want the invoice report to be generated.</p>
+            <Button type="button" variant="outline" className="justify-start" onClick={() => void printInvoice("grouped")}><Printer size={15} /> Grouped — summary by activity groups</Button>
+            <Button type="button" variant="outline" className="justify-start" onClick={() => void printInvoice("activitywise")}><Printer size={15} /> Activity-wise — detailed activity breakdown</Button>
+          </div>
+        </Dialog>
+      )}
     </section>
   );
 
@@ -591,12 +598,6 @@ function centered(value: string) {
 
 function principalText(form: InvoiceFormState) {
   return [form.prin_code, form.prin_name].filter(Boolean).join(" - ") || "Select a job line";
-}
-
-function statusChip(status: string) {
-  const label = status === "Y" || status === "A" ? "Approved" : status === "C" ? "Cancelled" : "Open";
-  const color = status === "Y" || status === "A" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : status === "C" ? "border-red-200 bg-red-50 text-red-700" : "border-amber-200 bg-amber-50 text-amber-700";
-  return <span className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-semibold ${color}`}>{label}</span>;
 }
 
 export default FreightInvoicePage;

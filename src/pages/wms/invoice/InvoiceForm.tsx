@@ -18,11 +18,14 @@ import {
 import JobSelectionModal from "./JobSelectionModal";
 import StorageSelectionModal from "./StorageSelectionModal";
 import { executeWmsInboundSql, getInvocieDetailReport } from "../../../api/wms";
+import { api } from "../../../api/client";
+import { freightSelect } from "../../../api/freight";
 // import { set } from "react-datepicker/dist/dist/date_utils.js";
 
 type InvoiceFormProps = {
   existingData?: Record<string, unknown>;
   viewMode?: boolean;
+  mode?: "wms" | "freight";
   onClose: (shouldRefetch?: boolean) => void;
 };
 
@@ -134,9 +137,10 @@ function FieldGrid({ fields, invoice, onChange, disabled }: {
   );
 }
 
-export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProps) {
+export function InvoiceForm({ existingData, viewMode, mode = "wms", onClose }: InvoiceFormProps) {
   const { user } = useAuth();
   const company_code = user?.company_code ?? "";
+  const isFreight = mode === "freight";
 
   /* ================= STATE ================= */
   const [tab, setTab] = useState<0 | 1>(0);
@@ -165,12 +169,13 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
   // Jobs already added to the invoice (Job Details grid) — passed to JobSelectionModal
   // so it can exclude them from the pickable list instead of showing duplicates.
   const existingJobKeys = useMemo(
-    () => lines.map((row) => `${String(row.job_no ?? "").trim()}||${String(row.act_code ?? "").trim()}`),
+    () => lines.map(sourceActivityKey),
     [lines],
   );
 
   /* ================= EFFECTS ================= */
   useEffect(() => {
+    if (isFreight) return;
     if (!user?.loginid || !user?.company_code || !prinCode) return;
     (async () => {
       try {
@@ -185,12 +190,33 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
         setLines([]);
       }
     })();
-  }, [prinCode, invoiceNo, user?.loginid, user?.company_code]);
+  }, [isFreight, prinCode, invoiceNo, user?.loginid, user?.company_code]);
+
+  useEffect(() => {
+    if (!isFreight || !invoiceNo || !user?.company_code) return;
+    (async () => {
+      try {
+        const response = await api.post("/api/freight/invoice/get", {
+          company_code: user.company_code,
+          invoice_no: invoiceNo,
+        });
+        const payload = (response.data as any)?.data || {};
+        const header = normalizeKeys(payload.header || existingData || {});
+        const jobs = (Array.isArray(payload.jobSelection) ? payload.jobSelection : []).map(normalizeKeys);
+        setInvoice(header);
+        setLines(jobs);
+        setJobSelectionRows(jobs.map((row: any) => ({ ...row, source_srno: row.srno })));
+      } catch {
+        setWarning("Unable to load freight invoice details.");
+      }
+    })();
+  }, [isFreight, invoiceNo, user?.company_code]);
 
   // Re-seed jobSelectionRows from jobs already linked to this invoice (SELECTED = 'Y')
   // so an edit-and-save (without touching "Select Job") still re-sends them — otherwise
   // jobSelection stays empty for existing invoices even though Job Details shows rows.
   useEffect(() => {
+    if (isFreight) return;
     if (!user?.loginid || !user?.company_code || !prinCode || !invoiceNo) return;
     (async () => {
       try {
@@ -232,7 +258,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
     // Only re-run on invoice identity change — new picks via the modal are appended
     // separately in handleJobSelect and shouldn't be wiped out by this effect re-firing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prinCode, invoiceNo, user?.loginid, user?.company_code]);
+  }, [isFreight, prinCode, invoiceNo, user?.loginid, user?.company_code]);
 
   /* ================= HANDLERS ================= */
   const setField = (key: string, value: string) => {
@@ -243,18 +269,28 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
     const map: Record<string, any> = {};
     lines.forEach((row) => {
       const key = row.activity || "";
-      if (!map[key]) map[key] = { ...row };
-      else map[key].quantity += Number(row.quantity || 0);
+      if (!map[key]) {
+        map[key] = {
+          ...row,
+          total_cost: Number(row.total_cost ?? row.TOTAL_COST ?? 0),
+          total_bill: Number(row.bill ?? row.BILL ?? 0),
+        };
+      } else {
+        map[key].quantity += Number(row.quantity || 0);
+        map[key].total_cost += Number(row.total_cost ?? row.TOTAL_COST ?? 0);
+        map[key].total_bill += Number(row.bill ?? row.BILL ?? 0);
+      }
       map[key].cost_rate = Number(row.cost_rate || 0);
       map[key].bill_rate = Number(row.bill_rate || 0);
     });
     return Object.values(map).map((row: any, idx) => ({
       ...row,
       srno: idx + 1,
-      cost_amount: (row.quantity || 0) * (row.cost_rate || 0),
-      bill_amount: (row.quantity || 0) * (row.bill_rate || 0),
+      cost_rate: isFreight ? row.total_cost : row.cost_rate,
+      cost_amount: isFreight ? row.total_cost : (row.quantity || 0) * (row.cost_rate || 0),
+      bill_amount: isFreight ? row.total_bill : (row.quantity || 0) * (row.bill_rate || 0),
     }));
-  }, [lines]);
+  }, [isFreight, lines]);
 
   // Storage rows ALWAYS collapse into ONE summary row — total qty, total amount
   const aggregatedStorage = useMemo(() => {
@@ -276,7 +312,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
 
   const handleJobSelect = (selectedJobs: any[]) => {
     const existingKeys = new Set(
-      lines.map((row) => `${String(row.job_no ?? "").trim()}||${String(row.act_code ?? "").trim()}`),
+      lines.map(sourceActivityKey),
     );
     const duplicates: string[] = [];
     const newLines: any[] = [];
@@ -285,7 +321,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
     selectedJobs.forEach((job) => {
       const jobNo = String(job.job_no ?? job.JOB_NO ?? "").trim();
       const actCode = String(job.act_code ?? job.ACT_CODE ?? "").trim();
-      const key = `${jobNo}||${actCode}`;
+      const key = sourceActivityKey(job);
       if (existingKeys.has(key)) {
         duplicates.push(`Job No: ${jobNo}, Act Code: ${actCode}`);
         return;
@@ -293,6 +329,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
       existingKeys.add(key);
 
       const line = {
+        company_code: job.company_code ?? job.COMPANY_CODE ?? user?.company_code ?? "",
         srno: lines.length + newLines.length + 1, // local UI display order for this invoice's grid
         act_code: actCode,
         act_group_name: job.act_group_name ?? job.ACT_GROUP_NAME ?? "",
@@ -304,6 +341,14 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
         bill_rate: Number(job.bill_rate ?? job.BILL_RATE ?? 0),
         cost_rate: Number(job.cost_rate ?? job.COST_RATE ?? 0),
         actual_cost: Number(job.actual_cost ?? job.ACTUAL_COST ?? 0),
+        partners_price: Number(job.partners_price ?? job.PARTNERS_PRICE ?? 0),
+        transport_price: Number(job.transport_price ?? job.TRANSPORT_PRICE ?? 0),
+        total_cost: Number(
+          job.total_cost ?? job.TOTAL_COST ??
+          (Number(job.actual_cost ?? job.ACTUAL_COST ?? 0)
+            + Number(job.partners_price ?? job.PARTNERS_PRICE ?? 0)
+            + Number(job.transport_price ?? job.TRANSPORT_PRICE ?? 0)),
+        ),
         quantity: Number(job.quantity ?? job.QUANTITY ?? 1),
         other_services: job.other_services ?? "",
         job_date: job.job_date ?? job.JOB_DATE ?? null,
@@ -337,6 +382,10 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
         const quantity = Number(row.quantity || 0);
         const billRate = Number(row.bill_rate || 0);
         const costRate = Number(row.cost_rate || 0);
+        const freightCost = Number(
+          row.total_cost ?? row.TOTAL_COST ??
+          (Number(row.actual_cost || 0) + Number(row.partners_price || 0) + Number(row.transport_price || 0)),
+        );
         return {
           ...row,
           srno: index + 1,
@@ -345,9 +394,10 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
           job_no: row.job_no ?? "",
           quantity,
           bill_rate: billRate,
-          cost_rate: costRate,
-          bill_amount: quantity * billRate,
-          cost_amount: quantity * costRate,
+          cost_rate: isFreight ? freightCost : costRate,
+          bill_amount: isFreight ? Number(row.bill || 0) : quantity * billRate,
+          cost_amount: isFreight ? freightCost : quantity * costRate,
+          total_cost: freightCost,
         };
       });
 
@@ -397,12 +447,33 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
         INV_DESC2: getValue(invoice, "inv_desc2") ?? "",
       }));
 
-      const result = await updateBillingApi({
-        invoiceHeader,
-        invoiceDetails,
-        storageSelection,
-        jobSelection,
-      });
+      const result = isFreight
+        ? (await api.post("/api/freight/invoice/save", {
+            company_code: user?.company_code,
+            user_id: user?.loginid,
+            invoiceHeader: invoiceHeader.map((row) => ({
+              ...row,
+              cust_code: getValue(row, "cust_code") || prinCode,
+              inv_to: getValue(row, "inv_to") || prinCode,
+              inv_status: getValue(row, "inv_status") || "N",
+              job_no: (() => {
+                const jobs = [...new Set(lines.map((line) => String(line.job_no || "").trim()).filter(Boolean))];
+                return jobs.length === 1 ? jobs[0] : "";
+              })(),
+              inv_desc1: getValue(row, "inv_desc1") || "",
+              inv_desc2: getValue(row, "inv_desc2") || "",
+              inv_amount: jobLineRows.reduce((sum, line: any) => sum + Number(line.bill ?? line.bill_amount ?? 0), 0),
+            })),
+            invoiceDetails: jobLineRows.map((row: any) => ({
+              ...row,
+              cost: row.total_cost ?? row.cost_amount ?? 0,
+              cost_rate: row.total_cost ?? row.cost_rate ?? 0,
+              bill: row.bill ?? row.bill_amount ?? 0,
+              inv_desc: row.activity ?? "",
+            })),
+            jobSelection,
+          })).data
+        : await updateBillingApi({ invoiceHeader, invoiceDetails, storageSelection, jobSelection });
       if (result.success) onClose(true);
       else setWarning(result.message);
     } catch (err) {
@@ -474,7 +545,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
     <Dialog
       open
       wide
-      title={viewMode ? "View Invoice" : existingData ? "Edit Invoice" : "Create Invoice"}
+      title={`${viewMode ? "View" : existingData ? "Edit" : "Create"}${isFreight ? " Freight" : ""} Invoice`}
       onClose={() => onClose(false)}
       contentClassName="max-h-[90vh] w-[min(96vw,1200px)]"
       footer={
@@ -545,11 +616,14 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
                     columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }]}
                     valueField="prin_code"
                     displayFields={["prin_code", "prin_name"]}
-                    loadOptions={() => getPrincipalDropdown(user?.company_code ?? "", user?.loginid ?? "")}
+                    loadOptions={(search) => isFreight
+                      ? loadFreightPrincipals(user?.company_code ?? "", search)
+                      : getPrincipalDropdown(user?.company_code ?? "", user?.loginid ?? "")}
                     onChange={(value, row) => {
                       setInvoice((prev: any) => ({
                         ...prev,
                         prin_code: value,
+                        ...(isFreight ? { cust_code: value, inv_to: value } : {}),
                         curr_code: row ? (getValue(row, "curr_code") ?? "") : "",
                       }));
                     }}
@@ -649,7 +723,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
           </div>
 
           {/* Storage Details — ALWAYS ONE aggregated row, never multiple */}
-          <div className="grid gap-2">
+          {!isFreight && <div className="grid gap-2">
             <p className="m-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Storage Details</p>
             <div className="max-h-[280px] overflow-auto rounded-md border">
               <Table>
@@ -683,16 +757,16 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
                 </TableBody>
               </Table>
             </div>
-          </div>
+          </div>}
 
           {/* Select Job / Select Storage — side by side, left aligned */}
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setJobModalOpen(true)} disabled={viewMode || !prinCode}>
               Select Job
             </Button>
-            <Button variant="outline" onClick={() => setStorageModalOpen(true)} disabled={viewMode || !prinCode}>
+            {!isFreight && <Button variant="outline" onClick={() => setStorageModalOpen(true)} disabled={viewMode || !prinCode}>
               <Package size={14} /> Select Storage
-            </Button>
+            </Button>}
           </div>
         </div>
       )}
@@ -704,12 +778,14 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
           fromDate={fromDate}
           toDate={toDate}
           existingKeys={existingJobKeys}
+          loadJobs={isFreight ? loadFreightJobs : undefined}
+          useFreightCost={isFreight}
           onClose={() => setJobModalOpen(false)}
           onSelect={handleJobSelect}
         />
       )}
 
-      {storageModalOpen && (
+      {!isFreight && storageModalOpen && (
         <StorageSelectionModal
           prinCode={prinCode}
           consolidatedInvNo={consolidatedInvNo}
@@ -766,6 +842,43 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
       )}
     </Dialog>
   );
+}
+
+function sourceActivityKey(row: any) {
+  return [
+    row.company_code ?? row.COMPANY_CODE ?? "",
+    row.invoice_no ?? row.INVOICE_NO ?? "",
+    row.prin_code ?? row.PRIN_CODE ?? "",
+    row.job_no ?? row.JOB_NO ?? "",
+    row.source_srno ?? row.srno ?? row.SRNO ?? "",
+    row.act_code ?? row.ACT_CODE ?? "",
+  ].map((value) => String(value ?? "").trim()).join("||");
+}
+
+function normalizeKeys(row: Record<string, unknown>) {
+  const next: Record<string, unknown> = { ...row };
+  Object.entries(row).forEach(([key, value]) => { next[key.toLowerCase()] = value; });
+  return next;
+}
+
+async function loadFreightPrincipals(companyCode: string, search?: string) {
+  const rows = await freightSelect<Record<string, unknown>>({
+    parameter: "freight_principal",
+    code1: companyCode,
+    code2: search?.trim() || "NULL",
+  });
+  return rows.map(normalizeKeys) as any;
+}
+
+async function loadFreightJobs(params: {
+  company_code: string;
+  prin_code: string;
+  invoice_no?: string;
+  from_date?: string;
+  to_date?: string;
+}) {
+  const response = await api.post("/api/freight/invoice/job-selection", params);
+  return ((response.data as any)?.data || []).map(normalizeKeys);
 }
 
 export default InvoiceForm;
