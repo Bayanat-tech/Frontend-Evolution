@@ -31,7 +31,7 @@ type SheetState = {
 export function FreightJobSheetPage({
   target,
   initialJob = null,
-  readOnly = false,
+  readOnly: _readOnly = false,
   onEmbeddedActionsChange,
   onEmbeddedList,
 }: {
@@ -41,6 +41,7 @@ export function FreightJobSheetPage({
   onEmbeddedActionsChange?: (actions: ReactNode | null) => void;
   onEmbeddedList?: () => void;
 }) {
+  const readOnly = true;
   const { user } = useAuth();
   const { toast } = useToast();
   const userRecord = (user || {}) as Record<string, unknown>;
