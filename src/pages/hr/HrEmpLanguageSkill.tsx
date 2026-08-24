@@ -23,16 +23,7 @@ type EmployeeOption = { employee_id: string;  employee_name: string };
 type LanguageOption = { lang_code: string;    lang_desc: string };
 type StatusOption   = { value_code: string;   value_desc: string };
 
-// FIX: WMSTST.HR_EMP_LANGUAGES_OBJ.TO_READ / TO_WRITE / TO_SPEAK are
-// VARCHAR2(1) columns in Oracle (confirmed via NJS-142 error: "value too
-// large for attribute TO_READ ... maximum: 1"). The grid must display full
-// proficiency labels to the user but SEND only the single-char code to the
-// backend. `code` here is what gets saved to Oracle; `label` is what shows
-// in the dropdown.
-//
-// NOTE: codes below (B/I/F/E) are a best guess. Confirm against your actual
-// HR_CODE_VALUES / business standard and adjust if the DB expects different
-// single-char codes (e.g. a different letter set for read/write/speak scale).
+
 const PROFICIENCY_OPTIONS: { code: string; label: string }[] = [
   { code: "B", label: "Basic" },
   { code: "I", label: "Intermediate" },
@@ -42,13 +33,6 @@ const PROFICIENCY_OPTIONS: { code: string; label: string }[] = [
 
 type LangRow = {
   _rowId:        string;
-  // FIX: same reasoning as HrEmpEducationPage — rows loaded from the API are
-  // "persisted". Removing one of these from the grid must not simply drop it
-  // from local state, because the save payload would then omit it and the
-  // backend (an upsert API) would never know to delete/deactivate it.
-  // Persisted rows that get "removed" are kept in state with status_flag
-  // flipped to "D" and sent to the server on save, then dropped from the
-  // grid afterwards.
   _isPersisted:  boolean;
   lang_code:     string;
   lang_desc:     string;
@@ -155,11 +139,7 @@ export function HrEmpLanguagePage() {
   const { user }    = useAuth();
   const queryClient = useQueryClient();
   const loginid     = user?.loginid      ?? "";
-  // FIX: company_code is intentionally NOT rendered anywhere in the UI
-  // (per requirement — the image's Company field is dropped). It is still
-  // required by every backend query, so it's read silently from the
-  // authenticated user and threaded through buildParams()/save exactly like
-  // before.
+
   const companyCode = user?.company_code ?? "";
 
   // ── Filter state ───────────────────────────────────────────────────────────
@@ -168,20 +148,14 @@ export function HrEmpLanguagePage() {
   const [section,    setSection]    = useState<SectionOption  | null>(null);
   const [employee,   setEmployee]   = useState<EmployeeOption | null>(null);
 
-  // FIX: bumping this remounts every LookupField below (via `key`), forcing
-  // each one to re-run its loadOptions from scratch — this is what makes
-  // "Refresh" restore the page to its just-opened state rather than just
-  // re-fetching the currently selected employee's grid data.
+  
   const [resetKey, setResetKey] = useState(0);
 
   // ── Grid / notice state ────────────────────────────────────────────────────
   const [rows,   setRows]   = useState<LangRow[]>([]);
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  // FIX: guards against the post-save refetch clobbering rows the user just
-  // edited/deleted locally. Scoped to the employee_id the skip applies to
-  // (not a bare boolean) so switching employees before the post-save refetch
-  // fires doesn't swallow a different employee's legitimate hydration.
+ 
   const skipHydrateForEmployeeRef = useRef<string | null>(null);
 
   // ── Master data — languages + status ───────────────────────────────────────
@@ -196,8 +170,7 @@ export function HrEmpLanguagePage() {
     },
   });
 
-  // Status : SELECT VALUE_DESC, VALUE_CODE FROM HR_CODE_VALUES
-  //          WHERE GROUP_CODE = 6 AND STATUS = 'A' ORDER BY SORT_ORDER ASC
+  
   const { data: statusOpts = [] } = useQuery<StatusOption[]>({
     queryKey: ["hr-language-status", companyCode],
     staleTime: 10 * 60 * 1000,
@@ -209,11 +182,7 @@ export function HrEmpLanguagePage() {
     },
   });
 
-  // ── Employee language data ──────────────────────────────────────────────────
-  // SELECT EMPLOYEE_ID, LANG_CODE, TO_READ, TO_WRITE, TO_SPEAK, REMARKS,
-  //        STATUS_FLAG, USER_ID, USER_DT, COMPANY_CODE
-  // FROM HR_EMP_LANGUAGES
-  // WHERE COMPANY_CODE = :as_companycode AND EMPLOYEE_ID = :as_employee_id
+ 
   const langQuery = useQuery({
     queryKey: ["language-data", employee?.employee_id],
     enabled:  !!employee?.employee_id,
@@ -262,11 +231,7 @@ export function HrEmpLanguagePage() {
     },
   });
 
-  // ── Cascade resets ─────────────────────────────────────────────────────────
-  // NOTE: this is the OTHER half of the cascade (clearing children when a
-  // parent changes). The `key` props below (which embed each parent's
-  // current code) are what force a fresh remount + refetch on every field —
-  // matching HrEmpEducationPage's current (no `disabled`) structure exactly.
+ 
   useEffect(() => {
     setDepartment(null);
     setSection(null);
@@ -315,12 +280,7 @@ export function HrEmpLanguagePage() {
     [],
   );
 
-  // FIX: deleteRow doesn't just filter the row out of state.
-  // - Unpersisted (new) rows are dropped entirely.
-  // - Persisted rows are marked status_flag "D" but kept in state so the
-  //   next save payload carries them — the backend needs to know they were
-  //   removed, otherwise they stay in the DB and reappear on refetch. They
-  //   are hidden from the visible grid via `visibleRows` below.
+  
   const deleteRow = useCallback((rowId: string) => {
     setRows((prev) =>
       prev
@@ -333,8 +293,7 @@ export function HrEmpLanguagePage() {
     );
   }, []);
 
-  // FIX: rows marked for deletion stay in `rows` (so save can send them) but
-  // are hidden from the visible grid the user interacts with.
+ 
   const visibleRows = useMemo(
     () => rows.filter((r) => r.status_flag !== "D"),
     [rows],
@@ -452,15 +411,12 @@ export function HrEmpLanguagePage() {
   const mutation = useMutation({
     mutationFn: async () => {
       if (!employee?.employee_id) throw new Error("Please select an employee");
-      // FIX: validate against visible (non-deleted) rows, not the raw `rows`
-      // array, since `rows` may contain status_flag "D" entries pending
-      // deletion that shouldn't block saving an otherwise-empty grid.
+     
       if (visibleRows.length === 0 && rows.every((r) => r.status_flag === "D")) {
         throw new Error("Add at least one language record");
       }
 
-      // FIX: send ALL rows, including ones marked status_flag "D", so the
-      // backend can actually remove/deactivate the records the user deleted.
+      
       const language_details = rows.map((r) => ({
         employee_id:  employee.employee_id,
         lang_code:    r.lang_code,
@@ -484,18 +440,14 @@ export function HrEmpLanguagePage() {
     onSuccess: () => {
       setNotice({ type: "success", message: "Language details saved successfully." });
 
-      // FIX: drop rows we just told the server to delete, and mark the
-      // remaining rows as persisted (they now exist server-side too).
+     
       setRows((prev) =>
         prev
           .filter((r) => r.status_flag !== "D")
           .map((r) => ({ ...r, _isPersisted: true })),
       );
 
-      // FIX: tell the next language-data fetch FOR THIS SPECIFIC EMPLOYEE to
-      // skip re-hydrating `rows` from the server response — we already have
-      // the correct local state. Scoping to employee_id (instead of a bare
-      // boolean) prevents it from swallowing a different employee's fetch.
+     
       skipHydrateForEmployeeRef.current = employee?.employee_id ?? null;
       queryClient.invalidateQueries({ queryKey: ["language-data", employee?.employee_id] });
     },
@@ -513,8 +465,6 @@ export function HrEmpLanguagePage() {
     [loginid, companyCode],
   );
 
-  // Department: scoped by Division when one is picked. Empty div_code =>
-  // all departments for the company (EDUCATION_QUALIFICATION_DEPARTMENT_DEPTCODE).
   const loadDepartments = useCallback(
     () =>
       getDynamicLookup(
@@ -528,60 +478,45 @@ export function HrEmpLanguagePage() {
     [loginid, companyCode, division?.div_code],
   );
 
-  // Section: same shape as HrEmpEducationPage's loadSections — code2 =
-  // DIV_CODE (optional), code3 = DEPT_CODE (optional). No `disabled` gate,
-  // matching Education's current structure — the field is always clickable,
-  // and the `key` below (embedding division + department codes) forces a
-  // remount + fresh fetch whenever a parent filter changes.
   const loadSections = useCallback(
-    () =>
-      getDynamicLookup(
-        buildParams(
-          "EDUCATION_QUALIFICATION_MS_HR_SECTION",
-          loginid,
-          companyCode,
-          division?.div_code    ?? "", // code2 — DIV_CODE  (optional)
-          department?.dept_code ?? "", // code3 — DEPT_CODE (optional)
-        ),
+  () =>
+    getDynamicLookup(
+      buildParams(
+        "EDUCATION_QUALIFICATION_MS_HR_SECTION",
+        loginid,
+        companyCode,
+        division?.div_code ?? "",
+        department?.dept_code ?? "",
       ),
-    [loginid, companyCode, division?.div_code, department?.dept_code],
-  );
+    ),
+  [
+    loginid,
+    companyCode,
+    division?.div_code,
+    department?.dept_code,
+  ],
+);
 
-  // Employee: same shape as HrEmpEducationPage's loadEmployees — no
-  // `disabled` gate, `key` embeds every parent code so any upstream change
-  // forces a remount + fresh fetch.
-  //
-  // NOTE: code slot order intentionally differs from Education's employee
-  // loader. Education's stored-proc branch treats DIV_CODE/DEPT_CODE/
-  // SECTION_CODE as fully optional (OR-empty pattern), so any slot order
-  // works there. Language's stored-proc branch
-  // (EDUCATION_QUALIFICATION_LANG_EMPLOYEE_LIST) has DEPT_CODE as a
-  // mandatory hard equality on P_CODE2 — so department must stay in the
-  // code2 slot here, or the query silently returns zero rows whenever
-  // department is empty. To get identical code-slot ordering to Education
-  // too, the backend proc's WHERE clause needs DEPT_CODE wrapped in the
-  // same optional OR-pattern used for DIV_CODE/SECTION_CODE first.
   const loadEmployees = useCallback(
-    () =>
-      getDynamicLookup(
-        buildParams(
-          "EDUCATION_QUALIFICATION_HR_EMPLOYEE_LIST_WITH_MANAGER",
-          loginid,
-          companyCode,
-          department?.dept_code ?? "", // code2 — DEPT_CODE (mandatory in proc)
-          division?.div_code    ?? "", // code3 — DIV_CODE  (optional)
-          section?.section_code ?? "", // code4 — SECTION_CODE (optional)
-        ),
+  () =>
+    getDynamicLookup(
+      buildParams(
+        "EDUCATION_QUALIFICATION_HR_EMPLOYEE_LIST_WITH_MANAGER",
+        loginid,
+        companyCode,
+        division?.div_code ?? "",      // code2 = DIVISION
+        department?.dept_code ?? "",   // code3 = DEPARTMENT
+        section?.section_code ?? "",   // code4 = SECTION
       ),
-    [
-      loginid,
-      companyCode,
-      department?.dept_code,
-      division?.div_code,
-      section?.section_code,
-    ],
-  );
-
+    ),
+  [
+    loginid,
+    companyCode,
+    division?.div_code,
+    department?.dept_code,
+    section?.section_code,
+  ],
+);
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <section className="grid gap-4">
@@ -600,24 +535,19 @@ export function HrEmpLanguagePage() {
           <Button
             variant="outline"
             onClick={() => {
-              // Reset all filters and grid state back to how the page
-              // looked when it was first opened.
+              
               setDivision(null);
               setDepartment(null);
               setSection(null);
               setEmployee(null);
               setRows([]);
               setNotice(null);
-              // Force every LookupField to remount so it reloads its option
-              // list fresh instead of showing a stale cached list.
+             
               setResetKey((k) => k + 1);
-              // Refresh master dropdown data (languages / status).
+              
               void queryClient.invalidateQueries({ queryKey: ["hr-language", companyCode] });
               void queryClient.invalidateQueries({ queryKey: ["hr-language-status", companyCode] });
-              // Fully remove any cached language-data results (for every
-              // employee, not just the currently selected one) so
-              // re-selecting an employee after Refresh always triggers a
-              // genuine fresh fetch instead of reusing a previous result.
+              
               queryClient.removeQueries({
                 predicate: (query) => query.queryKey[0] === "language-data",
               });
@@ -632,9 +562,7 @@ export function HrEmpLanguagePage() {
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
       {/* ── Filter Bar ───────────────────────────────────────────────────── */}
-      {/* NOTE: Company field intentionally omitted from the UI — companyCode
-          is still read from the authenticated user and passed to every API
-          call under the hood. */}
+      
       <Card>
         <CardHeader>
           <div>
@@ -698,43 +626,41 @@ export function HrEmpLanguagePage() {
             />
           </label>
 
-          {/* Section — key includes division.div_code + department.dept_code:
-              any change up the chain forces a remount, so loadSections()
-              always runs fresh and scoped correctly. Matches Education's
-              current (no `disabled`) structure. */}
+          
           <label className="field">
-            <span>Section</span>
-            <LookupField
-              key={`section-${resetKey}-${division?.div_code ?? ""}-${department?.dept_code ?? ""}`}
-              compact
-              label="Section"
-              value={section?.section_code ?? ""}
-              displayValue={section ? `${section.section_code} - ${section.section_name}` : ""}
-              columns={[
-                { field: "section_code", header: "Code"    },
-                { field: "section_name", header: "Section" },
-              ]}
-              valueField="section_code"
-              displayFields={["section_code", "section_name"]}
-              loadOptions={loadSections}
-              onChange={(_, row) => {
-                setSection(
-                  row
-                    ? {
-                        section_code: String(row.section_code ?? ""),
-                        section_name: String(row.section_name ?? ""),
-                      }
-                    : null,
-                );
-              }}
-            />
-          </label>
+  <span>Section</span>
 
-          {/* Employee — key includes department.dept_code + division.div_code
-              + section.section_code: any change up the chain forces a
-              remount, so loadEmployees() always runs fresh and scoped
-              correctly. Matches Education's current (no `disabled`)
-              structure. */}
+  <LookupField
+    key={`section-${resetKey}-${division?.div_code ?? ""}-${department?.dept_code ?? ""}`}
+    compact
+    label="Section"
+    value={section?.section_code ?? ""}
+    displayValue={
+      section
+        ? `${section.section_code} - ${section.section_name}`
+        : ""
+    }
+    columns={[
+      { field: "section_code", header: "Code" },
+      { field: "section_name", header: "Section" },
+    ]}
+    valueField="section_code"
+    displayFields={["section_code", "section_name"]}
+    loadOptions={loadSections}
+    onChange={(_, row) => {
+      setSection(
+        row
+          ? {
+              section_code: String(row.section_code ?? ""),
+              section_name: String(row.section_name ?? ""),
+            }
+          : null
+      );
+    }}
+  />
+</label>
+
+          
           <label className="field">
             <span>
               Employee <strong className="text-destructive">*</strong>
@@ -779,9 +705,7 @@ export function HrEmpLanguagePage() {
       {/* ── Language Grid ────────────────────────────────────────────────── */}
       <DataTable
         columns={columns}
-        // Renders only visibleRows (excludes rows pending deletion) so a
-        // removed row stays gone from the UI, while the underlying `rows`
-        // state still carries it (status_flag "D") for the save call.
+       
         data={visibleRows}
         title={`${visibleRows.length} Record${visibleRows.length !== 1 ? "s" : ""}`}
         subtitle="Language Records"
