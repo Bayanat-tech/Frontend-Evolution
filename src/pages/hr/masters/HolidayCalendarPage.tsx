@@ -38,6 +38,13 @@ function sqlEscape(value: string) {
   return value.replace(/'/g, "''");
 }
 
+function formatHolidayDate(value: string | null) {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
 function buildHolidayCalendarQuery(params: {
   companyCode: string;
   startYear: string;
@@ -105,10 +112,12 @@ function buildGenerateCalendarBlock(params: {
 // TODO: same caveat — confirm the real update proc/endpoint. A client-built UPDATE per row
 // is fine for a first pass consistent with this file's existing style, but this should move
 // behind a proper API route so you're not shipping raw SQL from the browser long-term.
-function buildUpdateHolidayTypeQuery(row: HolidayRow) {
+function buildUpdateHolidayRowQuery(row: HolidayRow) {
   return `
     UPDATE "MS_HR_HOLIDAYCALENDAR"
-    SET "HOLIDAY_TYPE" = '${sqlEscape(row.HOLIDAY_TYPE ?? "")}'
+    SET "HOLIDAY_TYPE" = '${sqlEscape(row.HOLIDAY_TYPE ?? "")}',
+        "HOLIDAY_REASON" = '${sqlEscape(row.HOLIDAY_REASON ?? "")}',
+        "REMARKS" = '${sqlEscape(row.REMARKS ?? "")}'
     WHERE "DATEID" = '${sqlEscape(row.DATEID)}'
   `;
 }
@@ -200,6 +209,14 @@ export default function HolidayCalendarPage() {
     setDirtyDateIds((prev) => new Set(prev).add(dateId));
   }, []);
 
+  const handleFieldChange = useCallback(
+    (dateId: string, field: "HOLIDAY_REASON" | "REMARKS", value: string) => {
+      setRows((prev) => prev.map((r) => (r.DATEID === dateId ? { ...r, [field]: value } : r)));
+      setDirtyDateIds((prev) => new Set(prev).add(dateId));
+    },
+    [],
+  );
+
   const handleSaveChanges = useCallback(async () => {
     const dirtyRows = rows.filter((r) => dirtyDateIds.has(r.DATEID));
     if (dirtyRows.length === 0) return;
@@ -207,7 +224,7 @@ export default function HolidayCalendarPage() {
     setError("");
     try {
       for (const row of dirtyRows) {
-        await executeWmsInboundSql(buildUpdateHolidayTypeQuery(row));
+        await executeWmsInboundSql(buildUpdateHolidayRowQuery(row));
       }
       setDirtyDateIds(new Set());
     } catch (err) {
@@ -219,8 +236,23 @@ export default function HolidayCalendarPage() {
 
   const columns = useMemo<ColumnDef<HolidayRow>[]>(
     () => [
-      { accessorKey: "HOLIDAY_DATE", header: "Date" },
-      { accessorKey: "HOLIDAY_REASON", header: "Holiday Reason" },
+      {
+        accessorKey: "HOLIDAY_DATE",
+        header: "Date",
+        cell: ({ row }) => formatHolidayDate(row.original.HOLIDAY_DATE),
+      },
+      {
+        accessorKey: "HOLIDAY_REASON",
+        header: "Holiday Reason",
+        cell: ({ row }) => (
+          <input
+            type="text"
+            value={row.original.HOLIDAY_REASON ?? ""}
+            onChange={(e) => handleFieldChange(row.original.DATEID, "HOLIDAY_REASON", e.target.value)}
+            className="h-7 w-full rounded-md border border-gray-300 bg-background px-2 text-xs"
+          />
+        ),
+      },
       {
         accessorKey: "HOLIDAY_TYPE",
         header: "Type",
@@ -242,11 +274,22 @@ export default function HolidayCalendarPage() {
           );
         },
       },
-      { accessorKey: "REMARKS", header: "Remarks" },
+      {
+        accessorKey: "REMARKS",
+        header: "Remarks",
+        cell: ({ row }) => (
+          <input
+            type="text"
+            value={row.original.REMARKS ?? ""}
+            onChange={(e) => handleFieldChange(row.original.DATEID, "REMARKS", e.target.value)}
+            className="h-7 w-full rounded-md border border-gray-300 bg-background px-2 text-xs"
+          />
+        ),
+      },
       { accessorKey: "DIV_CODE", header: "Div Code" },
       { accessorKey: "GRADE_CODE", header: "Grade" },
     ],
-    [handleTypeChange],
+    [handleTypeChange, handleFieldChange],
   );
 
   const stats = useMemo(() => {
@@ -258,31 +301,28 @@ export default function HolidayCalendarPage() {
   }, [rows]);
 
   return (
-    <div className="grid gap-4 p-4">
-      {/* Page header */}
-      <div className="flex items-center gap-3">
-        <div className="grid h-11 w-11 place-items-center rounded-xl bg-primary/10 text-primary">
-          <CalendarDays size={22} />
+    <div className="grid gap-2 p-3">
+      {/* Page header — compact, no title */}
+      {/* <div className="flex items-center gap-2">
+        <div className="grid h-8 w-8 place-items-center rounded-lg bg-primary/10 text-primary">
+          <CalendarDays size={16} />
         </div>
-        <div>
-          <h1 className="text-lg font-semibold leading-tight text-foreground">Holiday Calendar</h1>
-          <p className="m-0 text-xs text-muted-foreground">
-            View declared holidays, weekly offs, and working-day exceptions by division and year
-          </p>
-        </div>
-      </div>
+        <p className="m-0 text-xs text-muted-foreground">
+          View declared holidays, weekly offs, and working-day exceptions by division and year
+        </p>
+      </div> */}
 
       {/* Filter card */}
       <div className="overflow-hidden rounded-lg border border-[#aebbd0] bg-card shadow-[0_8px_22px_rgba(15,23,42,0.07)]">
-        <div className="flex items-center gap-2 border-b border-[#c7d2e3] bg-[#f8fbff] px-4 py-3">
-          <SlidersHorizontal size={15} className="text-primary" />
+        <div className="flex items-center gap-2 border-b border-[#c7d2e3] bg-[#f8fbff] px-3 py-2">
+          <SlidersHorizontal size={14} className="text-primary" />
           <div>
             <p className="eyebrow m-0">Filters</p>
             <p className="m-0 text-xs text-muted-foreground">Division, Holiday Type, Grade & Year Range</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 lg:grid-cols-5">
           <LookupField
             label="Division"
             value={divCode}
@@ -348,7 +388,7 @@ export default function HolidayCalendarPage() {
           </label>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-[#c7d2e3] bg-[#fafbfd] px-4 py-3">
+        <div className="flex items-center justify-end gap-2 border-t border-[#c7d2e3] bg-[#fafbfd] px-3 py-2">
           <button
             type="button"
             onClick={handleGenerateCalendar}
