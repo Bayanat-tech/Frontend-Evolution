@@ -380,7 +380,9 @@ export function lineDiscPoPrice(row: PurchaseOrderLineRow) {
 }
 
 export function finalRate(row: PurchaseOrderLineRow) {
-  return row.unit_price * (1 - row.disc_percent / 100);
+  return Number(
+    (row.unit_price * (1 - row.disc_percent / 100)).toFixed(6)
+  );
 }
 
 export function finalPORate(row: PurchaseOrderLineRow) {

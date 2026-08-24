@@ -73,12 +73,16 @@ const TABLE_COLUMN_COUNT = 24;
 
 // Final Rate = Unit Price - (Unit Price * Disc % / 100)  [matches lineNetAmount / "Final Rate" in the sheet]
 function finalRate(row: PurchaseOrderLineRow): number {
-  const price = numberOrZero(row.unit_price);
+  const price =
+    Math.trunc(numberOrZero(row.unit_price) * 1_000_000) / 1_000_000;
 
-  const discPct = numberOrZero(row.disc_percent);
-  return price - (price * discPct) / 100;
+  const discPct =
+    Math.trunc(numberOrZero(row.disc_percent) * 1_000_000) / 1_000_000;
+
+  const rate = price - (price * discPct) / 100;
+
+  return Math.trunc(rate * 1_000_000) / 1_000_000;
 }
-
 // Total Amount (net, post-discount) = Net Qty * Final Rate  [sheet's "Total Amout" column]
 function netTotalAmount(quantity: number, row: PurchaseOrderLineRow): number {
   return quantity * finalRate(row);
@@ -550,7 +554,19 @@ export function PurchaseOrderLinesTable({
                     />
                   </td>
                   <td className="finance-amount-cell w-28 px-2 py-1">
-                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.0001" value={row.unit_price} onChange={(event) => updateRow(row.id, { unit_price: Number(event.target.value || 0) })} />
+                    <Input
+                      className="finance-money-input"
+                      disabled={headerAndLineDisabled}
+                      type="number"
+                      style={{ textAlign: "right" }}
+                      step="0.000001"
+                      value={Number(row.unit_price || 0).toFixed(6)}
+                      onChange={(event) =>
+                        updateRow(row.id, {
+                          unit_price: Number(event.target.value || 0)
+                        })
+                      }
+                    />
                   </td>
                   <td className="finance-amount-cell px-2 py-1 text-right">
                     {formatAmount(quantity)}
@@ -560,7 +576,9 @@ export function PurchaseOrderLinesTable({
                     <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.disc_percent} onChange={(event) => updateRow(row.id, { disc_percent: Number(event.target.value || 0) })} />
                   </td>
                   <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineDiscPrice(row))}</td>
-                  <td className="finance-amount-cell px-2 py-1 text-right">{formatAmount(finalRate(row))}</td>
+                  <td className="finance-amount-cell px-2 py-1 text-right">
+                    {finalRate(row).toFixed(6)}
+                  </td>
                   <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineAmount(row))}</td>
                   <td className="finance-amount-cell w-32 px-2 py-1 text-right">
                     {formatAmount(lcurrAmountValue)}
@@ -668,7 +686,7 @@ export function PurchaseOrderLinesTable({
                   <td className="finance-amount-cell w-32 px-2 py-1 text-right">
                     {formatAmount(taxLcurrAmountValue)}
                   </td>
-                   <td className="finance-amount-cell w-32 px-2 py-1 text-right">
+                  <td className="finance-amount-cell w-32 px-2 py-1 text-right">
                     {formatAmount(LcurrDisAmount(row, ex_rate))}
                   </td>
                   <td className="px-2 py-1">

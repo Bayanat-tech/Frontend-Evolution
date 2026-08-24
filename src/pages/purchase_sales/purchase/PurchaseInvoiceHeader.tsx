@@ -231,7 +231,8 @@ export function PurchaseInvoiceHeaderForm({
                                             porder_tx_compntcat_code_1: text(getLookupValue(item, "porder_tx_compntcat_code_1")),
                                              porder_required_dt: text(getLookupValue(item, "porder_required_dt")),
                                              porder_tx_compnt_1_expmt:text(getLookupValue(item, "porder_tx_compnt_1_expmt")),
-                                             porder_remarks:text(getLookupValue(item, "porder_remarks"))
+                                             porder_remarks:text(getLookupValue(item, "porder_remarks")),
+                                             serial_no: numberOrZero(getLookupValue(item, "serial_no")),
                                             
                                         }));
                                         console.log("Mapped length:", mappedDetails?.length);
