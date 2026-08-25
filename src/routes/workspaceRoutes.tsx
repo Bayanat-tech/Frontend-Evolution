@@ -196,6 +196,7 @@ import HolidayCalendarPage from "../pages/hr/masters/HolidayCalendarPage";
 import LeaveSlapPage from "../pages/hr/LeaveSlab";
 import TravelFare from "../pages/hr/TravelFare";
 import { HrEmpLanguagePage } from "../pages/hr/HrEmpLanguageSkill";
+import ConsolidatePayUnitPage from "../pages/hr/consolidate_pay_unit/ConsolidatePayUnitPage";
 
  type WorkspaceRouteContext = {
   pathname: string;
@@ -216,6 +217,12 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 }
 
 export const workspaceRoutes: WorkspaceRoute[] = [
+  {
+    name : 'HR Consolidate Pay Unit',
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hcm/employee/consolidate_pay_unit"),
+    element: () => <ConsolidatePayUnitPage />,
+  },
+
   {
     name: 'HR Leave Slap Page',
     match: ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/setup/pay%20units/leave_slab"),

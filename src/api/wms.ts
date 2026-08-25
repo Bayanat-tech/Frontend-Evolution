@@ -384,6 +384,8 @@ export const saveFlowAssignLevels = async (
     level3_role?: string;
     level4_role?: string;
     level5_role?: string;
+    level6_role?:string;
+    level7_role?:string;
     last_level: number;
     flow_code?: string;
   }[]
@@ -397,6 +399,8 @@ export const saveFlowAssignLevels = async (
       level3_role: r.level3_role || null,
       level4_role: r.level4_role || null,
       level5_role: r.level5_role || null,
+      level6_role: r.level6_role || null,
+      level7_role: r.level7_role || null,
       last_level: r.last_level,
       flow_code: r.flow_code || "NA",
     })),
