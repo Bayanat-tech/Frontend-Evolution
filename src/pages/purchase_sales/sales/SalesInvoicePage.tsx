@@ -7,16 +7,16 @@ import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
 import { Dialog } from "../../../components/ui/Dialog";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
+import ReportDialogPage from "../../../components/ReportDialogPage";
 
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { TabStrip } from "../../vendor/components";
 import { PurchaseOrderEditorState } from "../../purchase_sales/purchase/Purchaseordereditor";
-import { SalesOrderEditor } from "./SalesOrdereditor";
-import { SDN_CONFIG, SIN_CONFIG, SO_CONFIG } from "./SalesOrdertypes";
+import { SIN_CONFIG } from "./SalesOrdertypes";
 import { SalesInvoiceEditor } from "./SalesInvoiceEditor";
+import { downloadSalesInvoiceExcel, SalesInvoiceReport } from "./SalesInvoiceReport";
 
-// TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface SalesOrderRow {
   doc_type: string;
   doc_no: string;
@@ -57,13 +57,8 @@ export interface SalesOrderRow {
   flow_level_running?: number;
   flow_level?: number;
   sentback_reason?: string;
-  reject_reason?: string; // added for reject action
+  reject_reason?: string;
   last_action?: "SENTBACK" | "REJECTED" | "APPROVED" | "CANCELED" | "PENDING" | string;
-}
-
-// TODO: swap for a real API call, e.g. cancelPurchaseOrderApi(docNo)
-async function cancelPurchaseOrderApi(_docNo: string): Promise<void> {
-  return;
 }
 
 type RequestTab = "PENDING" | "INPROGRESS" | "CLOSED" | "CANCELED" | "REJECTED" | "SENDBACK";
@@ -83,9 +78,12 @@ export function SalesInvoicePage({ onClose }: { onClose?: () => void } = {}) {
   const canViewCanceledTab = approvalLevel <= 1;
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<PurchaseOrderEditorState>(null);
-  const [cancelTarget, setCancelTarget] = useState<SalesOrderRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+
+  // Print dialog
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportDoc, setReportDoc] = useState<{ doc_no: string } | null>(null);
 
   const loadLookups = async () => {
     const divisionData = await getDivisions();
@@ -100,13 +98,15 @@ export function SalesInvoicePage({ onClose }: { onClose?: () => void } = {}) {
       setRows(response);
       setTotalRows(response.length);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load purchase orders" });
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to load purchase orders",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  // TODO: confirm lookup parameter name against your Oracle package (mirrors MS_BUDGET_ACCOUNT_TAB__List).
   const fetchPurchaseOrders = async () => {
     const response = await getDynamicLookup({
       parameter: "PS_SALE_PURCHASE_ENTRY_SINV_TAB_LIST",
@@ -114,19 +114,40 @@ export function SalesInvoicePage({ onClose }: { onClose?: () => void } = {}) {
       code2: user?.loginid || user?.username || "ADMIN",
       code3: tab,
     });
-
     return response as unknown as SalesOrderRow[];
   };
 
+  const openPrint = (row: SalesOrderRow) => {
+    setReportDoc({ doc_no: row.doc_no });
+    setReportOpen(true);
+  };
+
+  const handleExcel = async (row: SalesOrderRow) => {
+    try {
+      await downloadSalesInvoiceExcel({
+        doc_no: row.doc_no,
+        company_code: user?.company_code,
+      });
+    } catch (e: any) {
+      setNotice({
+        type: "error",
+        message: e?.response?.data?.message || e?.message || "Excel export failed",
+      });
+    }
+  };
+
   useEffect(() => {
-  if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
-    setTab("PENDING");
-  }
-}, [approvalLevel, tab]);
+    if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
+      setTab("PENDING");
+    }
+  }, [approvalLevel, tab]);
 
   useEffect(() => {
     void loadLookups().catch((error) => {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load lookups" });
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to load lookups",
+      });
       setLoading(false);
     });
 
@@ -141,7 +162,9 @@ export function SalesInvoicePage({ onClose }: { onClose?: () => void } = {}) {
         });
         if (!mounted) return;
         const first = (rows || [])[0] as Record<string, unknown> | undefined;
-        const level = first ? Number(first.level ?? first.flow_level ?? first.flow_level_running ?? Object.values(first)[0]) : 0;
+        const level = first
+          ? Number(first.level ?? first.flow_level ?? first.flow_level_running ?? Object.values(first)[0])
+          : 0;
         setApprovalLevel(Number.isFinite(level) ? level : 0);
       } catch {
         if (mounted) setApprovalLevel(0);
@@ -157,48 +180,73 @@ export function SalesInvoicePage({ onClose }: { onClose?: () => void } = {}) {
     void loadRows();
   }, [tab, query, pageIndex, pageSize, columnFilters]);
 
-  const columns = useMemo<ColumnDef<SalesOrderRow>[]>(() => [
-    {
-      accessorKey: "doc_no",
-      header: "Doc No",
-      cell: ({ row }) => <span className="font-semibold">{row.original.doc_no}</span>,
-    },
-    { accessorKey: "doc_date", header: "Doc Date", cell: ({ getValue }) => formatDate(getValue()) },
-    { accessorKey: "div_code", header: "Div" },
-    { accessorKey: "ac_code", header: "A/c Code" },
-    { accessorKey: "ac_name", header: "A/c Name" },
-    { accessorKey: "curr_code", header: "Currency" },
-    {
-      accessorKey: "canceled",
-      header: "Status",
-      cell: ({ getValue }) => String(getValue() || "N") === "Y" ? <Badge variant="outline" className="border-destructive text-destructive">Cancelled</Badge> : <Badge>Active</Badge>,
-    },
-     {
-  id: "reason",
-  header: "Reason",
-  accessorFn: (row) =>
-    row.last_action === "SENTBACK" ? row.sentback_reason : row.reject_reason,
-},
-        { accessorKey: "last_action", header: "Last Action" },
-    {
-      id: "actions",
-      header: "Actions",
-      enableSorting: false,
-      cell: ({ row }) => (
-        <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original as any })} title="Edit">
-            <Edit2 size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" title="Print / PDF">
-            <Printer size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" title="Excel">
-            <Download size={15} />
-          </Button>
-        </div>
-      ),
-    },
-  ], []);
+  const columns = useMemo<ColumnDef<SalesOrderRow>[]>(
+    () => [
+      {
+        accessorKey: "doc_no",
+        header: "Doc No",
+        cell: ({ row }) => <span className="font-semibold">{row.original.doc_no}</span>,
+      },
+      { accessorKey: "doc_date", header: "Doc Date", cell: ({ getValue }) => formatDate(getValue()) },
+      { accessorKey: "div_code", header: "Div" },
+      { accessorKey: "ac_code", header: "A/c Code" },
+      { accessorKey: "ac_name", header: "A/c Name" },
+      { accessorKey: "curr_code", header: "Currency" },
+      {
+        accessorKey: "canceled",
+        header: "Status",
+        cell: ({ getValue }) =>
+          String(getValue() || "N") === "Y" ? (
+            <Badge variant="outline" className="border-destructive text-destructive">
+              Cancelled
+            </Badge>
+          ) : (
+            <Badge>Active</Badge>
+          ),
+      },
+      {
+        id: "reason",
+        header: "Reason",
+        accessorFn: (row) =>
+          row.last_action === "SENTBACK" ? row.sentback_reason : row.reject_reason,
+      },
+      { accessorKey: "last_action", header: "Last Action" },
+      {
+        id: "actions",
+        header: "Actions",
+        enableSorting: false,
+        cell: ({ row }) => (
+          <div className="flex items-center gap-1">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => setEditor({ mode: "edit", row: row.original as any })}
+              title="Edit"
+            >
+              <Edit2 size={15} />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              title="Print / PDF"
+              onClick={() => openPrint(row.original)}
+            >
+              <Printer size={15} />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              title="Excel"
+              onClick={() => void handleExcel(row.original)}
+            >
+              <Download size={15} />
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    [],
+  );
 
   const openCreateForDivision = (division: Division) => {
     setDivisionPicker(false);
@@ -213,37 +261,46 @@ export function SalesInvoicePage({ onClose }: { onClose?: () => void } = {}) {
           <p className="m-0 mt-1 text-sm text-muted-foreground">Sales Invoice document</p>
         </div>
         <div className="finance-list-actions">
-          <Button variant="outline" size="icon" title="Refresh" aria-label="Refresh" onClick={() => void loadRows()}>
+          <Button
+            variant="outline"
+            size="icon"
+            title="Refresh"
+            aria-label="Refresh"
+            onClick={() => void loadRows()}
+          >
             <RefreshCw size={15} />
           </Button>
-           { tab === "PENDING" && (
-          <Button title="Add Purchase Order" onClick={() => setDivisionPicker(true)}>
-            <Plus size={15} /> Add
-          </Button>
-        )}
+          {tab === "PENDING" && (
+            <Button title="Add Sales Invoice" onClick={() => setDivisionPicker(true)}>
+              <Plus size={15} /> Add
+            </Button>
+          )}
         </div>
       </div>
 
       <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
-     <TabStrip
-  value={tab}
-  onChange={(value) => setTab(value as RequestTab)}
-  tabs={
-    approvalLevel === 0
-      ? [
-          { label: "Pending", value: "PENDING", icon: "pending" },
-          { label: "Closed", value: "CLOSED", icon: "closed" },
-          { label: "Canceled", value: "CANCELED", icon: "canceled" as const },
-        ]
-      : [
-          { label: "Pending", value: "PENDING", icon: "pending" },
-          { label: "In Progress", value: "INPROGRESS", icon: "inProgress" },
-          { label: "Closed", value: "CLOSED", icon: "closed" },
-          ...(canViewCanceledTab ? [{ label: "Canceled", value: "CANCELED", icon: "canceled" as const }] : []),
-          { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
-        ]
-  }
-/>
+
+      <TabStrip
+        value={tab}
+        onChange={(value) => setTab(value as RequestTab)}
+        tabs={
+          approvalLevel === 0
+            ? [
+                { label: "Pending", value: "PENDING", icon: "pending" },
+                { label: "Closed", value: "CLOSED", icon: "closed" },
+                { label: "Canceled", value: "CANCELED", icon: "canceled" as const },
+              ]
+            : [
+                { label: "Pending", value: "PENDING", icon: "pending" },
+                { label: "In Progress", value: "INPROGRESS", icon: "inProgress" },
+                { label: "Closed", value: "CLOSED", icon: "closed" },
+                ...(canViewCanceledTab
+                  ? [{ label: "Canceled", value: "CANCELED", icon: "canceled" as const }]
+                  : []),
+                { label: "Rejected", value: "REJECTED", icon: "rejected" as const },
+              ]
+        }
+      />
 
       <div className="min-h-[650px]">
         <DataTable
@@ -265,7 +322,7 @@ export function SalesInvoicePage({ onClose }: { onClose?: () => void } = {}) {
           enablePagination
           manualPagination
           enableExport
-          exportFilename="purchase-orders.csv"
+          exportFilename="sales-invoices.csv"
           initialSorting={[{ id: "doc_date", desc: true }]}
           pageIndex={pageIndex}
           pageSize={pageSize}
@@ -306,7 +363,11 @@ export function SalesInvoicePage({ onClose }: { onClose?: () => void } = {}) {
         title="Select Division"
         description="Choose the division before opening the Sales Invoice form."
         onClose={() => setDivisionPicker(false)}
-        footer={<Button variant="outline" onClick={() => setDivisionPicker(false)}>Cancel</Button>}
+        footer={
+          <Button variant="outline" onClick={() => setDivisionPicker(false)}>
+            Cancel
+          </Button>
+        }
       >
         <div className="grid max-h-[420px] gap-2 overflow-auto">
           {divisions.map((division) => (
@@ -322,6 +383,34 @@ export function SalesInvoicePage({ onClose }: { onClose?: () => void } = {}) {
           ))}
         </div>
       </Dialog>
+
+      {reportOpen && reportDoc && (
+        <ReportDialogPage
+          title={`Sales Invoice - ${reportDoc.doc_no}`}
+          Report={SalesInvoiceReport}
+          required_values={{
+            doc_no: reportDoc.doc_no,
+            company_code: user?.company_code,
+            doc_type: "SINVOICE",
+          }}
+          onClose={() => {
+            setReportOpen(false);
+            setReportDoc(null);
+          }}
+          excel={() =>
+            void downloadSalesInvoiceExcel({
+              doc_no: reportDoc.doc_no,
+              company_code: user?.company_code,
+            }).catch((e: any) =>
+              setNotice({
+                type: "error",
+                message:
+                  e?.response?.data?.message || e?.message || "Excel export failed",
+              }),
+            )
+          }
+        />
+      )}
     </section>
   );
 }

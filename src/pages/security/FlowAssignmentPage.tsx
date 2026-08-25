@@ -23,15 +23,48 @@ function val(row: Record<string, unknown>, key: string) {
   return String(row[key] ?? row[key.toUpperCase()] ?? row[key.toLowerCase()] ?? "");
 }
 
-type LevelKey = "level1_role" | "level2_role" | "level3_role" | "level4_role" | "level5_role";
+// ── Dynamic level support ───────────────────────────────────────────────
+// The number of approver levels is NOT fixed — it's whatever the backend
+// returns for a given process (could be 3, 5, 7, 10...). We detect it from
+// the shape of the API response (level1_role, level2_role, ... levelN_role
+// keys) rather than hardcoding a level count.
 
-const LEVEL_FIELDS: { key: LevelKey; label: string; required: boolean }[] = [
-  { key: "level1_role", label: "Level 1", required: true },
-  { key: "level2_role", label: "Level 2", required: true },
-  { key: "level3_role", label: "Level 3", required: false },
-  { key: "level4_role", label: "Level 4", required: false },
-  { key: "level5_role", label: "Level 5", required: false },
-];
+type LevelField = { key: string; label: string; required: boolean };
+
+const DEFAULT_LEVEL_COUNT = 5; // used only when a process has no rows yet
+
+function buildLevelFields(count: number): LevelField[] {
+  return Array.from({ length: count }, (_, i) => {
+    const n = i + 1;
+    return { key: `level${n}_role`, label: `Level ${n}`, required: n <= 2 };
+  });
+}
+
+// Scans raw API rows for level<N>_role keys and returns the highest N found.
+// ALSO checks the `last_level` field on each row — some processes (e.g.
+// frt_enquiry) report a last_level higher than the number of level<N>_role
+// KEYS actually present on the row (only level1_role..level5_role exist as
+// keys, but last_level says 7). last_level is the authoritative "this
+// process has N levels" signal — key presence alone isn't enough, since a
+// row can legitimately omit level6_role/level7_role as keys entirely while
+// still needing those columns to exist so they CAN be filled in and saved.
+function detectLevelCount(rows: Record<string, unknown>[]): number {
+  let max = 0;
+  const pattern = /^level(\d+)_role$/i;
+  for (const row of rows) {
+    for (const k of Object.keys(row)) {
+      const m = pattern.exec(k);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (n > max) max = n;
+      }
+    }
+    const lastLevelRaw = row["last_level"] ?? row["LAST_LEVEL"];
+    const lastLevel = Number(lastLevelRaw);
+    if (!Number.isNaN(lastLevel) && lastLevel > max) max = lastLevel;
+  }
+  return max;
+}
 
 // Each grid cell carries its code + resolved description together so
 // LookupField can render "CODE — DESC" via displayValue without flicker.
@@ -42,7 +75,13 @@ type LevelCell = { value: string; desc: string };
 // Level 1 approver handling multiple departments via different Flow Codes.
 // `rowId` is a client-only key (the backend has no serial number for these
 // rows) used for React keys / dirty tracking — never sent to the backend.
-type FlowRow = { rowId: string } & Record<LevelKey, LevelCell> & { flow_code: LevelCell };
+// `levels` is keyed dynamically by "level1_role", "level2_role", etc. so the
+// row shape adapts to however many levels the current process uses.
+type FlowRow = {
+  rowId: string;
+  levels: Record<string, LevelCell>;
+  flow_code: LevelCell;
+};
 
 function makeRowId() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -50,14 +89,14 @@ function makeRowId() {
     : `row_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
 
-function emptyRow(): FlowRow {
+function emptyRow(levelCount: number): FlowRow {
+  const levels: Record<string, LevelCell> = {};
+  for (let i = 1; i <= levelCount; i++) {
+    levels[`level${i}_role`] = { value: "", desc: "" };
+  }
   return {
     rowId: makeRowId(),
-    level1_role: { value: "", desc: "" },
-    level2_role: { value: "", desc: "" },
-    level3_role: { value: "", desc: "" },
-    level4_role: { value: "", desc: "" },
-    level5_role: { value: "", desc: "" },
+    levels,
     // Backend returns "NA" when nothing's been picked yet — default to it.
     flow_code: { value: "NA", desc: "" },
   };
@@ -85,9 +124,24 @@ export function FlowAssignmentPage() {
 
   // Horizontal Approver Levels grid — one process can have multiple flow rows.
   const [flowRows, setFlowRows] = useState<FlowRow[]>([]);
+  // How many Level columns the CURRENT process uses — detected from the API
+  // response each time a process is loaded (see detectLevelCount).
+  const [levelCount, setLevelCount] = useState<number>(DEFAULT_LEVEL_COUNT);
   const [levelLoading, setLevelLoading] = useState(false);
   const [savingLevels, setSavingLevels] = useState(false);
   const [levelDirty, setLevelDirty] = useState(false);
+
+  const LEVEL_FIELDS = useMemo(() => buildLevelFields(levelCount), [levelCount]);
+
+  // Single source of truth for the grid's column layout, driven by the
+  // detected level count — used as inline style so it stays correct no
+  // matter how many levels a process has (Tailwind can't generate an
+  // arbitrary grid-cols class for a count that only exists at runtime).
+  const gridTemplateColumns = useMemo(
+    () => `repeat(${levelCount + 1}, minmax(130px, 1fr)) 24px`,
+    [levelCount]
+  );
+  const gridMinWidth = useMemo(() => `${Math.max(680, (levelCount + 1) * 140 + 40)}px`, [levelCount]);
 
   const [selectedRole, setSelectedRole] = useState<string>("");
   const [selectedRoleDesc, setSelectedRoleDesc] = useState<string>("");
@@ -142,18 +196,12 @@ export function FlowAssignmentPage() {
 
   // Default bottom-panel view: users across every role used anywhere in the
   // grid (all rows, all levels) — same fallback as before, extended from
-  // "one row's levels" to "all rows' levels" now that there can be several.
+  // "one row's fixed levels" to "all rows' dynamic levels".
   const loadUsersForRows = async (rows: FlowRow[]) => {
     const roleCodes = Array.from(
       new Set(
         rows
-          .flatMap((r) => [
-            r.level1_role.value,
-            r.level2_role.value,
-            r.level3_role.value,
-            r.level4_role.value,
-            r.level5_role.value,
-          ])
+          .flatMap((r) => Object.values(r.levels).map((cell) => cell.value))
           .filter(Boolean)
       )
     );
@@ -191,6 +239,7 @@ export function FlowAssignmentPage() {
   const loadLevelDetails = async (process: string) => {
     if (!process) {
       setFlowRows([]);
+      setLevelCount(DEFAULT_LEVEL_COUNT);
       setLevelDirty(false);
       setUserRows([]);
       setRightPanelContext("");
@@ -203,19 +252,29 @@ export function FlowAssignmentPage() {
       const rows = await getFlowAssignLevelDetails(companyCode, process);
       const data = (rows ?? []) as unknown as Record<string, unknown>[];
 
-      const mapped: FlowRow[] = data.map((r) => ({
-        rowId: makeRowId(),
-        level1_role: { value: val(r, "level1_role"), desc: val(r, "level1_role_desc") },
-        level2_role: { value: val(r, "level2_role"), desc: val(r, "level2_role_desc") },
-        level3_role: { value: val(r, "level3_role"), desc: val(r, "level3_role_desc") },
-        level4_role: { value: val(r, "level4_role"), desc: val(r, "level4_role_desc") },
-        level5_role: { value: val(r, "level5_role"), desc: val(r, "level5_role_desc") },
-        flow_code: { value: val(r, "flow_code") || "NA", desc: val(r, "flow_code_desc") },
-      }));
+      // Detect how many level columns this process actually uses. Falls
+      // back to the default only when the process has no rows yet (new
+      // process, nothing configured) so there's still something to fill in.
+      const detected = detectLevelCount(data);
+      const count = detected > 0 ? detected : DEFAULT_LEVEL_COUNT;
+      setLevelCount(count);
+
+      const mapped: FlowRow[] = data.map((r) => {
+        const levels: Record<string, LevelCell> = {};
+        for (let i = 1; i <= count; i++) {
+          const key = `level${i}_role`;
+          levels[key] = { value: val(r, key), desc: val(r, `${key}_desc`) };
+        }
+        return {
+          rowId: makeRowId(),
+          levels,
+          flow_code: { value: val(r, "flow_code") || "NA", desc: val(r, "flow_code_desc") },
+        };
+      });
 
       // Always keep at least one (possibly empty) row so there's something
       // to fill in for a process that has no flows configured yet.
-      const next = mapped.length ? mapped : [emptyRow()];
+      const next = mapped.length ? mapped : [emptyRow(count)];
       setFlowRows(next);
       setLevelDirty(false);
       setSelectedRole("");
@@ -230,15 +289,18 @@ export function FlowAssignmentPage() {
     }
   };
 
-  const updateRowLevel = (rowId: string, key: LevelKey, newValue: string, row: LookupRow | null) => {
+  const updateRowLevel = (rowId: string, key: string, newValue: string, row: LookupRow | null) => {
     setFlowRows((prev) =>
       prev.map((r) =>
         r.rowId === rowId
           ? {
               ...r,
-              [key]: {
-                value: newValue,
-                desc: newValue ? val((row as Record<string, unknown>) || {}, "ROLE_DESC") : "",
+              levels: {
+                ...r.levels,
+                [key]: {
+                  value: newValue,
+                  desc: newValue ? val((row as Record<string, unknown>) || {}, "ROLE_DESC") : "",
+                },
               },
             }
           : r
@@ -269,9 +331,9 @@ export function FlowAssignmentPage() {
 
   // Clicking the small "view users" icon next to a filled cell shows that
   // specific row + level's role in the bottom panel, without touching the grid.
-  const handleViewRoleUsers = (row: FlowRow, key: LevelKey) => {
-    const cell = row[key];
-    if (!cell.value) return;
+  const handleViewRoleUsers = (row: FlowRow, key: string) => {
+    const cell = row.levels[key];
+    if (!cell?.value) return;
     const levelLabel = LEVEL_FIELDS.find((f) => f.key === key)?.label || key;
     setSelectedRole(cell.value);
     setSelectedRoleDesc(cell.desc);
@@ -281,7 +343,7 @@ export function FlowAssignmentPage() {
   };
 
   const handleAddRow = () => {
-    setFlowRows((prev) => [...prev, emptyRow()]);
+    setFlowRows((prev) => [...prev, emptyRow(levelCount)]);
     setLevelDirty(true);
   };
 
@@ -291,7 +353,7 @@ export function FlowAssignmentPage() {
   const handleRemoveRow = (rowId: string) => {
     setFlowRows((prev) => {
       const next = prev.filter((r) => r.rowId !== rowId);
-      return next.length ? next : [emptyRow()];
+      return next.length ? next : [emptyRow(levelCount)];
     });
     setLevelDirty(true);
   };
@@ -303,9 +365,7 @@ export function FlowAssignmentPage() {
     }
 
     // Drop rows nobody touched (added via "+ Add Row" then left blank).
-    const usableRows = flowRows.filter(
-      (r) => r.level1_role.value || r.level2_role.value || r.level3_role.value || r.level4_role.value || r.level5_role.value
-    );
+    const usableRows = flowRows.filter((r) => Object.values(r.levels).some((c) => c.value));
 
     if (usableRows.length === 0) {
       setNotice({ type: "error", message: "Add at least one row with Level 1 and Level 2." });
@@ -313,7 +373,7 @@ export function FlowAssignmentPage() {
     }
 
     for (const row of usableRows) {
-      if (!row.level1_role.value || !row.level2_role.value) {
+      if (!row.levels["level1_role"]?.value || !row.levels["level2_role"]?.value) {
         setNotice({ type: "error", message: "Level 1 and Level 2 are required on every row." });
         return;
       }
@@ -324,11 +384,12 @@ export function FlowAssignmentPage() {
     // flows can't be told apart.
     const seen = new Set<string>();
     for (const row of usableRows) {
-      const key = `${row.level1_role.value}::${row.flow_code.value || "NA"}`;
+      const level1Value = row.levels["level1_role"]?.value || "";
+      const key = `${level1Value}::${row.flow_code.value || "NA"}`;
       if (seen.has(key)) {
         setNotice({
           type: "error",
-          message: `Two rows share Level 1 (${row.level1_role.value}) and Flow Code (${row.flow_code.value || "NA"}) — give one of them a different Flow Code.`,
+          message: `Two rows share Level 1 (${level1Value}) and Flow Code (${row.flow_code.value || "NA"}) — give one of them a different Flow Code.`,
         });
         return;
       }
@@ -337,17 +398,24 @@ export function FlowAssignmentPage() {
 
     setSavingLevels(true);
     try {
-      const payloadRows = usableRows.map((row) => ({
-        level1_role: row.level1_role.value,
-        level2_role: row.level2_role.value,
-        level3_role: row.level3_role.value || undefined,
-        level4_role: row.level4_role.value || undefined,
-        level5_role: row.level5_role.value || undefined,
-        last_level: [row.level1_role.value, row.level2_role.value, row.level3_role.value, row.level4_role.value, row.level5_role.value].filter(
-          Boolean
-        ).length,
-        flow_code: row.flow_code.value || "NA",
-      }));
+      // Send every level the grid is currently showing for this process
+      // (levelCount) — level6, level7, etc. included, not just 1-5 — so
+      // insUpdMsApproverLevels actually receives and persists them.
+      const payloadRows:any = usableRows.map((row) => {
+        const payload: Record<string, unknown> = {};
+        let lastLevel = 0;
+        for (let i = 1; i <= levelCount; i++) {
+          const key = `level${i}_role`;
+          const v = row.levels[key]?.value || "";
+          if (v) lastLevel = i;
+          // Level 1 & 2 are required, so always send whatever's there;
+          // levels 3+ are optional and omitted entirely when blank.
+          payload[key] = i <= 2 ? v : v || undefined;
+        }
+        payload.last_level = lastLevel;
+        payload.flow_code = row.flow_code.value || "NA";
+        return payload;
+      });
 
       const result = await saveFlowAssignLevels(companyCode, selectedProcess, payloadRows);
 
@@ -502,7 +570,7 @@ const handleSaveRole = async () => {
     setRightPanelContext(`Role ${modalRole}`);
   };
 
-  const filledRowCount = flowRows.filter((r) => r.level1_role.value).length;
+  const filledRowCount = flowRows.filter((r) => r.levels["level1_role"]?.value).length;
 
   return (
     <section className="grid gap-5">
@@ -553,10 +621,23 @@ const handleSaveRole = async () => {
     </Button>
   </div>
 
+  {!selectedProcess ? (
+    // Nothing to show columns FOR yet — no process means no known level
+    // count, so we don't render Level 1..N headers at all until one is
+    // picked and the API tells us how many levels it actually has.
+    <div className="rounded-md border border-dashed py-8 text-center text-sm text-muted-foreground">
+      Select a process above to view or configure its approver levels.
+    </div>
+  ) : levelLoading ? (
+    <div className="rounded-md border border-dashed py-8 text-center text-sm text-muted-foreground">
+      Loading approver levels...
+    </div>
+  ) : (
   <div className="overflow-x-auto">
-    <div className="min-w-[860px]">
-      {/* header */}
-      <div className="grid grid-cols-[repeat(6,minmax(130px,1fr))_24px] gap-1.5 border-b pb-1.5">
+    <div style={{ minWidth: gridMinWidth }}>
+      {/* header — columns are generated from LEVEL_FIELDS, which is sized
+          off the level count detected from THIS process's API response */}
+      <div className="grid gap-1.5 border-b pb-1.5" style={{ gridTemplateColumns }}>
         {LEVEL_FIELDS.map(({ key, label, required }) => (
           <span key={key} className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
             {label}
@@ -572,15 +653,16 @@ const handleSaveRole = async () => {
         {flowRows.map((row) => (
           <div
             key={row.rowId}
-            className="grid grid-cols-[repeat(6,minmax(130px,1fr))_24px] items-center gap-1.5 rounded-md px-1 py-0.5 hover:bg-muted/40"
+            className="grid items-center gap-1.5 rounded-md px-1 py-0.5 hover:bg-muted/40"
+            style={{ gridTemplateColumns }}
           >
             {LEVEL_FIELDS.map(({ key, required }) => (
               <div key={key} className="flex min-w-0 items-center gap-1">
                 <div className="min-w-0 flex-1">
                   <LookupField
                   dense
-                    value={row[key].value}
-                    displayValue={formatRoleDisplay(row[key].value, row[key].desc)}
+                    value={row.levels[key].value}
+                    displayValue={formatRoleDisplay(row.levels[key].value, row.levels[key].desc)}
                     placeholder={required ? "Select" : "None"}
                     columns={[
                       { field: "ROLE_ID", header: "Role Code" },
@@ -593,7 +675,7 @@ const handleSaveRole = async () => {
                     onChange={(v, r) => updateRowLevel(row.rowId, key, v, r)}
                   />
                 </div>
-                {row[key].value && (
+                {row.levels[key].value && (
                   <button
                     type="button"
                     className="shrink-0 text-muted-foreground hover:text-foreground"
@@ -637,10 +719,15 @@ const handleSaveRole = async () => {
       </div>
     </div>
   </div>
+  )}
 
   <div className="flex items-center justify-between border-t pt-2">
     <span className="text-xs font-medium text-muted-foreground">
-      Rows: <span className="tabular-nums text-foreground">{filledRowCount}</span>
+      {selectedProcess ? (
+        <>Rows: <span className="tabular-nums text-foreground">{filledRowCount}</span></>
+      ) : (
+        <>&nbsp;</>
+      )}
     </span>
     <Button
       size="sm"

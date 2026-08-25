@@ -260,6 +260,10 @@ export function HrEmpEducationPage() {
   });
 
   // ── Cascade resets ─────────────────────────────────────────────────────────
+  // NOTE: this is the OTHER half of the cascade (clearing children when a
+  // parent changes). It already worked correctly before — the missing piece
+  // was only the `disabled` gating below, which is what actually stops the
+  // user from opening Section/Employee before their parent is chosen.
   useEffect(() => {
     setDepartment(null);
     setSection(null);
@@ -532,6 +536,9 @@ export function HrEmpEducationPage() {
     [loginid, companyCode],
   );
 
+  // Department: scoped by Division when one is picked (procedure branch
+  // EDUCATION_QUALIFICATION_DEPARTMENT_DEPTCODE — P_CODE2 = DIV_CODE,
+  // optional: empty => all departments for the company).
   const loadDepartments = useCallback(
     () =>
       getDynamicLookup(
@@ -545,6 +552,11 @@ export function HrEmpEducationPage() {
     [loginid, companyCode, division?.div_code],
   );
 
+  // Section: HARD-depends on Department (see `disabled={!department}` on
+  // the field below). Uses EDUCATION_QUALIFICATION_MS_HR_SECTION —
+  // P_CODE2 = DIV_CODE (optional extra narrowing), P_CODE3 = DEPT_CODE
+  // (the field is disabled until this is set, so it's effectively always
+  // present once the call fires).
   const loadSections = useCallback(
     () =>
       getDynamicLookup(
@@ -552,16 +564,18 @@ export function HrEmpEducationPage() {
           "EDUCATION_QUALIFICATION_MS_HR_SECTION",
           loginid,
           companyCode,
-          department?.dept_code ?? "",
+          division?.div_code   ?? "",  // code2 — DIV_CODE (optional)
+          department?.dept_code ?? "", // code3 — DEPT_CODE (drives the fetch)
         ),
       ),
-    [loginid, companyCode, department?.dept_code],
+    [loginid, companyCode, division?.div_code, department?.dept_code],
   );
 
-  // FIX: loadEmployees now accepts any combination of filters.
-  // Division and section are optional — only department is used as
-  // the primary filter (code2). Division goes to code3, section to code4.
-  // The disabled prop below is also relaxed to only require department.
+  // Employee: HARD-depends on Section (see `disabled={!section}` on the
+  // field below). Uses EDUCATION_QUALIFICATION_HR_EMPLOYEE_LIST_WITH_MANAGER
+  // — P_CODE2 = DIV_CODE, P_CODE3 = DEPT_CODE, P_CODE4 = SECTION_CODE (the
+  // field is disabled until Section is set, so all three are present by
+  // the time this call fires).
   const loadEmployees = useCallback(
     () =>
       getDynamicLookup(
@@ -569,12 +583,18 @@ export function HrEmpEducationPage() {
           "EDUCATION_QUALIFICATION_HR_EMPLOYEE_LIST_WITH_MANAGER",
           loginid,
           companyCode,
-          department?.dept_code  ?? "",  // code2 — primary filter
-          division?.div_code     ?? "",  // code3 — optional
-          section?.section_code  ?? "",  // code4 — optional
+          division?.div_code    ?? "", // code2 — DIV_CODE
+          department?.dept_code ?? "", // code3 — DEPT_CODE
+          section?.section_code ?? "", // code4 — SECTION_CODE (drives the fetch)
         ),
       ),
-    [loginid, companyCode, department?.dept_code, division?.div_code, section?.section_code],
+    [
+      loginid,
+      companyCode,
+      division?.div_code,
+      department?.dept_code,
+      section?.section_code,
+    ],
   );
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -637,12 +657,12 @@ export function HrEmpEducationPage() {
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
 
-          <label className="field">
+          {/* <label className="field">
             <span>Company</span>
             <Input disabled value={companyCode} />
-          </label>
+          </label> */}
 
-          {/* Division — optional, narrows employee list */}
+          {/* Division — top of the chain, always enabled */}
           <label className="field">
             <span>Division</span>
             <LookupField
@@ -668,11 +688,13 @@ export function HrEmpEducationPage() {
             />
           </label>
 
-          {/* Department — optional but recommended */}
+          {/* Department — optional (works with or without Division), but
+              its `key` includes division.div_code so picking a Division
+              forces a remount and re-fetches departments scoped to it. */}
           <label className="field">
             <span>Department</span>
             <LookupField
-              key={`department-${resetKey}`}
+              key={`department-${resetKey}-${division?.div_code ?? ""}`}
               compact
               label="Department"
               value={department?.dept_code ?? ""}
@@ -694,11 +716,18 @@ export function HrEmpEducationPage() {
             />
           </label>
 
-          {/* Section — fully optional */}
+          {/* Section — HARD depends on Department.
+              - disabled={!department}: field can't be opened until a
+                Department is selected.
+              - key includes division.div_code + department.dept_code:
+                any change up the chain forces a remount, so loadSections()
+                always runs fresh and scoped correctly. */}
           <label className="field">
-            <span>Section</span>
+            <span>
+              Section <strong className="text-destructive">*</strong>
+            </span>
             <LookupField
-              key={`section-${resetKey}`}
+              key={`section-${resetKey}-${division?.div_code ?? ""}-${department?.dept_code ?? ""}`}
               compact
               label="Section"
               value={section?.section_code ?? ""}
@@ -710,7 +739,7 @@ export function HrEmpEducationPage() {
               valueField="section_code"
               displayFields={["section_code", "section_name"]}
               loadOptions={loadSections}
-              disabled={!department}
+            
               onChange={(_, row) => {
                 setSection(
                   row
@@ -724,13 +753,19 @@ export function HrEmpEducationPage() {
             />
           </label>
 
-          {/* Employee — FIX: only requires department, not division */}
+          {/* Employee — HARD depends on Section.
+              - disabled={!section}: field can't be opened until a Section
+                is selected.
+              - key includes department.dept_code + division.div_code +
+                section.section_code: any change up the chain forces a
+                remount, so loadEmployees() always runs fresh and scoped
+                correctly. */}
           <label className="field">
             <span>
               Employee <strong className="text-destructive">*</strong>
             </span>
             <LookupField
-              key={`employee-${resetKey}`}
+              key={`employee-${resetKey}-${department?.dept_code ?? ""}-${division?.div_code ?? ""}-${section?.section_code ?? ""}`}
               compact
               label="Employee"
               value={employee?.employee_id ?? ""}
@@ -746,8 +781,7 @@ export function HrEmpEducationPage() {
               valueField="employee_id"
               displayFields={["employee_id", "employee_name"]}
               loadOptions={loadEmployees}
-              // FIX: was `!division || !department` — division is optional
-              disabled={false}
+            
               onChange={(_, row) => {
                 setEmployee(
                   row
@@ -755,8 +789,8 @@ export function HrEmpEducationPage() {
                         employee_id: String(
                           row.employee_id ?? "",
                         ),
-                        // FIX: guard both rpt_name and employee_name —
-                        // API may return either depending on the lookup
+                        // guard both rpt_name and employee_name — API may
+                        // return either depending on the lookup
                         employee_name: String(
                           row.employee_name ?? row.rpt_name ?? "",
                         ),

@@ -6,7 +6,7 @@ import { executeWmsInboundSql } from "../../../api/wms"; // adjust path to where
 import { LookupRow, getLookupValue } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { ColumnDef } from "@tanstack/react-table";
-import { CalendarDays, Search as SearchIcon, SlidersHorizontal, Sparkles, Save } from "lucide-react";
+import { CalendarDays, Search as SearchIcon, Sparkles, Save } from "lucide-react";
 
 type HolidayRow = {
   DATEID: string;
@@ -36,6 +36,13 @@ function holidayTypeMeta(code: string | null) {
 
 function sqlEscape(value: string) {
   return value.replace(/'/g, "''");
+}
+
+function formatHolidayDate(value: string | null) {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 function buildHolidayCalendarQuery(params: {
@@ -105,10 +112,12 @@ function buildGenerateCalendarBlock(params: {
 // TODO: same caveat — confirm the real update proc/endpoint. A client-built UPDATE per row
 // is fine for a first pass consistent with this file's existing style, but this should move
 // behind a proper API route so you're not shipping raw SQL from the browser long-term.
-function buildUpdateHolidayTypeQuery(row: HolidayRow) {
+function buildUpdateHolidayRowQuery(row: HolidayRow) {
   return `
     UPDATE "MS_HR_HOLIDAYCALENDAR"
-    SET "HOLIDAY_TYPE" = '${sqlEscape(row.HOLIDAY_TYPE ?? "")}'
+    SET "HOLIDAY_TYPE" = '${sqlEscape(row.HOLIDAY_TYPE ?? "")}',
+        "HOLIDAY_REASON" = '${sqlEscape(row.HOLIDAY_REASON ?? "")}',
+        "REMARKS" = '${sqlEscape(row.REMARKS ?? "")}'
     WHERE "DATEID" = '${sqlEscape(row.DATEID)}'
   `;
 }
@@ -200,6 +209,14 @@ export default function HolidayCalendarPage() {
     setDirtyDateIds((prev) => new Set(prev).add(dateId));
   }, []);
 
+  const handleFieldChange = useCallback(
+    (dateId: string, field: "HOLIDAY_REASON" | "REMARKS", value: string) => {
+      setRows((prev) => prev.map((r) => (r.DATEID === dateId ? { ...r, [field]: value } : r)));
+      setDirtyDateIds((prev) => new Set(prev).add(dateId));
+    },
+    [],
+  );
+
   const handleSaveChanges = useCallback(async () => {
     const dirtyRows = rows.filter((r) => dirtyDateIds.has(r.DATEID));
     if (dirtyRows.length === 0) return;
@@ -207,7 +224,7 @@ export default function HolidayCalendarPage() {
     setError("");
     try {
       for (const row of dirtyRows) {
-        await executeWmsInboundSql(buildUpdateHolidayTypeQuery(row));
+        await executeWmsInboundSql(buildUpdateHolidayRowQuery(row));
       }
       setDirtyDateIds(new Set());
     } catch (err) {
@@ -219,8 +236,23 @@ export default function HolidayCalendarPage() {
 
   const columns = useMemo<ColumnDef<HolidayRow>[]>(
     () => [
-      { accessorKey: "HOLIDAY_DATE", header: "Date" },
-      { accessorKey: "HOLIDAY_REASON", header: "Holiday Reason" },
+      {
+        accessorKey: "HOLIDAY_DATE",
+        header: "Date",
+        cell: ({ row }) => formatHolidayDate(row.original.HOLIDAY_DATE),
+      },
+      {
+        accessorKey: "HOLIDAY_REASON",
+        header: "Holiday Reason",
+        cell: ({ row }) => (
+          <input
+            type="text"
+            value={row.original.HOLIDAY_REASON ?? ""}
+            onChange={(e) => handleFieldChange(row.original.DATEID, "HOLIDAY_REASON", e.target.value)}
+            className="h-7 w-full rounded-md border border-gray-300 bg-background px-2 text-xs"
+          />
+        ),
+      },
       {
         accessorKey: "HOLIDAY_TYPE",
         header: "Type",
@@ -242,11 +274,22 @@ export default function HolidayCalendarPage() {
           );
         },
       },
-      { accessorKey: "REMARKS", header: "Remarks" },
+      {
+        accessorKey: "REMARKS",
+        header: "Remarks",
+        cell: ({ row }) => (
+          <input
+            type="text"
+            value={row.original.REMARKS ?? ""}
+            onChange={(e) => handleFieldChange(row.original.DATEID, "REMARKS", e.target.value)}
+            className="h-7 w-full rounded-md border border-gray-300 bg-background px-2 text-xs"
+          />
+        ),
+      },
       { accessorKey: "DIV_CODE", header: "Div Code" },
       { accessorKey: "GRADE_CODE", header: "Grade" },
     ],
-    [handleTypeChange],
+    [handleTypeChange, handleFieldChange],
   );
 
   const stats = useMemo(() => {
@@ -258,31 +301,19 @@ export default function HolidayCalendarPage() {
   }, [rows]);
 
   return (
-    <div className="grid gap-4 p-4">
-      {/* Page header */}
-      <div className="flex items-center gap-3">
-        <div className="grid h-11 w-11 place-items-center rounded-xl bg-primary/10 text-primary">
-          <CalendarDays size={22} />
-        </div>
-        <div>
-          <h1 className="text-lg font-semibold leading-tight text-foreground">Holiday Calendar</h1>
-          <p className="m-0 text-xs text-muted-foreground">
-            View declared holidays, weekly offs, and working-day exceptions by division and year
-          </p>
-        </div>
-      </div>
-
-      {/* Filter card */}
+    <div className="grid gap-2 p-3">
+      {/* Filter card — compact single-row header, no separate page title block */}
       <div className="overflow-hidden rounded-lg border border-[#aebbd0] bg-card shadow-[0_8px_22px_rgba(15,23,42,0.07)]">
-        <div className="flex items-center gap-2 border-b border-[#c7d2e3] bg-[#f8fbff] px-4 py-3">
-          <SlidersHorizontal size={15} className="text-primary" />
-          <div>
-            <p className="eyebrow m-0">Filters</p>
-            <p className="m-0 text-xs text-muted-foreground">Division, Holiday Type, Grade & Year Range</p>
+        <div className="flex items-center gap-2 border-b border-[#c7d2e3] bg-gradient-to-r from-[#eef4ff] to-[#f8fbff] px-3 py-2">
+          <div className="grid h-6 w-6 place-items-center rounded-md bg-primary/10 text-primary">
+            <CalendarDays size={13} />
           </div>
+          <p className="m-0 text-xs font-medium text-foreground">Holiday Calendar</p>
+          <span className="text-[#c7d2e3]">|</span>
+          <p className="m-0 text-xs text-muted-foreground">Division, Holiday Type, Grade & Year Range</p>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 lg:grid-cols-5">
           <LookupField
             label="Division"
             value={divCode}
@@ -303,7 +334,7 @@ export default function HolidayCalendarPage() {
           <label className="field">
             <span>Holiday Type</span>
             <select
-              className="h-9 rounded-md border border-gray-400 bg-background px-3 text-sm"
+              className="h-9 appearance-none rounded-md border border-gray-400 bg-background bg-[length:14px] bg-[right_0.6rem_center] bg-no-repeat px-3 text-sm leading-none [background-image:url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2364748b%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22M6%209l6%206%206-6%22%2F%3E%3C%2Fsvg%3E')]"
               value={holidayType}
               onChange={(e) => setHolidayType(e.target.value)}
             >
@@ -348,7 +379,7 @@ export default function HolidayCalendarPage() {
           </label>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-[#c7d2e3] bg-[#fafbfd] px-4 py-3">
+        <div className="flex items-center justify-end gap-2 border-t border-[#c7d2e3] bg-[#fafbfd] px-3 py-2">
           <button
             type="button"
             onClick={handleGenerateCalendar}
@@ -403,7 +434,7 @@ export default function HolidayCalendarPage() {
         emptyText="No holidays found for this period — try Generate Calendar if this is a new Division/Year"
         searchPlaceholder="Search date, reason, type..."
         enablePagination
-        pageSize={100}
+        pageSize={10}
         density="compact"
         rowClassName={(row) =>
           row.HOLIDAY_TYPE === "PH" ? "bg-amber-50/80" : row.HOLIDAY_TYPE === "W1" || row.HOLIDAY_TYPE === "W2" ? "bg-red-50/80" : ""
