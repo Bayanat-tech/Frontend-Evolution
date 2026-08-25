@@ -26,6 +26,7 @@ interface PurchaseOrderReportProps {
 type SupplierRow = { AC_CODE: string; AC_NAME: string };
 type ProductRow = { PROD_CODE: string; PROD_NAME: string };
 type DocRow = { DOC_NO: string; DOC_DATE: string; DOC_TYPE: string };
+type LogoRow = { COMP_LOGO: string };
 
 type ReportCriteria = "Summary" | "Detail";
 
@@ -142,14 +143,14 @@ const SearchField: React.FC<{
   loading?: boolean;
   placeholder?: string;
   displayFormat?: (item: { code: string; name: string; extra?: string }) => string;
-}> = ({ 
-  options, 
-  code, 
-  name, 
-  onChange, 
-  loading, 
+}> = ({
+  options,
+  code,
+  name,
+  onChange,
+  loading,
   placeholder = "All",
-  displayFormat 
+  displayFormat,
 }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -282,9 +283,11 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(false);
-  const [html, setHtml] = useState("");
+  const [lastGeneratedAt, setLastGeneratedAt] = useState<Date | null>(null);
   const [pending, setPending] = useState<Filters>(buildDefaultFilters());
   const [applied, setApplied] = useState<Filters>(buildDefaultFilters());
+
+  const reportWindowRef = useRef<Window | null>(null);
 
   const setPendingField = <K extends keyof Filters>(key: K, val: Filters[K]) =>
     setPending((prev) => ({ ...prev, [key]: val }));
@@ -337,6 +340,24 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
     enabled: !!companyCode,
   });
 
+  // Company logo lookup using stored procedure (PENDING_PURCHASE_ORDER_LOGO)
+  const { data: logoRows = [] } = useQuery<LogoRow[]>({
+    queryKey: ["po_get_logo", companyCode, loginid],
+    queryFn: async () => {
+      const rows = await getDynamicLookupaccount({
+        parameter: "PENDING_PURCHASE_ORDER_LOGO",
+        loginid,
+        code1: companyCode,
+      } as DynamicQueryParams);
+      return (rows || []).map((r) =>
+        uppercaseKeys<LogoRow>(r as Record<string, any>)
+      );
+    },
+    enabled: !!companyCode,
+  });
+
+  const logoUrl = logoRows[0]?.COMP_LOGO || "";
+
   const buildBody = (f: Filters) => {
     const from = parseISODate(f.dateFrom);
     const toInclusive = parseISODate(f.dateTo);
@@ -352,12 +373,25 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
       date_from: from ? toISODate(from) : null,
       date_to: toExclusive ? toISODate(toExclusive) : null,
       report_type: f.reportType,
+      logo_url: logoUrl || null,
     };
   };
 
+  // ── Fetch the report HTML from the API and open it in a new browser tab
   const handleGenerate = async () => {
     setError("");
     setLoading(true);
+
+    const newTab = window.open("", "_blank");
+    if (!newTab) {
+      setLoading(false);
+      setError("Your browser blocked the new tab. Please allow pop-ups for this site and try again.");
+      return;
+    }
+    newTab.document.write(
+      "<title>Pending Purchase Order Report</title><body style='font-family:sans-serif;padding:40px;color:#6b7280;'>Loading report…</body>"
+    );
+
     try {
       const body = buildBody(pending);
       setApplied({ ...pending });
@@ -367,15 +401,26 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
         headers: { Accept: "text/html" },
       });
 
-      setHtml(typeof res.data === "string" ? res.data : String(res.data));
+      const htmlContent = typeof res.data === "string" ? res.data : String(res.data);
+
+      newTab.document.open();
+      newTab.document.write(htmlContent);
+      newTab.document.close();
+
+      reportWindowRef.current = newTab;
       setHasGenerated(true);
+      setLastGeneratedAt(new Date());
     } catch (e: any) {
+      newTab.document.open();
+      newTab.document.write(
+        "<title>Pending Purchase Order Report</title><body style='font-family:sans-serif;padding:40px;color:#dc2626;'>Failed to load report. Please close this tab and try again.</body>"
+      );
+      newTab.document.close();
       setError(
         e?.response?.data?.message ||
           e?.message ||
           "Failed to generate report"
       );
-      setHtml("");
       setHasGenerated(false);
     } finally {
       setLoading(false);
@@ -417,19 +462,19 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
     const d = buildDefaultFilters();
     setPending(d);
     setApplied(d);
-    setHtml("");
     setHasGenerated(false);
+    setLastGeneratedAt(null);
     setError("");
   };
 
+  // ── Print (targets the most recently opened report tab)
   const handlePrint = () => {
-    if (!html) return;
-    const w = window.open("", "_blank");
-    if (!w) return;
-    w.document.write(html);
-    w.document.close();
-    w.focus();
-    w.print();
+    if (reportWindowRef.current && !reportWindowRef.current.closed) {
+      reportWindowRef.current.focus();
+      reportWindowRef.current.print();
+    } else {
+      setError("No open report tab to print. Generate the report again.");
+    }
   };
 
   const row2: React.CSSProperties = {
@@ -473,14 +518,47 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
             style={{
               display: "flex",
               alignItems: "center",
+              justifyContent: "space-between",
               gap: 8,
               marginBottom: 12,
             }}
           >
-            <BarChart2 size={17} color="#185FA5" />
-            <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>
-              Pending Purchase Order Report
-            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <BarChart2 size={17} color="#185FA5" />
+              <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>
+                Pending Purchase Order Report
+              </span>
+              {hasGenerated && (
+                <span
+                  style={{
+                    fontSize: 10,
+                    background: "#d1fae5",
+                    color: "#065f46",
+                    padding: "2px 10px",
+                    borderRadius: 12,
+                    fontWeight: 500,
+                  }}
+                >
+                  Report Generated
+                </span>
+              )}
+            </div>
+
+            {/* Company logo preview, pulled via PENDING_PURCHASE_ORDER_LOGO */}
+            {logoUrl && (
+              <img
+                src={logoUrl}
+                alt="Company Logo"
+                style={{
+                  height: 32,
+                  maxWidth: 160,
+                  objectFit: "contain",
+                }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                }}
+              />
+            )}
           </div>
 
           {error && (
@@ -522,10 +600,10 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
             <div className="field-row" style={row2}>
               <FloatLabel label="Document No" bgColor={BG}>
                 <SearchField
-                  options={docRows.map(d => ({ 
-                    code: d.DOC_NO, 
+                  options={docRows.map(d => ({
+                    code: d.DOC_NO,
                     name: d.DOC_NO,
-                    extra: d.DOC_TYPE 
+                    extra: d.DOC_TYPE
                   }))}
                   code={pending.docNo}
                   name={pending.docNoName}
@@ -627,6 +705,53 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
             </div>
           </div>
 
+          {/* Status bar when report is generated */}
+          {hasGenerated && (
+            <div
+              style={{
+                marginTop: 10,
+                padding: "8px 14px",
+                background: "#f0fdf4",
+                border: "1px solid #bbf7d0",
+                borderRadius: 6,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 16 }}>✅</span>
+                <span style={{ fontSize: 12, color: "#065f46" }}>
+                  Report generated successfully at {lastGeneratedAt?.toLocaleTimeString()}
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  if (reportWindowRef.current && !reportWindowRef.current.closed) {
+                    reportWindowRef.current.focus();
+                  } else {
+                    setError("Report tab is closed. Please generate again.");
+                  }
+                }}
+                style={{
+                  padding: "4px 12px",
+                  background: "#185FA5",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 4,
+                  fontSize: 11,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                <Eye size={12} /> Open Report
+              </button>
+            </div>
+          )}
+
           <div
             style={{
               display: "flex",
@@ -723,30 +848,6 @@ const PurchaseOrderReport: React.FC<PurchaseOrderReportProps> = () => {
             </button>
           </div>
         </div>
-
-        {/* Report from backend HTML */}
-        {hasGenerated && (
-          <div
-            style={{
-              background: "#fff",
-              border: "0.5px solid #e5e7eb",
-              borderRadius: 12,
-              padding: 8,
-              minHeight: 400,
-            }}
-          >
-            <iframe
-              title="Pending PO Report"
-              srcDoc={html}
-              style={{
-                width: "100%",
-                height: "70vh",
-                border: "none",
-                background: "#fff",
-              }}
-            />
-          </div>
-        )}
       </div>
     </div>
   );
