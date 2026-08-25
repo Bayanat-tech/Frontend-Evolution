@@ -61,6 +61,26 @@ export type DataTableProps<TData, TValue> = {
   /** Called whenever row selection changes; receives array of selected row originals */
    onRowSelectionChange?: (selectedRows: TData[]) => void;
   initialSorting?: SortingState;
+  /**
+   * STANDARD WIDE-TABLE PATTERN — on by default for every table using this
+   * component. Pins the first column (row identity) while scrolling
+   * horizontally. Set false only if the table has no natural identity
+   * column, or is narrow enough to never scroll.
+   */
+  stickyFirstColumn?: boolean;
+  /**
+   * Pins the last column (typically Actions) while scrolling horizontally,
+   * so view/edit/delete controls never require scrolling back. On by
+   * default — set false only for tables with no action column.
+   */
+  stickyLastColumn?: boolean;
+  /**
+   * Shows a soft edge shadow on whichever side still has more columns to
+   * scroll to, fading out at each end. This is the only reliable "there's
+   * more here" signal until the user is already dragging the scrollbar.
+   * On by default.
+   */
+  enableScrollShadow?: boolean;
 };
 
 const densityClasses: Record<DataTableDensity, { row: string; cell: string }> = {
@@ -69,6 +89,21 @@ const densityClasses: Record<DataTableDensity, { row: string; cell: string }> = 
   comfortable: { row: "h-12", cell: "py-3" },
   large: { row: "h-14", cell: "py-3.5" },
 };
+
+// STANDARD WIDE-TABLE PATTERN — sticky column dividers.
+// Plain box-shadow (not a border color) so it reads correctly in both
+// light/dark and doesn't fight the table's existing border tokens.
+const STICKY_LEFT_SHADOW = "6px 0 6px -6px rgba(0,0,0,0.15)";
+const STICKY_RIGHT_SHADOW = "-6px 0 6px -6px rgba(0,0,0,0.15)";
+// Sticky cells need an opaque background or the scrolling columns behind
+// them show through. bg-white matches the convention already used
+// elsewhere in this file (data-table-scroll, data-table-header, etc).
+// NOTE: this means a sticky cell will NOT pick up row hover / [data-state
+// =selected] styling from Table.tsx if that styling relies on the row's
+// own background showing through cells — flag this to whoever owns
+// Table.tsx if that's needed; not fixed here since Table.tsx wasn't in
+// scope for this change.
+const STICKY_CELL_BG = "bg-white";
 
 const includesText: FilterFn<unknown> = (row, columnId, filterValue) => {
   const search = String(filterValue ?? "").trim().toLowerCase();
@@ -126,6 +161,9 @@ export function DataTable<TData, TValue>({
   getRowId,
   onRowSelectionChange,
   initialSorting = [],
+  stickyFirstColumn = true,
+  stickyLastColumn = true,
+  enableScrollShadow = true,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>(initialSorting);
   const [internalColumnFilters, setInternalColumnFilters] = useState<ColumnFiltersState>([]);
@@ -136,6 +174,10 @@ export function DataTable<TData, TValue>({
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const topScrollRef = useRef<HTMLDivElement>(null);
   const [scrollContentWidth, setScrollContentWidth] = useState(0);
+  // STANDARD WIDE-TABLE PATTERN — scroll-shadow state, driven off the same
+  // horizontal scroll position already tracked for the synced top scrollbar.
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
   const globalFilter = searchValue ?? internalSearch;
   const columnFilters = controlledColumnFilters ?? internalColumnFilters;
   const rowStyle = densityClasses[density];
@@ -236,10 +278,23 @@ export function DataTable<TData, TValue>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rowSelection]);
 
+  // STANDARD WIDE-TABLE PATTERN — recompute shadow visibility from the
+  // scroll container's current scrollLeft/scrollWidth/clientWidth.
+  const updateScrollShadows = () => {
+    if (!enableScrollShadow) return;
+    const el = tableScrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 1);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  };
+
   useEffect(() => {
     const scrollElement = tableScrollRef.current;
     if (!scrollElement) return undefined;
-    const updateWidth = () => setScrollContentWidth(scrollElement.scrollWidth);
+    const updateWidth = () => {
+      setScrollContentWidth(scrollElement.scrollWidth);
+      updateScrollShadows();
+    };
     updateWidth();
     const resizeObserver = new ResizeObserver(updateWidth);
     resizeObserver.observe(scrollElement);
@@ -249,16 +304,19 @@ export function DataTable<TData, TValue>({
       resizeObserver.disconnect();
       window.removeEventListener("resize", updateWidth);
     };
-  }, [columns.length, data.length, visibleRows.length, minWidthValue]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columns.length, data.length, visibleRows.length, minWidthValue, enableScrollShadow]);
 
   const syncTableScroll = (event: UIEvent<HTMLDivElement>) => {
     if (!tableScrollRef.current) return;
     tableScrollRef.current.scrollLeft = event.currentTarget.scrollLeft;
+    updateScrollShadows();
   };
 
   const syncTopScroll = (event: UIEvent<HTMLDivElement>) => {
     if (!topScrollRef.current) return;
     topScrollRef.current.scrollLeft = event.currentTarget.scrollLeft;
+    updateScrollShadows();
   };
 
   return (
@@ -323,62 +381,106 @@ export function DataTable<TData, TValue>({
         <div style={{ width: scrollContentWidth ? `${scrollContentWidth}px` : minWidthValue, height: 1 }} />
       </div>
 
-      <div
-        ref={tableScrollRef}
-        className="data-table-scroll overflow-auto bg-white"
-        style={{ maxHeight: heightValue, overflowX: "auto" }}
-        onScroll={syncTopScroll}
-      >
-        <Table style={{ minWidth: minWidthValue, width: `max(100%, ${minWidthValue})` }}>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead
-                    key={header.id}
-                    style={{ width: header.getSize() || undefined }}
-                    className={cn("relative", header.column.getCanSort() ? "cursor-pointer select-none" : undefined)}
-                    onClick={header.column.getToggleSortingHandler()}
-                  >
-                    <div className="flex min-h-7 items-center justify-between gap-1">
-                      <span className="flex min-w-0 items-center gap-1 truncate">
-                        {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                        {header.column.getCanSort() && (
-                          <SortIcon sorted={header.column.getIsSorted()} />
+      {/* STANDARD WIDE-TABLE PATTERN — relative wrapper so the scroll-shadow
+          overlays below can sit absolutely positioned against the actual
+          scrolling viewport, not the whole table shell. */}
+      <div className="relative">
+        {enableScrollShadow && (
+          <>
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 left-0 z-30 w-6 transition-opacity duration-150"
+              style={{
+                opacity: canScrollLeft ? 1 : 0,
+                background: "linear-gradient(to right, rgba(0,0,0,0.08), transparent)",
+              }}
+            />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 right-0 z-30 w-6 transition-opacity duration-150"
+              style={{
+                opacity: canScrollRight ? 1 : 0,
+                background: "linear-gradient(to left, rgba(0,0,0,0.08), transparent)",
+              }}
+            />
+          </>
+        )}
+
+        <div
+          ref={tableScrollRef}
+          className="data-table-scroll overflow-auto bg-white"
+          style={{ maxHeight: heightValue, overflowX: "auto" }}
+          onScroll={syncTopScroll}
+        >
+          <Table style={{ minWidth: minWidthValue, width: `max(100%, ${minWidthValue})` }}>
+            {/* STANDARD WIDE-TABLE PATTERN — sticky header stays visible on
+                vertical scroll. z-20 so it sits above sticky body columns
+                (z-10) at the header/body seam. */}
+            <TableHeader className="sticky top-0 z-20 bg-white">
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header, colIndex) => {
+                    const isFirst = colIndex === 0;
+                    const isLast = colIndex === headerGroup.headers.length - 1;
+                    const stickLeft = stickyFirstColumn && isFirst;
+                    // Guard against a 1-column table trying to stick both sides at once.
+                    const stickRight = stickyLastColumn && isLast && headerGroup.headers.length > 1;
+                    return (
+                      <TableHead
+                        key={header.id}
+                        style={{
+                          width: header.getSize() || undefined,
+                          boxShadow: stickLeft ? STICKY_LEFT_SHADOW : stickRight ? STICKY_RIGHT_SHADOW : undefined,
+                        }}
+                        className={cn(
+                          "relative",
+                          header.column.getCanSort() ? "cursor-pointer select-none" : undefined,
+                          (stickLeft || stickRight) && `sticky z-10 ${STICKY_CELL_BG}`,
+                          stickLeft && "left-0",
+                          stickRight && "right-0",
                         )}
-                      </span>
-                      {enableColumnFilters && header.column.getCanFilter() && (
-                        <ColumnFilterButton
-                          column={header.column}
-                          open={activeFilterColumn === header.column.id}
-                          onOpenChange={(open) => setActiveFilterColumn(open ? header.column.id : null)}
-                        />
-                      )}
-                    </div>
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-  {loading ? (
-    loaderType === "circle" ? (
-      <TableRow>
-        <TableCell className="h-40 text-center" colSpan={enhancedColumns.length}>
-          <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
-            <Loader2 className="animate-spin text-primary" size={22} />
-            <span className="text-xs font-medium">Loading...</span>
-          </div>
-        </TableCell>
-      </TableRow>
-    ) : (
-      skeletonRows.map((_, index) => (
-        <TableRow className={rowStyle.row} key={index}>
-          <TableCell className={rowStyle.cell} colSpan={enhancedColumns.length}><Skeleton /></TableCell>
+                        onClick={header.column.getToggleSortingHandler()}
+                      >
+                        <div className="flex min-h-7 items-center justify-between gap-1">
+                          <span className="flex min-w-0 items-center gap-1 truncate">
+                            {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                            {header.column.getCanSort() && (
+                              <SortIcon sorted={header.column.getIsSorted()} />
+                            )}
+                          </span>
+                          {enableColumnFilters && header.column.getCanFilter() && (
+                            <ColumnFilterButton
+                              column={header.column}
+                              open={activeFilterColumn === header.column.id}
+                              onOpenChange={(open) => setActiveFilterColumn(open ? header.column.id : null)}
+                            />
+                          )}
+                        </div>
+                      </TableHead>
+                    );
+                  })}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+    {loading ? (
+      loaderType === "circle" ? (
+        <TableRow>
+          <TableCell className="h-40 text-center" colSpan={enhancedColumns.length}>
+            <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
+              <Loader2 className="animate-spin text-primary" size={22} />
+              <span className="text-xs font-medium">Loading...</span>
+            </div>
+          </TableCell>
         </TableRow>
-      ))
-    )
-  ) : visibleRows.length ? (
+      ) : (
+        skeletonRows.map((_, index) => (
+          <TableRow className={rowStyle.row} key={index}>
+            <TableCell className={rowStyle.cell} colSpan={enhancedColumns.length}><Skeleton /></TableCell>
+          </TableRow>
+        ))
+      )
+    ) : visibleRows.length ? (
               visibleRows.map((row) => (
                 <TableRow
                   className={cn(rowStyle.row, onRowClick && "cursor-pointer", rowClassName?.(row.original))}
@@ -386,11 +488,29 @@ export function DataTable<TData, TValue>({
                   key={row.id}
                   onClick={() => onRowClick?.(row.original)}
                 >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell className={rowStyle.cell} key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
+                  {row.getVisibleCells().map((cell, colIndex) => {
+                    const cells = row.getVisibleCells();
+                    const isFirst = colIndex === 0;
+                    const isLast = colIndex === cells.length - 1;
+                    const stickLeft = stickyFirstColumn && isFirst;
+                    const stickRight = stickyLastColumn && isLast && cells.length > 1;
+                    return (
+                      <TableCell
+                        className={cn(
+                          rowStyle.cell,
+                          (stickLeft || stickRight) && `sticky z-10 ${STICKY_CELL_BG}`,
+                          stickLeft && "left-0",
+                          stickRight && "right-0",
+                        )}
+                        style={{
+                          boxShadow: stickLeft ? STICKY_LEFT_SHADOW : stickRight ? STICKY_RIGHT_SHADOW : undefined,
+                        }}
+                        key={cell.id}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    );
+                  })}
                 </TableRow>
               ))
             ) : (
@@ -401,7 +521,8 @@ export function DataTable<TData, TValue>({
               </TableRow>
             )}
           </TableBody>
-        </Table>
+          </Table>
+        </div>
       </div>
 
       {enablePagination && (
