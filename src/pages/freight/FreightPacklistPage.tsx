@@ -519,7 +519,7 @@ export function FreightPacklistPage({
         </>
       )}
 
-      <fieldset disabled={readOnly || !editing} className={`freight-document-paper freight-shipment-paper ${editing && !readOnly ? "is-editing" : "is-viewing"}`}>
+      <fieldset disabled={readOnly || !editing} className={`freight-ui-standard freight-document-paper freight-shipment-paper ${editing && !readOnly ? "is-editing" : "is-viewing"}`}>
         <PackEditContext.Provider value={editing && !readOnly}>
         <div className="freight-job-section-grid">
         <Panel className="lg:col-span-12" icon={FileSignature} title="Document Reference" meta={`Pack ${pack.packlist_no || "Auto"} / ${pack.job_no || "Select job"}`}>

@@ -547,7 +547,7 @@ export function InvoiceForm({ existingData, viewMode, mode = "wms", onClose }: I
       wide
       title={`${viewMode ? "View" : existingData ? "Edit" : "Create"}${isFreight ? " Freight" : ""} Invoice`}
       onClose={() => onClose(false)}
-      contentClassName="max-h-[90vh] w-[min(96vw,1200px)]"
+      contentClassName={`max-h-[90vh] w-[min(96vw,1200px)] ${isFreight ? "freight-ui-standard" : ""}`}
       footer={
         <div className="flex w-full items-center justify-between">
           {hasExistingData ? (

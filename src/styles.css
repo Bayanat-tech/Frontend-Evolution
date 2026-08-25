@@ -8811,6 +8811,202 @@ freight-dense-form .freight-form-card {
   }
 }
 
+/* Final Freight control normalization. Kept last so page-specific legacy
+   typography utilities cannot move labels back beside controls. */
+.freight-ui-standard :where(label):not(.inline-flex):not(.data-table-search) {
+  display: grid !important;
+  align-content: start;
+  gap: 4px !important;
+  color: #172033 !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.2 !important;
+  text-transform: none !important;
+}
+
+.freight-ui-standard :where(label):not(.inline-flex):not(.data-table-search) > :where(span, div):first-child {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+
+.freight-ui-standard :where(label):not(.inline-flex):not(.data-table-search) :where(
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea,
+  .ui-input,
+  .ui-select,
+  .ui-textarea,
+  .lookup-field-trigger,
+  button[role="combobox"]
+) {
+  min-height: 34px !important;
+  border: 1px solid #aeb9c8 !important;
+  border-radius: 10px !important;
+  background: #f8fafc !important;
+  color: #24364b !important;
+  font-size: 12px !important;
+  font-weight: 550 !important;
+  box-shadow: none !important;
+}
+
+.freight-ui-standard :where(label):not(.inline-flex):not(.data-table-search) :where(
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea,
+  .ui-input,
+  .ui-select,
+  .ui-textarea,
+  .lookup-field-trigger,
+  button[role="combobox"]
+):focus,
+.freight-ui-standard :where(label):not(.inline-flex):not(.data-table-search) :where(
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea,
+  .ui-input,
+  .ui-select,
+  .ui-textarea,
+  .lookup-field-trigger,
+  button[role="combobox"]
+):focus-visible {
+  border-color: #2463a7 !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 2px rgba(36, 99, 167, 0.13) !important;
+  outline: none !important;
+}
+
+.freight-ui-standard table :where(label) :where(input, select, textarea, .lookup-field-trigger, button[role="combobox"]) {
+  min-height: 28px !important;
+  height: 28px !important;
+  border-radius: 6px !important;
+  font-size: 11px !important;
+}
+
+/* Freight form language ---------------------------------------------------
+   Shared by commercial, operations, invoice, tariff and report screens.
+   Editable line-item tables intentionally retain their compact dimensions. */
+.freight-ui-standard {
+  --freight-control-height: 34px;
+  --freight-control-radius: 10px;
+  --freight-control-border: #aeb9c8;
+  --freight-control-bg: #f8fafc;
+  --freight-control-text: #24364b;
+  --freight-label-text: #172033;
+  --freight-section-border: #cbd3df;
+}
+
+.freight-ui-standard :where(
+  .freight-field-label,
+  .freight-compact-label,
+  .freight-form-card label,
+  .freight-panel-body label,
+  .freight-info-body label
+) {
+  display: grid;
+  align-content: start;
+  gap: 4px !important;
+  color: var(--freight-label-text) !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.2;
+  text-transform: none !important;
+}
+
+.freight-ui-standard :where(
+  .freight-field-label,
+  .freight-compact-label,
+  .freight-form-card label,
+  .freight-panel-body label,
+  .freight-info-body label
+) > span:first-child {
+  color: var(--freight-label-text) !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.freight-ui-standard :where(
+  .freight-form-card,
+  .freight-panel-body,
+  .freight-info-body
+) :where(input, select, textarea, .ui-input, .ui-select, .ui-textarea, .lookup-field-trigger, button[role="combobox"]),
+.freight-ui-standard > :where(div, section) label > :where(input, select, textarea, .ui-input, .ui-select, .ui-textarea, .lookup-field-trigger, button[role="combobox"]) {
+  min-height: var(--freight-control-height) !important;
+  border-color: var(--freight-control-border) !important;
+  border-radius: var(--freight-control-radius) !important;
+  background-color: var(--freight-control-bg) !important;
+  color: var(--freight-control-text) !important;
+  font-size: 12px !important;
+  font-weight: 550 !important;
+  box-shadow: none !important;
+}
+
+.freight-ui-standard :where(
+  .freight-form-card,
+  .freight-panel-body,
+  .freight-info-body
+) :where(textarea, .ui-textarea) {
+  min-height: 58px !important;
+  resize: vertical;
+}
+
+.freight-ui-standard :where(
+  .freight-form-card,
+  .freight-panel-body,
+  .freight-info-body
+) :where(input, select, textarea, .ui-input, .ui-select, .ui-textarea, .lookup-field-trigger, button[role="combobox"]):focus,
+.freight-ui-standard :where(
+  .freight-form-card,
+  .freight-panel-body,
+  .freight-info-body
+) :where(input, select, textarea, .ui-input, .ui-select, .ui-textarea, .lookup-field-trigger, button[role="combobox"]):focus-visible {
+  border-color: #2463a7 !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 0 0 2px rgba(36, 99, 167, 0.13) !important;
+  outline: none !important;
+}
+
+.freight-ui-standard :where(
+  .freight-form-card,
+  .freight-panel-body,
+  .freight-info-body
+) :where(input, select, textarea, .ui-input, .ui-select, .ui-textarea, .lookup-field-trigger, button[role="combobox"]):disabled {
+  border-color: #cbd3df !important;
+  background-color: #f1f4f8 !important;
+  color: #66758a !important;
+  opacity: 1 !important;
+}
+
+.freight-ui-standard :where(.freight-form-card, .freight-panel, .freight-info-section) {
+  border-color: var(--freight-section-border) !important;
+  border-radius: 14px !important;
+  overflow: hidden;
+}
+
+.freight-ui-standard :where(.freight-panel-body, .freight-info-body) {
+  padding: 12px !important;
+}
+
+.freight-ui-standard :where(.freight-job-table-shell, table) :where(input, select, textarea, .lookup-field-trigger, button[role="combobox"]) {
+  min-height: 28px !important;
+  height: 28px !important;
+  border-radius: 6px !important;
+  font-size: 11px !important;
+}
+
+@media (max-width: 720px) {
+  .freight-ui-standard {
+    --freight-control-height: 38px;
+  }
+
+  .freight-ui-standard :where(.freight-panel-body, .freight-info-body) {
+    padding: 10px !important;
+  }
+}
+
 .freight-job-editor-shell .freight-document-paper {
   min-width: 0;
   overflow: hidden;
@@ -9345,4 +9541,213 @@ freight-dense-form .freight-form-card {
     height: auto;
     gap: 8px;
   }
+}
+
+/* Freight UI final cascade overrides */
+.freight-ui-standard.freight-dense-form :where(.freight-form-card, .freight-panel-body) label > span:first-child,
+.freight-ui-standard .freight-compact-label > span:first-child,
+.freight-ui-standard .freight-field-label > span:first-child {
+  color: #172033 !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.freight-ui-standard :where(.freight-form-card, .freight-panel-body, .freight-info-body) :where(
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea,
+  .ui-input,
+  .ui-select,
+  .ui-textarea,
+  .lookup-field-trigger,
+  button[role="combobox"]
+) {
+  min-height: 34px !important;
+  border-color: #aeb9c8 !important;
+  border-radius: 10px !important;
+  background-color: #f8fafc !important;
+}
+
+.freight-ui-standard :where(.freight-job-table-shell, table) :where(
+  input,
+  select,
+  textarea,
+  .lookup-field-trigger,
+  button[role="combobox"]
+) {
+  min-height: 28px !important;
+  height: 28px !important;
+  border-radius: 6px !important;
+}
+
+.freight-ui-standard .data-table-search {
+  display: flex !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  width: 100% !important;
+  max-width: 520px !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 0 12px !important;
+  border: 1px solid #aebbd0 !important;
+  border-radius: 9999px !important;
+  background: #fbfdff !important;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+.freight-ui-standard .data-table-search > input {
+  display: block !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.freight-ui-standard .data-table-search:focus-within {
+  border-color: #2463a7 !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 2px rgba(36, 99, 167, 0.13) !important;
+}
+
+/* Freight dropdowns and lookup triggers */
+.freight-ui-standard .lookup-field-trigger {
+  min-height: 34px !important;
+  height: 34px !important;
+  border: 1px solid #aeb9c8 !important;
+  border-radius: 10px !important;
+  background: #f8fafc !important;
+  box-shadow: none !important;
+}
+
+.freight-ui-standard .lookup-field-trigger > button:first-of-type {
+  color: #24364b !important;
+  font-family: var(--app-font-family) !important;
+  font-size: 12px !important;
+  font-weight: 550 !important;
+}
+
+.freight-ui-standard .lookup-field-trigger > button:last-of-type {
+  color: #73839a !important;
+}
+
+.freight-ui-standard .lookup-field-trigger:focus-within {
+  border-color: #2463a7 !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 2px rgba(36, 99, 167, 0.13) !important;
+}
+
+.freight-ui-standard select {
+  color: #24364b !important;
+  font-family: var(--app-font-family) !important;
+  font-weight: 550 !important;
+}
+
+/* Lookup popups are portal-rendered, so their common visual contract lives
+   outside the Freight page scope. */
+.lookup-popover {
+  border: 1px solid #aeb9c8 !important;
+  border-radius: 10px !important;
+  font-family: var(--app-font-family) !important;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.2) !important;
+}
+
+.lookup-popover > div:first-child label {
+  display: flex !important;
+  height: 34px !important;
+  align-items: center !important;
+  gap: 8px !important;
+  border-color: #b8c3d1 !important;
+  border-radius: 9999px !important;
+  background: #ffffff !important;
+}
+
+.lookup-popover > div:first-child label > input {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.lookup-popover .lookup-popover-head,
+.lookup-popover table th {
+  height: 30px !important;
+  border-color: #0b438e !important;
+  background: #06479b !important;
+  color: #ffffff !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.lookup-popover table td {
+  height: 30px !important;
+  color: #24364b;
+  font-family: var(--app-font-family) !important;
+  font-size: 11px !important;
+}
+
+.lookup-popover .lookup-popover-code {
+  color: #0756a8 !important;
+  font-weight: 650 !important;
+}
+
+.lookup-popover .lookup-footer {
+  min-height: 32px;
+  background: #f8fafc !important;
+  color: #68778c !important;
+}
+
+/* Shared LookupField trigger — global across all application modules. */
+.lookup-field-trigger {
+  min-height: 34px !important;
+  height: 34px !important;
+  border: 1px solid #aeb9c8 !important;
+  border-radius: 10px !important;
+  background: #f8fafc !important;
+  font-family: var(--app-font-family) !important;
+  box-shadow: none !important;
+}
+
+.lookup-field-trigger > button:first-of-type {
+  color: #24364b !important;
+  font-family: var(--app-font-family) !important;
+  font-size: 12px !important;
+  font-weight: 550 !important;
+}
+
+.lookup-field-trigger > button:last-of-type {
+  color: #73839a !important;
+}
+
+.lookup-field-trigger:focus-within {
+  border-color: #2463a7 !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 2px rgba(36, 99, 167, 0.13) !important;
+}
+
+.lookup-field-trigger:has(button:disabled) {
+  border-color: #cbd3df !important;
+  background: #f1f4f8 !important;
+  opacity: 1 !important;
+}
+
+.lookup-field-trigger:has(button:disabled) > button {
+  color: #66758a !important;
+  opacity: 1 !important;
+}
+
+/* Dense editable grids retain their compact row height. */
+table .lookup-field-trigger,
+.freight-job-table-shell .lookup-field-trigger,
+.commercial-lines-card .lookup-field-trigger {
+  min-height: 28px !important;
+  height: 28px !important;
+  border-radius: 6px !important;
 }

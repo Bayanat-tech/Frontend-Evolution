@@ -453,7 +453,7 @@ export function FreightJobPage({
         {editing && <Button type="submit" size="sm" disabled={saving || isEditLocked}><Save size={14} />Save</Button>}
       </Header>}
       <div className="freight-job-editor-shell">
-        <fieldset disabled={isEditLocked || !editing} className={`freight-document-paper freight-shipment-paper ${editing ? "is-editing" : "is-viewing"}`}>
+        <fieldset disabled={isEditLocked || !editing} className={`freight-ui-standard freight-document-paper freight-shipment-paper ${editing ? "is-editing" : "is-viewing"}`}>
           <JobEditContext.Provider value={editing && !isEditLocked}>
           <div className="freight-shipment-hero">
             <div className="freight-shipment-hero-item">

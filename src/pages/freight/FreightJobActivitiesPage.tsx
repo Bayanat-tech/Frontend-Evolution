@@ -294,7 +294,7 @@ export function FreightJobActivitiesPage({
   }
 
   return (
-    <section className="grid gap-2 freight-job-ops-screen">
+    <section className="freight-ui-standard grid gap-2 freight-job-ops-screen">
       {!embeddedInWorkspace && <Header eyebrow={copy.eyebrow} title={copy.title} subtitle={`${lookupText(header, "job_no")} / ${lookupText(header, "prin_name") || lookupText(header, "prin_code")}`}>
         {notice && <NoticeChip notice={notice} />}
         {!initialJob && <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>}

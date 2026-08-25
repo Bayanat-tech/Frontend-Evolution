@@ -966,7 +966,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
 
   return (
     <>
-      <form ref={formRef} className="freight-dense-form" onSubmit={saveQuotation}> 
+      <form ref={formRef} className="freight-dense-form freight-ui-standard" onSubmit={saveQuotation}>
         <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={15} /></div>
