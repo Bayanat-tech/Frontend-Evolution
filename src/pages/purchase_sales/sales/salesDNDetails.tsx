@@ -228,13 +228,22 @@ export function SalesDnDetailsTable({
                                             onChange={(value, selectedRow) => {
                                                 const patch: Partial<SalesOrderLineRow> = {
                                                     so_p_uom: value,
-                                                    uom_name: text(getLookupValue(selectedRow || {}, "uom_name")) || row.uom_name,
+                                                    uom_name:
+                                                        text(getLookupValue(selectedRow || {}, "uom_name")) ||
+                                                        row.uom_name,
                                                 };
+
                                                 const merged = { ...row, ...patch };
+
                                                 if (isSamePoUom(merged)) {
-                                                    patch.so_qty_puom = qtyPoLuomNum;
+                                                    patch.qty_puom = 0;
                                                 }
-                                                patch.so_quantity = computePoQuantity({ ...row, ...patch });
+
+                                                patch.so_quantity = computeQuantity({
+                                                    ...row,
+                                                    ...patch,
+                                                });
+
                                                 updateRow(row.id, patch);
                                             }}
                                         />
@@ -242,18 +251,24 @@ export function SalesDnDetailsTable({
                                     <td className="finance-amount-cell px-2 py-1">
                                         <Input
                                             className="finance-money-input"
-                                            disabled={headerAndLineDisabled || samePoUom}
+                                            disabled={headerAndLineDisabled || sameUom}
                                             type="number"
                                             style={{ textAlign: "right" }}
                                             step="0.001"
-                                            value={sameUom ? qtyPoLuomNum : row.so_qty_puom}
+                                            value={sameUom ? 0 : row.so_qty_puom}
                                             onChange={(event) => {
                                                 const newQtyPuom = Number(event.target.value || 0);
-                                                const patch = { so_qty_puom: newQtyPuom };
-                                                updateRow(row.id, {
+
+                                                const patch: Partial<SalesOrderLineRow> = {
+                                                    so_qty_puom: newQtyPuom,
+                                                };
+
+                                                patch.so_quantity = computeQuantity({
+                                                    ...row,
                                                     ...patch,
-                                                    so_quantity: computePoQuantity({ ...row, ...patch }),
                                                 });
+
+                                                updateRow(row.id, patch);
                                             }}
                                         />
                                     </td>
@@ -294,17 +309,28 @@ export function SalesDnDetailsTable({
                                         />
                                     </td>
                                     <td className="finance-amount-cell w-24 px-2 py-1">
-                                        <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.001" value={row.so_qty_luom} onChange={(event) => {
-                                            const newQtyLuom = Number(event.target.value || 0);
-                                            const patch: Partial<SalesOrderLineRow> = { so_qty_luom: newQtyLuom };
-                                            if (samePoUom) {
-                                                patch.so_qty_puom = newQtyLuom;
-                                                patch.so_quantity = newQtyLuom;
-                                            } else {
-                                                patch.so_quantity = computePoQuantity({ ...row, ...patch });
-                                            }
-                                            updateRow(row.id, patch);
-                                        }} />
+                                        <Input
+                                            className="finance-money-input"
+                                            disabled={headerAndLineDisabled}
+                                            type="number"
+                                            style={{ textAlign: "right" }}
+                                            step="0.001"
+                                            value={row.so_qty_luom}
+                                            onChange={(event) => {
+                                                const newQtyLuom = Number(event.target.value || 0);
+
+                                                const patch: Partial<SalesOrderLineRow> = {
+                                                    so_qty_luom: newQtyLuom,
+                                                };
+
+                                                patch.so_quantity = computeQuantity({
+                                                    ...row,
+                                                    ...patch,
+                                                });
+
+                                                updateRow(row.id, patch);
+                                            }}
+                                        />
                                     </td>
                                     <td className="finance-amount-cell px-2 py-1">
                                         <Input
@@ -373,14 +399,20 @@ export function SalesDnDetailsTable({
                                             type="number"
                                             style={{ textAlign: "right" }}
                                             step="0.001"
-                                            value={sameUom ? qtyLuomNum : row.qty_puom}
+                                            value={sameUom ? 0 : row.qty_puom}
                                             onChange={(event) => {
                                                 const newQtyPuom = Number(event.target.value || 0);
-                                                const patch = { qty_puom: newQtyPuom };
-                                                updateRow(row.id, {
+
+                                                const patch: Partial<SalesOrderLineRow> = {
+                                                    qty_puom: newQtyPuom,
+                                                };
+
+                                                patch.quantity = computeQuantity({
+                                                    ...row,
                                                     ...patch,
-                                                    quantity: computeQuantity({ ...row, ...patch }),
                                                 });
+
+                                                updateRow(row.id, patch);
                                             }}
                                         />
                                     </td>
@@ -421,17 +453,28 @@ export function SalesDnDetailsTable({
                                         />
                                     </td>
                                     <td className="finance-amount-cell w-24 px-2 py-1">
-                                        <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.001" value={row.qty_luom} onChange={(event) => {
-                                            const newQtyLuom = Number(event.target.value || 0);
-                                            const patch: Partial<SalesOrderLineRow> = { qty_luom: newQtyLuom };
-                                            if (sameUom) {
-                                                patch.qty_puom = newQtyLuom;
-                                                patch.quantity = newQtyLuom;
-                                            } else {
-                                                patch.quantity = computeQuantity({ ...row, ...patch });
-                                            }
-                                            updateRow(row.id, patch);
-                                        }} />
+                                        <Input
+                                            className="finance-money-input"
+                                            disabled={headerAndLineDisabled}
+                                            type="number"
+                                            style={{ textAlign: "right" }}
+                                            step="0.001"
+                                            value={row.qty_luom}
+                                            onChange={(event) => {
+                                                const newQtyLuom = Number(event.target.value || 0);
+
+                                                const patch: Partial<SalesOrderLineRow> = {
+                                                    qty_luom: newQtyLuom,
+                                                };
+
+                                                patch.quantity = computeQuantity({
+                                                    ...row,
+                                                    ...patch,
+                                                });
+
+                                                updateRow(row.id, patch);
+                                            }}
+                                        />
                                     </td>
                                     <td className="finance-amount-cell px-2 py-1 text-right">
                                         {formatAmount(quantity)}

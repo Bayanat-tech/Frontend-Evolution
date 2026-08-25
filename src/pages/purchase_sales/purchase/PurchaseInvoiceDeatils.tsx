@@ -230,7 +230,7 @@ export function PurchaseInvoiceLinesTable({
                       })}
                     />
                   </td>
- 
+
                   <td className="finance-sticky-col finance-account-cell bg-card px-2 py-1" style={stickyStyle("product", docType)}>
                     <LookupField
                       label=""
@@ -288,13 +288,22 @@ export function PurchaseInvoiceLinesTable({
                       onChange={(value, selectedRow) => {
                         const patch: Partial<PurchaseOrderLineRow> = {
                           p_uom: value,
-                          uom_name: text(getLookupValue(selectedRow || {}, "uom_name")) || row.uom_name,
+                          uom_name:
+                            text(getLookupValue(selectedRow || {}, "uom_name")) ||
+                            row.uom_name,
                         };
+
                         const merged = { ...row, ...patch };
+
                         if (isSameUom(merged)) {
-                          patch.qty_puom = qtyLuomNum;
+                          patch.qty_puom = 0;
                         }
-                        patch.quantity = computeQuantity({ ...row, ...patch });
+
+                        patch.quantity = computeQuantity({
+                          ...row,
+                          ...patch,
+                        });
+
                         updateRow(row.id, patch);
                       }}
                     />
@@ -306,14 +315,20 @@ export function PurchaseInvoiceLinesTable({
                       type="number"
                       style={{ textAlign: "right" }}
                       step="0.001"
-                      value={sameUom ? qtyLuomNum : row.qty_puom}
+                      value={sameUom ? 0 : row.qty_puom}
                       onChange={(event) => {
                         const newQtyPuom = Number(event.target.value || 0);
-                        const patch = { qty_puom: newQtyPuom };
-                        updateRow(row.id, {
+
+                        const patch: Partial<PurchaseOrderLineRow> = {
+                          qty_puom: newQtyPuom,
+                        };
+
+                        patch.quantity = computeQuantity({
+                          ...row,
                           ...patch,
-                          quantity: computeQuantity({ ...row, ...patch }),
                         });
+
+                        updateRow(row.id, patch);
                       }}
                     />
                   </td>
@@ -354,17 +369,28 @@ export function PurchaseInvoiceLinesTable({
                     />
                   </td>
                   <td className="finance-amount-cell w-24 px-2 py-1">
-                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.001" value={row.qty_luom} onChange={(event) => {
-                      const newQtyLuom = Number(event.target.value || 0);
-                      const patch: Partial<PurchaseOrderLineRow> = { qty_luom: newQtyLuom };
-                      if (sameUom) {
-                        patch.qty_puom = newQtyLuom;
-                        patch.quantity = newQtyLuom;
-                      } else {
-                        patch.quantity = computeQuantity({ ...row, ...patch });
-                      }
-                      updateRow(row.id, patch);
-                    }} />
+                    <Input
+                      className="finance-money-input"
+                      disabled={headerAndLineDisabled}
+                      type="number"
+                      style={{ textAlign: "right" }}
+                      step="0.001"
+                      value={row.qty_luom}
+                      onChange={(event) => {
+                        const newQtyLuom = Number(event.target.value || 0);
+
+                        const patch: Partial<PurchaseOrderLineRow> = {
+                          qty_luom: newQtyLuom,
+                        };
+
+                        patch.quantity = computeQuantity({
+                          ...row,
+                          ...patch,
+                        });
+
+                        updateRow(row.id, patch);
+                      }}
+                    />
                   </td>
                   <td className="finance-amount-cell px-2 py-1">
                     <Input
@@ -405,7 +431,7 @@ export function PurchaseInvoiceLinesTable({
                       onChange={(event) => {
                         const taxType = event.target.value;
                         const taxPerc = taxType === "S" ? 5 : 0;
-                        {/* FIX #1: call linePOAmount(row), not the bare function reference */}
+                        {/* FIX #1: call linePOAmount(row), not the bare function reference */ }
                         const taxAmt = taxType === "S" ? (Number(linePOAmount(row)) || 0) * (taxPerc / 100) : 0;
                         updateRow(row.id, {
                           porder_tx_compnt_1_expmt: taxType,

@@ -239,13 +239,22 @@ export function PurchaseGrnDetailsTable({
                                             onChange={(value, selectedRow) => {
                                                 const patch: Partial<PurchaseOrderLineRow> = {
                                                     po_p_uom: value,
-                                                    uom_name: text(getLookupValue(selectedRow || {}, "uom_name")) || row.uom_name,
+                                                    uom_name:
+                                                        text(getLookupValue(selectedRow || {}, "uom_name")) ||
+                                                        row.uom_name,
                                                 };
+
                                                 const merged = { ...row, ...patch };
+
                                                 if (isSamePoUom(merged)) {
-                                                    patch.po_qty_puom = qtyPoLuomNum;
+                                                    patch.po_qty_puom = 0;
                                                 }
-                                                patch.po_quantity = computePoQuantity({ ...row, ...patch });
+
+                                                patch.quantity = computePoQuantity({
+                                                    ...row,
+                                                    ...patch,
+                                                });
+
                                                 updateRow(row.id, patch);
                                             }}
                                         />
@@ -253,18 +262,24 @@ export function PurchaseGrnDetailsTable({
                                     <td className="finance-amount-cell px-2 py-1">
                                         <Input
                                             className="finance-money-input"
-                                            disabled={headerAndLineDisabled || samePoUom}
+                                            disabled={headerAndLineDisabled || sameUom}
                                             type="number"
                                             style={{ textAlign: "right" }}
                                             step="0.001"
-                                            value={sameUom ? qtyPoLuomNum : row.po_qty_puom}
+                                            value={sameUom ? 0 : row.po_qty_puom}
                                             onChange={(event) => {
                                                 const newQtyPuom = Number(event.target.value || 0);
-                                                const patch = { po_qty_puom: newQtyPuom };
-                                                updateRow(row.id, {
+
+                                                const patch: Partial<PurchaseOrderLineRow> = {
+                                                    po_qty_puom: newQtyPuom,
+                                                };
+
+                                                patch.po_quantity = computePoQuantity({
+                                                    ...row,
                                                     ...patch,
-                                                    po_quantity: computePoQuantity({ ...row, ...patch }),
                                                 });
+
+                                                updateRow(row.id, patch);
                                             }}
                                         />
                                     </td>
@@ -305,17 +320,28 @@ export function PurchaseGrnDetailsTable({
                                         />
                                     </td>
                                     <td className="finance-amount-cell w-24 px-2 py-1">
-                                        <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.001" value={row.po_qty_luom} onChange={(event) => {
-                                            const newQtyLuom = Number(event.target.value || 0);
-                                            const patch: Partial<PurchaseOrderLineRow> = { po_qty_luom: newQtyLuom };
-                                            if (samePoUom) {
-                                                patch.po_qty_puom = newQtyLuom;
-                                                patch.po_quantity = newQtyLuom;
-                                            } else {
-                                                patch.po_quantity = computePoQuantity({ ...row, ...patch });
-                                            }
-                                            updateRow(row.id, patch);
-                                        }} />
+                                        <Input
+                                            className="finance-money-input"
+                                            disabled={headerAndLineDisabled}
+                                            type="number"
+                                            style={{ textAlign: "right" }}
+                                            step="0.001"
+                                            value={row.po_qty_luom}
+                                            onChange={(event) => {
+                                                const newQtyLuom = Number(event.target.value || 0);
+
+                                                const patch: Partial<PurchaseOrderLineRow> = {
+                                                    po_qty_luom: newQtyLuom,
+                                                };
+
+                                                patch.po_quantity = computePoQuantity({
+                                                    ...row,
+                                                    ...patch,
+                                                });
+
+                                                updateRow(row.id, patch);
+                                            }}
+                                        />
                                     </td>
                                     <td className="finance-amount-cell px-2 py-1">
                                         <Input
@@ -344,9 +370,9 @@ export function PurchaseGrnDetailsTable({
                                     <td className="w-64 px-2 py-1">
                                         <LookupField
                                             label=""
-                                            value={row.p_uom || ""}
+                                            value={row.po_p_uom || ""}
                                             displayValue={
-                                                row.p_uom
+                                                row.po_p_uom
                                             }
                                             columns={[
                                                 { field: "uom_code", header: "Code" },
@@ -365,14 +391,23 @@ export function PurchaseGrnDetailsTable({
                                             disabled={headerAndLineDisabled}
                                             onChange={(value, selectedRow) => {
                                                 const patch: Partial<PurchaseOrderLineRow> = {
-                                                    p_uom: value,
-                                                    uom_name: text(getLookupValue(selectedRow || {}, "uom_name")) || row.uom_name,
+                                                    po_p_uom: value,
+                                                    uom_name:
+                                                        text(getLookupValue(selectedRow || {}, "uom_name")) ||
+                                                        row.uom_name,
                                                 };
+
                                                 const merged = { ...row, ...patch };
+
                                                 if (isSameUom(merged)) {
-                                                    patch.qty_puom = qtyLuomNum;
+                                                    patch.qty_puom = 0;
                                                 }
-                                                patch.quantity = computeQuantity({ ...row, ...patch });
+
+                                                patch.quantity = computeQuantity({
+                                                    ...row,
+                                                    ...patch,
+                                                });
+
                                                 updateRow(row.id, patch);
                                             }}
                                         />
@@ -384,23 +419,29 @@ export function PurchaseGrnDetailsTable({
                                             type="number"
                                             style={{ textAlign: "right" }}
                                             step="0.001"
-                                            value={sameUom ? qtyLuomNum : row.qty_puom}
+                                            value={sameUom ? 0 : row.qty_puom}
                                             onChange={(event) => {
                                                 const newQtyPuom = Number(event.target.value || 0);
-                                                const patch = { qty_puom: newQtyPuom };
-                                                updateRow(row.id, {
+
+                                                const patch: Partial<PurchaseOrderLineRow> = {
+                                                    qty_puom: newQtyPuom,
+                                                };
+
+                                                patch.quantity = computeQuantity({
+                                                    ...row,
                                                     ...patch,
-                                                    quantity: computeQuantity({ ...row, ...patch }),
                                                 });
+
+                                                updateRow(row.id, patch);
                                             }}
                                         />
                                     </td>
                                     <td className="w-64 px-2 py-1">
                                         <LookupField
                                             label=""
-                                            value={row.l_uom || ""}
+                                            value={row.po_l_uom || ""}
                                             displayValue={
-                                                row.l_uom
+                                                row.po_l_uom
                                             }
                                             columns={[
                                                 { field: "uom_code", header: "Code" },
@@ -419,7 +460,7 @@ export function PurchaseGrnDetailsTable({
                                             disabled={headerAndLineDisabled}
                                             onChange={(value, selectedRow) => {
                                                 const patch: Partial<PurchaseOrderLineRow> = {
-                                                    l_uom: value,
+                                                    po_l_uom: value,
                                                     uom_name: text(getLookupValue(selectedRow || {}, "uom_name")) || row.uom_name,
                                                 };
                                                 const merged = { ...row, ...patch };
@@ -432,17 +473,28 @@ export function PurchaseGrnDetailsTable({
                                         />
                                     </td>
                                     <td className="finance-amount-cell w-24 px-2 py-1">
-                                        <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.001" value={row.qty_luom} onChange={(event) => {
-                                            const newQtyLuom = Number(event.target.value || 0);
-                                            const patch: Partial<PurchaseOrderLineRow> = { qty_luom: newQtyLuom };
-                                            if (sameUom) {
-                                                patch.qty_puom = newQtyLuom;
-                                                patch.quantity = newQtyLuom;
-                                            } else {
-                                                patch.quantity = computeQuantity({ ...row, ...patch });
-                                            }
-                                            updateRow(row.id, patch);
-                                        }} />
+                                        <Input
+                                            className="finance-money-input"
+                                            disabled={headerAndLineDisabled}
+                                            type="number"
+                                            style={{ textAlign: "right" }}
+                                            step="0.001"
+                                            value={row.qty_luom}
+                                            onChange={(event) => {
+                                                const newQtyLuom = Number(event.target.value || 0);
+
+                                                const patch: Partial<PurchaseOrderLineRow> = {
+                                                    qty_luom: newQtyLuom,
+                                                };
+
+                                                patch.quantity = computeQuantity({
+                                                    ...row,
+                                                    ...patch,
+                                                });
+
+                                                updateRow(row.id, patch);
+                                            }}
+                                        />
                                     </td>
                                     <td className="finance-amount-cell px-2 py-1 text-right">
                                         {formatAmount(quantity)}

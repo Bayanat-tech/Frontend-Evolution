@@ -41,6 +41,7 @@ import { SalesInvoiceReport } from "./SalesInvoiceReport";
 import { downloadSalesInvoiceExcel } from "./SalesInvoiceReport";
 import { SalesInvoiceHeaderForm } from "./salesInvoiceHeader";
 import { SalesInvoiceLinesTable } from "./SalesInvoiceDetails";
+import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 
 export type { PurchaseOrderEditorState };
 
@@ -519,7 +520,7 @@ export function SalesInvoiceEditor({
                   </Button>
                 </>
               ) : null}
-              <Button type="button" variant="secondary">
+              <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
                 <Paperclip size={15} /> Files
               </Button>
               <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}>
@@ -721,6 +722,19 @@ export function SalesInvoiceEditor({
           excel={() => void handleExcel()}
         />
       ) : null}
+
+      
+       <AttachmentDialog
+        open={attachmentOpen}
+        onClose={() => setAttachmentOpen(false)}
+        requestNumber={form.doc_no ? String(form.doc_no) : ""}
+        title="Sales Invoice Attachments"
+        module="SI"
+        type="Sales Invoice"
+        companyCode={user?.company_code || ""}
+        loginId={user?.loginid || ""}
+        flowLevel={effectiveFlowLevel}
+      />
     </>
   );
 }

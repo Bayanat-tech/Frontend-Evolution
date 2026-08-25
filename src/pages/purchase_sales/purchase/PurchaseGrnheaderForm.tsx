@@ -69,12 +69,12 @@ export function PurchaseGrnHeaderForm({
                 <div className="col-span-2">
                     <LookupField
                         label="A/c code *"
-                        value={form.ac_code}
-                        displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
+                        value={form.po_ac_code || ""}
+                        displayValue={form.ac_name ? `${form.po_ac_code} - ${form.ac_name}` : form.po_ac_code}
                         columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "address", header: "Address" }, { field: "tel", header: "Tel" }, { field: "fax", header: "Fax" }]}
                         valueField="ac_code"
                         displayFields={["ac_code", "ac_name"]}
-                        loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_HDR", code1: companyCode, loginid: loginIdOrAdmin })}
+                        loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_For_suppier_customer", code1: companyCode, loginid: loginIdOrAdmin })}
                         disabled={headerAndLineDisabled}
                         onChange={(value, row) => setForm((current) => ({
                             ...current,
@@ -119,7 +119,7 @@ export function PurchaseGrnHeaderForm({
                                    po_doc_date: toDateInputValue(getLookupValue(row || {}, "po_doc_date")),
                                     po_payment_terms: text(getLookupValue(row || {}, "po_payment_terms")),
                                     po_dlvr_term: text(getLookupValue(row || {}, "po_dlvr_term")),
-                                    total_po_amount:numberOrZero(getLookupValue(row || {},"total_po_amount"))
+                                    total_po_amount:numberOrZero(getLookupValue(row || {},"total_po_amount")),        
                                 }));
                                 // Fetch and populate line details — same logic as the lines table
                                 try {

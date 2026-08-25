@@ -39,6 +39,7 @@ import ReportDialogPage from "../../../components/ReportDialogPage";
 import { SalesDNReport, downloadSalesDNExcel } from "./SalesDNReport";
 import { SalesDNHeaderForm } from "./SaleDNHeaderfrom";
 import { SalesDnDetailsTable } from "./salesDNDetails";
+import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 
 export type { PurchaseOrderEditorState };
 
@@ -322,7 +323,6 @@ export function SalesDNEditor({
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
-    if (!form.curr_code) return setError("Currency is required");
     return runAction(
       "submit",
       async () => {
@@ -543,7 +543,7 @@ export function SalesDNEditor({
                   </Button>
                 </>
               )}
-              <Button type="button" variant="secondary">
+               <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
                 <Paperclip size={15} /> Files
               </Button>
               <Button
@@ -755,7 +755,19 @@ export function SalesDNEditor({
           onClose={closeReport}
           excel={() => void handleExcel()}
         />
+
       )}
+             <AttachmentDialog
+              open={attachmentOpen}
+              onClose={() => setAttachmentOpen(false)}
+              requestNumber={form.doc_no ? String(form.doc_no) : ""}
+              title="Sales DN Attachments"
+              module="SDN"
+              type="Sales DN"
+              companyCode={user?.company_code || ""}
+              loginId={user?.loginid || ""}
+              flowLevel={effectiveFlowLevel}
+            />
     </>
   );
 }

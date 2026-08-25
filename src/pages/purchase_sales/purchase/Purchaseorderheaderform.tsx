@@ -309,7 +309,7 @@ export function PurchaseOrderHeaderForm({
           </div>
         )}
         <CField label="Quotn No">
-          <Input className="text-right" type="number" disabled={headerAndLineDisabled} value={form.ref_no} onChange={(event) => updateField("ref_no", event.target.value)} />
+          <Input className="text-right" type="text" disabled={headerAndLineDisabled} value={form.ref_no} onChange={(event) => updateField("ref_no", event.target.value)} />
         </CField>
         <CField label="Quotn Date">
           <Input type="date" disabled={headerAndLineDisabled} value={form.ref_date} onChange={(event) => updateField("ref_date", event.target.value)} />
@@ -341,7 +341,7 @@ export function PurchaseOrderHeaderForm({
             columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "address", header: "Address" }, { field: "tel", header: "Tel" }, { field: "fax", header: "Fax" }]}
             valueField="ac_code"
             displayFields={["ac_code", "ac_name"]}
-            loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_HDR", code1: companyCode, loginid: loginIdOrAdmin })}
+            loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_For_suppier_customer", code1: companyCode, loginid: loginIdOrAdmin })}
             disabled={headerAndLineDisabled}
             onChange={(value, row) => setForm((current) => ({
               ...current,
@@ -405,10 +405,10 @@ export function PurchaseOrderHeaderForm({
 
       <CompactSection label="Order, Currency & Tax">
       {(String(docType ?? "").trim().toUpperCase() === "LPO" &&  <CField label="Buyer">
-          <Input className="text-right" type="number" disabled={headerAndLineDisabled} value={form.buyer} onChange={(event) => updateField("buyer", event.target.value)} />
+          <Input className="text-right" type="text" disabled={headerAndLineDisabled} value={form.buyer} onChange={(event) => updateField("buyer", event.target.value)} />
         </CField>)}
        { (String(docType ?? "").trim().toUpperCase() === "LPO" &&<CField label="WO No">
-          <Input className="text-right" type="number" disabled={headerAndLineDisabled} value={form.wo_number} onChange={(event) => updateField("wo_number", event.target.value)} />
+          <Input className="text-right" type="text" disabled={headerAndLineDisabled} value={form.wo_number} onChange={(event) => updateField("wo_number", event.target.value)} />
         </CField>)}
 
         <div className="col-span-2">
@@ -529,7 +529,7 @@ export function PurchaseOrderHeaderForm({
           <Input disabled={headerAndLineDisabled} value={form.project_name} onChange={(event) => updateField("project_name", event.target.value)} />
         </CField>)}
        { (String(docType ?? "").trim().toUpperCase() === "LPO" &&<CField label="PR No">
-          <Input className="text-right" type="number" disabled={headerAndLineDisabled} value={form.pr_no} onChange={(event) => updateField("pr_no", event.target.value)} />
+          <Input className="text-right" type="text" disabled={headerAndLineDisabled} value={form.pr_no} onChange={(event) => updateField("pr_no", event.target.value)} />
         </CField>)}
       {(String(docType ?? "").trim().toUpperCase() === "LPO" &&  <CField label="Scope of Work" className="col-span-2">
           <Input disabled={headerAndLineDisabled} value={form.scope_of_work} onChange={(event) => updateField("scope_of_work", event.target.value)} />

@@ -75,7 +75,7 @@ export function SalesInvoiceHeaderForm({
                         columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "address", header: "Address" }, { field: "tel", header: "Tel" }, { field: "fax", header: "Fax" }]}
                         valueField="ac_code"
                         displayFields={["ac_code", "ac_name"]}
-                        loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_HDR", code1: companyCode, loginid: loginIdOrAdmin })}
+                        loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_For_suppier_customer", code1: companyCode, loginid: loginIdOrAdmin })}
                         disabled={headerAndLineDisabled}
                         onChange={(value, row) => setForm((current) => ({
                             ...current,
@@ -245,16 +245,16 @@ export function SalesInvoiceHeaderForm({
                             />
                         </div>
                     )}
-                <CField label="GRN Date *">
+                <CField label="SDN Date *">
                     <Input type="date" disabled={headerAndLineDisabled} required value={form.doc_date} onChange={(event) => updateField("doc_date", event.target.value)} />
                 </CField>
-                <CField label="PO NO *">
+                <CField label="SO NO *">
                     <Input type="text" disabled={headerAndLineDisabled} required value={form.so_doc_no} onChange={(event) => updateField("so_doc_no", event.target.value)} />
                 </CField>
-                <CField label="PO Date *">
+                <CField label="SO Date *">
                     <Input type="date" disabled={headerAndLineDisabled} required value={form.so_doc_date} onChange={(event) => updateField("so_doc_date", event.target.value)} />
                 </CField>
-                <CField label="PO Amount *">
+                <CField label="SO Amount *">
                     <Input type="text" disabled={headerAndLineDisabled} required value={form.total_so_amount} onChange={(event) => updateField("total_so_amount", event.target.value)} />
                 </CField>
                 <CField label="INV NO *">
@@ -347,26 +347,7 @@ export function SalesInvoiceHeaderForm({
 
 
             <CompactSection label="Order, Currency & Tax">
-                <CField label="Buyer">
-                    <Input
-                        className="text-right"
-                        type="number"
-                        disabled={headerAndLineDisabled}
-                        value={form.so_buyer}
-                        onChange={(event) => updateField("so_buyer", event.target.value)}
-                    />
-                </CField>
-
-                <CField label="WO No">
-                    <Input
-                        className="text-right"
-                        type="number"
-                        disabled={headerAndLineDisabled}
-                        value={form.so_wo_number}
-                        onChange={(event) => updateField("so_wo_number", event.target.value)}
-                    />
-                </CField>
-
+ 
                 <div className="col-span-2">
                     <LookupField
                         label="Currency *"
@@ -584,42 +565,10 @@ export function SalesInvoiceHeaderForm({
 
 
             <CompactSection
-                label="Project, Scope & Delivery"
+                label="Delivery"
                 className="border-b-0"
             >
-                <CField label="Project Name" className="col-span-2">
-                    <Input
-                        disabled={headerAndLineDisabled}
-                        value={form.so_project_name}
-                        onChange={(event) =>
-                            updateField("so_project_name", event.target.value)
-                        }
-                    />
-                </CField>
-
-                <CField label="PR No">
-                    <Input
-                        className="text-right"
-                        type="number"
-                        disabled={headerAndLineDisabled}
-                        value={form.so_pr_no}
-                        onChange={(event) =>
-                            updateField("so_pr_no", event.target.value)
-                        }
-                    />
-                </CField>
-
-                <CField label="Scope of Work" className="col-span-2">
-                    <Input
-                        disabled={headerAndLineDisabled}
-                        value={form.so_scope_of_work}
-                        onChange={(event) =>
-                            updateField("so_scope_of_work", event.target.value)
-                        }
-                    />
-                </CField>
-
-                <CField label="Delivery Contact">
+                   <CField label="Delivery Contact">
                     <Input
                         disabled={headerAndLineDisabled}
                         value={form.so_dlvr_contact}

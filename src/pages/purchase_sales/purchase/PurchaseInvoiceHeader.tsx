@@ -350,7 +350,7 @@ export function PurchaseInvoiceHeaderForm({
                 <CField label="Buyer">
                     <Input
                         className="text-right"
-                        type="number"
+                        type="text"
                         disabled={headerAndLineDisabled}
                         value={form.po_buyer}
                         onChange={(event) => updateField("po_buyer", event.target.value)}
@@ -360,7 +360,7 @@ export function PurchaseInvoiceHeaderForm({
                 <CField label="WO No">
                     <Input
                         className="text-right"
-                        type="number"
+                        type="text"
                         disabled={headerAndLineDisabled}
                         value={form.po_wo_number}
                         onChange={(event) => updateField("po_wo_number", event.target.value)}
@@ -600,7 +600,7 @@ export function PurchaseInvoiceHeaderForm({
                 <CField label="PR No">
                     <Input
                         className="text-right"
-                        type="number"
+                        type="text"
                         disabled={headerAndLineDisabled}
                         value={form.po_pr_no}
                         onChange={(event) =>
