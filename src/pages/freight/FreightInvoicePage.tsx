@@ -2,8 +2,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Calculator, Eye, Pencil, Plus, Printer, RefreshCw, Save, Search, Trash2 } from "lucide-react";
 import { api } from "../../api/client";
-import { freightSelect } from "../../api/freight";
-import { getInvocieDetailReport } from "../../api/wms";
+import { freightSelect, getFreightInvoiceDetailReport } from "../../api/freight";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
@@ -12,7 +11,6 @@ import { Input } from "../../components/ui/Input";
 import { LookupField } from "../../components/ui/LookupField";
 import { useToast } from "../../components/ui/AlertToast";
 import { useAuth } from "../../state/AuthContext";
-import InvoiceForm from "../wms/invoice/InvoiceForm";
 
 type InvoiceEditorMode = "add" | "edit" | "view";
 
@@ -292,7 +290,7 @@ export function FreightInvoicePage() {
     }
     reportWindow.document.write("<p style='font-family:Arial;padding:24px'>Loading invoice report...</p>");
     try {
-      const html = await getInvocieDetailReport(form.prin_code, form.invoice_no, companyCode, reportType);
+      const html = await getFreightInvoiceDetailReport(form.prin_code, form.invoice_no, companyCode, reportType);
       if (reportWindow.closed) return;
       reportWindow.document.open();
       reportWindow.document.write(html);
@@ -337,21 +335,8 @@ export function FreightInvoicePage() {
         getRowId={(row, index) => text(row.invoice_no) || String(index)}
       />
 
-      {editorOpen && (
-        <InvoiceForm
-          mode="freight"
-          existingData={editorMode === "add" ? undefined : form as unknown as Record<string, unknown>}
-          viewMode={readOnly}
-          onClose={(shouldRefetch) => {
-            setEditorOpen(false);
-            setPrintDialogOpen(false);
-            if (shouldRefetch) void loadRows();
-          }}
-        />
-      )}
-
       <Dialog
-        open={false}
+        open={editorOpen}
         wide
         title={readOnly ? "View Freight Invoice" : editorMode === "edit" ? "Edit Freight Invoice" : "Create Freight Invoice"}
         description={form.invoice_no || "Select confirmed freight service lines and create an invoice."}
