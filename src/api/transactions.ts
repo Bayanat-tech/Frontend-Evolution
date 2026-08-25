@@ -395,9 +395,12 @@ export async function getLpoDetail(docNo: string, docType: string) {
 
 // Get lpo (Ref_Doc) in PI
 export async function getPurchaseHeader(docNo: string, docType: string) {
+  const normalizedDocType = docType.trim().toUpperCase() === "PIREQUEST"
+    ? "PI"
+    : docType.trim().toUpperCase();
   const response = await api.get<ApiResponse<Record<string, unknown>>>(
     `/api/finance/transactions/purchaseheader/${encodeURIComponent(docNo)}`,
-    { params: { doc_type: docType } }
+    { params: { doc_type: normalizedDocType } }
   );
   if (!response.data.success) throw new Error(response.data.message || "Unable to load purchase header");
   return response.data.data || {};

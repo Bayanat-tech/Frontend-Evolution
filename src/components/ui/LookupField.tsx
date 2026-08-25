@@ -26,6 +26,7 @@ type LookupFieldProps = {
   placeholder?: string;
   required?: boolean;
   multiSelect?: boolean;
+  showLabelInCompact?: boolean;
 };
 
 export function LookupField({
@@ -40,6 +41,7 @@ export function LookupField({
   disabled,
   compact,
   dense = false,
+  showLabelInCompact = false,
   placeholder,
   required,
   enforceRequired,
@@ -207,11 +209,11 @@ export function LookupField({
   return (
     <>
       <label className={compact ? "block w-full min-w-0" : "field"}>
-        {!compact && (
+      {(!compact || showLabelInCompact) && (
           <span>
             {label} {required && <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span>}
           </span>
-        )}
+      )}
         <div
           ref={triggerRef}
           className={`lookup-field-trigger relative flex w-full min-w-0 overflow-hidden rounded-md border border-[#d5dbe3] bg-white ${

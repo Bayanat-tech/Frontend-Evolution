@@ -6,7 +6,7 @@ import { executeWmsInboundSql } from "../../../api/wms"; // adjust path to where
 import { LookupRow, getLookupValue } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { ColumnDef } from "@tanstack/react-table";
-import { CalendarDays, Search as SearchIcon, SlidersHorizontal, Sparkles, Save } from "lucide-react";
+import { CalendarDays, Search as SearchIcon, Sparkles, Save } from "lucide-react";
 
 type HolidayRow = {
   DATEID: string;
@@ -302,24 +302,15 @@ export default function HolidayCalendarPage() {
 
   return (
     <div className="grid gap-2 p-3">
-      {/* Page header — compact, no title */}
-      {/* <div className="flex items-center gap-2">
-        <div className="grid h-8 w-8 place-items-center rounded-lg bg-primary/10 text-primary">
-          <CalendarDays size={16} />
-        </div>
-        <p className="m-0 text-xs text-muted-foreground">
-          View declared holidays, weekly offs, and working-day exceptions by division and year
-        </p>
-      </div> */}
-
-      {/* Filter card */}
+      {/* Filter card — compact single-row header, no separate page title block */}
       <div className="overflow-hidden rounded-lg border border-[#aebbd0] bg-card shadow-[0_8px_22px_rgba(15,23,42,0.07)]">
-        <div className="flex items-center gap-2 border-b border-[#c7d2e3] bg-[#f8fbff] px-3 py-2">
-          <SlidersHorizontal size={14} className="text-primary" />
-          <div>
-            <p className="eyebrow m-0">Filters</p>
-            <p className="m-0 text-xs text-muted-foreground">Division, Holiday Type, Grade & Year Range</p>
+        <div className="flex items-center gap-2 border-b border-[#c7d2e3] bg-gradient-to-r from-[#eef4ff] to-[#f8fbff] px-3 py-2">
+          <div className="grid h-6 w-6 place-items-center rounded-md bg-primary/10 text-primary">
+            <CalendarDays size={13} />
           </div>
+          <p className="m-0 text-xs font-medium text-foreground">Holiday Calendar</p>
+          <span className="text-[#c7d2e3]">|</span>
+          <p className="m-0 text-xs text-muted-foreground">Division, Holiday Type, Grade & Year Range</p>
         </div>
 
         <div className="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -343,7 +334,7 @@ export default function HolidayCalendarPage() {
           <label className="field">
             <span>Holiday Type</span>
             <select
-              className="h-9 rounded-md border border-gray-400 bg-background px-3 text-sm"
+              className="h-9 appearance-none rounded-md border border-gray-400 bg-background bg-[length:14px] bg-[right_0.6rem_center] bg-no-repeat px-3 text-sm leading-none [background-image:url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2364748b%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22M6%209l6%206%206-6%22%2F%3E%3C%2Fsvg%3E')]"
               value={holidayType}
               onChange={(e) => setHolidayType(e.target.value)}
             >
@@ -443,7 +434,7 @@ export default function HolidayCalendarPage() {
         emptyText="No holidays found for this period — try Generate Calendar if this is a new Division/Year"
         searchPlaceholder="Search date, reason, type..."
         enablePagination
-        pageSize={100}
+        pageSize={10}
         density="compact"
         rowClassName={(row) =>
           row.HOLIDAY_TYPE === "PH" ? "bg-amber-50/80" : row.HOLIDAY_TYPE === "W1" || row.HOLIDAY_TYPE === "W2" ? "bg-red-50/80" : ""
