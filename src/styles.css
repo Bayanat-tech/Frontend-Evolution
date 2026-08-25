@@ -6046,8 +6046,27 @@ freight-dense-form .freight-form-card {
 }
 
 .lookup-popover table td {
-  height: 29px;
+  height: 30px;
   border-color: #edf2f7;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lookup-popover .lookup-results-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.lookup-popover .lookup-results-table th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lookup-popover .lookup-results-table tr {
+  height: 30px;
 }
 
 .lookup-popover table tr[aria-selected="true"] td {
