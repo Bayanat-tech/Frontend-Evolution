@@ -1316,7 +1316,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
 },
   
 {
-  name: "Profit & Loss Summary Report",
+  name: "PO Order Register Report",
   match: ({ pathname }) => isPoOrderRegisterRoute(pathname),
   element: () => <PoOrderRegisterPage />,
 }
