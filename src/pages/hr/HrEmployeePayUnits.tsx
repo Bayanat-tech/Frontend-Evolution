@@ -14,8 +14,6 @@ import {
 // ════════════════════════════════════════════════════════════════════════
 
 type THeaderFilters = {
-  company_code: string;
-  company_name: string;
   div_code: string;
   div_name: string;
   dept_code: string;
@@ -27,8 +25,6 @@ type THeaderFilters = {
 };
 
 const EMPTY_HEADER: THeaderFilters = {
-  company_code: "",
-  company_name: "",
   div_code: "",
   div_name: "",
   dept_code: "",
@@ -117,12 +113,6 @@ const makeNewRow = (): TPayUnitRow => ({
   is_new: true,
 });
 
-const COMPANY_LOOKUP_PARAMETER = "MST_HR_MS_HR_COMPANY_DDL";
-const COMPANY_LOOKUP_COLUMNS: { field: string; header: string }[] = [
-  { field: "company_code", header: "Company Code" },
-  { field: "comp_name", header: "Company Name" },
-];
-
 const DIVISION_LOOKUP_PARAMETER = "MST_HR_ACCOUNT_DIVISION";
 const DIVISION_LOOKUP_COLUMNS: { field: string; header: string }[] = [
   { field: "div_code", header: "Division Code" },
@@ -155,6 +145,7 @@ const PAY_UNITS_RETRIEVE_PARAMETER = "MST_HR_EMPLOYEE_PAY_UNITS_SELECT";
 export function HrEmployeePayUnits() {
   const { user } = useAuth();
   const loginid = user?.loginid ?? "";
+  const companyCode = user?.company_code ?? "";
 
   const [header, setHeader] = useState<THeaderFilters>({ ...EMPTY_HEADER });
   const [rows, setRows] = useState<TPayUnitRow[]>([]);
@@ -168,7 +159,7 @@ export function HrEmployeePayUnits() {
   const setHeaderField = (field: keyof THeaderFilters, value: unknown) =>
     setHeader((prev) => ({ ...prev, [field]: value }));
 
-  const employeeReady = !!header.company_code && !!header.employee_id;
+  const employeeReady = !!companyCode && !!header.employee_id;
 
   const loadLookupRows = useCallback(
     async (
@@ -206,7 +197,7 @@ export function HrEmployeePayUnits() {
   );
 
   const loadEmployeeOptions = useCallback(async (): Promise<LookupRow[]> => {
-    const all = await loadLookupRows(EMPLOYEE_LOOKUP_PARAMETER, header.company_code);
+    const all = await loadLookupRows(EMPLOYEE_LOOKUP_PARAMETER, companyCode);
     return all.filter((row) => {
       const r = row as Record<string, unknown>;
       if (header.div_code && (r.div_code as string) !== header.div_code) return false;
@@ -214,17 +205,17 @@ export function HrEmployeePayUnits() {
       if (header.section_code && (r.section_code as string) !== header.section_code) return false;
       return true;
     });
-  }, [loadLookupRows, header.company_code, header.div_code, header.dept_code, header.section_code]);
+  }, [loadLookupRows, companyCode, header.div_code, header.dept_code, header.section_code]);
 
   const handleRetrieve = useCallback(async () => {
-    if (!header.company_code || !header.employee_id) return;
+    if (!companyCode || !header.employee_id) return;
     setLoading(true);
     setNotice(null);
     try {
       const response = await getDynamicLookup({
         parameter: PAY_UNITS_RETRIEVE_PARAMETER,
         loginid,
-        code1: header.company_code,
+        code1: companyCode,
         code2: header.employee_id,
         code3: "NULL",
         code4: "NULL",
@@ -266,7 +257,7 @@ export function HrEmployeePayUnits() {
     } finally {
       setLoading(false);
     }
-  }, [loginid, header.company_code, header.employee_id]);
+  }, [loginid, companyCode, header.employee_id]);
 
   useEffect(() => {
     if (employeeReady) {
@@ -275,7 +266,7 @@ export function HrEmployeePayUnits() {
       setRows([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [header.company_code, header.employee_id]);
+  }, [companyCode, header.employee_id]);
 
   const updateRow = (row_id: string, patch: Partial<TPayUnitRow>) =>
     setRows((prev) =>
@@ -317,7 +308,7 @@ export function HrEmployeePayUnits() {
         pay_roll_status: labelToPayUnitStatusCode(row.pay_unit_status),
         status_flag: labelToStatusCode(row.status),
         remarks: row.remarks,
-        company_code: header.company_code,
+        company_code: companyCode,
         user_id: loginid,
         user_dt: today,
         entered_on: today,
@@ -360,7 +351,7 @@ export function HrEmployeePayUnits() {
     } finally {
       setSaving(false);
     }
-  }, [rows, header, employeeReady, loginid]);
+  }, [rows, header, companyCode, loginid, employeeReady]);
 
   return (
     <section className="grid gap-4">
@@ -383,45 +374,16 @@ export function HrEmployeePayUnits() {
       <div className="rounded-md border bg-card p-3">
         <div className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
           <div className="flex items-center gap-1.5 min-w-0">
-            <span className="w-24 shrink-0 text-sm text-primary font-medium">Company: *</span>
-            <div className="min-w-0 flex-1">
-              <LookupField
-                compact
-                value={header.company_code}
-                columns={COMPANY_LOOKUP_COLUMNS}
-                valueField="company_code"
-                displayFields={["company_code", "comp_name"]}
-                loadOptions={() => loadLookupRows(COMPANY_LOOKUP_PARAMETER, "NULL")}
-                onChange={(value, row) => {
-                  setHeaderField("company_code", value);
-                  setHeaderField("company_name", (row?.comp_name as string) ?? "");
-                  setHeaderField("div_code", "");
-                  setHeaderField("div_name", "");
-                  setHeaderField("dept_code", "");
-                  setHeaderField("dept_name", "");
-                  setHeaderField("section_code", "");
-                  setHeaderField("section_name", "");
-                  setHeaderField("employee_id", "");
-                  setHeaderField("employee_display", "");
-                }}
-                placeholder="Company code or name"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1.5 min-w-0">
             <span className="w-24 shrink-0 text-sm text-primary font-medium">Division: *</span>
             <div className="min-w-0 flex-1">
               <LookupField
                 compact
-                disabled={!header.company_code}
+                disabled={!companyCode}
                 value={header.div_code}
                 columns={DIVISION_LOOKUP_COLUMNS}
                 valueField="div_code"
                 displayFields={["div_code", "div_name"]}
-                loadOptions={() =>
-                  loadLookupRows(DIVISION_LOOKUP_PARAMETER, header.company_code)
-                }
+                loadOptions={() => loadLookupRows(DIVISION_LOOKUP_PARAMETER, companyCode)}
                 onChange={(value, row) => {
                   setHeaderField("div_code", value);
                   setHeaderField("div_name", (row?.div_name as string) ?? "");
@@ -448,11 +410,7 @@ export function HrEmployeePayUnits() {
                 valueField="dept_code"
                 displayFields={["dept_code", "dept_name"]}
                 loadOptions={() =>
-                  loadLookupRows(
-                    DEPARTMENT_LOOKUP_PARAMETER,
-                    header.company_code,
-                    header.div_code,
-                  )
+                  loadLookupRows(DEPARTMENT_LOOKUP_PARAMETER, companyCode, header.div_code)
                 }
                 onChange={(value, row) => {
                   setHeaderField("dept_code", value);
@@ -480,7 +438,7 @@ export function HrEmployeePayUnits() {
                 loadOptions={() =>
                   loadLookupRows(
                     SECTION_LOOKUP_PARAMETER,
-                    header.company_code,
+                    companyCode,
                     header.div_code,
                     header.dept_code,
                   )
@@ -501,7 +459,7 @@ export function HrEmployeePayUnits() {
             <div className="min-w-0 flex-1">
               <LookupField
                 compact
-                disabled={!header.company_code}
+                disabled={!companyCode}
                 value={header.employee_id}
                 columns={EMPLOYEE_LOOKUP_COLUMNS}
                 valueField="employee_id"
@@ -676,7 +634,7 @@ export function HrEmployeePayUnits() {
                       ? loading
                         ? "Loading..."
                         : "No pay units found for this employee."
-                      : "Select Company and Employee to begin."}
+                      : "Select Employee to begin."}
                   </td>
                 </tr>
               )}

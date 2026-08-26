@@ -8,7 +8,7 @@ import { DataTable } from "../../../components/ui/DataTable";
 import { Dialog } from "../../../components/ui/Dialog";
 // import AddEmployeeHrForm from "components/forms/HR/Masters/Employee/AddEmployeeHrForm";
 import { TEmployeeHr } from "./employee-hr.types";
-import { getDynamicLookup } from "../../../api/lookups";
+import { getDynamicLookup, executeDynamicDelete } from "../../../api/lookups";
 import AddEmployeeHrForm from "./AddEmployeeHrForm";
 
 export function EmployeeMasterPage() {
@@ -86,6 +86,12 @@ export function EmployeeMasterPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
+      await executeDynamicDelete({
+        parameter: "MSEHR_TRANSACTIONS_MS_HR_EMPLOYEE_DELETE",
+        loginid: user?.loginid ?? "",
+        code1: deleteTarget.employee_code,
+        code2: user?.company_code,
+      });
       toast.success("Employee deleted successfully");
       setDeleteOpen(false);
       setDeleteTarget(null);
@@ -95,7 +101,7 @@ export function EmployeeMasterPage() {
     } finally {
       setDeleting(false);
     }
-  };
+};
 
   const formatDate = (value: unknown) => {
   if (!value) return "";
