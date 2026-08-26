@@ -1,5 +1,8 @@
+// ════════════════════════════════════════════════════════════════════════
+// HrAccuralAccountSetup.tsx — Refresh now clears header filters + grid
+// ════════════════════════════════════════════════════════════════════════
 import type { ColumnDef } from "@tanstack/react-table";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { executeDynamicDelete, getDynamicLookup } from "../../api/lookups";
 import type { LookupRow } from "../../api/lookups";
@@ -270,6 +273,16 @@ export function HrAccuralAccountSetup() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyCode, header.div_code, header.dept_code, header.section_code]);
 
+  // ── Refresh — clears the header filters and the grid back to a clean
+  // slate, rather than re-fetching for whatever's currently selected.
+  // Distinct from Retrieve, which re-fetches for the current selection. ──
+  const handleClearAll = useCallback(() => {
+    setHeader({ ...EMPTY_HEADER });
+    setRows([]);
+    setDeletedRowIds([]);
+    setNotice(null);
+  }, []);
+
   // ── Row editing helpers ────────────────────────────────────────────
   const updateRow = (row_id: string, patch: Partial<TAccrualAccountRow>) =>
     setRows((prev) => prev.map((r) => (r.row_id === row_id ? { ...r, ...patch } : r)));
@@ -463,7 +476,10 @@ export function HrAccuralAccountSetup() {
           </div>
         </div>
 
-        <div className="mt-2 flex items-center justify-end border-t pt-2">
+        <div className="mt-2 flex items-center justify-end gap-2 border-t pt-2">
+          <Button size="sm" variant="outline" onClick={handleClearAll}>
+            <RefreshCw size={14} /> Refresh
+          </Button>
           <Button size="sm" disabled={!headerReady || loading} onClick={handleRetrieve}>
             {loading ? "Retrieving..." : "Retrieve"}
           </Button>
@@ -619,4 +635,4 @@ export function HrAccuralAccountSetup() {
       </div>
     </section>
   );
-} 
+}

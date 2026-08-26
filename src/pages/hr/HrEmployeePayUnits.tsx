@@ -1,4 +1,8 @@
+// ════════════════════════════════════════════════════════════════════════
+// HrEmployeePayUnits.tsx — Refresh now clears header filters + grid
+// ════════════════════════════════════════════════════════════════════════
 import { useCallback, useEffect, useState } from "react";
+import { RefreshCw } from "lucide-react";
 import { getDynamicLookup, type LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
@@ -268,6 +272,15 @@ export function HrEmployeePayUnits() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyCode, header.employee_id]);
 
+  // ── Refresh — clears the header filters and the grid back to a clean
+  // slate, rather than re-fetching for whatever's currently selected.
+  // Distinct from Retrieve, which re-fetches for the current selection. ──
+  const handleClearAll = useCallback(() => {
+    setHeader({ ...EMPTY_HEADER });
+    setRows([]);
+    setNotice(null);
+  }, []);
+
   const updateRow = (row_id: string, patch: Partial<TPayUnitRow>) =>
     setRows((prev) =>
       prev.map((r) => (r.row_id === row_id ? { ...r, ...patch, dirty: true } : r)),
@@ -478,6 +491,9 @@ export function HrEmployeePayUnits() {
         </div>
 
         <div className="mt-2 flex items-center justify-end gap-2 border-t pt-2">
+          <Button size="sm" variant="outline" onClick={handleClearAll}>
+            <RefreshCw size={14} /> Refresh
+          </Button>
           <Button size="sm" variant="secondary" disabled={!employeeReady} onClick={addRow}>
             Add
           </Button>
