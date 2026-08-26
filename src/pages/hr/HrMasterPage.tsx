@@ -34,6 +34,7 @@ export type HrMasterField = {
   disabledOnEdit?: boolean;
   disabledOnAdd?: boolean;
   type?: "text" | "number" | "select" | "email" | "date";
+   limit?: number;
   options?: { label: string; value: string }[];
   lookup?: {
     columns: { field: string; header: string }[];
@@ -398,7 +399,20 @@ function renderInput(field: HrMasterField, value: unknown, selectedLabel: unknow
       </Select>
     );
   }
-  return <Input type={field.type || "text"} value={field.type === "date" ? toDateInputValue(value) : String(value ?? "")} disabled={disabled} onChange={(event) => onChange(field.type === "number" ? Number(event.target.value || 0) : event.target.value)} />;
+
+  return (
+    <Input
+      type={field.type || "text"}
+      value={field.type === "date" ? toDateInputValue(value) : String(value ?? "")}
+      disabled={disabled}
+      maxLength={field.limit}
+      onChange={(event) => {
+        const raw = event.target.value;
+        const trimmed = field.limit ? raw.slice(0, field.limit) : raw;
+        onChange(field.type === "number" ? Number(trimmed || 0) : trimmed);
+      }}
+    />
+  );
 }
 
 function displayPatch(field: HrMasterField, row: LookupRow) {
