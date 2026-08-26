@@ -539,6 +539,7 @@ hrbank: {
       label: "Religion Name",
       required: true,
       width: 260,
+      // limit: 100,
     },
     {
       name: "religion_short_name",
