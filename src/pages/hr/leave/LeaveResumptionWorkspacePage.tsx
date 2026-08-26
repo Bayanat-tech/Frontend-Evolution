@@ -7,6 +7,7 @@ import { LeaveClosedRequestPage } from "./LeaveClosedRequestPage";
 import { LeaveFlowTable } from "./LeaveFlowTable";
 import { LeaveInProgressPage } from "./LeaveInProgressPage";
 import { leaveFlowConfigs, type LeaveFlowKey } from "./leaveFlowConfig";
+import LeaveResumptionApprovalPage from "./LeaveResumptionApprovalPage";
 
 type ResumptionTab = Exclude<LeaveFlowKey, "rejected">;
 
@@ -38,7 +39,7 @@ export function LeaveResumptionWorkspacePage() {
         ))}
       </div>
 
-      {activeTab === "request" ? <LeaveFlowTable config={{ ...leaveFlowConfigs.request, title: "Leave Resumption", description: "Resume-date requests waiting for review and action." }} /> : null}
+      {activeTab === "request" ? <LeaveResumptionApprovalPage/> : null}
       {activeTab === "inProgress" ? <LeaveInProgressPage /> : null}
       {activeTab === "closed" ? <LeaveClosedRequestPage /> : null}
       {activeTab === "cancelled" ? <LeaveCancelRequestPage /> : null}

@@ -69,7 +69,7 @@ export default function CompanyInfo() {
       { name: "prin_auto_ac_code", label: "Prin Auto A/C", width: 160, tab: "bank" },
       { name: "upload_inv_ac", label: "Upload Inv A/C", width: 140, tab: "bank" },
       { name: "payment_term3", label: "Payment Term 3", width: 140, tab: "bank" },
-      { name: "C.R. No", label: "Tax Number", width: 140, tab: "bank" },
+      { name: "tax_num", label: "CRN", width: 140, tab: "bank" },
       { name: "company_trn_no", label: "Company TRN", width: 140, tab: "bank" },
       { name: "supp_trn_no", label: "Supplier TRN", width: 140, tab: "bank" },
       { name: "trn_no", label: "TRN No", width: 140, tab: "bank" },

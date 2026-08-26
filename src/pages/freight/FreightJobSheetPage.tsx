@@ -31,7 +31,7 @@ type SheetState = {
 export function FreightJobSheetPage({
   target,
   initialJob = null,
-  readOnly = false,
+  readOnly: _readOnly = false,
   onEmbeddedActionsChange,
   onEmbeddedList,
 }: {
@@ -41,6 +41,7 @@ export function FreightJobSheetPage({
   onEmbeddedActionsChange?: (actions: ReactNode | null) => void;
   onEmbeddedList?: () => void;
 }) {
+  const readOnly = true;
   const { user } = useAuth();
   const { toast } = useToast();
   const userRecord = (user || {}) as Record<string, unknown>;
@@ -290,7 +291,7 @@ async function saveHeader() {
         </div>
       )}
 
-      <div className={`freight-document-paper freight-shipment-paper ${isEditing && !readOnly ? "is-editing" : "is-viewing"}`}>
+      <div className={`freight-ui-standard freight-document-paper freight-shipment-paper ${isEditing && !readOnly ? "is-editing" : "is-viewing"}`}>
         <div className="freight-shipment-hero">
           <div className="freight-shipment-hero-item">
             <span>Booking Ref / Job No</span>

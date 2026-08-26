@@ -294,7 +294,7 @@ export function FreightJobActivitiesPage({
   }
 
   return (
-    <section className="grid gap-2 freight-job-ops-screen">
+    <section className="freight-ui-standard grid gap-2 freight-job-ops-screen">
       {!embeddedInWorkspace && <Header eyebrow={copy.eyebrow} title={copy.title} subtitle={`${lookupText(header, "job_no")} / ${lookupText(header, "prin_name") || lookupText(header, "prin_code")}`}>
         {notice && <NoticeChip notice={notice} />}
         {!initialJob && <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>}
@@ -314,13 +314,13 @@ export function FreightJobActivitiesPage({
       </div>
 
       <div className="freight-job-table-shell">
-        <div className="freight-job-table-head grid grid-cols-[42px_90px_minmax(190px,1fr)_76px_94px_105px_105px_90px_105px_90px_105px_50px] items-center gap-1 px-2 py-1">
+        <div className="freight-job-table-head grid grid-cols-[42px_120px_minmax(190px,1fr)_76px_94px_105px_105px_90px_105px_90px_105px_50px] items-center gap-1 px-2 py-1">
           <span>No</span><span>Activity</span><span>Description</span><span>Qty</span><span>Rate</span><span>Revenue</span><span>Other Cost</span><span>Agent</span><span>Agent Cost</span><span>Transp.</span><span>Transp. Cost</span><span />
         </div>
         <div className="max-h-[calc(100vh-330px)] overflow-auto">
           {lines.map((line, index) => (
             <div key={`${line.srno}-${index}`} className="freight-job-table-row">
-              <div className="grid grid-cols-[42px_90px_minmax(190px,1fr)_76px_94px_105px_105px_90px_105px_90px_105px_50px] items-center gap-1 px-2 py-1">
+              <div className="grid grid-cols-[42px_120px_minmax(190px,1fr)_76px_94px_105px_105px_90px_105px_90px_105px_50px] items-center gap-1 px-2 py-1">
                 <span className="text-xs font-semibold text-muted-foreground">{index + 1}</span>
                 <ActivityLookup value={line.act_code} companyCode={companyCode} disabled={isLineLocked} onChange={(value, row) => updateLine(index, { act_code: value, activity: lookupText(row || undefined, "activity"), other_services: lookupText(row || undefined, "activity") || line.other_services, bill_rate: lookupText(row || undefined, "bill") || line.bill_rate, actual_cost: lookupText(row || undefined, "cost") || line.actual_cost })} />
                 <Input className="h-7 text-xs" value={line.other_services} disabled={isLineLocked} onChange={(event) => updateLine(index, { other_services: event.target.value })} />

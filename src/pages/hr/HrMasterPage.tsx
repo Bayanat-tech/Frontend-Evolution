@@ -204,13 +204,17 @@ export function HrMasterPage({ config }: { config: HrMasterConfig }) {
         else await executeDynamicMutation(payload);
       } else if (config.source === "finance" && config.buildSave && config.financeSaveEndpoint) {
         await postFinance(config.financeSaveEndpoint, cleanPayload(config.buildSave(form, buildContext()) as Record<string, unknown>));
-     } else {
-  const payload = config.stripEditKeyOnSave
-    ? (() => {
-        const { _edit_key, ...rest } = form;
-        return rest;
-      })()
-    : form;
+    } else {
+  let payload: Record<string, unknown>;
+
+  if (config.buildSave) {
+    payload = config.buildSave(form, buildContext()) as Record<string, unknown>;
+  } else if (config.stripEditKeyOnSave) {
+    const { _edit_key, ...rest } = form;
+    payload = rest;
+  } else {
+    payload = form;
+  }
 
   await saveHrGm(
     config.gmEndpoint,

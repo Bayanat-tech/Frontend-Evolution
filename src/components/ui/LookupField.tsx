@@ -26,6 +26,7 @@ type LookupFieldProps = {
   placeholder?: string;
   required?: boolean;
   multiSelect?: boolean;
+  showLabelInCompact?: boolean;
 };
 
 export function LookupField({
@@ -40,6 +41,7 @@ export function LookupField({
   disabled,
   compact,
   dense = false,
+  showLabelInCompact = false,
   placeholder,
   required,
   enforceRequired,
@@ -207,11 +209,11 @@ export function LookupField({
   return (
     <>
       <label className={compact ? "block w-full min-w-0" : "field"}>
-        {!compact && (
+      {(!compact || showLabelInCompact) && (
           <span>
             {label} {required && <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span>}
           </span>
-        )}
+      )}
         <div
           ref={triggerRef}
           className={`lookup-field-trigger relative flex w-full min-w-0 overflow-hidden rounded-md border border-[#d5dbe3] bg-white ${
@@ -287,11 +289,18 @@ export function LookupField({
             {error && <div className="m-2 alert error">{error}</div>}
 
             <div className="min-h-0 flex-1 overflow-auto">
-              <Table>
+              <Table className="lookup-results-table table-fixed">
                 <TableHeader className="lookup-popover-head sticky top-0 z-10">
                   <TableRow>
-                    {columns.map((column) => (
-                      <TableHead className="lookup-popover-th" key={column.field}>{column.header}</TableHead>
+                    {columns.map((column, columnIndex) => (
+                      <TableHead
+                        className="lookup-popover-th truncate whitespace-nowrap"
+                        key={column.field}
+                        style={columnIndex === 0 ? { width: columns.length > 2 ? "18%" : "28%" } : undefined}
+                        title={column.header}
+                      >
+                        {column.header}
+                      </TableHead>
                     ))}
                   </TableRow>
                 </TableHeader>
@@ -324,14 +333,18 @@ export function LookupField({
                           onClick={() => selectRow(row)}
                           aria-selected={selected}
                         >
-                          {columns.map((column, columnIndex) => (
-                            <TableCell
-                              className={`px-3 py-1.5 text-xs ${columnIndex === 0 ? "lookup-popover-code" : "text-slate-800"}`}
-                              key={column.field}
-                            >
-                              {formatLookupDisplayValue(column.field, getLookupValue(row, column.field))}
-                            </TableCell>
-                          ))}
+                          {columns.map((column, columnIndex) => {
+                            const cellText = formatLookupDisplayValue(column.field, getLookupValue(row, column.field));
+                            return (
+                              <TableCell
+                                className={`max-w-0 truncate whitespace-nowrap px-3 py-1.5 text-xs ${columnIndex === 0 ? "lookup-popover-code" : "text-slate-800"}`}
+                                key={column.field}
+                                title={cellText}
+                              >
+                                {cellText}
+                              </TableCell>
+                            );
+                          })}
                         </TableRow>
                       );
                     })

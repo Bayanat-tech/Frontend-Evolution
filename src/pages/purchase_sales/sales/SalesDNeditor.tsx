@@ -10,18 +10,13 @@ import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
 import {
   ActionKey,
-  PurchaseConfig,
   PurchaseOrderEditorState,
-  PurchaseOrderForm,
   PurchaseOrderLineRow,
   SendBackUserOption,
 } from "../../purchase_sales/purchase/Purchaseordertypes";
 import {
-
   formatAmount,
- 
   lowerRecord,
-  newId,
   numberOrZero,
   text,
 } from "../../purchase_sales/purchase/Purchaseorderutils";
@@ -29,9 +24,22 @@ import { PurchaseOrderHeaderForm } from "../../purchase_sales/purchase/Purchaseo
 import { PurchaseOrderLinesTable } from "../../purchase_sales/purchase/Purchaseorderlinestable";
 import { SendBackDialog } from "../../purchase_sales/purchase/Sendbackdialog";
 import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
-import { PROCESSSDN, PROCESSSO, SalesConfig, SalesOrderLineRow, SO_DOC_TYPE } from "./SalesOrdertypes";
-import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, lineAmount, lineDiscPrice, lineTaxAmount, runWorkflow } from "./SalesOrderutils";
-
+import { PROCESSSDN, PROCESSSO, PurchaseOrderForm, SalesConfig, SalesOrderLineRow, SO_DOC_TYPE } from "./SalesOrdertypes";
+import {
+  emptyForm,
+  emptyLineRow,
+  fetchSalesOrderDetail,
+  fetchSalesOrderHeader,
+  lineAmount,
+  lineDiscPrice,
+  lineTaxAmount,
+  runWorkflow,
+} from "./SalesOrderutils";
+import ReportDialogPage from "../../../components/ReportDialogPage";
+import { SalesDNReport, downloadSalesDNExcel } from "./SalesDNReport";
+import { SalesDNHeaderForm } from "./SaleDNHeaderfrom";
+import { SalesDnDetailsTable } from "./salesDNDetails";
+import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 
 export type { PurchaseOrderEditorState };
 
@@ -51,7 +59,9 @@ export function SalesDNEditor({
   const { user } = useAuth();
   const editMode = editor?.mode === "edit";
   const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
-  const [rows, setRows] = useState<PurchaseOrderLineRow[]>(() => (editMode ? [] : [emptyLineRow(form.div_code)]));
+  const [rows, setRows] = useState<PurchaseOrderLineRow[]>(() =>
+    editMode ? [] : [emptyLineRow(form.div_code)],
+  );
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -67,11 +77,49 @@ export function SalesDNEditor({
   const [sendBackError, setSendBackError] = useState("");
   const [sendBackUsers, setSendBackUsers] = useState<SendBackUserOption[]>([]);
   const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
+    const [attachmentOpen, setAttachmentOpen] = useState(false);
 
   // ---- Reject dialog state ----
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
+
+  // ---- Report dialog state ----
+  const [reportOpen, setReportOpen] = useState(false);
+
+  const reportValues = form.doc_no
+    ? {
+        company_code: user?.company_code,
+        doc_type: SO_DOC_TYPE.SDN,
+        doc_no: form.doc_no,
+      }
+    : null;
+
+  const openReport = () => {
+    if (!form.doc_no) {
+      setError("Save the document before printing");
+      return;
+    }
+    setReportOpen(true);
+  };
+
+  const closeReport = () => setReportOpen(false);
+
+  const handleExcel = async () => {
+    if (!form.doc_no) {
+      setError("Save the document before exporting Excel");
+      return;
+    }
+    try {
+      await downloadSalesDNExcel({
+        company_code: user?.company_code,
+        doc_type: SO_DOC_TYPE.SDN,
+        doc_no: form.doc_no,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to export Excel");
+    }
+  };
 
   useEffect(() => {
     if (!editor) return;
@@ -91,8 +139,18 @@ export function SalesDNEditor({
       try {
         const docNo = editor.row.doc_no;
         const [headerRaw, detailRows] = await Promise.all([
-          fetchSalesOrderHeader(docNo,config, user?.company_code, user?.loginid || user?.username),
-          fetchSalesOrderDetail(docNo,config, user?.company_code, user?.loginid || user?.username),
+          fetchSalesOrderHeader(
+            docNo,
+            config,
+            user?.company_code,
+            user?.loginid || user?.username,
+          ),
+          fetchSalesOrderDetail(
+            docNo,
+            config,
+            user?.company_code,
+            user?.loginid || user?.username,
+          ),
         ]);
         if (!mounted) return;
 
@@ -100,6 +158,12 @@ export function SalesDNEditor({
           ...current,
           doc_no: text(headerRaw.doc_no || docNo),
           doc_date: toDateInputValue(headerRaw.doc_date) || current.doc_date,
+          so_doc_no: text(headerRaw.so_doc_no || headerRaw.ref_doc_no || current.so_doc_no),
+          so_doc_date: toDateInputValue(headerRaw.so_doc_date || headerRaw.ref_doc_date) || current.so_doc_date,
+          so_ac_code: text(headerRaw.so_ac_code || headerRaw.ref_ac_code || current.so_ac_code),
+          so_payment_terms: text(headerRaw.so_payment_terms || headerRaw.payment_terms || headerRaw.pay_terms || current.so_payment_terms),
+          so_dlvr_term: text(headerRaw.so_dlvr_term || headerRaw.delivery_term || headerRaw.dlvr_term || current.so_dlvr_term),
+          total_so_amount: numberOrZero(headerRaw.total_so_amount || headerRaw.so_amount || headerRaw.total_amount || current.total_so_amount),
           ref_no: text(headerRaw.quotn_no || current.ref_no),
           ref_date: toDateInputValue(headerRaw.ref_date) || current.ref_date,
           div_code: text(headerRaw.div_code || current.div_code),
@@ -127,7 +191,9 @@ export function SalesDNEditor({
           tax_category: text(headerRaw.tax_category || current.tax_category),
           tax_code: text(headerRaw.tax_code || current.tax_code),
           expense_ac_post: text(headerRaw.expense_ac_post || current.expense_ac_post),
-          print_on_letterhead: text(headerRaw.print_on_letterhead || current.print_on_letterhead || "N"),
+          print_on_letterhead: text(
+            headerRaw.print_on_letterhead || current.print_on_letterhead || "N",
+          ),
           project_name: text(headerRaw.project_name || current.project_name),
           pr_no: text(headerRaw.pr_no || current.pr_no),
           scope_of_work: text(headerRaw.scope_of_work || current.scope_of_work),
@@ -135,19 +201,33 @@ export function SalesDNEditor({
           canceled: text(headerRaw.canceled || current.canceled || "N"),
         }));
 
-
-        setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
+        setRows(
+          detailRows.length
+            ? detailRows
+            : [emptyLineRow(text(headerRaw.div_code) || "")],
+        );
       } catch (loadError) {
         if (!mounted) return;
-        setError(loadError instanceof Error ? loadError.message : "Unable to load Sales Delivary Note");
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load Sales Delivery Note",
+        );
       } finally {
         if (mounted) setLoading(false);
       }
     }
     void loadExisting();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editMode, editor?.mode === "edit" ? editor.row.doc_no : undefined, user?.company_code, user?.loginid || user?.username]);
+  }, [
+    editMode,
+    editor?.mode === "edit" ? editor.row.doc_no : undefined,
+    user?.company_code,
+    user?.loginid || user?.username,
+  ]);
 
   useEffect(() => {
     let mounted = true;
@@ -161,13 +241,19 @@ export function SalesDNEditor({
         });
         if (!mounted) return;
         const first = (rows || [])[0] as Record<string, unknown> | undefined;
-        const val = first ? Number(first.level ?? first.flow_level ?? first.flow_level_running ?? Object.values(first)[0]) : 0;
+        const val = first
+          ? Number(
+              first.level ?? first.flow_level ?? first.flow_level_running ?? Object.values(first)[0],
+            )
+          : 0;
         setFlowLevelRunning(Number.isFinite(val) ? val : 0);
       } catch {
         if (mounted) setFlowLevelRunning(0);
       }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [user?.company_code, user?.loginid, user?.username]);
 
   const disabled = form.canceled === "Y" || saving || loading;
@@ -190,13 +276,20 @@ export function SalesDNEditor({
   };
 
   const updateRow = (id: string, patch: Partial<SalesOrderLineRow>) => {
-    setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+    setRows((current) =>
+      current.map((row) => (row.id === id ? { ...row, ...patch } : row)),
+    );
   };
 
   const addRow = () => setRows((current) => [...current, emptyLineRow(form.div_code)]);
-  const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
+  const removeRow = (id: string) =>
+    setRows((current) => current.filter((row) => row.id !== id));
 
-  const runAction = async (key: ActionKey, action: () => Promise<void> | void, successMessage?: string) => {
+  const runAction = async (
+    key: ActionKey,
+    action: () => Promise<void> | void,
+    successMessage?: string,
+  ) => {
     setActionLoading(key);
     setSaving(true);
     setError("");
@@ -211,24 +304,58 @@ export function SalesDNEditor({
     }
   };
 
- const handleSaveAsDraft = () =>
-  runAction("draft", async () => {
-    await runWorkflow("SAVEASDRAFT",  SO_DOC_TYPE.SDN, form, rows, user?.company_code, user?.loginid || user?.username);
-  }, "Sales Delivary Note saved as draft");
+  const handleSaveAsDraft = () =>
+    runAction(
+      "draft",
+      async () => {
+        await runWorkflow(
+          "SAVEASDRAFT",
+          SO_DOC_TYPE.SDN,
+          form,
+          rows,
+          user?.company_code,
+          user?.loginid || user?.username,
+        );
+      },
+      "Sales Delivery Note saved as draft",
+    );
 
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
-    if (!form.curr_code) return setError("Currency is required");
-    return runAction("submit", async () => {
-      await runWorkflow("SUBMITTED", SO_DOC_TYPE.SDN, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, editMode ? "Sales Delivary Note updated successfully" : "Sales Delivary Note created successfully");
+    return runAction(
+      "submit",
+      async () => {
+        await runWorkflow(
+          "SUBMITTED",
+          SO_DOC_TYPE.SDN,
+          form,
+          rows,
+          user?.company_code,
+          user?.loginid || user?.username,
+        );
+      },
+      editMode
+        ? "Sales Delivery Note updated successfully"
+        : "Sales Delivery Note created successfully",
+    );
   };
 
   const handleCancel = () =>
-    runAction("cancel", async () => {
-      await runWorkflow("CANCELED", SO_DOC_TYPE.SDN, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, "Sales Delivary Note cancelled");
+    runAction(
+      "cancel",
+      async () => {
+        await runWorkflow(
+          "CANCELED",
+          SO_DOC_TYPE.SDN,
+          form,
+          rows,
+          user?.company_code,
+          user?.loginid || user?.username,
+        );
+      },
+      "Sales Delivery Note cancelled",
+    );
 
   // ---- Reject handlers ----
   const openRejectDialog = () => {
@@ -246,11 +373,25 @@ export function SalesDNEditor({
       return;
     }
     setRejectError("");
-    return runAction("reject", async () => {
-      const payloadForm: PurchaseOrderForm = { ...form, reject_reason: rejectReason.trim() };
-      await runWorkflow("REJECTED", SO_DOC_TYPE.SDN, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
-      setRejectDialogOpen(false);
-    }, "Sales Delivary Note rejected");
+    return runAction(
+      "reject",
+      async () => {
+        const payloadForm: PurchaseOrderForm = {
+          ...form,
+          reject_reason: rejectReason.trim(),
+        };
+        await runWorkflow(
+          "REJECTED",
+          SO_DOC_TYPE.SDN,
+          payloadForm,
+          rows,
+          user?.company_code,
+          user?.loginid || user?.username,
+        );
+        setRejectDialogOpen(false);
+      },
+      "Sales Delivery Note rejected",
+    );
   };
 
   // ---- Send Back handlers ----
@@ -269,14 +410,16 @@ export function SalesDNEditor({
         number1: flowLevelRunning,
         code2: PROCESSSO,
       });
-      const options: SendBackUserOption[] = (rows || []).map((raw) => {
-        const row = lowerRecord(raw as Record<string, unknown>);
-        return {
-          code: text(row.level_no),
-          name: text(row.description),
-          level_no: numberOrZero(row.level_no),
-        };
-      }).filter((option) => option.code);
+      const options: SendBackUserOption[] = (rows || [])
+        .map((raw) => {
+          const row = lowerRecord(raw as Record<string, unknown>);
+          return {
+            code: text(row.level_no),
+            name: text(row.description),
+            level_no: numberOrZero(row.level_no),
+          };
+        })
+        .filter((option) => option.code);
       setSendBackUsers(options);
     } catch {
       setSendBackUsers([]);
@@ -298,60 +441,120 @@ export function SalesDNEditor({
       return;
     }
     setSendBackError("");
-    return runAction("sendBack", async () => {
-      const payloadForm: PurchaseOrderForm = {
-        ...form,
-        next_action_by: sendBackUserName,
-        sentback_reason: sendBackReason.trim(),
-        flow_level_running: sendBackUserLevel,
-      };
-      await runWorkflow("SENTBACK", SO_DOC_TYPE.SDN, payloadForm, rows, user?.company_code, user?.loginid || user?.username);
-      setSendBackDialogOpen(false);
-    }, "Sales Delivary Note sent back");
+    return runAction(
+      "sendBack",
+      async () => {
+        const payloadForm: PurchaseOrderForm = {
+          ...form,
+          next_action_by: sendBackUserName,
+          sentback_reason: sendBackReason.trim(),
+          flow_level_running: sendBackUserLevel,
+        };
+        await runWorkflow(
+          "SENTBACK",
+          SO_DOC_TYPE.SDN,
+          payloadForm,
+          rows,
+          user?.company_code,
+          user?.loginid || user?.username,
+        );
+        setSendBackDialogOpen(false);
+      },
+      "Sales Delivery Note sent back",
+    );
   };
 
   const actionBarBusy = actionLoading !== null || saving;
+  const canPrint = Boolean(form.doc_no);
 
   return (
     <>
       <form
-        className={`payment-workbench commercial-editor grid h-screen ${isCancelled ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled" : "grid-rows-[auto_minmax(0,1fr)_auto]"}`}
-        onSubmit={(event) => { event.preventDefault(); void handleSubmit(); }}
+        className={`payment-workbench commercial-editor grid h-screen ${
+          isCancelled
+            ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled"
+            : "grid-rows-[auto_minmax(0,1fr)_auto]"
+        }`}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void handleSubmit();
+        }}
       >
         <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
           <div className="flex min-h-10 items-center justify-between gap-3">
             <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
               <div>
                 <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/70">
-                  {editMode ? "Edit Sales Delivary Note" : "New Sales Delivary Note"}
+                  {editMode ? "Edit Sales Delivery Note" : "New Sales Delivery Note"}
                 </p>
-                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">Sales Delivary Note</h2>
+                <h2 className="m-0 text-base font-semibold leading-tight text-primary-foreground">
+                  Sales Delivery Note
+                </h2>
               </div>
               <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
-                <strong className="block text-sm leading-tight text-primary-foreground">{form.doc_no || "New"}</strong>
+                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">
+                  Doc No
+                </span>
+                <strong className="block text-sm leading-tight text-primary-foreground">
+                  {form.doc_no || "New"}
+                </strong>
               </div>
               <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
-                <strong className="block text-sm leading-tight text-primary-foreground">{formatAmount(finalTotal)}</strong>
+                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">
+                  Total
+                </span>
+                <strong className="block text-sm leading-tight text-primary-foreground">
+                  {formatAmount(finalTotal)}
+                </strong>
               </div>
               {form.ac_code && (
                 <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
-                  <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">A/c Code</span>
-                  <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}</strong>
+                  <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">
+                    A/c Code
+                  </span>
+                  <strong className="block truncate text-sm leading-tight text-primary-foreground">
+                    {form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
+                  </strong>
                 </div>
               )}
             </div>
             <div className="flex items-center gap-2">
-              {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
+              {form.canceled === "Y" && (
+                <Badge
+                  variant="outline"
+                  className="border-primary-foreground/40 text-primary-foreground"
+                >
+                  Cancelled
+                </Badge>
+              )}
               {form.doc_no && (
                 <>
-                  <Button type="button" variant="secondary"><Printer size={15} /> Print</Button>
-                  <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
+                  <Button type="button" variant="secondary" onClick={openReport}>
+                    <Printer size={15} /> Print
+                  </Button>
+                  <Button
+                    aria-label="Excel"
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    onClick={() => void handleExcel()}
+                  >
+                    <Download size={15} />
+                  </Button>
                 </>
               )}
-              <Button type="button" variant="secondary"><Paperclip size={15} /> Files</Button>
-              <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
+               <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                <Paperclip size={15} /> Files
+              </Button>
+              <Button
+                aria-label="Close"
+                type="button"
+                variant="secondary"
+                size="icon"
+                onClick={onClose}
+              >
+                <X size={16} />
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -360,20 +563,25 @@ export function SalesDNEditor({
           <div className="cancelled-document-banner" role="status">
             <div>
               <span className="cancelled-document-kicker">Cancelled Document</span>
-              <strong>{form.doc_no || "Sales Delivary Note"}</strong>
+              <strong>{form.doc_no || "Sales Delivery Note"}</strong>
             </div>
-            <p>This Sales Delivary Note is cancelled and opened in read-only mode.</p>
+            <p>This Sales Delivery Note is cancelled and opened in read-only mode.</p>
           </div>
         )}
 
         <CardContent className="min-h-0 overflow-auto p-3">
           {loading ? (
-            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading Sales Delivary Note...</div>
+            <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">
+              Loading Sales Delivery Note...
+            </div>
           ) : (
             <div className="grid gap-3">
-              <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
+              <AutoDismissAlert
+                notice={error ? { type: "error", message: error } : null}
+                onClose={() => setError("")}
+              />
 
-              <PurchaseOrderHeaderForm
+              <SalesDNHeaderForm
                 form={form}
                 setForm={setForm}
                 docType={SO_DOC_TYPE.SDN}
@@ -383,9 +591,10 @@ export function SalesDNEditor({
                 editMode={editMode}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
+                 setdetails={setRows}
               />
 
-              <PurchaseOrderLinesTable
+              <SalesDnDetailsTable
                 rows={rows}
                 form={form}
                 setdetails={setRows}
@@ -403,41 +612,106 @@ export function SalesDNEditor({
           )}
         </CardContent>
 
-       
         <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
           <div className="flex flex-wrap gap-3 rounded-2xl bg-gray-50 p-5 shadow-inner">
-           { isPendingTab && (
-             <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
-                {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            {isPendingTab && (
+              <Button
+                type="button"
+                onClick={handleSaveAsDraft}
+                disabled={actionDisabled || actionBarBusy}
+                className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60"
+              >
+                {actionLoading === "draft" ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
                 {actionLoading === "draft" ? "Saving..." : "Save Draft"}
               </Button>
             )}
-          { isPendingTab && <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
-              {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-              {actionLoading === "submit" ? "Submitting..." : "Submit"}
-            </Button>}
+            {isPendingTab && (
+              <Button
+                type="button"
+                onClick={handleSubmit}
+                disabled={actionDisabled || actionBarBusy}
+                className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60"
+              >
+                {actionLoading === "submit" ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="mr-2 h-4 w-4" />
+                )}
+                {actionLoading === "submit" ? "Submitting..." : "Submit"}
+              </Button>
+            )}
 
             {isPendingTab && canSendBackOrReject && (
-              <Button type="button" onClick={openSendBackDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60">
+              <Button
+                type="button"
+                onClick={openSendBackDialog}
+                disabled={actionDisabled || actionBarBusy}
+                className="rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md disabled:opacity-60"
+              >
                 {actionLoading === "sendBack" ? "Sending Back..." : "Send Back"}
               </Button>
             )}
 
             {isPendingTab && canSendBackOrReject && (
-              <Button type="button" onClick={openRejectDialog} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60">
+              <Button
+                type="button"
+                onClick={openRejectDialog}
+                disabled={actionDisabled || actionBarBusy}
+                className="rounded-full bg-red-600 hover:bg-red-700 shadow-md disabled:opacity-60"
+              >
                 {actionLoading === "reject" ? "Rejecting..." : "Reject"}
               </Button>
             )}
-{isPendingTab &&
-            <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
-              {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
-            </Button>}
+            {isPendingTab && (
+              <Button
+                type="button"
+                onClick={handleCancel}
+                disabled={actionDisabled || actionBarBusy}
+                className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60"
+              >
+                {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
+              </Button>
+            )}
           </div>
           <div className="flex items-center gap-2">
-            <Button aria-label="Print" type="button" variant="outline" size="icon" disabled={actionDisabled}><Printer size={15} /></Button>
-            <Button aria-label="Attachment" type="button" variant="outline" size="icon" disabled={actionDisabled}><Paperclip size={15} /></Button>
-            <Button aria-label="Download" type="button" variant="outline" size="icon" disabled={actionDisabled}><Download size={15} /></Button>
-            <Button type="button" variant="outline" onClick={onClose}>Close</Button>
+            <Button
+              aria-label="Print"
+              type="button"
+              variant="outline"
+              size="icon"
+              disabled={!canPrint}
+              onClick={openReport}
+              title={canPrint ? "Print Delivery Note" : "Save document first"}
+            >
+              <Printer size={15} />
+            </Button>
+            <Button
+              aria-label="Attachment"
+              type="button"
+              variant="outline"
+              size="icon"
+              disabled={actionDisabled}
+            >
+              <Paperclip size={15} />
+            </Button>
+            <Button
+              aria-label="Download"
+              type="button"
+              variant="outline"
+              size="icon"
+              disabled={!canPrint}
+              onClick={() => void handleExcel()}
+              title={canPrint ? "Export Excel" : "Save document first"}
+            >
+              <Download size={15} />
+            </Button>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Close
+            </Button>
           </div>
         </div>
       </form>
@@ -471,6 +745,29 @@ export function SalesDNEditor({
         onClose={closeRejectDialog}
         onConfirm={confirmReject}
       />
+
+      {/* Report dialog — Print icon opens this; Excel uses same required_values */}
+      {reportOpen && reportValues && (
+        <ReportDialogPage
+          Report={SalesDNReport}
+          required_values={reportValues}
+          title={`Delivery Note - ${reportValues.doc_no}`}
+          onClose={closeReport}
+          excel={() => void handleExcel()}
+        />
+
+      )}
+             <AttachmentDialog
+              open={attachmentOpen}
+              onClose={() => setAttachmentOpen(false)}
+              requestNumber={form.doc_no ? String(form.doc_no) : ""}
+              title="Sales DN Attachments"
+              module="SDN"
+              type="Sales DN"
+              companyCode={user?.company_code || ""}
+              loginId={user?.loginid || ""}
+              flowLevel={effectiveFlowLevel}
+            />
     </>
   );
 }

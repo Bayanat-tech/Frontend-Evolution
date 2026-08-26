@@ -873,22 +873,34 @@ buildDelete: (row, context) => ({
     deleteMode: "gm",
   },
   formaldesignation: {
-    title: "Formal Designation Master",
-    subtitle: "Maintain labour/formal designation codes used on HR documents.",
-    master: "formaldesignation",
-    gmEndpoint: "formaldesignation",
-    routeKeys: ["formaldesignation", "formal_designation", "labour_designation"],
-    keyField: "labour_desg_code",
-    fields: [
-      { name: "labour_desg_code", label: "Formal Code", required: true, disabledOnEdit: true, width: 150 },
-      { name: "labour_desg_name", label: "Formal Designation", required: true, width: 280 },
-      { name: "labour_desg_short_name", label: "Short Name", required: true, width: 140 },
-      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
-      { name: "remarks", label: "Remarks", width: 260 },
-    ],
-    defaults: { status: "A" },
-    deleteMode: "gm",
-  },
+  title: "Formal Designation Master",
+  subtitle: "Maintain labour/formal designation codes used on HR documents.",
+  master: "formaldesignation",
+  gmEndpoint: "formaldesignation",
+  routeKeys: ["formaldesignation", "formal_designation", "labour_designation"],
+  keyField: "labour_desg_code",
+  stripEditKeyOnSave: true,
+
+  buildSave: (form) => ({
+    // Only the fields the backend accepts
+    labour_desg_code: text(form, "labour_desg_code"),
+    labour_desg_name: text(form, "labour_desg_name"),
+    labour_desg_short_name: text(form, "labour_desg_short_name"),
+    status: text(form, "status", "A"),
+    remarks: text(form, "remarks"),
+    // Do NOT send company_code, user_id, user_dt
+  }),
+
+  fields: [
+    { name: "labour_desg_code", label: "Formal Code", required: true, disabledOnEdit: true, width: 150 },
+    { name: "labour_desg_name", label: "Formal Designation", required: true, width: 280 },
+    { name: "labour_desg_short_name", label: "Short Name", required: true, width: 140 },
+    { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
+    { name: "remarks", label: "Remarks", width: 260 },
+  ],
+  defaults: { status: "A" },
+  deleteMode: "gm",
+},
   leavetype: {
     title: "Leave Type Master",
     subtitle: "Maintain leave type codes, carry-forward behavior, and half-day eligibility.",
