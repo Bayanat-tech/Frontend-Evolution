@@ -27,6 +27,7 @@ import { LookupField } from "../../components/ui/LookupField";
 import { useToast } from "../../components/ui/AlertToast";
 import { useAuth } from "../../state/AuthContext";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
+import { freightSelect } from "../../api/freight";
 
 type ViewMode = "list" | "editor";
 type Notice = { type: "success" | "error"; text: string } | null;
@@ -235,22 +236,22 @@ export function FreightPacklistPage({
   }, [initialJob]);
 
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
-    { accessorKey: "packlist_no", header: "Pack No", size: 110, cell: ({ row }) => <button type="button" className="font-semibold text-primary hover:underline" onClick={() => openPack(row.original)}>{lookupText(row.original, "packlist_no") || "Auto"}</button> },
-    { accessorKey: "seq_number", header: "Seq", size: 70 },
-    { accessorKey: "job_no", header: "Job No", size: 120 },
-    { accessorKey: "job_date", header: "Job Date", size: 110, cell: ({ row }) => formatDate(lookupText(row.original, "job_date")) },
-    { accessorKey: "prin_code", header: "Principal", size: 90 },
-    { accessorKey: "prin_name", header: "Principal Name", size: 220 },
-    { accessorKey: "shipper_name", header: "Shipper", size: 200 },
-    { accessorKey: "consignee_name", header: "Consignee", size: 200 },
-    { accessorKey: "bl_no", header: isAir ? "AWB" : "BL No", size: 130 },
-    { accessorKey: "bl_date", header: "BL Date", size: 110, cell: ({ row }) => formatDate(lookupText(row.original, "bl_date")) },
-    { accessorKey: "container_no", header: "Container", size: 130 },
-    { accessorKey: "container_type", header: "Container Type", size: 130 },
-    { accessorKey: "gross_wt", header: "Gross Wt", size: 90 },
-    { accessorKey: "volume", header: "Volume", size: 90 },
-    { accessorKey: "quantity", header: "Qty", size: 80 },
-    { accessorKey: "shipment_status", header: "Shipment Status", size: 140 },
+    { accessorKey: "PACKLIST_NO", header: "Pack No", size: 110, cell: ({ row }) => <button type="button" className="font-semibold text-primary hover:underline" onClick={() => openPack(row.original)}>{lookupText(row.original, "packlist_no") || "Auto"}</button> },
+    { accessorKey: "SEQ_NUMBER", header: "Seq", size: 70 },
+    { accessorKey: "JOB_NO", header: "Job No", size: 120 },
+    { accessorKey: "JOB_DATE", header: "Job Date", size: 110, cell: ({ row }) => formatDate(lookupText(row.original, "job_date")) },
+    { accessorKey: "PRIN_CODE", header: "Principal", size: 90 },
+    { accessorKey: "PRIN_NAME", header: "Principal Name", size: 220 },
+    { accessorKey: "SHIPPER_NAME", header: "Shipper", size: 200 },
+    { accessorKey: "CONSIGNEE_NAME", header: "Consignee", size: 200 },
+    { accessorKey: "BL_NO", header: isAir ? "AWB" : "BL No", size: 130 },
+    { accessorKey: "BL_DATE", header: "BL Date", size: 110, cell: ({ row }) => formatDate(lookupText(row.original, "bl_date")) },
+    { accessorKey: "CONTAINER_NO", header: "Container", size: 130 },
+    { accessorKey: "CONTAINER_TYPE", header: "Container Type", size: 130 },
+    { accessorKey: "GROSS_WT", header: "Gross Wt", size: 90 },
+    { accessorKey: "VOLUME", header: "Volume", size: 90 },
+    { accessorKey: "QUANTITY", header: "Qty", size: 80 },
+    { accessorKey: "SHIPMENT_STATUS", header: "Shipment Status", size: 140 },
     { id: "actions", header: "Actions", size: 90, cell: ({ row }) => <div className="flex gap-1"><Button type="button" size="icon" variant="ghost" title="View" onClick={() => openPack(row.original)}><Eye size={14} /></Button><Button type="button" size="icon" variant="ghost" title="Delete" disabled={readOnly} onClick={(event) => { event.stopPropagation(); void deletePack(row.original); }}><Trash2 size={14} /></Button></div> },
   ], [isAir, readOnly]);
 
@@ -529,7 +530,7 @@ export function FreightPacklistPage({
             <ReadOnlyField label="Principal" value={pack.prin_code || "-"} />
             <ReadOnlyField label="Principal Name" value={pack.prin_name || "-"} />
             <Field label="Customer" value={pack.cust_code} onChange={(value) => setPackField(setPack, "cust_code", value)} />
-            <Field label="Broker" value={pack.broker_code} onChange={(value) => setPackField(setPack, "broker_code", value)} />
+            {/* <Field label="Broker" value={pack.broker_code} onChange={(value) => setPackField(setPack, "broker_code", value)} /> */}
             <Field label={isAir ? "AWB No" : "HBL Number"} value={pack.bl_no} onChange={(value) => setPackField(setPack, "bl_no", value)} />
             <Field label={isAir ? "AWB Date" : "WBL Date"} type="date" value={pack.bl_date} onChange={(value) => setPackField(setPack, "bl_date", value)} />
             <Field label="Currency" value={pack.curr_code} onChange={(value) => setPackField(setPack, "curr_code", value)} />
@@ -551,7 +552,8 @@ export function FreightPacklistPage({
           <div className="freight-job-field-grid freight-job-field-grid-3">
             <Field label="Packages" type="number" value={pack.no_of_packings} onChange={(value) => setPackField(setPack, "no_of_packings", value)} />
             <Field label="Quantity" type="number" value={pack.quantity} onChange={(value) => setPackField(setPack, "quantity", value)} />
-            <Field label="UOM" value={pack.puom} onChange={(value) => setPackField(setPack, "puom", value)} />
+            <Lookup label="UOM" value={pack.puom} valueField="UOM_CODE" displayFields={["UOM_CODE", "UOM_NAME"]} columns={[{ field: "UOM_CODE", header: "Code" }, { field: "UOM_NAME", header: "NAME" }]} loadOptions={(search) => lookup("freight_uom", companyCode, "NULL", "NULL", search)} onChange={(value) => setPackField(setPack, "puom", value)} />            
+            {/* <Field label="UOM" value={pack.puom} onChange={(value) => setPackField(setPack, "puom", value)} /> */}
             <Field label="Volume" type="number" value={pack.volume} onChange={(value) => setPackField(setPack, "volume", value)} />
             <Field label="Net Wt" type="number" value={pack.net_wt} onChange={(value) => setPackField(setPack, "net_wt", value)} />
             <Field label="Gross Wt" type="number" value={pack.gross_wt} onChange={(value) => setPackField(setPack, "gross_wt", value)} />
@@ -962,6 +964,18 @@ async function lookupJobs(companyCode: string, mode: string, jobType: string, se
     search,
   });
   return (response.data.data || []).map(normalizeLookupRow);
+}
+
+// async function lookupUoms(companyCode: string, search: string) {
+//   const response = await api.post<{ success?: boolean; data?: LookupRow[] }>("/api/freight/lookups/uom", {
+//     company_code: companyCode,
+//     search,
+//   });
+//   return (response.data.data || []).map(normalizeLookupRow);
+// }
+
+async function lookup(parameter: string, companyCode: string, code2 = "NULL", code3 = "NULL", query = "") {
+  return (await freightSelect<LookupRow>({ parameter, code1: companyCode, code2, code3, code4: query || "NULL", number1: 50 })).map(normalizeLookupRow);
 }
 
 function normalizeLookupRow(row: LookupRow) {

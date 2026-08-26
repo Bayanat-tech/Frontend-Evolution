@@ -1,4 +1,4 @@
-import { Search, X } from "lucide-react";
+import { ChevronDown, Search, X } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { formatLookupDisplayValue, getLookupText, getLookupValue, LookupRow } from "../../api/lookups";
@@ -26,6 +26,7 @@ type LookupFieldProps = {
   placeholder?: string;
   required?: boolean;
   multiSelect?: boolean;
+  showLabelInCompact?: boolean;
 };
 
 export function LookupField({
@@ -40,6 +41,7 @@ export function LookupField({
   disabled,
   compact,
   dense = false,
+  showLabelInCompact = false,
   placeholder,
   required,
   enforceRequired,
@@ -207,14 +209,14 @@ export function LookupField({
   return (
     <>
       <label className={compact ? "block w-full min-w-0" : "field"}>
-        {!compact && (
+      {(!compact || showLabelInCompact) && (
           <span>
             {label} {required && <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span>}
           </span>
-        )}
+      )}
         <div
           ref={triggerRef}
-          className={`relative flex w-full min-w-0 overflow-hidden rounded-md border border-gray-400 bg-background ${
+          className={`lookup-field-trigger relative flex w-full min-w-0 overflow-hidden rounded-md border border-[#d5dbe3] bg-white ${
             dense ? "h-7" : compact ? "h-7" : "h-9"
           }`}
         >
@@ -231,33 +233,35 @@ export function LookupField({
             />
           )}
           <button
-            className={`min-w-0 flex-1 border-0 bg-transparent text-left text-foreground disabled:opacity-60 ${
+            className={`min-w-0 flex-1 border-0 bg-transparent text-left disabled:opacity-60 ${
               dense || compact ? "px-2 text-xs" : "px-3 text-sm"
-            }`}
+            } ${currentText ? "font-semibold text-[#1d4ed8]" : "text-muted-foreground"}`}
             type="button"
             onClick={openLookup}
             disabled={disabled}
           >
-            <span className={currentText ? "block truncate" : "block truncate text-muted-foreground"}>
-              {currentText || placeholder || `Select ${label}`}
+            <span className="block truncate">
+              {currentText || placeholder || `Select ${label || ""}`}
             </span>
           </button>
           {value && !disabled && (
             <button
-              className={`${dense || compact ? "w-7" : "w-8"} grid place-items-center text-muted-foreground hover:bg-accent`}
+              className={`${dense || compact ? "w-6" : "w-7"} grid place-items-center text-muted-foreground hover:bg-accent`}
               type="button"
+              aria-label="Clear lookup"
               onClick={() => onChange("", null)}
             >
               <X size={dense ? 12 : 14} />
             </button>
           )}
           <button
-            className={`${dense || compact ? "w-7" : "w-9"} grid place-items-center border-l text-muted-foreground hover:bg-accent`}
+            className={`${dense || compact ? "w-7" : "w-8"} grid place-items-center text-slate-400 hover:bg-accent`}
             type="button"
             onClick={openLookup}
             disabled={disabled}
+            aria-label="Open lookup"
           >
-            <Search size={dense ? 13 : 15} />
+            <ChevronDown size={dense ? 14 : 16} />
           </button>
         </div>
       </label>
@@ -266,36 +270,18 @@ export function LookupField({
         createPortal(
           <div
             ref={popoverRef}
-            className="lookup-popover fixed z-[9999] flex flex-col overflow-hidden rounded-lg border bg-card shadow-2xl"
+            className="lookup-popover fixed z-[9999] flex flex-col overflow-hidden rounded-md border border-[#d5dbe3] bg-white shadow-2xl"
             style={popoverStyle}
           >
-            <div className="flex-none border-b bg-[#f8fbff] px-3 py-2">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="eyebrow m-0">{label}</p>
-                  <p className="m-0 truncate text-xs text-muted-foreground">Current: {currentText}</p>
-                </div>
-                <button
-                  aria-label="Close lookup"
-                  className="grid h-7 w-7 flex-none place-items-center rounded-md text-muted-foreground hover:bg-accent"
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    setQuery("");
-                    setPage(1);
-                  }}
-                >
-                  <X size={15} />
-                </button>
-              </div>
-              <label className="flex h-8 items-center gap-2 rounded-md border bg-background px-2.5 text-muted-foreground shadow-sm">
+            <div className="flex-none px-2.5 pt-2.5 pb-2">
+              <label className="flex h-8 items-center gap-2 rounded-full border border-[#d5dbe3] bg-white px-3 text-slate-400">
                 <Search size={14} />
                 <Input
                   autoFocus
                   className="h-7 border-0 bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search code, name, description..."
+                  placeholder="Search code or description..."
                 />
               </label>
             </div>
@@ -304,10 +290,10 @@ export function LookupField({
 
             <div className="min-h-0 flex-1 overflow-auto">
               <Table>
-                <TableHeader className="sticky top-0 z-10 bg-[#edf4ff]">
+                <TableHeader className="lookup-popover-head sticky top-0 z-10">
                   <TableRow>
                     {columns.map((column) => (
-                      <TableHead key={column.field}>{column.header}</TableHead>
+                      <TableHead className="lookup-popover-th" key={column.field}>{column.header}</TableHead>
                     ))}
                   </TableRow>
                 </TableHeader>
@@ -333,15 +319,18 @@ export function LookupField({
                       return (
                         <TableRow
                           className={selected
-                            ? "cursor-pointer bg-primary/10 outline outline-1 outline-primary"
-                            : "cursor-pointer hover:bg-accent"
+                            ? "cursor-pointer bg-primary/10"
+                            : "cursor-pointer hover:bg-slate-50"
                           }
                           key={`${rowValue || index}`}
                           onClick={() => selectRow(row)}
                           aria-selected={selected}
                         >
-                          {columns.map((column) => (
-                            <TableCell className="px-3 py-1.5 text-xs" key={column.field}>
+                          {columns.map((column, columnIndex) => (
+                            <TableCell
+                              className={`px-3 py-1.5 text-xs ${columnIndex === 0 ? "lookup-popover-code" : "text-slate-800"}`}
+                              key={column.field}
+                            >
                               {formatLookupDisplayValue(column.field, getLookupValue(row, column.field))}
                             </TableCell>
                           ))}
@@ -353,52 +342,43 @@ export function LookupField({
               </Table>
             </div>
 
-            <div className="lookup-footer flex flex-none items-center justify-between border-t bg-[#fafbfd] px-3 py-2 text-xs text-muted-foreground">
-              <span>
-                Page {page} of {totalPages}
-              </span>
+            <div className="lookup-footer flex flex-none items-center justify-between border-t border-[#e5e7eb] bg-white px-3 py-2 text-xs text-slate-500">
+              <span>{filteredRows.length} item{filteredRows.length === 1 ? "" : "s"}</span>
               <div className="lookup-pager flex items-center gap-1.5">
-                <span>Rows</span>
-                <select
-                  className="rounded border border-[#d7e1f1] bg-white px-1.5 py-0.5 text-xs text-[#17345f] focus:outline-none"
-                  value={rowsPerPage}
-                  onChange={(event) => {
-                    setRowsPerPage(Number(event.target.value));
+                {filteredRows.length > 10 && (
+                  <>
+                    <select
+                      className="rounded border border-[#d7e1f1] bg-white px-1.5 py-0.5 text-xs text-[#17345f] focus:outline-none"
+                      value={rowsPerPage}
+                      onChange={(event) => {
+                        setRowsPerPage(Number(event.target.value));
+                        setPage(1);
+                      }}
+                    >
+                      {[10, 25, 50, 100].map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="button" className="lookup-page-button" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>
+                      Prev
+                    </button>
+                    <button type="button" className="lookup-page-button" disabled={page === totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>
+                      Next
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  className="font-semibold text-slate-600 hover:text-slate-900"
+                  onClick={() => {
+                    setOpen(false);
+                    setQuery("");
                     setPage(1);
                   }}
                 >
-                  {[10, 25, 50, 100].map((size) => (
-                    <option key={size} value={size}>
-                      {size}
-                    </option>
-                  ))}
-                </select>
-                <button type="button" className="lookup-page-button" disabled={page === 1} onClick={() => setPage(1)}>
-                  First
-                </button>
-                <button
-                  type="button"
-                  className="lookup-page-button"
-                  disabled={page === 1}
-                  onClick={() => setPage((current) => current - 1)}
-                >
-                  Prev
-                </button>
-                <button
-                  type="button"
-                  className="lookup-page-button"
-                  disabled={page === totalPages}
-                  onClick={() => setPage((current) => current + 1)}
-                >
-                  Next
-                </button>
-                <button
-                  type="button"
-                  className="lookup-page-button"
-                  disabled={page === totalPages}
-                  onClick={() => setPage(totalPages)}
-                >
-                  Last
+                  Close
                 </button>
               </div>
             </div>
