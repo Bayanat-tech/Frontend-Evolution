@@ -266,9 +266,9 @@ buildDelete: (row, context) => ({
     fields: [
         { name: "main_bank_name", label: "Bank Name", required: true, width: 280 },
         { name: "main_bank_code", label: "Bank Code",required: true, width: 140 },
-        { name: "main_bank_short_name", label: "Short Name", width: 150 },
+        { name: "main_bank_short_name", label: "Short Name", width: 150,limit:4},
        
-        { name: "payer_bk_short_name", label: "Bank Short Name", table: false },
+        { name: "payer_bk_short_name", label: "Bank Short Name", table: false,limit:4 },
         { name: "payer_ac_iban", label: "Bank IBAN", table: false },
         { name: "bk_bic_swift", label: "Bank BIC/Swift", table: false },
       
@@ -472,7 +472,7 @@ hrbank: {
     }),
     buildDelete: (row, context) => ({ parameter: "MST_HR_DEL_CONTRACT_TYPES", loginid: context.loginid, code1: context.companyCode, code2: text(row, "contract_type") }),
     fields: [
-      { name: "contract_type", label: "Contract Type", required: true, disabledOnEdit: true, width: 150 },
+      { name: "contract_type", label: "Contract Type", required: true, disabledOnEdit: true, width: 150, limit: 5},
       { name: "contract_type_desc", label: "Description", required: true, width: 280 },
       { name: "contract_type_short_desc", label: "Short Description", width: 170 },
       { name: "status", label: "Status", type: "select", options: activeInactive, required: true, width: 120 },
