@@ -360,12 +360,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
   {
     name: "HR Absent Memo",
-    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/memo_and_forms/absent_memo"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hr/transactions/memo_and_forms/absent_memo"),
     element: () => <AbsentMemoMainPage />,
   },
   {
     name: "HR Salary Addition Deduction Page",
-    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/memo_and_forms/addition/deduction_letter"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hr/transactions/memo_and_forms/addition/deduction_letter"),
     element: () => <SalaryAdditionDeductionMainPage />,
   },
 
@@ -395,17 +395,17 @@ export const workspaceRoutes: WorkspaceRoute[] = [
 
   {
     name:"HR Grade Salary Increment",
-    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/grade_salary_increment"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hcm/transactions/grade_salary_increment"),
     element: () => <GradeSalaryIncrement />
   },
   {
     name: "HR Employee Salary Increment",
-    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/salary%20increment"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hcm/transactions/employee_salary_increment"),
     element: () => <EmployeeSalaryIncrement />
   },
   {
     name: "HR Leave Encashmen",
-    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/leave_encashment"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hcm/transactions/leave_encashment"),
     element: () => <LeaveEncashmentPage />
   },
   {

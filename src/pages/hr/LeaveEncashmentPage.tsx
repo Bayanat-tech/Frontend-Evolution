@@ -30,7 +30,7 @@ import {
 
 const PARAM = {
   DIVISION: "DROP_DOWN_DIVISION",
-  DEPARTMENT: "DROP_DOWN_DEPT_BASED_ON_DIV",
+  DEPARTMENT: "HR_LEAVE_ENCASHMENT_DEPT_DROP_DOWN",
   SECTION: "HR_LEAVE_ENCASHMENT_SECTION_DROP_DOWN",
   EMPLOYEE: "HR_LEAVE_ENCASHMENT_EMPLOYEE_DROP_DOWN",
   DOC_NO: "HR_LEAVE_ENCASHMENT_DOC_NO_DROP_DOWN",
@@ -126,6 +126,7 @@ export function LeaveEncashmentPage() {
           loginid,
           code1: filters.divCode,
           code2: filters.deptCode,
+          code3: companyCode,
         })) as LookupRow[])
       : [];
 
@@ -136,6 +137,7 @@ export function LeaveEncashmentPage() {
       code1: filters.divCode || undefined,
       code2: filters.divCode ? filters.deptCode || undefined : undefined,
       code3: filters.divCode ? filters.sectionCode || undefined : undefined,
+      code4: companyCode,
     })) as LookupRow[];
 
   const loadBalance = async (employeeId: string) => {
