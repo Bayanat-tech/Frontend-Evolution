@@ -617,14 +617,14 @@ export function FreightPacklistPage({
           <Panel className="lg:col-span-12" icon={Ship} title="Bill Of Lading Route" meta={`${pack.port_code || "Loading"} -> ${pack.destination_port || "Discharge"}`}>
             <div className="freight-job-field-grid freight-job-field-grid-4">
               <Field label="MSWB / Master BL" value={pack.doc_ref} onChange={(value) => setPackField(setPack, "doc_ref", value)} />
-              <Field label="PO No" value={pack.po_no} onChange={(value) => setPackField(setPack, "po_no", value)} />
+              {/* <Field label="PO No" value={pack.po_no} onChange={(value) => setPackField(setPack, "po_no", value)} /> */}
               <Field label="Pre-Carriage By" value={pack.vessel_name} onChange={(value) => setPackField(setPack, "vessel_name", value)} />
               <Field label="Place of Receipt" value={pack.place_receipt} onChange={(value) => setPackField(setPack, "place_receipt", value)} />
               <Field label="Port of Loading" value={pack.port_code} onChange={(value) => setPackField(setPack, "port_code", value)} />
               <Field label="Port of Discharge" value={pack.destination_port} onChange={(value) => setPackField(setPack, "destination_port", value)} />
               <Field label="Place of Delivery" value={pack.place_delivery} onChange={(value) => setPackField(setPack, "place_delivery", value)} />
               <Field label="Vessel Name" value={pack.vessel_name} onChange={(value) => setPackField(setPack, "vessel_name", value)} />
-              <Field label="Voyage No" value={pack.voyage_no} onChange={(value) => setPackField(setPack, "voyage_no", value)} />
+              {/* <Field label="Voyage No" value={pack.voyage_no} onChange={(value) => setPackField(setPack, "voyage_no", value)} /> */}
             </div>
           </Panel>
         )}
@@ -728,10 +728,21 @@ function Textarea({ label, value, onChange, className = "" }: { label: string; v
   return <label className={`freight-compact-label ${className}`}>{label}<textarea className="min-h-8 rounded-md border border-input bg-background px-2 py-1 text-xs font-semibold text-foreground shadow-sm" value={value} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
+// function ReadOnlyField({ label, value }: { label: string; value: string }) {
+//   const editable = useContext(PackEditContext);
+//   if (!editable) return <DisplayField label={label} value={value} strong />;
+//   return <div className="freight-compact-label">{label}<div className="flex h-[34px] items-center overflow-hidden rounded-md border bg-muted/40 px-2 text-xs font-semibold normal-case text-foreground">{value}</div></div>;
+// }
+
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
   const editable = useContext(PackEditContext);
   if (!editable) return <DisplayField label={label} value={value} strong />;
-  return <div className="freight-compact-label">{label}<div className="flex h-7 items-center rounded-md border bg-muted/40 px-2 text-xs font-semibold normal-case text-foreground">{value}</div></div>;
+  return (
+    <div className="freight-compact-label">
+      {label} <div title={value} className="flex h-[34px] items-center overflow-hidden whitespace-nowrap text-ellipsis rounded-md border bg-muted/40 px-2 text-xs font-semibold normal-case text-foreground"> {value}
+      </div>
+    </div>
+  );
 }
 
 function Lookup({ label, value, valueField, displayFields, columns, loadOptions, onChange }: { label: string; value: string; valueField: string; displayFields: string[]; columns: { field: string; header: string }[]; loadOptions: (query?: string) => Promise<LookupRow[]>; onChange: (value: string, row: LookupRow | null) => void }) {

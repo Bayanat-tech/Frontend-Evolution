@@ -1536,7 +1536,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 <table className="border-collapse text-[11px]" style={{ width: "max-content" }}>
                   <thead>
                     <tr className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 text-left text-[10px] font-bold uppercase tracking-wide text-slate-700">
-                      <th className="px-1.5 py-1.5" style={{ width: "90px" }}>Activity Code</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Activity Code</th>
                       <th className="px-1.5 py-1.5" style={{ width: "200px" }}>Activity Name</th>
                       <th className="px-1.5 py-1.5" style={{ width: "70px" }}>Mode</th>
                       <th className="px-1.5 py-1.5" style={{ width: "160px" }}>Origin</th>

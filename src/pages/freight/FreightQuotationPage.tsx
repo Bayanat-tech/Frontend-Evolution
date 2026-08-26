@@ -1163,7 +1163,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                   <table className="border-collapse text-[11px]" style={{ width: "max-content" }}>
                     <thead>
                       <tr className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 text-left text-[10px] font-bold uppercase tracking-wide text-slate-700">
-                        <th className="px-1.5 py-1.5" style={{ width: "100px" }}>Act</th>
+                        <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Act</th>
                         <th className="px-1.5 py-1.5" style={{ width: "180px" }}>Activity</th>
                         <th className="px-1.5 py-1.5" style={{ width: "80px" }}>Mode</th>
                         <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Origin</th>

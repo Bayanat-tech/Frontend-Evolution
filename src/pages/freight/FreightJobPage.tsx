@@ -578,11 +578,15 @@ export function FreightJobPage({
           <Panel className="lg:col-span-4 freight-job-compact-panel" icon={BriefcaseBusiness} title="Events" meta={job.job_start_date || "Job start pending"}>
             <div className="freight-job-field-grid freight-job-field-grid-2">
               <DateField label="Job Start Date" value={job.job_start_date} onChange={(value) => setJobField(setJob, "job_start_date", value)} required />
-              <DateField label="Date of Departure" value={job.etd} onChange={(value) => setJobField(setJob, "etd", value)} />
+              {/* <DateField label="Date of Departure" value={job.etd} onChange={(value) => setJobField(setJob, "etd", value)} />
               <DateField label="ETA" value={job.eta} onChange={(value) => setJobField(setJob, "eta", value)} />
               <DateField label="ATA" value={job.ata} onChange={(value) => setJobField(setJob, "ata", value)} />
-              <DateField label="Schedule Date" value={job.schedule_date} onChange={(value) => setJobField(setJob, "schedule_date", value)} />
-              <Field label="Transit Time" value={job.transit_time} onChange={(value) => setJobField(setJob, "transit_time", value)} />
+              <DateField label="Schedule Date" value={job.schedule_date} onChange={(value) => setJobField(setJob, "schedule_date", value)} /> */}
+              <DateTimeField label="Date of Departure" value={job.etd} onChange={(value) => setJobField(setJob, "etd", value)} />
+              <DateTimeField label="ETA" value={job.eta} onChange={(value) => setJobField(setJob, "eta", value)} />
+              <DateTimeField label="ATA" value={job.ata} onChange={(value) => setJobField(setJob, "ata", value)} />
+              <DateTimeField label="Schedule Date" value={job.schedule_date} onChange={(value) => setJobField(setJob, "schedule_date", value)} />
+              <DateTimeField label="Transit Time" value={job.transit_time} onChange={(value) => setJobField(setJob, "transit_time", value)} />
             </div>
           </Panel>
 
@@ -777,6 +781,45 @@ function DateField({
   );
 }
 
+function DateTimeField({
+  label,
+  value,
+  onChange,
+  required,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+}) {
+  const editable = useContext(JobEditContext);
+
+  if (!editable) {
+    return <DisplayField label={label} value={toDisplayDateTime(value)} />;
+  }
+
+  return (
+    <label className="freight-compact-label">
+      <span>
+        {label}
+        {required && <span style={{ color: "#E24B4A" }}> *</span>}
+      </span>
+      <Input
+        className="h-7 text-xs font-semibold"
+        type="datetime-local"
+        value={dateTimeInputValue(value)}
+        required={required}
+        // onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => onChange(localInputToUtcIso(event.target.value))}
+        onInvalid={(event) =>
+          (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)
+        }
+        onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")}
+      />
+    </label>
+  );
+}
+
 function Textarea({ label, value, onChange, className = "" }: { label: string; value: string; onChange: (value: string) => void; className?: string }) {
   const editable = useContext(JobEditContext);
   if (!editable) return <DisplayField className={className} label={label} value={value} multiline />;
@@ -962,7 +1005,7 @@ function today() {
 }
 
 function isJobDateField(key: string) {
-  return ["job_date", "eta", "ata", "etd", "schedule_date", "job_start_date", "be_date", "ref_customs_date", "confirm_date", "complete_date", "invoice_date", "packdet_date"].includes(key.toLowerCase());
+  return ["job_date", , "job_start_date", "be_date", "ref_customs_date", "confirm_date", "complete_date", "invoice_date", "packdet_date"].includes(key.toLowerCase());
 }
 
 function dateInputValue(value: string) {
@@ -978,6 +1021,31 @@ function toDisplayDate(value: string) {
   if (!normalized) return "";
   const [year, month, day] = normalized.split("-");
   return `${day}/${month}/${year}`;
+}
+
+function dateTimeInputValue(value: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  // yields YYYY-MM-DDTHH:mm for <input type="datetime-local">
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function toDisplayDateTime(value: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function localInputToUtcIso(value: string) {
+  if (!value) return "";
+  // value is "YYYY-MM-DDTHH:mm" with no timezone -> browser Date() treats it as LOCAL
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString(); // converts local -> proper UTC ISO string with Z
 }
 
 function parseDisplayDate(value: string) {
