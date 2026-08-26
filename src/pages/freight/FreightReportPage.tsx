@@ -489,6 +489,11 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
   const Icon = config.icon;
   const [filters, setFilters] = useState<ReportFilters>(emptyFilters);
   const [principalText, setPrincipalText] = useState("");
+  const [principalFromText, setPrincipalFromText] = useState("");
+  const [principalToText, setPrincipalToText] = useState("");
+  const principalDisplayText = principalText || (principalFromText && principalToText
+     ? `${principalFromText} - ${principalToText}`
+     : principalFromText || principalToText);
   const [rows, setRows] = useState<LookupRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("Select filters and run the report.");
@@ -524,6 +529,8 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
   function resetFilters() {
     setFilters(emptyFilters);
     setPrincipalText("");
+    setPrincipalFromText("");
+    setPrincipalToText("");
     setRows([]);
     setMessage("Select filters and run the report.");
   }
@@ -552,7 +559,7 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <SummaryBadge label={config.primaryMetric} value={String(rows.length)} />
+            <SummaryBadge label="Records" value={String(rows.length)} />
             {totals.map((item) => <SummaryBadge key={item.label} label={item.label} value={formatAmount(item.value)} strong />)}
             <Button type="button" variant="outline" size="sm" onClick={printReport} disabled={!rows.length}>
               <Printer size={14} /> Print
@@ -616,7 +623,10 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
         )}
 
         {!!config.advancedFilters?.length && (
-          <AdvancedReportFilters config={config} companyCode={companyCode} filters={filters} setFilters={setFilters} />
+          <AdvancedReportFilters config={config} companyCode={companyCode} filters={filters} setFilters={setFilters}
+             onPrincipalFromSelect={(row) => setPrincipalFromText(row ? `${lookupText(row, "PRIN_CODE")} - ${lookupText(row, "PRIN_NAME")}` : "")}
+             onPrincipalToSelect={(row) => setPrincipalToText(row ? `${lookupText(row, "PRIN_CODE")} - ${lookupText(row, "PRIN_NAME")}` : "")}
+   />
         )}
       </div>
 
@@ -652,11 +662,15 @@ function AdvancedReportFilters({
   companyCode,
   filters,
   setFilters,
+  onPrincipalFromSelect, 
+  onPrincipalToSelect
 }: {
   config: ReportConfig;
   companyCode: string;
   filters: ReportFilters;
   setFilters: Dispatch<SetStateAction<ReportFilters>>;
+   onPrincipalFromSelect: (row: LookupRow | null) => void;
+  onPrincipalToSelect: (row: LookupRow | null) => void;
 }) {
   const items = config.advancedFilters || [];
   return (
@@ -669,7 +683,8 @@ function AdvancedReportFilters({
       </div>
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         {items.includes("principalRange") && (
-          <RangeLookup label="Principal" companyCode={companyCode} parameter="freight_principal" valueField="PRIN_CODE" displayFields={["PRIN_CODE", "PRIN_NAME"]} columns={[{ field: "PRIN_CODE", header: "Code" }, { field: "PRIN_NAME", header: "Principal" }]} fromKey="prin_code_from" toKey="prin_code_to" filters={filters} setFilters={setFilters} />
+          <RangeLookup label="Principal" companyCode={companyCode} parameter="freight_principal" valueField="PRIN_CODE" displayFields={["PRIN_CODE", "PRIN_NAME"]} columns={[{ field: "PRIN_CODE", header: "Code" }, { field: "PRIN_NAME", header: "Principal" }]} fromKey="prin_code_from" toKey="prin_code_to" filters={filters} setFilters={setFilters} onSelectFrom={onPrincipalFromSelect}
+             onSelectTo={onPrincipalToSelect}/>
         )}
         {items.includes("brokerRange") && (
           <RangeLookup label="Broker" companyCode={companyCode} parameter="freight_broker" valueField="BROKER_CODE" displayFields={["BROKER_CODE", "BROKER_NAME"]} columns={[{ field: "BROKER_CODE", header: "Code" }, { field: "BROKER_NAME", header: "Broker" }]} fromKey="broker_code_from" toKey="broker_code_to" filters={filters} setFilters={setFilters} />
@@ -733,7 +748,21 @@ function AdvancedReportFilters({
     />
   )
   )}
-        {items.includes("departmentRange") && <RangeText label="Department" fromKey="dept_code_from" toKey="dept_code_to" filters={filters} setFilters={setFilters} />}
+        {/* {items.includes("departmentRange") && <RangeText label="Department" fromKey="dept_code_from" toKey="dept_code_to" filters={filters} setFilters={setFilters} />} */}
+  {items.includes("departmentRange") && (
+  <RangeLookup
+    label="Department"
+    companyCode={companyCode}
+    parameter="freight_department"
+    valueField="DEPT_CODE"
+    displayFields={["DEPT_CODE", "DEPT_NAME"]}
+    columns={[{ field: "DEPT_CODE", header: "Code" }, { field: "DEPT_NAME", header: "Department" }]}
+    fromKey="dept_code_from"
+    toKey="dept_code_to"
+    filters={filters}
+    setFilters={setFilters}
+  />
+)}
         {items.includes("portRange") && (
           <>
             <LookupFilter label="Origin Port" companyCode={companyCode} parameter="freight_port" value={filters.origin_port} valueField="PORT_CODE" displayFields={["PORT_CODE", "PORT_NAME"]} columns={[{ field: "PORT_CODE", header: "Code" }, { field: "PORT_NAME", header: "Port" }]} onChange={(value) => setFilter(setFilters, "origin_port", value)} />
@@ -819,6 +848,8 @@ function RangeLookup({
   toKey,
   filters,
   setFilters,
+  onSelectFrom, 
+  onSelectTo,
   ...lookup
 }: {
   label: string;
@@ -831,11 +862,15 @@ function RangeLookup({
   valueField: string;
   displayFields: string[];
   columns: { field: string; header: string }[];
+  onSelectFrom?: (row: LookupRow | null) => void;
+  onSelectTo?: (row: LookupRow | null) => void;
 }) {
   return (
     <div className="grid grid-cols-2 gap-2">
-      <LookupFilter label={`${label} From`} value={String(filters[fromKey] || "")} onChange={(value) => setFilter(setFilters, fromKey, value)} {...lookup} />
-      <LookupFilter label={`${label} To`} value={String(filters[toKey] || "")} onChange={(value) => setFilter(setFilters, toKey, value)} {...lookup} />
+      {/* <LookupFilter label={`${label} From`} value={String(filters[fromKey] || "")} onChange={(value) => setFilter(setFilters, fromKey, value)} {...lookup} />
+      <LookupFilter label={`${label} To`} value={String(filters[toKey] || "")} onChange={(value) => setFilter(setFilters, toKey, value)} {...lookup} /> */}
+       <LookupFilter label={`${label} From`} value={String(filters[fromKey] || "")} onChange={(value) => setFilter(setFilters, fromKey, value)} onSelect={onSelectFrom} {...lookup} />
+      <LookupFilter label={`${label} To`} value={String(filters[toKey] || "")} onChange={(value) => setFilter(setFilters, toKey, value)} onSelect={onSelectTo} {...lookup} />
     </div>
   );
 }
@@ -849,6 +884,7 @@ function LookupFilter({
   displayFields,
   columns,
   onChange,
+  onSelect,
 }: {
   label: string;
   companyCode: string;
@@ -858,13 +894,15 @@ function LookupFilter({
   displayFields: string[];
   columns: { field: string; header: string }[];
   onChange: (value: string) => void;
+  onSelect?: (row: LookupRow | null) => void;
 }) {
   return (
     <Field label={label}>
       <LookupField
         value={value}
         displayValue={value}
-        onChange={(nextValue) => onChange(nextValue)}
+        // onChange={(nextValue) => onChange(nextValue)}
+        onChange={(nextValue, row) => { onChange(nextValue); onSelect?.(row ?? null); }}
         loadOptions={(query) => loadLookup(parameter, companyCode, query)}
         valueField={valueField}
         displayFields={displayFields}
