@@ -98,6 +98,7 @@ import { StockAdjViewPage } from "../pages/wms/stock adjustment/StockAdjustmentV
 import StockAdjPage from "../pages/wms/stock adjustment/StockAdjustmentPage";
 import {StorageComputationPage} from "../pages/wms/storage computation/StorageComputation";
 import LeaveEncashmentPage from "../pages/hr/LeaveEncashmentPage";
+import { HrSeprationInitiation } from "../pages/hr/HrSeprationInitiation";
 import EmployeeSalaryIncrement from "../pages/hr/EmployeeSalaryIncrement";
 import { EmployeeProfilePage } from "../pages/hr/EmployeeProfilePage";
 
@@ -235,6 +236,15 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     name: 'Travel Fare Page',
     match: ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/setup/pay%20units/travel_fare"),
     element: () => <TravelFare />,
+  },
+
+  {
+  name: "HR Separation Initiation",
+  match: ({ pathname }) =>
+    pathname
+      .toLowerCase()
+      .includes("/hcm/hcm/transactions/sepration_initiation"),
+  element: () => <HrSeprationInitiation />,
   },
   {
     name: 'Company Info Master',
