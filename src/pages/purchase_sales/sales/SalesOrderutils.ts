@@ -235,12 +235,12 @@ export async function fetchSalesOrderDetail(
 export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: SODocType) {
   const refDocNo =
     docType === "SDN"
-      ? numberOrZero(form.so_doc_no)
+      ? form.so_doc_no
       : docType === "SIN"
         ? text(form.sdn_doc_no)
         : undefined;
   return {
-    doc_no: numberOrZero(form.doc_no) || undefined,
+    doc_no: form.doc_no || undefined,
     doc_type: docType,
     doc_date: form.doc_date,
     ref_no: form.ref_no,

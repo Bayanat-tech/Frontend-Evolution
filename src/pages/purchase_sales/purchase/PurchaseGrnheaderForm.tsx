@@ -69,8 +69,8 @@ export function PurchaseGrnHeaderForm({
                 <div className="col-span-2">
                     <LookupField
                         label="A/c code *"
-                        value={form.po_ac_code || ""}
-                        displayValue={form.ac_name ? `${form.po_ac_code} - ${form.ac_name}` : form.po_ac_code}
+                        value={form.ac_code || ""}
+                        displayValue={form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
                         columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "address", header: "Address" }, { field: "tel", header: "Tel" }, { field: "fax", header: "Fax" }]}
                         valueField="ac_code"
                         displayFields={["ac_code", "ac_name"]}
@@ -97,7 +97,7 @@ export function PurchaseGrnHeaderForm({
                             displayValue={String(form.po_doc_no ?? "")}
                             columns={[
                                 { field: "po_doc_no", header: "GRN No" },
-                                { field: "po_ac_code", header: "A/c Code" },
+                                { field: "ac_code", header: "A/c Code" },
                             ]}
                             valueField="po_doc_no"
                             displayFields={["po_doc_no"]}
@@ -115,7 +115,7 @@ export function PurchaseGrnHeaderForm({
                                 setForm((current) => ({
                                     ...current,
                                     po_doc_no: value,
-                                    po_ac_code: text(getLookupValue(row || {}, "po_ac_code")),
+                                    ac_code: text(getLookupValue(row || {}, "ac_code")),
                                    po_doc_date: toDateInputValue(getLookupValue(row || {}, "po_doc_date")),
                                     po_payment_terms: text(getLookupValue(row || {}, "po_payment_terms")),
                                     po_dlvr_term: text(getLookupValue(row || {}, "po_dlvr_term")),
@@ -129,7 +129,7 @@ export function PurchaseGrnHeaderForm({
                                         parameter: "PS_GRN_ENTRY_PO_NO_DETAIL_DET",
                                         code1: companyCode,
                                         code2: divCodeForFetch,
-                                        number1: Number(value),
+                                        code3: value,
                                     });
 
                                     const mappedDetails = (details || []).map((item: any, index: number) => ({

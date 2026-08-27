@@ -231,14 +231,14 @@ export async function fetchPurchaseOrderDetail(
 export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: PODocType) {
   const refDocNo =
     docType === "GRN"
-      ? numberOrZero(form.po_doc_no)
+      ? form.po_doc_no
       : docType === "PIN"
         ? text(form.grn_doc_no)
         : undefined;
 
   console.log("REF DOC NO:", refDocNo);
   return {
-    doc_no: numberOrZero(form.doc_no) || undefined,
+    doc_no: form.doc_no || undefined,
     doc_type: docType,
     doc_date: form.doc_date,
     ref_no: form.ref_no,
