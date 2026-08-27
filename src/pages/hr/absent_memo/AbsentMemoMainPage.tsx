@@ -26,6 +26,7 @@ const columnDef: ColumnDef<any>[] = [
 ];
 
 const normalizeValue = (value: any) => (value === null || value === undefined ? '' : String(value));
+
 const normalizeDateValue = (value: any) => {
   if (!value) return '';
   const date = new Date(value);
@@ -37,20 +38,20 @@ const mapDetailRows = (rows: any[]): AbsentMemoDetailRow[] =>
   rows.map((row, index) => ({
     srNo: row?.sr_no ?? row?.SR_NO ?? row?.serial_no ?? row?.SERIAL_NO ?? index + 1,
     payUnit: String(row?.pay_comp_id ?? row?.PAY_COMP_ID ?? ''),
-    description: String(row?.sal_type_flag ?? row?.SAL_TYPE_FLAG ?? row?.deduct_from_leave ?? row?.DEDUCT_FROM_LEAVE ?? ''),
-    effectiveFrom: normalizeDateValue(row?.recover_from_dt ?? row?.RECOVER_FROM_DT ?? row?.leave_start_date ?? row?.LEAVE_START_DATE),
-    absentFromDate: normalizeDateValue(row?.leave_start_date ?? row?.LEAVE_START_DATE),
+    description: String(row?.sal_type_flag ?? row?.SAL_TYPE_FLAG ?? row?.description ?? ''),
+    effectiveFrom: normalizeDateValue(row?.recover_from_dt ?? row?.RECOVER_FROM_DT),
+    absentFromDate: normalizeDateValue(row?.leave_start_date ?? row?.LEAVE_START_DATE ?? row?.recover_from_dt),
     absentToDate: normalizeDateValue(row?.leave_end_date ?? row?.LEAVE_END_DATE),
-    noOfDays: row?.deduct_noof_leavedays ?? row?.DEDUCT_NOOF_LEAVEDAYS ?? row?.leave_days_paid ?? row?.LEAVE_DAYS_PAID ?? '',
+    noOfDays: row?.deduct_noof_leavedays ?? row?.DEDUCT_NOOF_LEAVEDAYS ?? row?.leave_days_paid ?? '',
     amount: row?.amount ?? row?.AMOUNT ?? row?.recover_mth_amt ?? row?.RECOVER_MTH_AMT ?? '',
     refLeaveDocNo: String(row?.ref_leave_doc_no ?? row?.REF_LEAVE_DOC_NO ?? ''),
-    cancel: String(row?.cancel_status ?? row?.CANCEL_STATUS ?? 'No'),
+    cancel: String(row?.cancel_status ?? row?.CANCEL_STATUS ?? (row?.deduct_from_leave === 'Y' ? 'Yes' : 'No')),
   }));
 
 const getInitialFormValues = (rowData: any) => ({
   docNo: normalizeValue(rowData?.docNo ?? rowData?.doc_no),
   docType: normalizeValue(rowData?.docType ?? rowData?.doc_type ?? 'Absent'),
-  docDate: normalizeDateValue(rowData?.docDate ?? rowData?.doc_date),
+  docDate: normalizeDateValue(rowData?.docDate ?? rowData?.doc_date) || new Date().toISOString().slice(0, 10),
   refNo: normalizeValue(rowData?.refNo ?? rowData?.ref_no),
   employeeCode: normalizeValue(rowData?.employeeCode ?? rowData?.employee_code),
   nameFrom: normalizeValue(rowData?.nameFrom ?? rowData?.name_from),
@@ -66,46 +67,65 @@ const AbsentMemoMainPage = () => {
   const title = 'Absent Memo';
   const { user } = useAuth();
   const { toast } = useToast();
-
   const [selectedRowData, setSelectedRowData] = useState<any>(null);
   const [detailRows, setDetailRows] = useState<AbsentMemoDetailRow[]>([]);
   const [dialogStatus, setDialogStatus] = useState<{ open: boolean; type: '' | 'add' | 'edit' }>({
     open: false,
     type: '',
   });
+  const [isSaving, setIsSaving] = useState(false);
 
   const formik = useFormik({
     enableReinitialize: true,
     initialValues: getInitialFormValues(selectedRowData),
     onSubmit: async (values) => {
+      if (!values.employeeCode) {
+        toast.error('Employee Code is required');
+        return;
+      }
+      if (detailRows.length === 0) {
+        toast.error('Please add at least one detail line');
+        return;
+      }
+
+      setIsSaving(true);
       try {
+        const totalAmount = detailRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+
         const header = {
           company_code: user?.company_code ?? '',
           doc_type: values.docType || 'Absent',
-          doc_no: values.docNo ? Number(values.docNo) : undefined,
-          doc_date: values.docDate ? new Date(values.docDate).toISOString() : undefined,
+          doc_no: values.docNo ? Number(values.docNo) : 0,
+          doc_date: values.docDate ? new Date(values.docDate).toISOString() : new Date().toISOString(),
           ref_no: values.refNo || '',
           name_from: values.nameFrom || '',
           addr_from: values.addrFrom || '',
-          lettr_subject: values.lettrSubject || '',
+          lettr_subject: values.lettrSubject || 'Salary Deduction',
           remarks_1: values.remarks1 || '',
           remarks_2: values.remarks2 || '',
           signatory_name: values.signatoryName || '',
           signatory_position: values.signatoryPosition || '',
           employee_code: values.employeeCode || '',
           employee_id: values.employeeCode || '',
+          amount: totalAmount,
+          user_id: user?.loginid || '',
         };
 
-        const details = detailRows.map((row) => ({
+        const details = detailRows.map((row, index) => ({
           company_code: user?.company_code ?? '',
           doc_type: values.docType || 'Absent',
-          doc_no: values.docNo ? Number(values.docNo) : undefined,
+          doc_no: values.docNo ? Number(values.docNo) : 0,
+          sr_no: Number(row.srNo) || index + 1,
           employee_id: values.employeeCode || '',
-          emplyee_code: values.employeeCode || '',
+          emplyee_code: values.employeeCode || '', // matches DB column spelling
           pay_comp_id: row.payUnit || '',
           amount: Number(row.amount || 0),
           recover_mth_amt: Number(row.amount || 0),
-          recover_from_dt: row.effectiveFrom ? new Date(row.effectiveFrom).toISOString() : undefined,
+          recover_from_dt: row.effectiveFrom
+            ? new Date(row.effectiveFrom).toISOString()
+            : row.absentFromDate
+              ? new Date(row.absentFromDate).toISOString()
+              : undefined,
           deduct_from_leave: row.cancel === 'Yes' ? 'Y' : 'N',
           deduct_noof_leavedays: Number(row.noOfDays || 0),
           ref_leave_doc_no: row.refLeaveDocNo || '',
@@ -121,13 +141,14 @@ const AbsentMemoMainPage = () => {
           toast.success(dialogStatus.type === 'edit' ? 'Updated Successfully' : 'Saved Successfully');
           closeDialog();
           refetchGridData();
-          return;
+        } else {
+          toast.error(dialogStatus.type === 'edit' ? 'Update Failed' : 'Save Failed');
         }
-
-        toast.error(dialogStatus.type === 'edit' ? 'Update Failed' : 'Save Failed');
       } catch (error) {
         console.error('Absent Memo save error:', error);
         toast.error('Error while saving data');
+      } finally {
+        setIsSaving(false);
       }
     },
   });
@@ -149,7 +170,6 @@ const AbsentMemoMainPage = () => {
         setDetailRows([]);
       }
     };
-
     void fetchDetailRows();
   }, [dialogStatus.open, dialogStatus.type, selectedRowData, user?.company_code, user?.loginid]);
 
@@ -206,65 +226,81 @@ const AbsentMemoMainPage = () => {
 
   const totalAmount = detailRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
 
-  return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <h1 className="m-0 text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
-        <Button title={`Add ${title}`} onClick={openAdd}>
-          <Plus size={15} /> Add
-        </Button>
-      </div>
+return (
+  <section className="relative flex h-full min-h-0 flex-col gap-2 overflow-hidden p-0">
+    {/* Title row – tight, no extra top space */}
+    <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-1 pt-0">
+      <h1 className="m-0 text-xl font-semibold tracking-tight text-foreground">
+        {title}
+      </h1>
+      <Button title={`Add ${title}`} onClick={openAdd} size="sm">
+        <Plus size={14} /> Add
+      </Button>
+    </div>
 
+    {/* Grid fills all remaining height */}
+    <div className="min-h-0 flex-1">
       <DataTable
         columns={columns}
         data={gridData || []}
         loading={isLoading}
         emptyText={`No ${title.toLowerCase()} records found`}
-        height={590}
+        height="100%"          // if DataTable supports string height
+        // OR if it only accepts number, use a large value / calc:
+        // height={window.innerHeight - 160}
         density="grid"
         getRowId={(row: any) => String(row.doc_no)}
       />
+    </div>
 
-      {dialogStatus.open && (
-        <DocumentPageShell
-          eyebrow={dialogStatus.type === 'edit' ? 'Edit Document' : 'Add Document'}
-          title={title}
-          badges={[
-            { label: 'Doc No', value: formik.values.docNo || 'New' },
-            { label: 'Doc Date', value: formik.values.docDate || '—' },
-            { label: 'Employee', value: formik.values.employeeCode || '—' },
-          ]}
-          onClose={closeDialog}
-          onCancel={closeDialog}
-          footer={
-            <>
-              <div className="text-sm text-slate-600">
-                Total Amount{' '}
-                <span className="text-base font-semibold text-[#0e4f8f]">
-                  {totalAmount.toLocaleString(undefined, { minimumFractionDigits: 3 })}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" onClick={closeDialog}>
-                  Close
-                </Button>
-                <Button onClick={() => formik.submitForm()} className="bg-[#0e4f8f] hover:bg-[#0c4278]">
-                  <Save size={14} /> {dialogStatus.type === 'edit' ? 'Update' : 'Save'}
-                </Button>
-              </div>
-            </>
-          }
-        >
-          <AddAbsentMemoPage
-            mode={dialogStatus.type}
-            formik={formik}
-            detailRows={detailRows}
-            setDetailRows={setDetailRows}
-          />
-        </DocumentPageShell>
-      )}
-    </section>
-  );
+    {dialogStatus.open && (
+      <DocumentPageShell
+        eyebrow={dialogStatus.type === 'edit' ? 'Edit Document' : 'Add Document'}
+        title={title}
+        badges={[
+          { label: 'Doc No', value: formik.values.docNo || 'New' },
+          { label: 'Doc Date', value: formik.values.docDate || '—' },
+          { label: 'Employee', value: formik.values.employeeCode || '—' },
+        ]}
+        onClose={closeDialog}
+        onCancel={closeDialog}
+        footer={
+          <>
+            <div className="text-sm text-slate-600">
+              Total Amount{' '}
+              <span className="text-base font-semibold text-[#0e4f8f]">
+                {totalAmount.toLocaleString(undefined, {
+                  minimumFractionDigits: 3,
+                  maximumFractionDigits: 3,
+                })}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={closeDialog} disabled={isSaving}>
+                Close
+              </Button>
+              <Button
+                onClick={() => formik.submitForm()}
+                className="bg-[#0e4f8f] hover:bg-[#0c4278]"
+                disabled={isSaving}
+              >
+                <Save size={14} />{' '}
+                {isSaving ? 'Saving…' : dialogStatus.type === 'edit' ? 'Update' : 'Save'}
+              </Button>
+            </div>
+          </>
+        }
+      >
+        <AddAbsentMemoPage
+          mode={dialogStatus.type}
+          formik={formik}
+          detailRows={detailRows}
+          setDetailRows={setDetailRows}
+        />
+      </DocumentPageShell>
+    )}
+  </section>
+);
 };
 
 export default AbsentMemoMainPage;

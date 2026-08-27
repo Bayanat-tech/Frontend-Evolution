@@ -180,7 +180,7 @@ export function FreightJobFollowupTab({
   }, [job, kind, loading, notice, onEmbeddedActionsChange, onEmbeddedList, readOnly, saving, loadRows]);
 
   return (
-    <section className="grid gap-2 freight-job-ops-screen">
+    <section className="freight-ui-standard grid gap-2 freight-job-ops-screen">
       {!embeddedInWorkspace && <div className="freight-form-header">
         <div className="flex flex-wrap items-center justify-between gap-2 w-full">
           <div className="flex items-center gap-2">
