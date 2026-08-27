@@ -491,9 +491,12 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
   const [principalText, setPrincipalText] = useState("");
   const [principalFromText, setPrincipalFromText] = useState("");
   const [principalToText, setPrincipalToText] = useState("");
+  // const principalDisplayText = principalText || (principalFromText && principalToText
+  //    ? `${principalFromText} - ${principalToText}`
+  //    : principalFromText || principalToText);
   const principalDisplayText = principalText || (principalFromText && principalToText
-     ? `${principalFromText} - ${principalToText}`
-     : principalFromText || principalToText);
+   ? `${principalFromText}  →  ${principalToText}`
+   : principalFromText || principalToText);
   const [rows, setRows] = useState<LookupRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("Select filters and run the report.");
@@ -515,7 +518,7 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
       const nextRows = (response.data.data || []).map(normalizeRow);
       setRows(nextRows);
       setMessage(nextRows.length ? `${nextRows.length} records loaded from Oracle.` : "No records found for selected filters.");
-      writeReportWindow(reportWindow, reportHtml(config, companyCode, userName, filters, principalText, nextRows, buildTotals(nextRows, config.amountFields), true));
+      writeReportWindow(reportWindow, reportHtml(config, companyCode, userName, filters, principalDisplayText, nextRows, buildTotals(nextRows, config.amountFields), true));
     } catch (error: any) {
       setRows([]);
       const errorMessage = error?.response?.data?.details || error?.response?.data?.message || "Unable to generate Freight report.";
@@ -541,7 +544,8 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
       return;
     }
     const reportWindow = openReportShell(config.title);
-    writeReportWindow(reportWindow, reportHtml(config, companyCode, userName, filters, principalText, rows, totals, true));
+    // writeReportWindow(reportWindow, reportHtml(config, companyCode, userName, filters, principalText, rows, totals, true));
+    writeReportWindow(reportWindow, reportHtml(config, companyCode, userName, filters, principalDisplayText, rows, totals, true));
   }
 
   return (
@@ -569,7 +573,7 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
               variant="outline"
               size="sm"
               disabled={!rows.length}
-              onClick={() => exportReportExcel(config.title, reportHtml(config, companyCode, userName, filters, principalText, rows, totals, false))}
+              onClick={() => exportReportExcel(config.title, reportHtml(config, companyCode, userName, filters, principalDisplayText, rows, totals, false))}
             >
               <Download size={14} /> Excel
             </Button>
@@ -624,15 +628,17 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
 
         {!!config.advancedFilters?.length && (
           <AdvancedReportFilters config={config} companyCode={companyCode} filters={filters} setFilters={setFilters}
-             onPrincipalFromSelect={(row) => setPrincipalFromText(row ? `${lookupText(row, "PRIN_CODE")} - ${lookupText(row, "PRIN_NAME")}` : "")}
-             onPrincipalToSelect={(row) => setPrincipalToText(row ? `${lookupText(row, "PRIN_CODE")} - ${lookupText(row, "PRIN_NAME")}` : "")}
+            //  onPrincipalFromSelect={(row) => setPrincipalFromText(row ? `${lookupText(row, "PRIN_CODE")} - ${lookupText(row, "PRIN_NAME")}` : "")}
+            //  onPrincipalToSelect={(row) => setPrincipalToText(row ? `${lookupText(row, "PRIN_CODE")} - ${lookupText(row, "PRIN_NAME")}` : "")}
+            onPrincipalFromSelect={(row) => setPrincipalFromText(row ? lookupText(row, "PRIN_CODE") : "")}//DISPLAY ONLY CODE
+            onPrincipalToSelect={(row) => setPrincipalToText(row ? lookupText(row, "PRIN_CODE") : "")}
    />
         )}
       </div>
 
       <div className="grid gap-2 md:grid-cols-4">
         <ReportTile icon={CalendarDays} label="Period" value={`${toDisplayDate(filters.from_date) || "Start"} - ${toDisplayDate(filters.to_date) || "Today"}`} />
-        <ReportTile icon={UserRound} label="Principal" value={principalText || "All principals"} />
+        <ReportTile icon={UserRound} label="Principal" value={principalDisplayText || "All principals"} />
         <ReportTile icon={Ship} label="Movement" value={`${optionLabel(modeOptions, filters.transport_mode)} / ${optionLabel(jobTypeOptions, filters.job_type)}`} />
         <ReportTile icon={Filter} label="Status" value={visibleFilters.includes("status") ? optionLabel(statusOptions, filters.status) : "Not applicable"} />
       </div>
