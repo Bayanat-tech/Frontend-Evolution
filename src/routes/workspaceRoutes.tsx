@@ -227,16 +227,32 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     element: () => <ConsolidatePayUnitPage />,
   },
 
+  // {
+  //   name: 'HR Leave Slap Page',
+  //   match: ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/setup/pay%20units/leave_slab"),
+  //   element: () => <LeaveSlapPage />,
+  // },
+
   {
-    name: 'HR Leave Slap Page',
-    match: ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/setup/pay%20units/leave_slab"),
+   name: 'HR Leave Slap Page',
+    match: (context) => isHrRoute(context) && isHrLeaveSlapRoute(context),
     element: () => <LeaveSlapPage />,
   },
+
+  // {
+  //   name: 'Travel Fare Page',
+  //   match: ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/setup/pay%20units/travel_fare"),
+  //   element: () => <TravelFare />,
+  // },
+
+
+
   {
     name: 'Travel Fare Page',
-    match: ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/setup/pay%20units/travel_fare"),
+       match: (context) => isHrRoute(context) && isHrTravelFareRoute(context),
     element: () => <TravelFare />,
   },
+
   {
     name: 'Company Info Master',
     match: ({pathname}) => pathname.toLowerCase().includes("/security/security/masters/gm/com_info"),
@@ -2555,6 +2571,17 @@ function decodeRouteText(value: string) {
   }
 }
 
+function isHrLeaveSlapRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("leaveslap") || compact.includes("LeaveSlap");
+}
+function isHrTravelFareRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("TravelFare") || compact.includes("travelfare");
+}
+
+
+
 function isHrPayrollProcessRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
   return compact.includes("payrollprocessing") || compact.includes("payrollprocess") || compact.includes("payrollprocesspage");
@@ -2562,7 +2589,7 @@ function isHrPayrollProcessRoute(context: WorkspaceRouteContext) {
 
 function isHrPayUnitsRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
-  return (compact.includes("payunits") || compact.includes("payunit")) && !compact.includes("depend")&& !compact.includes("grade")&& !compact.includes("payrollaccountsetup") && !compact.includes("accrualtype") && !compact.includes("attendancetypes") ;
+  return (compact.includes("payunits") || compact.includes("payunit")) && !compact.includes("depend")&& !compact.includes("grade")&& !compact.includes("payrollaccountsetup") && !compact.includes("accrualtype") && !compact.includes("attendancetypes") && !compact.includes("leaveslap")&& !compact.includes("travelfare");
 }
 
 function isHrPayUnitsDependantRoute(context: WorkspaceRouteContext) {
