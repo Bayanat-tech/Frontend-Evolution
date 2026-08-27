@@ -2,7 +2,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Calculator, CheckCircle2, Edit2, ListPlus, Plus, RefreshCw, Save, Trash2, TrendingUp } from "lucide-react";
 import { api } from "../../api/client";
-import { freightSelect } from "../../api/freight";
+import { freightSelect, freightTaxCategories, freightTaxComponents } from "../../api/freight";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
@@ -40,11 +40,13 @@ type ActivityLine = {
   tx_compnt_perc_1: string;
   tx_compnt_amt_1: string;
   tx_compnt_lcuramt_1: string;
+  tx_compnt_1_expmt: string;
   tx_cat_code_cost: string;
   tx_compntcat_code_1_cost: string;
   tx_compnt_perc_1_cost: string;
   tx_compnt_amt_1_cost: string;
   tx_compnt_lcuramt_1_cost: string;
+  tx_compnt_1_expmt_cost: string;
 };
 
 const modeMap = {
@@ -243,7 +245,11 @@ export function FreightJobActivitiesPage({
           job_no: lookupText(header, "job_no"),
         },
       );
-      const incoming = (response.data.data?.lines || []).map(toLine);
+      const incoming = (response.data.data?.lines || []).map(toLine).map((line) => ({
+        ...line,
+        div_code: line.div_code || lookupText(header, "div_code"),
+        tx_cat_code: line.tx_cat_code || lookupText(header, "tx_cat_code"),
+      }));
       const existingCodes = new Set(lines.map((line) => line.act_code.trim().toUpperCase()).filter(Boolean));
       const additions = incoming.filter((line) => {
         const code = line.act_code.trim().toUpperCase();
@@ -387,30 +393,32 @@ export function FreightJobActivitiesPage({
             <div key={`${line.srno}-${index}`} className="freight-job-table-row">
               <div className="grid grid-cols-[42px_120px_minmax(190px,1fr)_76px_94px_105px_105px_90px_105px_90px_105px_50px] items-center gap-1 px-2 py-1">
                 <span className="text-xs font-semibold text-muted-foreground">{index + 1}</span>
-                <ActivityLookup value={line.act_code} companyCode={companyCode} disabled={isLineLocked} onChange={(value, row) => updateLine(index, { act_code: value, activity: lookupText(row || undefined, "activity"), other_services: lookupText(row || undefined, "activity") || line.other_services, bill_rate: lookupText(row || undefined, "bill") || line.bill_rate, actual_cost: lookupText(row || undefined, "cost") || line.actual_cost })} />
+                <ActivityLookup value={line.act_code} companyCode={companyCode} disabled={isLineLocked} onChange={(value, row) => updateLine(index, recalc({ ...line, act_code: value, activity: lookupText(row || undefined, "activity"), other_services: lookupText(row || undefined, "activity") || line.other_services, bill_rate: lookupText(row || undefined, "bill") || line.bill_rate, actual_cost: lookupText(row || undefined, "cost") || line.actual_cost, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code: line.tx_cat_code || lookupText(header, "tx_cat_code") }))} />
                 <Input className="h-7 text-xs" value={line.other_services} disabled={isLineLocked} onChange={(event) => updateLine(index, { other_services: event.target.value })} />
                 <MoneyInput value={line.quantity} disabled={isLineLocked}onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))} />
                 <MoneyInput value={line.bill_rate} disabled={isLineLocked} onChange={(value) => updateLine(index, recalc({ ...line, bill_rate: value }))} />
-                <MoneyInput value={line.bill} disabled={isLineLocked} onChange={(value) => updateLine(index, { bill: value })} />
-                <MoneyInput value={line.actual_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, { actual_cost: value })} />
+                <MoneyInput value={line.bill} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, bill: value }))} />
+                <MoneyInput value={line.actual_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, actual_cost: value }))} />
                 <Input className="h-7 text-xs" value={line.broker_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { broker_code: event.target.value })} />
                 <MoneyInput value={line.partners_price} disabled={isLineLocked} onChange={(value) => updateLine(index, { partners_price: value })} />
                 <Input className="h-7 text-xs" value={line.transporter_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { transporter_code: event.target.value })} />
                 <MoneyInput value={line.transport_price} disabled={isLineLocked} onChange={(value) => updateLine(index, { transport_price: value })} />
                 <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={isLineLocked} onClick={() => removeLine(index)}><Trash2 size={14} /></Button>
               </div>
-              <div className="freight-job-table-subrow grid grid-cols-[42px_repeat(10,minmax(88px,1fr))] gap-1 px-2 pb-1">
+              <div className="freight-job-table-subrow grid grid-cols-[42px_repeat(12,minmax(82px,1fr))] gap-1 px-2 pb-1">
                 <span className="self-center text-[10px] font-semibold uppercase text-muted-foreground">Tax</span>
-                <TaxCategoryLookup companyCode={companyCode} value={line.tx_cat_code} disabled={isLineLocked} placeholder="Sale Cat" onChange={(value) => updateLine(index, { tx_cat_code: value })} />
-                <TaxCodeLookup companyCode={companyCode} value={line.tx_compntcat_code_1} disabled={isLineLocked} placeholder="Sale Code" onChange={(value, row) => updateLine(index, { tx_compntcat_code_1: value, tx_cat_code: lookupText(row, "tx_cat_code") || line.tx_cat_code, tx_compnt_perc_1: lookupText(row, "tx_percnt") || line.tx_compnt_perc_1 })} />
-                <MoneyInput value={line.tx_compnt_perc_1} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_perc_1: value })} />
-                <MoneyInput value={line.tx_compnt_amt_1} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_amt_1: value })} />
-                <MoneyInput value={line.tx_compnt_lcuramt_1} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_lcuramt_1: value })} />
-                <TaxCategoryLookup companyCode={companyCode} value={line.tx_cat_code_cost} disabled={isLineLocked} placeholder="Cost Cat" onChange={(value) => updateLine(index, { tx_cat_code_cost: value })} />
-                <TaxCodeLookup companyCode={companyCode} value={line.tx_compntcat_code_1_cost} disabled={isLineLocked} placeholder="Cost Code" onChange={(value, row) => updateLine(index, { tx_compntcat_code_1_cost: value, tx_cat_code_cost: lookupText(row, "tx_cat_code") || line.tx_cat_code_cost, tx_compnt_perc_1_cost: lookupText(row, "tx_percnt") || line.tx_compnt_perc_1_cost })} />
-                <MoneyInput value={line.tx_compnt_perc_1_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_perc_1_cost: value })} />
-                <MoneyInput value={line.tx_compnt_amt_1_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_amt_1_cost: value })} />
-                <MoneyInput value={line.tx_compnt_lcuramt_1_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_lcuramt_1_cost: value })} />
+                <TaxCategoryLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} value={line.tx_cat_code} disabled={isLineLocked} placeholder="Sale Cat" onChange={(value) => updateLine(index, recalcSalesTax({ ...line, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code: value, tx_compntcat_code_1: "", tx_compnt_perc_1: "0", tx_compnt_1_expmt: "N" }))} />
+                <TaxCodeLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} taxCategory={line.tx_cat_code} activityCode={line.act_code} value={line.tx_compntcat_code_1} disabled={isLineLocked} placeholder="Sale Code" onChange={(value, row) => { const percent = lookupText(row, "tx_percnt") || "0"; updateLine(index, recalcSalesTax({ ...line, tx_compntcat_code_1: value, tx_cat_code: lookupText(row, "tx_cat_code") || line.tx_cat_code, tx_compnt_perc_1: percent, tx_compnt_1_expmt: numberValue(percent) > 0 ? "S" : "N" })); }} />
+                <MoneyInput value={line.tx_compnt_perc_1} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, tx_compnt_perc_1: value }))} />
+                <TaxTreatmentSelect value={line.tx_compnt_1_expmt} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, tx_compnt_1_expmt: value, tx_compnt_perc_1: value === "S" ? line.tx_compnt_perc_1 : "0" }))} />
+                <MoneyInput value={line.tx_compnt_amt_1} disabled onChange={() => undefined} />
+                <MoneyInput value={line.tx_compnt_lcuramt_1} disabled onChange={() => undefined} />
+                <TaxCategoryLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} value={line.tx_cat_code_cost} disabled={isLineLocked} placeholder="Cost Cat" onChange={(value) => updateLine(index, recalcCostTax({ ...line, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code_cost: value, tx_compntcat_code_1_cost: "", tx_compnt_perc_1_cost: "0", tx_compnt_1_expmt_cost: "N" }))} />
+                <TaxCodeLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} taxCategory={line.tx_cat_code_cost} activityCode={line.act_code} value={line.tx_compntcat_code_1_cost} disabled={isLineLocked} placeholder="Cost Code" onChange={(value, row) => { const percent = lookupText(row, "tx_percnt") || "0"; updateLine(index, recalcCostTax({ ...line, tx_compntcat_code_1_cost: value, tx_cat_code_cost: lookupText(row, "tx_cat_code") || line.tx_cat_code_cost, tx_compnt_perc_1_cost: percent, tx_compnt_1_expmt_cost: numberValue(percent) > 0 ? "S" : "N" })); }} />
+                <MoneyInput value={line.tx_compnt_perc_1_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, tx_compnt_perc_1_cost: value }))} />
+                <TaxTreatmentSelect value={line.tx_compnt_1_expmt_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, tx_compnt_1_expmt_cost: value, tx_compnt_perc_1_cost: value === "S" ? line.tx_compnt_perc_1_cost : "0" }))} />
+                <MoneyInput value={line.tx_compnt_amt_1_cost} disabled onChange={() => undefined} />
+                <MoneyInput value={line.tx_compnt_lcuramt_1_cost} disabled onChange={() => undefined} />
               </div>
             </div>
           ))}
@@ -425,7 +433,11 @@ export function FreightJobActivitiesPage({
       notify({ type: "error", text: "Confirmed, invoiced, or completed job is locked. Activities are view only." });
       return;
     }
-    setLines((current) => [...current, emptyLine(current.length + 1)]);
+    setLines((current) => [...current, {
+      ...emptyLine(current.length + 1),
+      div_code: lookupText(header, "div_code"),
+      tx_cat_code: lookupText(header, "tx_cat_code"),
+    }]);
     setDirty(true);
   }
 
@@ -478,7 +490,7 @@ function ActivityLookup({ companyCode, value, onChange, disabled }: { companyCod
   );
 }
 
-function TaxCategoryLookup({ companyCode, value, onChange, disabled, placeholder }: { companyCode: string; value: string; onChange: (value: string, row: LookupRow | null) => void; disabled?: boolean; placeholder: string }) {
+function TaxCategoryLookup({ companyCode, divisionCode, value, onChange, disabled, placeholder }: { companyCode: string; divisionCode: string; value: string; onChange: (value: string, row: LookupRow | null) => void; disabled?: boolean; placeholder: string }) {
   return (
     <LookupField
       value={value}
@@ -487,14 +499,14 @@ function TaxCategoryLookup({ companyCode, value, onChange, disabled, placeholder
       valueField="TX_CAT_CODE"
       displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]}
       columns={[{ field: "TX_CAT_CODE", header: "Code" }, { field: "TX_CAT_NAME", header: "Tax Category" }]}
-      loadOptions={(query) => loadFreightLookup("freight_tax_category", companyCode, query)}
+      loadOptions={(query) => freightTaxCategories<LookupRow>(companyCode, divisionCode, query).then((rows) => rows.map(normalizeLookupRow))}
       onChange={onChange}
-      disabled={disabled}
+      disabled={disabled || !divisionCode}
     />
   );
 }
 
-function TaxCodeLookup({ companyCode, value, onChange, disabled, placeholder }: { companyCode: string; value: string; onChange: (value: string, row: LookupRow | null) => void; disabled?: boolean; placeholder: string }) {
+function TaxCodeLookup({ companyCode, divisionCode, taxCategory, activityCode, value, onChange, disabled, placeholder }: { companyCode: string; divisionCode: string; taxCategory: string; activityCode: string; value: string; onChange: (value: string, row: LookupRow | null) => void; disabled?: boolean; placeholder: string }) {
   return (
     <LookupField
       value={value}
@@ -503,9 +515,9 @@ function TaxCodeLookup({ companyCode, value, onChange, disabled, placeholder }: 
       valueField="TX_COMPNTCAT_CODE"
       displayFields={["TX_COMPNTCAT_CODE", "TX_COMPNTCAT_NAME"]}
       columns={[{ field: "TX_COMPNTCAT_CODE", header: "Code" }, { field: "TX_COMPNTCAT_NAME", header: "Tax Code" }, { field: "TX_CAT_CODE", header: "Tax Category" }, { field: "TX_PERCNT", header: "Tax %" }]}
-      loadOptions={(query) => loadFreightLookup("freight_tax_code", companyCode, query)}
+      loadOptions={(query) => freightTaxComponents<LookupRow>(companyCode, divisionCode, taxCategory, query, activityCode).then((rows) => rows.map(normalizeLookupRow))}
       onChange={onChange}
-      disabled={disabled}
+      disabled={disabled || !divisionCode || !taxCategory}
     />
   );
 }
@@ -519,7 +531,7 @@ function NoticeChip({ notice }: { notice: Exclude<Notice, null> }) {
 }
 
 function emptyLine(srno: number): ActivityLine {
-  return { srno: String(srno), act_code: "", activity: "", other_services: "", quantity: "1", bill_rate: "0", bill: "0", actual_cost: "0", broker_code: "", partners_price: "0", transporter_code: "", vehicle_no: "", transport_price: "0", confirmed: "Y", print_flag: "Y", payment_mode: "", div_code: "", remarks: "", tx_cat_code: "", tx_compntcat_code_1: "", tx_compnt_perc_1: "", tx_compnt_amt_1: "", tx_compnt_lcuramt_1: "", tx_cat_code_cost: "", tx_compntcat_code_1_cost: "", tx_compnt_perc_1_cost: "", tx_compnt_amt_1_cost: "", tx_compnt_lcuramt_1_cost: "" };
+  return { srno: String(srno), act_code: "", activity: "", other_services: "", quantity: "1", bill_rate: "0", bill: "0", actual_cost: "0", broker_code: "", partners_price: "0", transporter_code: "", vehicle_no: "", transport_price: "0", confirmed: "Y", print_flag: "Y", payment_mode: "", div_code: "", remarks: "", tx_cat_code: "", tx_compntcat_code_1: "", tx_compnt_perc_1: "", tx_compnt_amt_1: "", tx_compnt_lcuramt_1: "", tx_compnt_1_expmt: "N", tx_cat_code_cost: "", tx_compntcat_code_1_cost: "", tx_compnt_perc_1_cost: "", tx_compnt_amt_1_cost: "", tx_compnt_lcuramt_1_cost: "", tx_compnt_1_expmt_cost: "N" };
 }
 
 function toLine(row: LookupRow, index: number): ActivityLine {
@@ -528,7 +540,28 @@ function toLine(row: LookupRow, index: number): ActivityLine {
 }
 
 function recalc(line: ActivityLine) {
-  return { ...line, bill: String(numberValue(line.quantity) * numberValue(line.bill_rate)) };
+  return recalcSalesTax({ ...line, bill: String(numberValue(line.quantity) * numberValue(line.bill_rate)) });
+}
+
+function TaxTreatmentSelect({ value, onChange, disabled }: { value: string; onChange: (value: string) => void; disabled?: boolean }) {
+  return (
+    <select className="h-7 min-w-0 rounded-md border border-input bg-background px-1 text-xs" value={value || "N"} disabled={disabled} onChange={(event) => onChange(event.target.value)} title="Tax treatment">
+      <option value="S">Standard</option>
+      <option value="Z">Zero</option>
+      <option value="E">Exempt</option>
+      <option value="N">No Tax</option>
+    </select>
+  );
+}
+
+function recalcSalesTax(line: ActivityLine) {
+  const amount = line.tx_compnt_1_expmt === "S" ? numberValue(line.bill) * numberValue(line.tx_compnt_perc_1) / 100 : 0;
+  return { ...line, tx_compnt_amt_1: String(amount), tx_compnt_lcuramt_1: String(amount) };
+}
+
+function recalcCostTax(line: ActivityLine) {
+  const amount = line.tx_compnt_1_expmt_cost === "S" ? numberValue(line.actual_cost) * numberValue(line.tx_compnt_perc_1_cost) / 100 : 0;
+  return { ...line, tx_compnt_amt_1_cost: String(amount), tx_compnt_lcuramt_1_cost: String(amount) };
 }
 
 function calculateTotals(lines: ActivityLine[]) {
