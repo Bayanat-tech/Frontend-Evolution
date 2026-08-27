@@ -186,6 +186,8 @@ import { PurchaseInvoicePage } from "../pages/purchase_sales/purchase/PurchaseIn
 import { SalesInvoicePage } from "../pages/purchase_sales/sales/SalesInvoicePage";
 import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
 import CompanyInfo from "../pages/security/CompanyInfo";
+import PurchaseRequestRegisterReport from "../pages/almswf/PurchaseRequestRegisterReport";
+
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -781,6 +783,16 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
 
    // ── ALMS My Task Routes (specific tabs first, then generic fallback) ──
+
+   {
+    name: "Purchase Request Register",
+    match: ({ pathname }) => {
+        const normalized = pathname.toLowerCase();
+        return normalized.includes("/almswf/almswf/reports/purchase_request_register") ||
+               normalized.includes("/almswf/reports/purchase_request_register");
+    },
+    element: () => <PurchaseRequestRegisterReport />,
+},
   {
     name: "ALMS My Task Pending",
     match: (context) => isAlmsMyTaskTabRoute(context, ["pending"]),

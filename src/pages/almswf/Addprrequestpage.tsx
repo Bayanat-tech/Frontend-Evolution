@@ -707,7 +707,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       const finalLevel = Number(header.FLOW_LEVEL_FINAL) || 1;
       const nextLevel = currentLevel + 1;
       const isFinal = nextLevel >= finalLevel ? "Y" : "N";
-
       const result = await saveBulk("APPROVED", "", {
         FLOW_LEVEL_RUNNING: nextLevel,
         FINAL_APPROVED: isFinal,
