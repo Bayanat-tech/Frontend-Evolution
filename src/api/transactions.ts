@@ -993,17 +993,9 @@ export async function getPoOrderRegisterReportExcel(params: Record<string, any>)
 
 
 
-
-
-
-
-
-
-
-
 export async function getPoOrderReportHtml(params: Record<string, any>): Promise<string> {
   const response = await api.post(
-    `/api/finance/transactions/reports/PoOrderReport/html`,
+    `/api/finance/transactions/reports/PurchaseOrderReport/html`,
     params,
     { responseType: "text" }
   );
@@ -1012,7 +1004,7 @@ export async function getPoOrderReportHtml(params: Record<string, any>): Promise
 
 export async function getPoOrderReportExcel(params: Record<string, any>): Promise<void> {
   const response = await api.post(
-    `/api/finance/transactions/reports/PoOrderReport/excel`,
+    `/api/finance/transactions/reports/PurchaseOrderReport/excel`,
     params,
     { responseType: "blob" }
   );
@@ -1026,6 +1018,35 @@ export async function getPoOrderReportExcel(params: Record<string, any>): Promis
   a.remove();
   window.URL.revokeObjectURL(url);
 }
+
+export async function getSoOrderReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/SoOrderReport/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getSoOrderReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/SoOrderReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "Sales_Order_Report.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+
+
 
 
 // ---------Profit & Loss Report----------------
