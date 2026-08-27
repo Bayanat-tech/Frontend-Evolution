@@ -33,6 +33,7 @@ import { SendBackDialog } from "../../purchase_sales/purchase/Sendbackdialog";
 import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
 import { PROCESSSO, SalesConfig, SO_DOC_TYPE } from "./SalesOrdertypes";
 import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, runWorkflow } from "./SalesOrderutils";
+import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 
 
 export type { PurchaseOrderEditorState };
@@ -69,6 +70,7 @@ export function SalesOrderEditor({
   const [sendBackError, setSendBackError] = useState("");
   const [sendBackUsers, setSendBackUsers] = useState<SendBackUserOption[]>([]);
   const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
+    const [attachmentOpen, setAttachmentOpen] = useState(false);
 
   // ---- Reject dialog state ----
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -83,6 +85,21 @@ export function SalesOrderEditor({
     setError("");
     setLoading(editor.mode === "edit");
   }, [editor]);
+  useEffect(() => {
+    if (!form.tx_compntcat_code_1 && !form.tx_cat_code && !form.disc_hdr_percent && !form.disc_hdr_price) return;
+    setRows((current) =>
+      current.map((row) => ({
+        ...row,
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        tx_cat_code: `${form.tx_cat_code || ""}`,
+        disc_price: row.disc_price || form.disc_hdr_price,
+        disc_percent: row.disc_percent || form.disc_hdr_percent,
+        tx_compnt_1_expmt: row.tx_compnt_1_expmt
+      }))
+    );
+  }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price , form.tx_compnt_1_expmt]);
+
+
 
   useEffect(() => {
     let mounted = true;
@@ -193,8 +210,19 @@ export function SalesOrderEditor({
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
 
-  const addRow = () => setRows((current) => [...current, emptyLineRow(form.div_code)]);
-  const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
+  const addRow = () =>
+    setRows((current) => [
+      ...current,
+      {
+        ...emptyLineRow(form.div_code),
+        tax_code: form.tx_compntcat_code_1,
+        tax_cat: form.tx_cat_name,
+        disc_price: form.disc_hdr_price,
+        disc_percent: form.disc_hdr_percent,
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
+      },
+    ]);
+     const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
 
   const runAction = async (key: ActionKey, action: () => Promise<void> | void, successMessage?: string) => {
     setActionLoading(key);
@@ -350,7 +378,9 @@ export function SalesOrderEditor({
                   <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
                 </>
               )}
-              <Button type="button" variant="secondary"><Paperclip size={15} /> Files</Button>
+                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                <Paperclip size={15} /> Files
+              </Button>
               <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
             </div>
           </div>
@@ -468,6 +498,18 @@ export function SalesOrderEditor({
         onClearError={() => setRejectError("")}
         onClose={closeRejectDialog}
         onConfirm={confirmReject}
+      />
+
+       <AttachmentDialog
+        open={attachmentOpen}
+        onClose={() => setAttachmentOpen(false)}
+        requestNumber={form.doc_no ? String(form.doc_no) : ""}
+        title="Sales Order Attachments"
+        module="SO"
+        type="Sales Order"
+        companyCode={user?.company_code || ""}
+        loginId={user?.loginid || ""}
+        flowLevel={effectiveFlowLevel}
       />
     </>
   );

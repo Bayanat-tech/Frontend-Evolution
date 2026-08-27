@@ -166,6 +166,9 @@ import Credit_Request_page from "../pages/almswf/CreaditRequestPage";
 import Capex_Request_page from "../pages/almswf/CapexRequestPage";
 import Purchase_Request_page from "../pages/almswf/PurchaseRequestPage";
 
+
+import PS_PendingPurchaseOrderReport from "../pages/purchase_sales/Reports/PS_PendingPurchaseOrderReport";
+
 import { PurchaseOrderPage } from "../pages/purchase_sales/purchase/Purchaseorderpage";
 
 import { StockInquiryPage } from "../pages/purchase_sales/PS_StockInquiry";
@@ -243,6 +246,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_group"),
     element: () => <MseProdGroup />,
   },
+
+  {
+  name: "Pending Purchase Order Report",
+  match: ({ pathname }) => isPendingPurchaseOrderRoute(pathname),
+  element: () => <PS_PendingPurchaseOrderReport />,
+    },
 
   {
   name: 'Purchase Sales Product Brand',
@@ -2683,5 +2692,14 @@ function isHrEmployeePayUnitsRoute(context: WorkspaceRouteContext) {
   return (
     compact.includes("employeepayunits") ||
     compact.includes("employee_payunits")
+  );
+}
+
+
+function isPendingPurchaseOrderRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/reports/pending_purchase_order"
   );
 }

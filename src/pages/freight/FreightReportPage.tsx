@@ -305,41 +305,44 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     subtitle: "Shipment deposits and demurrage values by job.",
     family: "Settlement",
     icon: WalletCards,
-    amountFields: ["AMOUNT", "DEMURAGE_AMOUNT"],
-    filters: ["date", "search"],
-    advancedFilters: ["principalRange", "be", "collectionDate", "variant"],
+    amountFields: ["AMOUNT"],
+    filters: ["date", "status"],
+    advancedFilters: ["principalRange", "jobRange"],
     primaryMetric: "Deposit",
     columns: [
       { key: "JOB_NO", label: "Job No" },
-      { key: "JOB_DATE", label: "Date", kind: "date" },
+      { key: "DEPOSIT_DATE", label: "Deposit Date", kind: "date" },
       { key: "PRIN_CODE", label: "Principal" },
       { key: "PRIN_NAME", label: "Principal Name" },
       { key: "BE_NO", label: "BE No" },
-      { key: "BE_DATE", label: "BE Date", kind: "date" },
+      { key: "DEPOSIT_EXPIRY_DATE", label: "Expiry Date", kind: "date" },
       { key: "AMOUNT", label: "Amount", kind: "amount" },
-      { key: "DEMURAGE_AMOUNT", label: "Demurrage", kind: "amount" },
-      { key: "REMARKS", label: "Remarks" },
+      { key: "CURRENCY", label: "Currency" },
+      { key: "STATUS", label: "Status", kind: "status" },
+      { key: "DEPOSIT_REMARKS", label: "Remarks" },
     ],
   },
   container_deposit: {
     title: "Container Deposit",
-    subtitle: "Container deposit follow-up by job and container.",
+    subtitle: "Container deposit follow-up, expiry, claim, and collection status.",
     family: "Settlement",
     icon: Boxes,
     amountFields: ["AMOUNT", "DEMURAGE_AMOUNT"],
-    filters: ["date", "type", "search"],
-    advancedFilters: ["jobRange", "depositDate", "expiryDate", "be", "claimExit", "cleared", "variant"],
+    filters: ["date", "type", "status"],
+    advancedFilters: ["principalRange", "jobRange"],
     primaryMetric: "Container Deposit",
     columns: [
       { key: "JOB_NO", label: "Job No" },
-      { key: "JOB_DATE", label: "Date", kind: "date" },
+      { key: "DEPOSIT_DATE", label: "Deposit Date", kind: "date" },
       { key: "PRIN_CODE", label: "Principal" },
       { key: "PRIN_NAME", label: "Principal Name" },
-      { key: "CONTAINER_NO", label: "Container" },
-      { key: "CONTAINER_TYPE", label: "Type" },
+      { key: "DEPOSIT_EXPIRY_DATE", label: "Expiry Date", kind: "date" },
+      { key: "BE_NO", label: "BE No" },
+      { key: "CLAIM_REF_NO", label: "Claim Ref" },
       { key: "AMOUNT", label: "Amount", kind: "amount" },
       { key: "DEMURAGE_AMOUNT", label: "Demurrage", kind: "amount" },
-      { key: "REMARKS", label: "Remarks" },
+      { key: "CURRENCY", label: "Currency" },
+      { key: "STATUS", label: "Status", kind: "status" },
     ],
   },
   freight_summary: {
@@ -535,7 +538,7 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
   }
 
   return (
-    <section className="grid gap-3">
+    <section className="freight-ui-standard grid gap-3">
       <div className="rounded-md border bg-card shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
