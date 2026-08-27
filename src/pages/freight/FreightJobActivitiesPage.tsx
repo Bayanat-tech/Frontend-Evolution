@@ -1,6 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Calculator, CheckCircle2, Edit2, Plus, RefreshCw, Save, Trash2, TrendingUp } from "lucide-react";
+import { ArrowLeft, Calculator, CheckCircle2, Edit2, ListPlus, Plus, RefreshCw, Save, Trash2, TrendingUp } from "lucide-react";
 import { api } from "../../api/client";
 import { freightSelect } from "../../api/freight";
 import type { LookupRow } from "../../api/lookups";
@@ -96,6 +96,8 @@ export function FreightJobActivitiesPage({
   const [lines, setLines] = useState<ActivityLine[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [populating, setPopulating] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
 
   const notify = useCallback((next: Exclude<Notice, null>) => {
@@ -178,8 +180,11 @@ export function FreightJobActivitiesPage({
         prin_code: lookupText(row, "prin_code"),
         job_no: lookupText(row, "job_no"),
       });
-      setHeader(normalizeLookupRow(response.data.data?.header || row));
+      const loadedHeader = normalizeLookupRow(response.data.data?.header || row);
+      const quotationRef = lookupText(loadedHeader, "quotation_ref") || lookupText(row, "quotation_ref");
+      setHeader({ ...loadedHeader, QUOTATION_REF: quotationRef });
       setLines((response.data.data?.lines || []).map(toLine));
+      setDirty(false);
       setView("editor");
     } catch (error: any) {
       notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to open job activities." });
@@ -205,11 +210,59 @@ export function FreightJobActivitiesPage({
         lines,
       });
       notify({ type: "success", text: "Job activities saved." });
+      setDirty(false);
       await loadRows();
     } catch (error: any) {
       notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to save job activities." });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function populateFromQuotation() {
+    if (!header) return;
+    if (isLineLocked) {
+      notify({ type: "error", text: "Confirmed, invoiced, or completed job is locked. Activities are view only." });
+      return;
+    }
+
+    const quotationRef = lookupText(header, "quotation_ref");
+    if (!quotationRef) {
+      notify({ type: "error", text: "This job is not linked to an approved quotation." });
+      return;
+    }
+
+    setPopulating(true);
+    setNotice(null);
+    try {
+      const response = await api.post<{ success?: boolean; message?: string; data?: { lines?: LookupRow[] } }>(
+        "/api/freight/job-activities/populate-from-quotation",
+        {
+          company_code: companyCode,
+          prin_code: lookupText(header, "prin_code"),
+          job_no: lookupText(header, "job_no"),
+        },
+      );
+      const incoming = (response.data.data?.lines || []).map(toLine);
+      const existingCodes = new Set(lines.map((line) => line.act_code.trim().toUpperCase()).filter(Boolean));
+      const additions = incoming.filter((line) => {
+        const code = line.act_code.trim().toUpperCase();
+        if (!code || existingCodes.has(code)) return false;
+        existingCodes.add(code);
+        return true;
+      });
+      const addedCount = additions.length;
+      if (addedCount) setLines((current) => [...current, ...additions].map((line, index) => ({ ...line, srno: String(index + 1) })));
+      if (addedCount) {
+        setDirty(true);
+        notify({ type: "success", text: `${addedCount} activities loaded from quotation ${quotationRef}. Review and save them.` });
+      } else {
+        notify({ type: "success", text: response.data.message || `No new activities are available in quotation ${quotationRef}.` });
+      }
+    } catch (error: any) {
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to populate quotation activities." });
+    } finally {
+      setPopulating(false);
     }
   }
 
@@ -252,7 +305,10 @@ export function FreightJobActivitiesPage({
         <Button type="button" size="sm" variant="outline" onClick={addLine} disabled={isLineLocked}>
           <Plus size={14} />Line
         </Button>
-        <Button type="button" size="sm" variant="outline" onClick={() => void confirmJob()} disabled={saving || isClosed || !lines.length || Boolean(lookupText(header, "confirm_date"))}>
+        <Button type="button" size="sm" variant="outline" onClick={() => void populateFromQuotation()} disabled={saving || populating || isLineLocked || !lookupText(header, "quotation_ref")} title={lookupText(header, "quotation_ref") ? `Load missing activities from ${lookupText(header, "quotation_ref")}` : "Job has no quotation reference"}>
+          <ListPlus size={14} />{populating ? "Loading..." : "Populate from Quotation"}
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={() => void confirmJob()} disabled={saving || populating || dirty || isClosed || !lines.length || Boolean(lookupText(header, "confirm_date"))} title={dirty ? "Save activity changes before confirmation" : undefined}>
           <CheckCircle2 size={14} />{lookupText(header, "confirm_date") ? "Confirmed" : "Confirm"}
         </Button>
         <Button type="button" size="sm" onClick={() => void saveLines()} disabled={saving || isLineLocked}>
@@ -262,7 +318,7 @@ export function FreightJobActivitiesPage({
       </div>
     );
     return () => onEmbeddedActionsChange(null);
-  }, [header, isClosed, isLineLocked, lines.length, notice, onEmbeddedActionsChange, onEmbeddedList, saving, view]);
+  }, [dirty, header, isClosed, isLineLocked, lines.length, notice, onEmbeddedActionsChange, onEmbeddedList, populating, saving, view]);
 
   if (view === "list") {
     return (
@@ -299,12 +355,21 @@ export function FreightJobActivitiesPage({
         {notice && <NoticeChip notice={notice} />}
         {!initialJob && <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>}
         <Button type="button" size="sm" variant="outline" onClick={addLine} disabled={isLineLocked}><Plus size={14} />Line</Button>
-        {/* <Button type="button" size="sm" variant="outline" onClick={() => void confirmJob()} disabled={saving || !lines.length}><CheckCircle2 size={14} />Confirm</Button> */}
-       <Button type="button" size="sm" variant="outline" onClick={() => void confirmJob()} disabled={saving || isClosed || !lines.length || Boolean(lookupText(header, "confirm_date"))}>
+        <Button type="button" size="sm" variant="outline" onClick={() => void populateFromQuotation()} disabled={saving || populating || isLineLocked || !lookupText(header, "quotation_ref")} title={lookupText(header, "quotation_ref") ? `Load missing activities from ${lookupText(header, "quotation_ref")}` : "Job has no quotation reference"}>
+          <ListPlus size={14} />{populating ? "Loading..." : "Populate from Quotation"}
+        </Button>
+       <Button type="button" size="sm" variant="outline" onClick={() => void confirmJob()} disabled={saving || populating || dirty || isClosed || !lines.length || Boolean(lookupText(header, "confirm_date"))} title={dirty ? "Save activity changes before confirmation" : undefined}>
            <CheckCircle2 size={14} />{lookupText(header, "confirm_date") ? "Confirmed" : "Confirm"}
         </Button>
         <Button type="button" size="sm" onClick={() => void saveLines()} disabled={saving || isLineLocked}><Save size={14} />Save</Button>
       </Header>}
+
+      <div className="flex min-h-9 flex-wrap items-center gap-x-5 gap-y-1 rounded-lg border border-border/80 bg-card px-3 py-1.5 text-xs">
+        <span className="text-muted-foreground">Job <strong className="ml-1 text-foreground">{lookupText(header, "job_no") || "-"}</strong></span>
+        <span className="text-muted-foreground">Principal <strong className="ml-1 text-foreground">{lookupText(header, "prin_name") || lookupText(header, "prin_code") || "-"}</strong></span>
+        <span className="text-muted-foreground">From Quotation <strong className="ml-1 text-primary">{lookupText(header, "quotation_ref") || "Not linked"}</strong></span>
+        {dirty && <span className="ml-auto rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-semibold text-amber-700">Unsaved changes</span>}
+      </div>
 
       <div className="grid gap-2 lg:grid-cols-4">
         <Metric label="Revenue" value={money(totals.revenue)} />
@@ -361,16 +426,19 @@ export function FreightJobActivitiesPage({
       return;
     }
     setLines((current) => [...current, emptyLine(current.length + 1)]);
+    setDirty(true);
   }
 
   function removeLine(index: number) {
     if (isLineLocked) return;
     setLines((current) => current.filter((_, rowIndex) => rowIndex !== index).map((line, rowIndex) => ({ ...line, srno: String(rowIndex + 1) })));
+    setDirty(true);
   }
 
   function updateLine(index: number, patch: Partial<ActivityLine>) {
     if (isLineLocked) return;
     setLines((current) => current.map((line, rowIndex) => rowIndex === index ? { ...line, ...patch, srno: String(index + 1) } : line));
+    setDirty(true);
   }
 }
 
