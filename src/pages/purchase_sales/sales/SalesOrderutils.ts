@@ -417,8 +417,12 @@ export function linePOAmount(row: SalesOrderLineRow) {
 
 // Net = gross - discount (single subtraction, no double-counting)
 export function lineNetAmount(row: SalesOrderLineRow) {
-  return lineAmount(row) - lineDiscPrice(row);
+  return lineAmount(row);
 }
+
+// export function lineNetAmount(row: SalesOrderLineRow) {
+//   return lineAmount(row) - lineDiscPrice(row);
+// }
 
 export function lineNetPOAmount(row: SalesOrderLineRow) {
   return linePOAmount(row) - lineDiscPoPrice(row);
@@ -451,9 +455,8 @@ export function taxLcurrpoAmount(row: SalesOrderLineRow, ex_rate?: number) {
 
 }
 
-export function LcurrDisAmount(row: SalesOrderLineRow) {
-  return lineLcurrAmount(row) + taxLcurrAmount(row)
-
+export function LcurrDisAmount(row: SalesOrderLineRow, ex_rate?: number) {
+  return lineLcurrAmount(row, ex_rate) + taxLcurrAmount(row, ex_rate);
 }
 
 // buildDetailsPayload — uses computed values
