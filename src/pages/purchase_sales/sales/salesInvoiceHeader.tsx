@@ -236,7 +236,8 @@ export function SalesInvoiceHeaderForm({
                                             sorder_tx_compntcat_code_1: text(getLookupValue(item, "sorder_tx_compntcat_code_1")),
                                             sorder_required_dt: text(getLookupValue(item, "sorder_required_dt")),
                                             sorder_tx_compnt_1_expmt: text(getLookupValue(item, "sorder_tx_compnt_1_expmt")),
-                                            sorder_remarks: text(getLookupValue(item, "sorder_remarks"))
+                                            sorder_remarks: text(getLookupValue(item, "sorder_remarks")),
+                                             serial_no: numberOrZero(getLookupValue(item, "serial_no")),
 
                                         }));
                                         console.log("Mapped length:", mappedDetails?.length);

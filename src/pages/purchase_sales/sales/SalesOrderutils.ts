@@ -56,6 +56,7 @@ export const emptyLineRow = (divCode: string): any => ({
   uppp: 0,
   quantity: 0,
   ex_rate: 1,
+  serial_no:0
 });
 
 export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
