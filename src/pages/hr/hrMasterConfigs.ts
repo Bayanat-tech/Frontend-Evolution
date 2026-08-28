@@ -266,9 +266,9 @@ buildDelete: (row, context) => ({
     fields: [
         { name: "main_bank_name", label: "Bank Name", required: true, width: 280 },
         { name: "main_bank_code", label: "Bank Code",required: true, width: 140 },
-        { name: "main_bank_short_name", label: "Short Name", width: 150 },
+        { name: "main_bank_short_name", label: "Short Name", width: 150,limit:4},
        
-        { name: "payer_bk_short_name", label: "Bank Short Name", table: false },
+        { name: "payer_bk_short_name", label: "Bank Short Name", table: false,limit:4 },
         { name: "payer_ac_iban", label: "Bank IBAN", table: false },
         { name: "bk_bic_swift", label: "Bank BIC/Swift", table: false },
       
@@ -472,7 +472,7 @@ hrbank: {
     }),
     buildDelete: (row, context) => ({ parameter: "MST_HR_DEL_CONTRACT_TYPES", loginid: context.loginid, code1: context.companyCode, code2: text(row, "contract_type") }),
     fields: [
-      { name: "contract_type", label: "Contract Type", required: true, disabledOnEdit: true, width: 150 },
+      { name: "contract_type", label: "Contract Type", required: true, disabledOnEdit: true, width: 150, limit: 5},
       { name: "contract_type_desc", label: "Description", required: true, width: 280 },
       { name: "contract_type_short_desc", label: "Short Description", width: 170 },
       { name: "status", label: "Status", type: "select", options: activeInactive, required: true, width: 120 },
@@ -539,6 +539,7 @@ hrbank: {
       label: "Religion Name",
       required: true,
       width: 260,
+      // limit: 100,
     },
     {
       name: "religion_short_name",
@@ -873,22 +874,34 @@ buildDelete: (row, context) => ({
     deleteMode: "gm",
   },
   formaldesignation: {
-    title: "Formal Designation Master",
-    subtitle: "Maintain labour/formal designation codes used on HR documents.",
-    master: "formaldesignation",
-    gmEndpoint: "formaldesignation",
-    routeKeys: ["formaldesignation", "formal_designation", "labour_designation"],
-    keyField: "labour_desg_code",
-    fields: [
-      { name: "labour_desg_code", label: "Formal Code", required: true, disabledOnEdit: true, width: 150 },
-      { name: "labour_desg_name", label: "Formal Designation", required: true, width: 280 },
-      { name: "labour_desg_short_name", label: "Short Name", required: true, width: 140 },
-      { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
-      { name: "remarks", label: "Remarks", width: 260 },
-    ],
-    defaults: { status: "A" },
-    deleteMode: "gm",
-  },
+  title: "Formal Designation Master",
+  subtitle: "Maintain labour/formal designation codes used on HR documents.",
+  master: "formaldesignation",
+  gmEndpoint: "formaldesignation",
+  routeKeys: ["formaldesignation", "formal_designation", "labour_designation"],
+  keyField: "labour_desg_code",
+  stripEditKeyOnSave: true,
+
+  buildSave: (form) => ({
+    // Only the fields the backend accepts
+    labour_desg_code: text(form, "labour_desg_code"),
+    labour_desg_name: text(form, "labour_desg_name"),
+    labour_desg_short_name: text(form, "labour_desg_short_name"),
+    status: text(form, "status", "A"),
+    remarks: text(form, "remarks"),
+    // Do NOT send company_code, user_id, user_dt
+  }),
+
+  fields: [
+    { name: "labour_desg_code", label: "Formal Code", required: true, disabledOnEdit: true, width: 150 },
+    { name: "labour_desg_name", label: "Formal Designation", required: true, width: 280 },
+    { name: "labour_desg_short_name", label: "Short Name", required: true, width: 140 },
+    { name: "status", label: "Status", type: "select", options: activeInactive, width: 120 },
+    { name: "remarks", label: "Remarks", width: 260 },
+  ],
+  defaults: { status: "A" },
+  deleteMode: "gm",
+},
   leavetype: {
     title: "Leave Type Master",
     subtitle: "Maintain leave type codes, carry-forward behavior, and half-day eligibility.",

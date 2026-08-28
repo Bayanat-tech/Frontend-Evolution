@@ -28,7 +28,7 @@ interface DropDownConfig {
 const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
   grade:{
     parameterCode: "GRADE_SALARY_INCREMENT_GRADE_DROP_DOWN",
-    label: "Grade",
+    label: "",
     valueField: "code",
     displayField: "name",
     columns: [
@@ -38,7 +38,7 @@ const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
   },
   payComponent: {
     parameterCode: "EMPLOYEE_SALARY_INCREMENT_DDDW_PAY_COMPONENT", // confirm/adjust name
-    label: "Pay Unit",
+    label: "",
     valueField: "code",
     displayField: "name",
     columns: [
@@ -48,7 +48,7 @@ const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
   },
   division: {
     parameterCode: "DROP_DOWN_DIVISION",
-    label: "Division",
+    label: "",
     valueField: "div_code",
     displayField: "div_name",
     columns: [
@@ -58,7 +58,7 @@ const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
   },
   department: {
     parameterCode: "DROP_DOWN_DEPT_BASED_ON_DIV",
-    label: "Department",
+    label: "",
     valueField: "dept_code",
     displayField: "dept_name",
     columns: [
@@ -67,8 +67,8 @@ const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
     ],
   },
   departmentBasedOnDivision: {
-    parameterCode: "DROP_DOWN_DEPT_BASED_ON_DIV",
-    label: "Department",
+    parameterCode: "HR_LEAVE_ENCASHMENT_DEPT_DROP_DOWN",
+    label: "",
     valueField: "dept_code",
     displayField: "dept_name",
     columns: [
@@ -78,7 +78,7 @@ const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
   },
   section: {
     parameterCode: "HR_LEAVE_ENCASHMENT_SECTION_DROP_DOWN",
-    label: "Section",
+    label: "",
     valueField: "section_code",
     displayField: "section_name",
     columns: [
@@ -88,7 +88,7 @@ const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
   },
   employee: {
     parameterCode: "HR_LEAVE_ENCASHMENT_EMPLOYEE_DROP_DOWN",
-    label: "Employee",
+    label: "",
     valueField: "employee_id",
     displayField: "rpt_name",
     columns: [
@@ -99,7 +99,7 @@ const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
   },
   dddwIncrementStatus: {
     parameterCode: "EMPLOYEE_SALARY_INCREMENT_DDDW_INCREMENT_STATUS",
-    label: "Increment Status",
+    label: "",
     valueField: "value_code",
     displayField: "value_desc",
     columns: [
@@ -109,7 +109,7 @@ const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
   },
   dddwYesNoFlag: {
     parameterCode: "EMPLOYEE_SALARY_INCREMENT_DDDW_YES_NO_FLAG",
-    label: "Yes/No",
+    label: "",
     valueField: "code",
     displayField: "name",
     columns: [
@@ -119,7 +119,7 @@ const DROPDOWN_CONFIG: Record<DropDownType, DropDownConfig> = {
   },
   dddwStatusFlag: {
     parameterCode: "EMPLOYEE_SALARY_INCREMENT_DDDW_STATUS_FLAG",
-    label: "Status",
+    label: "",
     valueField: "value_code",
     displayField: "value_desc",
     columns: [

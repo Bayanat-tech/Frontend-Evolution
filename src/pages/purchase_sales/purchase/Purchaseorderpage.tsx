@@ -1,7 +1,7 @@
 import { Download, Edit2, Plus, Printer, RefreshCw } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { useEffect, useMemo, useState } from "react";
-import { Division, getDivisions } from "../../../api/transactions";
+import { Division, getDivisions, getPoOrderReportExcel, getPoOrderReportHtml } from "../../../api/transactions";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
@@ -138,6 +138,52 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
     return response as unknown as PurchaseOrderRow[];
   };
 
+  const handlePrintPurchaseOrder = (row: PurchaseOrderRow) => {
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    setNotice({ type: "error", message: "Popup blocked — please allow popups to print." });
+    return;
+  }
+  printWindow.document.write("<p style='font-family:sans-serif;padding:20px;'>Loading report…</p>");
+
+  getPoOrderReportHtml({
+    company_code: user?.company_code,
+    doc_type: row.doc_type,
+    doc_no: row.doc_no,
+  })
+    .then((html) => {
+      printWindow.document.open();
+      printWindow.document.write(html);
+      printWindow.document.close();
+    })
+    .catch((error) => {
+      printWindow.document.open();
+      printWindow.document.write(
+        `<p style="font-family:sans-serif;padding:20px;color:#dc2626;">Unable to load report: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }</p>`
+      );
+      printWindow.document.close();
+    });
+};
+
+const handleExportPurchaseOrder = async (row: PurchaseOrderRow) => {
+  try {
+    await getPoOrderReportExcel({
+      company_code: user?.company_code,
+      doc_type: row.doc_type,
+      doc_no: row.doc_no,
+    });
+  } catch (error) {
+    setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to export report" });
+  }
+};
+
+
+
+
+
+
   useEffect(() => {
   if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
     setTab("PENDING");
@@ -209,12 +255,12 @@ export function PurchaseOrderPage({ onClose }: { onClose?: () => void } = {}) {
           <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })} title="Edit">
             <Edit2 size={15} />
           </Button>
-          <Button size="icon" variant="ghost" title="Print / PDF">
-            <Printer size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" title="Excel">
-            <Download size={15} />
-          </Button>
+         <Button size="icon" variant="ghost" title="Print / PDF" onClick={() => handlePrintPurchaseOrder(row.original)}>
+  <Printer size={15} />
+</Button>
+<Button size="icon" variant="ghost" title="Excel" onClick={() => void handleExportPurchaseOrder(row.original)}>
+  <Download size={15} />
+</Button>
         </div>
       ),
     },

@@ -31,9 +31,10 @@ import { PurchaseOrderHeaderForm } from "../../purchase_sales/purchase/Purchaseo
 import { PurchaseOrderLinesTable } from "../../purchase_sales/purchase/Purchaseorderlinestable";
 import { SendBackDialog } from "../../purchase_sales/purchase/Sendbackdialog";
 import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
-import { PROCESSSO, SalesConfig, SO_DOC_TYPE } from "./SalesOrdertypes";
+import { PROCESSSO, SalesConfig, SO_DOC_TYPE  } from "./SalesOrdertypes";
 import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, runWorkflow } from "./SalesOrderutils";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
+import { getSoOrderReportHtml } from "../../../api/transactions";
 
 
 export type { PurchaseOrderEditorState };
@@ -53,7 +54,8 @@ export function SalesOrderEditor({
 }) {
   const { user } = useAuth();
   const editMode = editor?.mode === "edit";
-  const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
+  // const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
+  const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor) as unknown as PurchaseOrderForm);
   const [rows, setRows] = useState<PurchaseOrderLineRow[]>(() => (editMode ? [] : [emptyLineRow(form.div_code)]));
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
@@ -70,7 +72,7 @@ export function SalesOrderEditor({
   const [sendBackError, setSendBackError] = useState("");
   const [sendBackUsers, setSendBackUsers] = useState<SendBackUserOption[]>([]);
   const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
-    const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [attachmentOpen, setAttachmentOpen] = useState(false);
 
   // ---- Reject dialog state ----
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -79,8 +81,10 @@ export function SalesOrderEditor({
 
   useEffect(() => {
     if (!editor) return;
-    const initialForm = emptyForm(editor);
-    setForm(initialForm);
+    // const initialForm = emptyForm(editor);
+    // setForm(initialForm);
+    const initialForm = emptyForm(editor) as unknown as PurchaseOrderForm;
+setForm(initialForm);
     setRows(editor.mode === "edit" ? [] : [emptyLineRow(initialForm.div_code)]);
     setError("");
     setLoading(editor.mode === "edit");
@@ -97,7 +101,7 @@ export function SalesOrderEditor({
         tx_compnt_1_expmt: row.tx_compnt_1_expmt
       }))
     );
-  }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price , form.tx_compnt_1_expmt]);
+  }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price, form.tx_compnt_1_expmt]);
 
 
 
@@ -222,7 +226,7 @@ export function SalesOrderEditor({
         tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
       },
     ]);
-     const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
+  const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
 
   const runAction = async (key: ActionKey, action: () => Promise<void> | void, successMessage?: string) => {
     setActionLoading(key);
@@ -237,6 +241,37 @@ export function SalesOrderEditor({
       setSaving(false);
       setActionLoading(null);
     }
+  };
+
+
+
+  const handlePrint = () => {
+    if (!form.doc_no) return;
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      setError("Popup blocked — please allow popups to print.");
+      return;
+    }
+    printWindow.document.write("<p style='font-family:sans-serif;padding:20px;'>Loading report…</p>");
+
+    getSoOrderReportHtml({
+      prin_code: user?.company_code,
+      order_no: form.doc_no,
+    })
+      .then((html) => {
+        printWindow.document.open();
+        printWindow.document.write(html);
+        printWindow.document.close();
+      })
+      .catch((printError) => {
+        printWindow.document.open();
+        printWindow.document.write(
+          `<p style="font-family:sans-serif;padding:20px;color:#dc2626;">Unable to load report: ${printError instanceof Error ? printError.message : "Unknown error"
+          }</p>`
+        );
+        printWindow.document.close();
+      });
   };
 
   const handleSaveAsDraft = () =>
@@ -374,11 +409,13 @@ export function SalesOrderEditor({
               {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
               {form.doc_no && (
                 <>
-                  <Button type="button" variant="secondary"><Printer size={15} /> Print</Button>
+                  <Button type="button" variant="secondary" onClick={handlePrint}>
+                    <Printer size={15} /> Print
+                  </Button>
                   <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
                 </>
               )}
-                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+              <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
                 <Paperclip size={15} /> Files
               </Button>
               <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
@@ -462,7 +499,9 @@ export function SalesOrderEditor({
               </Button>}
           </div>
           <div className="flex items-center gap-2">
-            <Button aria-label="Print" type="button" variant="outline" size="icon" disabled={actionDisabled}><Printer size={15} /></Button>
+            <Button aria-label="Print" type="button" variant="outline" size="icon" onClick={handlePrint} disabled={!form.doc_no}>
+              <Printer size={15} />
+            </Button>
             <Button aria-label="Attachment" type="button" variant="outline" size="icon" disabled={actionDisabled}><Paperclip size={15} /></Button>
             <Button aria-label="Download" type="button" variant="outline" size="icon" disabled={actionDisabled}><Download size={15} /></Button>
             <Button type="button" variant="outline" onClick={onClose}>Close</Button>
@@ -500,7 +539,7 @@ export function SalesOrderEditor({
         onConfirm={confirmReject}
       />
 
-       <AttachmentDialog
+      <AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
         requestNumber={form.doc_no ? String(form.doc_no) : ""}

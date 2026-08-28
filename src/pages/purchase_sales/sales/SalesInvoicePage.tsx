@@ -192,6 +192,7 @@ export function SalesInvoicePage({ onClose }: { onClose?: () => void } = {}) {
       { accessorKey: "ac_code", header: "A/c Code" },
       { accessorKey: "ac_name", header: "A/c Name" },
       { accessorKey: "curr_code", header: "Currency" },
+        { accessorKey: "total_so_amount", header: "Sales Order Amount" },
       {
         accessorKey: "canceled",
         header: "Status",

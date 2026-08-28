@@ -4,6 +4,7 @@ import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
 import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 import { PODocType, PurchaseOrderForm, PurchaseOrderLineRow } from "./Purchaseordertypes";
+
 import {
   formatAmount,
   lineAmount,
@@ -20,6 +21,7 @@ import {
 } from "./Purchaseorderutils";
 import { SODocType } from "../sales/SalesOrdertypes";
 import { Select } from "../../../components/ui/Select";
+import { useRef } from "react";
 
 const STICKY_COLS = {
   sno: { width: 50, left: 0 },
@@ -127,6 +129,7 @@ export function PurchaseOrderLinesTable({
   const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const grandTotal = totalAmount - totalDiscPrice - discAmt;
   const finalTotal = grandTotal + totalTaxAmount;
+    const tableContainerRef = useRef<HTMLDivElement>(null);
 
   // Quantity is always derived, never typed directly:
   // - same UOM: quantity mirrors qty_luom
@@ -145,9 +148,9 @@ export function PurchaseOrderLinesTable({
           </Button>
         </div>
       </div>
-      <div className="commercial-lines-scroll max-h-[45vh] overflow-auto">
+      <div className="commercial-lines-scroll max-h-[45vh] overflow-auto" >
         <table className="finance-lines-table w-full min-w-[2600px] text-sm">
-          <thead className="text-xs text-primary-foreground">
+          <thead className="text-xs text-primary-foreground"  style={{ overscrollBehavior: 'contain' }}>
             <tr>
               <th className="finance-sticky-col px-2 py-2 text-left" style={stickyHeaderStyle("sno")}>SNo</th>
               <th className="finance-sticky-col px-2 py-2 text-left" style={stickyHeaderStyle("div")}>Div</th>
