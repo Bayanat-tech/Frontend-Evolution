@@ -33,12 +33,14 @@ import {
   numberOrZero,
   runWorkflow,
   text,
-  
+
 } from "./Purchaseorderutils";
 import { PurchaseOrderHeaderForm } from "./Purchaseorderheaderform";
 import { PurchaseOrderLinesTable } from "./Purchaseorderlinestable";
 import { SendBackDialog } from "./Sendbackdialog";
 import { RejectDialog } from "./Rejectdialog";
+import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
+import { getPoOrderReportHtml } from "../../../api/transactions";
 
 
 export type { PurchaseOrderEditorState };
@@ -80,6 +82,7 @@ export function PurchaseOrderEditor({
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
+  const [attachmentOpen, setAttachmentOpen] = useState(false);
 
   useEffect(() => {
     if (!editor) return;
@@ -89,17 +92,19 @@ export function PurchaseOrderEditor({
     setError("");
     setLoading(editor.mode === "edit");
   }, [editor]);
-
   useEffect(() => {
-    if (!form.tax_code && !form.tax_category) return;
+    if (!form.tx_compntcat_code_1 && !form.tx_cat_code && !form.disc_hdr_percent && !form.disc_hdr_price) return;
     setRows((current) =>
       current.map((row) => ({
         ...row,
-        tax_code: form.tax_code || row.tax_code,
-        tax_cat: form.tax_category || row.tax_cat,
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        tx_cat_code: `${form.tx_cat_code || ""}`,
+        disc_price: row.disc_price || form.disc_hdr_price,
+        disc_percent: row.disc_percent || form.disc_hdr_percent,
+        tx_compnt_1_expmt: row.tx_compnt_1_expmt
       }))
     );
-  }, [form.tax_code, form.tax_category]);
+  }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price, form.tx_compnt_1_expmt]);
 
   useEffect(() => {
     let mounted = true;
@@ -110,8 +115,8 @@ export function PurchaseOrderEditor({
       try {
         const docNo = editor.row.doc_no;
         const [headerRaw, detailRows] = await Promise.all([
-          fetchPurchaseOrderHeader(docNo,config, user?.company_code, user?.loginid || user?.username),
-          fetchPurchaseOrderDetail(docNo,config, user?.company_code, user?.loginid || user?.username),
+          fetchPurchaseOrderHeader(docNo, config, user?.company_code, user?.loginid || user?.username),
+          fetchPurchaseOrderDetail(docNo, config, user?.company_code, user?.loginid || user?.username),
         ]);
         if (!mounted) return;
 
@@ -152,6 +157,7 @@ export function PurchaseOrderEditor({
           scope_of_work: text(headerRaw.scope_of_work || current.scope_of_work),
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
+          pay_terms: text(headerRaw.pay_terms || current.pay_terms),
         }));
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
@@ -215,8 +221,11 @@ export function PurchaseOrderEditor({
       ...current,
       {
         ...emptyLineRow(form.div_code),
-        tax_code: form.tax_code,
-        tax_cat: form.tax_category,
+        tax_code: form.tx_compntcat_code_1,
+        tax_cat: form.tx_cat_name,
+        disc_price: form.disc_hdr_price,
+        disc_percent: form.disc_hdr_percent,
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
@@ -236,10 +245,44 @@ export function PurchaseOrderEditor({
     }
   };
 
- const handleSaveAsDraft = () =>
-  runAction("draft", async () => {
-    await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
-  }, "Sales Order saved as draft");
+  const handlePrint = () => {
+    if (!form.doc_no) return;
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      setError("Popup blocked — please allow popups to print.");
+      return;
+    }
+    printWindow.document.write("<p style='font-family:sans-serif;padding:20px;'>Loading report…</p>");
+
+    getPoOrderReportHtml({
+      company_code: user?.company_code,
+      doc_type: PO_DOC_TYPE.LPO,
+      doc_no: form.doc_no,
+    })
+      .then((html) => {
+        printWindow.document.open();
+        printWindow.document.write(html);
+        printWindow.document.close();
+      })
+      .catch((printError) => {
+        printWindow.document.open();
+        printWindow.document.write(
+          `<p style="font-family:sans-serif;padding:20px;color:#dc2626;">Unable to load report: ${printError instanceof Error ? printError.message : "Unknown error"
+          }</p>`
+        );
+        printWindow.document.close();
+      });
+  };
+
+
+
+
+
+  const handleSaveAsDraft = () =>
+    runAction("draft", async () => {
+      await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
+    }, "Sales Order saved as draft");
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
@@ -335,7 +378,7 @@ export function PurchaseOrderEditor({
   };
 
   const actionBarBusy = actionLoading !== null || saving;
-    console.log("flowLevelRunning------------------>",flowLevelRunning)
+  console.log("flowLevelRunning------------------>", flowLevelRunning)
 
   return (
     <>
@@ -371,11 +414,15 @@ export function PurchaseOrderEditor({
               {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
               {form.doc_no && (
                 <>
-                  <Button type="button" variant="secondary"><Printer size={15} /> Print</Button>
+                  <Button type="button" variant="secondary" onClick={handlePrint}>
+                    <Printer size={15} /> Print
+                  </Button>
                   <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
                 </>
               )}
-              <Button type="button" variant="secondary"><Paperclip size={15} /> Files</Button>
+              <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                <Paperclip size={15} /> Files
+              </Button>
               <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
             </div>
           </div>
@@ -430,13 +477,13 @@ export function PurchaseOrderEditor({
 
         <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
           <div className="flex flex-wrap gap-3 rounded-2xl bg-gray-50 p-5 shadow-inner">
-           { isPendingTab && (
-             <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
+            {isPendingTab && (
+              <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
                 {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                 {actionLoading === "draft" ? "Saving..." : "Save Draft"}
               </Button>
             )}
-          { isPendingTab && <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
+            {isPendingTab && <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
               {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
               {actionLoading === "submit" ? "Submitting..." : "Submit"}
             </Button>}
@@ -452,13 +499,15 @@ export function PurchaseOrderEditor({
                 {actionLoading === "reject" ? "Rejecting..." : "Reject"}
               </Button>
             )}
-{isPendingTab &&
-            <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
-              {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
-            </Button>}
+            {isPendingTab &&
+              <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
+                {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
+              </Button>}
           </div>
           <div className="flex items-center gap-2">
-            <Button aria-label="Print" type="button" variant="outline" size="icon" disabled={actionDisabled}><Printer size={15} /></Button>
+            <Button aria-label="Print" type="button" variant="outline" size="icon" onClick={handlePrint} disabled={!form.doc_no}>
+              <Printer size={15} />
+            </Button>
             <Button aria-label="Attachment" type="button" variant="outline" size="icon" disabled={actionDisabled}><Paperclip size={15} /></Button>
             <Button aria-label="Download" type="button" variant="outline" size="icon" disabled={actionDisabled}><Download size={15} /></Button>
             <Button type="button" variant="outline" onClick={onClose}>Close</Button>
@@ -494,6 +543,18 @@ export function PurchaseOrderEditor({
         onClearError={() => setRejectError("")}
         onClose={closeRejectDialog}
         onConfirm={confirmReject}
+      />
+
+      <AttachmentDialog
+        open={attachmentOpen}
+        onClose={() => setAttachmentOpen(false)}
+        requestNumber={form.doc_no ? String(form.doc_no) : ""}
+        title="Purchase Order Attachments"
+        module="PO"
+        type="Purchase order"
+        companyCode={user?.company_code || ""}
+        loginId={user?.loginid || ""}
+        flowLevel={effectiveFlowLevel}
       />
     </>
   );

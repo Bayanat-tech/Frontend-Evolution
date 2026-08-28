@@ -285,8 +285,58 @@ export const wmsSimpleMasterConfigs: Record<string, WmsSimpleMasterConfig> = {
       { name: "rpt_group_name", label: "Report Group", width: 180 },
       { name: "sort_order", label: "Sort Order", type: "number", width: 120 },
       { name: "cost_group", label: "Cost Group", width: 140, maxLength: 1 },
+      { name: "sac_code", label: "SAC Code", width: 140 },
     ],
     defaults: { mandatory_flag: "N", validate_flag: "N", freight_flag: "N", sw_flag: "N" },
+    customLoad: async (user) => {
+      const typedUser = user as { loginid: string; company_code: string };
+      const data = await executeWmsInboundSql(`
+        SELECT *
+        FROM MS_ACTIVITY_GROUP
+        WHERE COMPANY_CODE = '${typedUser.company_code}'
+        ORDER BY SORT_ORDER, ACTIVITY_GROUP_CODE
+      `);
+      return {
+        tableData: data as Record<string, unknown>[],
+        count: data.length,
+      };
+    },
+    customSave: async (form, context) => {
+      console.log("Custom save logic for Activity Group Master", form, context);
+      const { editMode, original, user } = context;
+      const typedUser = user as { loginid: string; company_code: string };
+
+      await executeDynamicMutation({
+        loginid: typedUser.loginid,
+        parameter: "ACTIVITY_GROUP_INS_UPD",
+
+        // P_VAL1S1 → non-null means UPDATE
+        val1s1: (editMode
+          ? (original?.activity_group_code ?? form.activity_group_code)
+          : undefined) as string | undefined,
+
+        val1s2: form.act_group_name as string,
+        val1s3: form.mandatory_flag as string,
+        val1s4: form.validate_flag as string,
+        val1s5: form.account_code as string,
+        val1s6: form.act_group_type as string,
+        val1s7: form.alternate_accode as string,
+        val1s8: form.exp_account_code as string,
+        val1s9: form.freight_flag as string,
+        val1s10: form.rpt_group_name as string,
+
+        val1n1: form.sort_order as number,
+
+        wval1s1: typedUser.company_code,
+        wval1s2: (editMode
+          ? original?.activity_group_code
+          : form.activity_group_code) as string,
+
+        wval1s3: form.sw_flag as string,
+        wval1s4: form.cost_group as string,
+        wval1s5: (form.sac_code as string) ?? null,
+      });
+    },
     deleteConfig: { mode: "registered", payload: (row) => [row.activity_group_code] },
   },
   activitysubgroup: {
@@ -540,6 +590,7 @@ saveEndpoint: (form, { editMode, original }) => {
       { name: "prin_addr4", label: "Address 4", type: "textarea", tab: "basic-info", section: "COMPANY DETAILS", maxLength: 50 },
       { name: "territory_code", label: "Territory", dropdownParam: "DROP_DOWN_TERRITORY", dropdownCodeMap: { country_code: "code1" },dropdownDisplayFields: ["territory_code", "territory_name"], dropdownValueKey: "territory_code", tab: "basic-info", section: "COMPANY DETAILS" },
       { name: "sector_code", label: "Sector", tab: "basic-info", section: "COMPANY DETAILS" },
+      { name: "salesman_code", label: "Salesman Code", tab: "basic-info", section: "COMPANY DETAILS", dropdownParam: "DROP_DOWN_SALESMAN", dropdownDisplayFields: ["salesman_code", "salesman_name"], dropdownValueKey: "salesman_code" },
       // Basic Info Tab - Contact Information
       { name: "acc_email", label: "Email Account", type: "email", tab: "contact-info", section: "CONTACT INFORMATION" },
       { name: "prin_email1", label: "Email 1", type: "email", tab: "contact-info", section: "CONTACT INFORMATION" },

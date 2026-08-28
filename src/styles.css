@@ -3592,7 +3592,7 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 .freight-shipment-hero-item strong {
   min-width: 0;
   color: #111827;
-  font-size: 27px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.1;
   overflow-wrap: anywhere;
@@ -3891,6 +3891,12 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 
 .freight-dense-form .freight-tabs-shell .freight-tabs-panel {
   padding: 6.5px;
+}
+
+.freight-dense-form .freight-tabs-shell .freight-tabs-panel {
+  padding: 6.5px;
+  max-height: calc(150vh - 400px);
+  overflow-y: auto;
 }
 
 .freight-dense-form .freight-section-heading {
@@ -5666,6 +5672,26 @@ freight-dense-form .freight-form-card {
   -webkit-appearance: none;
 }
 
+.finance-page input[type="number"],
+.finance-list-page input[type="number"],
+.payment-workbench input[type="number"],
+.commercial-editor input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.finance-page input[type="number"]::-webkit-outer-spin-button,
+.finance-page input[type="number"]::-webkit-inner-spin-button,
+.finance-list-page input[type="number"]::-webkit-outer-spin-button,
+.finance-list-page input[type="number"]::-webkit-inner-spin-button,
+.payment-workbench input[type="number"]::-webkit-outer-spin-button,
+.payment-workbench input[type="number"]::-webkit-inner-spin-button,
+.commercial-editor input[type="number"]::-webkit-outer-spin-button,
+.commercial-editor input[type="number"]::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
 .commercial-editor table thead {
   box-shadow: 0 1px 0 rgba(15, 23, 42, 0.08);
 }
@@ -6020,8 +6046,27 @@ freight-dense-form .freight-form-card {
 }
 
 .lookup-popover table td {
-  height: 29px;
+  height: 30px;
   border-color: #edf2f7;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lookup-popover .lookup-results-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.lookup-popover .lookup-results-table th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lookup-popover .lookup-results-table tr {
+  height: 30px;
 }
 
 .lookup-popover table tr[aria-selected="true"] td {
@@ -8785,6 +8830,202 @@ freight-dense-form .freight-form-card {
   }
 }
 
+/* Final Freight control normalization. Kept last so page-specific legacy
+   typography utilities cannot move labels back beside controls. */
+.freight-ui-standard :where(label):not(.inline-flex):not(.data-table-search) {
+  display: grid !important;
+  align-content: start;
+  gap: 4px !important;
+  color: #172033 !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.2 !important;
+  text-transform: none !important;
+}
+
+.freight-ui-standard :where(label):not(.inline-flex):not(.data-table-search) > :where(span, div):first-child {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+
+.freight-ui-standard :where(label):not(.inline-flex):not(.data-table-search) :where(
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea,
+  .ui-input,
+  .ui-select,
+  .ui-textarea,
+  .lookup-field-trigger,
+  button[role="combobox"]
+) {
+  min-height: 34px !important;
+  border: 1px solid #aeb9c8 !important;
+  border-radius: 10px !important;
+  background: #f8fafc !important;
+  color: #24364b !important;
+  font-size: 12px !important;
+  font-weight: 550 !important;
+  box-shadow: none !important;
+}
+
+.freight-ui-standard :where(label):not(.inline-flex):not(.data-table-search) :where(
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea,
+  .ui-input,
+  .ui-select,
+  .ui-textarea,
+  .lookup-field-trigger,
+  button[role="combobox"]
+):focus,
+.freight-ui-standard :where(label):not(.inline-flex):not(.data-table-search) :where(
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea,
+  .ui-input,
+  .ui-select,
+  .ui-textarea,
+  .lookup-field-trigger,
+  button[role="combobox"]
+):focus-visible {
+  border-color: #2463a7 !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 2px rgba(36, 99, 167, 0.13) !important;
+  outline: none !important;
+}
+
+.freight-ui-standard table :where(label) :where(input, select, textarea, .lookup-field-trigger, button[role="combobox"]) {
+  min-height: 28px !important;
+  height: 28px !important;
+  border-radius: 6px !important;
+  font-size: 11px !important;
+}
+
+/* Freight form language ---------------------------------------------------
+   Shared by commercial, operations, invoice, tariff and report screens.
+   Editable line-item tables intentionally retain their compact dimensions. */
+.freight-ui-standard {
+  --freight-control-height: 34px;
+  --freight-control-radius: 10px;
+  --freight-control-border: #aeb9c8;
+  --freight-control-bg: #f8fafc;
+  --freight-control-text: #24364b;
+  --freight-label-text: #172033;
+  --freight-section-border: #cbd3df;
+}
+
+.freight-ui-standard :where(
+  .freight-field-label,
+  .freight-compact-label,
+  .freight-form-card label,
+  .freight-panel-body label,
+  .freight-info-body label
+) {
+  display: grid;
+  align-content: start;
+  gap: 4px !important;
+  color: var(--freight-label-text) !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.2;
+  text-transform: none !important;
+}
+
+.freight-ui-standard :where(
+  .freight-field-label,
+  .freight-compact-label,
+  .freight-form-card label,
+  .freight-panel-body label,
+  .freight-info-body label
+) > span:first-child {
+  color: var(--freight-label-text) !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.freight-ui-standard :where(
+  .freight-form-card,
+  .freight-panel-body,
+  .freight-info-body
+) :where(input, select, textarea, .ui-input, .ui-select, .ui-textarea, .lookup-field-trigger, button[role="combobox"]),
+.freight-ui-standard > :where(div, section) label > :where(input, select, textarea, .ui-input, .ui-select, .ui-textarea, .lookup-field-trigger, button[role="combobox"]) {
+  min-height: var(--freight-control-height) !important;
+  border-color: var(--freight-control-border) !important;
+  border-radius: var(--freight-control-radius) !important;
+  background-color: var(--freight-control-bg) !important;
+  color: var(--freight-control-text) !important;
+  font-size: 12px !important;
+  font-weight: 550 !important;
+  box-shadow: none !important;
+}
+
+.freight-ui-standard :where(
+  .freight-form-card,
+  .freight-panel-body,
+  .freight-info-body
+) :where(textarea, .ui-textarea) {
+  min-height: 58px !important;
+  resize: vertical;
+}
+
+.freight-ui-standard :where(
+  .freight-form-card,
+  .freight-panel-body,
+  .freight-info-body
+) :where(input, select, textarea, .ui-input, .ui-select, .ui-textarea, .lookup-field-trigger, button[role="combobox"]):focus,
+.freight-ui-standard :where(
+  .freight-form-card,
+  .freight-panel-body,
+  .freight-info-body
+) :where(input, select, textarea, .ui-input, .ui-select, .ui-textarea, .lookup-field-trigger, button[role="combobox"]):focus-visible {
+  border-color: #2463a7 !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 0 0 2px rgba(36, 99, 167, 0.13) !important;
+  outline: none !important;
+}
+
+.freight-ui-standard :where(
+  .freight-form-card,
+  .freight-panel-body,
+  .freight-info-body
+) :where(input, select, textarea, .ui-input, .ui-select, .ui-textarea, .lookup-field-trigger, button[role="combobox"]):disabled {
+  border-color: #cbd3df !important;
+  background-color: #f1f4f8 !important;
+  color: #66758a !important;
+  opacity: 1 !important;
+}
+
+.freight-ui-standard :where(.freight-form-card, .freight-panel, .freight-info-section) {
+  border-color: var(--freight-section-border) !important;
+  border-radius: 14px !important;
+  overflow: hidden;
+}
+
+.freight-ui-standard :where(.freight-panel-body, .freight-info-body) {
+  padding: 12px !important;
+}
+
+.freight-ui-standard :where(.freight-job-table-shell, table) :where(input, select, textarea, .lookup-field-trigger, button[role="combobox"]) {
+  min-height: 28px !important;
+  height: 28px !important;
+  border-radius: 6px !important;
+  font-size: 11px !important;
+}
+
+@media (max-width: 720px) {
+  .freight-ui-standard {
+    --freight-control-height: 38px;
+  }
+
+  .freight-ui-standard :where(.freight-panel-body, .freight-info-body) {
+    padding: 10px !important;
+  }
+}
+
 .freight-job-editor-shell .freight-document-paper {
   min-width: 0;
   overflow: hidden;
@@ -8937,9 +9178,19 @@ freight-dense-form .freight-form-card {
   padding-left: 46px !important;
 }
 
-.freight-dense-form :where(.freight-form-card, .freight-panel-body) label > span:first-child,
+/* .freight-dense-form :where(.freight-form-card, .freight-panel-body) label > span:first-child,
 .freight-dense-form .freight-compact-label > span:first-child {
   color: #64748b !important;
+  font-family: var(--app-font-family) !important;
+  font-size: 10.25px !important;
+  font-weight: 750 !important;
+  letter-spacing: 0.015em;
+  text-transform: uppercase;
+} */
+
+.freight-dense-form :where(.freight-form-card, .freight-panel-body) label > span:first-child,
+.freight-dense-form .freight-compact-label > span:first-child {
+  color: #1e293b !important;   /* was #64748b — now matches text-slate-800 */
   font-family: var(--app-font-family) !important;
   font-size: 10.25px !important;
   font-weight: 750 !important;
@@ -8988,7 +9239,7 @@ freight-dense-form .freight-form-card {
 
 @media (min-width: 1281px) {
   .freight-job-editor-shell {
-    grid-template-columns: minmax(0, 1fr) 212px;
+    grid-template-columns: minmax(0, 1fr) 176px;
     align-items: stretch;
   }
 }
@@ -8996,7 +9247,7 @@ freight-dense-form .freight-form-card {
 .freight-job-progress-rail {
   position: sticky;
   top: 76px;
-  width: 212px;
+  width: 176px;
   min-height: 0;
   height: 390px;
   max-height: 390px;
@@ -9040,8 +9291,8 @@ freight-dense-form .freight-form-card {
 
 .freight-job-progress-rail-step {
   position: relative;
-  grid-template-columns: 25px minmax(0, 1fr);
-  gap: 7px;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 5px;
   min-height: 0;
   padding: 0;
 }
@@ -9099,7 +9350,7 @@ freight-dense-form .freight-form-card {
 
 .freight-job-progress-rail-copy strong {
   color: #172033;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 850;
   line-height: 1.1;
 }
@@ -9115,9 +9366,187 @@ freight-dense-form .freight-form-card {
 .freight-job-progress-rail-copy small {
   margin-top: 2px;
   color: #7a8aa1;
-  font-size: 8.5px;
+  font-size: 8px;
   font-weight: 750;
   line-height: 1.1;
+}
+
+/* Desktop job layout: keep the status timeline vertical in a compact right rail. */
+@media (min-width: 1281px) {
+  .freight-job-editor-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 62px;
+    gap: 0;
+    align-items: start;
+  }
+
+  .freight-job-editor-shell .freight-document-paper {
+    order: initial;
+    width: auto;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail {
+    order: initial;
+    position: sticky;
+    top: 64px;
+    z-index: 4;
+    width: 62px;
+    height: calc(100vh - 72px);
+    max-height: none;
+    min-height: 0;
+    align-self: start;
+    overflow: visible;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-title {
+    display: none;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-title span,
+  .freight-job-editor-shell .freight-job-progress-rail-title strong {
+    width: min-content;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    white-space: nowrap;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-list {
+    position: relative;
+    display: flex;
+    height: 100%;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 0;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-list::before {
+    content: "";
+    position: absolute;
+    top: 42px;
+    bottom: 42px;
+    left: 50%;
+    width: 2px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #07996f 0 18%, #075fca 18% 38%, #cbd5e1 38% 100%);
+    transform: translateX(-50%);
+    opacity: 0.8;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-step {
+    display: block;
+    min-height: 84px;
+    padding: 10px 4px;
+    border: 1px solid #e1e8f2;
+    border-right: 0;
+    border-radius: 18px 0 0 18px;
+    background: rgba(255, 255, 255, 0.82);
+    transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+    position: relative;
+    z-index: 1;
+    box-shadow: -4px 4px 10px rgba(15, 23, 42, 0.04);
+    isolation: isolate;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-step::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: -5px;
+    width: 9px;
+    height: 24px;
+    border-radius: 0 8px 8px 0;
+    background: #cbd5e1;
+    transform: translateY(-50%);
+    z-index: -1;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-step:hover {
+    transform: translateX(-3px);
+    border-color: #b8cde5;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-copy {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    min-width: 0;
+    padding: 0;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-copy strong,
+  .freight-job-editor-shell .freight-job-progress-rail-copy small {
+    flex: 0 0 auto;
+    margin-top: 0;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    white-space: nowrap;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-copy strong {
+    font-size: 11.5px;
+    font-weight: 850;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-copy small {
+    font-size: 7.5px;
+    font-weight: 800;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-marker,
+  .freight-job-editor-shell .freight-job-progress-rail-marker::after {
+    display: none;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-step.done {
+    border-color: #9ed8c5;
+    background: linear-gradient(135deg, #f4fdf8 0%, #e8f8f1 100%);
+    border-right: 3px solid #07996f;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-step.done::before {
+    background: #07996f;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-step.current {
+    border-color: #8ab9ed;
+    background: linear-gradient(135deg, #f3f8ff 0%, #e4f0ff 100%);
+    box-shadow: -6px 5px 16px rgba(7, 95, 202, 0.16);
+    border-right: 3px solid #075fca;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-step.current::before {
+    background: #075fca;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-step.pending {
+    background: linear-gradient(135deg, #ffffff 0%, #f3f6fa 100%);
+    border-right: 3px solid #cbd5e1;
+  }
+}
+
+@media (max-width: 700px) {
+  .freight-job-editor-shell .freight-job-progress-rail {
+    position: static;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-list {
+    display: flex;
+    gap: 18px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .freight-job-editor-shell .freight-job-progress-rail-step {
+    flex: 0 0 126px;
+  }
 }
 
 @media (max-width: 1280px) {
@@ -9131,4 +9560,213 @@ freight-dense-form .freight-form-card {
     height: auto;
     gap: 8px;
   }
+}
+
+/* Freight UI final cascade overrides */
+.freight-ui-standard.freight-dense-form :where(.freight-form-card, .freight-panel-body) label > span:first-child,
+.freight-ui-standard .freight-compact-label > span:first-child,
+.freight-ui-standard .freight-field-label > span:first-child {
+  color: #172033 !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.freight-ui-standard :where(.freight-form-card, .freight-panel-body, .freight-info-body) :where(
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea,
+  .ui-input,
+  .ui-select,
+  .ui-textarea,
+  .lookup-field-trigger,
+  button[role="combobox"]
+) {
+  min-height: 34px !important;
+  border-color: #aeb9c8 !important;
+  border-radius: 10px !important;
+  background-color: #f8fafc !important;
+}
+
+.freight-ui-standard :where(.freight-job-table-shell, table) :where(
+  input,
+  select,
+  textarea,
+  .lookup-field-trigger,
+  button[role="combobox"]
+) {
+  min-height: 28px !important;
+  height: 28px !important;
+  border-radius: 6px !important;
+}
+
+.freight-ui-standard .data-table-search {
+  display: flex !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  width: 100% !important;
+  max-width: 520px !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 0 12px !important;
+  border: 1px solid #aebbd0 !important;
+  border-radius: 9999px !important;
+  background: #fbfdff !important;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+.freight-ui-standard .data-table-search > input {
+  display: block !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.freight-ui-standard .data-table-search:focus-within {
+  border-color: #2463a7 !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 2px rgba(36, 99, 167, 0.13) !important;
+}
+
+/* Freight dropdowns and lookup triggers */
+.freight-ui-standard .lookup-field-trigger {
+  min-height: 34px !important;
+  height: 34px !important;
+  border: 1px solid #aeb9c8 !important;
+  border-radius: 10px !important;
+  background: #f8fafc !important;
+  box-shadow: none !important;
+}
+
+.freight-ui-standard .lookup-field-trigger > button:first-of-type {
+  color: #24364b !important;
+  font-family: var(--app-font-family) !important;
+  font-size: 12px !important;
+  font-weight: 550 !important;
+}
+
+.freight-ui-standard .lookup-field-trigger > button:last-of-type {
+  color: #73839a !important;
+}
+
+.freight-ui-standard .lookup-field-trigger:focus-within {
+  border-color: #2463a7 !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 2px rgba(36, 99, 167, 0.13) !important;
+}
+
+.freight-ui-standard select {
+  color: #24364b !important;
+  font-family: var(--app-font-family) !important;
+  font-weight: 550 !important;
+}
+
+/* Lookup popups are portal-rendered, so their common visual contract lives
+   outside the Freight page scope. */
+.lookup-popover {
+  border: 1px solid #aeb9c8 !important;
+  border-radius: 10px !important;
+  font-family: var(--app-font-family) !important;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.2) !important;
+}
+
+.lookup-popover > div:first-child label {
+  display: flex !important;
+  height: 34px !important;
+  align-items: center !important;
+  gap: 8px !important;
+  border-color: #b8c3d1 !important;
+  border-radius: 9999px !important;
+  background: #ffffff !important;
+}
+
+.lookup-popover > div:first-child label > input {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.lookup-popover .lookup-popover-head,
+.lookup-popover table th {
+  height: 30px !important;
+  border-color: #0b438e !important;
+  background: #06479b !important;
+  color: #ffffff !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.lookup-popover table td {
+  height: 30px !important;
+  color: #24364b;
+  font-family: var(--app-font-family) !important;
+  font-size: 11px !important;
+}
+
+.lookup-popover .lookup-popover-code {
+  color: #0756a8 !important;
+  font-weight: 650 !important;
+}
+
+.lookup-popover .lookup-footer {
+  min-height: 32px;
+  background: #f8fafc !important;
+  color: #68778c !important;
+}
+
+/* Shared LookupField trigger — global across all application modules. */
+.lookup-field-trigger {
+  min-height: 34px !important;
+  height: 34px !important;
+  border: 1px solid #aeb9c8 !important;
+  border-radius: 10px !important;
+  background: #f8fafc !important;
+  font-family: var(--app-font-family) !important;
+  box-shadow: none !important;
+}
+
+.lookup-field-trigger > button:first-of-type {
+  color: #24364b !important;
+  font-family: var(--app-font-family) !important;
+  font-size: 12px !important;
+  font-weight: 550 !important;
+}
+
+.lookup-field-trigger > button:last-of-type {
+  color: #73839a !important;
+}
+
+.lookup-field-trigger:focus-within {
+  border-color: #2463a7 !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 2px rgba(36, 99, 167, 0.13) !important;
+}
+
+.lookup-field-trigger:has(button:disabled) {
+  border-color: #cbd3df !important;
+  background: #f1f4f8 !important;
+  opacity: 1 !important;
+}
+
+.lookup-field-trigger:has(button:disabled) > button {
+  color: #66758a !important;
+  opacity: 1 !important;
+}
+
+/* Dense editable grids retain their compact row height. */
+table .lookup-field-trigger,
+.freight-job-table-shell .lookup-field-trigger,
+.commercial-lines-card .lookup-field-trigger {
+  min-height: 28px !important;
+  height: 28px !important;
+  border-radius: 6px !important;
 }

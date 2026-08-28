@@ -166,6 +166,9 @@ import Credit_Request_page from "../pages/almswf/CreaditRequestPage";
 import Capex_Request_page from "../pages/almswf/CapexRequestPage";
 import Purchase_Request_page from "../pages/almswf/PurchaseRequestPage";
 
+
+import PS_PendingPurchaseOrderReport from "../pages/purchase_sales/Reports/PS_PendingPurchaseOrderReport";
+
 import { PurchaseOrderPage } from "../pages/purchase_sales/purchase/Purchaseorderpage";
 
 import { StockInquiryPage } from "../pages/purchase_sales/PS_StockInquiry";
@@ -182,9 +185,23 @@ import { JobProductionOrderPage } from "../pages/purchase_sales/production/JobPr
 import { LeaveTypesPage } from "../pages/hr/Leavetypespage";
 import AccuralPayUnit from "../pages/hr/AccuralPayUnit";
 import PLSummaryPage from "../pages/purchase_sales/Reports/Plsummarypage";
+import PayUnitsPage from "../pages/hr/pay_componants/PayUnitsPage";
+import GradePayUnitPage from "../pages/hr/pay_componants/Gradepayunitpage";
+import PayUnitDependentPage from "../pages/hr/pay_componants/PayUnitDependentPage";
+import PayrollAccountSetupPage from "../pages/hr/pay_componants/Payroll_Account_SetupPage";
+import AccrualTypePage from "../pages/hr/pay_componants/AccrualTypePage";
+import AttendanceTypesPage from "../pages/hr/pay_componants/AttendanceTypePage";
 import { PurchaseInvoicePage } from "../pages/purchase_sales/purchase/PurchaseInvoicePage";
 import { SalesInvoicePage } from "../pages/purchase_sales/sales/SalesInvoicePage";
 import { ProductBrandPage } from "../pages/purchase_sales/Productbrandpage";
+import CompanyInfo from "../pages/security/CompanyInfo";
+import HolidayCalendarPage from "../pages/hr/masters/HolidayCalendarPage"; 
+import PoOrderRegisterPage from "../pages/purchase_sales/Reports/PoOrderRegister";
+import LeaveSlapPage from "../pages/hr/LeaveSlab";
+import TravelFare from "../pages/hr/TravelFare";
+import { HrEmpLanguagePage } from "../pages/hr/HrEmpLanguageSkill";
+import ConsolidatePayUnitPage from "../pages/hr/consolidate_pay_unit/ConsolidatePayUnitPage";
+
  type WorkspaceRouteContext = {
   pathname: string;
   activeApp?: MenuNode;
@@ -205,10 +222,53 @@ export function resolveWorkspaceRoute(context: WorkspaceRouteContext) {
 
 export const workspaceRoutes: WorkspaceRoute[] = [
   {
+    name : 'HR Consolidate Pay Unit',
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hcm/employee/consolidate_pay_unit"),
+    element: () => <ConsolidatePayUnitPage />,
+  },
+
+  // {
+  //   name: 'HR Leave Slap Page',
+  //   match: ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/setup/pay%20units/leave_slab"),
+  //   element: () => <LeaveSlapPage />,
+  // },
+
+  {
+   name: 'HR Leave Slap Page',
+    match: (context) => isHrRoute(context) && isHrLeaveSlapRoute(context),
+    element: () => <LeaveSlapPage />,
+  },
+
+  // {
+  //   name: 'Travel Fare Page',
+  //   match: ({pathname}) => pathname.toLowerCase().includes("/hcm/hcm/setup/pay%20units/travel_fare"),
+  //   element: () => <TravelFare />,
+  // },
+
+
+
+  {
+    name: 'Travel Fare Page',
+       match: (context) => isHrRoute(context) && isHrTravelFareRoute(context),
+    element: () => <TravelFare />,
+  },
+
+  {
+    name: 'Company Info Master',
+    match: ({pathname}) => pathname.toLowerCase().includes("/security/security/masters/gm/com_info"),
+    element: () => <CompanyInfo />,
+  },
+  {
     name: 'MSE Prod Group',
     match: ({pathname}) => pathname.toLowerCase().includes("/purchase_sales/purchase_sales/masters/product_group"),
     element: () => <MseProdGroup />,
   },
+
+  {
+  name: "Pending Purchase Order Report",
+  match: ({ pathname }) => isPendingPurchaseOrderRoute(pathname),
+  element: () => <PS_PendingPurchaseOrderReport />,
+    },
 
   {
   name: 'Purchase Sales Product Brand',
@@ -314,6 +374,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: (context) => isHrRoute(context) && isHrLeaveResumptionRoute(context),
     element: () => <LeaveResumptionWorkspacePage />,
   },
+    {
+    name: "Employee Master",
+    match: ({pathname})=> pathname.toLocaleLowerCase().includes("/hcm/hr/employee/employee_master"),
+    element: () => <EmployeeMasterPage />
+  },
   {
     name: "HR Employee Profile",
     match: (context) => isHrRoute(context) && isHrEmployeeProfileRoute(context),
@@ -321,12 +386,12 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
   {
     name: "HR Absent Memo",
-    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/memo_and_forms/absent_memo"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hr/transactions/memo_and_forms/absent_memo"),
     element: () => <AbsentMemoMainPage />,
   },
   {
     name: "HR Salary Addition Deduction Page",
-    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/memo_and_forms/addition/deduction_letter"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hr/transactions/memo_and_forms/addition/deduction_letter"),
     element: () => <SalaryAdditionDeductionMainPage />,
   },
 
@@ -356,23 +421,18 @@ export const workspaceRoutes: WorkspaceRoute[] = [
 
   {
     name:"HR Grade Salary Increment",
-    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/grade_salary_increment"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hcm/transactions/grade_salary_increment"),
     element: () => <GradeSalaryIncrement />
   },
   {
     name: "HR Employee Salary Increment",
-    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/salary%20increment"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hcm/transactions/employee_salary_increment"),
     element: () => <EmployeeSalaryIncrement />
   },
   {
     name: "HR Leave Encashmen",
-    match: ({ pathname }) => pathname.toLowerCase().includes("/hr/hr/transactions/leave_encashment"),
+    match: ({ pathname }) => pathname.toLowerCase().includes("/hcm/hcm/transactions/leave_encashment"),
     element: () => <LeaveEncashmentPage />
-  },
-  {
-    name: "Employee Master",
-    match: ({pathname})=> pathname.toLocaleLowerCase().includes("/hr/hr/employee/employee_master"),
-    element: () => <EmployeeMasterPage />
   },
   {
     name: "Vendor System",
@@ -1123,20 +1183,47 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   element: () => <HrEmployeePayUnits />,
   },
 
-  
+  // ----------------------------- HR Pay Componants Routes --------------------------------
   {
     name: "HR Pay Units",
     match: (context) => isHrRoute(context) && isHrPayUnitsRoute(context),
-    element: () => <HrPayUnitsPage mode="units" />,
+    element: () => <PayUnitsPage/>,
   },
 
   
-
   {
     name: "HR Pay Units Dependant",
     match: (context) => isHrRoute(context) && isHrPayUnitsDependantRoute(context),
-    element: () => <HrPayUnitsPage mode="dependant" />,
+    element: () => <PayUnitDependentPage />,
   },
+
+  {
+  name: "HR Grade Pay Unit",
+  match: (context) => isHrRoute(context) && isHrGradePayUnitRoute(context),
+  element: () => <GradePayUnitPage />,
+},
+
+{
+    name: "HR Payroll Account Setup",
+    match: (context) => isHrRoute(context) && isHrPayrollAccountSetupRoute(context),
+    element: () => <PayrollAccountSetupPage />,
+  },
+
+  {
+    name: "HR Accrual Type",
+    match: (context) => isHrRoute(context) && isHrAccrualTypeRoute(context),
+    element: () => <AccrualTypePage />,
+  },
+
+
+  {
+    name: "HR Attendance Types",
+    match: (context) => isHrRoute(context) && isHrAttendanceTypesRoute(context),
+    element: () => <AttendanceTypesPage />,
+  },
+
+
+
   {
     name: "HR Payroll Process",
     match: (context) => isHrRoute(context) && isHrPayrollProcessRoute(context),
@@ -1200,18 +1287,23 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   match: (context) => isHrRoute(context) && isHrEmployeeInformationRoute(context),
   element: () => <KpiEmployeeInformationPage />,
 },
-
-
-{
-    name: "HR Payroll Account Setup",
-    match: (context) => isHrRoute(context) && isHrPayrollAccountSetupRoute(context),
-    element: () => <HrPayrollAccountSetupPage />,
-  },
   {
     name: "HR Leave Types",
     match: ({ pathname }) => isHrLeaveTypeRoute(pathname),
     element: () => <LeaveTypesPage />,
   },
+  {
+    name: "HR Holiday Calendar",
+    match: ({ pathname }) => isHrHolidayCalendarRoute(pathname),
+    element: () => <HolidayCalendarPage />,
+  },
+
+  {
+  name : "Hr Employee Language Skills",
+  match: ({pathname}) => isHrEmpLanguageSkillRoute(pathname),
+  element: () => <HrEmpLanguagePage/>
+},
+  
   {
     name: "HR Master",
     match: (context) => Boolean(getHrMasterConfig(context)),
@@ -1237,7 +1329,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   element: () => <ZoneMasterPage />,
   },
 
-  
+ 
 
   {
     name : "Expense Master",
@@ -1276,12 +1368,40 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   element: () => <PLSummaryPage />,
 },
   
+{
+  name: "PO Order Register Report",
+  match: ({ pathname }) => isPoOrderRegisterRoute(pathname),
+  element: () => <PoOrderRegisterPage />,
+}
+
+
+
 ];
 
 function isStorageComputationRoute(pathname: string) {
   return pathname.toLowerCase().includes("wms/activity/request/storage_computation");
 }
 
+
+
+function isHrEmpLanguageSkillRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  return (
+    normalized.includes("/hcm/hcm/employee/language_skills") ||
+    normalized.includes("/hcm/hcm/employee/language%20skills")
+  );
+}
+
+function isHrHolidayCalendarRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  const compact = normalized.replace(/[^a-z0-9]/g, "");
+  return (
+    normalized.includes("/hcm/hr/general_master/source/holiday_calendar") ||
+    normalized.includes("/hcm/hr/general%20master/source/holiday_calendar") ||
+    compact.includes("generalmastersourceholidaycalendar") ||
+    compact.includes("holidaycalendar")
+  );
+}
 
 function isHrLeaveTypeRoute(pathname: string) {
   const normalized = decodeRouteText(pathname).toLowerCase();
@@ -1325,6 +1445,12 @@ function isProfitLossSummaryRoute(pathname: string) {
   );
 }
 
+function isPoOrderRegisterRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/reports/po_order_register"
+  );
+}
 
 
 function isStockAdjViewRoute(pathname: string) {
@@ -2445,6 +2571,17 @@ function decodeRouteText(value: string) {
   }
 }
 
+function isHrLeaveSlapRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("leaveslap") || compact.includes("LeaveSlap");
+}
+function isHrTravelFareRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("TravelFare") || compact.includes("travelfare");
+}
+
+
+
 function isHrPayrollProcessRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
   return compact.includes("payrollprocessing") || compact.includes("payrollprocess") || compact.includes("payrollprocesspage");
@@ -2452,13 +2589,37 @@ function isHrPayrollProcessRoute(context: WorkspaceRouteContext) {
 
 function isHrPayUnitsRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
-  return (compact.includes("payunits") || compact.includes("payunit")) && !compact.includes("depend");
+  return (compact.includes("payunits") || compact.includes("payunit")) && !compact.includes("depend")&& !compact.includes("grade")&& !compact.includes("payrollaccountsetup") && !compact.includes("accrualtype") && !compact.includes("attendancetypes") && !compact.includes("leaveslap")&& !compact.includes("travelfare");
 }
 
 function isHrPayUnitsDependantRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
   return compact.includes("payunitsdependant") || compact.includes("payunitdependant") || compact.includes("payunitsdependent") || compact.includes("payunitdependent");
 }
+
+function isHrGradePayUnitRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("gradepayunit") || compact.includes("gradepayunits");
+}
+
+
+
+function isHrPayrollAccountSetupRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("payrollaccountsetup") || compact.includes("payrollaccountssetup") || compact.includes("payrollacsetup");
+}
+
+
+function isHrAccrualTypeRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("accrualtype") || compact.includes("accrualtypes");
+}
+
+function isHrAttendanceTypesRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("attendancetypes") || compact.includes("attendance_type");
+}
+
 
 function isHrLeaveCancelRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
@@ -2494,10 +2655,10 @@ function isHrEmployeeProfileRoute(context: WorkspaceRouteContext) {
   return compact.includes("employeeprofile") || compact.includes("employeemaster") || compact.includes("hremployeeprofile");
 }
 
-function isHrPayrollAccountSetupRoute(context: WorkspaceRouteContext) {
-  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
-  return compact.includes("payrollaccountsetup") || compact.includes("payrollaccountssetup") || compact.includes("payrollacsetup");
-}
+// function isHrPayrollAccountSetupRoute(context: WorkspaceRouteContext) {
+//   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+//   return compact.includes("payrollaccountsetup") || compact.includes("payrollaccountssetup") || compact.includes("payrollacsetup");
+// }
 
 function isHrMemosAndFormsWarningLetterRoute(context: WorkspaceRouteContext) {
   const normalized = getHrMatchText(context);
@@ -2573,5 +2734,14 @@ function isHrEmployeePayUnitsRoute(context: WorkspaceRouteContext) {
   return (
     compact.includes("employeepayunits") ||
     compact.includes("employee_payunits")
+  );
+}
+
+
+function isPendingPurchaseOrderRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/reports/pending_purchase_order"
   );
 }

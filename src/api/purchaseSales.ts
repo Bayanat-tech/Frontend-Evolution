@@ -127,6 +127,7 @@ const endpoint =
       response.data.message || "Unable to perform purchase/sales entry action"
     );
   }
+  console.log("payloay",payload)
 
   return response.data;
 }

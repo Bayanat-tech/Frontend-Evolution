@@ -11,20 +11,42 @@ type JobSelectionModalProps = {
   fromDate?: string | Date | null;
   toDate?: string | Date | null;
   existingKeys?: string[]; // "job_no||act_code" of jobs already added to the invoice
+  loadJobs?: (params: {
+    company_code: string;
+    prin_code: string;
+    invoice_no?: string;
+    from_date?: string;
+    to_date?: string;
+  }) => Promise<any[]>;
+  useFreightCost?: boolean;
   onClose: () => void;
   onSelect: (selectedJobs: any[]) => void;
 };
 
 const normalizeRow = (row: any) => ({
+  company_code: row.company_code ?? row.COMPANY_CODE ?? "",
   job_no: row.job_no ?? row.JOB_NO ?? "",
   invoice_no: row.invoice_no ?? row.INVOICE_NO ?? "",
+  // Original SRNO of this row on its own source job invoice (TN_INVOICE_DET).
+  // Needed later so PROC_UPDATE_INVOICE_DTLS can find and link the right row —
+  // must NOT be confused with any locally-generated UI sequence number.
+  srno: row.srno ?? row.SRNO ?? null,
   prin_code: row.prin_code ?? row.PRIN_CODE ?? "",
   quantity: row.quantity ?? row.QUANTITY ?? "",
   activity: row.activity ?? row.ACTIVITY ?? "",
   act_code: row.act_code ?? row.ACT_CODE ?? "",
   act_group_name: row.act_group_name ?? row.ACT_GROUP_NAME ?? "",
+  activity_group_code: row.activity_group_code ?? row.ACTIVITY_GROUP_CODE ?? "",
   bill: Number(row.bill ?? row.BILL ?? 0),
   actual_cost: Number(row.actual_cost ?? row.ACTUAL_COST ?? 0),
+  partners_price: Number(row.partners_price ?? row.PARTNERS_PRICE ?? 0),
+  transport_price: Number(row.transport_price ?? row.TRANSPORT_PRICE ?? 0),
+  total_cost: Number(
+    row.total_cost ?? row.TOTAL_COST ??
+    (Number(row.actual_cost ?? row.ACTUAL_COST ?? 0)
+      + Number(row.partners_price ?? row.PARTNERS_PRICE ?? 0)
+      + Number(row.transport_price ?? row.TRANSPORT_PRICE ?? 0)),
+  ),
   bill_rate: Number(row.bill_rate ?? row.BILL_RATE ?? 0),
   cost_rate: Number(row.cost_rate ?? row.COST_RATE ?? 0),
   job_date: row.job_date ?? row.JOB_DATE ?? null,
@@ -41,10 +63,18 @@ const toDDMMYYYY = (d?: string | Date | null) => {
 };
 
 function rowKeyOf(row: ReturnType<typeof normalizeRow>) {
-  return `${row.job_no}||${row.act_code}`;
+  return [
+    row.company_code,
+    row.invoice_no,
+    row.prin_code,
+    row.job_no,
+    row.srno ?? "",
+    row.act_code,
+  ].map((value) => String(value ?? "").trim()).join("||");
 }
 
 const ALL_GROUPS = "__all__";
+const ALL_ACTIVITIES = "__all__";
 
 export function JobSelectionModal({
   prinCode,
@@ -52,6 +82,8 @@ export function JobSelectionModal({
   fromDate,
   toDate,
   existingKeys = [],
+  loadJobs,
+  useFreightCost = false,
   onClose,
   onSelect,
 }: JobSelectionModalProps) {
@@ -59,7 +91,8 @@ export function JobSelectionModal({
   const [jobs, setJobs] = useState<ReturnType<typeof normalizeRow>[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [groupFilter, setGroupFilter] = useState<string>(ALL_GROUPS);
+  const [groupFilter, setGroupFilter] = useState<string>(ALL_GROUPS); // holds activity_group_code
+  const [activityFilter, setActivityFilter] = useState<string>(ALL_ACTIVITIES);
 
   // Jobs already added to the invoice (Job Details grid) — never show these again here.
   const excludeSet = useMemo(() => new Set(existingKeys), [existingKeys]);
@@ -73,14 +106,16 @@ export function JobSelectionModal({
     setLoading(true);
     (async () => {
       try {
-        const response = await getInvoiceJobSelection({
-          loginid: user.loginid ?? "",
+        const request = {
           company_code: user.company_code ?? "",
           prin_code: prinCode,
-          invoice_no: invoiceNo,
+          invoice_no: invoiceNo || undefined,
           from_date: toDDMMYYYY(fromDate),
           to_date: toDDMMYYYY(toDate),
-        });
+        };
+        const response = loadJobs
+          ? await loadJobs(request)
+          : await getInvoiceJobSelection({ loginid: user.loginid ?? "", ...request });
         const normalized = Array.isArray(response)
           ? response
               .map(normalizeRow)
@@ -93,26 +128,56 @@ export function JobSelectionModal({
         // Pre-check rows already flagged SELECTED = 'Y' by the backend view
         setSelected(new Set(normalized.filter((r) => r.selected).map(rowKeyOf)));
         setGroupFilter(ALL_GROUPS);
+        setActivityFilter(ALL_ACTIVITIES);
       } catch {
         setJobs([]);
       } finally {
         setLoading(false);
       }
     })();
-  }, [prinCode, invoiceNo, user?.loginid, user?.company_code, excludeSet]);
+  }, [prinCode, invoiceNo, user?.loginid, user?.company_code, excludeSet, loadJobs]);
 
-  // Distinct activity group names present in the fetched jobs, for the filter dropdown
+  // Distinct activity groups present in the fetched jobs — keyed by activity_group_code
+  // (the reliable match key), displayed using act_group_name as the label.
   const groupOptions = useMemo(() => {
-    const names = new Set<string>();
+    const byCode = new Map<string, string>();
     jobs.forEach((row) => {
-      if (row.act_group_name) names.add(row.act_group_name);
+      if (row.activity_group_code && !byCode.has(row.activity_group_code)) {
+        byCode.set(row.activity_group_code, row.act_group_name || row.activity_group_code);
+      }
     });
-    return Array.from(names).sort();
+    return Array.from(byCode.entries())
+      .map(([code, name]) => ({ code, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [jobs]);
 
+  // Distinct activity names, scoped to the currently selected group code — only
+  // activities whose activity_group_code matches the selected group show up.
+  const activityOptions = useMemo(() => {
+    const names = new Set<string>();
+    jobs
+      .filter((row) => groupFilter === ALL_GROUPS || row.activity_group_code === groupFilter)
+      .forEach((row) => {
+        if (row.activity) names.add(row.activity);
+      });
+    return Array.from(names).sort();
+  }, [jobs, groupFilter]);
+
+  // If the selected activity no longer applies to the selected group, reset it
+  useEffect(() => {
+    if (activityFilter !== ALL_ACTIVITIES && !activityOptions.includes(activityFilter)) {
+      setActivityFilter(ALL_ACTIVITIES);
+    }
+  }, [activityOptions, activityFilter]);
+
   const visibleJobs = useMemo(
-    () => (groupFilter === ALL_GROUPS ? jobs : jobs.filter((row) => row.act_group_name === groupFilter)),
-    [jobs, groupFilter],
+    () =>
+      jobs.filter((row) => {
+        if (groupFilter !== ALL_GROUPS && row.activity_group_code !== groupFilter) return false;
+        if (activityFilter !== ALL_ACTIVITIES && row.activity !== activityFilter) return false;
+        return true;
+      }),
+    [jobs, groupFilter, activityFilter],
   );
 
   const toggleRow = (key: string) => {
@@ -143,9 +208,15 @@ export function JobSelectionModal({
     onClose();
   };
 
+  const hasActiveFilter = groupFilter !== ALL_GROUPS || activityFilter !== ALL_ACTIVITIES;
+  const clearFilters = () => {
+    setGroupFilter(ALL_GROUPS);
+    setActivityFilter(ALL_ACTIVITIES);
+  };
+
   return (
     <Dialog open wide title="Select Jobs" onClose={onClose}>
-      <div className="mb-2 flex items-center gap-2">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium text-muted-foreground">Activity Group</span>
         <select
           className="h-8 rounded-md border bg-background px-2 text-sm"
@@ -153,15 +224,30 @@ export function JobSelectionModal({
           onChange={(e) => setGroupFilter(e.target.value)}
         >
           <option value={ALL_GROUPS}>All Groups</option>
-          {groupOptions.map((name) => (
+          {groupOptions.map(({ code, name }) => (
+            <option key={code} value={code}>
+              {name}
+            </option>
+          ))}
+        </select>
+
+        <span className="ml-2 text-xs font-medium text-muted-foreground">Activity</span>
+        <select
+          className="h-8 rounded-md border bg-background px-2 text-sm"
+          value={activityFilter}
+          onChange={(e) => setActivityFilter(e.target.value)}
+        >
+          <option value={ALL_ACTIVITIES}>All Activities</option>
+          {activityOptions.map((name) => (
             <option key={name} value={name}>
               {name}
             </option>
           ))}
         </select>
-        {groupFilter !== ALL_GROUPS && (
-          <Button variant="ghost" size="sm" onClick={() => setGroupFilter(ALL_GROUPS)}>
-            Clear
+
+        {hasActiveFilter && (
+          <Button variant="ghost" size="sm" onClick={clearFilters}>
+            Clear Filters
           </Button>
         )}
       </div>
@@ -179,7 +265,7 @@ export function JobSelectionModal({
               <TableHead>Activity Group</TableHead>
               <TableHead className="text-right">Qty</TableHead>
               <TableHead className="text-right">Bill</TableHead>
-              <TableHead className="text-right">Actual Cost</TableHead>
+              <TableHead className="text-right">{useFreightCost ? "Total Cost" : "Actual Cost"}</TableHead>
               <TableHead className="text-right">Bill Rate</TableHead>
               <TableHead className="text-right">Cost Rate</TableHead>
               <TableHead>Job Date</TableHead>
@@ -193,7 +279,7 @@ export function JobSelectionModal({
             ) : visibleJobs.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={11} className="py-6 text-center text-muted-foreground">
-                  {jobs.length === 0 ? "No jobs found" : "No jobs found for this activity group"}
+                  {jobs.length === 0 ? "No jobs found" : "No jobs found for the selected filters"}
                 </TableCell>
               </TableRow>
             ) : (
@@ -210,12 +296,14 @@ export function JobSelectionModal({
                       <input type="checkbox" checked={isSelected} onChange={() => toggleRow(key)} />
                     </TableCell>
                     <TableCell>{row.job_no}</TableCell>
-                    <TableCell>{row.activity}</TableCell>
+                    <TableCell>{row.act_code ? `${row.act_code} - ${row.activity}` : row.activity}</TableCell>
                     <TableCell>{row.act_code}</TableCell>
-                    <TableCell>{row.act_group_name}</TableCell>
+                    <TableCell>
+                      {row.activity_group_code ? `${row.activity_group_code} - ${row.act_group_name}` : row.act_group_name}
+                    </TableCell>
                     <TableCell className="text-right">{row.quantity}</TableCell>
                     <TableCell className="text-right">{row.bill}</TableCell>
-                    <TableCell className="text-right">{row.actual_cost}</TableCell>
+                    <TableCell className="text-right">{useFreightCost ? row.total_cost : row.actual_cost}</TableCell>
                     <TableCell className="text-right">{row.bill_rate}</TableCell>
                     <TableCell className="text-right">{row.cost_rate}</TableCell>
                     <TableCell>{row.job_date ? new Date(row.job_date).toLocaleDateString() : ""}</TableCell>

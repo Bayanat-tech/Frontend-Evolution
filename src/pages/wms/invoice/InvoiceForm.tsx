@@ -9,6 +9,7 @@ import { useAuth } from "../../../state/AuthContext";
 import {
   getPrincipalDropdown,
   getInvoiceDetailLines,
+  getInvoiceJobSelection,
   updateBillingApi,
   TInvoice,
   TInvoiceDetail,
@@ -17,6 +18,7 @@ import {
 import JobSelectionModal from "./JobSelectionModal";
 import StorageSelectionModal from "./StorageSelectionModal";
 import { executeWmsInboundSql, getInvocieDetailReport } from "../../../api/wms";
+// import { set } from "react-datepicker/dist/dist/date_utils.js";
 
 type InvoiceFormProps = {
   existingData?: Record<string, unknown>;
@@ -25,6 +27,14 @@ type InvoiceFormProps = {
 };
 
 const getValue = (obj: any, key: string) => obj?.[key.toLowerCase()] ?? obj?.[key.toUpperCase()];
+const toDDMMYYYY = (d?: string | Date | null) => {
+  if (!d) return undefined;
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return undefined;
+  const dd = String(dt.getDate()).padStart(2, "0");
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${dt.getFullYear()}`;
+};
 const toDateInputValue = (value: unknown): string => {
   if (!value) return "";
   const str = String(value);
@@ -34,7 +44,14 @@ const toDateInputValue = (value: unknown): string => {
   return parsed.toISOString().slice(0, 10);
 };
 
-type FieldDef = { label: string; key: string; type?: "text" | "date", disabled?: boolean };
+// NOTE: `required` is a rendering flag only (shows the asterisk). It does not
+// enforce validation on its own — wire real required-checks in handleSave
+// once business rules for each field are confirmed. Only Principal Code is
+// marked required here because that's the one field actually enforced today
+// (via LookupField's `required` prop). Update the others as rules are confirmed
+// instead of guessing — an asterisk that doesn't match real validation is
+// worse than no asterisk.
+type FieldDef = { label: string; key: string; type?: "text" | "date"; disabled?: boolean; required?: boolean };
 
 const HEADER_FIELDS: FieldDef[] = [
   { label: "Invoice No", key: "invoice_no" },
@@ -69,6 +86,17 @@ const CURRENCY_FIELDS: FieldDef[] = [
   { label: "Exchange Rate", key: "ex_rate", disabled: true },
 ];
 
+// Section registry for the jump-nav — id must match the `id` set on each
+// <section> below. Kept as one list so the nav and the sections can't drift
+// out of sync with each other.
+const FORM_SECTIONS = [
+  { id: "sec-invoice-info", label: "Invoice info" },
+  { id: "sec-status", label: "Status" },
+  { id: "sec-references", label: "References" },
+  { id: "sec-description", label: "Description" },
+  { id: "sec-currency", label: "Currency" },
+];
+
 // Tiny placeholder pages shown in the new tab while the report loads / if it fails.
 const REPORT_LOADING_HTML = `<!DOCTYPE html>
 <html>
@@ -100,26 +128,119 @@ function SectionHeader({ icon: Icon, title, subtitle }: { icon: any; title: stri
   );
 }
 
-function FieldGrid({ fields, invoice, onChange, disabled }: {
+// Standard card wrapper for a form section — border + bg so each group of
+// fields reads as a distinct block instead of blending into one long list.
+// Use this for every new section added to this form.
+function FormSection({
+  id,
+  icon,
+  title,
+  subtitle,
+  children,
+}: {
+  id: string;
+  icon: any;
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section id={id} className="scroll-mt-3 rounded-md border bg-background p-3">
+      <SectionHeader icon={icon} title={title} subtitle={subtitle} />
+      {children}
+    </section>
+  );
+}
+
+// Same card pattern as FormSection, but with an action slot on the right of
+// the header — used on the Billing Details tab where each section has its
+// own "add" action (Select Job / Select Storage) that belongs next to the
+// section it affects, not floating in a separate row below both tables.
+function BillingSection({
+  icon: Icon,
+  title,
+  subtitle,
+  action,
+  children,
+}: {
+  icon: any;
+  title: string;
+  subtitle: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-md border bg-background p-3">
+      <div className="mb-2 flex items-center justify-between gap-2 border-b pb-1">
+        <div className="flex items-center gap-2">
+          <Icon size={13} className="text-primary" />
+          <div>
+            <p className="m-0 text-[10px] font-semibold uppercase leading-none tracking-wide text-primary">{title}</p>
+            <p className="m-0 text-xs font-medium leading-tight text-foreground">{subtitle}</p>
+          </div>
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+// Empty-state content — replaces a bare "No data found" string with an icon
+// + message + optional inline CTA, shown inside a full-width TableCell.
+function EmptyTableState({ icon: Icon, message, actionLabel, onAction }: {
+  icon: any;
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
+      <Icon size={20} className="text-muted-foreground/60" />
+      <p className="m-0 text-xs">{message}</p>
+      {actionLabel && onAction && (
+        <Button size="sm" variant="outline" type="button" onClick={onAction}>
+          {actionLabel}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function FieldLabel({ label, required }: { label: string; required?: boolean }) {
+  return (
+    <span className="text-xs">
+      {label} {required && <span className="text-destructive">*</span>}
+    </span>
+  );
+}
+
+function FieldGrid({ fields, invoice, onChange, disabled, hint }: {
   fields: FieldDef[];
   invoice: any;
   onChange: (key: string, value: string) => void;
   disabled?: boolean;
+  // Optional helper text shown once under the grid — for fields that are
+  // disabled because they're auto-filled, not because they're locked.
+  hint?: string;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-2">
-      {fields.map(({ label, key, type, disabled: fieldDisabled }) => (
-        <label key={key} className="field">
-          <span className="text-xs">{label}</span>
-          <Input
-            className="h-8 text-sm"
-            type={type === "date" ? "date" : "text"}
-            value={type === "date" ? toDateInputValue(getValue(invoice, key)) : getValue(invoice, key) ?? ""}
-            onChange={(e) => onChange(key, e.target.value)}
-            disabled={disabled || fieldDisabled}
-          />
-        </label>
-      ))}
+    <div className="grid gap-2">
+      <div className="grid grid-cols-2 gap-2">
+        {fields.map(({ label, key, type, disabled: fieldDisabled, required }) => (
+          <label key={key} className="field">
+            <FieldLabel label={label} required={required} />
+            <Input
+              className="h-8 text-sm disabled:cursor-not-allowed disabled:bg-muted/50 disabled:text-muted-foreground"
+              type={type === "date" ? "date" : "text"}
+              value={type === "date" ? toDateInputValue(getValue(invoice, key)) : getValue(invoice, key) ?? ""}
+              onChange={(e) => onChange(key, e.target.value)}
+              disabled={disabled || fieldDisabled}
+            />
+          </label>
+        ))}
+      </div>
+      {hint && <p className="m-0 text-[11px] text-muted-foreground">{hint}</p>}
     </div>
   );
 }
@@ -127,7 +248,6 @@ function FieldGrid({ fields, invoice, onChange, disabled }: {
 export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProps) {
   const { user } = useAuth();
   const company_code = user?.company_code ?? "";
-  console.log("InvoiceForm existingData:", existingData);
 
   /* ================= STATE ================= */
   const [tab, setTab] = useState<0 | 1>(0);
@@ -140,6 +260,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
   const [saving, setSaving] = useState(false);
   const [warning, setWarning] = useState("");
   const [printError, setPrintError] = useState("");
+  const [printDialogOpen, setPrintDialogOpen] = useState(false);
 
   /* ================= DERIVED VALUES ================= */
   const prinCode = getValue(invoice, "prin_code") || "";
@@ -148,6 +269,10 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
   const toDate = getValue(invoice, "to_date");
   const hasExistingData = !!existingData && Object.keys(existingData).length > 0;
   const consolidatedInvNo = getValue(invoice, "consolidated_invno") || invoiceNo;
+  const currCode = getValue(invoice, "curr_code") || "";
+
+  // Report Print Type
+  const report_type = ['grouped','activitywise']
 
   // Jobs already added to the invoice (Job Details grid) — passed to JobSelectionModal
   // so it can exclude them from the pickable list instead of showing duplicates.
@@ -172,6 +297,53 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
         setLines([]);
       }
     })();
+  }, [prinCode, invoiceNo, user?.loginid, user?.company_code]);
+
+  // Re-seed jobSelectionRows from jobs already linked to this invoice (SELECTED = 'Y')
+  // so an edit-and-save (without touching "Select Job") still re-sends them — otherwise
+  // jobSelection stays empty for existing invoices even though Job Details shows rows.
+  useEffect(() => {
+    if (!user?.loginid || !user?.company_code || !prinCode || !invoiceNo) return;
+    (async () => {
+      try {
+        const response = await getInvoiceJobSelection({
+          loginid: user.loginid ?? "",
+          company_code: user.company_code ?? "",
+          prin_code: prinCode,
+          invoice_no: invoiceNo,
+          from_date: toDDMMYYYY(fromDate),
+          to_date: toDDMMYYYY(toDate),
+        });
+        console.log(
+          "[DEBUG] getInvoiceJobSelection raw response for invoiceNo:",
+          invoiceNo,
+          JSON.stringify(response, null, 2),
+        );
+        const alreadyLinked = (Array.isArray(response) ? response : [])
+          .filter((row: any) => (row.selected ?? row.SELECTED) === "Y")
+          .map((row: any) => ({
+            job_no: row.job_no ?? row.JOB_NO ?? "",
+            act_code: row.act_code ?? row.ACT_CODE ?? "",
+            act_group_name: row.act_group_name ?? row.ACT_GROUP_NAME ?? "",
+            activity: row.activity ?? row.ACTIVITY ?? "",
+            invoice_no: row.invoice_no ?? row.INVOICE_NO ?? "",
+            prin_code: row.prin_code ?? row.PRIN_CODE ?? prinCode,
+            quantity: Number(row.quantity ?? row.QUANTITY ?? 0),
+            bill: Number(row.bill ?? row.BILL ?? 0),
+            job_date: row.job_date ?? row.JOB_DATE ?? null,
+            // Real SRNO on the job's own source invoice — required by the proc's
+            // WHERE clause to find and re-link the correct TN_INVOICE_DET row.
+            source_srno: row.srno ?? row.SRNO ?? null,
+          }));
+        console.log("[DEBUG] alreadyLinked (selected=Y, filtered) for jobSelectionRows:", alreadyLinked);
+        setJobSelectionRows(alreadyLinked);
+      } catch {
+        setJobSelectionRows([]);
+      }
+    })();
+    // Only re-run on invoice identity change — new picks via the modal are appended
+    // separately in handleJobSelect and shouldn't be wiped out by this effect re-firing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prinCode, invoiceNo, user?.loginid, user?.company_code]);
 
   /* ================= HANDLERS ================= */
@@ -204,6 +376,14 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
     return { count: storageLines.length, totalQty, totalAmount };
   }, [storageLines]);
 
+  // Billing tab totals strip — job bill total + storage total + grand total.
+  // Purely derived/display, doesn't touch what actually gets sent on save.
+  const billingTotals = useMemo(() => {
+    const jobTotal = groupedLines.reduce((sum, row) => sum + Number(row.bill_amount || 0), 0);
+    const storageTotal = aggregatedStorage?.totalAmount ?? 0;
+    return { jobTotal, storageTotal, grandTotal: jobTotal + storageTotal };
+  }, [groupedLines, aggregatedStorage]);
+
   const handleDeleteLine = (activity: string) => {
     if (!window.confirm("Remove this line item?")) return;
     setLines((prev) => prev.filter((r) => r.activity !== activity));
@@ -233,7 +413,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
       existingKeys.add(key);
 
       const line = {
-        srno: lines.length + newLines.length + 1,
+        srno: lines.length + newLines.length + 1, // local UI display order for this invoice's grid
         act_code: actCode,
         act_group_name: job.act_group_name ?? job.ACT_GROUP_NAME ?? "",
         activity: job.activity ?? job.ACTIVITY ?? "",
@@ -248,6 +428,9 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
         other_services: job.other_services ?? "",
         job_date: job.job_date ?? job.JOB_DATE ?? null,
         cancelled: false,
+        // Real SRNO on the job's own source invoice (from JobSelectionModal) — this is
+        // what jobSelection must send, NOT the local `srno` counter above.
+        source_srno: job.srno ?? job.SRNO ?? null,
       };
       newLines.push(line);
       newJobSelectionRows.push(line);
@@ -298,7 +481,9 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
         quantity: row.quantity,
         bill: row.bill,
         job_date: row.job_date,
-        srno: row.srno,
+        // Must be the source job's own SRNO on its own invoice (TN_INVOICE_DET),
+        // not any locally-generated UI sequence number.
+        srno: row.source_srno,
         selected: "Y",
       }));
 
@@ -328,6 +513,8 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
       ].map((row, index) => ({
         ...row,
         srno: index + 1,
+        INV_DESC1: getValue(invoice, "inv_desc1") ?? "",
+        INV_DESC2: getValue(invoice, "inv_desc2") ?? "",
       }));
 
       const result = await updateBillingApi({
@@ -347,7 +534,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
 
   // Backend returns raw HTML for the report — open it directly in a new tab
   // instead of rendering it inside a dialog/iframe.
-  const handlePrint = async () => {
+  const handlePrint = async (report_type: string) => {
     if (!prinCode || !invoiceNo) return;
     setPrintError("");
 
@@ -364,13 +551,12 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
     reportWindow.document.close();
 
     try {
-      const html = await getInvocieDetailReport(String(prinCode), String(invoiceNo), String(company_code));
+      const html = await getInvocieDetailReport(String(prinCode), String(invoiceNo), String(company_code), String(report_type));
       if (reportWindow.closed) return; // user closed the tab while we waited
       reportWindow.document.open();
       reportWindow.document.write(html);
       reportWindow.document.close();
     } catch (err) {
-      console.error("Invoice report error:", err);
       setPrintError("Failed to load report. Please try again.");
       if (!reportWindow.closed) {
         reportWindow.document.open();
@@ -403,6 +589,10 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
     };
   }, [invoice.curr_code]);
 
+  const jumpToSection = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   /* ================= RENDER ================= */
   return (
     <Dialog
@@ -414,7 +604,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
       footer={
         <div className="flex w-full items-center justify-between">
           {hasExistingData ? (
-            <Button variant="outline" onClick={handlePrint}>
+            <Button variant="outline" onClick={()=> setPrintDialogOpen(true)}>
               <Printer size={14} /> Print
             </Button>
           ) : <span />}
@@ -423,7 +613,10 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
               <X size={14} /> Cancel
             </Button>
             {!viewMode && (
-              <Button onClick={handleSave} disabled={saving}>
+              <Button
+                onClick={handleSave}
+                disabled={saving || (lines.length === 0 && storageLines.length === 0)}
+              >
                 {saving ? <LoaderCircle size={14} className="animate-spin" /> : <Save size={14} />} Save Invoice
               </Button>
             )}
@@ -462,78 +655,109 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
 
       {/* ── TAB 1: Invoice Details ── */}
       {tab === 0 && (
-        <div className="grid gap-3 lg:grid-cols-2">
-          <div className="grid gap-3">
-            <section>
-              <SectionHeader icon={Receipt} title="Invoice Information" subtitle="Principal, Invoice No & Period" />
-              <div className="grid grid-cols-2 gap-2">
-                <div className="col-span-2">
-                  <LookupField
-                    label="Principal Code"
-                    required
-                    compact
-                    value={prinCode}
-                    columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }]}
-                    valueField="prin_code"
-                    displayFields={["prin_code", "prin_name"]}
-                    loadOptions={() => getPrincipalDropdown(user?.company_code ?? "", user?.loginid ?? "")}
-                    onChange={(value, row) => {
-                      setInvoice((prev: any) => ({
-                        ...prev,
-                        prin_code: value,
-                        curr_code: row ? (getValue(row, "curr_code") ?? "") : "",
-                      }));
-                    }}
-                    disabled={viewMode}
-                  />
-                </div>
-                {HEADER_FIELDS.map(({ label, key, type }) => (
-                  <label key={key} className="field">
-                    <span className="text-xs">{label}</span>
-                    <Input
-                      className="h-8 text-sm"
-                      type={type === "date" ? "date" : "text"}
-                      value={type === "date" ? toDateInputValue(getValue(invoice, key)) : getValue(invoice, key) ?? ""}
-                      onChange={(e) => setField(key, e.target.value)}
-                      disabled={viewMode}
-                    />
-                  </label>
-                ))}
-              </div>
-            </section>
-
-            <section>
-              <SectionHeader icon={FileText} title="Status" subtitle="Dispatch & Invoice Status" />
-              <FieldGrid fields={STATUS_FIELDS} invoice={invoice} onChange={setField} disabled={viewMode} />
-            </section>
-
-            <section>
-              <SectionHeader icon={Receipt} title="Currency" subtitle="Currency Code & Exchange Rate" />
-              <FieldGrid fields={CURRENCY_FIELDS} invoice={invoice} onChange={setField} disabled={viewMode} />
-            </section>
+        <div className="grid gap-3">
+          {/* Section-jump nav — sticky within the Dialog's own scroll container
+              (no ref into Dialog needed; scrollIntoView finds the nearest
+              scrollable ancestor on its own). Only shown on this tab since
+              Billing Details is short enough not to need it. */}
+          <div className="sticky top-0 z-10 -mx-1 flex flex-wrap gap-1.5 bg-card/95 px-1 py-1 backdrop-blur-sm">
+            {FORM_SECTIONS.map((section) => (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => jumpToSection(section.id)}
+                className="rounded-full border px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:border-primary/40 hover:text-primary"
+              >
+                {section.label}
+              </button>
+            ))}
           </div>
 
-          <div className="grid gap-3">
-            <section>
-              <SectionHeader icon={FileText} title="References" subtitle="Account, Credit Note & Principal References" />
-              <FieldGrid fields={REFERENCE_FIELDS} invoice={invoice} onChange={setField} disabled={viewMode} />
-            </section>
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div className="grid gap-3">
+              <FormSection id="sec-invoice-info" icon={Receipt} title="Invoice Information" subtitle="Principal, Invoice No & Period">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="col-span-2">
+                    <LookupField
+                      label="Principal Code"
+                      required
+                      compact
+                      showLabelInCompact
+                      value={prinCode}
+                      columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }]}
+                      valueField="prin_code"
+                      displayFields={["prin_code", "prin_name"]}
+                      loadOptions={() => getPrincipalDropdown(user?.company_code ?? "", user?.loginid ?? "")}
+                      onChange={(value, row) => {
+                        setInvoice((prev: any) => ({
+                          ...prev,
+                          prin_code: value,
+                          curr_code: row ? (getValue(row, "curr_code") ?? "") : "",
+                        }));
+                      }}
+                      disabled={viewMode}
+                    />
+                  </div>
+                  {HEADER_FIELDS.map(({ label, key, type, required }) => (
+                    <label key={key} className="field">
+                      <FieldLabel label={label} required={required} />
+                      <Input
+                        className="h-8 text-sm"
+                        type={type === "date" ? "date" : "text"}
+                        value={type === "date" ? toDateInputValue(getValue(invoice, key)) : getValue(invoice, key) ?? ""}
+                        onChange={(e) => setField(key, e.target.value)}
+                        disabled={viewMode}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </FormSection>
 
-            <section>
-              <SectionHeader icon={FileText} title="Description" subtitle="Invoice Descriptions" />
-              <FieldGrid fields={DESCRIPTION_FIELDS} invoice={invoice} onChange={setField} disabled={viewMode} />
-            </section>
+              <FormSection id="sec-status" icon={FileText} title="Status" subtitle="Dispatch & Invoice Status">
+                <FieldGrid fields={STATUS_FIELDS} invoice={invoice} onChange={setField} disabled={viewMode} />
+              </FormSection>
+            </div>
+
+            <div className="grid gap-3">
+              <FormSection id="sec-references" icon={FileText} title="References" subtitle="Account, Credit Note & Principal References">
+                <FieldGrid fields={REFERENCE_FIELDS} invoice={invoice} onChange={setField} disabled={viewMode} />
+              </FormSection>
+
+              <FormSection id="sec-description" icon={FileText} title="Description" subtitle="Invoice Descriptions">
+                <FieldGrid fields={DESCRIPTION_FIELDS} invoice={invoice} onChange={setField} disabled={viewMode} />
+              </FormSection>
+
+              <FormSection id="sec-currency" icon={Receipt} title="Currency" subtitle="Currency Code & Exchange Rate">
+                <FieldGrid
+                  fields={CURRENCY_FIELDS}
+                  invoice={invoice}
+                  onChange={setField}
+                  disabled={viewMode}
+                  hint="Auto-filled from the selected Principal — not editable here."
+                />
+              </FormSection>
+            </div>
           </div>
         </div>
       )}
 
       {/* ── TAB 2: Billing Details (Job + Storage) ── */}
       {tab === 1 && (
-        <div className="grid gap-4">
+        <div className="grid gap-3">
           {/* Job Details */}
-          <div className="grid gap-2">
-            <p className="m-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Job Details</p>
-            <div className="max-h-[280px] overflow-auto rounded-md border">
+          <BillingSection
+            icon={Receipt}
+            title="Job Details"
+            subtitle="Activities billed on this invoice"
+            action={
+              !viewMode && (
+                <Button size="sm" variant="outline" onClick={() => setJobModalOpen(true)} disabled={!prinCode}>
+                  + Select Job
+                </Button>
+              )
+            }
+          >
+            <div className="max-h-[240px] overflow-auto rounded-md border">
               <Table>
                 <TableHeader className="sticky top-0 z-10 bg-secondary/70">
                   <TableRow>
@@ -551,8 +775,13 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
                 <TableBody>
                   {groupedLines.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="py-6 text-center text-muted-foreground">
-                        No data found
+                      <TableCell colSpan={9} className="py-0">
+                        <EmptyTableState
+                          icon={Receipt}
+                          message={prinCode ? "No jobs added to this invoice yet." : "Pick a Principal on the Invoice Details tab first."}
+                          actionLabel={prinCode && !viewMode ? "Select Job" : undefined}
+                          onAction={() => setJobModalOpen(true)}
+                        />
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -577,12 +806,22 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
                 </TableBody>
               </Table>
             </div>
-          </div>
+          </BillingSection>
 
           {/* Storage Details — ALWAYS ONE aggregated row, never multiple */}
-          <div className="grid gap-2">
-            <p className="m-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Storage Details</p>
-            <div className="max-h-[280px] overflow-auto rounded-md border">
+          <BillingSection
+            icon={Package}
+            title="Storage Details"
+            subtitle="Aggregated storage charges for this invoice"
+            action={
+              !viewMode && (
+                <Button size="sm" variant="outline" onClick={() => setStorageModalOpen(true)} disabled={!prinCode}>
+                  + Select Storage
+                </Button>
+              )
+            }
+          >
+            <div className="max-h-[240px] overflow-auto rounded-md border">
               <Table>
                 <TableHeader className="sticky top-0 z-10 bg-secondary/70">
                   <TableRow>
@@ -595,8 +834,13 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
                 <TableBody>
                   {!aggregatedStorage ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="py-6 text-center text-muted-foreground">
-                        No storage lines added
+                      <TableCell colSpan={4} className="py-0">
+                        <EmptyTableState
+                          icon={Package}
+                          message={prinCode ? "No storage charges added to this invoice yet." : "Pick a Principal on the Invoice Details tab first."}
+                          actionLabel={prinCode && !viewMode ? "Select Storage" : undefined}
+                          onAction={() => setStorageModalOpen(true)}
+                        />
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -614,17 +858,27 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
                 </TableBody>
               </Table>
             </div>
-          </div>
+          </BillingSection>
 
-          {/* Select Job / Select Storage — side by side, left aligned */}
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => setJobModalOpen(true)} disabled={viewMode || !prinCode}>
-              Select Job
-            </Button>
-            <Button variant="outline" onClick={() => setStorageModalOpen(true)} disabled={viewMode || !prinCode}>
-              <Package size={14} /> Select Storage
-            </Button>
-          </div>
+          {/* Totals strip — fills the dead space that used to sit below the
+              Select Job/Storage buttons with something actually useful: what
+              this invoice adds up to so far. Display-only, doesn't affect save. */}
+          <section className="rounded-md border bg-secondary/30 p-3">
+            <div className="flex flex-wrap items-center justify-end gap-6">
+              <div className="text-right">
+                <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Job total</p>
+                <p className="m-0 text-sm font-semibold text-foreground">{billingTotals.jobTotal.toFixed(3)} {currCode}</p>
+              </div>
+              <div className="text-right">
+                <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Storage total</p>
+                <p className="m-0 text-sm font-semibold text-foreground">{billingTotals.storageTotal.toFixed(3)} {currCode}</p>
+              </div>
+              <div className="text-right">
+                <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-primary">Grand total</p>
+                <p className="m-0 text-base font-bold text-primary">{billingTotals.grandTotal.toFixed(3)} {currCode}</p>
+              </div>
+            </div>
+          </section>
         </div>
       )}
 
@@ -649,6 +903,51 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
           onClose={() => setStorageModalOpen(false)}
           onSelect={handleStorageSelect}
         />
+      )}
+      {printDialogOpen && (
+        <Dialog
+          open
+          title="Print Invoice"
+          onClose={() => setPrintDialogOpen(false)}
+          compact
+        >
+          <div className="grid gap-3 py-1">
+            <p className="m-0 text-sm text-muted-foreground">
+              Choose how you want the invoice report to be generated.
+            </p>
+
+            <div className="grid gap-2">
+              {report_type.map((type) => {
+                const isGrouped = type === "grouped";
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => handlePrint(type)}
+                    className="group flex w-full items-center gap-3 rounded-lg border border-border bg-background px-3 py-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary group-hover:bg-primary/15">
+                      <Printer size={16} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="m-0 text-sm font-semibold text-foreground">
+                        {isGrouped ? "Grouped" : "Activity-wise"}
+                      </p>
+                      <p className="m-0 text-xs text-muted-foreground">
+                        {isGrouped
+                          ? "Summary by activity groups"
+                          : "Detailed breakdown per activity"}
+                      </p>
+                    </div>
+                    <span className="text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
+                      Print →
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </Dialog>
       )}
     </Dialog>
   );

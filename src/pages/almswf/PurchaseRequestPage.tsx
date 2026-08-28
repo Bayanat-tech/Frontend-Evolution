@@ -82,15 +82,13 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
   const [flowConfirm, setFlowConfirm] = useState({
     open: false,
     loading: false,
-    rows: [] as { flowCode: string; flowDescription: string }[],
+    rows: [] as { flowCode: string; flowDescription: string; divCode: string; divName: string }[],
     selectedFlowCode: "",
   });
-
   // ── Query with proper typing ──────────────────────────────────────────────
   const activeCode3 = TAB_CODE3[activeTab];
   const isPoGeneratedTab = activeCode3 === "POGENERATED";
 
-  // ✅ FIXED: Use separate query for PO Generated tab
   const prQuery = useQuery({
     queryKey: ["purchase-request-page", loginid, companyCode, activeCode3, "pr"],
     queryFn: () => almsCommonSelect<TPurchaseSummaryTxn>({
@@ -117,7 +115,6 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
     enabled: !!loginid && !!companyCode && isPoGeneratedTab,
   });
 
-  // Select correct data based on tab
   const data = isPoGeneratedTab ? poQuery.data : prQuery.data;
   const isLoading = isPoGeneratedTab ? poQuery.isLoading : prQuery.isLoading;
   const isError = isPoGeneratedTab ? poQuery.isError : prQuery.isError;
@@ -131,7 +128,6 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
     if (!query.trim()) return rows;
     const q = query.toLowerCase();
 
-    // For PO Generated tab, filter PO data
     if (isPoGeneratedTab) {
       return (rows as TPPOGenerated[]).filter((row) =>
         [row.PO_NUMBER, row.PR_NUMBER, row.SUPPLIER_CODE, row.SUPPLIER_NAME, row.PR_DESCRIPTION]
@@ -140,7 +136,6 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
       );
     }
 
-    // For PR tabs
     return (rows as TPurchaseSummaryTxn[]).filter((row) =>
       [row.REQUEST_NUMBER, (row as any).DESCRIPTION, (row as any).SUPPLIER, (row as any).SUPPLIER_NAME]
         .filter(Boolean)
@@ -158,6 +153,7 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
     }
   }, [isError, error]);
 
+
   // ── Popup handlers ──────────────────────────────────────────────────────────
   const openAddPopup = async () => {
     setFlowConfirm({ open: true, loading: true, rows: [], selectedFlowCode: "" });
@@ -170,16 +166,34 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
         code3: "Admin",
         code4: "",
       });
+
+      // Fetch divisions
+      const divisions = await almsCommonSelect({
+        parameter: "PS_PREQUEST_ENTRY_DIVISION",
+        loginid,
+        code1: companyCode,
+        code2: loginid,
+        code3: "",
+        code4: ""
+      });
+
       const flowRows = rawRows
-        .map((row) => ({
-          flowCode: String(row.FLOW_CODE ?? row.flow_code ?? ""),
-          flowDescription: String(row.FLOW_DESCRIPTION ?? row.flow_description ?? ""),
-        }))
+        .map((row) => {
+          const flowCode = String(row.FLOW_CODE ?? row.flow_code ?? "");
+          const flowDivCode = String(row.DIV_CODE ?? "");
+          const div = divisions.find((d: any) => d.DIV_CODE === flowDivCode);
+          return {
+            flowCode: flowCode,
+            flowDescription: String(row.FLOW_DESCRIPTION ?? row.flow_description ?? ""),
+            divCode: flowDivCode,
+            divName: div ? String(div.DIV_NAME || "") : "",
+          };
+        })
         .filter((row) => row.flowCode);
 
       if (flowRows.length === 0) {
         setFlowConfirm({ open: false, loading: false, rows: [], selectedFlowCode: "" });
-        setNotice({ type: "error", message: "No approval flow found for this user. Please check MS_APPROVER_LEVELS setup." });
+        setNotice({ type: "error", message: "No approval flow found for this user." });
         return;
       }
       setFlowConfirm({
@@ -212,6 +226,10 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
   };
 
   const handleActions = (actionType: "view" | "edit", row: TPurchaseSummaryTxn) => {
+    // Get flow code and description from the row data
+    const flowCode = (row as any).FLOW_CODE || "";
+    const flowDescription = (row as any).FLOW_DESCRIPTION || "";
+
     setTaskPopup({
       open: true,
       title: `${actionType === "edit" ? "Edit" : "View"} PR - ${row.REQUEST_NUMBER}`,
@@ -219,8 +237,8 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
         existingData: row,
         isEditMode: actionType === "edit",
         isViewMode: actionType === "view",
-        flowCode: "",
-        flowDescription: "",
+        flowCode: flowCode,
+        flowDescription: flowDescription,
       },
     });
   };
@@ -229,7 +247,6 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
     setTaskPopup((prev) => ({ ...prev, open: false }));
     if (refresh) {
       queryClient.invalidateQueries({ queryKey: ["purchase-request-page", loginid, companyCode] });
-      setNotice({ type: "success", message: "Purchase request updated successfully" });
     }
   };
 
@@ -240,14 +257,12 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
 
   // ── View PO Handler ────────────────────────────────────────────────────────
   const handlePoView = (row: TPPOGenerated) => {
-    // ✅ Handle null PR_NUMBER
     const prNumber = row.PR_NUMBER || '';
 
     setTaskPopup({
       open: true,
       title: `PO - ${row.PO_NUMBER}`,
       data: {
-        // ✅ Only pass PR number if it exists
         existingData: prNumber ? { REQUEST_NUMBER: prNumber } as any : null,
         isEditMode: false,
         isViewMode: true,
@@ -319,16 +334,16 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
         },
       },
       {
-  accessorKey: "next_action_by",
-  header: "Next Action By",
-  cell: ({ row }) => {
-    const r = row.original as any;
-    if (!r.NEXT_ACTION_BY) return "—";
-    return r.NEXT_ACTION_BY_NAME
-      ? `${r.NEXT_ACTION_BY} - ${r.NEXT_ACTION_BY_NAME}`
-      : r.NEXT_ACTION_BY;
-  },
-},
+        accessorKey: "next_action_by",
+        header: "Next Action By",
+        cell: ({ row }) => {
+          const r = row.original as any;
+          if (!r.NEXT_ACTION_BY) return "—";
+          return r.NEXT_ACTION_BY_NAME
+            ? `${r.NEXT_ACTION_BY} - ${r.NEXT_ACTION_BY_NAME}`
+            : r.NEXT_ACTION_BY;
+        },
+      },
       {
         id: "actions",
         header: "Actions",
@@ -359,8 +374,6 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
   );
 
   // ── PO Columns ─────────────────────────────────────────────────────────────
-  // In PurchaseRequestPage.tsx - poColumns
-
   const poColumns = useMemo<ColumnDef<TPPOGenerated>[]>(
     () => [
       {
@@ -382,7 +395,6 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
         header: "Supplier",
         cell: ({ row }) => {
           const r = row.original;
-          // ✅ Handle null values
           if (r.SUPPLIER_CODE && r.SUPPLIER_NAME) {
             return `${r.SUPPLIER_CODE} - ${r.SUPPLIER_NAME}`;
           }
@@ -397,7 +409,7 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
         header: "PR Number",
         cell: ({ row }) => (
           <span className="font-medium text-blue-600">
-            {row.original.PR_NUMBER || "—"}  {/* ✅ Handle null */}
+            {row.original.PR_NUMBER || "—"}
           </span>
         ),
       },
@@ -443,7 +455,6 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
     []
   );
 
-  // ── Select columns based on tab ──────────────────────────────────────────
   const columns = isPoGeneratedTab ? poColumns : prColumns;
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -546,18 +557,20 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
       </div>
 
       {/* ─── Approval Flow confirmation popup ─── */}
+      // ─── Approval Flow confirmation popup ───
+      {/* ─── Approval Flow confirmation popup ─── */}
       <Dialog
         open={flowConfirm.open}
-        wide
-        title="Approval Flow"
-        description="Select the approval flow this purchase request will follow."
+        wide={false}
+        title="Select Approval Flow"
+        description="Choose the approval flow for this purchase request"
         onClose={() => setFlowConfirm((prev) => ({ ...prev, open: false }))}
         footer={
           <>
-            <Button variant="outline" onClick={() => setFlowConfirm((prev) => ({ ...prev, open: false }))}>
+            <Button variant="outline" size="sm" onClick={() => setFlowConfirm((prev) => ({ ...prev, open: false }))}>
               Cancel
             </Button>
-            <Button disabled={flowConfirm.loading || !flowConfirm.selectedFlowCode} onClick={confirmFlowAndOpenPR}>
+            <Button disabled={flowConfirm.loading || !flowConfirm.selectedFlowCode} size="sm" onClick={confirmFlowAndOpenPR}>
               OK
             </Button>
           </>
@@ -566,19 +579,20 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
         {flowConfirm.loading ? (
           <p className="m-0 text-sm text-muted-foreground">Loading approval flow...</p>
         ) : (
-          <div className="max-h-[420px] overflow-auto rounded-md border">
-            <table className="w-full min-w-[520px] text-sm">
-              <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
+          <div className="max-h-[320px] overflow-auto rounded-md border">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-muted text-[10px] uppercase tracking-wide text-muted-foreground">
                 <tr>
-                  <th className="w-12 px-3 py-2 text-center"></th>
-                  <th className="px-3 py-2 text-left">Flow Code</th>
-                  <th className="px-3 py-2 text-left">Description</th>
+                  <th className="w-8 px-2 py-1.5 text-center"></th>
+                  <th className="px-2 py-1.5 text-left whitespace-nowrap">Flow Code</th>
+                  <th className="px-2 py-1.5 text-left whitespace-nowrap">Description</th>
+                  <th className="px-2 py-1.5 text-left whitespace-nowrap">Division</th>
                 </tr>
               </thead>
               <tbody>
                 {flowConfirm.rows.length === 0 ? (
                   <tr>
-                    <td className="px-3 py-6 text-center text-muted-foreground" colSpan={3}>No approval flow found</td>
+                    <td className="px-3 py-4 text-center text-muted-foreground" colSpan={4}>No approval flow found</td>
                   </tr>
                 ) : flowConfirm.rows.map((row) => (
                   <tr
@@ -586,16 +600,26 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
                     className="cursor-pointer border-t odd:bg-muted/20 hover:bg-accent"
                     onClick={() => setFlowConfirm((prev) => ({ ...prev, selectedFlowCode: row.flowCode }))}
                   >
-                    <td className="px-3 py-2 text-center">
+                    <td className="px-2 py-1.5 text-center">
                       <input
                         type="radio"
                         name="flow-code"
+                        className="h-3 w-3"
                         checked={flowConfirm.selectedFlowCode === row.flowCode}
                         onChange={() => setFlowConfirm((prev) => ({ ...prev, selectedFlowCode: row.flowCode }))}
                       />
                     </td>
-                    <td className="px-3 py-2 font-semibold">{row.flowCode}</td>
-                    <td className="px-3 py-2">{row.flowDescription || "—"}</td>
+                    <td className="px-2 py-1.5 font-semibold whitespace-nowrap">{row.flowCode}</td>
+                    <td className="px-2 py-1.5 whitespace-nowrap">{row.flowDescription || "—"}</td>
+                    <td className="px-2 py-1.5 whitespace-nowrap">
+                      {row.divCode ? (
+                        <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-800 whitespace-nowrap">
+                          {row.divCode} {row.divName ? `- ${row.divName}` : ""}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

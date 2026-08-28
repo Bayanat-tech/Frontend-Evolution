@@ -40,6 +40,7 @@ import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
 import { JobconsumLinesTable } from "./JobConsumdetails"; // ensure this file exports JobconsumLinesTable
 import { fetchPurchaseOrderDetail, fetchPurchaseOrderHeader, fetchexpenseDetailsDetail, fetchjmiConsumDetailsDetail, runWorkflow } from "./JobProductionutils";
 import { OtherExpensesTable } from "./JobExpenseDetail";
+import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 
 export type { PurchaseOrderEditorState };
 
@@ -152,6 +153,7 @@ export function JobProductionOrderEditor({
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
+    const [attachmentOpen, setAttachmentOpen] = useState(false);
 
   // Reset form when editor changes
   useEffect(() => {
@@ -186,7 +188,7 @@ export function JobProductionOrderEditor({
         setForm((current) => {
           const nextForm = {
             ...current,
-            doc_no: numberOrZero(headerRaw.doc_no || docNo),
+            doc_no: headerRaw.doc_no || docNo,
             doc_date: toDateInputValue(headerRaw.doc_date) || current.doc_date,
             quotn_no: text((headerRaw as any)?.quotn_no || (current as any)?.quotn_no),
             quotn_date: toDateInputValue((headerRaw as any)?.quotn_date) || (current as any)?.quotn_date,
@@ -223,7 +225,7 @@ export function JobProductionOrderEditor({
             canceled: text(headerRaw.canceled || current.canceled || "N"),
           };
 
-          return nextForm as PurchaseOrderForm;
+          return nextForm as unknown as PurchaseOrderForm;
         });
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
         setJobConsumRows(
@@ -531,7 +533,9 @@ export function JobProductionOrderEditor({
                   <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
                 </>
               )}
-              <Button type="button" variant="secondary"><Paperclip size={15} /> Files</Button>
+                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                <Paperclip size={15} /> Files
+              </Button>
               <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
             </div>
           </div>
@@ -740,6 +744,18 @@ export function JobProductionOrderEditor({
         onClearError={() => setRejectError("")}
         onClose={closeRejectDialog}
         onConfirm={confirmReject}
+      />
+
+       <AttachmentDialog
+        open={attachmentOpen}
+        onClose={() => setAttachmentOpen(false)}
+        requestNumber={form.doc_no ? String(form.doc_no) : ""}
+        title="Job Production Attachments"
+        module="JP"
+        type="Job Production"
+        companyCode={user?.company_code || ""}
+        loginId={user?.loginid || ""}
+        flowLevel={effectiveFlowLevel}
       />
     </>
   );

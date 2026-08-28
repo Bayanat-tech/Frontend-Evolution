@@ -109,7 +109,7 @@ export function InboundJobListing() {
         cell: ({ row }) => (
           <div className="flex items-center gap-1">
             <Button size="icon" variant="ghost" title="Open job"
-              onClick={() => navigate(`view/${value(row.original, "job_no")}/shipment_details?principal_code=${value(row.original, "prin_code")}`)}>
+              onClick={() => navigate(`view/${value(row.original, "job_no")}/job_details?principal_code=${value(row.original, "prin_code")}`)}>
               <Eye size={14} />
             </Button>
             {activeTab !== "cancel" && (
