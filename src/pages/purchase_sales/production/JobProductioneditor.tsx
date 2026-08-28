@@ -188,7 +188,7 @@ export function JobProductionOrderEditor({
         setForm((current) => {
           const nextForm = {
             ...current,
-            doc_no: text(headerRaw.doc_no ?? docNo),
+            doc_no: headerRaw.doc_no || docNo,
             doc_date: toDateInputValue(headerRaw.doc_date) || current.doc_date,
             quotn_no: text((headerRaw as any)?.quotn_no || (current as any)?.quotn_no),
             quotn_date: toDateInputValue((headerRaw as any)?.quotn_date) || (current as any)?.quotn_date,
@@ -225,7 +225,7 @@ export function JobProductionOrderEditor({
             canceled: text(headerRaw.canceled || current.canceled || "N"),
           };
 
-          return nextForm as PurchaseOrderForm;
+          return nextForm as unknown as PurchaseOrderForm;
         });
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
         setJobConsumRows(

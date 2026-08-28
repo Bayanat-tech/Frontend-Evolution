@@ -108,7 +108,7 @@ export function ProductionJobOrderEditor({
           const rawHeader = headerRaw as Record<string, unknown>;
           return {
             ...current,
-            doc_no: text(headerRaw.doc_no ?? docNo),
+            doc_no: headerRaw.doc_no || docNo, // keep as number
             doc_date: toDateInputValue(headerRaw.doc_date) || current.doc_date,
             quotn_no: text(String((rawHeader.quotn_no as string | number | undefined) ?? current.quotn_no)),
             quotn_date: toDateInputValue(headerRaw.quotn_date) || current.quotn_date,
