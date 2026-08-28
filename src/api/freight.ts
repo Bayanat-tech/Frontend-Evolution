@@ -75,6 +75,24 @@ export async function freightDelete(params: FreightProcedureParams) {
   return response.data;
 }
 
+export async function getFreightInvoiceDetailReport(
+  prinCode: string,
+  invoiceNo: string,
+  companyCode: string,
+  reportType: string
+): Promise<string> {
+  const response = await api.get("/api/freight/invoice/report/html", {
+    params: {
+      prin_code: prinCode,
+      invoice_no: invoiceNo,
+      company_code: companyCode,
+      report_type: reportType,
+    },
+    responseType: "text",
+  });
+  return response.data;
+}
+
 function normalizeParams(params: FreightProcedureParams) {
   return {
     code1: "NULL",

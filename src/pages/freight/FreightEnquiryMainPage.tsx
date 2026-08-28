@@ -1198,7 +1198,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
   return (
     <>
-    <form className="freight-dense-form" onSubmit={saveEnquiry}>
+    <form className="freight-dense-form freight-ui-standard" onSubmit={saveEnquiry}>
       <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
@@ -1536,7 +1536,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 <table className="border-collapse text-[11px]" style={{ width: "max-content" }}>
                   <thead>
                     <tr className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 text-left text-[10px] font-bold uppercase tracking-wide text-slate-700">
-                      <th className="px-1.5 py-1.5" style={{ width: "90px" }}>Activity Code</th>
+                      <th className="px-1.5 py-1.5" style={{ width: "120px" }}>Activity Code</th>
                       <th className="px-1.5 py-1.5" style={{ width: "200px" }}>Activity Name</th>
                       <th className="px-1.5 py-1.5" style={{ width: "70px" }}>Mode</th>
                       <th className="px-1.5 py-1.5" style={{ width: "160px" }}>Origin</th>

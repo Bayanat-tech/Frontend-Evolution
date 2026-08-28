@@ -11,7 +11,6 @@ import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 import {
   ActionKey,
   PurchaseOrderEditorState,
-  PurchaseOrderForm,
   PurchaseOrderLineRow,
   SendBackUserOption,
 } from "../../purchase_sales/purchase/Purchaseordertypes";
@@ -25,7 +24,7 @@ import { PurchaseOrderHeaderForm } from "../../purchase_sales/purchase/Purchaseo
 import { PurchaseOrderLinesTable } from "../../purchase_sales/purchase/Purchaseorderlinestable";
 import { SendBackDialog } from "../../purchase_sales/purchase/Sendbackdialog";
 import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
-import { PROCESSSDN, PROCESSSO, SalesConfig, SalesOrderLineRow, SO_DOC_TYPE } from "./SalesOrdertypes";
+import { PROCESSSDN, PROCESSSO, PurchaseOrderForm, SalesConfig, SalesOrderLineRow, SO_DOC_TYPE } from "./SalesOrdertypes";
 import {
   emptyForm,
   emptyLineRow,
@@ -38,6 +37,9 @@ import {
 } from "./SalesOrderutils";
 import ReportDialogPage from "../../../components/ReportDialogPage";
 import { SalesDNReport, downloadSalesDNExcel } from "./SalesDNReport";
+import { SalesDNHeaderForm } from "./SaleDNHeaderfrom";
+import { SalesDnDetailsTable } from "./salesDNDetails";
+import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 
 export type { PurchaseOrderEditorState };
 
@@ -75,6 +77,7 @@ export function SalesDNEditor({
   const [sendBackError, setSendBackError] = useState("");
   const [sendBackUsers, setSendBackUsers] = useState<SendBackUserOption[]>([]);
   const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
+    const [attachmentOpen, setAttachmentOpen] = useState(false);
 
   // ---- Reject dialog state ----
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -155,6 +158,12 @@ export function SalesDNEditor({
           ...current,
           doc_no: text(headerRaw.doc_no || docNo),
           doc_date: toDateInputValue(headerRaw.doc_date) || current.doc_date,
+          so_doc_no: text(headerRaw.so_doc_no || headerRaw.ref_doc_no || current.so_doc_no),
+          so_doc_date: toDateInputValue(headerRaw.so_doc_date || headerRaw.ref_doc_date) || current.so_doc_date,
+          so_ac_code: text(headerRaw.so_ac_code || headerRaw.ref_ac_code || current.so_ac_code),
+          so_payment_terms: text(headerRaw.so_payment_terms || headerRaw.payment_terms || headerRaw.pay_terms || current.so_payment_terms),
+          so_dlvr_term: text(headerRaw.so_dlvr_term || headerRaw.delivery_term || headerRaw.dlvr_term || current.so_dlvr_term),
+          total_so_amount: numberOrZero(headerRaw.total_so_amount || headerRaw.so_amount || headerRaw.total_amount || current.total_so_amount),
           ref_no: text(headerRaw.quotn_no || current.ref_no),
           ref_date: toDateInputValue(headerRaw.ref_date) || current.ref_date,
           div_code: text(headerRaw.div_code || current.div_code),
@@ -314,7 +323,6 @@ export function SalesDNEditor({
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
-    if (!form.curr_code) return setError("Currency is required");
     return runAction(
       "submit",
       async () => {
@@ -535,7 +543,7 @@ export function SalesDNEditor({
                   </Button>
                 </>
               )}
-              <Button type="button" variant="secondary">
+               <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
                 <Paperclip size={15} /> Files
               </Button>
               <Button
@@ -573,7 +581,7 @@ export function SalesDNEditor({
                 onClose={() => setError("")}
               />
 
-              <PurchaseOrderHeaderForm
+              <SalesDNHeaderForm
                 form={form}
                 setForm={setForm}
                 docType={SO_DOC_TYPE.SDN}
@@ -583,9 +591,10 @@ export function SalesDNEditor({
                 editMode={editMode}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
+                 setdetails={setRows}
               />
 
-              <PurchaseOrderLinesTable
+              <SalesDnDetailsTable
                 rows={rows}
                 form={form}
                 setdetails={setRows}
@@ -746,7 +755,19 @@ export function SalesDNEditor({
           onClose={closeReport}
           excel={() => void handleExcel()}
         />
+
       )}
+             <AttachmentDialog
+              open={attachmentOpen}
+              onClose={() => setAttachmentOpen(false)}
+              requestNumber={form.doc_no ? String(form.doc_no) : ""}
+              title="Sales DN Attachments"
+              module="SDN"
+              type="Sales DN"
+              companyCode={user?.company_code || ""}
+              loginId={user?.loginid || ""}
+              flowLevel={effectiveFlowLevel}
+            />
     </>
   );
 }
