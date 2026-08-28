@@ -188,7 +188,7 @@ export function JobProductionOrderEditor({
         setForm((current) => {
           const nextForm = {
             ...current,
-            doc_no: numberOrZero(headerRaw.doc_no || docNo),
+            doc_no: text(headerRaw.doc_no ?? docNo),
             doc_date: toDateInputValue(headerRaw.doc_date) || current.doc_date,
             quotn_no: text((headerRaw as any)?.quotn_no || (current as any)?.quotn_no),
             quotn_date: toDateInputValue((headerRaw as any)?.quotn_date) || (current as any)?.quotn_date,
