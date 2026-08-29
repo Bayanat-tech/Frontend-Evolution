@@ -386,6 +386,12 @@ const AppraisalViewTabsPage: React.FC = () => {
   const [finalApproved,  setFinalApproved]  = useState<string>(
     prefetchedRow ? (text(prefetchedRow.FINAL_APPROVED) || "NO") : "NO"
   );
+  // NEW: doc's creator — used to detect the "employee is their own HOD"
+  // self-rating case (CREATED_BY === EMPLOYEE_CODE). Backend's
+  // 'get_appraisal_flow_level' select must return CREATED_BY for this to work.
+  const [createdBy,      setCreatedBy]      = useState<string>(
+    prefetchedRow ? text(prefetchedRow.CREATED_BY) : ""
+  );
   const [taskTotal,      setTaskTotal]      = useState<number>(0);
   const [characterTotal, setCharacterTotal] = useState<number>(0);
   const [sentBackPopup,  setSentBackPopup]  = useState(false);
@@ -417,9 +423,22 @@ const AppraisalViewTabsPage: React.FC = () => {
   const reportPrintRef      = useRef<HTMLDivElement>(null);
 
   // ── Derived ────────────────────────────────────────────────────────────────
-  const isFinalized              = finalApproved === "YES";
-  const showSaveSubmitButtons    = !isFinalized && flowLevel >= 0 && flowLevel <= 2;
-  const showApproveRejectButtons = !isFinalized && flowLevel >= 3 && flowLevel <= 7;
+  const isFinalized = finalApproved === "YES";
+
+  // Employee is their own creator/HOD -> only Level 0 (their own self-rating
+  // fill) is a Draft/Submit step. From Level 1 onward (COO, CEO, HR) it's
+  // pure Approve/Sent Back/Reject, because Level 1's approver there is the
+  // COO, not a second rating step.
+  // Normal employee -> Level 0 (employee) and Level 1 (supervisor) are both
+  // Draft/Submit steps; Level 2 onward is Approve/Sent Back/Reject.
+  const employeeIsHOD =
+    !!createdBy && createdBy.trim().toUpperCase() === employeeCode.trim().toUpperCase();
+
+  const showSaveSubmitButtons =
+  !isFinalized && (employeeIsHOD ? flowLevel === 0 : flowLevel <= 2);
+const showApproveRejectButtons =
+  !isFinalized && (employeeIsHOD ? flowLevel >= 1 : flowLevel >= 3) && flowLevel <= 7;
+
   const finalRating              = calcFinalRating(taskTotal, characterTotal, weightageConfig);
   const showFinalRating          = taskTotal > 0 && characterTotal > 0;
   const [reportReady, setReportReady] = useState(false);
@@ -454,6 +473,7 @@ const AppraisalViewTabsPage: React.FC = () => {
           nextActionBy     = text(flowRes[0].NEXT_ACTION_BY).trim().toUpperCase();
           setFlowLevel(currentFlowLevel);
           setFinalApproved(text(flowRes[0].FINAL_APPROVED) || "NO");
+          setCreatedBy(text(flowRes[0].CREATED_BY));
         }
 
         if (weightageRes.length > 0) {
