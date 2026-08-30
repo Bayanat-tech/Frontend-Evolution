@@ -15,7 +15,7 @@ import {
 interface PoOrderRegisterParams {
     loginid: string;
     company_code: string;
-    fromdate: string; 
+    fromdate: string;
     todate: string;
     ac_code: string;
     po_number: string;
@@ -557,34 +557,34 @@ export default function PoOrderRegisterPage() {
                                     onChange={(value: string, row: any) => {
                                         setAcCode(value);
                                         setAcName(text(getLookupValue(row || {}, "ac_name")));
-                                         setPoNumber("");
+                                        setPoNumber("");
                                     }}
                                 />
                             </div>
 
-                           <div style={{ minWidth: 0 }}>
-    <LookupField
-        label="PO Number"
-        value={poNumber}
-        displayValue={poNumber}
-        columns={[
-            { field: "doc_no", header: "PO No" },
-            { field: "doc_date", header: "Date" },
-            { field: "ac_name", header: "Supplier" },
-        ]}
-        valueField="doc_no"
-        displayFields={["doc_no"]}
-        loadOptions={() =>
-            getDynamicLookup({
-                parameter: "Account_PORPT_DOCNO_BY_SUPPLIER",
-                code1: companyCode,
-                code2: acCode,
-            })
-        }
-        disabled={!acCode}
-        onChange={(value: string) => setPoNumber(value)}
-    />
-</div>
+                            <div style={{ minWidth: 0 }}>
+                                <LookupField
+                                    label="PO Number"
+                                    value={poNumber}
+                                    displayValue={poNumber}
+                                    columns={[
+                                        { field: "doc_no", header: "PO No" },
+                                        { field: "doc_date", header: "Date" },
+                                        { field: "ac_name", header: "Supplier" },
+                                    ]}
+                                    valueField="doc_no"
+                                    displayFields={["doc_no"]}
+                                    loadOptions={() =>
+                                        getDynamicLookup({
+                                            parameter: "Account_PORPT_DOCNO_BY_SUPPLIER",
+                                            code1: companyCode,
+                                            code2: acCode,
+                                        })
+                                    }
+                                    disabled={!acCode}
+                                    onChange={(value: string) => setPoNumber(value)}
+                                />
+                            </div>
                         </div>
 
                         {/* ───────────── Second Row : Product (Multi-select checkboxes) ───────────── */}
