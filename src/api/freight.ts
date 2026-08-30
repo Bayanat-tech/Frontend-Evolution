@@ -75,6 +75,28 @@ export async function freightDelete(params: FreightProcedureParams) {
   return response.data;
 }
 
+export async function freightTaxCategories<T = Record<string, unknown>>(companyCode: string, divCode: string, search = ""): Promise<T[]> {
+  if (!companyCode || !divCode) return [];
+  const response = await api.post<ApiResponse<T[]>>("/api/freight/tax/categories", {
+    company_code: companyCode,
+    div_code: divCode,
+    search: search || null,
+  });
+  return Array.isArray(response.data.data) ? response.data.data : [];
+}
+
+export async function freightTaxComponents<T = Record<string, unknown>>(companyCode: string, divCode: string, taxCategory: string, search = "", activityCode = ""): Promise<T[]> {
+  if (!companyCode || !divCode || !taxCategory) return [];
+  const response = await api.post<ApiResponse<T[]>>("/api/freight/tax/components", {
+    company_code: companyCode,
+    div_code: divCode,
+    tx_cat_code: taxCategory,
+    act_code: activityCode || null,
+    search: search || null,
+  });
+  return Array.isArray(response.data.data) ? response.data.data : [];
+}
+
 export async function getFreightInvoiceDetailReport(
   prinCode: string,
   invoiceNo: string,
