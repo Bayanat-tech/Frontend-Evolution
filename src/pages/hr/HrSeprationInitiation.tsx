@@ -7,7 +7,7 @@ import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
 import { NoticeToast } from "../../components/ui/NoticeToast";
 import { useAuth } from "../../state/AuthContext";
-import { AddHrInitiationSepration } from "./AddhrInitiationSepration";
+import { AddHrInitiationSepration } from "./AddHrInitiationSepration";
 
 // Row shape matches HR_EMP_SEPARATIONS columns (see MST_HR_EMP_SEPARATIONS_DETAIL
 // and MST_HR_EMP_SEPARATIONS_LIST in PROC_BUILD_DYNAMIC_SQL_MST_HR). Table has
