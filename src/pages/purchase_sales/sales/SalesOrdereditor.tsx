@@ -34,7 +34,7 @@ import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
 import { PROCESSSO, SalesConfig, SO_DOC_TYPE  } from "./SalesOrdertypes";
 import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, runWorkflow } from "./SalesOrderutils";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
-import { getSoOrderReportHtml } from "../../../api/transactions";
+import { getSOrderReportHtml } from "../../../api/transactions";
 
 
 export type { PurchaseOrderEditorState };
@@ -255,10 +255,11 @@ setForm(initialForm);
     }
     printWindow.document.write("<p style='font-family:sans-serif;padding:20px;'>Loading report…</p>");
 
-    getSoOrderReportHtml({
-      prin_code: user?.company_code,
-      order_no: form.doc_no,
-    })
+    getSOrderReportHtml({
+  company_code: user?.company_code,
+  doc_type: SO_DOC_TYPE.SO,
+  doc_no: form.doc_no,
+})
       .then((html) => {
         printWindow.document.open();
         printWindow.document.write(html);
