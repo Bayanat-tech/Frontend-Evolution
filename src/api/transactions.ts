@@ -1019,9 +1019,9 @@ export async function getPoOrderReportExcel(params: Record<string, any>): Promis
   window.URL.revokeObjectURL(url);
 }
 
-export async function getSoOrderReportHtml(params: Record<string, any>): Promise<string> {
+export async function getSOrderReportHtml(params: Record<string, any>): Promise<string> {
   const response = await api.post(
-    `/api/finance/transactions/reports/SoOrderReport/html`,
+    `/api/finance/transactions/reports/SalesOrderReport/html`,
     params,
     { responseType: "text" }
   );
@@ -1030,7 +1030,7 @@ export async function getSoOrderReportHtml(params: Record<string, any>): Promise
 
 export async function getSoOrderReportExcel(params: Record<string, any>): Promise<void> {
   const response = await api.post(
-    `/api/finance/transactions/reports/SoOrderReport/excel`,
+    `/api/finance/transactions/reports/SalesOrderReport/excel`,
     params,
     { responseType: "blob" }
   );
