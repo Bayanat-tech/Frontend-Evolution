@@ -25,9 +25,12 @@ import {
   fetchPurchaseOrderHeader,
   formatAmount,
   lineAmount,
+  lineDiscPoPrice,
   lineDiscPrice,
   lineNetAmount,
+  linePOAmount,
   lineTaxAmount,
+  lineTaxpoAmount,
   lowerRecord,
   newId,
   numberOrZero,
@@ -209,9 +212,9 @@ export function PurchaseInvoiceEditor({
   const canSendBackOrReject = effectiveFlowLevel !== 1 && effectiveFlowLevel !== 0;
 
   const finalTotal = (() => {
-    const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
-    const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
-    const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
+    const totalAmount = rows.reduce((sum, row) => sum + linePOAmount(row), 0);
+    const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPoPrice(row), 0);
+    const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxpoAmount(row), 0);
     return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
   })();
 
