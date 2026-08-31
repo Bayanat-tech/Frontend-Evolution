@@ -25,20 +25,26 @@ import {
   fetchPurchaseOrderHeader,
   formatAmount,
   lineAmount,
+  lineDiscPoPrice,
   lineDiscPrice,
   lineNetAmount,
+  linePOAmount,
   lineTaxAmount,
+  lineTaxpoAmount,
   lowerRecord,
   newId,
   numberOrZero,
   runWorkflow,
   text,
-  
+
 } from "./Purchaseorderutils";
 import { PurchaseOrderHeaderForm } from "./Purchaseorderheaderform";
 import { PurchaseOrderLinesTable } from "./Purchaseorderlinestable";
 import { SendBackDialog } from "./Sendbackdialog";
 import { RejectDialog } from "./Rejectdialog";
+import { PurchaseInvoiceHeaderForm } from "./PurchaseInvoiceHeader";
+import { PurchaseInvoiceLinesTable } from "./PurchaseInvoiceDeatils";
+import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 
 
 export type { PurchaseOrderEditorState };
@@ -70,6 +76,7 @@ export function PurchaseInvoiceEditor({
   const [sendBackDialogOpen, setSendBackDialogOpen] = useState(false);
   const [sendBackUser, setSendBackUser] = useState("");
   const [sendBackUserName, setSendBackUserName] = useState("");
+    const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [sendBackUserLevel, setSendBackUserLevel] = useState<number>(0);
   const [sendBackReason, setSendBackReason] = useState("");
   const [sendBackError, setSendBackError] = useState("");
@@ -91,15 +98,17 @@ export function PurchaseInvoiceEditor({
   }, [editor]);
 
   useEffect(() => {
-    if (!form.tax_code && !form.tax_category) return;
+    if (!form.tx_compntcat_code_1 && !form.tx_cat_code && !form.disc_hdr_percent && !form.disc_hdr_price) return;
     setRows((current) =>
       current.map((row) => ({
         ...row,
-        tax_code: form.tax_code || row.tax_code,
-        tax_cat: form.tax_category || row.tax_cat,
+        tax_code: form.tx_compntcat_code_1,
+        tax_cat: form.tx_cat_code,
+        disc_price: row.disc_price || form.disc_hdr_price,
+        disc_percent: row.disc_percent || form.disc_hdr_percent,
       }))
     );
-  }, [form.tax_code, form.tax_category]);
+  }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price]);
 
   useEffect(() => {
     let mounted = true;
@@ -110,48 +119,55 @@ export function PurchaseInvoiceEditor({
       try {
         const docNo = editor.row.doc_no;
         const [headerRaw, detailRows] = await Promise.all([
-          fetchPurchaseOrderHeader(docNo,config, user?.company_code, user?.loginid || user?.username),
-          fetchPurchaseOrderDetail(docNo,config, user?.company_code, user?.loginid || user?.username),
+          fetchPurchaseOrderHeader(docNo, config, user?.company_code, user?.loginid || user?.username),
+          fetchPurchaseOrderDetail(docNo, config, user?.company_code, user?.loginid || user?.username),
         ]);
         if (!mounted) return;
 
         setForm((current) => ({
           ...current,
-          doc_no: text(headerRaw.doc_no || docNo),
-          doc_date: toDateInputValue(headerRaw.doc_date) || current.doc_date,
-          ref_no: text(headerRaw.quotn_no || current.ref_no),
-          ref_date: toDateInputValue(headerRaw.ref_date) || current.ref_date,
+          doc_no: text(headerRaw.pi_doc_no) || text(docNo),
+          doc_date: toDateInputValue(headerRaw.pi_doc_date) || current.doc_date,
+          grn_doc_no: text(headerRaw.doc_no),
           div_code: text(headerRaw.div_code || current.div_code),
-          div_name: text(headerRaw.div_name || current.div_name),
-          ac_code: text(headerRaw.ac_code || current.ac_code),
-          ac_name: text(headerRaw.ac_name || current.ac_name),
-          party_address: text(headerRaw.address || current.party_address),
-          credit_period: Number(headerRaw.credit_period || current.credit_period || 0),
-          dept_code: text(headerRaw.dept_code || current.dept_code),
-          party_phone: text(headerRaw.tel || current.party_phone),
-          party_fax: text(headerRaw.fax || current.party_fax),
-          buyer: text(headerRaw.buyer || current.buyer),
-          wo_number: text(headerRaw.wo_number || current.wo_number),
-          curr_code: text(headerRaw.curr_code || current.curr_code),
-          curr_name: text(headerRaw.curr_name || current.curr_name),
-          ex_rate: Number(headerRaw.ex_rate || current.ex_rate || 1),
-          payment_terms: text(headerRaw.pay_terms || current.payment_terms),
-          dlvr_term: text(headerRaw.delivery_term || current.dlvr_term),
-          dlvr_contact: text(headerRaw.delivery_contact || current.dlvr_contact),
-          dlvr_mobile: text(headerRaw.delivery_tel || current.dlvr_mobile),
-          dlvr_email: text(headerRaw.delivery_email || current.dlvr_email),
+          ac_code: text(headerRaw.pi_ac_code || current.ac_code),
           remarks: text(headerRaw.remarks || current.remarks),
-          disc_price: Number(headerRaw.disc_price || 0),
-          disc_pct: Number(headerRaw.disc_pct || 0),
-          tax_category: text(headerRaw.tax_category || current.tax_category),
-          tax_code: text(headerRaw.tax_code || current.tax_code),
-          expense_ac_post: text(headerRaw.expense_ac_post || current.expense_ac_post),
-          print_on_letterhead: text(headerRaw.print_on_letterhead || current.print_on_letterhead || "N"),
-          project_name: text(headerRaw.project_name || current.project_name),
-          pr_no: text(headerRaw.pr_no || current.pr_no),
-          scope_of_work: text(headerRaw.scope_of_work || current.scope_of_work),
-          flow_level_running: flowLevelRunning,
-          canceled: text(headerRaw.canceled || current.canceled || "N"),
+          canceled: text(headerRaw.pi_canceled || current.canceled || "N"),
+          flow_level_running: numberOrZero(headerRaw.pi_flow_level_running),
+
+          po_doc_no: text(headerRaw.po_doc_no),
+          po_doc_date: toDateInputValue(headerRaw.po_doc_date),
+          po_ac_code: text(headerRaw.po_ac_code),
+          po_ac_name: text(headerRaw.po_party_name),
+          po_dept_code: text(headerRaw.po_dept_code),
+          po_remarks: text(headerRaw.po_remarks),
+          po_ref_no: text(headerRaw.po_ref_no),
+          po_ref_date: text(headerRaw.po_ref_date),
+          po_curr_code: text(headerRaw.po_curr_code),
+          po_ex_rate: numberOrZero(headerRaw.po_ex_rate),
+          po_disc_hdr_percent: numberOrZero(headerRaw.po_disc_hdr_percent),
+          po_disc_hdr_price: numberOrZero(headerRaw.po_disc_hdr_price),
+          po_payment_terms: text(headerRaw.po_payment_terms),
+          po_credit_period: numberOrZero(headerRaw.po_credit_period),
+          po_party_name: text(headerRaw.po_party_name),
+          po_party_address: text(headerRaw.po_party_address),
+          po_party_phone: text(headerRaw.po_party_phone),
+          po_party_fax: text(headerRaw.po_party_fax),
+          po_dlvr_contact: text(headerRaw.po_dlvr_contact),
+          po_dlvr_email: text(headerRaw.po_dlvr_email),
+          po_dlvr_mobile: text(headerRaw.po_dlvr_mobile),
+          po_dlvr_term: text(headerRaw.po_dlvr_term),
+          po_tx_compntcat_code_1: text(headerRaw.po_tx_compntcat_code_1),
+          po_tx_cat_code: text(headerRaw.po_tx_cat_code),
+          po_wo_number: text(headerRaw.po_wo_number),
+          po_project_name: text(headerRaw.po_project_name),
+          po_pr_no: text(headerRaw.po_pr_no),
+          po_scope_of_work: text(headerRaw.po_scope_of_work),
+          po_buyer: text(headerRaw.po_buyer),
+          total_po_amount: numberOrZero(headerRaw.total_po_amount),
+
+          pi_doc_no: text(headerRaw.pi_doc_no),
+          pi_doc_date: toDateInputValue(headerRaw.pi_doc_date),
         }));
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
@@ -196,9 +212,9 @@ export function PurchaseInvoiceEditor({
   const canSendBackOrReject = effectiveFlowLevel !== 1 && effectiveFlowLevel !== 0;
 
   const finalTotal = (() => {
-    const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
-    const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
-    const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
+    const totalAmount = rows.reduce((sum, row) => sum + linePOAmount(row), 0);
+    const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPoPrice(row), 0);
+    const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxpoAmount(row), 0);
     return totalAmount - totalDiscPrice - form.disc_price + totalTaxAmount;
   })();
 
@@ -215,8 +231,10 @@ export function PurchaseInvoiceEditor({
       ...current,
       {
         ...emptyLineRow(form.div_code),
-        tax_code: form.tax_code,
-        tax_cat: form.tax_category,
+        tax_code: form.tx_compntcat_code_1,
+        tax_cat: form.tx_cat_name,
+        disc_price: form.disc_hdr_price,
+        disc_percent: form.disc_hdr_percent,
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
@@ -236,10 +254,10 @@ export function PurchaseInvoiceEditor({
     }
   };
 
- const handleSaveAsDraft = () =>
-  runAction("draft", async () => {
-    await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.PIN, form, rows, user?.company_code, user?.loginid || user?.username);
-  }, "Sales Order saved as draft");
+  const handleSaveAsDraft = () =>
+    runAction("draft", async () => {
+      await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.PIN, form, rows, user?.company_code, user?.loginid || user?.username);
+    }, "Sales Order saved as draft");
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
@@ -335,7 +353,7 @@ export function PurchaseInvoiceEditor({
   };
 
   const actionBarBusy = actionLoading !== null || saving;
-    console.log("flowLevelRunning------------------>",flowLevelRunning)
+  console.log("flowLevelRunning------------------>", flowLevelRunning)
 
   return (
     <>
@@ -375,7 +393,9 @@ export function PurchaseInvoiceEditor({
                   <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
                 </>
               )}
-              <Button type="button" variant="secondary"><Paperclip size={15} /> Files</Button>
+                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                <Paperclip size={15} /> Files
+              </Button>
               <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
             </div>
           </div>
@@ -398,7 +418,7 @@ export function PurchaseInvoiceEditor({
             <div className="grid gap-3">
               <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
-              <PurchaseOrderHeaderForm
+              <PurchaseInvoiceHeaderForm
                 form={form}
                 setdetails={setRows}
                 docType={PO_DOC_TYPE.PIN}
@@ -411,7 +431,7 @@ export function PurchaseInvoiceEditor({
                 loginid={user?.loginid || user?.username}
               />
 
-              <PurchaseOrderLinesTable
+              <PurchaseInvoiceLinesTable
                 rows={rows}
                 form={form}
                 setdetails={setRows}
@@ -431,13 +451,13 @@ export function PurchaseInvoiceEditor({
 
         <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
           <div className="flex flex-wrap gap-3 rounded-2xl bg-gray-50 p-5 shadow-inner">
-           { isPendingTab && (
-             <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
+            {isPendingTab && (
+              <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
                 {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                 {actionLoading === "draft" ? "Saving..." : "Save Draft"}
               </Button>
             )}
-          { isPendingTab && <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
+            {isPendingTab && <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
               {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
               {actionLoading === "submit" ? "Submitting..." : "Submit"}
             </Button>}
@@ -453,10 +473,10 @@ export function PurchaseInvoiceEditor({
                 {actionLoading === "reject" ? "Rejecting..." : "Reject"}
               </Button>
             )}
-{isPendingTab &&
-            <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
-              {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
-            </Button>}
+            {isPendingTab &&
+              <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
+                {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
+              </Button>}
           </div>
           <div className="flex items-center gap-2">
             <Button aria-label="Print" type="button" variant="outline" size="icon" disabled={actionDisabled}><Printer size={15} /></Button>
@@ -495,6 +515,17 @@ export function PurchaseInvoiceEditor({
         onClearError={() => setRejectError("")}
         onClose={closeRejectDialog}
         onConfirm={confirmReject}
+      />
+       <AttachmentDialog
+        open={attachmentOpen}
+        onClose={() => setAttachmentOpen(false)}
+        requestNumber={form.doc_no ? String(form.doc_no) : ""}
+        title="Purchase Invoice Attachments"
+        module="PI"
+        type="Purchase Invoice"
+        companyCode={user?.company_code || ""}
+        loginId={user?.loginid || ""}
+        flowLevel={effectiveFlowLevel}
       />
     </>
   );

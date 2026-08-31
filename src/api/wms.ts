@@ -8,6 +8,14 @@ type ApiResponse<T> = {
   data?: T;
   message?: string;
 };
+export type HolidayCalendarFilters = {
+  companyCode: string;
+  divCode?: string;
+  holidayType?: string;
+  gradeCode?: string;
+  yearFrom: string;
+  yearTo: string;
+};
 
 export type WmsMasterResponse = {
   tableData: LookupRow[];
@@ -140,7 +148,59 @@ export async function getStockAdjustmentDetails(
 export async function createAdjHeader(payload: AdjHeaderCreatePayload) {
   return postWmsStockAdjustment("createAdjHeader", payload as unknown as Record<string, unknown>);
 }
+export type HolidayCalendarApiRow = {
+  DATEID: string;
+  HOLIDAY_DATE: string; // ISO string from backend, parse before display
+  HOLIDAY_REASON: string | null;
+  COMPANY_CODE: string;
+  HOLIDAY_TYPE: string | null;
+  HALF_DAY: string | null;
+  DIV_CODE: string;
+  REMARKS: string | null;
+  GRADE_CODE: string | null;
+};
 
+export async function fetchHolidayCalendar(
+  filters: HolidayCalendarFilters,
+): Promise<HolidayCalendarApiRow[]> {
+  const { data } = await api.post<HolidayCalendarApiRow[]>(
+    "/api/gm/hr/holiday-calendar",
+    filters,
+  );
+  return data;
+}
+export type HolidayCalendarUpdateDetail = {
+  dateid: string;
+  holiday_date: string;
+  holiday_reason?: string | null;
+  holiday_type: string;
+  company_code: string;
+  div_code: string;
+  grade_code: string;
+  half_day?: string | null;
+  remarks?: string | null;
+  user_id?: string | null;
+};
+
+export type HolidayCalendarUpdatePayload = {
+  details: HolidayCalendarUpdateDetail[];
+};
+
+export type HolidayCalendarUpdateResponse = {
+  success: boolean;
+  message: string;
+  recordsProcessed?: number;
+};
+
+export async function updateHolidayCalendar(
+  payload: HolidayCalendarUpdatePayload,
+): Promise<HolidayCalendarUpdateResponse> {
+  const { data } = await api.post<HolidayCalendarUpdateResponse>(
+    "/api/hr/holiday-calendar",
+    payload,
+  );
+  return data;
+}
 /** POST create adjustment detail line */
 export async function createAdjDetail(payload: AdjDetailPayload) {
   return postWmsStockAdjustment("createAdjDetail", payload as unknown as Record<string, unknown>);
@@ -324,6 +384,8 @@ export const saveFlowAssignLevels = async (
     level3_role?: string;
     level4_role?: string;
     level5_role?: string;
+    level6_role?:string;
+    level7_role?:string;
     last_level: number;
     flow_code?: string;
   }[]
@@ -337,6 +399,8 @@ export const saveFlowAssignLevels = async (
       level3_role: r.level3_role || null,
       level4_role: r.level4_role || null,
       level5_role: r.level5_role || null,
+      level6_role: r.level6_role || null,
+      level7_role: r.level7_role || null,
       last_level: r.last_level,
       flow_code: r.flow_code || "NA",
     })),
@@ -347,23 +411,53 @@ export const saveFlowAssignLevels = async (
 };
 // ─── Add / Remove user from role ──────────────────────────────────────────
 export async function addUserToRole(companyCode: string, roleId: string, loginidToAdd: string, actorLoginId: string) {
-  const res = await insSecRoleFunctionAccessUser([
-    {
-      company_code: companyCode,
-      loginid: loginidToAdd,
-      serial_no_or_role_id: roleId,
-      userid: loginidToAdd,
-      create_user: actorLoginId,
-    },
-  ]);
+  const res = await insSecRoleFunctionAccessUser({
+    rows: [
+      {
+        company_code: companyCode,
+        role_id: roleId,
+        loginid: loginidToAdd,
+        serial_no_or_role_id: roleId,
+        userid: loginidToAdd,
+        create_user: actorLoginId,
+      },
+    ],
+    role_id: roleId,
+    company_code: companyCode,
+  });
   if (!res?.success) throw new Error(res?.message || "Unable to add user to role");
   return res;
 }
-
- export const insSecRoleFunctionAccessUser = async (rows: any[]) => {
-  const res = await api.post("/api/finance/insSecRoleFunctionAccessUser", { rows });
+export async function insSecRoleFunctionAccessUser(payload: {
+  rows: {
+    company_code: string;
+    role_id: string;
+    loginid: string;
+    serial_no_or_role_id: string;
+    userid: string;
+    create_user: string;
+  }[];
+  role_id: string;
+  company_code: string;
+}) {
+  const res = await api.post("/api/finance/insSecRoleFunctionAccessUser", payload);
   return res.data;
-};
+}
+// export async function insSecRoleFunctionAccessUser(payload: {
+//   rows: {
+//     company_code: string;
+//     role_id: string;
+//     loginid: string;
+//     serial_no_or_role_id: string;
+//     userid: string;
+//     create_user: string;
+//   }[];
+//   role_id: string;
+//   company_code: string;
+// }) {
+//   const res = await api.post("/api/finance/insSecRoleFunctionAccessUser", payload);
+//   return res.data;
+// };
 export async function removeUserFromRole(companyCode: string, roleId: string, loginid: string, actorLoginId: string) {
   const response = await api.post<ApiResponse<unknown>>(
     "/api/wms/common/proc_build_dynamic_del_common", // TODO: confirm route + parameter name with backend

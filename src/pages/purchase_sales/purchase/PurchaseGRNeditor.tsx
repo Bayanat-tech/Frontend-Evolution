@@ -39,6 +39,9 @@ import { PurchaseOrderHeaderForm } from "./Purchaseorderheaderform";
 import { PurchaseOrderLinesTable } from "./Purchaseorderlinestable";
 import { SendBackDialog } from "./Sendbackdialog";
 import { RejectDialog } from "./Rejectdialog";
+import { PurchaseGrnHeaderForm } from "./PurchaseGrnheaderForm";
+import { PurchaseGrnDetailsTable } from "./PurchaseGrnDetails";
+import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 
 
 export type { PurchaseOrderEditorState };
@@ -73,6 +76,7 @@ export function PurchaseGRNEditor({
   const [sendBackUserName, setSendBackUserName] = useState("");
   const [sendBackUserLevel, setSendBackUserLevel] = useState<number>(0);
   const [sendBackReason, setSendBackReason] = useState("");
+  const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [sendBackError, setSendBackError] = useState("");
   const [sendBackUsers, setSendBackUsers] = useState<SendBackUserOption[]>([]);
   const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
@@ -141,6 +145,14 @@ export function PurchaseGRNEditor({
           scope_of_work: text(headerRaw.scope_of_work || current.scope_of_work),
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
+          // --- PO-reference fields, missing until now ---
+          po_doc_no: text(headerRaw.po_doc_no || current.po_doc_no),
+          po_doc_date: toDateInputValue(headerRaw.po_doc_date) || current.po_doc_date,
+          po_div_code: text(headerRaw.po_div_code || current.po_div_code),
+          po_ac_code: text(headerRaw.po_ac_code || current.po_ac_code),
+          po_payment_terms: text(headerRaw.po_payment_terms || current.po_payment_terms),
+          po_dlvr_term: text(headerRaw.po_dlvr_term || current.po_dlvr_term),
+          total_po_amount: numberOrZero(headerRaw.total_po_amount) || current.total_po_amount,
         }));
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
@@ -225,7 +237,6 @@ export function PurchaseGRNEditor({
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
-    if (!form.curr_code) return setError("Currency is required");
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
     }, editMode ? "Purchase GRN updated successfully" : "Purchase GRN created successfully");
@@ -378,7 +389,9 @@ export function PurchaseGRNEditor({
                   <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
                 </>
               )}
-              <Button type="button" variant="secondary"><Paperclip size={15} /> Files</Button>
+              <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+                <Paperclip size={15} /> Files
+              </Button>
               <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
             </div>
           </div>
@@ -401,7 +414,7 @@ export function PurchaseGRNEditor({
             <div className="grid gap-3">
               <AutoDismissAlert notice={error ? { type: "error", message: error } : null} onClose={() => setError("")} />
 
-              <PurchaseOrderHeaderForm
+              <PurchaseGrnHeaderForm
                 form={form}
                 docType={PO_DOC_TYPE.GRN}
                 setForm={setForm}
@@ -414,7 +427,7 @@ export function PurchaseGRNEditor({
                 setdetails={setRows}
               />
 
-              <PurchaseOrderLinesTable
+              <PurchaseGrnDetailsTable
                 rows={rows}
                 form={form}
                 setdetails={setRows}
@@ -501,6 +514,18 @@ export function PurchaseGRNEditor({
         onClearError={() => setRejectError("")}
         onClose={closeRejectDialog}
         onConfirm={confirmReject}
+      />
+
+      <AttachmentDialog
+        open={attachmentOpen}
+        onClose={() => setAttachmentOpen(false)}
+        requestNumber={form.doc_no ? String(form.doc_no) : ""}
+        title="Purchase grn Attachments"
+        module="PG"
+        type="Purchase grn"
+        companyCode={user?.company_code || ""}
+        loginId={user?.loginid || ""}
+        flowLevel={effectiveFlowLevel}
       />
     </>
   );

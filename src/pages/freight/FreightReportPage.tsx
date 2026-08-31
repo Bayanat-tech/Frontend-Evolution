@@ -305,41 +305,44 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     subtitle: "Shipment deposits and demurrage values by job.",
     family: "Settlement",
     icon: WalletCards,
-    amountFields: ["AMOUNT", "DEMURAGE_AMOUNT"],
-    filters: ["date", "search"],
-    advancedFilters: ["principalRange", "be", "collectionDate", "variant"],
+    amountFields: ["AMOUNT"],
+    filters: ["date", "status"],
+    advancedFilters: ["principalRange", "jobRange"],
     primaryMetric: "Deposit",
     columns: [
       { key: "JOB_NO", label: "Job No" },
-      { key: "JOB_DATE", label: "Date", kind: "date" },
+      { key: "DEPOSIT_DATE", label: "Deposit Date", kind: "date" },
       { key: "PRIN_CODE", label: "Principal" },
       { key: "PRIN_NAME", label: "Principal Name" },
       { key: "BE_NO", label: "BE No" },
-      { key: "BE_DATE", label: "BE Date", kind: "date" },
+      { key: "DEPOSIT_EXPIRY_DATE", label: "Expiry Date", kind: "date" },
       { key: "AMOUNT", label: "Amount", kind: "amount" },
-      { key: "DEMURAGE_AMOUNT", label: "Demurrage", kind: "amount" },
-      { key: "REMARKS", label: "Remarks" },
+      { key: "CURRENCY", label: "Currency" },
+      { key: "STATUS", label: "Status", kind: "status" },
+      { key: "DEPOSIT_REMARKS", label: "Remarks" },
     ],
   },
   container_deposit: {
     title: "Container Deposit",
-    subtitle: "Container deposit follow-up by job and container.",
+    subtitle: "Container deposit follow-up, expiry, claim, and collection status.",
     family: "Settlement",
     icon: Boxes,
     amountFields: ["AMOUNT", "DEMURAGE_AMOUNT"],
-    filters: ["date", "type", "search"],
-    advancedFilters: ["jobRange", "depositDate", "expiryDate", "be", "claimExit", "cleared", "variant"],
+    filters: ["date", "type", "status"],
+    advancedFilters: ["principalRange", "jobRange"],
     primaryMetric: "Container Deposit",
     columns: [
       { key: "JOB_NO", label: "Job No" },
-      { key: "JOB_DATE", label: "Date", kind: "date" },
+      { key: "DEPOSIT_DATE", label: "Deposit Date", kind: "date" },
       { key: "PRIN_CODE", label: "Principal" },
       { key: "PRIN_NAME", label: "Principal Name" },
-      { key: "CONTAINER_NO", label: "Container" },
-      { key: "CONTAINER_TYPE", label: "Type" },
+      { key: "DEPOSIT_EXPIRY_DATE", label: "Expiry Date", kind: "date" },
+      { key: "BE_NO", label: "BE No" },
+      { key: "CLAIM_REF_NO", label: "Claim Ref" },
       { key: "AMOUNT", label: "Amount", kind: "amount" },
       { key: "DEMURAGE_AMOUNT", label: "Demurrage", kind: "amount" },
-      { key: "REMARKS", label: "Remarks" },
+      { key: "CURRENCY", label: "Currency" },
+      { key: "STATUS", label: "Status", kind: "status" },
     ],
   },
   freight_summary: {
@@ -486,6 +489,14 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
   const Icon = config.icon;
   const [filters, setFilters] = useState<ReportFilters>(emptyFilters);
   const [principalText, setPrincipalText] = useState("");
+  const [principalFromText, setPrincipalFromText] = useState("");
+  const [principalToText, setPrincipalToText] = useState("");
+  // const principalDisplayText = principalText || (principalFromText && principalToText
+  //    ? `${principalFromText} - ${principalToText}`
+  //    : principalFromText || principalToText);
+  const principalDisplayText = principalText || (principalFromText && principalToText
+   ? `${principalFromText}  →  ${principalToText}`
+   : principalFromText || principalToText);
   const [rows, setRows] = useState<LookupRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("Select filters and run the report.");
@@ -507,7 +518,7 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
       const nextRows = (response.data.data || []).map(normalizeRow);
       setRows(nextRows);
       setMessage(nextRows.length ? `${nextRows.length} records loaded from Oracle.` : "No records found for selected filters.");
-      writeReportWindow(reportWindow, reportHtml(config, companyCode, userName, filters, principalText, nextRows, buildTotals(nextRows, config.amountFields), true));
+      writeReportWindow(reportWindow, reportHtml(config, companyCode, userName, filters, principalDisplayText, nextRows, buildTotals(nextRows, config.amountFields), true));
     } catch (error: any) {
       setRows([]);
       const errorMessage = error?.response?.data?.details || error?.response?.data?.message || "Unable to generate Freight report.";
@@ -521,6 +532,8 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
   function resetFilters() {
     setFilters(emptyFilters);
     setPrincipalText("");
+    setPrincipalFromText("");
+    setPrincipalToText("");
     setRows([]);
     setMessage("Select filters and run the report.");
   }
@@ -531,11 +544,12 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
       return;
     }
     const reportWindow = openReportShell(config.title);
-    writeReportWindow(reportWindow, reportHtml(config, companyCode, userName, filters, principalText, rows, totals, true));
+    // writeReportWindow(reportWindow, reportHtml(config, companyCode, userName, filters, principalText, rows, totals, true));
+    writeReportWindow(reportWindow, reportHtml(config, companyCode, userName, filters, principalDisplayText, rows, totals, true));
   }
 
   return (
-    <section className="grid gap-3">
+    <section className="freight-ui-standard grid gap-3">
       <div className="rounded-md border bg-card shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
@@ -549,7 +563,7 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <SummaryBadge label={config.primaryMetric} value={String(rows.length)} />
+            <SummaryBadge label="Records" value={String(rows.length)} />
             {totals.map((item) => <SummaryBadge key={item.label} label={item.label} value={formatAmount(item.value)} strong />)}
             <Button type="button" variant="outline" size="sm" onClick={printReport} disabled={!rows.length}>
               <Printer size={14} /> Print
@@ -559,7 +573,7 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
               variant="outline"
               size="sm"
               disabled={!rows.length}
-              onClick={() => exportReportExcel(config.title, reportHtml(config, companyCode, userName, filters, principalText, rows, totals, false))}
+              onClick={() => exportReportExcel(config.title, reportHtml(config, companyCode, userName, filters, principalDisplayText, rows, totals, false))}
             >
               <Download size={14} /> Excel
             </Button>
@@ -613,13 +627,18 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
         )}
 
         {!!config.advancedFilters?.length && (
-          <AdvancedReportFilters config={config} companyCode={companyCode} filters={filters} setFilters={setFilters} />
+          <AdvancedReportFilters config={config} companyCode={companyCode} filters={filters} setFilters={setFilters}
+            //  onPrincipalFromSelect={(row) => setPrincipalFromText(row ? `${lookupText(row, "PRIN_CODE")} - ${lookupText(row, "PRIN_NAME")}` : "")}
+            //  onPrincipalToSelect={(row) => setPrincipalToText(row ? `${lookupText(row, "PRIN_CODE")} - ${lookupText(row, "PRIN_NAME")}` : "")}
+            onPrincipalFromSelect={(row) => setPrincipalFromText(row ? lookupText(row, "PRIN_CODE") : "")}//DISPLAY ONLY CODE
+            onPrincipalToSelect={(row) => setPrincipalToText(row ? lookupText(row, "PRIN_CODE") : "")}
+   />
         )}
       </div>
 
       <div className="grid gap-2 md:grid-cols-4">
         <ReportTile icon={CalendarDays} label="Period" value={`${toDisplayDate(filters.from_date) || "Start"} - ${toDisplayDate(filters.to_date) || "Today"}`} />
-        <ReportTile icon={UserRound} label="Principal" value={principalText || "All principals"} />
+        <ReportTile icon={UserRound} label="Principal" value={principalDisplayText || "All principals"} />
         <ReportTile icon={Ship} label="Movement" value={`${optionLabel(modeOptions, filters.transport_mode)} / ${optionLabel(jobTypeOptions, filters.job_type)}`} />
         <ReportTile icon={Filter} label="Status" value={visibleFilters.includes("status") ? optionLabel(statusOptions, filters.status) : "Not applicable"} />
       </div>
@@ -649,11 +668,15 @@ function AdvancedReportFilters({
   companyCode,
   filters,
   setFilters,
+  onPrincipalFromSelect, 
+  onPrincipalToSelect
 }: {
   config: ReportConfig;
   companyCode: string;
   filters: ReportFilters;
   setFilters: Dispatch<SetStateAction<ReportFilters>>;
+   onPrincipalFromSelect: (row: LookupRow | null) => void;
+  onPrincipalToSelect: (row: LookupRow | null) => void;
 }) {
   const items = config.advancedFilters || [];
   return (
@@ -666,7 +689,8 @@ function AdvancedReportFilters({
       </div>
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         {items.includes("principalRange") && (
-          <RangeLookup label="Principal" companyCode={companyCode} parameter="freight_principal" valueField="PRIN_CODE" displayFields={["PRIN_CODE", "PRIN_NAME"]} columns={[{ field: "PRIN_CODE", header: "Code" }, { field: "PRIN_NAME", header: "Principal" }]} fromKey="prin_code_from" toKey="prin_code_to" filters={filters} setFilters={setFilters} />
+          <RangeLookup label="Principal" companyCode={companyCode} parameter="freight_principal" valueField="PRIN_CODE" displayFields={["PRIN_CODE", "PRIN_NAME"]} columns={[{ field: "PRIN_CODE", header: "Code" }, { field: "PRIN_NAME", header: "Principal" }]} fromKey="prin_code_from" toKey="prin_code_to" filters={filters} setFilters={setFilters} onSelectFrom={onPrincipalFromSelect}
+             onSelectTo={onPrincipalToSelect}/>
         )}
         {items.includes("brokerRange") && (
           <RangeLookup label="Broker" companyCode={companyCode} parameter="freight_broker" valueField="BROKER_CODE" displayFields={["BROKER_CODE", "BROKER_NAME"]} columns={[{ field: "BROKER_CODE", header: "Code" }, { field: "BROKER_NAME", header: "Broker" }]} fromKey="broker_code_from" toKey="broker_code_to" filters={filters} setFilters={setFilters} />
@@ -730,7 +754,21 @@ function AdvancedReportFilters({
     />
   )
   )}
-        {items.includes("departmentRange") && <RangeText label="Department" fromKey="dept_code_from" toKey="dept_code_to" filters={filters} setFilters={setFilters} />}
+        {/* {items.includes("departmentRange") && <RangeText label="Department" fromKey="dept_code_from" toKey="dept_code_to" filters={filters} setFilters={setFilters} />} */}
+  {items.includes("departmentRange") && (
+  <RangeLookup
+    label="Department"
+    companyCode={companyCode}
+    parameter="freight_department"
+    valueField="DEPT_CODE"
+    displayFields={["DEPT_CODE", "DEPT_NAME"]}
+    columns={[{ field: "DEPT_CODE", header: "Code" }, { field: "DEPT_NAME", header: "Department" }]}
+    fromKey="dept_code_from"
+    toKey="dept_code_to"
+    filters={filters}
+    setFilters={setFilters}
+  />
+)}
         {items.includes("portRange") && (
           <>
             <LookupFilter label="Origin Port" companyCode={companyCode} parameter="freight_port" value={filters.origin_port} valueField="PORT_CODE" displayFields={["PORT_CODE", "PORT_NAME"]} columns={[{ field: "PORT_CODE", header: "Code" }, { field: "PORT_NAME", header: "Port" }]} onChange={(value) => setFilter(setFilters, "origin_port", value)} />
@@ -816,6 +854,8 @@ function RangeLookup({
   toKey,
   filters,
   setFilters,
+  onSelectFrom, 
+  onSelectTo,
   ...lookup
 }: {
   label: string;
@@ -828,11 +868,15 @@ function RangeLookup({
   valueField: string;
   displayFields: string[];
   columns: { field: string; header: string }[];
+  onSelectFrom?: (row: LookupRow | null) => void;
+  onSelectTo?: (row: LookupRow | null) => void;
 }) {
   return (
     <div className="grid grid-cols-2 gap-2">
-      <LookupFilter label={`${label} From`} value={String(filters[fromKey] || "")} onChange={(value) => setFilter(setFilters, fromKey, value)} {...lookup} />
-      <LookupFilter label={`${label} To`} value={String(filters[toKey] || "")} onChange={(value) => setFilter(setFilters, toKey, value)} {...lookup} />
+      {/* <LookupFilter label={`${label} From`} value={String(filters[fromKey] || "")} onChange={(value) => setFilter(setFilters, fromKey, value)} {...lookup} />
+      <LookupFilter label={`${label} To`} value={String(filters[toKey] || "")} onChange={(value) => setFilter(setFilters, toKey, value)} {...lookup} /> */}
+       <LookupFilter label={`${label} From`} value={String(filters[fromKey] || "")} onChange={(value) => setFilter(setFilters, fromKey, value)} onSelect={onSelectFrom} {...lookup} />
+      <LookupFilter label={`${label} To`} value={String(filters[toKey] || "")} onChange={(value) => setFilter(setFilters, toKey, value)} onSelect={onSelectTo} {...lookup} />
     </div>
   );
 }
@@ -846,6 +890,7 @@ function LookupFilter({
   displayFields,
   columns,
   onChange,
+  onSelect,
 }: {
   label: string;
   companyCode: string;
@@ -855,13 +900,15 @@ function LookupFilter({
   displayFields: string[];
   columns: { field: string; header: string }[];
   onChange: (value: string) => void;
+  onSelect?: (row: LookupRow | null) => void;
 }) {
   return (
     <Field label={label}>
       <LookupField
         value={value}
         displayValue={value}
-        onChange={(nextValue) => onChange(nextValue)}
+        // onChange={(nextValue) => onChange(nextValue)}
+        onChange={(nextValue, row) => { onChange(nextValue); onSelect?.(row ?? null); }}
         loadOptions={(query) => loadLookup(parameter, companyCode, query)}
         valueField={valueField}
         displayFields={displayFields}
@@ -1529,7 +1576,7 @@ function writeReportWindow(win: Window | null, html: string) {
 
 function reportLoadingHtml(title: string) {
   return `<!doctype html><html><head><title>${escapeHtml(title)}</title><style>
-    body{margin:0;font-family:Arial,sans-serif;background:#eef3f9;color:#0f172a}
+    body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#eef3f9;color:#0f172a}
     .bar{height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:white;border-bottom:1px solid #dbe3ef;box-shadow:0 8px 22px rgba(15,23,42,.06)}
     .bar strong{font-size:16px}.bar span{font-size:12px;color:#64748b}
     .loading{height:calc(100vh - 58px);display:grid;place-items:center;text-align:center}
@@ -1542,7 +1589,7 @@ function reportLoadingHtml(title: string) {
 
 function reportErrorHtml(title: string, message: string) {
   return `<!doctype html><html><head><title>${escapeHtml(title)}</title><style>
-    body{margin:0;font-family:Arial,sans-serif;background:#f8fafc;color:#0f172a}.wrap{height:100vh;display:grid;place-items:center}.card{max-width:720px;border:1px solid #fecdd3;background:white;border-radius:10px;padding:24px;box-shadow:0 12px 30px rgba(15,23,42,.08)}
+    body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f8fafc;color:#0f172a}.wrap{height:100vh;display:grid;place-items:center}.card{max-width:720px;border:1px solid #fecdd3;background:white;border-radius:10px;padding:24px;box-shadow:0 12px 30px rgba(15,23,42,.08)}
     h1{margin:0 0 8px;font-size:22px;color:#be123c}pre{white-space:pre-wrap;color:#475569;background:#f8fafc;border:1px solid #e2e8f0;padding:12px;border-radius:8px}
     button{height:34px;border:1px solid #cbd5e1;border-radius:8px;background:white;font-weight:700;padding:0 14px;cursor:pointer}
   </style></head><body><div class="wrap"><div class="card"><h1>Report failed</h1><p>Oracle did not return the report data.</p><pre>${escapeHtml(message)}</pre><button onclick="window.close()">Close</button></div></div></body></html>`;
@@ -1564,7 +1611,7 @@ function reportHtml(
   const generatedAt = formatReportDateTime(new Date());
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(config.title)}</title><style>
     @page{size:landscape;margin:14mm}
-    body{font-family:Arial,sans-serif;margin:0;color:#0f172a;background:${interactive ? "#eef3f9" : "#fff"}}
+    body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;color:#0f172a;background:${interactive ? "#eef3f9" : "#fff"}}
     .viewerbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff;border-bottom:1px solid #dbe3ef;padding:10px 18px;box-shadow:0 8px 22px rgba(15,23,42,.06)}
     .viewerbar h1{margin:0;font-size:16px}.viewerbar p{margin:2px 0 0;color:#64748b;font-size:12px}.actions{display:flex;gap:8px}.actions button{height:34px;border:1px solid #cbd5e1;border-radius:8px;background:white;color:#0f172a;font-weight:700;padding:0 13px;cursor:pointer}.actions button.primary{background:#0b4ca1;border-color:#0b4ca1;color:white}
     .sheet{padding:${interactive ? "18px" : "0"}}.paper{max-width:1280px;margin:0 auto;background:white;padding:14px;${interactive ? "border:1px solid #dbe3ef;box-shadow:0 18px 42px rgba(15,23,42,.08)" : ""}}

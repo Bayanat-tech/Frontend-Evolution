@@ -1,6 +1,6 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Pencil, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { Pencil, Plus, RefreshCw, Save, Trash2, X, FilePlus, Eraser } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { Dialog } from "../../components/ui/Dialog";
@@ -28,9 +28,18 @@ import {
   validateDetailRow,
 } from "./leaveEncashmentHelpers";
 
+/** Shape returned by saveLeaveEncashment — keep loose so API shape drift does not break the page. */
+type SaveLeaveEncashmentResult = {
+  message?: string;
+  lve_doc_no?: string | number | null;
+  doc_no?: string | number | null;
+  hdr_lve_slno?: string | number | null;
+  [key: string]: unknown;
+};
+
 const PARAM = {
   DIVISION: "DROP_DOWN_DIVISION",
-  DEPARTMENT: "DROP_DOWN_DEPT_BASED_ON_DIV",
+  DEPARTMENT: "HR_LEAVE_ENCASHMENT_DEPT_DROP_DOWN",
   SECTION: "HR_LEAVE_ENCASHMENT_SECTION_DROP_DOWN",
   EMPLOYEE: "HR_LEAVE_ENCASHMENT_EMPLOYEE_DROP_DOWN",
   DOC_NO: "HR_LEAVE_ENCASHMENT_DOC_NO_DROP_DOWN",
@@ -61,8 +70,6 @@ type DetailGridRow = LeaveDetailRow & {
   doc_approval_status?: string;
 };
 
-const FALLBACK_ID_PREFIX = "history-fallback-";
-
 const emptyFilters: FilterState = {
   divCode: "",
   divName: "",
@@ -73,6 +80,16 @@ const emptyFilters: FilterState = {
   employeeId: "",
   employeeName: "",
 };
+
+/** Display-only date formatter – strips time/Z so tables show YYYY-MM-DD */
+function formatDateDisplay(value: unknown): string {
+  if (value == null || value === "") return "";
+  const str = String(value).trim();
+  // ISO / SQL datetime → date part only
+  if (str.includes("T")) return str.split("T")[0];
+  if (str.includes(" ")) return str.split(" ")[0];
+  return str;
+}
 
 export function LeaveEncashmentPage() {
   const { user } = useAuth();
@@ -96,13 +113,17 @@ export function LeaveEncashmentPage() {
 
   const [lineEditorOpen, setLineEditorOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [confirmDeleteIndex, setConfirmDeleteIndex] = useState<number | null>(null);
 
   const employeeSelected = Boolean(filters.employeeId);
 
-  // Only one encashment detail line is allowed per document at a time.
-  // The Add button is hidden once a real (non-fallback) row exists in
-  // `details`, and reappears automatically once the row is removed.
-  const canAddLine = employeeSelected && details.length === 0;
+  const selectedHistoryRow = useMemo(
+    () => history.find((row) => String(row.lve_doc_no ?? "") === selectedDocNo),
+    [history, selectedDocNo],
+  );
+
+  // Add is available whenever an employee is selected and a document is not loading.
+  const canAddLine = employeeSelected && !loadingDoc;
 
   // ── Lookups ───────────────────────────────────────────────────────────────
 
@@ -126,6 +147,7 @@ export function LeaveEncashmentPage() {
           loginid,
           code1: filters.divCode,
           code2: filters.deptCode,
+          code3: companyCode,
         })) as LookupRow[])
       : [];
 
@@ -136,6 +158,7 @@ export function LeaveEncashmentPage() {
       code1: filters.divCode || undefined,
       code2: filters.divCode ? filters.deptCode || undefined : undefined,
       code3: filters.divCode ? filters.sectionCode || undefined : undefined,
+      code4: companyCode,
     })) as LookupRow[];
 
   const loadBalance = async (employeeId: string) => {
@@ -150,7 +173,10 @@ export function LeaveEncashmentPage() {
       });
       setBalances(data as LeaveBalanceRow[]);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load leave balance" });
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to load leave balance",
+      });
     } finally {
       setLoadingBalance(false);
     }
@@ -166,32 +192,41 @@ export function LeaveEncashmentPage() {
       });
       setDocNoOptions(data);
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load document list" });
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to load document list",
+      });
     }
   };
 
-  const loadHistory = async (employeeId: string) => {
+  const loadHistory = async (employeeId: string): Promise<LookupRow[]> => {
     try {
-      const data = await getDynamicLookup({
+      const data = (await getDynamicLookup({
         parameter: PARAM.LEAVE_HISTORY,
         loginid,
         code1: employeeId,
         code2: companyCode,
         code3: DOC_TYPE_LEAVE_ENCASHMENT,
-      });
+      })) as LookupRow[];
       setHistory(data);
+      return data;
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load encashment history" });
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to load encashment history",
+      });
+      return [];
     }
   };
 
-  const resetDocument = () => {
+  const resetDocument = useCallback(() => {
     setSelectedDocNo("");
     setHeader(emptyHeader(companyCode, filters.employeeId));
     setDetails([]);
     setEditingIndex(null);
     setLineEditorOpen(false);
-  };
+    setConfirmDeleteIndex(null);
+  }, [companyCode, filters.employeeId]);
 
   useEffect(() => {
     if (!filters.employeeId) {
@@ -205,12 +240,14 @@ export function LeaveEncashmentPage() {
     void loadBalance(filters.employeeId);
     void loadDocNoOptions(filters.employeeId);
     void loadHistory(filters.employeeId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.employeeId]);
 
   const loadDocument = async (hdrLveSlno: string) => {
     if (!hdrLveSlno || !filters.employeeId) return;
     setLoadingDoc(true);
     setNotice(null);
+    setConfirmDeleteIndex(null);
     try {
       const [headerRows, detailRows] = await Promise.all([
         getDynamicLookup({
@@ -231,18 +268,55 @@ export function LeaveEncashmentPage() {
         }),
       ]);
 
-      const loadedHeader = (headerRows[0] as LeaveHeader) || emptyHeader(companyCode, filters.employeeId);
+      const loadedHeader =
+        (headerRows[0] as LeaveHeader) || emptyHeader(companyCode, filters.employeeId);
       setHeader({ ...loadedHeader, hdr_lve_slno: hdrLveSlno });
-      setDetails(
-        (detailRows as LeaveDetailRow[]).map((row) => ({
-          ...row,
-          status: toStatusDisplay(row.status),
-          half_day: toHalfDayDisplay(row.half_day),
-          leave_reason: toLeaveReasonDisplay(row.leave_reason),
-        })),
-      );
+
+      const mappedDetails = (detailRows as LeaveDetailRow[]).map((row) => ({
+        ...row,
+        status: toStatusDisplay(row.status),
+        half_day: toHalfDayDisplay(row.half_day),
+        leave_reason: toLeaveReasonDisplay(row.leave_reason),
+      }));
+
+      // If DETAIL proc returns nothing, seed an editable line from history so
+      // the grid always has Edit / Delete actions (not a read-only placeholder).
+      if (mappedDetails.length === 0) {
+        const historyRow = history.find(
+          (row) => String(row.hdr_lve_slno ?? "") === String(hdrLveSlno),
+        );
+        if (historyRow) {
+          setDetails([
+            {
+              id: `seeded-${hdrLveSlno}`,
+              leave_type: String(historyRow.leave_type ?? ""),
+              leave_days:
+                historyRow.leave_days != null ? Number(historyRow.leave_days) : 0,
+              leave_reason: toLeaveReasonDisplay(String(historyRow.leave_reason ?? "")),
+              half_day: toHalfDayDisplay(String(historyRow.half_day ?? "")),
+              status: toStatusDisplay(String(historyRow.status ?? historyRow.approval_status ?? "")),
+              remarks: String(historyRow.remarks ?? ""),
+              lve_doc_no:
+                historyRow.lve_doc_no != null ? String(historyRow.lve_doc_no) : null,
+              leave_start_date: String(historyRow.leave_start_date ?? ""),
+              leave_end_date: String(historyRow.leave_end_date ?? ""),
+              company_code: companyCode,
+              employee_id: filters.employeeId,
+              hdr_lve_slno: hdrLveSlno,
+              doc_type: DOC_TYPE_LEAVE_ENCASHMENT,
+            },
+          ]);
+        } else {
+          setDetails([]);
+        }
+      } else {
+        setDetails(mappedDetails);
+      }
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load encashment document" });
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to load encashment document",
+      });
     } finally {
       setLoadingDoc(false);
     }
@@ -255,11 +329,18 @@ export function LeaveEncashmentPage() {
       const slno = row.hdr_lve_slno != null ? String(row.hdr_lve_slno) : "";
       if (docNo && slno) map.set(docNo, slno);
     });
+    // Also map from docNoOptions in case history is lagging
+    docNoOptions.forEach((row) => {
+      const docNo = row.lve_doc_no != null ? String(row.lve_doc_no) : "";
+      const slno = row.hdr_lve_slno != null ? String(row.hdr_lve_slno) : "";
+      if (docNo && slno && !map.has(docNo)) map.set(docNo, slno);
+    });
     return map;
-  }, [history]);
+  }, [history, docNoOptions]);
 
   const handleDocNoChange = (value: string) => {
     setSelectedDocNo(value);
+    setConfirmDeleteIndex(null);
     if (!value) {
       resetDocument();
       return;
@@ -283,104 +364,82 @@ export function LeaveEncashmentPage() {
     setLineEditorOpen(true);
   };
 
-  const openEditLine = (index: number) => {
+  const openEditLine = useCallback((index: number) => {
     setEditingIndex(index);
     setLineEditorOpen(true);
-  };
+  }, []);
 
   const closeLineEditor = () => {
     setLineEditorOpen(false);
     setEditingIndex(null);
   };
 
-  // `row` here is the form's working copy, which is a DetailGridRow and may
-  // carry display-only doc-level fields (lve_doc_no, doc_approval_status)
-  // that were merged in purely for rendering. HR_EMP_LEAVE_DET has no
-  // LVE_DOC_NO column — strip those before writing into `details`, the
-  // array that actually gets sent to the save API.
+  // `row` here is the form's working copy (DetailGridRow) and may carry
+  // display-only doc_approval_status merged for rendering. Strip it before
+  // writing into `details`, the source-of-truth sent to the save API.
   const saveDetailRow = (row: DetailGridRow) => {
-    const { doc_approval_status, lve_doc_no, ...lineFields } = row;
-    void doc_approval_status;
-    void lve_doc_no;
+    const { doc_approval_status: _docStatus, ...lineFields } = row;
+    void _docStatus;
 
     setDetails((current) => {
       if (editingIndex !== null && editingIndex >= 0 && editingIndex < current.length) {
         const next = [...current];
-        next[editingIndex] = { ...lineFields, id: current[editingIndex].id } as LeaveDetailRow;
+        next[editingIndex] = {
+          ...(lineFields as LeaveDetailRow),
+          id: current[editingIndex].id,
+        };
         return next;
       }
-      // Enforce single-line-per-document on the add path as well, in case
-      // openAddLine's guard was bypassed (e.g. dialog left open from a
-      // stale render). Editing an existing row is always allowed.
-      if (current.length > 0) return current;
-      return [...current, { ...lineFields, id: `new-${Date.now()}` } as LeaveDetailRow];
+      return [
+        ...current,
+        {
+          ...(lineFields as LeaveDetailRow),
+          id: `new-${Date.now()}`,
+        },
+      ];
     });
     closeLineEditor();
   };
 
-  const removeDetailRow = (index: number) => {
+  // Delete simply removes the row from the in-memory `details` array.
+  // User can then Save to persist the change.
+  const removeDetailRow = useCallback((index: number) => {
     setDetails((current) => current.filter((_, i) => i !== index));
-  };
+    setConfirmDeleteIndex(null);
+    setEditingIndex((idx) => (idx === index ? null : idx));
+  }, []);
 
-  // When the DETAIL proc returns rows, merge doc-level fields (doc no,
-  // start/end date, approval status) from the history list which carries them.
-  // When DETAIL returns nothing for a selected doc, fall back to the history
-  // row itself so the user sees something in the grid instead of an empty table.
-  // NOTE: the fallback row (id starting with FALLBACK_ID_PREFIX) is
-  // display-only and does NOT exist in `details` — actions on it must be
-  // disabled, see detailColumns below.
+  // Grid always reflects `details` (source of truth). Doc-level display fields
+  // from the selected history row are merged for columns only.
   const detailsForGrid = useMemo<DetailGridRow[]>(() => {
-    if (!selectedDocNo && details.length === 0) return [];
+    if (details.length === 0) return [];
 
-    const historyRow = history.find((row) => String(row.lve_doc_no ?? "") === selectedDocNo);
+    const historyRow = selectedDocNo
+      ? history.find((row) => String(row.lve_doc_no ?? "") === selectedDocNo)
+      : undefined;
 
-    if (details.length > 0) {
-      if (!historyRow) return details;
-      return details.map((row) => ({
-        ...row,
-        lve_doc_no: historyRow.lve_doc_no != null ? String(historyRow.lve_doc_no) : row.lve_doc_no,
-        leave_start_date:
-          historyRow.leave_start_date != null ? String(historyRow.leave_start_date) : row.leave_start_date,
-        leave_end_date:
-          historyRow.leave_end_date != null ? String(historyRow.leave_end_date) : row.leave_end_date,
-        doc_approval_status:
-          historyRow.approval_status != null ? String(historyRow.approval_status) : undefined,
-      }));
-    }
+    if (!historyRow) return details;
 
-    // DETAIL proc returned nothing — show history row as a display-only fallback
-    if (selectedDocNo && historyRow) {
-      return [
-        {
-          id: `${FALLBACK_ID_PREFIX}${selectedDocNo}`,
-          leave_type: String(historyRow.leave_type ?? ""),
-          leave_days: historyRow.leave_days != null ? Number(historyRow.leave_days) : undefined,
-          leave_reason: String(historyRow.leave_reason ?? ""),
-          half_day: String(historyRow.half_day ?? ""),
-          status: String(historyRow.approval_status ?? ""),
-          remarks: String(historyRow.remarks ?? ""),
-          lve_doc_no: String(historyRow.lve_doc_no ?? ""),
-          leave_start_date: String(historyRow.leave_start_date ?? ""),
-          leave_end_date: String(historyRow.leave_end_date ?? ""),
-          doc_approval_status: String(historyRow.approval_status ?? ""),
-          company_code: companyCode,
-          employee_id: filters.employeeId,
-          hdr_lve_slno: String(historyRow.hdr_lve_slno ?? ""),
-        } as DetailGridRow,
-      ];
-    }
+    return details.map((row) => ({
+      ...row,
+      lve_doc_no:
+        row.lve_doc_no != null && row.lve_doc_no !== ""
+          ? row.lve_doc_no
+          : historyRow.lve_doc_no != null
+            ? String(historyRow.lve_doc_no)
+            : row.lve_doc_no,
+      leave_start_date:
+        row.leave_start_date ||
+        (historyRow.leave_start_date != null ? String(historyRow.leave_start_date) : ""),
+      leave_end_date:
+        row.leave_end_date ||
+        (historyRow.leave_end_date != null ? String(historyRow.leave_end_date) : ""),
+      doc_approval_status:
+        historyRow.approval_status != null ? String(historyRow.approval_status) : undefined,
+    }));
+  }, [details, history, selectedDocNo]);
 
-    return [];
-  }, [details, history, selectedDocNo, companyCode, filters.employeeId]);
-
-  // FIX (Bug 1): editingRow must read from `detailsForGrid`, not `details`.
-  // `details` is the raw API/source-of-truth array and never carries
-  // lve_doc_no / doc_approval_status — those are merged in only on
-  // `detailsForGrid`. Editing from `details` caused the dialog to always
-  // show blank Doc No / Doc Status even though the table row displayed them.
   const editingRow = editingIndex !== null ? detailsForGrid[editingIndex] ?? null : null;
-
-  const isFallbackRow = (row: DetailGridRow) => String(row.id ?? "").startsWith(FALLBACK_ID_PREFIX);
 
   const detailColumns = useMemo<ColumnDef<DetailGridRow>[]>(
     () => [
@@ -391,30 +450,44 @@ export function LeaveEncashmentPage() {
       { accessorKey: "status", header: "Status" },
       { accessorKey: "remarks", header: "Remarks" },
       { accessorKey: "lve_doc_no", header: "Doc No" },
-      { accessorKey: "leave_start_date", header: "Start Date" },
-      { accessorKey: "leave_end_date", header: "End Date" },
+      { accessorKey: "leave_start_date", header: "Start Date",
+        cell: ({ getValue }) => formatDateDisplay(getValue()) },
+      { accessorKey: "leave_end_date", header: "End Date",
+        cell: ({ getValue }) => formatDateDisplay(getValue()) },
       { accessorKey: "doc_approval_status", header: "Doc Status" },
       {
         id: "actions",
         header: "Actions",
         enableSorting: false,
-        // NOTE: this DataTable wrapper only guarantees `row.index`, not a
-        // full TanStack row with `.original` — so look the row up from
-        // `detailsForGrid` (closed over here) by index instead of reading
-        // row.original directly. The synthetic "history fallback" row has
-        // no corresponding entry in `details`, so openEditLine/removeDetailRow
-        // (which operate by index into `details`) must never be wired to it.
         cell: ({ row }: { row: { index: number } }) => {
-          const original = detailsForGrid[row.index];
-          if (!original || isFallbackRow(original)) {
-            return <span className="text-xs text-muted-foreground">Add a line to edit</span>;
+          if (confirmDeleteIndex === row.index) {
+            return (
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant="outline" onClick={() => removeDetailRow(row.index)}>
+                  Confirm
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setConfirmDeleteIndex(null)}>
+                  Cancel
+                </Button>
+              </div>
+            );
           }
           return (
             <div className="flex items-center gap-1">
-              <Button size="icon" variant="ghost" onClick={() => openEditLine(row.index)}>
+              <Button
+                size="icon"
+                variant="ghost"
+                title="Edit line"
+                onClick={() => openEditLine(row.index)}
+              >
                 <Pencil size={14} />
               </Button>
-              <Button size="icon" variant="ghost" onClick={() => removeDetailRow(row.index)}>
+              <Button
+                size="icon"
+                variant="ghost"
+                title="Remove line"
+                onClick={() => setConfirmDeleteIndex(row.index)}
+              >
                 <Trash2 size={14} />
               </Button>
             </div>
@@ -422,12 +495,12 @@ export function LeaveEncashmentPage() {
         },
       },
     ],
-    [detailsForGrid],
+    [confirmDeleteIndex, openEditLine, removeDetailRow],
   );
 
   // ── Save ──────────────────────────────────────────────────────────────────
 
-  const canSave = employeeSelected && details.length > 0;
+  const canSave = employeeSelected && details.length > 0 && !loadingDoc;
 
   const saveDocument = async () => {
     if (!canSave) return;
@@ -435,58 +508,148 @@ export function LeaveEncashmentPage() {
     setNotice(null);
     try {
       const payload = buildLeaveEncashmentPayload(
-        { ...header, employee_id: filters.employeeId, company_code: companyCode, doc_type: DOC_TYPE_LEAVE_ENCASHMENT },
+        {
+          ...header,
+          employee_id: filters.employeeId,
+          company_code: companyCode,
+          doc_type: DOC_TYPE_LEAVE_ENCASHMENT,
+        },
         details,
         loginid,
       );
-      const result = await saveLeaveEncashment(payload);
-      setNotice({ type: "success", message: result.message || "Leave encashment saved successfully" });
+      const result = (await saveLeaveEncashment(payload)) as SaveLeaveEncashmentResult;
+      setNotice({
+        type: "success",
+        message: result?.message || "Leave encashment saved successfully",
+      });
+
+      // Refresh lists, then try to land on the saved document if we can resolve it
       await loadDocNoOptions(filters.employeeId);
-      await loadHistory(filters.employeeId);
+      const nextHistory = await loadHistory(filters.employeeId);
       await loadBalance(filters.employeeId);
+
+      const rawDoc =
+        result?.lve_doc_no != null && result.lve_doc_no !== ""
+          ? result.lve_doc_no
+          : result?.doc_no != null && result.doc_no !== ""
+            ? result.doc_no
+            : "";
+      const returnedDocNo = rawDoc !== "" ? String(rawDoc) : "";
+
+      if (returnedDocNo) {
+        setSelectedDocNo(returnedDocNo);
+        const slno =
+          nextHistory.find((r) => String(r.lve_doc_no ?? "") === returnedDocNo)?.hdr_lve_slno ??
+          result?.hdr_lve_slno ??
+          null;
+        if (slno != null && slno !== "") {
+          void loadDocument(String(slno));
+        }
+      } else if (selectedDocNo) {
+        // Re-load the current document so header/status stay in sync
+        const slno = docNoToHdrLveSlno.get(selectedDocNo);
+        if (slno) void loadDocument(slno);
+      } else {
+        // New document with no returned doc no — reset so the user starts clean
+        resetDocument();
+      }
     } catch (error) {
-      setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to save leave encashment" });
+      setNotice({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to save leave encashment",
+      });
     } finally {
       setSaving(false);
     }
   };
 
+  const clearFilters = () => {
+    setFilters(emptyFilters);
+    setBalances([]);
+    setDocNoOptions([]);
+    setHistory([]);
+    resetDocument();
+    setNotice(null);
+  };
+
+  const startNewDocument = () => {
+    if (!employeeSelected) return;
+    resetDocument();
+    setNotice(null);
+  };
+
+  // Header status: prefer live document status, fall back to history for selected doc
+  const headerStatusDisplay = useMemo(() => {
+    if (selectedHistoryRow?.approval_status) {
+      return String(selectedHistoryRow.approval_status);
+    }
+    return header.verified_status || "New";
+  }, [selectedHistoryRow, header.verified_status]);
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <section className="grid gap-2">
-      {/* Page title + actions — compact */}
+      {/* Page title + actions */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="m-0 text-lg font-semibold tracking-tight">Leave Encashment</h1>
+          {employeeSelected && (
+            <p className="m-0 text-xs text-muted-foreground">
+              {filters.employeeName
+                ? `${filters.employeeName} (${filters.employeeId})`
+                : filters.employeeId}
+              {selectedDocNo ? ` · Doc ${selectedDocNo}` : " · New document"}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <Button
             size="sm"
             variant="outline"
-            disabled={!filters.employeeId}
+            disabled={!filters.employeeId || loadingBalance}
             onClick={() => filters.employeeId && void loadBalance(filters.employeeId)}
+            title="Refresh leave balance"
           >
-            <RefreshCw size={13} /> Refresh
+            <RefreshCw size={13} className={loadingBalance ? "animate-spin" : undefined} /> Refresh
           </Button>
-          {/* Only one detail line is allowed per document — hide Add once a
-              real (non-fallback) row exists; it reappears after removal. */}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!employeeSelected || loadingDoc}
+            onClick={startNewDocument}
+            title="Start a new encashment document"
+          >
+            <FilePlus size={13} /> New
+          </Button>
           {canAddLine && (
-            <Button size="sm" onClick={openAddLine}>
+            <Button size="sm" onClick={openAddLine} title="Add encashment line">
               <Plus size={13} /> Add
             </Button>
           )}
-          <Button size="sm" disabled={!canSave || saving} onClick={() => void saveDocument()}>
-            <Save size={13} /> Save
+          <Button
+            size="sm"
+            disabled={!canSave || saving}
+            onClick={() => void saveDocument()}
+            title="Save document"
+          >
+            <Save size={13} /> {saving ? "Saving…" : "Save"}
           </Button>
         </div>
       </div>
 
       <NoticeToast notice={notice} onClose={() => setNotice(null)} />
 
-      {/* Org-structure filter cascade — compact padding */}
+      {/* Org-structure filter cascade */}
       <div className="rounded-md border bg-white p-2">
-        <p className="eyebrow mb-1.5 text-xs">Employee Selection</p>
+        <div className="mb-1.5 flex items-center justify-between gap-2">
+          <p className="eyebrow m-0 text-xs">Employee Selection</p>
+          {(filters.divCode || filters.employeeId) && (
+            <Button size="sm" variant="ghost" onClick={clearFilters} title="Clear all filters">
+              <Eraser size={12} /> Clear
+            </Button>
+          )}
+        </div>
         <div className="grid gap-2 md:grid-cols-4">
           <LookupField
             label="Division"
@@ -589,7 +752,9 @@ export function LeaveEncashmentPage() {
                   divCode,
                   divName: divCode ? String(row.div_name ?? (current.divName || divCode)) : current.divName,
                   deptCode,
-                  deptName: deptCode ? String(row.dept_name ?? (current.deptName || deptCode)) : current.deptName,
+                  deptName: deptCode
+                    ? String(row.dept_name ?? (current.deptName || deptCode))
+                    : current.deptName,
                   sectionCode,
                   sectionName: sectionCode
                     ? String(row.section_name ?? (current.sectionName || sectionCode))
@@ -602,9 +767,15 @@ export function LeaveEncashmentPage() {
         </div>
       </div>
 
+      {!employeeSelected && (
+        <div className="rounded-md border border-dashed bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
+          Select an employee to view leave balance, history, and create an encashment document.
+        </div>
+      )}
+
       {employeeSelected && (
         <>
-          {/* Document header — all fields in one compact row */}
+          {/* Document header */}
           <div className="rounded-md border bg-white p-2">
             <div className="grid gap-2 md:grid-cols-4">
               <label className="field">
@@ -612,6 +783,7 @@ export function LeaveEncashmentPage() {
                 <select
                   className="ui-input h-8 rounded-md border px-2 text-sm"
                   value={selectedDocNo}
+                  disabled={loadingDoc || saving}
                   onChange={(event) => handleDocNoChange(event.target.value)}
                 >
                   <option value="">New (unsaved)</option>
@@ -628,25 +800,31 @@ export function LeaveEncashmentPage() {
                   type="date"
                   className="h-8 text-sm"
                   value={toDateInputValue(header.leave_request_date)}
-                  onChange={(event) => setHeader((current) => ({ ...current, leave_request_date: event.target.value }))}
+                  disabled={loadingDoc || saving}
+                  onChange={(event) =>
+                    setHeader((current) => ({ ...current, leave_request_date: event.target.value }))
+                  }
                 />
               </label>
               <label className="field">
                 <span className="text-xs">Leave Status</span>
-                <Input className="h-8 text-sm" value={header.verified_status || "New"} disabled />
+                <Input className="h-8 text-sm" value={headerStatusDisplay} disabled />
               </label>
               <label className="field">
                 <span className="text-xs">Remarks</span>
                 <Input
                   className="h-8 text-sm"
                   value={header.leave_remarks || ""}
-                  onChange={(event) => setHeader((current) => ({ ...current, leave_remarks: event.target.value }))}
+                  disabled={loadingDoc || saving}
+                  onChange={(event) =>
+                    setHeader((current) => ({ ...current, leave_remarks: event.target.value }))
+                  }
                 />
               </label>
             </div>
           </div>
 
-          {/* Leave detail lines — reduced height */}
+          {/* Leave detail lines */}
           <DataTable
             columns={detailColumns}
             data={detailsForGrid}
@@ -657,7 +835,7 @@ export function LeaveEncashmentPage() {
             getRowId={(row, index) => String(row.id ?? index)}
           />
 
-          {/* Leave balance + history side by side — reduced height */}
+          {/* Leave balance + history */}
           <div className="grid gap-2 md:grid-cols-2">
             <div className="rounded-md border bg-white">
               <div className="border-b px-3 py-1.5">
@@ -701,9 +879,12 @@ export function LeaveEncashmentPage() {
                       );
                     },
                   },
-                  { accessorKey: "leave_request_date", header: "Request Date" },
-                  { accessorKey: "leave_start_date", header: "Start Date" },
-                  { accessorKey: "leave_end_date", header: "End Date" },
+                  { accessorKey: "leave_request_date", header: "Request Date",
+                    cell: ({ getValue }) => formatDateDisplay(getValue()) },
+                  { accessorKey: "leave_start_date", header: "Start Date",
+                    cell: ({ getValue }) => formatDateDisplay(getValue()) },
+                  { accessorKey: "leave_end_date", header: "End Date",
+                    cell: ({ getValue }) => formatDateDisplay(getValue()) },
                   { accessorKey: "approval_status", header: "Status" },
                 ]}
                 data={history}
@@ -733,7 +914,6 @@ export function LeaveEncashmentPage() {
 }
 
 // ── Line editor dialog ────────────────────────────────────────────────────────
-// 2-column layout with all 10 grid columns covered as editable fields.
 
 function LeaveLineEditor({
   open,
@@ -758,39 +938,76 @@ function LeaveLineEditor({
 }) {
   const isEditing = Boolean(editingRow);
 
-  const [form, setForm] = useState<DetailGridRow>(
-    editingRow || (emptyDetailRow(companyCode, employeeId, hdrLveSlno) as DetailGridRow),
+  const [form, setForm] = useState<DetailGridRow>(() =>
+    editingRow
+      ? { ...editingRow }
+      : { ...emptyDetailRow(companyCode, employeeId, hdrLveSlno) },
   );
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (open) {
-      setForm(editingRow || (emptyDetailRow(companyCode, employeeId, hdrLveSlno) as DetailGridRow));
+      setForm(
+        editingRow
+          ? { ...editingRow }
+          : { ...emptyDetailRow(companyCode, employeeId, hdrLveSlno) },
+      );
       setError("");
     }
   }, [open, editingRow, companyCode, employeeId, hdrLveSlno]);
 
   const selectedBalance = findBalanceForType(balances, form.leave_type || "");
 
-  // Loads leave types from MS_HR_LEAVE_TYPES for the company, excluding any
-  // row explicitly flagged as not encashable (ENCASHMENT = 'N'). Rows with
-  // ENCASHMENT null/blank/'Y' (or anything other than 'N') are shown.
+  const availableDays = selectedBalance
+    ? Number(
+        selectedBalance.leave_balance ??
+          selectedBalance.no_of_leaves_available ??
+          0,
+      )
+    : 0;
+
+  // Only leave types that appear in the balance table (no extra API call needed).
   const loadLeaveTypes = async () => {
-    const rows = (await getDynamicLookup({
-      parameter: "HR_LEAVE_ENCASHMENT_LEAVE_TYPE_DROP_DOWN",
-      loginid,
-      code1: companyCode,
-    })) as LookupRow[];
-    return rows.filter((row) => String(row.encashment ?? "").trim().toUpperCase() !== "N");
+    return balances
+      .filter((b) => String(b.leave_type ?? "").trim() !== "")
+      .map((b) => ({
+        leave_type: String(b.leave_type),
+        leave_type_desc: String(b.leave_type_desc ?? b.leave_type),
+      }));
   };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    const validationError = validateDetailRow(form, balances);
+
+    const validationError = validateDetailRow(form as LeaveDetailRow, balances);
     if (validationError) {
       setError(validationError);
       return;
     }
+
+    // Hard cap: days must not exceed available balance for the chosen type.
+    const days = Number(form.leave_days ?? 0);
+    if (!form.leave_type) {
+      setError("Leave type is required");
+      return;
+    }
+    if (!selectedBalance) {
+      setError(`No balance found for "${form.leave_type}"`);
+      return;
+    }
+    if (days <= 0) {
+      setError("Days must be greater than 0");
+      return;
+    }
+    if (days > availableDays) {
+      setError(
+        `Cannot exceed available balance of ${availableDays} day(s) for ${
+          selectedBalance.leave_type_desc || form.leave_type
+        }`,
+      );
+      return;
+    }
+
     onSave(form);
   };
 
@@ -811,9 +1028,11 @@ function LeaveLineEditor({
         </>
       }
     >
-      <form id="leave-encashment-line-form" className="grid grid-cols-2 gap-x-4 gap-y-2" onSubmit={submit}>
-
-        {/* Row 1: Leave Type + Days */}
+      <form
+        id="leave-encashment-line-form"
+        className="grid grid-cols-2 gap-x-4 gap-y-2"
+        onSubmit={submit}
+      >
         <label className="field">
           <span className="text-xs font-medium">Leave Type *</span>
           <LookupField
@@ -827,7 +1046,14 @@ function LeaveLineEditor({
             valueField="leave_type"
             displayFields={["leave_type", "leave_type_desc"]}
             loadOptions={loadLeaveTypes}
-            onChange={(value) => setForm((c) => ({ ...c, leave_type: value }))}
+            onChange={(value) =>
+              setForm((c) => ({
+                ...c,
+                leave_type: value,
+                // Clear days when type changes so user re-enters within new balance
+                leave_days: c.leave_type === value ? c.leave_days : 0,
+              }))
+            }
             required
           />
         </label>
@@ -838,25 +1064,26 @@ function LeaveLineEditor({
             type="number"
             className="h-8 text-sm"
             min={0}
+            max={availableDays > 0 ? availableDays : undefined}
             step={0.5}
             value={String(form.leave_days ?? "")}
-            onChange={(e) => setForm((c) => ({ ...c, leave_days: Number(e.target.value) }))}
+            onChange={(e) => {
+              const raw = e.target.value;
+              const next = raw === "" ? 0 : Number(raw);
+              setForm((c) => ({ ...c, leave_days: next }));
+            }}
             required
           />
         </label>
 
-        {/* Balance hint */}
         {form.leave_type && (
           <p className="col-span-2 -mt-1 m-0 text-xs text-muted-foreground">
             {!selectedBalance
               ? `No balance found for "${form.leave_type}"`
-              : `${selectedBalance.leave_type_desc || selectedBalance.leave_type} — available: ${
-                  selectedBalance.leave_balance ?? selectedBalance.no_of_leaves_available ?? 0
-                } day(s)`}
+              : `${selectedBalance.leave_type_desc || selectedBalance.leave_type} — available: ${availableDays} day(s)`}
           </p>
         )}
 
-        {/* Row 2: Start Date + End Date */}
         <label className="field">
           <span className="text-xs font-medium">Start Date</span>
           <Input
@@ -877,7 +1104,6 @@ function LeaveLineEditor({
           />
         </label>
 
-        {/* Row 3: Half Day + Status */}
         <label className="field">
           <span className="text-xs font-medium">Half Day</span>
           <select
@@ -886,12 +1112,13 @@ function LeaveLineEditor({
             onChange={(e) => setForm((c) => ({ ...c, half_day: e.target.value }))}
           >
             {HALF_DAY_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>{opt}</option>
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
             ))}
           </select>
         </label>
 
-        {/* Status maps "Active"/"Inactive" to "A"/"I" in buildLeaveEncashmentPayload */}
         <label className="field">
           <span className="text-xs font-medium">Status</span>
           <select
@@ -900,15 +1127,13 @@ function LeaveLineEditor({
             onChange={(e) => setForm((c) => ({ ...c, status: e.target.value }))}
           >
             {STATUS_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>{opt}</option>
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
             ))}
           </select>
         </label>
 
-        {/* Row 4: Doc No + Doc Status — read-only: doc number is assigned by
-            the backend (HDR_LVE_SLNO -> LVE_DOC_NO) and approval status is a
-            header-level value; neither is a column on HR_EMP_LEAVE_DET, so
-            they must not be free-typed as if they were per-line fields. */}
         <label className="field">
           <span className="text-xs font-medium">Doc No</span>
           <Input
@@ -929,7 +1154,6 @@ function LeaveLineEditor({
           />
         </label>
 
-        {/* Row 5: Reason + Remarks */}
         <label className="field">
           <span className="text-xs font-medium">Reason</span>
           <Input

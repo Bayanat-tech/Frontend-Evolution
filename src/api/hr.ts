@@ -1,4 +1,5 @@
 import { TEmployeeHr } from "../pages/hr/Employee Master/employee-hr.types";
+import { IHrEmployee, IValidateLeaveResponse } from "../pages/hr/leave/leave-approval-types";
 import { api } from "./client";
 import { LookupRow } from "./lookups";
 
@@ -90,6 +91,25 @@ export async function getHrEmployees(loginId?: string) {
   return normalizeApiRows<HrEmployee>(response.data, "Unable to load employees");
 }
 
+export async function getEmployees(loginId?: string): Promise<IHrEmployee[]> {
+
+  const config = loginId ? { params: { loginid: loginId } } : {};
+  const response = await api.get('/api/hr/gm/employees', config);
+  console.log('Full API response:', response);
+
+  if (response.data && Array.isArray(response.data?.data)) {
+        return response.data;
+      }
+
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+
+      console.warn('Unexpected response structure:', response.data);
+      return [];
+
+}
+
 export async function getHrLeaveEntitlement(employeeId: string) {
   const response = await withHrFallback((prefix) => api.get<ApiResponse<HrLeaveEntitlement[]> | HrLeaveEntitlement[]>(`${prefix}/gm/leaveentitle/${employeeId}`));
   return normalizeApiRows<HrLeaveEntitlement>(response.data, "Unable to load leave entitlement");
@@ -105,7 +125,7 @@ export type ValidateLeavePayload = {
 };
 
 export async function validateHrLeave(payload: ValidateLeavePayload) {
-  const response = await withHrFallback((prefix) => api.get<unknown>(`${prefix}/gm/validateleave`, {
+  const response = await withHrFallback((prefix) => api.get<IValidateLeaveResponse>(`${prefix}/gm/validateleave`, {
     params: payload,
   }));
   return response.data;
@@ -197,6 +217,31 @@ export async function executeHrRawSql<T = Record<string, unknown>>(rawSql: strin
   if (payload.success === false) throw new Error(("error" in payload && payload.error) || "Unable to execute HR query");
   return normalizeApiRows<T>(payload, "Unable to execute HR query");
 }
+
+
+export async function   executeRawSql (rawSql: string): Promise<any[] | null>  {
+    try {
+      if (!rawSql) {
+        console.warn('Missing raw SQL input.');
+        return null;
+      }
+
+      console.log('Executing raw SQL:', rawSql);
+
+      const response = await api.post('api/HR/gm/executeRawSql', { raw_sql: rawSql });
+
+      if (response.data?.success && response.data?.data) {
+        console.log('Raw SQL execution result:', response.data.data);
+        return response.data.data;
+      } else {
+        console.error('SQL execution failed:', response.data?.error);
+        return null;
+      }
+    } catch (error: unknown) {
+      console.error('Error in executeRawSql:', (error as { message: string }).message);
+      return null;
+    }
+  };
 
 export async function getHrLeaveHistory(params: {
   employeeId: string;
