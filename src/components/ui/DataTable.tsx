@@ -346,10 +346,13 @@ export function DataTable<TData, TValue>({
   };
 
   return (
-    <div className="data-table-wrap grid w-full min-w-0 max-w-full gap-2">
-      <div className={cn("data-table-shell w-full min-w-0 max-w-full overflow-hidden rounded-xl border bg-card shadow-[0_6px_16px_rgba(15,23,42,0.05)]", GRID_OUTLINE)}>
+    <div className="data-table-wrap grid w-full min-w-0 max-w-full gap-3">
+      {/* SECTION 1 — search / column-visibility / toolbar / export. Sits
+          directly on the page background, outside the grid's own bordered
+          card, so it reads as a separate toolbar row rather than being
+          fused to the table (matches the reference layout). */}
       {(onSearchChange || toolbar || enableColumnVisibility || showExport) && (
-        <div className={cn("data-table-header grid gap-2 border-b bg-white px-3 py-2", GRID_LINE)}>
+        <div className={cn("data-table-header grid gap-2 rounded-2xl border bg-card px-3 py-2.5 shadow-[0_10px_24px_rgba(15,23,42,0.06)]", GRID_OUTLINE)}>
           <div className="data-table-actions flex w-full flex-wrap items-center justify-between gap-2">
             {onSearchChange && (
               <label className={cn("data-table-search flex h-10 w-full min-w-[260px] max-w-[520px] items-center gap-2 rounded-full border bg-[#fbfdff] px-3 text-muted-foreground shadow-inner", GRID_OUTLINE)}>
@@ -398,6 +401,9 @@ export function DataTable<TData, TValue>({
         </div>
       )}
 
+      {/* SECTION 2 — the grid itself: header, rows, and pagination footer,
+          all inside one rounded card of their own. */}
+      <div className={cn("data-table-shell w-full min-w-0 max-w-full overflow-hidden rounded-2xl border bg-card shadow-[0_10px_24px_rgba(15,23,42,0.06)]", GRID_OUTLINE)}>
       <div
         ref={topScrollRef}
         className="data-table-x-scrollbar"
@@ -472,7 +478,7 @@ export function DataTable<TData, TValue>({
                         onClick={header.column.getToggleSortingHandler()}
                       >
                         <div className="flex min-h-7 items-center justify-between gap-2">
-                          <span className="flex items-center gap-1 whitespace-nowrap">
+                          <span className="flex items-center gap-1.5 whitespace-nowrap text-[13px] font-medium normal-case text-foreground/80">
                             {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                             {header.column.getCanSort() && (
                               <SortIcon sorted={header.column.getIsSorted()} />

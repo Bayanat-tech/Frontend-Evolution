@@ -102,8 +102,16 @@ const columns = useMemo<ColumnDef<WmsRow>[]>(() => [
         return [code, name].filter(Boolean).join(" - ") || "-";
       },
     },
-    { accessorKey: "div_code", header: "Division Code", size: 100, cell: ({ row }) => val(row.original, "div_code") || "-" },
-    { accessorKey: "div_name", header: "Division", size: 120, cell: ({ row }) => val(row.original, "div_name") || "-" },
+    {
+      id: "division",
+      header: "Division",
+      size: 180,
+      cell: ({ row }) => {
+        const code = val(row.original, "div_code");
+        const name = val(row.original, "div_name");
+        return [code, name].filter(Boolean).join(" - ") || "-";
+      },
+    },
     { accessorKey: "job_no", header: "Job No", size: 110, cell: ({ row }) => val(row.original, "job_no") || "-" },
     // { accessorKey: "other_job", header: "Other Job", size: 110, cell: ({ row }) => val(row.original, "other_job") || "-" },
     { accessorKey: "cust_code", header: "Customer Code", size: 120, cell: ({ row }) => val(row.original, "cust_code") || "-" },
@@ -199,6 +207,31 @@ const columns = useMemo<ColumnDef<WmsRow>[]>(() => [
     },
   ], []);
 
+  // NOTE: this used to render InvoiceForm as an overlay Dialog on top of the
+  // listing. Per request, the form is now an in-page view — this component
+  // swaps its ENTIRE body between the listing and the form instead, so the
+  // page's own sidebar/breadcrumb chrome (rendered by the layout around
+  // InvoicePage) stays visible and untouched the whole time, same as
+  // switching from "Normal Sales Transaction" to "Modify Normal Sales
+  // Transaction" in the reference app.
+  if (formOpen) {
+    return (
+      <section className="grid gap-4">
+        <InvoiceForm
+          existingData={editingRow ?? undefined}
+          viewMode={viewMode}
+          onClose={(shouldRefetch) => {
+            setFormOpen(false);
+            if (shouldRefetch) {
+              void loadRows(false);
+              setNotice({ type: "success", message: "Invoice saved successfully." });
+            }
+          }}
+        />
+      </section>
+    );
+  }
+
   return (
     <section className="grid gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -236,20 +269,6 @@ const columns = useMemo<ColumnDef<WmsRow>[]>(() => [
           return inv ? `${co}-${prin}-${inv}` : String(index);
         }}
       />
-
-      {formOpen && (
-        <InvoiceForm
-          existingData={editingRow ?? undefined}
-          viewMode={viewMode}
-          onClose={(shouldRefetch) => {
-            setFormOpen(false);
-            if (shouldRefetch) {
-              void loadRows(false);
-              setNotice({ type: "success", message: "Invoice saved successfully." });
-            }
-          }}
-        />
-      )}
     </section>
   );
 }
