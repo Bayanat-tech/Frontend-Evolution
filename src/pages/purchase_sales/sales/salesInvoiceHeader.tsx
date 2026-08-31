@@ -87,7 +87,7 @@ export function SalesInvoiceHeaderForm({
                         }))}
                     />
                 </div>
-                <div className="col-span-2">
+                {/* <div className="col-span-2">
                     <LookupField
                         label="Division *"
                         value={form.div_code}
@@ -103,7 +103,7 @@ export function SalesInvoiceHeaderForm({
                             div_name: text(getLookupValue(row || {}, "div_name")),
                         }))}
                     />
-                </div>
+                </div> */}
 
                 {(String(docType ?? "").trim().toUpperCase() === "PIN" ||
                     String(docType ?? "").trim().toUpperCase() === "SIN") && (
@@ -141,8 +141,8 @@ export function SalesInvoiceHeaderForm({
                                         doc_date: toDateInputValue(getLookupValue(row || {}, "doc_date")),
                                         so_doc_date: toDateInputValue(getLookupValue(row || {}, "so_doc_date")),
                                         so_doc_no: text(getLookupValue(row || {}, "so_doc_no")),
-                                        so_ac_code: text(getLookupValue(row || {}, "so_ac_code")),
-                                        so_ac_name: text(getLookupValue(row || {}, "so_ac_name")),
+                                        ac_code: text(getLookupValue(row || {}, "ac_code")),
+                                        ac_name: text(getLookupValue(row || {}, "ac_name")),
                                         so_dept_code: text(getLookupValue(row || {}, "so_dept_code")),
                                         remarks: text(getLookupValue(row || {}, "remarks")),
                                         so_remarks: text(getLookupValue(row || {}, "so_remarks")),
@@ -353,7 +353,7 @@ export function SalesInvoiceHeaderForm({
 
             <CompactSection label="Order, Currency & Tax">
 
-                <div className="col-span-2">
+                <div className="col-span-1">
                     <LookupField
                         label="Currency *"
                         value={form.curr_code || ""}
@@ -566,13 +566,6 @@ export function SalesInvoiceHeaderForm({
                         ))}
                     </Select>
                 </CField>
-            </CompactSection>
-
-
-            <CompactSection
-                label="Delivery"
-                className="border-b-0"
-            >
                 <CField label="Delivery Contact">
                     <Input
                         disabled={headerAndLineDisabled}
@@ -593,7 +586,7 @@ export function SalesInvoiceHeaderForm({
                     />
                 </CField>
 
-                <CField label="Delivery Email" className="col-span-1">
+                <CField label="Delivery Email" className="col-span-2">
                     <Input
                         disabled={headerAndLineDisabled}
                         type="email"
@@ -604,6 +597,14 @@ export function SalesInvoiceHeaderForm({
                     />
                 </CField>
             </CompactSection>
+
+
+            {/* <CompactSection
+                label="Delivery"
+                className="border-b-0"
+            >
+                
+            </CompactSection> */}
         </div>
     );
 }

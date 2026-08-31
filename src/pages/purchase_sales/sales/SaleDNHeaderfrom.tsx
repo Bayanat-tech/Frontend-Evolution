@@ -133,6 +133,7 @@ export function SalesDNHeaderForm({
                                 ...current,
                                 so_doc_no: soDocNo,
                                 ac_code: text(lookupValue(selectedRow, "ac_code", "ac_code")),
+                                   ac_name: text(lookupValue(selectedRow, "ac_name", "ac_name")),
                                 so_doc_date: toDateInputValue(
                                     lookupValue(selectedRow, "so_doc_date", "doc_date")
                                 ),
@@ -230,7 +231,7 @@ export function SalesDNHeaderForm({
                 </CField>
 
 
-                <div className="col-span-2">
+                {/* <div className="col-span-2">
                     <LookupField
                         label="Division *"
                         value={form.div_code}
@@ -246,7 +247,7 @@ export function SalesDNHeaderForm({
                             div_name: text(getLookupValue(row || {}, "div_name")),
                         }))}
                     />
-                </div>
+                </div> */}
 
 
 

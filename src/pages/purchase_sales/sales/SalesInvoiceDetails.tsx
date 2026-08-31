@@ -394,20 +394,20 @@ export function SalesInvoiceLinesTable({
                     />
                   </td>
                   <td className="finance-amount-cell w-28 px-2 py-1">
-                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.0001" value={row.sorder_unit_price} onChange={(event) => updateRow(row.id, { sorder_unit_price: Number(event.target.value || 0) })} />
+                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.0001" value={row.unit_price} onChange={(event) => updateRow(row.id, { unit_price: Number(event.target.value || 0) })} />
                   </td>
                   <td className="finance-amount-cell px-2 py-1 text-right">
                     {formatAmount(quantity)}
                   </td>
 
                   <td className="finance-amount-cell w-24 px-2 py-1">
-                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.sorder_disc_percent} onChange={(event) => updateRow(row.id, { sorder_disc_percent: Number(event.target.value || 0) })} />
+                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.disc_percent} onChange={(event) => updateRow(row.id, { disc_percent: Number(event.target.value || 0) })} />
                   </td>
-                  <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineDiscPoPrice(row))}</td>
-                  <td className="finance-amount-cell px-2 py-1 text-right">{formatAmount(finalPORate(row))}</td>
-                  <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(linePOAmount(row))}</td>
+                  <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineDiscPrice(row))}</td>
+                  <td className="finance-amount-cell px-2 py-1 text-right">{formatAmount(finalRate(row))}</td>
+                  <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineAmount(row))}</td>
                   <td className="finance-amount-cell w-32 px-2 py-1 text-right">
-                    {formatAmount(lcurrAmountPOValue)}
+                    {formatAmount(lcurrAmountValue)}
                   </td>
                   <td className="w-40 px-2 py-1">
                     <Select
@@ -416,7 +416,7 @@ export function SalesInvoiceLinesTable({
                         const taxType = event.target.value;
                         const taxPerc = taxType === "S" ? 5 : 0;
                         {/* FIX #1: call linePOAmount(row), not the bare function reference */ }
-                        const taxAmt = taxType === "S" ? (Number(linePOAmount(row)) || 0) * (taxPerc / 100) : 0;
+                        const taxAmt = taxType === "S" ? (Number(lineAmount(row)) || 0) * (taxPerc / 100) : 0;
                         updateRow(row.id, {
                           sorder_tx_compnt_1_expmt: taxType,
                           sorder_tx_compnt_perc_1: taxPerc,
@@ -434,7 +434,7 @@ export function SalesInvoiceLinesTable({
                     {/* FIX #2: write to sorder_tx_compnt_perc_1, matching the displayed value */}
                     <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.sorder_tx_compnt_perc_1} onChange={(event) => updateRow(row.id, { sorder_tx_compnt_perc_1: Number(event.target.value || 0) })} />
                   </td>
-                  <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineTaxpoAmount(row))}</td>
+                  <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineTaxAmount(row))}</td>
 
                   <td className="w-32 px-2 py-1">
                     <Input type="date" disabled={headerAndLineDisabled} value={row.sorder_required_dt} onChange={(event) => updateRow(row.id, { sorder_required_dt: event.target.value })} />
@@ -513,10 +513,10 @@ export function SalesInvoiceLinesTable({
                     />
                   </td>
                   <td className="finance-amount-cell w-32 px-2 py-1 text-right">
-                    {formatAmount(taxLcurrAmountpoValue)}
+                    {formatAmount(taxLcurrAmountValue)}
                   </td>
                   <td className="finance-amount-cell w-32 px-2 py-1 text-right">
-                    {formatAmount(lineLcurrPOAmount(row, ex_rate) + taxLcurrpoAmount(row, ex_rate))}
+                    {formatAmount(lineLcurrAmount(row, ex_rate) + taxLcurrAmount(row, ex_rate))}
                   </td>
                   <td className="px-2 py-1">
                     <Button disabled={headerAndLineDisabled} size="icon" type="button" variant="ghost" onClick={() => removeRow(row.id)}><X size={14} /></Button>

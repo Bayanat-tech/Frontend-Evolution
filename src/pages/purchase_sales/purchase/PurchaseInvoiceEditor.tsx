@@ -76,7 +76,7 @@ export function PurchaseInvoiceEditor({
   const [sendBackDialogOpen, setSendBackDialogOpen] = useState(false);
   const [sendBackUser, setSendBackUser] = useState("");
   const [sendBackUserName, setSendBackUserName] = useState("");
-    const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [sendBackUserLevel, setSendBackUserLevel] = useState<number>(0);
   const [sendBackReason, setSendBackReason] = useState("");
   const [sendBackError, setSendBackError] = useState("");
@@ -102,10 +102,11 @@ export function PurchaseInvoiceEditor({
     setRows((current) =>
       current.map((row) => ({
         ...row,
-        tax_code: form.tx_compntcat_code_1,
-        tax_cat: form.tx_cat_code,
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        tx_cat_code: `${form.tx_cat_code || ""}`,
         disc_price: row.disc_price || form.disc_hdr_price,
         disc_percent: row.disc_percent || form.disc_hdr_percent,
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
       }))
     );
   }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price]);
@@ -137,8 +138,7 @@ export function PurchaseInvoiceEditor({
 
           po_doc_no: text(headerRaw.po_doc_no),
           po_doc_date: toDateInputValue(headerRaw.po_doc_date),
-          po_ac_code: text(headerRaw.po_ac_code),
-          po_ac_name: text(headerRaw.po_party_name),
+          ac_name: text(headerRaw.ac_name),
           po_dept_code: text(headerRaw.po_dept_code),
           po_remarks: text(headerRaw.po_remarks),
           po_ref_no: text(headerRaw.po_ref_no),
@@ -168,6 +168,7 @@ export function PurchaseInvoiceEditor({
 
           pi_doc_no: text(headerRaw.pi_doc_no),
           pi_doc_date: toDateInputValue(headerRaw.pi_doc_date),
+          tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt),
         }));
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
@@ -231,10 +232,11 @@ export function PurchaseInvoiceEditor({
       ...current,
       {
         ...emptyLineRow(form.div_code),
-        tax_code: form.tx_compntcat_code_1,
-        tax_cat: form.tx_cat_name,
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        tx_cat_code: `${form.tx_cat_code || ""}`,
         disc_price: form.disc_hdr_price,
         disc_percent: form.disc_hdr_percent,
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
@@ -262,6 +264,8 @@ export function PurchaseInvoiceEditor({
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
+    if (!form.inv_no) return setError("Invoice Number  is required");
+    if (!form.inv_date) return setError("Invoice Date is required");
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", PO_DOC_TYPE.PIN, form, rows, user?.company_code, user?.loginid || user?.username);
     }, editMode ? "Purchase Invoice updated successfully" : "Purchase Invoice created successfully");
@@ -384,6 +388,12 @@ export function PurchaseInvoiceEditor({
                   <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}</strong>
                 </div>
               )}
+              {form.div_code && (
+                <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
+                  <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Division Code</span>
+                  <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}</strong>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
@@ -393,7 +403,7 @@ export function PurchaseInvoiceEditor({
                   <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
                 </>
               )}
-                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+              <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
                 <Paperclip size={15} /> Files
               </Button>
               <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
@@ -516,7 +526,7 @@ export function PurchaseInvoiceEditor({
         onClose={closeRejectDialog}
         onConfirm={confirmReject}
       />
-       <AttachmentDialog
+      <AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
         requestNumber={form.doc_no ? String(form.doc_no) : ""}

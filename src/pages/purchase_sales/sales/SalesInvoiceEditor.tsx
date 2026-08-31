@@ -181,6 +181,7 @@ export function SalesInvoiceEditor({
           so_scope_of_work: text(headerRaw.so_scope_of_work),
           so_buyer: text(headerRaw.so_buyer),
           total_so_amount: numberOrZero(headerRaw.total_so_amount),
+          tx_compnt_1_expmt:text(headerRaw.tx_compnt_1_expmt),
 
           pi_doc_no: text(headerRaw.pi_doc_no),
           si_doc_date: toDateInputValue(headerRaw.si_doc_date),
@@ -253,7 +254,18 @@ export function SalesInvoiceEditor({
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
 
-  const addRow = () => setRows((current) => [...current, emptyLineRow(form.div_code)]);
+   const addRow = () =>
+    setRows((current) => [
+      ...current,
+      {
+        ...emptyLineRow(form.div_code),
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        tx_cat_code: `${form.tx_cat_code || ""}`,
+        disc_price: form.disc_hdr_price,
+        disc_percent: form.disc_hdr_percent,
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
+      },
+    ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
 
   const runAction = async (
@@ -295,6 +307,8 @@ export function SalesInvoiceEditor({
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
+        if (!form.inv_no) return setError("Invoice Number  is required");
+    if (!form.inv_date) return setError("Invoice Date is required");
     return runAction(
       "submit",
       async () => {
@@ -496,6 +510,15 @@ export function SalesInvoiceEditor({
                   <strong className="block truncate text-sm leading-tight text-primary-foreground">
                     {form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}
                   </strong>
+                </div>
+
+                
+              )}
+              
+                {form.div_code && (
+                <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
+                  <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Division Code</span>
+                  <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}</strong>
                 </div>
               )}
             </div>

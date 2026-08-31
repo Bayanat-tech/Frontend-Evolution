@@ -97,7 +97,7 @@ export function PurchaseOrderHeaderForm({
               <Input type="date" disabled={headerAndLineDisabled} value={form.ref_date} onChange={(e) => updateField("ref_date", e.target.value)} />
             </CField>
 
-            <div className="col-span-2">
+            {/* <div className="col-span-2">
               <LookupField
                 label="Division *"
                 value={form.div_code}
@@ -113,7 +113,7 @@ export function PurchaseOrderHeaderForm({
                   div_name: text(getLookupValue(row || {}, "div_name")),
                 }))}
               />
-            </div>
+            </div> */}
 
             <div className="col-span-2">
               <LookupField
@@ -135,7 +135,7 @@ export function PurchaseOrderHeaderForm({
                 }))}
               />
             </div>
-              <div className="col-span-2">
+              <div className="col-span-1">
               <LookupField
                 label="Currency *"
                 value={form.curr_code}

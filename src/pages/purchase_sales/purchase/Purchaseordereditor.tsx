@@ -101,7 +101,7 @@ export function PurchaseOrderEditor({
         tx_cat_code: `${form.tx_cat_code || ""}`,
         disc_price: row.disc_price || form.disc_hdr_price,
         disc_percent: row.disc_percent || form.disc_hdr_percent,
-        tx_compnt_1_expmt: row.tx_compnt_1_expmt
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
       }))
     );
   }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price, form.tx_compnt_1_expmt]);
@@ -148,8 +148,8 @@ export function PurchaseOrderEditor({
           remarks: text(headerRaw.remarks || current.remarks),
           disc_price: Number(headerRaw.disc_price || 0),
           disc_pct: Number(headerRaw.disc_pct || 0),
-          tax_category: text(headerRaw.tax_category || current.tax_category),
-          tax_code: text(headerRaw.tax_code || current.tax_code),
+          tx_cat_code: text(headerRaw.tx_cat_code || current.tx_cat_code),
+          tx_compntcat_code_1: text(headerRaw.tx_compntcat_code_1 || current.tx_compntcat_code_1),
           expense_ac_post: text(headerRaw.expense_ac_post || current.expense_ac_post),
           print_on_letterhead: text(headerRaw.print_on_letterhead || current.print_on_letterhead || "N"),
           project_name: text(headerRaw.project_name || current.project_name),
@@ -158,6 +158,9 @@ export function PurchaseOrderEditor({
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
           pay_terms: text(headerRaw.pay_terms || current.pay_terms),
+          tx_compnt_1_expmt : text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
+          inv_no: text(headerRaw.inv_no),
+          inv_date: text(headerRaw.inv_date)
         }));
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
@@ -221,8 +224,8 @@ export function PurchaseOrderEditor({
       ...current,
       {
         ...emptyLineRow(form.div_code),
-        tax_code: form.tx_compntcat_code_1,
-        tax_cat: form.tx_cat_name,
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        tx_cat_code: `${form.tx_cat_code || ""}`,
         disc_price: form.disc_hdr_price,
         disc_percent: form.disc_hdr_percent,
         tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
@@ -409,7 +412,16 @@ export function PurchaseOrderEditor({
                   <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}</strong>
                 </div>
               )}
+
+                {form.div_code && (
+                <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
+                  <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Division Code</span>
+                  <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}</strong>
+                </div>
+              )}
             </div>
+
+            
             <div className="flex items-center gap-2">
               {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
               {form.doc_no && (

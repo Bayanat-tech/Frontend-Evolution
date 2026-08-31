@@ -98,7 +98,7 @@ setForm(initialForm);
         tx_cat_code: `${form.tx_cat_code || ""}`,
         disc_price: row.disc_price || form.disc_hdr_price,
         disc_percent: row.disc_percent || form.disc_hdr_percent,
-        tx_compnt_1_expmt: row.tx_compnt_1_expmt
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
       }))
     );
   }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price, form.tx_compnt_1_expmt]);
@@ -156,6 +156,7 @@ setForm(initialForm);
           scope_of_work: text(headerRaw.scope_of_work || current.scope_of_work),
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
+          tx_compnt_1_expmt:text(headerRaw.tx_compnt_1_expmt)
         }));
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
@@ -219,8 +220,8 @@ setForm(initialForm);
       ...current,
       {
         ...emptyLineRow(form.div_code),
-        tax_code: form.tx_compntcat_code_1,
-        tax_cat: form.tx_cat_name,
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        tx_cat_code: `${form.tx_cat_code || ""}`,
         disc_price: form.disc_hdr_price,
         disc_percent: form.disc_hdr_percent,
         tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""

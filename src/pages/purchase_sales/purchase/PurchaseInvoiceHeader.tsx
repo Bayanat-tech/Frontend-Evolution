@@ -74,7 +74,7 @@ export function PurchaseInvoiceHeaderForm({
                         columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "address", header: "Address" }, { field: "tel", header: "Tel" }, { field: "fax", header: "Fax" }]}
                         valueField="ac_code"
                         displayFields={["ac_code", "ac_name"]}
-                        loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_HDR", code1: companyCode, loginid: loginIdOrAdmin })}
+                        loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_For_suppier_customer", code1: companyCode, loginid: loginIdOrAdmin })}
                         disabled={headerAndLineDisabled}
                         onChange={(value, row) => setForm((current) => ({
                             ...current,
@@ -86,7 +86,7 @@ export function PurchaseInvoiceHeaderForm({
                         }))}
                     />
                 </div>
-                   <div className="col-span-2">
+                   {/* <div className="col-span-2">
                     <LookupField
                         label="Division *"
                         value={form.div_code}
@@ -102,7 +102,7 @@ export function PurchaseInvoiceHeaderForm({
                             div_name: text(getLookupValue(row || {}, "div_name")),
                         }))}
                     />
-                </div>
+                </div> */}
 
                 {(String(docType ?? "").trim().toUpperCase() === "PIN" ||
                     String(docType ?? "").trim().toUpperCase() === "SIN") && (
@@ -138,8 +138,8 @@ export function PurchaseInvoiceHeaderForm({
                                         doc_date: toDateInputValue(getLookupValue(row || {}, "doc_date")),
                                         po_doc_date: toDateInputValue(getLookupValue(row || {}, "po_doc_date")),
                                         po_doc_no: text(getLookupValue(row || {}, "po_doc_no")),
-                                        po_ac_code: text(getLookupValue(row || {}, "po_ac_code")),
-                                        po_ac_name: text(getLookupValue(row || {}, "po_ac_name")),
+                                        ac_code: text(getLookupValue(row || {}, "ac_code")),
+                                        ac_name: text(getLookupValue(row || {}, "ac_name")),
                                         po_dept_code: text(getLookupValue(row || {}, "po_dept_code")),
                                         remarks: text(getLookupValue(row || {}, "remarks")),
                                         po_remarks: text(getLookupValue(row || {}, "po_remarks")),
@@ -268,10 +268,6 @@ export function PurchaseInvoiceHeaderForm({
                     <Input type="date" disabled={headerAndLineDisabled} required value={form.pi_doc_date} onChange={(event) => updateField("pi_doc_date", event.target.value)} />
                 </CField>
 
-                <CField label="Pay Terms" className="col-span-2">
-                    <Input disabled={headerAndLineDisabled} value={form.po_payment_terms} onChange={(event) => updateField("po_payment_terms", event.target.value)} />
-                </CField>
-
                 <CField label="GRN Remarks" className="col-span-2">
                     <Input disabled={headerAndLineDisabled} value={form.remarks} onChange={(event) => updateField("remarks", event.target.value)} />
                 </CField>
@@ -290,7 +286,7 @@ export function PurchaseInvoiceHeaderForm({
                 <CField label="Credit Period">
                     <Input disabled={headerAndLineDisabled} className="text-right" type="number" step="1" value={form.po_credit_period} onChange={(event) => updateField("po_credit_period", Number(event.target.value || 0))} />
                 </CField>
-                <div className="col-span-2">
+                <div className="col-span-1">
                     <LookupField
                         label="Department"
                         value={form.po_dept_code || ""}
@@ -367,7 +363,7 @@ export function PurchaseInvoiceHeaderForm({
                     />
                 </CField>
 
-                <div className="col-span-2">
+                <div className="col-span-1">
                     <LookupField
                         label="Currency *"
                         value={form.curr_code || ""}
