@@ -40,6 +40,7 @@ import { PurchaseOrderLinesTable } from "./Purchaseorderlinestable";
 import { SendBackDialog } from "./Sendbackdialog";
 import { RejectDialog } from "./Rejectdialog";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
+import { getPoOrderReportHtml } from "../../../api/transactions";
 
 
 export type { PurchaseOrderEditorState };
@@ -244,6 +245,40 @@ export function PurchaseOrderEditor({
     }
   };
 
+  const handlePrint = () => {
+    if (!form.doc_no) return;
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      setError("Popup blocked — please allow popups to print.");
+      return;
+    }
+    printWindow.document.write("<p style='font-family:sans-serif;padding:20px;'>Loading report…</p>");
+
+    getPoOrderReportHtml({
+      company_code: user?.company_code,
+      doc_type: PO_DOC_TYPE.LPO,
+      doc_no: form.doc_no,
+    })
+      .then((html) => {
+        printWindow.document.open();
+        printWindow.document.write(html);
+        printWindow.document.close();
+      })
+      .catch((printError) => {
+        printWindow.document.open();
+        printWindow.document.write(
+          `<p style="font-family:sans-serif;padding:20px;color:#dc2626;">Unable to load report: ${printError instanceof Error ? printError.message : "Unknown error"
+          }</p>`
+        );
+        printWindow.document.close();
+      });
+  };
+
+
+
+
+
   const handleSaveAsDraft = () =>
     runAction("draft", async () => {
       await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.LPO, form, rows, user?.company_code, user?.loginid || user?.username);
@@ -379,7 +414,9 @@ export function PurchaseOrderEditor({
               {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
               {form.doc_no && (
                 <>
-                  <Button type="button" variant="secondary"><Printer size={15} /> Print</Button>
+                  <Button type="button" variant="secondary" onClick={handlePrint}>
+                    <Printer size={15} /> Print
+                  </Button>
                   <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
                 </>
               )}
@@ -468,7 +505,9 @@ export function PurchaseOrderEditor({
               </Button>}
           </div>
           <div className="flex items-center gap-2">
-            <Button aria-label="Print" type="button" variant="outline" size="icon" disabled={actionDisabled}><Printer size={15} /></Button>
+            <Button aria-label="Print" type="button" variant="outline" size="icon" onClick={handlePrint} disabled={!form.doc_no}>
+              <Printer size={15} />
+            </Button>
             <Button aria-label="Attachment" type="button" variant="outline" size="icon" disabled={actionDisabled}><Paperclip size={15} /></Button>
             <Button aria-label="Download" type="button" variant="outline" size="icon" disabled={actionDisabled}><Download size={15} /></Button>
             <Button type="button" variant="outline" onClick={onClose}>Close</Button>

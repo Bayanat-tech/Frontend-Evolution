@@ -231,14 +231,14 @@ export async function fetchPurchaseOrderDetail(
 export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: PODocType) {
   const refDocNo =
     docType === "GRN"
-      ? numberOrZero(form.po_doc_no)
+      ? form.po_doc_no
       : docType === "PIN"
         ? text(form.grn_doc_no)
         : undefined;
 
   console.log("REF DOC NO:", refDocNo);
   return {
-    doc_no: numberOrZero(form.doc_no) || undefined,
+    doc_no: form.doc_no || undefined,
     doc_type: docType,
     doc_date: form.doc_date,
     ref_no: form.ref_no,
@@ -372,11 +372,11 @@ export function computePQuantity(row: PurchaseOrderLineRow): number {
 
 // Total discount for the whole line (was missing * quantity before)
 export function lineDiscPrice(row: PurchaseOrderLineRow) {
-  return row.unit_price * computeQuantity(row) * (row.disc_percent / 100);
+  return row.unit_price *  (row.disc_percent / 100);
 }
 
 export function lineDiscPoPrice(row: PurchaseOrderLineRow) {
-  return (row.porder_unit_price ?? 0) * computeQuantity(row) * ((row.porder_disc_percent ?? 0) / 100);
+  return (row.porder_unit_price ?? 0)  * ((row.porder_disc_percent ?? 0) / 100);
 }
 
 export function finalRate(row: PurchaseOrderLineRow) {
@@ -390,11 +390,11 @@ export function finalPORate(row: PurchaseOrderLineRow) {
 }
 
 export function lineAmount(row: PurchaseOrderLineRow) {
-  return row.unit_price * computeQuantity(row);
+  return finalRate(row)* computeQuantity(row);
 }
 
 export function linePOAmount(row: PurchaseOrderLineRow) {
-  return (row.porder_unit_price ?? 0) * computeQuantity(row);
+  return finalPORate(row) * computeQuantity(row);
 }
 
 

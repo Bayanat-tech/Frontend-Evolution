@@ -90,7 +90,7 @@ export interface PurchaseOrderLineRow {
 }
 
 export interface PurchaseOrderForm {
-  doc_no: number | string;
+  doc_no: string;
   doc_type?: string
   doc_date: string;
   quotn_no: string;

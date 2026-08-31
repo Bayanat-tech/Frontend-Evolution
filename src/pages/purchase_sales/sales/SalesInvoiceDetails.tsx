@@ -7,7 +7,7 @@ import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
 
 import { PurchaseOrderForm, SalesOrderLineRow, SODocType } from "../sales/SalesOrdertypes";
 import { Select } from "../../../components/ui/Select";
-import { computeQuantity, formatAmount, isSameUom, lineAmount, lineDiscPoPrice, lineDiscPrice, lineLcurrAmount, lineLcurrPOAmount, linePOAmount, lineTaxAmount, lineTaxpoAmount, numberOrZero, taxLcurrAmount, taxLcurrpoAmount, text } from "./SalesOrderutils";
+import { computeQuantity, formatAmount, isSameUom, LcurrDisAmount, lineAmount, lineDiscPoPrice, lineDiscPrice, lineLcurrAmount, lineLcurrPOAmount, linePOAmount, lineTaxAmount, lineTaxpoAmount, numberOrZero, taxLcurrAmount, taxLcurrpoAmount, text } from "./SalesOrderutils";
 import { PODocType } from "../purchase/Purchaseordertypes";
 
 const STICKY_COLS = {
@@ -132,11 +132,11 @@ export function SalesInvoiceLinesTable({
           <p className="eyebrow m-0">Lines</p>
           <h3 className="m-0 text-sm font-semibold leading-tight">Purchase Order Lines</h3>
         </div>
-        <div className="flex items-center gap-2">
+        {/* <div className="flex items-center gap-2">
           <Button disabled={headerAndLineDisabled} size="sm" type="button" variant="outline" onClick={addRow}>
             <Plus size={14} /> Add Line
           </Button>
-        </div>
+        </div> */}
       </div>
       <div className="commercial-lines-scroll max-h-[45vh] overflow-auto">
         <table className="finance-lines-table w-full min-w-[2600px] text-sm">
@@ -163,7 +163,7 @@ export function SalesInvoiceLinesTable({
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Disc Price</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Unit price Net Amt</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Amount</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Lcurr Amount</th>
+              <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Lcurr Amount Before Tax</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax Type</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax %</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Tax Amount</th>
@@ -173,7 +173,7 @@ export function SalesInvoiceLinesTable({
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax Cat</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax code</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Tax Lcurr amount</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Lcurr amount Discount</th>
+              <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Lcurr amount After Tax</th>
               <th className="px-2 py-2 text-left w-16" style={plainHeaderStyle}>Action</th>
             </tr>
           </thead>
@@ -515,8 +515,8 @@ export function SalesInvoiceLinesTable({
                   <td className="finance-amount-cell w-32 px-2 py-1 text-right">
                     {formatAmount(taxLcurrAmountpoValue)}
                   </td>
-                  <td className="finance-amount-cell w-32 px-2 py-1">
-                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.lcur_amount_disc} onChange={(event) => updateRow(row.id, { lcur_amount_disc: Number(event.target.value || 0) })} />
+                  <td className="finance-amount-cell w-32 px-2 py-1 text-right">
+                    {formatAmount(lineLcurrPOAmount(row, ex_rate) + taxLcurrpoAmount(row, ex_rate))}
                   </td>
                   <td className="px-2 py-1">
                     <Button disabled={headerAndLineDisabled} size="icon" type="button" variant="ghost" onClick={() => removeRow(row.id)}><X size={14} /></Button>

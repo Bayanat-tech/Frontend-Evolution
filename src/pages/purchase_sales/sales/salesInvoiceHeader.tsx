@@ -87,7 +87,7 @@ export function SalesInvoiceHeaderForm({
                         }))}
                     />
                 </div>
-                   <div className="col-span-2">
+                <div className="col-span-2">
                     <LookupField
                         label="Division *"
                         value={form.div_code}
@@ -113,10 +113,10 @@ export function SalesInvoiceHeaderForm({
                                 label="DN No"
                                 compact
                                 placeholder="DN No"
-                                value={String(form.sdn_doc_no ?? "")}
-                                displayValue={String(form.sdn_doc_no ?? "")}
+                                value={String(editMode ? form.doc_no ?? "" : form.sdn_doc_no ?? "")}
+                                displayValue={String(editMode ? form.doc_no ?? "" : form.sdn_doc_no ?? "")}
                                 columns={[
-                                    { field: "doc_no", header: "GRN No" },
+                                    { field: "doc_no", header: "SDN No" },
                                     { field: "ac_code", header: "A/c Code" },
                                 ]}
                                 valueField="doc_no"
@@ -135,7 +135,9 @@ export function SalesInvoiceHeaderForm({
                                     // Populate header fields immediately from the selected row
                                     setForm((current) => ({
                                         ...current,
-                                        sdn_doc_no: value,
+                                        ...(editMode
+                                            ? { doc_no: value }
+                                            : { sdn_doc_no: value }),
                                         doc_date: toDateInputValue(getLookupValue(row || {}, "doc_date")),
                                         so_doc_date: toDateInputValue(getLookupValue(row || {}, "so_doc_date")),
                                         so_doc_no: text(getLookupValue(row || {}, "so_doc_no")),
@@ -170,12 +172,14 @@ export function SalesInvoiceHeaderForm({
                                         so_tx_cat_code: `${text(getLookupValue(row || {}, "so_tx_cat_code"))} - ${text(
                                             getLookupValue(row || {}, "so_tx_cat_name")
                                         )}`,
-                                        grn_payment_terms: text(getLookupValue(row || {}, "grn_payment_terms")),
-                                        grn_dlvr_term: text(getLookupValue(row || {}, "grn_dlvr_term")),
+                                        SDN_payment_terms: text(getLookupValue(row || {}, "SDN_payment_terms")),
+                                        SDN_dlvr_term: text(getLookupValue(row || {}, "SDN_dlvr_term")),
                                         so_project_name: text(getLookupValue(row || {}, "so_project_name")),
                                         so_pr_no: text(getLookupValue(row || {}, "so_pr_no")),
                                         so_scope_of_work: text(getLookupValue(row || {}, "so_scope_of_work")),
-                                        total_so_amount: numberOrZero(getLookupValue(row || {}, "total_so_amount"))
+                                        total_so_amount: numberOrZero(getLookupValue(row || {}, "total_so_amount")),
+                                        si_doc_no:text(getLookupValue(row || {}, "si_doc_no")),
+                                          si_doc_date: toDateInputValue(getLookupValue(row || {}, "si_doc_date")),
 
 
                                     }));
@@ -187,7 +191,7 @@ export function SalesInvoiceHeaderForm({
                                         const details = await getDynamicLookup({
                                             parameter: "PS_SALE_PURCHASE_ENTRY_SINV_SDN_NO_DETAIL_DET",
                                             code1: companyCode,
-                                            number1: Number(value),
+                                            code2: value,
                                         });
 
                                         const mappedDetails = (details || []).map((item: any, index: number) => ({
@@ -200,7 +204,7 @@ export function SalesInvoiceHeaderForm({
                                             sorder_qty_puom: numberOrZero(getLookupValue(item, "sorder_qty_puom")),
                                             l_uom: text(getLookupValue(item, "l_uom")),
                                             qty_luom: numberOrZero(getLookupValue(item, "qty_luom")),
-                                              sorder_qty_luom: numberOrZero(getLookupValue(item, "sorder_qty_luom")),
+                                            sorder_qty_luom: numberOrZero(getLookupValue(item, "sorder_qty_luom")),
                                             unit_price: numberOrZero(getLookupValue(item, "unit_price")),
                                             sorder_unit_price: numberOrZero(getLookupValue(item, "sorder_unit_price")),
                                             disc_hdr_percent: numberOrZero(getLookupValue(item, "disc_hdr_percent")),
@@ -227,18 +231,19 @@ export function SalesInvoiceHeaderForm({
                                             quantity: numberOrZero(getLookupValue(item, "quantity")),
                                             ex_rate: numberOrZero(getLookupValue(item, "ex_rate")),
                                             sorder_tx_compnt_amt_1: text(getLookupValue(item, "sorder_tx_compnt_amt_1")),
-                                            sorder_tx_compnt_perc_1:text(getLookupValue(item, "sorder_tx_compnt_perc_1")),
+                                            sorder_tx_compnt_perc_1: text(getLookupValue(item, "sorder_tx_compnt_perc_1")),
                                             sorder_tx_cat_code: text(getLookupValue(item, "sorder_tx_cat_code")),
                                             sorder_tx_compntcat_code_1: text(getLookupValue(item, "sorder_tx_compntcat_code_1")),
-                                             sorder_required_dt: text(getLookupValue(item, "sorder_required_dt")),
-                                             sorder_tx_compnt_1_expmt:text(getLookupValue(item, "sorder_tx_compnt_1_expmt")),
-                                              sorder_remarks:text(getLookupValue(item, "sorder_remarks"))
-                                            
+                                            sorder_required_dt: text(getLookupValue(item, "sorder_required_dt")),
+                                            sorder_tx_compnt_1_expmt: text(getLookupValue(item, "sorder_tx_compnt_1_expmt")),
+                                            sorder_remarks: text(getLookupValue(item, "sorder_remarks")),
+                                             serial_no: numberOrZero(getLookupValue(item, "serial_no")),
+
                                         }));
                                         console.log("Mapped length:", mappedDetails?.length);
                                         setdetails?.(mappedDetails);
                                     } catch (error) {
-                                        console.error("ERROR LOADING GRN DETAILS FROM HEADER:", error);
+                                        console.error("ERROR LOADING SDN DETAILS FROM HEADER:", error);
                                         setdetails?.([]);
                                     }
                                 }}
@@ -272,7 +277,7 @@ export function SalesInvoiceHeaderForm({
                     <Input disabled={headerAndLineDisabled} value={form.so_payment_terms} onChange={(event) => updateField("so_payment_terms", event.target.value)} />
                 </CField>
 
-                <CField label="GRN Remarks" className="col-span-2">
+                <CField label="SDN Remarks" className="col-span-2">
                     <Input disabled={headerAndLineDisabled} value={form.remarks} onChange={(event) => updateField("remarks", event.target.value)} />
                 </CField>
 
@@ -347,7 +352,7 @@ export function SalesInvoiceHeaderForm({
 
 
             <CompactSection label="Order, Currency & Tax">
- 
+
                 <div className="col-span-2">
                     <LookupField
                         label="Currency *"
@@ -568,7 +573,7 @@ export function SalesInvoiceHeaderForm({
                 label="Delivery"
                 className="border-b-0"
             >
-                   <CField label="Delivery Contact">
+                <CField label="Delivery Contact">
                     <Input
                         disabled={headerAndLineDisabled}
                         value={form.so_dlvr_contact}

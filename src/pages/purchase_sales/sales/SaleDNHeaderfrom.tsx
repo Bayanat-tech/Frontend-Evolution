@@ -106,7 +106,7 @@ export function SalesDNHeaderForm({
                         displayValue={String(form.so_doc_no ?? "")}
                         columns={[
                             { field: "so_doc_no", header: "SDN No" },
-                            { field: "so_ac_code", header: "A/c Code" },
+                            { field: "ac_code", header: "A/c Code" },
                         ]}
                         valueField="so_doc_no"
                         displayFields={["so_doc_no"]}
@@ -132,7 +132,7 @@ export function SalesDNHeaderForm({
                             setForm((current) => ({
                                 ...current,
                                 so_doc_no: soDocNo,
-                                so_ac_code: text(lookupValue(selectedRow, "so_ac_code", "ac_code")),
+                                ac_code: text(lookupValue(selectedRow, "ac_code", "ac_code")),
                                 so_doc_date: toDateInputValue(
                                     lookupValue(selectedRow, "so_doc_date", "doc_date")
                                 ),
@@ -156,7 +156,7 @@ export function SalesDNHeaderForm({
                                     parameter: "PS_SDN_ENTRY_SO_NO_DETAIL_DET",
                                     code1: companyCode,
                                     code2: divCodeForFetch,
-                                    number1: Number(value),
+                                    code3: value,
                                 });
 
                                 const mappedDetails = (details || []).map((item: any, index: number) => ({
