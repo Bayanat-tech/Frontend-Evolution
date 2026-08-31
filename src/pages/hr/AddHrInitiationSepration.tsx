@@ -112,6 +112,10 @@ export function AddHrInitiationSepration({ mode, existingData, onClose }: Props)
   const [saving, setSaving] = useState(false);
   const [apiError, setApiError] = useState("");
 
+  // Display text for Division/Department/Section on edit/view, since those
+  // codes are derived (not loaded until the LookupField popup is opened).
+  const [orgDisplay, setOrgDisplay] = useState({ division: "", department: "", section: "" });
+
   const set = (field: keyof THrSeparation, value: unknown) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
@@ -151,6 +155,45 @@ export function AddHrInitiationSepration({ mode, existingData, onClose }: Props)
       });
     }
   }, [isEdit, readonly, existingData]);
+
+  // ── Derive Division/Department/Section for edit/view ────────────────────
+  // HR_EMP_SEPARATIONS only stores EMPLOYEE_ID — it has no DIV_CODE/DEPT_CODE/
+  // SECTION_CODE columns, and MST_HR_EMP_SEPARATIONS_DETAIL doesn't return
+  // them either. Unlike Training Feedback (which denormalizes desig/dept/grade
+  // directly onto the document), we have to re-derive these from the employee
+  // master by employee_id so the cascading LookupFields aren't left blank.
+  useEffect(() => {
+    if (!(isEdit || readonly) || !existingData?.employee_id || !companyCode) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await getDynamicLookup(baseParams("MST_HR_VW_HR_EMP_MASTER_DDL"));
+        const match = extractRows(res).find(
+          (r) => pick(r, "employee_id") === String(existingData.employee_id)
+        );
+        if (match && !cancelled) {
+          setForm((prev) => ({
+            ...prev,
+            division: pick(match, "div_code") || prev.division,
+            department: pick(match, "dept_code") || prev.department,
+            section: pick(match, "section_code") || prev.section,
+          }));
+          setOrgDisplay({
+            division: [pick(match, "div_code"), pick(match, "div_name")].filter(Boolean).join(" - "),
+            department: [pick(match, "dept_code"), pick(match, "dept_name")].filter(Boolean).join(" - "),
+            section: [pick(match, "section_code"), pick(match, "section_name")].filter(Boolean).join(" - "),
+          });
+        }
+      } catch {
+        // Non-fatal — Division/Department/Section just stay blank if this fails.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isEdit, readonly, existingData?.employee_id, companyCode, baseParams]);
 
   // ── LookupField data loaders ──────────────────────────────────────────────
   // Each loader is called by its LookupField on open; cascading fields read
@@ -317,6 +360,7 @@ export function AddHrInitiationSepration({ mode, existingData, onClose }: Props)
             required
             disabled={readonly}
             value={form.division ?? ""}
+            displayValue={orgDisplay.division}
             columns={[
               { field: "div_code", header: "Code" },
               { field: "div_name", header: "Name" },
@@ -329,6 +373,7 @@ export function AddHrInitiationSepration({ mode, existingData, onClose }: Props)
               set("department", "");
               set("section", "");
               set("employee_id", "");
+              setOrgDisplay({ division: "", department: "", section: "" });
             }}
             placeholder="Select Division"
           />
@@ -338,6 +383,7 @@ export function AddHrInitiationSepration({ mode, existingData, onClose }: Props)
             required
             disabled={readonly || !form.division}
             value={form.department ?? ""}
+            displayValue={orgDisplay.department}
             columns={[
               { field: "dept_code", header: "Code" },
               { field: "dept_name", header: "Name" },
@@ -349,6 +395,7 @@ export function AddHrInitiationSepration({ mode, existingData, onClose }: Props)
               set("department", value);
               set("section", "");
               set("employee_id", "");
+              setOrgDisplay((prev) => ({ ...prev, department: "", section: "" }));
             }}
             placeholder="Select Department"
           />
@@ -358,6 +405,7 @@ export function AddHrInitiationSepration({ mode, existingData, onClose }: Props)
             required
             disabled={readonly || !form.department}
             value={form.section ?? ""}
+            displayValue={orgDisplay.section}
             columns={[
               { field: "section_code", header: "Code" },
               { field: "section_name", header: "Name" },
@@ -368,6 +416,7 @@ export function AddHrInitiationSepration({ mode, existingData, onClose }: Props)
             onChange={(value) => {
               set("section", value);
               set("employee_id", "");
+              setOrgDisplay((prev) => ({ ...prev, section: "" }));
             }}
             placeholder="Select Section"
           />

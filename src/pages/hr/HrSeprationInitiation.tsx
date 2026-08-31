@@ -223,19 +223,16 @@ export function HrSeprationInitiation() {
   }, [loginid, companyCode]);
 
   // ── Delete ───────────────────────────────────────────────────────────────
-  // TODO: "MST_HR_EMP_SEPARATIONS_DELETE" is NOT yet defined in any procedure
-  // shared so far. HR_CAM_JOIN_RPT_DELETE (the Joining page's equivalent)
-  // doesn't appear in PROC_BUILD_DYNAMIC_SQL_MST_HR either, so deletes are
-  // handled by a separate procedure not included here. Add a matching
-  // WHEN clause there (DELETE FROM HR_EMP_SEPARATIONS WHERE COMPANY_CODE =
-  // P_CODE1 AND EMPLOYEE_ID = P_CODE2) before this will work.
+  // Uses the MST_HR_EMP_SEPARATIONS_DELETE WHEN clause added to
+  // PROC_BUILD_DYNAMIC_DEL_MST_HR: code1 = COMPANY_CODE, code2 = EMPLOYEE_ID
+  // (this table has no DOC_NO, same natural key as insert/update and detail).
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
     setNotice(null);
     try {
       await executeDynamicDelete({
-        parameter: "MST_HR_EMP_SEPARATIONS_DELETE", // TODO: add this WHEN clause to the delete procedure
+        parameter: "MST_HR_EMP_SEPARATIONS_DELETE",
         loginid,
         code1: companyCode,
         code2: String(deleteTarget.employee_id),
