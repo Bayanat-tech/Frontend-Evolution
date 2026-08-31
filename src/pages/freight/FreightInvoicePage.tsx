@@ -46,10 +46,15 @@ export function FreightInvoicePage() {
   const [saving, setSaving] = useState(false);
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
 
-  const selectedTotal = useMemo(
+  const selectedBase = useMemo(
     () => selectedRows.reduce((sum, row) => sum + number(row, "bill"), 0),
     [selectedRows]
   );
+  const selectedTax = useMemo(
+    () => selectedRows.reduce((sum, row) => sum + number(row, "tax_amount"), 0),
+    [selectedRows]
+  );
+  const selectedTotal = selectedBase + selectedTax;
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -352,10 +357,12 @@ export function FreightInvoicePage() {
         }
       >
         <div className="grid gap-3">
-          <div className="grid gap-2 md:grid-cols-4">
+          <div className="grid gap-2 md:grid-cols-5">
             <MetricCard label="Selected Jobs" value={String(unique(selectedRows.map((row) => text(row.job_no))).length)} />
             <MetricCard label="Activity Lines" value={String(selectedRows.length)} />
-            <MetricCard label="Invoice Amount" value={`${selectedTotal.toFixed(3)} ${form.curr_code || "OMR"}`} highlight />
+            <MetricCard label="Before Tax" value={`${selectedBase.toFixed(3)} ${form.curr_code || "OMR"}`} />
+            <MetricCard label="Tax" value={`${selectedTax.toFixed(3)} ${form.curr_code || "OMR"}`} />
+            <MetricCard label="Invoice Total" value={`${selectedTotal.toFixed(3)} ${form.curr_code || "OMR"}`} highlight />
             <MetricCard label="Status" value={readOnly ? "View" : "Draft"} />
           </div>
 
@@ -387,7 +394,7 @@ export function FreightInvoicePage() {
                 placeholder="Select principal"
               />
             </Field>
-            <Field label="Amount"><Input value={selectedTotal.toFixed(3)} disabled className="text-right font-semibold" /></Field>
+            <Field label="Total With Tax"><Input value={selectedTotal.toFixed(3)} disabled className="text-right font-semibold" /></Field>
           </div>
           </div>
 
@@ -414,6 +421,8 @@ export function FreightInvoicePage() {
                       <th className="px-2 py-2 text-left">Activity</th>
                       <th className="px-2 py-2 text-right">Qty</th>
                       <th className="px-2 py-2 text-right">Bill</th>
+                      <th className="px-2 py-2 text-right">Tax</th>
+                      <th className="px-2 py-2 text-right">Total</th>
                       <th className="px-2 py-2 text-right">Cost</th>
                     </tr>
                   </thead>
@@ -427,10 +436,12 @@ export function FreightInvoicePage() {
                         <td className="px-2 py-2">{text(row.act_code)} - {text(row.activity)}</td>
                         <td className="px-2 py-2 text-right tabular-nums">{number(row, "quantity").toFixed(3)}</td>
                         <td className="px-2 py-2 text-right tabular-nums">{number(row, "bill").toFixed(3)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums">{number(row, "tax_amount").toFixed(3)}</td>
+                        <td className="px-2 py-2 text-right font-semibold tabular-nums">{(number(row, "bill") + number(row, "tax_amount")).toFixed(3)}</td>
                         <td className="px-2 py-2 text-right tabular-nums">{number(row, "actual_cost").toFixed(3)}</td>
                       </tr>
                     ))}
-                    {!candidateRows.length && <tr><td className="px-2 py-8 text-center text-muted-foreground" colSpan={8}>No confirmed billable Freight activity lines found.</td></tr>}
+                    {!candidateRows.length && <tr><td className="px-2 py-8 text-center text-muted-foreground" colSpan={10}>No confirmed billable Freight activity lines found.</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -444,7 +455,7 @@ export function FreightInvoicePage() {
                 <p className="m-0 text-xs text-muted-foreground">{selectedRows.length} lines / {unique(selectedRows.map((row) => text(row.job_no))).length} jobs</p>
               </div>
               <div className="text-right">
-                <p className="m-0 text-xs font-semibold uppercase text-muted-foreground">Invoice Amount</p>
+                <p className="m-0 text-xs font-semibold uppercase text-muted-foreground">Before Tax {selectedBase.toFixed(3)} / Tax {selectedTax.toFixed(3)}</p>
                 <p className="m-0 text-lg font-bold text-primary">{selectedTotal.toFixed(3)} {form.curr_code || "OMR"}</p>
               </div>
             </div>
@@ -457,6 +468,8 @@ export function FreightInvoicePage() {
                     <th className="px-2 py-2 text-right">Qty</th>
                     <th className="px-2 py-2 text-right">Rate</th>
                     <th className="px-2 py-2 text-right">Bill</th>
+                    <th className="px-2 py-2 text-right">Tax</th>
+                    <th className="px-2 py-2 text-right">Total</th>
                     <th className="px-2 py-2 text-right">Cost</th>
                     {!readOnly && <th className="px-2 py-2 text-right">Action</th>}
                   </tr>
@@ -469,11 +482,13 @@ export function FreightInvoicePage() {
                       <td className="px-2 py-2 text-right tabular-nums">{number(row, "quantity").toFixed(3)}</td>
                       <td className="px-2 py-2 text-right tabular-nums">{number(row, "bill_rate").toFixed(3)}</td>
                       <td className="px-2 py-2 text-right tabular-nums">{number(row, "bill").toFixed(3)}</td>
+                      <td className="px-2 py-2 text-right tabular-nums">{number(row, "tax_amount").toFixed(3)}</td>
+                      <td className="px-2 py-2 text-right font-semibold tabular-nums">{(number(row, "bill") + number(row, "tax_amount")).toFixed(3)}</td>
                       <td className="px-2 py-2 text-right tabular-nums">{number(row, "actual_cost").toFixed(3)}</td>
                       {!readOnly && <td className="px-2 py-2 text-right"><Button type="button" size="icon" variant="ghost" onClick={() => removeSelected(row)}><Trash2 size={14} /></Button></td>}
                     </tr>
                   ))}
-                  {!selectedRows.length && <tr><td className="px-2 py-8 text-center text-muted-foreground" colSpan={readOnly ? 6 : 7}>No lines selected.</td></tr>}
+                  {!selectedRows.length && <tr><td className="px-2 py-8 text-center text-muted-foreground" colSpan={readOnly ? 8 : 9}>No lines selected.</td></tr>}
                 </tbody>
               </table>
             </div>

@@ -151,6 +151,7 @@ export function SalesInvoiceEditor({
           canceled: text(headerRaw.canceled || current.canceled || "N"),
 
             so_doc_no: text(headerRaw.so_doc_no),
+             si_doc_no: text(headerRaw.si_doc_no),
           so_doc_date: toDateInputValue(headerRaw.so_doc_date),
           so_ac_code: text(headerRaw.so_ac_code),
           so_ac_name: text(headerRaw.so_party_name),
@@ -182,7 +183,7 @@ export function SalesInvoiceEditor({
           total_so_amount: numberOrZero(headerRaw.total_so_amount),
 
           pi_doc_no: text(headerRaw.pi_doc_no),
-          pi_doc_date: toDateInputValue(headerRaw.pi_doc_date),
+          si_doc_date: toDateInputValue(headerRaw.si_doc_date),
         }));
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {

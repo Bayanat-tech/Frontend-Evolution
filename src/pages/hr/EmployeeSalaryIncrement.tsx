@@ -742,7 +742,6 @@ export default function EmployeeSalaryIncrement() {
         <p className="eyebrow mb-1.5 text-xs">Employee Selection</p>
         <div className="grid gap-2 md:grid-cols-4">
           <label className="field">
-            <span className="text-xs">Division *</span>
             <DynamicDropDown
               type="division"
               value={employeeDetail.div_code}
@@ -754,7 +753,6 @@ export default function EmployeeSalaryIncrement() {
           </label>
 
           <label className="field">
-            <span className="text-xs">Department *</span>
             <DynamicDropDown
               type="departmentBasedOnDivision"
               value={employeeDetail.dept_code}
@@ -768,19 +766,20 @@ export default function EmployeeSalaryIncrement() {
           </label>
 
           <label className="field">
-            <span className="text-xs">Section *</span>
             <DynamicDropDown
               type="section"
               value={employeeDetail.section_code}
               displayName={employeeDetail.section_name}
               onChange={handleSectionChange}
               disabled={!employeeDetail.dept_code}
+              code1 = {employeeDetail.div_code || undefined}
+              code2 = {employeeDetail.dept_code || undefined}
+              code3= {user?.company_code || undefined}
               key={`section-${employeeDetail.div_code}-${employeeDetail.dept_code}-${employeeDetail.section_code}`}
             />
           </label>
 
           <label className="field">
-            <span className="text-xs">Employee *</span>
             <DynamicDropDown
               type="employee"
               value={employeeDetail.emp_id}
@@ -789,6 +788,7 @@ export default function EmployeeSalaryIncrement() {
               code1={employeeDetail.div_code || undefined}
               code2={employeeDetail.dept_code || undefined}
               code3={employeeDetail.section_code || undefined}
+              code4={user?.company_code || undefined}
               key={`employee-${employeeDetail.div_code}-${employeeDetail.dept_code}-${employeeDetail.section_code}-${employeeDetail.emp_id}`}
             />
           </label>

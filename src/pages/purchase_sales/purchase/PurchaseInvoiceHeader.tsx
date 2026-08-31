@@ -186,7 +186,7 @@ export function PurchaseInvoiceHeaderForm({
                                         const details = await getDynamicLookup({
                                             parameter: "PS_INVOICE_ENTRY_GRN_NO_DETAIL_DET",
                                             code1: companyCode,
-                                            number1: Number(value),
+                                            code2:value,
                                         });
 
                                         const mappedDetails = (details || []).map((item: any, index: number) => ({
