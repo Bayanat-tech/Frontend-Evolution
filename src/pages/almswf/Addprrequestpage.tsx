@@ -15,10 +15,8 @@ import { CardHeader } from "../../components/ui/Card";
 import { useAuth } from "../../state/AuthContext";
 import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
-
-
 import type { TPRHeader, TPRItem } from "./PurchaseSummary-types";
-import { almsCommonSelect, almsGeneratePOFromPR, almsSave, almsSavePrequestBulk } from "../../api/alms";
+import { almsCommonSelect, almsSave, almsSavePrequestBulk } from "../../api/alms";
 import { openPRPurchaseReport } from "../../api/transactions";
 import { useToast } from "../../components/ui/AlertToast";
 
@@ -41,13 +39,64 @@ function fmt3(n: number) {
 function num(v: unknown) { return Number(v) || 0; }
 function newId() { return `${Date.now()}_${Math.random().toString(36).slice(2)}`; }
 
+// ─── PO-style calculation helpers ─────────────────────────────────────────
+function itemQty(item: Partial<TPRItem>, userLevel: number) {
+  return userLevel >= 2 ? num(item.ALLOCATED_APPROVED_QUANTITY) : num(item.REQUEST_QUANTITY);
+}
+
+function itemDiscPrice(item: Partial<TPRItem>) {
+  return num(item.ITEM_RATE) * (num(item.DISCOUNT_AMOUNT) / 100);
+}
+
+function itemFinalRate(item: Partial<TPRItem>) {
+  return num(item.ITEM_RATE) - itemDiscPrice(item);
+}
+
+function itemAmount(item: Partial<TPRItem>, userLevel: number) {
+  return itemFinalRate(item) * itemQty(item, userLevel);
+}
+
+function itemNetAmount(item: Partial<TPRItem>, userLevel: number) {
+  return itemAmount(item, userLevel);
+}
+
+function itemTaxAmount(item: Partial<TPRItem>, userLevel: number) {
+  return itemNetAmount(item, userLevel) * (num(item.TX_COMPNT_PERC_1) / 100);
+}
+
+function itemLcurrAmount(item: Partial<TPRItem>, exRate: number, userLevel: number) {
+  return itemAmount(item, userLevel) * (exRate || 1);
+}
+
+function itemTaxLcurrAmount(item: Partial<TPRItem>, exRate: number, userLevel: number) {
+  return itemTaxAmount(item, userLevel) * (exRate || 1);
+}
+
+function itemLcurrAfterDiscount(item: Partial<TPRItem>, exRate: number, userLevel: number) {
+  return itemLcurrAmount(item, exRate, userLevel) + itemTaxLcurrAmount(item, exRate, userLevel);
+}
+
+function recalcItem<T extends Partial<TPRItem>>(item: T, exRate: number, userLevel: number): T {
+  const rate = exRate || 1;
+  item.FINAL_RATE = itemFinalRate(item);
+  item.AMOUNT = itemAmount(item, userLevel);
+  item.TX_COMPNT_AMT_1 = itemTaxAmount(item, userLevel);
+  (item as any).LCURR_AMT = itemLcurrAmount(item, rate, userLevel);
+  (item as any).TX_COMPNT_LCURAMT_1 = itemTaxLcurrAmount(item, rate, userLevel);
+  (item as any).LCURR_AFTER_DISCOUNT = itemLcurrAfterDiscount(item, rate, userLevel);
+  (item as any).BASE_AMOUNT = (item as any).LCURR_AMT;
+  (item as any).FINAL_AMOUNT = (item as any).LCURR_AMT + (item as any).TX_COMPNT_LCURAMT_1;
+  return item;
+}
+
 function cleanNumericData(data: any): any {
   const numericFields = [
     'AMOUNT', 'CURRENCY_RATE', 'ITEM_RATE', 'ITEM_QTY',
     'CREDIT_AMOUNT', 'PO_AMOUNT', 'DISCOUNT_AMOUNT',
     'FINAL_RATE', 'BASE_AMOUNT', 'FINAL_AMOUNT', 'LCURR_AMT',
     'TX_COMPNT_AMT_1', 'TX_COMPNT_LCURAMT_1', 'TX_COMPNT_PERC_1',
-    'REQUEST_QUANTITY', 'ALLOCATED_APPROVED_QUANTITY'
+    'REQUEST_QUANTITY', 'ALLOCATED_APPROVED_QUANTITY',
+    'LCURR_AFTER_DISCOUNT'
   ];
 
   if (Array.isArray(data)) {
@@ -92,6 +141,7 @@ function blankItem(srNo: number, requestNumber: string, companyCode: string, hdr
     LCURR_AMT: 0,
     BASE_AMOUNT: 0,
     FINAL_AMOUNT: 0,
+    LCURR_AFTER_DISCOUNT: 0,
     CURR_CODE: hdr.CURR_CODE ?? "",
     CURR_NAME: hdr.CURR_NAME ?? "",
     CURRENCY_RATE: hdr.CURRENCY_RATE ?? 0,
@@ -109,14 +159,14 @@ function blankItem(srNo: number, requestNumber: string, companyCode: string, hdr
     USER_ID: "",
     SUPPLIER_CODE: "",
     SUPPLIER_NAME: "",
+    CASH_IND: "",
   };
 }
 
 // ─── Validation Function ──────────────────────────────────────────────────────
-function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any[]): { valid: boolean; errors: string[] } {
+function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any[], userLevel: number): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
-  // Header validations
   if (!header.DESCRIPTION || header.DESCRIPTION.trim() === "") {
     errors.push("Description / Reason is required");
   }
@@ -130,7 +180,6 @@ function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any
     errors.push("Currency is required");
   }
 
-  // Items validations
   if (items.length === 0) {
     errors.push("At least one item is required");
   } else {
@@ -141,11 +190,14 @@ function validatePRForm(header: Partial<TPRHeader>, items: TPRItem[], terms: any
       if (!item.ITEM_DESP) {
         errors.push(`Item ${index + 1}: Item Description is required`);
       }
-      if (!item.SUPPLIER) {
+      if (userLevel >= 6 && !item.SUPPLIER) {
         errors.push(`Item ${index + 1}: Supplier is required`);
       }
-      if (num(item.ALLOCATED_APPROVED_QUANTITY) <= 0) {
+      if (userLevel >= 2 && num(item.ALLOCATED_APPROVED_QUANTITY) <= 0) {
         errors.push(`Item ${index + 1}: Approved Quantity must be greater than 0`);
+      }
+      if (userLevel === 1 && num(item.REQUEST_QUANTITY) <= 0) {
+        errors.push(`Item ${index + 1}: Request Quantity must be greater than 0`);
       }
       if (num(item.ITEM_RATE) <= 0) {
         errors.push(`Item ${index + 1}: Rate must be greater than 0`);
@@ -164,7 +216,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
   const companyCode = user?.company_code ?? "";
   const loginid = user?.loginid ?? "";
   const { toast } = useToast();
-
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -180,11 +231,103 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
   const [activeTab, setActiveTab] = useState<"items" | "terms">("items");
   const [terms, setTerms] = useState<any[]>([]);
   const tableContainerRef = useRef<HTMLDivElement>(null);
-  const disabled = isViewMode || saving;
+
   const PDO_TYPE_MAP: Record<string, string> = {
     'P': 'PDO-OTO',
     'Q': 'PDO-NON-OTO',
     'N': 'NON-PDO'
+  };
+  const [userApprovalLevel, setUserApprovalLevel] = useState<number>(0);
+  const [displayDate, setDisplayDate] = useState("");
+  const isInitialized = useRef(false);
+  const disabled = isViewMode || saving;
+
+
+  useEffect(() => {
+    if (isInitialized.current) return;
+
+    // Only for NEW document (not edit/view)
+    if (!isEditMode && !isViewMode) {
+      const today = new Date();
+      const day = String(today.getDate()).padStart(2, '0');
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const year = today.getFullYear();
+      const formattedDate = `${day}/${month}/${year}`;
+      const yyyyMMdd = today.toISOString().slice(0, 10);
+
+      setDisplayDate(formattedDate);
+      setHdr("REQUEST_DATE", yyyyMMdd);
+      isInitialized.current = true;
+    }
+  }, [isEditMode, isViewMode]);
+
+  useEffect(() => {
+    if (header.REQUEST_DATE) {
+      const date = new Date(header.REQUEST_DATE);
+      if (!isNaN(date.getTime())) {
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        setDisplayDate(`${day}/${month}/${year}`);
+      }
+    }
+  }, [header.REQUEST_DATE]);
+
+
+  useEffect(() => {
+    if ((isEditMode || isViewMode) && header.REQUEST_DATE) {
+      const date = new Date(header.REQUEST_DATE);
+      if (!isNaN(date.getTime())) {
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        setDisplayDate(`${day}/${month}/${year}`);
+      }
+    }
+  }, [isEditMode, isViewMode, header.REQUEST_DATE]);
+
+  // ─── Fetch user's approval level based on flow ──────────────
+  useEffect(() => {
+    const fetchUserLevel = async () => {
+      if (!user?.loginid || !companyCode || !header.FLOW_CODE) return;
+
+      try {
+        const result = await almsCommonSelect({
+          parameter: "PS_PREQUEST_ENTRY_GET_USER_LEVEL",
+          loginid,
+          code1: companyCode,
+          code2: header.FLOW_CODE || "",
+          code3: user?.loginid || "",
+          code4: ""
+        });
+
+        if (result && result.length > 0) {
+          const level = Number(result[0].FLOW_LEVEL) || 0;
+          setUserApprovalLevel(level);
+        } else {
+          const currentLevel = Number(header.FLOW_LEVEL_RUNNING) || 0;
+          setUserApprovalLevel(currentLevel);
+        }
+      } catch (error) {
+        console.error("Failed to fetch user level:", error);
+        const currentLevel = Number(header.FLOW_LEVEL_RUNNING) || 0;
+        setUserApprovalLevel(currentLevel);
+      }
+    };
+
+    fetchUserLevel();
+  }, [user, companyCode, header.FLOW_CODE, header.FLOW_LEVEL_RUNNING]);
+
+  const shouldShowSupplier = (): boolean => {
+    return userApprovalLevel >= 6;
+  };
+
+  const shouldShowApprovedQty = (): boolean => {
+    return userApprovalLevel >= 2;
+  };
+
+  const shouldShowTermsTab = (): boolean => {
+    return userApprovalLevel >= 6;
   };
 
   // ─── Lookup Queries ──────────────────────────────────────────────
@@ -227,6 +370,19 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     enabled: !!companyCode,
   });
 
+  const { data: taxComponentList = [] } = useQuery<LookupItem[]>({
+    queryKey: ["pr-tax-component-lookup", companyCode],
+    queryFn: () => almsCommonSelect({
+      parameter: "PS_PREQUEST_ENTRY_TAX_COMPONENT",
+      loginid,
+      code1: companyCode,
+      code2: loginid,
+      code3: "",
+      code4: ""
+    }),
+    enabled: !!companyCode,
+  });
+
   const { data: supplierList = [] } = useQuery<LookupItem[]>({
     queryKey: ["pr-supplier-lookup", companyCode],
     queryFn: () => almsCommonSelect({
@@ -237,7 +393,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       code3: "",
       code4: ""
     }),
-    enabled: !!companyCode,
+    enabled: !!companyCode && shouldShowSupplier(),
   });
 
   const { data: currencyList = [] } = useQuery<LookupItem[]>({
@@ -305,7 +461,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       code3: "",
       code4: "",
     }),
-    enabled: (isEditMode || isViewMode) && !!requestNumber,
+    enabled: (isEditMode || isViewMode) && !!requestNumber && shouldShowTermsTab(),
   });
 
   // ─── Fetch Flow Details for DIV_CODE ────────────────────────────
@@ -354,6 +510,8 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
         DIV_NAME: (headerData as any).DIV_NAME || "",
         DEPT_CODE_FLOW: (headerData as any).DEPT_CODE_FLOW || "",
         DEPT_NAME: (headerData as any).DEPT_NAME || "",
+        FLOW_CODE: (headerData as any).FLOW_CODE || headerData.FLOW_CODE || "",
+        FLOW_DESCRIPTION: (headerData as any).FLOW_DESCRIPTION || headerData.FLOW_DESCRIPTION || "",
       });
       setLoading(false);
     } else if (!loading) {
@@ -381,21 +539,25 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       return;
     }
 
-    const enriched = itemList.map((row) => ({
-      ...row,
-      id: (row as any).id || newId(),
-      ITEM_DESP: row.ITEM_DESP || itemCodes.find((i) => i.ITEM_CODE === row.ITEM_CODE)?.ITEM_DESP || "",
-      COST_NAME: row.COST_NAME || costCodes.find((c) => c.COST_CODE === row.COST_CODE)?.COST_NAME || "",
-      SUPPLIER_NAME: (row as any).SUPPLIER_NAME || supplierList.find((s) => s.SUPPLIER_CODE === row.SUPPLIER)?.SUPPLIER_NAME || "",
-      TX_CAT_NAME: (row as any).TX_CAT_NAME || taxCodes.find((t) => t.TX_CAT_CODE === row.TX_CAT_CODE)?.TX_CAT_NAME || "",
-      CURR_NAME: (row as any).CURR_NAME || currencyList.find((c) => c.CURR_CODE === row.CURR_CODE)?.CURR_NAME || "",
-      CAPEX_OPEX_NON_OPEX: (row as any).CAPEX || (row as any).CAPEX_OPEX_NON_OPEX || "",
-      BASE_AMOUNT: num(row.AMOUNT) * num(row.CURRENCY_RATE || header.CURRENCY_RATE || 1),
-      FINAL_AMOUNT: (num(row.AMOUNT) * num(row.CURRENCY_RATE || header.CURRENCY_RATE || 1)) + num(row.TX_COMPNT_AMT_1),
-    }));
+    const enriched = itemList.map((row) => {
+      const base: TPRItem = {
+        ...row,
+        id: (row as any).id || newId(),
+        ITEM_DESP: row.ITEM_DESP || itemCodes.find((i) => i.ITEM_CODE === row.ITEM_CODE)?.ITEM_DESP || "",
+        COST_NAME: row.COST_NAME || costCodes.find((c) => c.COST_CODE === row.COST_CODE)?.COST_NAME || "",
+        SUPPLIER_NAME: (row as any).SUPPLIER_NAME || supplierList.find((s) => s.SUPPLIER_CODE === row.SUPPLIER)?.SUPPLIER_NAME || "",
+        TX_CAT_NAME: (row as any).TX_CAT_NAME || taxCodes.find((t) => t.TX_CAT_CODE === row.TX_CAT_CODE)?.TX_CAT_NAME || "",
+        CURR_NAME: (row as any).CURR_NAME || currencyList.find((c) => c.CURR_CODE === row.CURR_CODE)?.CURR_NAME || "",
+        CAPEX_OPEX_NON_OPEX: (row as any).CAPEX || (row as any).CAPEX_OPEX_NON_OPEX || "",
+        LCURR_AFTER_DISCOUNT: 0,
+        CASH_IND: (row as any).CASH_IND || "",
+      } as TPRItem;
+      const exRate = num(base.CURRENCY_RATE || header.CURRENCY_RATE || 1);
+      return recalcItem(base, exRate, userApprovalLevel);
+    });
     const renumbered = enriched.map((item, idx) => ({ ...item, ITEM_SRNO: idx + 1 }));
     setItems(renumbered);
-  }, [itemList, itemCodes, costCodes, supplierList, taxCodes, currencyList, header.CURRENCY_RATE, isViewMode, requestNumber]);
+  }, [userApprovalLevel]);
 
   // ─── Set Terms Data ──────────────────────────────────────────────
   useEffect(() => {
@@ -422,13 +584,10 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
   const totalFinalAmount = items.reduce((s, r) => s + num(r.FINAL_AMOUNT), 0);
   const [headerExpanded, setHeaderExpanded] = useState(true);
 
-  // ─── Validate Before Action ──────────────────────────────────────
   const validateAndShowErrors = (): boolean => {
-    const { valid, errors } = validatePRForm(header, items, terms);
+    const { valid, errors } = validatePRForm(header, items, terms, userApprovalLevel);
     if (!valid) {
-      // Show first error as toast
       toast.error(errors[0], 5000);
-      // Also show all errors in notice
       setNotice({
         type: "error",
         message: errors.join(". ")
@@ -438,7 +597,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     return true;
   };
 
-  // ─── Save Functions ──────────────────────────────────────────────
   const saveBulk = async (status: string, remark: string = "", overrides: Partial<Record<string, any>> = {}): Promise<{ success: boolean; message?: string;[key: string]: any }> => {
     const headerData = {
       REQUEST_NUMBER: requestNumber || null,
@@ -560,10 +718,11 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       TX_COMPNTCAT_CODE_1: item.TX_COMPNTCAT_CODE_1 || "",
       TX_COMPNT_PERC_1: item.TX_COMPNT_PERC_1 || 0,
       TX_COMPNT_AMT_1: item.TX_COMPNT_AMT_1 || 0,
-      TX_COMPNT_LCURAMT_1: 0,
+      TX_COMPNT_LCURAMT_1: item.TX_COMPNT_LCURAMT_1 || 0,
       TX_COMPNT_1_EXPMT: "",
       CURR_CODE: item.CURR_CODE || "",
-      LCURR_AMT: 0,
+      LCURR_AMT: item.LCURR_AMT || 0,
+      LCURR_AFTER_DISCOUNT: (item as any).LCURR_AFTER_DISCOUNT || 0,
       ALLOCATED_APPROVED_QUANTITY: item.ALLOCATED_APPROVED_QUANTITY || 0,
       SELECTED_ITEM: "",
       LAST_ACTION: status,
@@ -571,7 +730,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       ITEM_SRNO: item.ITEM_SRNO || 0,
       SUPPLIER_PART_CODE: "",
       RATE_METHODE: "",
-      CASH_IND: "",
+      CASH_IND: item.CASH_IND || "",
       MAIL_ATTATCH: "",
       ITEM_CANEL: "",
       SUPPLIER: item.SUPPLIER || "",
@@ -640,7 +799,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
   const runAction = async (status: string, successMsg: string, remark: string = "", overrides: Partial<Record<string, any>> = {}) => {
     if (saving) return;
 
-    // Validate before any action except SAVEASDRAFT
     if (status !== "SAVEASDRAFT") {
       if (!validateAndShowErrors()) {
         return;
@@ -666,7 +824,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
   };
 
   const handleSaveDraft = () => {
-    // Draft doesn't need validation, but check if at least some data exists
     if (!header.DESCRIPTION && items.length === 0) {
       toast.warning("Please add at least a description or an item before saving draft", 4000);
       return;
@@ -695,7 +852,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       return;
     }
 
-    // Validate before approve
     if (!validateAndShowErrors()) {
       return;
     }
@@ -716,23 +872,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
         throw new Error(result.message || "Failed to approve");
       }
 
-      if (isFinal === "Y") {
-        const poResult = await almsGeneratePOFromPR({
-          companyCode,
-          requestNumber,
-          docType: "LPO",
-        });
-
-        if (!poResult.success) {
-          toast.error(`PR approved, but PO generation failed: ${poResult.message || "unknown error"}`, 5000);
-          onClose(true);
-          return;
-        }
-        toast.success("PR approved & PO generated successfully!", 4000);
-      } else {
-        toast.success("PR approved successfully!", 4000);
-      }
-
+      toast.success("PR approved successfully!", 4000);
       onClose(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to approve", 5000);
@@ -744,7 +884,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       toast.error("No PR to reject", 5000);
       return;
     }
-    // Validation will be done in handleRejectConfirm
   };
 
   const { data: sendBackTargets = [] } = useQuery<LookupItem[]>({
@@ -763,7 +902,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
   const sendBackOptions = useMemo(() => {
     const opts: { loginid: string; label: string; level: number }[] = [];
 
-    // Only show the previous users (not the current user)
     if (header.USER_ID) {
       opts.push({ loginid: String(header.USER_ID), label: `${header.USER_ID} (Creator)`, level: 0 });
     }
@@ -771,7 +909,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     const seen = new Set(opts.map((o) => o.loginid));
     sendBackTargets.forEach((row: any) => {
       const lg = String(row.LOGINID || "");
-      // Don't show current user in sendback targets
       if (lg && !seen.has(lg) && lg !== loginid) {
         seen.add(lg);
         opts.push({ loginid: lg, label: `${lg} (Level ${row.FLOW_LEVEL_RUNNING})`, level: Number(row.FLOW_LEVEL_RUNNING) || 0 });
@@ -806,7 +943,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       return;
     }
 
-    // Validate before reject
     if (!validateAndShowErrors()) {
       return;
     }
@@ -819,47 +955,24 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     setRemarkText("");
   };
 
-  const handleGeneratePO = async () => {
-    if (!requestNumber) {
-      toast.error("No PR to generate PO", 5000);
-      return;
-    }
-    setSaving(true);
-    setNotice(null);
-    try {
-      await almsSave({
-        parameter: "Amlspf_GeneratePO",
-        loginid,
-        code1: companyCode,
-        code2: requestNumber,
-        code3: header.FINAL_APPROVED || "YES",
-        code4: ""
-      });
-      toast.success("PO generated successfully!", 4000);
-      onClose(true);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to generate PO", 5000);
-    } finally { setSaving(false); }
-  };
-
-  // ─── Rest of the component remains the same ─────────────────────
   const updateAllItemsWithHeader = (overrides: Partial<TPRHeader> = {}) => {
     const hdr = { ...header, ...overrides };
     setItems((prev) =>
-      prev.map((item) => ({
-        ...item,
-        CURR_CODE: hdr.CURR_CODE || item.CURR_CODE || "",
-        CURR_NAME: hdr.CURR_NAME || item.CURR_NAME || "",
-        CURRENCY_RATE: hdr.CURRENCY_RATE || item.CURRENCY_RATE || 1,
-        TX_CAT_CODE: hdr.TX_CAT_CODE || item.TX_CAT_CODE || "",
-        TX_CAT_NAME: hdr.TX_CAT_NAME || item.TX_CAT_NAME || "",
-        TX_COMPNTCAT_CODE_1: hdr.TX_COMPNTCAT_CODE_1 || item.TX_COMPNTCAT_CODE_1 || "",
-        TX_COMPNT_PERC_1: hdr.TX_COMPNT_PERC_1 || item.TX_COMPNT_PERC_1 || 0,
-        BASE_AMOUNT: num(item.AMOUNT) * num(hdr.CURRENCY_RATE || item.CURRENCY_RATE || 1),
-        TX_COMPNT_AMT_1: (num(item.AMOUNT) * num(hdr.TX_COMPNT_PERC_1 || item.TX_COMPNT_PERC_1 || 0)) / 100,
-        FINAL_AMOUNT: (num(item.AMOUNT) * num(hdr.CURRENCY_RATE || item.CURRENCY_RATE || 1)) +
-          ((num(item.AMOUNT) * num(hdr.TX_COMPNT_PERC_1 || item.TX_COMPNT_PERC_1 || 0)) / 100),
-      }))
+      prev.map((item) => {
+        const merged: TPRItem = {
+          ...item,
+          CURR_CODE: hdr.CURR_CODE || item.CURR_CODE || "",
+          CURR_NAME: hdr.CURR_NAME || item.CURR_NAME || "",
+          CURRENCY_RATE: hdr.CURRENCY_RATE || item.CURRENCY_RATE || 1,
+          TX_CAT_CODE: hdr.TX_CAT_CODE || item.TX_CAT_CODE || "",
+          TX_CAT_NAME: hdr.TX_CAT_NAME || item.TX_CAT_NAME || "",
+          TX_COMPNTCAT_CODE_1: hdr.TX_COMPNTCAT_CODE_1 || item.TX_COMPNTCAT_CODE_1 || "",
+          TX_COMPNT_PERC_1: hdr.TX_COMPNT_PERC_1 || item.TX_COMPNT_PERC_1 || 0,
+          TX_COMPNTCAT_NAME: (hdr as any).TX_COMPNTCAT_NAME || (item as any).TX_COMPNTCAT_NAME || "",
+        };
+        const exRate = num(merged.CURRENCY_RATE) || 1;
+        return recalcItem(merged, exRate, userApprovalLevel);
+      })
     );
   };
 
@@ -873,6 +986,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     blank.TX_CAT_NAME = header.TX_CAT_NAME || "";
     blank.TX_COMPNTCAT_CODE_1 = header.TX_COMPNTCAT_CODE_1 || "";
     blank.TX_COMPNT_PERC_1 = header.TX_COMPNT_PERC_1 || 0;
+    blank.CASH_IND = "N";
     (blank as any).id = newId();
     setItems([...items, blank]);
 
@@ -896,35 +1010,19 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       const updated = [...prev];
       const item = { ...updated[index], [field]: value };
 
-      if (field === "ITEM_RATE" || field === "DISCOUNT_AMOUNT") {
-        const rate = field === "ITEM_RATE" ? num(value) : num(item.ITEM_RATE);
-        const discount = field === "DISCOUNT_AMOUNT" ? num(value) : num(item.DISCOUNT_AMOUNT);
-        item.FINAL_RATE = rate - discount;
-        const qty = num(item.ALLOCATED_APPROVED_QUANTITY);
-        item.AMOUNT = item.FINAL_RATE * qty;
-        item.BASE_AMOUNT = item.AMOUNT * num(item.CURRENCY_RATE);
-        item.TX_COMPNT_AMT_1 = (item.AMOUNT * num(item.TX_COMPNT_PERC_1)) / 100;
-        item.FINAL_AMOUNT = item.BASE_AMOUNT + item.TX_COMPNT_AMT_1;
-      }
-      if (field === "ALLOCATED_APPROVED_QUANTITY") {
-        const qty = num(value);
-        item.AMOUNT = num(item.FINAL_RATE) * qty;
-        item.BASE_AMOUNT = item.AMOUNT * num(item.CURRENCY_RATE);
-        item.TX_COMPNT_AMT_1 = (item.AMOUNT * num(item.TX_COMPNT_PERC_1)) / 100;
-        item.FINAL_AMOUNT = item.BASE_AMOUNT + item.TX_COMPNT_AMT_1;
+      if (field === "ITEM_RATE" || field === "DISCOUNT_AMOUNT" || field === "ALLOCATED_APPROVED_QUANTITY" || field === "REQUEST_QUANTITY") {
+        const exRate = num(item.CURRENCY_RATE) || 1;
+        recalcItem(item, exRate, userApprovalLevel);
       }
       if (field === "CURRENCY_RATE") {
         const rate = num(value);
         item.CURRENCY_RATE = rate;
-        item.BASE_AMOUNT = num(item.AMOUNT) * rate;
-        item.TX_COMPNT_AMT_1 = (num(item.AMOUNT) * num(item.TX_COMPNT_PERC_1)) / 100;
-        item.FINAL_AMOUNT = item.BASE_AMOUNT + item.TX_COMPNT_AMT_1;
+        recalcItem(item, rate || 1, userApprovalLevel);
       }
       if (field === "TX_COMPNT_PERC_1") {
-        const perc = num(value);
-        item.TX_COMPNT_PERC_1 = perc;
-        item.TX_COMPNT_AMT_1 = (num(item.AMOUNT) * perc) / 100;
-        item.FINAL_AMOUNT = item.BASE_AMOUNT + item.TX_COMPNT_AMT_1;
+        item.TX_COMPNT_PERC_1 = num(value);
+        const exRate = num(item.CURRENCY_RATE) || 1;
+        recalcItem(item, exRate, userApprovalLevel);
       }
       if (field === "TX_CAT_CODE" && typeof value === 'string') {
         const found = taxCodes.find((t) => t.tx_cat_code === value);
@@ -933,9 +1031,24 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
           item.TX_CAT_NAME = found.tx_cat_name || "";
           item.TX_COMPNTCAT_CODE_1 = found.tx_compntcat_code_1 || "";
           item.TX_COMPNT_PERC_1 = found.tx_compnt_perc_1 || 0;
-          item.TX_COMPNT_AMT_1 = (num(item.AMOUNT) * num(item.TX_COMPNT_PERC_1)) / 100;
-          item.FINAL_AMOUNT = item.BASE_AMOUNT + item.TX_COMPNT_AMT_1;
+          const exRate = num(item.CURRENCY_RATE) || 1;
+          recalcItem(item, exRate, userApprovalLevel);
         }
+      }
+      if (field === "TX_COMPNTCAT_CODE_1" && typeof value === 'string') {
+        const found = taxComponentList.find((t) => t.TX_COMPNTCAT_CODE === value);
+        if (found) {
+          item.TX_COMPNTCAT_CODE_1 = value;
+          item.TX_COMPNTCAT_NAME = found.TX_COMPNTCAT_NAME || "";
+          if (found.TX_PERCNT !== undefined) {
+            item.TX_COMPNT_PERC_1 = Number(found.TX_PERCNT) || 0;
+          }
+          const exRate = num(item.CURRENCY_RATE) || 1;
+          recalcItem(item, exRate, userApprovalLevel);
+        }
+      }
+      if (field === "CASH_IND" && typeof value === 'string') {
+        item.CASH_IND = value;
       }
 
       updated[index] = item;
@@ -986,7 +1099,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     });
   };
 
-  // ─── Column Definitions ──────────────────────────────────────────
   const currencyColumns = [
     { field: "CURR_CODE", header: "Code" },
     { field: "CURR_NAME", header: "Name" },
@@ -998,8 +1110,8 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     { field: "TX_COMPNT_PERC_1", header: "Tax %" },
   ];
   const taxComponentColumns = [
-    { field: "tx_compntcat_code", header: "Code" },
-    { field: "tx_compntcat_name", header: "Name" },
+    { field: "TX_COMPNTCAT_CODE", header: "Code" },
+    { field: "TX_COMPNTCAT_NAME", header: "Name" },
   ];
   const itemCodeColumns = [
     { field: "ITEM_CODE", header: "Code" },
@@ -1019,8 +1131,11 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     { field: "TX_TYPE_DESC", header: "Description" },
   ];
   const capexOptions = ["CAPEX", "OPEX", "NON-OPEX"];
+  const cashIndOptions = [
+    { value: "Y", label: "Cash" },
+    { value: "N", label: "Credit" }
+  ];
 
-  // ─── Render ──────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 bg-background">
       <section className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]">
@@ -1039,6 +1154,12 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Doc No</span>
                 <strong className="block text-sm leading-tight text-primary-foreground">
                   {docType !== "PR" ? (docNo || "New") : (requestNumber || "New")}
+                </strong>
+              </div>
+              <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
+                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Flow Code</span>
+                <strong className="block text-sm leading-tight text-primary-foreground">
+                  {header.FLOW_CODE || "—"}
                 </strong>
               </div>
               <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
@@ -1119,39 +1240,44 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                           <label className="field">
                             <span>Request Date</span>
                             <Input
-                              disabled={disabled}
-                              type="date"
-                              min={new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}
-                              value={header.REQUEST_DATE ? String(header.REQUEST_DATE).slice(0, 10) : ""}
-                              onChange={(e) => setHdr("REQUEST_DATE", e.target.value)}
+                              disabled
+                              type="text"
+                              placeholder="dd/mm/yyyy"
+                              value={displayDate}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setDisplayDate(value);
+
+                                const parts = value.split('/');
+                                if (parts.length === 3) {
+                                  const day = parseInt(parts[0]);
+                                  const month = parseInt(parts[1]) - 1;
+                                  const year = parseInt(parts[2]);
+                                  const date = new Date(year, month, day);
+                                  if (!isNaN(date.getTime())) {
+                                    const yyyy = date.getFullYear();
+                                    const mm = String(date.getMonth() + 1).padStart(2, '0');
+                                    const dd = String(date.getDate()).padStart(2, '0');
+                                    setHdr("REQUEST_DATE", `${yyyy}-${mm}-${dd}`);
+                                  }
+                                }
+                              }}
                               className="w-full"
                             />
                           </label>
                         </div>
                         <div className="col-span-1">
                           <label className="field">
-                            <span>Creation Date</span>
+                            <span>Flow Code</span>
                             <Input
-                              disabled={disabled}
-                              type="date"
-                              value={header.CREATE_DATE ? String(header.CREATE_DATE).slice(0, 10) : ""}
-                              onChange={(e) => setHdr("CREATE_DATE", e.target.value)}
-                              className="w-full"
+                              disabled
+                              value={String(header.FLOW_CODE || "")}
+                              placeholder="Flow Code"
+                              className="w-full bg-muted/50"
                             />
                           </label>
                         </div>
                         <div className="col-span-2 grid grid-cols-3 gap-3">
-                          <div className="col-span-1">
-                            <label className="field">
-                              <span>Flow Code</span>
-                              <Input
-                                disabled
-                                value={String(header.FLOW_CODE || "")}
-                                placeholder="Flow Code"
-                                className="w-full bg-muted/50"
-                              />
-                            </label>
-                          </div>
                           <div className="col-span-2">
                             <label className="field">
                               <span>Division</span>
@@ -1231,14 +1357,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                               onChange={(e) => {
                                 const rate = Number(e.target.value);
                                 setHdr("CURRENCY_RATE", rate);
-                                setItems((prev) =>
-                                  prev.map((item) => ({
-                                    ...item,
-                                    CURRENCY_RATE: rate,
-                                    BASE_AMOUNT: num(item.AMOUNT) * rate,
-                                    FINAL_AMOUNT: (num(item.AMOUNT) * rate) + num(item.TX_COMPNT_AMT_1),
-                                  }))
-                                );
+                                updateAllItemsWithHeader({ CURRENCY_RATE: rate });
                               }}
                               className="w-full"
                             />
@@ -1296,17 +1415,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                         </div>
                         <div className="col-span-1">
                           <label className="field">
-                            <span>Tax Code</span>
-                            <Input
-                              disabled={disabled}
-                              value={String(header.TX_COMPNTCAT_CODE_1 || "")}
-                              onChange={(e) => setHdr("TX_COMPNTCAT_CODE_1", e.target.value)}
-                              className="w-full"
-                            />
-                          </label>
-                        </div>
-                        <div className="col-span-1">
-                          <label className="field">
                             <span>Tax Type</span>
                             <Select
                               value={String(header.TAX_TYPE || "N")}
@@ -1316,13 +1424,11 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                 const perc = v === "S" ? 5 : 0;
                                 setHdr("TAX_TYPE", v);
                                 setItems((prev) =>
-                                  prev.map((item) => ({
-                                    ...item,
-                                    TAX_TYPE: v,
-                                    TX_COMPNT_PERC_1: perc,
-                                    TX_COMPNT_AMT_1: (num(item.AMOUNT) * perc) / 100,
-                                    FINAL_AMOUNT: num(item.BASE_AMOUNT) + ((num(item.AMOUNT) * perc) / 100),
-                                  }))
+                                  prev.map((item) => {
+                                    const merged: TPRItem = { ...item, TAX_TYPE: v, TX_COMPNT_PERC_1: perc };
+                                    const exRate = num(merged.CURRENCY_RATE) || 1;
+                                    return recalcItem(merged, exRate, userApprovalLevel);
+                                  })
                                 );
                               }}
                               className="w-full"
@@ -1332,10 +1438,61 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                             </Select>
                           </label>
                         </div>
+                        <div className="col-span-2">
+                          <label className="field">
+                            <span>Tax Code</span>
+                            <div className="w-full">
+                              <LookupField
+                                label=""
+                                compact
+                                placeholder="Search Tax Component"
+                                value={header.TX_COMPNTCAT_CODE_1 || ""}
+                                displayValue={
+                                  header.TX_COMPNTCAT_CODE_1 && (header as any).TX_COMPNTCAT_NAME
+                                    ? `${header.TX_COMPNTCAT_CODE_1} - ${(header as any).TX_COMPNTCAT_NAME}`
+                                    : header.TX_COMPNTCAT_CODE_1 || ""
+                                }
+                                columns={taxComponentColumns}
+                                valueField="TX_COMPNTCAT_CODE"
+                                displayFields={["TX_COMPNTCAT_CODE", "TX_COMPNTCAT_NAME"]}
+                                loadOptions={() => almsCommonSelect({
+                                  parameter: "PS_PREQUEST_ENTRY_TAX_COMPONENT",
+                                  loginid,
+                                  code1: companyCode,
+                                  code2: loginid,
+                                  code3: "",
+                                  code4: ""
+                                })}
+                                onChange={(val, row) => {
+                                  if (row && typeof row === 'object') {
+                                    const taxComponentName = String(row.TX_COMPNTCAT_NAME || '');
+                                    const taxPercent = Number(row.TX_PERCNT) || 0;
+
+                                    setHdr("TX_COMPNTCAT_CODE_1", val);
+                                    setHdr("TX_COMPNTCAT_NAME", taxComponentName);
+                                    setHdr("TX_COMPNT_PERC_1", taxPercent);
+
+                                    updateAllItemsWithHeader({
+                                      TX_COMPNTCAT_CODE_1: val,
+                                      TX_COMPNTCAT_NAME: taxComponentName,
+                                      TX_COMPNT_PERC_1: taxPercent,
+                                    });
+                                  } else {
+                                    setHdr("TX_COMPNTCAT_CODE_1", val);
+                                    updateAllItemsWithHeader({
+                                      TX_COMPNTCAT_CODE_1: val,
+                                    });
+                                  }
+                                }}
+                                disabled={disabled}
+                              />
+                            </div>
+                          </label>
+                        </div>
+
                       </div>
                     </div>
 
-                    {/* ── REMARKS box ── */}
                     {/* ── REMARKS box ── */}
                     <div className="rounded-md border w-full lg:col-span-2">
                       <div className="border-b bg-muted/40 px-3 py-1.5">
@@ -1349,7 +1506,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                             value={String(header.DESCRIPTION || "")}
                             onChange={(e) => {
                               setHdr("DESCRIPTION", e.target.value);
-                              // Auto-resize
                               const target = e.target;
                               target.style.height = 'auto';
                               target.style.height = target.scrollHeight + 'px';
@@ -1397,6 +1553,9 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                       <strong className="text-foreground">Doc No:</strong> {requestNumber || "New"}
                     </span>
                     <span>
+                      <strong className="text-foreground">Flow Code:</strong> {header.FLOW_CODE || "—"}
+                    </span>
+                    <span>
                       <strong className="text-foreground">Currency:</strong> {header.CURR_CODE || "—"}
                     </span>
                     {(header as any).purch_status && (
@@ -1423,22 +1582,26 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                   >
                     Details Items
                   </button>
-                  <button
-                    onClick={() => setActiveTab("terms")}
-                    className={`px-4 py-4 text-sm font-medium transition-colors border-b-2 ${activeTab === "terms"
-                      ? 'border-primary text-primary bg-background'
-                      : 'border-transparent text-muted-foreground hover:text-foreground'
-                      }`}
-                  >
-                    Terms & Conditions
-                  </button>
+
+                  {shouldShowTermsTab() && (
+                    <button
+                      onClick={() => setActiveTab("terms")}
+                      className={`px-4 py-4 text-sm font-medium transition-colors border-b-2 ${activeTab === "terms"
+                        ? 'border-primary text-primary bg-background'
+                        : 'border-transparent text-muted-foreground hover:text-foreground'
+                        }`}
+                    >
+                      Terms & Conditions
+                    </button>
+                  )}
+
                   <div className="ml-auto px-3">
                     {!isViewMode && activeTab === "items" && (
                       <Button disabled={disabled} size="sm" type="button" variant="outline" onClick={addItemLine}>
                         <Plus size={14} /> Add Line
                       </Button>
                     )}
-                    {!isViewMode && activeTab === "terms" && (
+                    {!isViewMode && activeTab === "terms" && shouldShowTermsTab() && (
                       <Button disabled={disabled} size="sm" type="button" variant="outline" onClick={addTermLine}>
                         <Plus size={14} /> Add Line
                       </Button>
@@ -1454,7 +1617,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                       className="commercial-lines-scroll min-h-0 flex-1 overflow-x-auto overflow-y-auto"
                       style={{ overscrollBehavior: 'contain' }}
                     >
-                      <table className="finance-lines-table w-full min-w-[2400px] text-[12px] border-separate border-spacing-0">
+                      <table className="finance-lines-table w-full min-w-[3500px] text-[12px] border-separate border-spacing-0">
                         <thead className="sticky top-0 z-30 bg-primary text-xs text-primary-foreground">
                           <tr>
                             <th className="sticky left-0 z-40 bg-primary px-2 py-2 text-center w-[45px] min-w-[45px] max-w-[45px] border-r border-primary-foreground/10">
@@ -1465,28 +1628,36 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                             </th>
                             <th className="px-2 py-2 text-left w-[280px] min-w-[300px] max-w-[280px]">Cost Code *</th>
                             <th className="px-2 py-2 text-center w-[80px] min-w-[150px] max-w-[80px]">Req Qty</th>
-                            <th className="px-2 py-2 text-center w-[80px] min-w-[150px] max-w-[80px]">Appr Qty *</th>
-                            <th className="px-2 py-2 text-right w-[90px] min-w-[150px] max-w-[90px]">Rate *</th>
+                            {shouldShowApprovedQty() && (
+                              <th className="px-2 py-2 text-center w-[80px] min-w-[150px] max-w-[80px]">Appr Qty *</th>
+                            )}
+                            <th className="px-2 py-2 text-right w-[90px] min-w-[150px] max-w-[90px]">Unit Price *</th>
                             <th className="px-2 py-2 text-center w-[75px] min-w-[220px] max-w-[75px]">Currency</th>
                             <th className="px-2 py-2 text-right w-[80px] min-w-[150px] max-w-[80px]">Ex Rate</th>
-                            <th className="px-2 py-2 text-left w-[250px] min-w-[550px] max-w-[250px]">Supplier *</th>
+                            {shouldShowSupplier() && (
+                              <th className="px-2 py-2 text-left w-[250px] min-w-[550px] max-w-[250px]">Supplier *</th>
+                            )}
+                            <th className="px-2 py-2 text-right w-[80px] min-w-[150px] max-w-[80px]">Quantity</th>
+                            <th className="px-2 py-2 text-right w-[65px] min-w-[150px] max-w-[65px]">Disc %</th>
+                            <th className="px-2 py-2 text-right w-[90px] min-w-[150px] max-w-[90px]">Disc Price</th>
+                            <th className="px-2 py-2 text-right w-[90px] min-w-[150px] max-w-[150px]">Unit price Net Amt</th>
                             <th className="finance-amount-cell px-2 py-2 text-right w-[100px] min-w-[150px] max-w-[100px]">Amount</th>
-                            <th className="finance-amount-cell px-2 py-2 text-right w-[100px] min-w-[150px] max-w-[100px]">Base Amt</th>
-                            <th className="px-2 py-2 text-center w-[100px] min-w-[150px] max-w-[100px]">Tax Code</th>
-                            <th className="px-2 py-2 text-left w-[280px] min-w-[330px] max-w-[280px]">Tax Category</th>
+                            <th className="finance-amount-cell px-2 py-2 text-right w-[100px] min-w-[150px] max-w-[100px]">Lcurr Amount</th>
+                            <th className="px-2 py-2 text-left w-[280px] min-w-[330px] max-w-[280px]">Tax Cat</th>
+                            <th className="px-2 py-2 text-left w-[280px] min-w-[300px] max-w-[280px]">Tax Code</th>
                             <th className="px-2 py-2 text-right w-[65px] min-w-[150px] max-w-[65px]">Tax %</th>
-                            <th className="finance-amount-cell px-2 py-2 text-right w-[90px] min-w-[150px] max-w-[90px]">Tax Amt</th>
+                            <th className="finance-amount-cell px-2 py-2 text-right w-[90px] min-w-[150px] max-w-[90px]">Tax Amount</th>
                             <th className="px-2 py-2 text-center w-[90px] min-w-[200px] max-w-[90px]">Tax Type</th>
-                            <th className="px-2 py-2 text-right w-[90px] min-w-[150px] max-w-[90px]">Discount</th>
-                            <th className="px-2 py-2 text-right w-[90px] min-w-[90px] max-w-[90px]">Final Rate</th>
-                            <th className="finance-amount-cell px-2 py-2 text-right w-[100px] min-w-[100px] max-w-[100px] font-bold bg-primary text-primary-foreground">Final Amt</th>
+                            <th className="finance-amount-cell px-2 py-2 text-right w-[100px] min-w-[150px] max-w-[100px]">Tax Lcurr amount</th>
+                            <th className="finance-amount-cell px-2 py-2 text-right w-[100px] min-w-[150px] max-w-[100px]">Lcurr after Discount</th>
                             <th className="px-2 py-2 text-center w-[95px] min-w-[150px] max-w-[95px]">Capex</th>
+                            <th className="px-2 py-2 text-center w-[80px] min-w-[100px] max-w-[80px]">Cash Indicator</th>
                             <th className="px-2 py-2 text-center w-[55px] min-w-[55px] max-w-[55px]">Action</th>
                           </tr>
                         </thead>
                         <tbody>
                           {items.length === 0 ? (
-                            <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={21}>No items yet. Click "Add Line" to add items.</td></tr>
+                            <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={25}>No items yet. Click "Add Line" to add items.</td></tr>
                           ) : items.map((item) => {
                             const itemId = (item as any).id || String(item.ITEM_SRNO);
 
@@ -1505,6 +1676,10 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                             const taxCategoryDisplay = item.TX_CAT_CODE && (item as any).TX_CAT_NAME
                               ? `${item.TX_CAT_CODE} - ${(item as any).TX_CAT_NAME}`
                               : (item.TX_CAT_CODE || "");
+
+                            const taxComponentDisplay = item.TX_COMPNTCAT_CODE_1 && (item as any).TX_COMPNTCAT_NAME
+                              ? `${item.TX_COMPNTCAT_CODE_1} - ${(item as any).TX_COMPNTCAT_NAME}`
+                              : (item.TX_COMPNTCAT_CODE_1 || "");
 
                             const currencyDisplay = item.CURR_CODE && (item as any).CURR_NAME
                               ? `${item.CURR_CODE} - ${(item as any).CURR_NAME}`
@@ -1580,17 +1755,19 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                     placeholder="0"
                                   />
                                 </td>
-                                <td className="px-2 py-1 w-[80px] min-w-[80px] max-w-[80px]">
-                                  <Input
-                                    type="number"
-                                    step="0.001"
-                                    value={item.ALLOCATED_APPROVED_QUANTITY || ""}
-                                    onChange={(e) => updateItemField(itemId, "ALLOCATED_APPROVED_QUANTITY", Number(e.target.value) || 0)}
-                                    disabled={disabled}
-                                    className="h-9 text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                    placeholder="0"
-                                  />
-                                </td>
+                                {shouldShowApprovedQty() && (
+                                  <td className="px-2 py-1 w-[80px] min-w-[80px] max-w-[80px]">
+                                    <Input
+                                      type="number"
+                                      step="0.001"
+                                      value={item.ALLOCATED_APPROVED_QUANTITY || ""}
+                                      onChange={(e) => updateItemField(itemId, "ALLOCATED_APPROVED_QUANTITY", Number(e.target.value) || 0)}
+                                      disabled={disabled}
+                                      className="h-9 text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                      placeholder="0"
+                                    />
+                                  </td>
+                                )}
                                 <td className="px-2 py-1 w-[90px] min-w-[90px] max-w-[90px]">
                                   <Input
                                     type="number"
@@ -1629,68 +1806,82 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                     placeholder="1"
                                   />
                                 </td>
-                                <td className="px-2 py-1 w-[250px] min-w-[250px] max-w-[250px]">
-                                  <LookupField
-                                    label=""
-                                    compact
-                                    placeholder="Supplier *"
-                                    value={item.SUPPLIER || ""}
-                                    displayValue={supplierDisplay}
-                                    columns={supplierColumns}
-                                    valueField="supplier_code"
-                                    displayFields={["supplier_code", "supplier_name"]}
-                                    loadOptions={() => almsCommonSelect({
-                                      parameter: "PS_PREQUEST_ENTRY_SUPPLIERS",
-                                      loginid,
-                                      code1: companyCode,
-                                      code2: loginid,
-                                      code3: "",
-                                      code4: ""
-                                    })}
-                                    onChange={(val, row) => {
-                                      const oldSupplier = item.SUPPLIER;
+                                {shouldShowSupplier() && (
+                                  <td className="px-2 py-1 w-[250px] min-w-[250px] max-w-[250px]">
+                                    <LookupField
+                                      label=""
+                                      compact
+                                      placeholder="Supplier *"
+                                      value={item.SUPPLIER || ""}
+                                      displayValue={supplierDisplay}
+                                      columns={supplierColumns}
+                                      valueField="supplier_code"
+                                      displayFields={["supplier_code", "supplier_name"]}
+                                      loadOptions={() => almsCommonSelect({
+                                        parameter: "PS_PREQUEST_ENTRY_SUPPLIERS",
+                                        loginid,
+                                        code1: companyCode,
+                                        code2: loginid,
+                                        code3: "",
+                                        code4: ""
+                                      })}
+                                      onChange={(val, row) => {
+                                        const oldSupplier = item.SUPPLIER;
 
-                                      updateItemField(itemId, "SUPPLIER", val);
+                                        updateItemField(itemId, "SUPPLIER", val);
 
-                                      if (row) {
-                                        const supName = row.supplier_name ?? row.SUPPLIER_NAME ?? "";
+                                        if (row) {
+                                          const supName = row.supplier_name ?? row.SUPPLIER_NAME ?? "";
 
-                                        updateItemField(itemId, "SUPPLIER_NAME", supName);
-                                        updateItemField(itemId, "SUPPLIER_CODE", row.supplier_code ?? val);
+                                          updateItemField(itemId, "SUPPLIER_NAME", supName);
+                                          updateItemField(itemId, "SUPPLIER_CODE", row.supplier_code ?? val);
 
-                                        upsertTermForSupplier(val, supName as any);
+                                          upsertTermForSupplier(val, supName as any);
 
-                                        if (oldSupplier && oldSupplier !== val) {
-                                          const stillUsed = items.some(
-                                            i =>
-                                              (i as any).id !== itemId &&
-                                              i.SUPPLIER === oldSupplier
-                                          );
-
-                                          if (!stillUsed) {
-                                            setTerms(prev =>
-                                              prev.filter(t => t.SUPPLIER !== oldSupplier)
+                                          if (oldSupplier && oldSupplier !== val) {
+                                            const stillUsed = items.some(
+                                              i =>
+                                                (i as any).id !== itemId &&
+                                                i.SUPPLIER === oldSupplier
                                             );
+
+                                            if (!stillUsed) {
+                                              setTerms(prev =>
+                                                prev.filter(t => t.SUPPLIER !== oldSupplier)
+                                              );
+                                            }
                                           }
                                         }
-                                      }
-                                    }}
+                                      }}
+                                      disabled={disabled}
+                                    />
+                                  </td>
+                                )}
+                                <td className="finance-amount-cell px-2 py-1 text-right w-[80px] min-w-[80px] max-w-[80px]">
+                                  {fmt3(itemQty(item, userApprovalLevel))}
+                                </td>
+                                <td className="px-2 py-1 w-[65px] min-w-[65px] max-w-[65px]">
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    value={item.DISCOUNT_AMOUNT || ""}
+                                    onChange={(e) => updateItemField(itemId, "DISCOUNT_AMOUNT", Number(e.target.value) || 0)}
                                     disabled={disabled}
+                                    className="h-9 text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    placeholder="0"
                                   />
+                                </td>
+                                <td className="finance-amount-cell px-2 py-1 text-right w-[90px] min-w-[90px] max-w-[90px]">
+                                  {fmt3(itemDiscPrice(item))}
+                                </td>
+                                <td className="finance-amount-cell px-2 py-1 text-right w-[90px] min-w-[90px] max-w-[90px]">
+                                  {fmt3(item.FINAL_RATE)}
                                 </td>
                                 <td className="finance-amount-cell px-2 py-1 text-right font-semibold text-green-600 w-[100px] min-w-[100px] max-w-[100px]">
                                   {fmt3(item.AMOUNT)}
                                 </td>
                                 <td className="finance-amount-cell px-2 py-1 text-right text-green-600 w-[100px] min-w-[100px] max-w-[100px]">
-                                  {fmt3(item.BASE_AMOUNT)}
-                                </td>
-                                <td className="px-2 py-1 w-[100px] min-w-[100px] max-w-[100px]">
-                                  <Input
-                                    value={item.TX_COMPNTCAT_CODE_1 || ""}
-                                    onChange={(e) => updateItemField(itemId, "TX_COMPNTCAT_CODE_1", e.target.value)}
-                                    disabled={disabled}
-                                    className="h-9 text-center text-sm"
-                                  />
+                                  {fmt3((item as any).LCURR_AMT || 0)}
                                 </td>
                                 <td className="px-2 py-1 w-[280px] min-w-[280px] max-w-[280px]">
                                   <LookupField
@@ -1716,6 +1907,36 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                         updateItemField(itemId, "TX_CAT_NAME", row.TX_CAT_NAME || "");
                                         updateItemField(itemId, "TX_COMPNTCAT_CODE_1", row.TX_COMPNTCAT_CODE_1 || "");
                                         updateItemField(itemId, "TX_COMPNT_PERC_1", row.TX_COMPNT_PERC_1 || 0);
+                                      }
+                                    }}
+                                    disabled={disabled}
+                                  />
+                                </td>
+                                <td className="px-2 py-1 w-[280px] min-w-[280px] max-w-[280px]">
+                                  <LookupField
+                                    label=""
+                                    compact
+                                    placeholder="Tax Component"
+                                    value={item.TX_COMPNTCAT_CODE_1 || ""}
+                                    displayValue={taxComponentDisplay}
+                                    columns={taxComponentColumns}
+                                    valueField="TX_COMPNTCAT_CODE"
+                                    displayFields={["TX_COMPNTCAT_CODE", "TX_COMPNTCAT_NAME"]}
+                                    loadOptions={() => almsCommonSelect({
+                                      parameter: "PS_PREQUEST_ENTRY_TAX_COMPONENT",
+                                      loginid,
+                                      code1: companyCode,
+                                      code2: loginid,
+                                      code3: "",
+                                      code4: ""
+                                    })}
+                                    onChange={(val, row) => {
+                                      updateItemField(itemId, "TX_COMPNTCAT_CODE_1", val);
+                                      if (row) {
+                                        updateItemField(itemId, "TX_COMPNTCAT_NAME", row.TX_COMPNTCAT_NAME || "");
+                                        if (row.TX_PERCNT !== undefined) {
+                                          updateItemField(itemId, "TX_COMPNT_PERC_1", Number(row.TX_PERCNT) || 0);
+                                        }
                                       }
                                     }}
                                     disabled={disabled}
@@ -1757,22 +1978,11 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                     disabled={disabled}
                                   />
                                 </td>
-                                <td className="px-2 py-1 w-[90px] min-w-[90px] max-w-[90px]">
-                                  <Input
-                                    type="number"
-                                    step="0.001"
-                                    value={item.DISCOUNT_AMOUNT || ""}
-                                    onChange={(e) => updateItemField(itemId, "DISCOUNT_AMOUNT", Number(e.target.value) || 0)}
-                                    disabled={disabled}
-                                    className="h-9 text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                    placeholder="0"
-                                  />
+                                <td className="finance-amount-cell px-2 py-1 text-right text-green-600 w-[100px] min-w-[100px] max-w-[100px]">
+                                  {fmt3((item as any).TX_COMPNT_LCURAMT_1 || 0)}
                                 </td>
-                                <td className="px-2 py-1 text-right w-[90px] min-w-[90px] max-w-[90px]">
-                                  {fmt3(item.FINAL_RATE)}
-                                </td>
-                                <td className="finance-amount-cell px-2 py-1 text-right font-bold text-green-700 w-[100px] min-w-[100px] max-w-[100px] bg-green-50">
-                                  {fmt3(item.FINAL_AMOUNT || 0)}
+                                <td className="finance-amount-cell px-2 py-1 text-right font-semibold text-blue-600 w-[100px] min-w-[100px] max-w-[100px]">
+                                  {fmt3((item as any).LCURR_AFTER_DISCOUNT || 0)}
                                 </td>
                                 <td className="px-2 py-1 w-[95px] min-w-[95px] max-w-[95px]">
                                   <Select
@@ -1784,6 +1994,18 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                     <option value="">—</option>
                                     {capexOptions.map((opt) => (
                                       <option key={opt} value={opt}>{opt}</option>
+                                    ))}
+                                  </Select>
+                                </td>
+                                <td className="px-2 py-1 w-[80px] min-w-[80px] max-w-[80px]">
+                                  <Select
+                                    className="h-9 text-sm"
+                                    value={item.CASH_IND || "N"}
+                                    onChange={(e) => updateItemField(itemId, "CASH_IND", e.target.value)}
+                                    disabled={disabled}
+                                  >
+                                    {cashIndOptions.map((opt) => (
+                                      <option key={opt.value} value={opt.value}>{opt.label}</option>
                                     ))}
                                   </Select>
                                 </td>
@@ -1832,7 +2054,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                 )}
 
                 {/* ─── Terms Tab Content ─── */}
-                {activeTab === "terms" && (
+                {activeTab === "terms" && shouldShowTermsTab() && (
                   <div className="commercial-lines-scroll min-h-0 flex-1 overflow-x-auto overflow-y-auto">
                     <div className="relative">
                       <table className="finance-lines-table w-full min-w-[1200px] text-[12px] border-separate border-spacing-0">
@@ -1976,11 +2198,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
             <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
               <Paperclip size={15} /> Files
             </Button>
-            {!isViewMode && !(docType !== "PR") && (
-              <Button disabled={saving || !requestNumber} type="button" variant="default" className="min-w-[110px] justify-center bg-indigo-600 hover:bg-indigo-700" onClick={handleGeneratePO}>
-                Generate PO
-              </Button>
-            )}
           </div>
         </div>
       </section>
