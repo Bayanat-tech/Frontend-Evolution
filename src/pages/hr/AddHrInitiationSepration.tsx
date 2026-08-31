@@ -1,9 +1,10 @@
 import { Save, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { getDynamicLookup } from "../../api/lookups";
+import { executeDynamicMutationColumn90, getDynamicLookup, LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { Card, CardContent } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
+import { LookupField } from "../../components/ui/LookupField";
 import { Select } from "../../components/ui/Select";
 import { NoticeToast } from "../../components/ui/NoticeToast";
 import { useAuth } from "../../state/AuthContext";
@@ -44,8 +45,6 @@ type Props = {
   existingData?: Partial<THrSeparation>;
   onClose: (shouldRefetch?: boolean) => void;
 };
-
-type Option = { value: string; label: string };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -113,20 +112,6 @@ export function AddHrInitiationSepration({ mode, existingData, onClose }: Props)
   const [saving, setSaving] = useState(false);
   const [apiError, setApiError] = useState("");
 
-  // Dropdown options
-  const [divOptions, setDivOptions] = useState<Option[]>([]);
-  const [deptOptions, setDeptOptions] = useState<Option[]>([]);
-  const [sectOptions, setSectOptions] = useState<Option[]>([]);
-  const [empOptions, setEmpOptions] = useState<Option[]>([]);
-  const [reasonOptions, setReasonOptions] = useState<Option[]>([]);
-  const [statusOptions, setStatusOptions] = useState<Option[]>([]);
-
-  const [divLoading, setDivLoading] = useState(false);
-  const [deptLoading, setDeptLoading] = useState(false);
-  const [sectLoading, setSectLoading] = useState(false);
-  const [empLoading, setEmpLoading] = useState(false);
-  const [reasonLoading, setReasonLoading] = useState(false);
-
   const set = (field: keyof THrSeparation, value: unknown) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
@@ -167,153 +152,78 @@ export function AddHrInitiationSepration({ mode, existingData, onClose }: Props)
     }
   }, [isEdit, readonly, existingData]);
 
-  // ── Load Division + Reason + Status (independent) ────────────────────────
-  useEffect(() => {
-    if (!companyCode) return;
+  // ── LookupField data loaders ──────────────────────────────────────────────
+  // Each loader is called by its LookupField on open; cascading fields read
+  // the latest form.* value via closure, so parent selections stay in sync.
 
-    const loadIndependent = async () => {
-      setDivLoading(true);
-      setReasonLoading(true);
-      try {
-        const [divRes, reasonRes, statusRes] = await Promise.all([
-          getDynamicLookup(baseParams("MST_HR_ACCOUNT_DIVISION")),
-          getDynamicLookup(baseParams("MST_HR_SEPARATION_REASON_LIST")),
-          getDynamicLookup(baseParams("MST_HR_CODE_STATUS")), // GROUP_CODE = 6
-        ]);
-
-        setDivOptions(
-          extractRows(divRes).map((r) => ({
-            value: pick(r, "div_code"),
-            label: pick(r, "div_name") || pick(r, "div_code"),
-          }))
-        );
-
-        setReasonOptions(
-          extractRows(reasonRes).map((r) => ({
-            value: pick(r, "sep_reason_code"),
-            label: pick(r, "sep_reason_desc") || pick(r, "sep_reason_code"),
-          }))
-        );
-
-        const statusRows = extractRows(statusRes);
-        setStatusOptions(
-          statusRows.length
-            ? statusRows.map((r) => ({
-                value: pick(r, "value_code"),
-                label: pick(r, "value_desc") || pick(r, "value_code"),
-              }))
-            : [
-                { value: "N", label: "New" },
-                { value: "A", label: "Approved" },
-                { value: "C", label: "Cancelled" },
-              ]
-        );
-      } catch (e) {
-        console.error("Independent lookups failed", e);
-      } finally {
-        setDivLoading(false);
-        setReasonLoading(false);
-      }
-    };
-
-    void loadIndependent();
+  const loadDivisionOptions = useCallback(async (): Promise<LookupRow[]> => {
+    if (!companyCode) return [];
+    const res = await getDynamicLookup(baseParams("MST_HR_ACCOUNT_DIVISION"));
+    return extractRows(res).map((r) => ({
+      div_code: pick(r, "div_code"),
+      div_name: pick(r, "div_name"),
+    }));
   }, [baseParams, companyCode]);
 
-  // ── Cascading: Department when Division changes ──────────────────────────
-  useEffect(() => {
-    if (!form.division || !companyCode) {
-      setDeptOptions([]);
-      return;
+  const loadDepartmentOptions = useCallback(async (): Promise<LookupRow[]> => {
+    if (!form.division || !companyCode) return [];
+    const res = await getDynamicLookup(baseParams("MST_HR_MS_HR_DEPARTMENT", form.division));
+    return extractRows(res).map((r) => ({
+      dept_code: pick(r, "dept_code"),
+      dept_name: pick(r, "dept_name"),
+    }));
+  }, [baseParams, companyCode, form.division]);
+
+  const loadSectionOptions = useCallback(async (): Promise<LookupRow[]> => {
+    if (!form.division || !form.department || !companyCode) return [];
+    const res = await getDynamicLookup(
+      baseParams("MST_HR_MS_HR_SECTION_DDL", form.division, form.department)
+    );
+    return extractRows(res).map((r) => ({
+      section_code: pick(r, "section_code"),
+      section_name: pick(r, "section_name"),
+    }));
+  }, [baseParams, companyCode, form.division, form.department]);
+
+  const loadEmployeeOptions = useCallback(async (): Promise<LookupRow[]> => {
+    if (!companyCode) return [];
+    const res = await getDynamicLookup(baseParams("MST_HR_VW_HR_EMP_MASTER_DDL"));
+    let rows = extractRows(res);
+    if (form.division) rows = rows.filter((r) => pick(r, "div_code") === form.division);
+    if (form.department) rows = rows.filter((r) => pick(r, "dept_code") === form.department);
+    if (form.section) rows = rows.filter((r) => pick(r, "section_code") === form.section);
+    return rows.map((r) => ({
+      employee_id: pick(r, "employee_id"),
+      employee_code: pick(r, "employee_code"),
+      rpt_name: pick(r, "rpt_name"),
+    }));
+  }, [baseParams, companyCode, form.division, form.department, form.section]);
+
+  const loadReasonOptions = useCallback(async (): Promise<LookupRow[]> => {
+    if (!companyCode) return [];
+    const res = await getDynamicLookup(baseParams("MST_HR_SEPARATION_REASON_LIST"));
+    return extractRows(res).map((r) => ({
+      sep_reason_code: pick(r, "sep_reason_code"),
+      sep_reason_desc: pick(r, "sep_reason_desc"),
+    }));
+  }, [baseParams, companyCode]);
+
+  const loadStatusOptions = useCallback(async (): Promise<LookupRow[]> => {
+    if (!companyCode) return [];
+    const res = await getDynamicLookup(baseParams("MST_HR_CODE_STATUS")); // GROUP_CODE = 6
+    const rows = extractRows(res);
+    if (!rows.length) {
+      return [
+        { value_code: "N", value_desc: "New" },
+        { value_code: "A", value_desc: "Approved" },
+        { value_code: "C", value_desc: "Cancelled" },
+      ];
     }
-    const loadDept = async () => {
-      setDeptLoading(true);
-      try {
-        const res = await getDynamicLookup(
-          baseParams("MST_HR_MS_HR_DEPARTMENT", form.division)
-        );
-        setDeptOptions(
-          extractRows(res).map((r) => ({
-            value: pick(r, "dept_code"),
-            label: pick(r, "dept_name") || pick(r, "dept_code"),
-          }))
-        );
-      } catch (e) {
-        console.error("Department lookup failed", e);
-        setDeptOptions([]);
-      } finally {
-        setDeptLoading(false);
-      }
-    };
-    void loadDept();
-  }, [form.division, baseParams, companyCode]);
-
-  // ── Cascading: Section when Department changes ───────────────────────────
-  useEffect(() => {
-    if (!form.division || !form.department || !companyCode) {
-      setSectOptions([]);
-      return;
-    }
-    const loadSect = async () => {
-      setSectLoading(true);
-      try {
-        const res = await getDynamicLookup(
-          baseParams("MST_HR_MS_HR_SECTION_DDL", form.division, form.department)
-        );
-        setSectOptions(
-          extractRows(res).map((r) => ({
-            value: pick(r, "section_code"),
-            label: pick(r, "section_name") || pick(r, "section_code"),
-          }))
-        );
-      } catch (e) {
-        console.error("Section lookup failed", e);
-        setSectOptions([]);
-      } finally {
-        setSectLoading(false);
-      }
-    };
-    void loadSect();
-  }, [form.division, form.department, baseParams, companyCode]);
-
-  // ── Employee list (company-wide; filter client-side if needed) ───────────
-  useEffect(() => {
-    if (!companyCode) return;
-    const loadEmp = async () => {
-      setEmpLoading(true);
-      try {
-        const res = await getDynamicLookup(
-          baseParams("MST_HR_VW_HR_EMP_MASTER_DDL")
-        );
-        let rows = extractRows(res);
-
-        // Optional client-side cascade filter
-        if (form.division) {
-          rows = rows.filter((r) => pick(r, "div_code") === form.division);
-        }
-        if (form.department) {
-          rows = rows.filter((r) => pick(r, "dept_code") === form.department);
-        }
-        if (form.section) {
-          rows = rows.filter((r) => pick(r, "section_code") === form.section);
-        }
-
-        setEmpOptions(
-          rows.map((r) => ({
-            value: pick(r, "employee_id"),
-            label:
-              `${pick(r, "employee_code")} - ${pick(r, "rpt_name")}`.trim() ||
-              pick(r, "employee_id"),
-          }))
-        );
-      } catch (e) {
-        console.error("Employee lookup failed", e);
-        setEmpOptions([]);
-      } finally {
-        setEmpLoading(false);
-      }
-    };
-    void loadEmp();
-  }, [form.division, form.department, form.section, baseParams, companyCode]);
+    return rows.map((r) => ({
+      value_code: pick(r, "value_code"),
+      value_desc: pick(r, "value_desc"),
+    }));
+  }, [baseParams, companyCode]);
 
   // ── Save ─────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
@@ -357,32 +267,28 @@ export function AddHrInitiationSepration({ mode, existingData, onClose }: Props)
     setSaving(true);
     setApiError("");
     try {
-      // TODO: replace with your real insert/update service
-      // await hrSeparationServiceInstance.insUpd({
-      //   ...form,
-      //   company_code: companyCode,
-      //   user_id: loginid,
-      //   loginid,
-      // });
-
-      // Temporary: log payload so you can wire the real API
-      console.log("Separation payload", {
-        company_code: companyCode,
-        employee_id: form.employee_id,
-        pay_month: form.pay_month,
-        pay_year: form.pay_year,
-        separation_initiation_date: form.separation_initiation_date,
-        in_notice_period: form.in_notice_period,
-        notice_period: form.notice_period,
-        notice_period_start_date: form.notice_period_start_date || null,
-        notice_period_end_date: form.notice_period_end_date || null,
-        act_separation_date: form.act_separation_date || null,
-        settlement_date: form.settlement_date || null,
-        separation_reason: form.separation_reason,
-        reason_category: form.reason_category,
-        remarks: form.remarks,
-        status_flag: form.status_flag,
-        user_id: loginid,
+      // Maps 1:1 to the WHEN 'mst_hr_emp_separations_ins_upd' branch in
+      // PROC_BUILD_DYNAMIC_INS_UPD_COLUMN90 — that branch keys off
+      // COMPANY_CODE + EMPLOYEE_ID (no DOC_NO on this table) and auto
+      // detects insert vs update, so the same call is used for add and edit.
+      await executeDynamicMutationColumn90({
+        parameter: "MST_HR_EMP_SEPARATIONS_INS_UPD",
+        loginid,
+        val1s1: companyCode,                              // COMPANY_CODE
+        val1s2: String(form.employee_id ?? ""),           // EMPLOYEE_ID
+        val1s3: form.pay_month ?? "",                     // PAY_MONTH
+        val1s4: form.pay_year ?? "",                      // PAY_YEAR
+        val1s5: form.separation_initiation_date ?? "",    // SEPARATION_INITIATION_DATE
+        val1s6: form.in_notice_period ?? "Y",              // IN_NOTICE_PERIOD
+        val1s7: form.notice_period_start_date ?? "",       // NOTICE_PERIOD_START_DATE
+        val1s8: form.notice_period_end_date ?? "",         // NOTICE_PERIOD_END_DATE
+        val1s9: form.act_separation_date ?? "",             // ACT_SEPARATION_DATE
+        val1s10: form.settlement_date ?? "",                // SETTLEMENT_DATE
+        val1s11: form.separation_reason ?? "",               // SEPARATION_REASON
+        val1s12: form.reason_category ?? "",                 // REASON_CATEGORY
+        val1s13: form.remarks ?? "",                          // REMARKS
+        val1s14: form.status_flag ?? "N",                     // STATUS_FLAG
+        val1n1: Number(form.notice_period) || 0,               // NOTICE_PERIOD (days)
       });
 
       onClose(true);
@@ -406,97 +312,90 @@ export function AddHrInitiationSepration({ mode, existingData, onClose }: Props)
       <Card>
         {/* Row 1: Division / Department / Section / Employee */}
         <CardContent className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-          <label className="field">
-            <span>
-              Division <strong className="text-destructive">*</strong>
-            </span>
-            <Select
-              disabled={readonly || divLoading}
-              value={form.division ?? ""}
-              onChange={(e) => {
-                set("division", e.target.value);
-                set("department", "");
-                set("section", "");
-                set("employee_id", "");
-              }}
-            >
-              <option value="">
-                {divLoading ? "Loading..." : "Select Division"}
-              </option>
-              {divOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-          </label>
+          <LookupField
+            label="Division"
+            required
+            disabled={readonly}
+            value={form.division ?? ""}
+            columns={[
+              { field: "div_code", header: "Code" },
+              { field: "div_name", header: "Name" },
+            ]}
+            valueField="div_code"
+            displayFields={["div_code", "div_name"]}
+            loadOptions={loadDivisionOptions}
+            onChange={(value) => {
+              set("division", value);
+              set("department", "");
+              set("section", "");
+              set("employee_id", "");
+            }}
+            placeholder="Select Division"
+          />
 
-          <label className="field">
-            <span>
-              Department <strong className="text-destructive">*</strong>
-            </span>
-            <Select
-              disabled={readonly || deptLoading || !form.division}
-              value={form.department ?? ""}
-              onChange={(e) => {
-                set("department", e.target.value);
-                set("section", "");
-                set("employee_id", "");
-              }}
-            >
-              <option value="">
-                {deptLoading ? "Loading..." : "Select Department"}
-              </option>
-              {deptOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-          </label>
+          <LookupField
+            label="Department"
+            required
+            disabled={readonly || !form.division}
+            value={form.department ?? ""}
+            columns={[
+              { field: "dept_code", header: "Code" },
+              { field: "dept_name", header: "Name" },
+            ]}
+            valueField="dept_code"
+            displayFields={["dept_code", "dept_name"]}
+            loadOptions={loadDepartmentOptions}
+            onChange={(value) => {
+              set("department", value);
+              set("section", "");
+              set("employee_id", "");
+            }}
+            placeholder="Select Department"
+          />
 
-          <label className="field">
-            <span>
-              Section <strong className="text-destructive">*</strong>
-            </span>
-            <Select
-              disabled={readonly || sectLoading || !form.department}
-              value={form.section ?? ""}
-              onChange={(e) => {
-                set("section", e.target.value);
-                set("employee_id", "");
-              }}
-            >
-              <option value="">
-                {sectLoading ? "Loading..." : "Select Section"}
-              </option>
-              {sectOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-          </label>
+          <LookupField
+            label="Section"
+            required
+            disabled={readonly || !form.department}
+            value={form.section ?? ""}
+            columns={[
+              { field: "section_code", header: "Code" },
+              { field: "section_name", header: "Name" },
+            ]}
+            valueField="section_code"
+            displayFields={["section_code", "section_name"]}
+            loadOptions={loadSectionOptions}
+            onChange={(value) => {
+              set("section", value);
+              set("employee_id", "");
+            }}
+            placeholder="Select Section"
+          />
 
-          <label className="field">
-            <span>
-              Employee <strong className="text-destructive">*</strong>
-            </span>
-            <Select
-              disabled={readonly || empLoading}
-              value={String(form.employee_id ?? "")}
-              onChange={(e) => set("employee_id", e.target.value)}
-            >
-              <option value="">
-                {empLoading ? "Loading..." : "Select Employee"}
-              </option>
-              {empOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-          </label>
+          <LookupField
+            label="Employee"
+            required
+            disabled={readonly}
+            value={String(form.employee_id ?? "")}
+            displayValue={
+              form.employee_id
+                ? [form.emp_code, form.emp_name].filter(Boolean).join(" - ")
+                : ""
+            }
+            columns={[
+              { field: "employee_code", header: "Code" },
+              { field: "rpt_name", header: "Name" },
+            ]}
+            valueField="employee_id"
+            displayFields={["employee_code", "rpt_name"]}
+            loadOptions={loadEmployeeOptions}
+            onChange={(value, row) => {
+              set("employee_id", value);
+              set("emp_code", row ? pick(row as Record<string, unknown>, "employee_code") : "");
+              set("emp_name", row ? pick(row as Record<string, unknown>, "rpt_name") : "");
+            }}
+            placeholder="Select Employee"
+          />
         </CardContent>
 
         {/* Row 2: Request Date / Reason / Month / Year */}
@@ -513,25 +412,21 @@ export function AddHrInitiationSepration({ mode, existingData, onClose }: Props)
             />
           </label>
 
-          <label className="field">
-            <span>
-              Separation Reason <strong className="text-destructive">*</strong>
-            </span>
-            <Select
-              disabled={readonly || reasonLoading}
-              value={form.separation_reason ?? ""}
-              onChange={(e) => set("separation_reason", e.target.value)}
-            >
-              <option value="">
-                {reasonLoading ? "Loading..." : "Select Reason"}
-              </option>
-              {reasonOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-          </label>
+          <LookupField
+            label="Separation Reason"
+            required
+            disabled={readonly}
+            value={form.separation_reason ?? ""}
+            columns={[
+              { field: "sep_reason_code", header: "Code" },
+              { field: "sep_reason_desc", header: "Description" },
+            ]}
+            valueField="sep_reason_code"
+            displayFields={["sep_reason_code", "sep_reason_desc"]}
+            loadOptions={loadReasonOptions}
+            onChange={(value) => set("separation_reason", value)}
+            placeholder="Select Reason"
+          />
 
           <label className="field">
             <span>Payroll Month</span>
@@ -554,7 +449,7 @@ export function AddHrInitiationSepration({ mode, existingData, onClose }: Props)
           </label>
         </CardContent>
 
-        {/* Row 3: Reason Category */}
+        {/* Row 3: Reason Category / Status */}
         <CardContent className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
           <label className="field">
             <span>
@@ -566,13 +461,29 @@ export function AddHrInitiationSepration({ mode, existingData, onClose }: Props)
               onChange={(e) => set("reason_category", e.target.value)}
             >
               <option value="">Select Reason Category</option>
-              {/* Replace with real lookup if you have one; common values: */}
-              <option value="RESIGNATION">Resignation</option>
-              <option value="TERMINATION">Termination</option>
-              <option value="RETIREMENT">Retirement</option>
+              {/* Values capped at 5 chars — REASON_CATEGORY is VARCHAR2(5) */}
+              <option value="RESGN">Resignation</option>
+              <option value="TERM">Termination</option>
+              <option value="RETIR">Retirement</option>
               <option value="OTHER">Other</option>
             </Select>
           </label>
+
+          <LookupField
+            label="Status"
+            required
+            disabled={readonly}
+            value={form.status_flag ?? "N"}
+            columns={[
+              { field: "value_code", header: "Code" },
+              { field: "value_desc", header: "Description" },
+            ]}
+            valueField="value_code"
+            displayFields={["value_code", "value_desc"]}
+            loadOptions={loadStatusOptions}
+            onChange={(value) => set("status_flag", value)}
+            placeholder="Select Status"
+          />
         </CardContent>
 
         {/* Row 4: Notice period block */}
@@ -655,26 +566,6 @@ export function AddHrInitiationSepration({ mode, existingData, onClose }: Props)
               value={form.remarks ?? ""}
               onChange={(e) => set("remarks", e.target.value)}
             />
-          </label>
-        </CardContent>
-
-        {/* Status */}
-        <CardContent className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-          <label className="field">
-            <span>
-              Status <strong className="text-destructive">*</strong>
-            </span>
-            <Select
-              disabled={readonly}
-              value={form.status_flag ?? "N"}
-              onChange={(e) => set("status_flag", e.target.value)}
-            >
-              {statusOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
           </label>
         </CardContent>
       </Card>
