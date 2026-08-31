@@ -490,6 +490,11 @@ export function DataTable<TData, TValue>({
                 >
                   {row.getVisibleCells().map((cell, colIndex) => {
                     const cells = row.getVisibleCells();
+                    const rawCellValue = cell.getValue();
+                    const cellTitle =
+                      typeof rawCellValue === "string" || typeof rawCellValue === "number"
+                        ? String(rawCellValue)
+                        : undefined;
                     const isFirst = colIndex === 0;
                     const isLast = colIndex === cells.length - 1;
                     const stickLeft = stickyFirstColumn && isFirst;
@@ -506,8 +511,11 @@ export function DataTable<TData, TValue>({
                           boxShadow: stickLeft ? STICKY_LEFT_SHADOW : stickRight ? STICKY_RIGHT_SHADOW : undefined,
                         }}
                         key={cell.id}
+                        title={cellTitle}
                       >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        <div className="data-table-cell-content">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </div>
                       </TableCell>
                     );
                   })}

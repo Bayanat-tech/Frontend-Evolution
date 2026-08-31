@@ -966,7 +966,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
 
   return (
     <>
-      <form ref={formRef} className="freight-dense-form freight-ui-standard" onSubmit={saveQuotation}>
+      <form ref={formRef} className="freight-dense-form freight-ui-standard freight-quotation-form" onSubmit={saveQuotation}>
         <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={15} /></div>
@@ -1026,8 +1026,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
         {assistOpen && <FreightAssistPanel checks={smartChecks} />}
 
         <fieldset disabled={isReadOnly} className="contents">
-        <section className="freight-form-card rounded-md border bg-card shadow-sm">
-          <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-11">
+        <section className="freight-form-card freight-quotation-header-card rounded-md border bg-card shadow-sm">
+          <div className="freight-quotation-header-grid grid gap-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-11">
             <FormInput label="Quotation No" value={header.quotation_nr} onChange={(value) => setHeaderField("quotation_nr", value)} placeholder="Auto" disabled />
             <FormInput label="Date" type="date" value={header.quotation_date} onChange={(value) => setHeaderField("quotation_date", value)} required />
             <FormLookup label="Principal" value={header.prin_code} displayValue={headerNames.prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required className="sm:col-span-2 xl:col-span-2"/>
@@ -1052,8 +1052,8 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
         </section>
         </fieldset>
 
-        <div className="freight-tabs-shell grid min-h-0 gap-0 rounded-md border bg-card shadow-sm">
-          <div className="freight-tabs-list flex overflow-x-auto">
+        <div className="freight-tabs-shell freight-quotation-tabs grid min-h-0 gap-0 rounded-md border bg-card shadow-sm">
+          <div className="freight-tabs-list flex">
             {tabs.map((tab) => <TabButton key={tab.key} tab={tab} active={activeTab === tab.key} onClick={() => setActiveTab(tab.key)} />)}
           </div>
           <fieldset disabled={isReadOnly} className="contents">

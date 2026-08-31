@@ -114,10 +114,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   const displayCollapsed = isMobile ? false : collapsed;
   const userDisplayName = user?.username || user?.loginid || "User";
   const companyName = user?.company_name || user?.company_code || "Company";
-  const isFreightLandingRoute = useMemo(() => {
-    const normalizedPath = location.pathname.toLowerCase().replace(/\/+$/, "");
-    return (appCode || "").toLowerCase() === "fms" && (normalizedPath === "/workspace/fms" || normalizedPath === "/workspace/fms/fms");
-  }, [appCode, location.pathname]);
+  const isFreightModule = (appCode || "").toLowerCase() === "fms";
 
   // useEffect(() => {
   //   setExpanded(collectExpandedPath(activeMenuPath));
@@ -131,10 +128,10 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   }, [activeApp?.id, activeApp?.title, location.pathname]);
 
   useEffect(() => {
-    if (!isMobile && isFreightLandingRoute) {
-      setCollapsed(true);
+    if (!isMobile && isFreightModule) {
+      setCollapsed(false);
     }
-  }, [isFreightLandingRoute, isMobile]);
+  }, [isFreightModule, isMobile]);
 
   const toggleSidebar = () => {
     if (isMobile) {
@@ -159,7 +156,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
       setMobileMenuOpen(false);
       return;
     }
-    setCollapsed(true);
+    if (!isFreightModule) setCollapsed(true);
   };
 
   return (
@@ -250,7 +247,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
           </div>
         </header>
 
-        <main className="workspace-content">
+        <main className={cn("workspace-content", isFreightModule && "freight-workspace-ui")}>
           <nav className="breadcrumb">
             <Link to="/apps">
               <Home size={14} /> Home
