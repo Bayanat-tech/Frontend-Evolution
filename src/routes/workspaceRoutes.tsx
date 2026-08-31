@@ -200,6 +200,7 @@ import LeaveSlapPage from "../pages/hr/LeaveSlab";
 import TravelFare from "../pages/hr/TravelFare";
 import { HrEmpLanguagePage } from "../pages/hr/HrEmpLanguageSkill";
 import ConsolidatePayUnitPage from "../pages/hr/consolidate_pay_unit/ConsolidatePayUnitPage";
+import PayrollProcessingPage from "../pages/hr/payroll_processing/PayrollProcessingPage";
 
  type WorkspaceRouteContext = {
   pathname: string;
@@ -1210,7 +1211,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: "HR Payroll Process",
     match: (context) => isHrRoute(context) && isHrPayrollProcessRoute(context),
-    element: () => <HrPayrollProcessPage />,
+    element: () => <PayrollProcessingPage />,
   },
   {
     name: "HR Leave Cancel",
