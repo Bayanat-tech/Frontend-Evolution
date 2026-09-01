@@ -571,6 +571,29 @@ export async function openGrnPrintReport(params: ReportParams) {
   );
 }
 
+
+
+
+export async function exportGrnPrintReportExcel(params: ReportParams): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/getGrnPrintReport/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "GRN_Report.xlsx";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+ 
+
 // ── 1. Cheque Book Monitoring ─────────────────────────────────────────────
 // export async function openChequeMonitoringReport(params: ReportParams) {
 //     await openReportInTab(
