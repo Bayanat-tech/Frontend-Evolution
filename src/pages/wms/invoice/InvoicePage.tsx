@@ -218,6 +218,7 @@ const columns = useMemo<ColumnDef<WmsRow>[]>(() => [
     return (
       <section className="grid gap-4">
         <InvoiceForm
+          // companyCode={user?.company_code ?? ""}
           existingData={editingRow ?? undefined}
           viewMode={viewMode}
           onClose={(shouldRefetch) => {

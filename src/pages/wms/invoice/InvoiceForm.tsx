@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, FileText, LoaderCircle, Package, Printer, Receipt, Save, Trash2, X } from "lucide-react";
-import { Dialog } from "../../../components/ui/Dialog";
-import { Button } from "../../../components/ui/Button";
+import { LoaderCircle, Printer, Save } from "lucide-react";
 import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/Table";
 import { useAuth } from "../../../state/AuthContext";
 import {
   getPrincipalDropdown,
@@ -15,17 +12,16 @@ import {
   TInvoiceDetail,
   StorageSelectionRow,
 } from "../../../api/billing";
+import { executeWmsInboundSql, getInvocieDetailReport } from "../../../api/wms";
 import JobSelectionModal from "./JobSelectionModal";
 import StorageSelectionModal from "./StorageSelectionModal";
-import { executeWmsInboundSql, getInvocieDetailReport } from "../../../api/wms";
 
-type InvoiceFormProps = {
-  existingData?: Record<string, unknown>;
-  viewMode?: boolean;
-  onClose: (shouldRefetch?: boolean) => void;
-};
+// ---------------------------------------------------------------------------
+// Helpers — date handling
+// ---------------------------------------------------------------------------
 
 const getValue = (obj: any, key: string) => obj?.[key.toLowerCase()] ?? obj?.[key.toUpperCase()];
+
 const toDDMMYYYY = (d?: string | Date | null) => {
   if (!d) return undefined;
   const dt = new Date(d);
@@ -34,6 +30,7 @@ const toDDMMYYYY = (d?: string | Date | null) => {
   const mm = String(dt.getMonth() + 1).padStart(2, "0");
   return `${dd}/${mm}/${dt.getFullYear()}`;
 };
+
 const toDateInputValue = (value: unknown): string => {
   if (!value) return "";
   const str = String(value);
@@ -43,151 +40,99 @@ const toDateInputValue = (value: unknown): string => {
   return parsed.toISOString().slice(0, 10);
 };
 
-type FieldDef = { label: string; key: string; type?: "text" | "date"; disabled?: boolean; required?: boolean; wide?: boolean };
+const today = new Date();
+const todayStr = today.toISOString().slice(0, 10);
 
-const HEADER_FIELDS: FieldDef[] = [
-  { label: "Invoice No", key: "invoice_no" },
-  { label: "Invoice Date", key: "invoice_date", type: "date" },
-  { label: "From Date", key: "from_date", type: "date" },
-  { label: "To Date", key: "to_date", type: "date" },
+// ---------------------------------------------------------------------------
+// Common input styling to make all fields look consistent
+// ---------------------------------------------------------------------------
+
+const inputBase =
+  "h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-[#1F5C6B] focus:outline-none focus:ring-1 focus:ring-[#1F5C6B] disabled:bg-slate-50 disabled:text-slate-500";
+
+const selectBase =
+  "h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-700 focus:border-[#1F5C6B] focus:outline-none focus:ring-1 focus:ring-[#1F5C6B] disabled:bg-slate-50";
+
+// ---------------------------------------------------------------------------
+// Field definitions (without "Invoice status")
+// ---------------------------------------------------------------------------
+
+type FieldDef = { label: string; key: string; type?: "date" | "select"; disabled?: boolean; span: number; placeholder?: string; options?: { value: string; label: string }[] };
+
+const ALL_FIELDS: FieldDef[] = [
+  { label: "Invoice no", key: "invoice_no", span: 3, placeholder: "Auto-generated" },
+  { label: "Invoice date", key: "invoice_date", type: "date", span: 2 },
+  { label: "From date", key: "from_date", type: "date", span: 2 },
+  { label: "To date", key: "to_date", type: "date", span: 2 },
+
+  // "Invoice status" removed
+
+  {
+    label: "Despatched",
+    key: "despatched",
+    span: 3,
+    type: "select",
+    options: [
+      { value: "Y", label: "Yes" },
+      { value: "N", label: "No" },
+    ],
+    placeholder: "Select",
+  },
+  { label: "Dispatch date", key: "desp_date", type: "date", span: 2 },
+  { label: "Invoice mode", key: "inv_mode", span: 4, placeholder: "e.g., Email, Print" },
+
+  { label: "Account reference", key: "account_ref", span: 2, placeholder: "Account ref" },
+  { label: "Invoice to", key: "inv_to", span: 2, placeholder: "Customer name" },
+  { label: "Principal ref 1", key: "prin_ref1", span: 2, placeholder: "Ref 1" },
+  { label: "Principal ref 2", key: "prin_ref2", span: 2, placeholder: "Ref 2" },
+  { label: "Credit note no", key: "credit_note_no", span: 2, placeholder: "Optional" },
+  { label: "Credit note date", key: "credit_note_date", type: "date", span: 2 },
+
+  { label: "Invoice description 1", key: "inv_desc1", span: 4, placeholder: "Description line 1" },
+  { label: "Invoice description 2", key: "inv_desc2", span: 4, placeholder: "Description line 2" },
+  // Exchange rate is handled separately as a disabled field
 ];
 
-const STATUS_FIELDS: FieldDef[] = [
-  { label: "Invoice Status", key: "inv_status" },
-  { label: "Despatched", key: "despatched" },
-  { label: "Dispatch Date", key: "desp_date", type: "date" },
-  { label: "Invoice Mode", key: "inv_mode" },
-];
+// ---------------------------------------------------------------------------
+// Field wrapper
+// ---------------------------------------------------------------------------
 
-const REFERENCE_FIELDS: FieldDef[] = [
-  { label: "Account Reference", key: "account_ref" },
-  { label: "Invoice To", key: "inv_to" },
-  { label: "Principal Ref 1", key: "prin_ref1" },
-  { label: "Principal Ref 2", key: "prin_ref2" },
-  { label: "Credit Note No", key: "credit_note_no" },
-  { label: "Credit Note Date", key: "credit_note_date", type: "date" },
-];
-
-const DESCRIPTION_FIELDS: FieldDef[] = [
-  { label: "Invoice Description 1", key: "inv_desc1", wide: true },
-  { label: "Invoice Description 2", key: "inv_desc2", wide: true },
-];
-
-const CURRENCY_FIELDS: FieldDef[] = [
-  { label: "Currency Code", key: "curr_code", disabled: true },
-  { label: "Exchange Rate", key: "ex_rate", disabled: true },
-];
-
-const REPORT_LOADING_HTML = `<!DOCTYPE html>
-<html>
-  <head><meta charset="utf-8" /><title>Loading report...</title></head>
-  <body style="font-family:Arial,Helvetica,sans-serif;display:flex;align-items:center;
-    justify-content:center;height:100vh;margin:0;color:#555;">
-    Loading invoice report...
-  </body>
-</html>`;
-
-const reportErrorHtml = (message: string) => `<!DOCTYPE html>
-<html>
-  <head><meta charset="utf-8" /><title>Error</title></head>
-  <body style="font-family:Arial,Helvetica,sans-serif;display:flex;align-items:center;
-    justify-content:center;height:100vh;margin:0;color:#c0392b;">
-    ${message}
-  </body>
-</html>`;
-
-// ── Compact primitives ──
-function GroupDivider({ icon: Icon, title }: { icon: any; title: string }) {
+function FieldWrap({ label, span, children }: { label: string; span: number; children: React.ReactNode }) {
   return (
-    <div className="col-span-full mt-0.5 flex items-center gap-1 border-b border-primary/20 pb-0 first:mt-0">
-      <Icon size={12} className="text-primary" />
-      <span className="text-[9px] font-semibold uppercase tracking-wider text-primary">{title}</span>
-    </div>
-  );
-}
-
-function CompactField({
-  field,
-  invoice,
-  onChange,
-  disabled,
-}: {
-  field: FieldDef;
-  invoice: any;
-  onChange: (key: string, value: string) => void;
-  disabled?: boolean;
-}) {
-  const { label, key, type, disabled: fieldDisabled, required, wide } = field;
-  return (
-    <label className={`field grid gap-0 ${wide ? "col-span-2" : ""}`}>
-      <span className="text-[9px] font-medium text-foreground">
-        {label} {required && <span className="text-destructive">*</span>}
-      </span>
-      <Input
-        className="h-6 w-full rounded border border-input bg-background px-1.5 text-[10px] shadow-none focus-visible:border-primary focus-visible:ring-1 focus-visible:ring-primary disabled:cursor-not-allowed disabled:border-dashed disabled:text-muted-foreground"
-        type={type === "date" ? "date" : "text"}
-        value={type === "date" ? toDateInputValue(getValue(invoice, key)) : getValue(invoice, key) ?? ""}
-        onChange={(e) => onChange(key, e.target.value)}
-        disabled={disabled || fieldDisabled}
-      />
-    </label>
-  );
-}
-
-function BillingSection({
-  icon: Icon,
-  title,
-  subtitle,
-  action,
-  children,
-}: {
-  icon: any;
-  title: string;
-  subtitle: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-md border bg-white p-1.5">
-      <div className="mb-0.5 flex items-center justify-between gap-2 border-b pb-0">
-        <div className="flex items-center gap-1.5">
-          <Icon size={12} className="text-primary" />
-          <div>
-            <p className="m-0 text-[9px] font-semibold uppercase tracking-wide text-primary">{title}</p>
-            <p className="m-0 text-[10px] font-medium text-foreground">{subtitle}</p>
-          </div>
-        </div>
-        {action}
-      </div>
+    <div className="flex flex-col gap-0.5 min-w-0" style={{ gridColumn: `span ${span} / span ${span}` }}>
+      <span className="text-[10px] font-medium text-slate-500 tracking-wide">{label}</span>
       {children}
-    </section>
-  );
-}
-
-function EmptyTableState({ icon: Icon, message, actionLabel, onAction }: {
-  icon: any;
-  message: string;
-  actionLabel?: string;
-  onAction?: () => void;
-}) {
-  return (
-    <div className="flex flex-col items-center gap-1 py-4 text-muted-foreground">
-      <Icon size={16} className="text-muted-foreground/60" />
-      <p className="m-0 text-[10px]">{message}</p>
-      {actionLabel && onAction && (
-        <Button size="sm" variant="outline" type="button" onClick={onAction} className="h-6 text-xs">
-          {actionLabel}
-        </Button>
-      )}
     </div>
   );
 }
 
-export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProps) {
-  const { user } = useAuth();
-  const company_code = user?.company_code ?? "";
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
 
-  const [invoice, setInvoice] = useState<any>(existingData ?? {});
+interface InvoiceFormProps {
+  existingData?: Record<string, unknown>;
+  viewMode?: boolean;
+  onClose: (shouldRefetch?: boolean) => void;
+}
+
+export default function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProps) {
+  const { user } = useAuth();
+
+  const [invoice, setInvoice] = useState<any>(() => {
+    if (existingData && Object.keys(existingData).length > 0) {
+      return existingData;
+    }
+    return {
+      invoice_date: todayStr,
+      from_date: todayStr,
+      to_date: todayStr,
+      desp_date: todayStr,
+      credit_note_date: todayStr,
+      despatched: "N", // default to No
+    };
+  });
+
   const [lines, setLines] = useState<any[]>([]);
   const [jobSelectionRows, setJobSelectionRows] = useState<any[]>([]);
   const [storageLines, setStorageLines] = useState<StorageSelectionRow[]>([]);
@@ -196,23 +141,54 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
   const [saving, setSaving] = useState(false);
   const [warning, setWarning] = useState("");
   const [printError, setPrintError] = useState("");
-  const [printDialogOpen, setPrintDialogOpen] = useState(false);
+  const [currencyOptions, setCurrencyOptions] = useState<Array<{ code: string; name: string }>>([]);
+  const [loadingCurrencies, setLoadingCurrencies] = useState(false);
+
+  const setField = (key: string, value: string) => {
+    setInvoice((prev: any) => ({ ...prev, [key]: value }));
+  };
 
   const prinCode = getValue(invoice, "prin_code") || "";
   const invoiceNo = getValue(invoice, "invoice_no") || "";
   const fromDate = getValue(invoice, "from_date");
   const toDate = getValue(invoice, "to_date");
+  const currCode = getValue(invoice, "curr_code") || "";
   const hasExistingData = !!existingData && Object.keys(existingData).length > 0;
   const consolidatedInvNo = getValue(invoice, "consolidated_invno") || invoiceNo;
-  const currCode = getValue(invoice, "curr_code") || "";
-
-  const report_type = ['grouped','activitywise'];
+  const isNew = !hasExistingData;
 
   const existingJobKeys = useMemo(
     () => lines.map((row) => `${String(row.job_no ?? "").trim()}||${String(row.act_code ?? "").trim()}`),
     [lines],
   );
 
+  // Load currency codes from MS_CURRENCY
+  useEffect(() => {
+    if (!user?.company_code) return;
+    let cancelled = false;
+    setLoadingCurrencies(true);
+    (async () => {
+      try {
+        const rows = await executeWmsInboundSql(
+          `SELECT CURR_CODE, CURR_NAME FROM MS_CURRENCY ORDER BY CURR_CODE`
+        );
+        if (!cancelled && Array.isArray(rows)) {
+          const opts = rows.map((row: any) => ({
+            code: row.CURR_CODE ?? row.curr_code ?? "",
+            name: row.CURR_NAME ?? row.curr_name ?? "",
+          }));
+          setCurrencyOptions(opts);
+        }
+      } catch {
+        if (!cancelled) setCurrencyOptions([]);
+      } finally {
+        if (!cancelled) setLoadingCurrencies(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.company_code]);
+
+  // Existing job lines
   useEffect(() => {
     if (!user?.loginid || !user?.company_code || !prinCode) return;
     (async () => {
@@ -230,6 +206,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
     })();
   }, [prinCode, invoiceNo, user?.loginid, user?.company_code]);
 
+  // Re-seed job selection rows
   useEffect(() => {
     if (!user?.loginid || !user?.company_code || !prinCode || !invoiceNo) return;
     (async () => {
@@ -261,12 +238,28 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
         setJobSelectionRows([]);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prinCode, invoiceNo, user?.loginid, user?.company_code]);
 
-  const setField = (key: string, value: string) => {
-    setInvoice((prev: any) => ({ ...prev, [key]: value }));
-  };
+  // Exchange rate auto‑fill
+  useEffect(() => {
+    if (!invoice.curr_code) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await executeWmsInboundSql(
+          `SELECT EX_RATE FROM MS_CURRENCY WHERE CURR_CODE = '${invoice.curr_code}'`,
+        );
+        const rate = rows?.[0]?.ex_rate ?? rows?.[0]?.EX_RATE ?? "";
+        if (!cancelled) setField("ex_rate", String(rate));
+      } catch {
+        if (!cancelled) setField("ex_rate", "");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [invoice.curr_code]);
 
+  // Group job lines
   const groupedLines = useMemo(() => {
     const map: Record<string, any> = {};
     lines.forEach((row) => {
@@ -286,26 +279,16 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
 
   const aggregatedStorage = useMemo(() => {
     if (storageLines.length === 0) return null;
-    const totalQty = storageLines.reduce((sum, r) => sum + Number(r.QTY || 0), 0);
-    const totalAmount = storageLines.reduce((sum, r) => sum + Number(r.AMOUNT || 0), 0);
+    const totalQty = storageLines.reduce((sum, r: any) => sum + Number(r.QTY || 0), 0);
+    const totalAmount = storageLines.reduce((sum, r: any) => sum + Number(r.AMOUNT || 0), 0);
     return { count: storageLines.length, totalQty, totalAmount };
   }, [storageLines]);
 
   const billingTotals = useMemo(() => {
-    const jobTotal = groupedLines.reduce((sum, row) => sum + Number(row.bill_amount || 0), 0);
+    const jobTotal = groupedLines.reduce((sum, row: any) => sum + Number(row.bill_amount || 0), 0);
     const storageTotal = aggregatedStorage?.totalAmount ?? 0;
     return { jobTotal, storageTotal, grandTotal: jobTotal + storageTotal };
   }, [groupedLines, aggregatedStorage]);
-
-  const handleDeleteLine = (activity: string) => {
-    if (!window.confirm("Remove this line item?")) return;
-    setLines((prev) => prev.filter((r) => r.activity !== activity));
-  };
-
-  const handleClearStorageLines = () => {
-    if (!window.confirm("Remove all storage lines?")) return;
-    setStorageLines([]);
-  };
 
   const handleJobSelect = (selectedJobs: any[]) => {
     const existingKeys = new Set(
@@ -396,7 +379,7 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
         selected: "Y",
       }));
 
-      const storageSelection = storageLines.map((row) => ({
+      const storageSelection = storageLines.map((row: any) => ({
         ...row,
         act_code: "9001",
         SELECTED: "Y",
@@ -415,23 +398,16 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
         job_no: "",
       }));
 
-      const invoiceDetails: TInvoiceDetail[] = [
-        ...jobLineRows,
-        ...jobSelection,
-        ...storageDetailRows,
-      ].map((row, index) => ({
-        ...row,
-        srno: index + 1,
-        INV_DESC1: getValue(invoice, "inv_desc1") ?? "",
-        INV_DESC2: getValue(invoice, "inv_desc2") ?? "",
-      }));
+      const invoiceDetails: TInvoiceDetail[] = [...jobLineRows, ...jobSelection, ...storageDetailRows].map(
+        (row, index) => ({
+          ...row,
+          srno: index + 1,
+          INV_DESC1: getValue(invoice, "inv_desc1") ?? "",
+          INV_DESC2: getValue(invoice, "inv_desc2") ?? "",
+        }),
+      );
 
-      const result = await updateBillingApi({
-        invoiceHeader,
-        invoiceDetails,
-        storageSelection,
-        jobSelection,
-      });
+      const result = await updateBillingApi({ invoiceHeader, invoiceDetails, storageSelection, jobSelection });
       if (result.success) onClose(true);
       else setWarning(result.message);
     } catch (err) {
@@ -441,296 +417,300 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
     }
   };
 
-  const handlePrint = async (report_type: string) => {
+  const handlePrint = async (report_type: "grouped" | "activitywise") => {
     if (!prinCode || !invoiceNo) return;
     setPrintError("");
-
     const reportWindow = window.open("", "_blank");
     if (!reportWindow) {
       setPrintError("Please allow pop-ups for this site to view the report.");
       return;
     }
-
-    reportWindow.document.open();
-    reportWindow.document.write(REPORT_LOADING_HTML);
-    reportWindow.document.close();
-
+    reportWindow.document.write("Loading invoice report...");
     try {
-      const html = await getInvocieDetailReport(String(prinCode), String(invoiceNo), String(company_code), String(report_type));
+      const html = await getInvocieDetailReport(
+        String(prinCode),
+        String(invoiceNo),
+        String(user?.company_code ?? ""),
+        report_type,
+      );
       if (reportWindow.closed) return;
       reportWindow.document.open();
       reportWindow.document.write(html);
       reportWindow.document.close();
-    } catch (err) {
+    } catch {
       setPrintError("Failed to load report. Please try again.");
-      if (!reportWindow.closed) {
-        reportWindow.document.open();
-        reportWindow.document.write(reportErrorHtml("Failed to load report. Please try again."));
-        reportWindow.document.close();
-      }
+      if (!reportWindow.closed) reportWindow.close();
     }
   };
 
-  useEffect(() => {
-    if (!invoice.curr_code) return;
-    let cancelled = false;
-    const fetchExRate = async () => {
-      try {
-        const ex_rate_sql = `SELECT EX_RATE FROM MS_CURRENCY WHERE CURR_CODE = '${invoice.curr_code}'`;
-        const response = await executeWmsInboundSql(ex_rate_sql);
-        const rate = response?.[0]?.ex_rate ?? response?.[0]?.EX_RATE ?? "";
-        if (!cancelled) {
-          setField("ex_rate", String(rate));
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setField("ex_rate", "");
-        }
-      }
-    };
-    fetchExRate();
-    return () => {
-      cancelled = true;
-    };
-  }, [invoice.curr_code]);
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
 
   return (
-    <div className="grid gap-1.5 rounded-md border bg-white p-2 shadow-sm">
+    <div className="flex h-[calc(100vh-160px)] w-full min-w-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white pt-1">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-1.5 border-b pb-1.5">
-        <div className="flex items-center gap-1.5">
-          <Button size="icon" variant="ghost" onClick={() => onClose(false)} title="Back to listing" className="h-6 w-6">
-            <ArrowLeft size={14} />
-          </Button>
-          <h1 className="m-0 text-sm font-semibold text-foreground">
-            {viewMode ? "View Invoice" : existingData ? "Edit Invoice" : "Create Invoice"}
+      <header className="flex w-full shrink-0 items-center justify-between border-b border-slate-200 px-5 py-3">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-label="Back"
+            onClick={() => onClose(false)}
+            className="grid h-7 w-7 place-items-center rounded-md text-slate-500 hover:bg-slate-100"
+          >
+            ←
+          </button>
+          <h1 className="text-[17px] font-semibold text-slate-900">
+            {isNew ? "Create invoice" : viewMode ? "View invoice" : "Edit invoice"}
           </h1>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
           {hasExistingData && (
-            <Button variant="outline" onClick={() => setPrintDialogOpen(true)} size="sm" className="h-6 text-xs">
-              <Printer size={12} /> Print
-            </Button>
+            <>
+              <button
+                type="button"
+                onClick={() => handlePrint("grouped")}
+                className="flex h-8 items-center gap-1 rounded-md border border-slate-300 bg-white px-3 text-[13px] font-medium text-slate-600 hover:bg-slate-50"
+              >
+                <Printer size={13} /> Grouped
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePrint("activitywise")}
+                className="flex h-8 items-center gap-1 rounded-md border border-slate-300 bg-white px-3 text-[13px] font-medium text-slate-600 hover:bg-slate-50"
+              >
+                <Printer size={13} /> Activity-wise
+              </button>
+            </>
           )}
-          <Button variant="outline" onClick={() => onClose(false)} size="sm" className="h-6 text-xs">
-            <X size={12} /> Cancel
-          </Button>
+          <button
+            type="button"
+            onClick={() => onClose(false)}
+            className="h-8 rounded-md border border-slate-300 bg-white px-4 text-[13px] font-medium text-slate-600 hover:bg-slate-50"
+          >
+            Cancel
+          </button>
           {!viewMode && (
-            <Button
+            <button
+              type="button"
+              disabled={saving}
               onClick={handleSave}
-              disabled={saving || (lines.length === 0 && storageLines.length === 0)}
-              size="sm"
-              className="h-6 text-xs"
+              className="flex h-8 items-center gap-1 rounded-md bg-[#1F5C6B] px-4 text-[13px] font-medium text-white hover:bg-[#194b58] disabled:opacity-60"
             >
-              {saving ? <LoaderCircle size={12} className="animate-spin" /> : <Save size={12} />} Save
-            </Button>
+              {saving ? <LoaderCircle size={14} className="animate-spin" /> : <Save size={14} />}
+              {saving ? "Saving..." : "Save"}
+            </button>
           )}
         </div>
-      </div>
+      </header>
 
+      {/* Warnings */}
       {warning && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-[10px] text-destructive">
+        <div className="mx-4 mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-[12px] text-rose-600">
           {warning}
         </div>
       )}
       {printError && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-[10px] text-destructive">
+        <div className="mx-4 mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-[12px] text-rose-600">
           {printError}
         </div>
       )}
 
-      {/* ── TOP: Invoice Details (all fields) ── */}
-      <div className="grid grid-cols-3 gap-x-1.5 gap-y-0.5 bg-white">
-        <GroupDivider icon={Receipt} title="Invoice Information" />
-        <div className="col-span-2 grid gap-0">
-          <span className="text-[9px] font-medium text-foreground">
-            Principal Code <span className="text-destructive">*</span>
-          </span>
-          <LookupField
-            label=""
-            required
-            compact
-            value={prinCode}
-            columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }]}
-            valueField="prin_code"
-            displayFields={["prin_code", "prin_name"]}
-            loadOptions={() => getPrincipalDropdown(user?.company_code ?? "", user?.loginid ?? "")}
-            onChange={(value, row) => {
-              setInvoice((prev: any) => ({
-                ...prev,
-                prin_code: value,
-                curr_code: row ? (getValue(row, "curr_code") ?? "") : "",
-              }));
-            }}
-            disabled={viewMode}
-            // className="h-6 text-[10px]"
+      {/* Main content */}
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-3 px-4 pb-4 pt-2 overflow-hidden">
+        {/* Fields section — fixed height, no scroll */}
+        <section className="shrink-0 w-full rounded-lg border border-slate-200 bg-white px-5 py-3">
+          <fieldset disabled={viewMode} className="grid grid-cols-12 gap-x-3 gap-y-2">
+            {/* Principal code */}
+            <div style={{ gridColumn: "span 3 / span 3" }}>
+              <LookupField
+                label="Principal code"
+                required
+                compact
+                showLabelInCompact
+                value={prinCode}
+                columns={[
+                  { field: "prin_code", header: "Code" },
+                  { field: "prin_name", header: "Name" },
+                ]}
+                valueField="prin_code"
+                displayFields={["prin_code", "prin_name"]}
+                loadOptions={() => getPrincipalDropdown(user?.company_code ?? "", user?.loginid ?? "")}
+                onChange={(value, row) =>
+                  setInvoice((prev: any) => ({
+                    ...prev,
+                    prin_code: value,
+                    curr_code: row ? getValue(row, "curr_code") ?? "" : "",
+                  }))
+                }
+                disabled={viewMode}
+                // inputClassName={inputBase} // apply consistent styling
+              />
+            </div>
+
+            {/* Dynamic fields */}
+            {ALL_FIELDS.map(({ label, key, type, disabled, span, placeholder, options }) => {
+              const value = getValue(invoice, key) ?? "";
+              if (type === "date") {
+                return (
+                  <FieldWrap key={key} label={label} span={span}>
+                    <Input
+                      className={inputBase}
+                      type="date"
+                      value={toDateInputValue(value)}
+                      onChange={(e) => setField(key, e.target.value)}
+                      disabled={viewMode || disabled}
+                    />
+                  </FieldWrap>
+                );
+              }
+              if (type === "select" && options) {
+                return (
+                  <FieldWrap key={key} label={label} span={span}>
+                    <select
+                      className={selectBase}
+                      value={value}
+                      onChange={(e) => setField(key, e.target.value)}
+                      disabled={viewMode || disabled}
+                    >
+                      <option value="">{placeholder || "Select"}</option>
+                      {options.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </FieldWrap>
+                );
+              }
+              return (
+                <FieldWrap key={key} label={label} span={span}>
+                  <Input
+                    className={inputBase}
+                    type="text"
+                    value={value}
+                    onChange={(e) => setField(key, e.target.value)}
+                    disabled={viewMode || disabled}
+                    placeholder={placeholder || ""}
+                  />
+                </FieldWrap>
+              );
+            })}
+
+            {/* Currency code — custom LookupField */}
+            <div style={{ gridColumn: "span 2 / span 2" }}>
+              <LookupField
+                label="Currency code"
+                compact
+                showLabelInCompact
+                value={currCode}
+                columns={[
+                  { field: "code", header: "Code" },
+                  { field: "name", header: "Name" },
+                ]}
+                valueField="code"
+                displayFields={["code", "name"]}
+                loadOptions={async () => {
+                  if (currencyOptions.length) return currencyOptions;
+                  try {
+                    const rows = await executeWmsInboundSql(
+                      `SELECT CURR_CODE, CURR_NAME FROM MS_CURRENCY ORDER BY CURR_CODE`
+                    );
+                    const opts = (Array.isArray(rows) ? rows : []).map((row: any) => ({
+                      code: row.CURR_CODE ?? row.curr_code ?? "",
+                      name: row.CURR_NAME ?? row.curr_name ?? "",
+                    }));
+                    if (opts.length) setCurrencyOptions(opts);
+                    return opts;
+                  } catch {
+                    return [];
+                  }
+                }}
+                onChange={(value) => setInvoice((prev: any) => ({ ...prev, curr_code: value }))}
+                disabled={viewMode || loadingCurrencies}
+                placeholder={loadingCurrencies ? "Loading…" : "Select currency"}
+                // inputClassName={inputBase}
+              />
+            </div>
+
+            {/* Exchange rate — disabled input */}
+            <div style={{ gridColumn: "span 2 / span 2" }}>
+              <FieldWrap label="Exchange rate" span={2}>
+                <Input
+                  className={inputBase}
+                  type="text"
+                  value={getValue(invoice, "ex_rate") ?? ""}
+                  disabled
+                  placeholder="Auto"
+                />
+              </FieldWrap>
+            </div>
+          </fieldset>
+        </section>
+
+        {/* Grids section — scrolls if needed */}
+        <section className="flex-1 min-h-0 grid grid-cols-2 gap-3 overflow-auto">
+          <GridPanel
+            title="Job details"
+            subtitle="Activities billed on this invoice"
+            action={
+              !viewMode && (
+                <button
+                  type="button"
+                  onClick={() => setJobModalOpen(true)}
+                  disabled={!prinCode}
+                  className="h-6 shrink-0 rounded-md border border-slate-300 bg-white px-2 text-[11px] font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  + Select job
+                </button>
+              )
+            }
+            emptyText={prinCode ? "No jobs added to this invoice yet." : "Select a principal to load job details."}
+            headers={["Activity", "Qty", "Cost rate", "Cost amt", "Bill rate", "Bill amt"]}
+            rows={groupedLines}
+            rowKey={(r: any) => r.srno}
+            renderRow={(r: any) => [
+              r.activity,
+              String(r.quantity),
+              Number(r.cost_rate).toFixed(2),
+              Number(r.cost_amount).toFixed(2),
+              Number(r.bill_rate).toFixed(2),
+              Number(r.bill_amount).toFixed(2),
+            ]}
           />
-        </div>
-        {HEADER_FIELDS.map((f) => (
-          <CompactField key={f.key} field={f} invoice={invoice} onChange={setField} disabled={viewMode} />
-        ))}
+          <GridPanel
+            title="Storage details"
+            subtitle="Aggregated storage charges for this invoice"
+            action={
+              !viewMode && (
+                <button
+                  type="button"
+                  onClick={() => setStorageModalOpen(true)}
+                  disabled={!prinCode}
+                  className="h-6 shrink-0 rounded-md border border-slate-300 bg-white px-2 text-[11px] font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  + Select storage
+                </button>
+              )
+            }
+            emptyText={prinCode ? "No storage charges added to this invoice yet." : "Select a principal to load storage details."}
+            headers={["Record", "Qty", "Amount"]}
+            rows={aggregatedStorage ? [aggregatedStorage] : []}
+            rowKey={() => "storage-summary"}
+            renderRow={(r: any) => [`${r.count} record${r.count > 1 ? "s" : ""}`, String(r.totalQty), r.totalAmount.toFixed(3)]}
+          />
+        </section>
 
-        <GroupDivider icon={FileText} title="Status" />
-        {STATUS_FIELDS.map((f) => (
-          <CompactField key={f.key} field={f} invoice={invoice} onChange={setField} disabled={viewMode} />
-        ))}
-
-        <GroupDivider icon={FileText} title="References" />
-        {REFERENCE_FIELDS.map((f) => (
-          <CompactField key={f.key} field={f} invoice={invoice} onChange={setField} disabled={viewMode} />
-        ))}
-
-        <GroupDivider icon={FileText} title="Description" />
-        {DESCRIPTION_FIELDS.map((f) => (
-          <CompactField key={f.key} field={f} invoice={invoice} onChange={setField} disabled={viewMode} />
-        ))}
-
-        <GroupDivider icon={Receipt} title="Currency" />
-        {CURRENCY_FIELDS.map((f) => (
-          <CompactField key={f.key} field={f} invoice={invoice} onChange={setField} disabled={viewMode} />
-        ))}
-        <p className="col-span-full -mt-0.5 text-[9px] text-muted-foreground">
-          Auto-filled from the selected Principal — not editable here.
-        </p>
+        {/* Footer totals */}
+        <footer className="flex w-full shrink-0 items-center justify-end gap-8 rounded-lg border border-slate-200 bg-white px-5 py-2.5">
+          <Total label="Job total" value={billingTotals.jobTotal} suffix={currCode} />
+          <Total label="Storage total" value={billingTotals.storageTotal} suffix={currCode} />
+          <div className="h-6 w-px bg-slate-200" />
+          <Total label="Grand total" value={billingTotals.grandTotal} suffix={currCode} emphasize />
+        </footer>
       </div>
 
-      {/* ── BOTTOM: Billing sections side by side ── */}
-      <div className="grid grid-cols-1 gap-1.5 md:grid-cols-2">
-        {/* Job Details */}
-        <BillingSection
-          icon={Receipt}
-          title="Job Details"
-          subtitle="Activities billed on this invoice"
-          action={
-            !viewMode && (
-              <Button size="sm" variant="outline" onClick={() => setJobModalOpen(true)} disabled={!prinCode} className="h-6 text-[10px]">
-                + Select Job
-              </Button>
-            )
-          }
-        >
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader className="bg-secondary/70">
-                <TableRow>
-                  <TableHead className="py-0.5 text-[9px]">Action</TableHead>
-                  <TableHead className="py-0.5 text-[9px]">Sr</TableHead>
-                  <TableHead className="py-0.5 text-[9px]">Activity</TableHead>
-                  <TableHead className="py-0.5 text-right text-[9px]">Qty</TableHead>
-                  <TableHead className="py-0.5 text-right text-[9px]">Cost Rate</TableHead>
-                  <TableHead className="py-0.5 text-right text-[9px]">Cost Amt</TableHead>
-                  <TableHead className="py-0.5 text-right text-[9px]">Bill Rate</TableHead>
-                  <TableHead className="py-0.5 text-right text-[9px]">Bill Amt</TableHead>
-                  <TableHead className="py-0.5 text-[9px]">Other</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {groupedLines.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="py-0">
-                      <EmptyTableState
-                        icon={Receipt}
-                        message={prinCode ? "No jobs added to this invoice yet." : "Pick a Principal on the Invoice Details tab first."}
-                        actionLabel={prinCode && !viewMode ? "Select Job" : undefined}
-                        onAction={() => setJobModalOpen(true)}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  groupedLines.map((row) => (
-                    <TableRow key={row.srno}>
-                      <TableCell className="py-0.5">
-                        <Button size="icon" variant="ghost" onClick={() => handleDeleteLine(row.activity)} disabled={viewMode} className="h-5 w-5">
-                          <Trash2 size={11} className="text-destructive" />
-                        </Button>
-                      </TableCell>
-                      <TableCell className="py-0.5 text-[10px]">{row.srno}</TableCell>
-                      <TableCell className="py-0.5 text-[10px]">{row.activity}</TableCell>
-                      <TableCell className="py-0.5 text-right text-[10px]">{row.quantity}</TableCell>
-                      <TableCell className="py-0.5 text-right text-[10px]">{row.cost_rate}</TableCell>
-                      <TableCell className="py-0.5 text-right text-[10px]">{row.cost_amount}</TableCell>
-                      <TableCell className="py-0.5 text-right text-[10px]">{row.bill_rate}</TableCell>
-                      <TableCell className="py-0.5 text-right text-[10px]">{row.bill_amount}</TableCell>
-                      <TableCell className="py-0.5 text-[10px]">{row.other_services}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </BillingSection>
-
-        {/* Storage Details */}
-        <BillingSection
-          icon={Package}
-          title="Storage Details"
-          subtitle="Aggregated storage charges for this invoice"
-          action={
-            !viewMode && (
-              <Button size="sm" variant="outline" onClick={() => setStorageModalOpen(true)} disabled={!prinCode} className="h-6 text-[10px]">
-                + Select Storage
-              </Button>
-            )
-          }
-        >
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader className="bg-secondary/70">
-                <TableRow>
-                  <TableHead className="py-0.5 text-[9px]">Action</TableHead>
-                  <TableHead className="py-0.5 text-[9px]">Records</TableHead>
-                  <TableHead className="py-0.5 text-right text-[9px]">Qty</TableHead>
-                  <TableHead className="py-0.5 text-right text-[9px]">Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {!aggregatedStorage ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="py-0">
-                      <EmptyTableState
-                        icon={Package}
-                        message={prinCode ? "No storage charges added to this invoice yet." : "Pick a Principal on the Invoice Details tab first."}
-                        actionLabel={prinCode && !viewMode ? "Select Storage" : undefined}
-                        onAction={() => setStorageModalOpen(true)}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  <TableRow>
-                    <TableCell className="py-0.5">
-                      <Button size="icon" variant="ghost" onClick={handleClearStorageLines} disabled={viewMode} className="h-5 w-5">
-                        <Trash2 size={11} className="text-destructive" />
-                      </Button>
-                    </TableCell>
-                    <TableCell className="py-0.5 text-[10px]">{aggregatedStorage.count} record{aggregatedStorage.count > 1 ? "s" : ""}</TableCell>
-                    <TableCell className="py-0.5 text-right text-[10px]">{aggregatedStorage.totalQty}</TableCell>
-                    <TableCell className="py-0.5 text-right text-[10px]">{aggregatedStorage.totalAmount.toFixed(3)}</TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </BillingSection>
-      </div>
-
-      {/* Totals strip */}
-      <section className="rounded-md border bg-secondary/20 p-1.5">
-        <div className="flex flex-wrap items-center justify-end gap-3">
-          <div className="text-right">
-            <p className="m-0 text-[8px] font-semibold uppercase tracking-wide text-muted-foreground">Job total</p>
-            <p className="m-0 text-xs font-semibold text-foreground">{billingTotals.jobTotal.toFixed(3)} {currCode}</p>
-          </div>
-          <div className="text-right">
-            <p className="m-0 text-[8px] font-semibold uppercase tracking-wide text-muted-foreground">Storage total</p>
-            <p className="m-0 text-xs font-semibold text-foreground">{billingTotals.storageTotal.toFixed(3)} {currCode}</p>
-          </div>
-          <div className="text-right">
-            <p className="m-0 text-[8px] font-semibold uppercase tracking-wide text-primary">Grand total</p>
-            <p className="m-0 text-sm font-bold text-primary">{billingTotals.grandTotal.toFixed(3)} {currCode}</p>
-          </div>
-        </div>
-      </section>
-
+      {/* Modals */}
       {jobModalOpen && (
         <JobSelectionModal
           prinCode={prinCode}
@@ -742,7 +722,6 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
           onSelect={handleJobSelect}
         />
       )}
-
       {storageModalOpen && (
         <StorageSelectionModal
           prinCode={prinCode}
@@ -753,53 +732,89 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
           onSelect={handleStorageSelect}
         />
       )}
-
-      {printDialogOpen && (
-        <Dialog
-          open
-          title="Print Invoice"
-          onClose={() => setPrintDialogOpen(false)}
-          compact
-        >
-          <div className="grid gap-1.5 py-1">
-            <p className="m-0 text-sm text-muted-foreground">
-              Choose how you want the invoice report to be generated.
-            </p>
-            <div className="grid gap-1">
-              {report_type.map((type) => {
-                const isGrouped = type === "grouped";
-                return (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => handlePrint(type)}
-                    className="group flex w-full items-center gap-2 rounded-lg border border-border bg-background px-2 py-1.5 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-                  >
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary group-hover:bg-primary/15">
-                      <Printer size={13} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="m-0 text-sm font-semibold text-foreground">
-                        {isGrouped ? "Grouped" : "Activity-wise"}
-                      </p>
-                      <p className="m-0 text-xs text-muted-foreground">
-                        {isGrouped
-                          ? "Summary by activity groups"
-                          : "Detailed breakdown per activity"}
-                      </p>
-                    </div>
-                    <span className="text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
-                      Print →
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </Dialog>
-      )}
     </div>
   );
 }
 
-export default InvoiceForm;
+// ---------------------------------------------------------------------------
+// GridPanel
+// ---------------------------------------------------------------------------
+
+function GridPanel({
+  title,
+  subtitle,
+  action,
+  emptyText,
+  headers,
+  rows,
+  rowKey,
+  renderRow,
+}: {
+  title: string;
+  subtitle: string;
+  action?: React.ReactNode;
+  emptyText: string;
+  headers: string[];
+  rows: any[];
+  rowKey: (row: any) => string | number;
+  renderRow: (row: any) => string[];
+}) {
+  return (
+    <div className="flex h-full min-h-[180px] w-full flex-col rounded-lg border border-slate-200 bg-white">
+      <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-2">
+        <div>
+          <p className="text-[13px] font-semibold text-slate-800">{title}</p>
+          <p className="text-[11px] text-slate-400">{subtitle}</p>
+        </div>
+        {action}
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto">
+        <table className="w-full border-collapse text-[12px]">
+          <thead className="sticky top-0 bg-slate-50">
+            <tr>
+              {headers.map((h) => (
+                <th key={h} className="whitespace-nowrap px-3 py-1.5 text-left font-medium text-slate-500">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={headers.length} className="px-3 py-8 text-center text-[12px] text-slate-400">
+                  {emptyText}
+                </td>
+              </tr>
+            ) : (
+              rows.map((row) => (
+                <tr key={rowKey(row)}>
+                  {renderRow(row).map((cell, j) => (
+                    <td key={j} className="whitespace-nowrap px-3 py-1.5 text-slate-700">
+                      {cell}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Total
+// ---------------------------------------------------------------------------
+
+function Total({ label, value, suffix, emphasize }: { label: string; value: number; suffix?: string; emphasize?: boolean }) {
+  return (
+    <div className="flex items-baseline gap-2">
+      <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</span>
+      <span className={emphasize ? "text-[15px] font-semibold text-[#1F5C6B]" : "text-[14px] font-medium text-slate-700"}>
+        {value.toFixed(3)} {suffix}
+      </span>
+    </div>
+  );
+}
