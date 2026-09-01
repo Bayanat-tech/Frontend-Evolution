@@ -163,16 +163,11 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
     <div className="workspace">
       <aside className={cn("sidebar", displayCollapsed && "collapsed", isMobile && "mobile-sidebar", mobileMenuOpen && "mobile-open")}>
         <div className="sidebar-top">
-          <Link to="/apps" className={displayCollapsed ? "sidebar-brand logo-only" : "sidebar-brand"} title="Bayanat Technology">
+          <Link to="/apps" className={displayCollapsed ? "sidebar-brand logo-only" : "sidebar-brand"} title={companyName}>
             <span className="sidebar-logo-wrap">
               <img src="/bayanat-logo.png" alt="Bayanat Technology" className="sidebar-logo" />
             </span>
-            {!displayCollapsed && (
-              <span className="sidebar-brand-copy">
-                <strong>Bayanat</strong>
-                <small>Technology</small>
-              </span>
-            )}
+            {!displayCollapsed && <span className="sidebar-brand-copy"><strong>{companyName}</strong></span>}
           </Link>
           <button
             className="icon-button sidebar-toggle"
@@ -191,7 +186,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
          )}
 
         <nav className="sidebar-nav">
-          {(activeApp?.children || []).map((item) => (
+          {(activeApp?.children || []).map((item, index) => (
             <MenuItem
               key={item.id || item.title}
               item={item}
@@ -201,6 +196,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
               appCode={appCode || ""}
               pathname={location.pathname}
               level={1}
+              siblingIndex={index + 1}
               onNavigate={handleMenuNavigate}
             />
           ))}
@@ -209,7 +205,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
         <div className={cn("sidebar-footer", displayCollapsed && "collapsed")}>
           {!displayCollapsed && (
             <div className="sidebar-company-card">
-              <span>Company</span>
+              <span><Building2 size={13} /> Company</span>
               <strong>{companyName}</strong>
             </div>
           )}
@@ -314,6 +310,7 @@ function MenuItem({
   appCode,
   pathname,
   level,
+  siblingIndex,
   onNavigate,
 }: {
   item: MenuNode;
@@ -323,6 +320,7 @@ function MenuItem({
   appCode: string;
   pathname: string;
   level: number;
+  siblingIndex?: number;
   onNavigate: () => void;
 }) {
   const key = item.id || item.title;
@@ -330,7 +328,8 @@ function MenuItem({
   const hasChildren = children.length > 0;
   const path = cleanPath(item.url_path);
   const to = path ? `/workspace/${appCode}/${path}` : "#";
-  const active = isMenuNodeActive(item, pathname);
+  const directActive = isPathActive(path, pathname);
+  const branchActive = !directActive && Boolean(children.some((child) => isMenuNodeActive(child, pathname)));
   const shouldRenderChildren = !collapsed && expanded[key];
   const displayTitle = titleCase(item.title);
 
@@ -338,20 +337,20 @@ function MenuItem({
     return (
       <div className={cn("nav-group", collapsed && "collapsed", `nav-level-${level}`)}>
         <button
-          className={cn("nav-item", active && "active", collapsed && "icon-only", `nav-level-${level}`)}
+          className={cn("nav-item", directActive && "active", branchActive && "branch-active", collapsed && "icon-only", `nav-level-${level}`)}
           onClick={() => setExpanded((prev) => ({ ...prev, [key]: !prev[key] }))}
           title={displayTitle}
           aria-label={displayTitle}
         >
           <span className="nav-link-copy">
-            <MenuIcon item={item} level={level} className="nav-leading-icon" />
+            <MenuIcon item={item} level={level} siblingIndex={siblingIndex} className="nav-leading-icon" />
             {!collapsed && <span title={displayTitle}>{displayTitle}</span>}
           </span>
           {!collapsed && (expanded[key] ? <ChevronDown size={15} /> : <ChevronRight size={15} />)}
         </button>
         {shouldRenderChildren && (
           <div className={cn("nav-children", collapsed && "collapsed")}>
-            {children.map((child) => (
+            {children.map((child, index) => (
               <MenuItem
                 key={child.id || child.title}
                 item={child}
@@ -361,6 +360,7 @@ function MenuItem({
                 appCode={appCode}
                 pathname={pathname}
                 level={level + 1}
+                siblingIndex={index + 1}
                 onNavigate={onNavigate}
               />
             ))}
@@ -371,17 +371,17 @@ function MenuItem({
   }
 
   return (
-    <Link className={cn("nav-item", active && "active", collapsed && "icon-only", `nav-level-${level}`)} to={to} title={displayTitle} aria-label={displayTitle} onClick={onNavigate}>
+    <Link className={cn("nav-item", directActive && "active", collapsed && "icon-only", `nav-level-${level}`)} to={to} title={displayTitle} aria-label={displayTitle} onClick={onNavigate}>
       <span className="nav-link-copy">
-        <MenuIcon item={item} level={level} className="nav-leading-icon" />
+        <MenuIcon item={item} level={level} siblingIndex={siblingIndex} className="nav-leading-icon" />
         {!collapsed && <span title={displayTitle}>{displayTitle}</span>}
       </span>
     </Link>
   );
 }
 
-function MenuIcon({ item, level, className }: { item: MenuNode; level: number; className?: string }) {
-  if (level >= 3) return <span className={cn("nav-dot", className)} aria-hidden="true" />;
+function MenuIcon({ item, level, siblingIndex, className }: { item: MenuNode; level: number; siblingIndex?: number; className?: string }) {
+  if (level >= 2) return <span className={cn("nav-index", className)} aria-hidden="true">{siblingIndex}</span>;
   const Icon = getMenuIcon(item);
   return <Icon className={className} size={level === 1 ? 15 : 13} aria-hidden="true" />;
 }
@@ -474,7 +474,22 @@ function isPathActive(menuPath: string, pathname: string): boolean {
   if (!menuPath) return false;
   const path = normalizeRoutePath(menuPath);
   const current = normalizeRoutePath(pathname);
-  return current === path || current.endsWith(`/${path}`);
+  if (current === path || current.endsWith(`/${path}`)) return true;
+
+  // Backend menu paths and React routes sometimes use different separators
+  // (for example import_for_reexport vs import-for-reexport). Compare the
+  // canonical path segments as a fallback while retaining the mode/section
+  // segments, so identical leaf names under Air, Sea and Road do not collide.
+  const canonicalSegments = (value: string) => value
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => decodeURIComponent(segment).replace(/[^a-z0-9]/gi, "").toLowerCase());
+  const menuSegments = canonicalSegments(path);
+  const currentSegments = canonicalSegments(current);
+  if (!menuSegments.length || currentSegments.length < menuSegments.length) return false;
+  return menuSegments.every(
+    (segment, index) => segment === currentSegments[currentSegments.length - menuSegments.length + index],
+  );
 }
 
 function normalizeRoutePath(path: string) {
