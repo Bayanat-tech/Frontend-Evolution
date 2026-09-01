@@ -79,6 +79,47 @@ function pick(obj: Record<string, unknown>, ...aliases: string[]): string {
   return "";
 }
 
+/**
+ * Translates raw Oracle error text into a specific, field-aware message.
+ * Falls back to the raw message (or a generic one) when the error doesn't
+ * match a known pattern — so nothing is ever silently swallowed, it's just
+ * made clearer when we can.
+ */
+function getFriendlySaveError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error ?? "");
+
+  // ORA-01438: NUMBER column value exceeds its declared precision.
+  // Oracle's own message never names the column (unlike ORA-12899 below),
+  // so this has to be a static hint tied to whichever NUMBER field this
+  // form actually sends — currently just Notice Period (val1n1).
+  if (raw.includes("ORA-01438")) {
+    return "Notice Period (Days) is too large for this field — please enter 99 or fewer days.";
+  }
+
+  // ORA-12899: VARCHAR2/CHAR value too long for its column. Oracle's message
+  // does include the column name, e.g.:
+  //   value too large for column "WMSTST"."HR_EMP_SEPARATIONS"."REASON_CATEGORY" (actual: 11, maximum: 5)
+  // Extract it and map to the on-screen field label when we recognize it.
+  const tooLongMatch = raw.match(/value too large for column "[^"]+"\."[^"]+"\."([^"]+)"/i);
+  if (tooLongMatch) {
+    const column = tooLongMatch[1].toUpperCase();
+    const fieldLabels: Record<string, string> = {
+      REASON_CATEGORY: "Reason Category",
+      SEPARATION_REASON: "Separation Reason",
+      STATUS_FLAG: "Status",
+      SETTLEMENT_STATUS: "Settlement Status",
+      REMARKS: "Remarks",
+      PAY_MONTH: "Payroll Month",
+      PAY_YEAR: "Payroll Year",
+      IN_NOTICE_PERIOD: "In Notice Period",
+    };
+    const label = fieldLabels[column] ?? column;
+    return `${label} is too long for this field — please shorten it and try again.`;
+  }
+
+  return raw || "Unable to save separation record";
+}
+
 const EMPTY: THrSeparation = {
   employee_id: "",
   division: "",
@@ -336,9 +377,7 @@ export function AddHrInitiationSepration({ mode, existingData, onClose }: Props)
 
       onClose(true);
     } catch (error) {
-      setApiError(
-        error instanceof Error ? error.message : "Unable to save separation record"
-      );
+      setApiError(getFriendlySaveError(error));
     } finally {
       setSaving(false);
     }
