@@ -3232,7 +3232,7 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
 }
 
 .freight-job-table-shell {
-  overflow: hidden;
+  overflow: auto;
   border: 1px solid #d8dee8;
   border-radius: 7px;
   background: #ffffff;
