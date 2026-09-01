@@ -357,7 +357,7 @@ export function FreightInvoicePage() {
         }
       >
         <div className="grid gap-3">
-          <div className="grid gap-2 md:grid-cols-5">
+          <div className="grid gap-2 md:grid-cols-6">
             <MetricCard label="Selected Jobs" value={String(unique(selectedRows.map((row) => text(row.job_no))).length)} />
             <MetricCard label="Activity Lines" value={String(selectedRows.length)} />
             <MetricCard label="Before Tax" value={`${selectedBase.toFixed(3)} ${form.curr_code || "OMR"}`} />

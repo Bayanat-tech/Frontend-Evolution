@@ -1111,7 +1111,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
 
             {activeTab === "payment" && (
                         <section>
-                          <SectionPanel icon={CreditCard} title="Payment Terms" meta=" PaymentTerms & instructions"><div className="grid gap-2 sm:grid-cols-2">
+                          <SectionPanel icon={CreditCard} title="Payment Terms"><div className="grid gap-2 sm:grid-cols-2">
                    <FormSelect label="INCO Terms" value={header.payment_terms} onChange={(value) => setHeaderField("payment_terms", value)} options={paymentTerms.map((value) => ({ value, label: value }))} />
                    <FormSelect label="Freight Payable At" value={header.tos} onChange={(value) => setHeaderField("tos", value)} options={tosOptions.map((value) => ({ value, label: value }))} />
                    <FormLookup label="Currency" value={header.curr_code} valueField="curr_code" displayFields={["curr_code", "curr_name"]} columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Currency" }, { field: "ex_rate", header: "Rate" }]} loadOptions={() => loadCurrencyLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("curr_code", value, row)} required />
@@ -1235,7 +1235,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
               </section>
             )}
 
-            {activeTab === "terms" && (
+            {/* {activeTab === "terms" && (
               <section>
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <h2 className="m-0 text-sm font-semibold uppercase text-muted-foreground">Terms And Conditions</h2>
@@ -1246,7 +1246,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                   {terms.map((term, index) => (
                     <div key={term.serial_no} className="grid gap-2 rounded-md border bg-background p-2 sm:grid-cols-[90px_120px_1fr_40px]">
                       {/* <FormInput label="Sr No" value={term.serial_no} onChange={(value) => setTermField(index, "serial_no", value)} /> */}
-                      <FormInput label="Sr No" value={String(term.serial_no)} onChange={(value) => {}} disabled />
+                      {/* <FormInput label="Sr No" value={String(term.serial_no)} onChange={(value) => {}} disabled />
                       <FormInput label="Type" value={term.type_ind} onChange={(value) => setTermField(index, "type_ind", value)} />
                       <FormTextarea label="Description" value={term.description} onChange={(value) => setTermField(index, "description", value)} compact />
                       <div className="grid place-items-end"><Button type="button" size="icon" variant="ghost" title="Remove term" onClick={() => removeTerm(index)}><Trash2 size={14} /></Button></div>
@@ -1254,7 +1254,71 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                   ))}
                 </div>
               </section>
+            )} */} 
+
+            {activeTab === "terms" && (
+              <section>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <h2 className="m-0 text-sm font-semibold uppercase text-muted-foreground">Terms And Conditions</h2>
+                  <Button type="button" size="sm" variant="outline" onClick={addTerm}><Plus size={14} />Add Term</Button>
+                </div>
+                {terms.length === 0 ? (
+                  <div className="rounded-md border border-dashed bg-muted/25 p-5 text-center text-sm text-muted-foreground">No terms added. Oracle save procedure can also copy defaults from `MS_QUOTE_TERMS`.</div>
+                ) : (
+                  <div className="overflow-x-auto rounded-md border border-slate-200 bg-white shadow-inner">
+                    <table className="w-full border-collapse text-[11px]">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-100 text-left text-[10px] font-bold uppercase tracking-wide text-slate-700">
+                          <th className="px-1.5 py-1.5" style={{ width: "60px" }}>Sr No</th>
+                          <th className="px-1.5 py-1.5" style={{ width: "70px" }}>Type</th>
+                          <th className="px-1.5 py-1.5">Description</th>
+                          <th className="px-1.5 py-1.5 text-right" style={{ width: "42px" }} />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {terms.map((term, index) => (
+                          <tr key={term.serial_no} className="border-b border-slate-200 bg-white transition last:border-0 hover:bg-slate-50/80">
+                            <td className="px-1.5 py-1.5 align-middle text-slate-600">{term.serial_no}</td>
+                            <CellInput value={term.type_ind} onChange={(value) => setTermField(index, "type_ind", value)} className="w-[80px]" />
+                            <td className="px-1 py-0.5">
+                              <textarea
+                                className={`${fieldClassName} min-h-7 py-0.5 w-full`}
+                                value={term.description}
+                                onChange={(event) => setTermField(index, "description", event.target.value)}
+                              />
+                            </td>
+                                     {/* <td className="px-1 py-0.5">
+                              <textarea
+                               className="h-auto min-h-7 w-full rounded-md border border-slate-400 bg-slate-100 px-2 text-[11px] font-semibold text-foreground shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary resize-none overflow-hidden leading-snug py-0.5"
+                               //className={`${fieldClassName} min-h-7 py-0.5 w-full resize-none overflow-hidden leading-snug`}
+                                value={term.description}
+                                rows={1}
+                                onChange={(event) => setTermField(index, "description", event.target.value)}
+                                onInput={(event) => {
+                                  const el = event.target as HTMLTextAreaElement;
+                                  el.style.height = "auto";
+                                  el.style.height = `${el.scrollHeight}px`;
+                                }}
+                                ref={(el) => {
+                                  if (el) {
+                                    el.style.height = "auto";
+                                    el.style.height = `${el.scrollHeight}px`;
+                                  }
+                                }}
+                              />
+                            </td>  */}
+                            <td className="px-1 py-1.5 text-right align-middle">
+                              <Button type="button" size="icon" variant="ghost" title="Remove term" onClick={() => removeTerm(index)}><Trash2 size={12} /></Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
             )}
+
           </div>
           </fieldset>
         </div>

@@ -32,7 +32,7 @@ type AdvancedFilterKey =
 type ReportConfig = {
   title: string;
   subtitle: string;
-  family: string;
+    // family: string;
   icon: typeof FileSpreadsheet;
   columns: ReportColumn[];
   amountFields: string[];
@@ -104,7 +104,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   enquiry_list: {
     title: "Enquiry List",
     subtitle: "Customer freight requirements captured before RFQ or quotation.",
-    family: "Commercial Register",
+    // family: "Commercial Register",
     icon: FileSpreadsheet,
     amountFields: [],
     filters: ["date", "mode", "type", "status", "search"],
@@ -127,7 +127,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   rfq_list: {
     title: "RFQ List",
     subtitle: "Request-for-quote register sourced from approved enquiries.",
-    family: "Supplier Rate Request",
+    // family: "Supplier Rate Request",
     icon: FileSpreadsheet,
     amountFields: [],
     filters: ["date", "mode", "type", "status", "search"],
@@ -148,7 +148,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   quotation_list: {
     title: "Quotation List",
     subtitle: "Customer quotation register with cost, sell, and margin.",
-    family: "Commercial Offer",
+    // family: "Commercial Offer",
     icon: BarChart3,
     amountFields: ["TOTAL_SELL", "TOTAL_COST", "PROFIT"],
     filters: ["date", "mode", "type", "status", "search"],
@@ -171,7 +171,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   freight_job_list: {
     title: "Freight Job List",
     subtitle: "Operational jobs created from approved freight quotations.",
-    family: "Operations",
+    // family: "Operations",
     icon: Ship,
     amountFields: [],
     filters: ["date", "mode", "type", "status", "search"],
@@ -194,7 +194,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   freight_profit: {
     title: "Freight Profit",
     subtitle: "Job profitability with revenue, expense, and margin control.",
-    family: "Finance Control",
+    // family: "Finance Control",
     icon: BarChart3,
     amountFields: ["REVENUE", "EXPENSE", "PROFIT"],
     filters: ["date", "search"],
@@ -216,7 +216,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   freight_expense: {
     title: "Freight Expense",
     subtitle: "Cost lines posted against freight job activities.",
-    family: "Cost Report",
+    // family: "Cost Report",
     icon: BarChart3,
     amountFields: ["EXPENSE"],
     filters: ["date", "search"],
@@ -238,7 +238,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   freight_revenue: {
     title: "Freight Revenue",
     subtitle: "Billing and revenue lines posted against freight jobs.",
-    family: "Revenue Report",
+    // family: "Revenue Report",
     icon: BarChart3,
     amountFields: ["REVENUE"],
     filters: ["date", "search"],
@@ -260,7 +260,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   freight_brokerage: {
     title: "Freight Brokerage",
     subtitle: "Broker-linked jobs and brokerage base values.",
-    family: "Brokerage",
+    // family: "Brokerage",
     icon: WalletCards,
     amountFields: ["BROKERAGE_BASE"],
     filters: ["date", "search"],
@@ -281,7 +281,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   query_report: {
     title: "Query Report",
     subtitle: "Shipment query with invoice, vessel, BL, container, and date filters.",
-    family: "Operations Query",
+    // family: "Operations Query",
     icon: FileSpreadsheet,
     amountFields: [],
     filters: ["date", "mode", "type", "search"],
@@ -303,7 +303,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   deposits: {
     title: "Deposits",
     subtitle: "Shipment deposits and demurrage values by job.",
-    family: "Settlement",
+    // family: "Settlement",
     icon: WalletCards,
     amountFields: ["AMOUNT"],
     filters: ["date", "status"],
@@ -325,7 +325,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   container_deposit: {
     title: "Container Deposit",
     subtitle: "Container deposit follow-up, expiry, claim, and collection status.",
-    family: "Settlement",
+    // family: "Settlement",
     icon: Boxes,
     amountFields: ["AMOUNT", "DEMURAGE_AMOUNT"],
     filters: ["date", "type", "status"],
@@ -348,7 +348,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
   freight_summary: {
     title: "Freight Summary Report",
     subtitle: "Mode-wise summary/detail report with PB commercial filters.",
-    family: "Modewise Summary",
+    // family: "Modewise Summary",
     icon: BarChart3,
     amountFields: ["REVENUE", "EXPENSE", "PROFIT"],
     filters: ["date", "mode", "type", "search"],
@@ -557,12 +557,12 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
               <Icon size={20} />
             </span>
             <div className="min-w-0">
-              <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">{config.family}</p>
+              <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary"></p>
               <h1 className="m-0 truncate text-xl font-semibold leading-tight text-foreground">{config.title}</h1>
               <p className="m-0 text-xs text-muted-foreground">{config.subtitle}</p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          {/* <div className="flex flex-wrap items-center gap-2">
             <SummaryBadge label="Records" value={String(rows.length)} />
             {totals.map((item) => <SummaryBadge key={item.label} label={item.label} value={formatAmount(item.value)} strong />)}
             <Button type="button" variant="outline" size="sm" onClick={printReport} disabled={!rows.length}>
@@ -578,6 +578,57 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
               <Download size={14} /> Excel
             </Button>
           </div>
+        </div>
+
+                 <div className="flex flex-wrap items-center gap-2">
+            <SummaryBadge label="Records" value={String(rows.length)} />
+            {totals.map((item) => <SummaryBadge key={item.label} label={item.label} value={formatAmount(item.value)} strong />)}
+            <Button type="button" variant="outline" size="sm" onClick={printReport} disabled={!rows.length}>
+              <Printer size={14} /> Print
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!rows.length}
+              onClick={() => exportReportExcel(config.title, reportHtml(config, companyCode, userName, filters, principalDisplayText, rows, totals, false))}
+            >
+              <Download size={14} /> Excel
+            </Button>
+          </div>
+
+        <div className="flex flex-wrap items-stretch gap-0 border-b bg-slate-50/80 px-4 py-2.5">
+          <SummaryStripItem icon={CalendarDays} label="Period" value={`${toDisplayDate(filters.from_date) || "Start"} – ${toDisplayDate(filters.to_date) || "Today"}`} />
+          <SummaryStripItem icon={UserRound} label="Principal" value={principalDisplayText || "All principals"} />
+          <SummaryStripItem icon={Ship} label="Movement" value={`${optionLabel(modeOptions, filters.transport_mode)} / ${optionLabel(jobTypeOptions, filters.job_type)}`} />
+          {visibleFilters.includes("status") && (
+            <SummaryStripItem icon={Filter} label="Status" value={optionLabel(statusOptions, filters.status)} last />
+          )}
+        </div> */}
+ 
+                  <div className="flex flex-wrap items-center gap-2">
+            <SummaryBadge label="Records" value={String(rows.length)} />
+            {totals.map((item) => <SummaryBadge key={item.label} label={item.label} value={formatAmount(item.value)} strong />)}
+            <Button type="button" variant="outline" size="sm" onClick={printReport} disabled={!rows.length}>
+              <Printer size={14} /> Print
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!rows.length}
+              onClick={() => exportReportExcel(config.title, reportHtml(config, companyCode, userName, filters, principalDisplayText, rows, totals, false))}
+            >
+              <Download size={14} /> Excel
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 border-b bg-muted/10 p-3 md:grid-cols-4">
+          <SummaryStripItem icon={CalendarDays} label="Period" value={`${toDisplayDate(filters.from_date) || "Start"} – ${toDisplayDate(filters.to_date) || "Today"}`} />
+          <SummaryStripItem icon={UserRound} label="Principal" value={principalDisplayText || "All principals"} />
+          <SummaryStripItem icon={Ship} label="Movement" value={`${optionLabel(modeOptions, filters.transport_mode)} / ${optionLabel(jobTypeOptions, filters.job_type)}`} />
+          <SummaryStripItem icon={Filter} label="Status" value={visibleFilters.includes("status") ? optionLabel(statusOptions, filters.status) : "Not applicable"} />
         </div>
 
         <div className="grid gap-2 p-3 xl:grid-cols-[1fr_1fr_1.35fr_0.9fr_0.8fr_0.8fr_0.85fr_auto]">
@@ -636,23 +687,23 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
         )}
       </div>
 
-      <div className="grid gap-2 md:grid-cols-4">
+      {/* <div className="grid gap-2 md:grid-cols-4">
         <ReportTile icon={CalendarDays} label="Period" value={`${toDisplayDate(filters.from_date) || "Start"} - ${toDisplayDate(filters.to_date) || "Today"}`} />
         <ReportTile icon={UserRound} label="Principal" value={principalDisplayText || "All principals"} />
         <ReportTile icon={Ship} label="Movement" value={`${optionLabel(modeOptions, filters.transport_mode)} / ${optionLabel(jobTypeOptions, filters.job_type)}`} />
         <ReportTile icon={Filter} label="Status" value={visibleFilters.includes("status") ? optionLabel(statusOptions, filters.status) : "Not applicable"} />
-      </div>
+      </div> */}
 
-      <ReportLaunchPanel
+      {/* <ReportLaunchPanel
         config={config}
         rows={rows}
         totals={totals}
         loading={loading}
         message={message}
         onOpen={() => printReport()}
-      />
-    </section>
-  );
+      /> */}
+     </section>
+   );
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -971,17 +1022,45 @@ function SummaryBadge({ label, value, strong }: { label: string; value: string; 
   return <div className={`rounded-md border px-3 py-1.5 ${strong ? "border-primary/20 bg-primary/10 text-primary" : "bg-muted/40 text-foreground"}`}><div className="text-[9px] font-semibold uppercase text-muted-foreground">{label}</div><div className="text-sm font-semibold">{value}</div></div>;
 }
 
-function ReportTile({ icon: Icon, label, value }: { icon: typeof CalendarDays; label: string; value: string }) {
+// function ReportTile({ icon: Icon, label, value }: { icon: typeof CalendarDays; label: string; value: string }) {
+//   return (
+//     <div className="flex min-w-0 items-center gap-2 rounded-md border bg-card px-3 py-2 shadow-sm">
+//       <span className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary"><Icon size={16} /></span>
+//       <div className="min-w-0">
+//         <div className="text-[10px] font-semibold uppercase text-muted-foreground">{label}</div>
+//         <div className="truncate text-sm font-semibold text-foreground">{value}</div>
+//       </div>
+//     </div>
+//   );
+// }
+
+function SummaryStripItem({ icon: Icon, label, value }: { icon: typeof CalendarDays; label: string; value: string }) {
   return (
-    <div className="flex min-w-0 items-center gap-2 rounded-md border bg-card px-3 py-2 shadow-sm">
-      <span className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary"><Icon size={16} /></span>
-      <div className="min-w-0">
-        <div className="text-[10px] font-semibold uppercase text-muted-foreground">{label}</div>
-        <div className="truncate text-sm font-semibold text-foreground">{value}</div>
+    <div className="flex min-w-0 items-center gap-2.5 rounded-lg border border-primary/15 bg-white px-3.5 py-2.5 shadow-sm">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+        <Icon size={16} />
+      </span>
+      <div className="min-w-0 leading-tight">
+        <div className="text-[9.5px] font-bold uppercase tracking-wider text-primary/70">{label}</div>
+        <div className="truncate text-[13px] font-semibold text-slate-800" title={value}>{value}</div>
       </div>
     </div>
   );
 }
+
+// function SummaryStripItem({ icon: Icon, label, value }: { icon: typeof CalendarDays; label: string; value: string }) {
+//   return (
+//     <div className="group flex min-w-0 max-w-[240px] flex-1 basis-[190px] items-center gap-2 rounded-md border border-primary/15 bg-white px-2.5 py-1.5 shadow-sm transition-shadow hover:shadow-md hover:border-primary/30">
+//       <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-white">
+//         <Icon size={13} />
+//       </span>
+//       <div className="min-w-0 leading-tight">
+//         <div className="text-[8.5px] font-bold uppercase tracking-wider text-primary/70">{label}</div>
+//         <div className="truncate text-xs font-semibold text-slate-800" title={value}>{value}</div>
+//       </div>
+//     </div>
+//   );
+// }
 
 function StatusPill({ value }: { value: string }) {
   const code = value.trim().toUpperCase();
@@ -1022,7 +1101,7 @@ function ReportLaunchPanel({
       </div>
       <div className="grid gap-3 p-4 md:grid-cols-[1.1fr_1fr_1fr]">
         <div className="rounded-md border bg-muted/20 p-4">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">{config.family}</div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary"></div>
           <div className="mt-2 text-2xl font-bold text-foreground">{config.title}</div>
           <p className="m-0 mt-1 text-sm text-muted-foreground">Run opens a formatted report viewer with print and Excel actions.</p>
         </div>
@@ -1124,7 +1203,8 @@ function ReportHeader({
         <div>
           <h3 className="m-0 text-xl font-bold uppercase tracking-wide text-slate-950">{config.title}</h3>
           <p className="m-0 text-[11px] text-slate-500">
-            {config.family} | Company {companyCode}
+            {/* {config.family} |  */}
+            Company {companyCode}
             {rows.length ? ` | ${rows.length} record${rows.length === 1 ? "" : "s"}` : ""}
             {totals.map((item) => ` | ${item.label}: ${formatAmount(item.value)}`).join("")}
           </p>
@@ -1584,7 +1664,8 @@ function reportLoadingHtml(title: string) {
     .spinner{width:32px;height:32px;border:3px solid #dbe3ef;border-top-color:#0b4ca1;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
     .title{font-size:20px;font-weight:800}.sub{margin-top:7px;color:#64748b;font-size:13px}.hint{margin-top:18px;border-radius:8px;background:#f8fafc;padding:10px;color:#475569;font-size:12px}
     @keyframes spin{to{transform:rotate(360deg)}}
-  </style></head><body><div class="bar"><strong>Freight Report Viewer</strong><span>${escapeHtml(title)}</span></div><div class="loading"><div class="box"><div class="spinner"></div><div class="title">Generating ${escapeHtml(title)}</div><div class="sub">Fetching report data from Oracle...</div><div class="hint">Please keep this window open. The formatted report will appear here automatically.</div></div></div></body></html>`;
+  </style></head><body><div class="bar">
+  <strong>Freight Report Viewer</strong><span>${escapeHtml(title)}</span></div><div class="loading"><div class="box"><div class="spinner"></div><div class="title">Generating ${escapeHtml(title)}</div><div class="sub">Fetching report data from Oracle...</div><div class="hint">Please keep this window open. The formatted report will appear here automatically.</div></div></div></body></html>`;
 }
 
 function reportErrorHtml(title: string, message: string) {
@@ -1628,7 +1709,7 @@ function reportHtml(
     @media print{body{background:white}.viewerbar{display:none}.sheet{padding:0}.paper{border:0;box-shadow:none;max-width:none}}
   </style></head><body>${interactive ? `<div class="viewerbar"><div><h1>${escapeHtml(config.title)}</h1><p>${rows.length} rows | ${escapeHtml(principalText || "All principals")} | ${escapeHtml(generatedAt)}</p></div><div class="actions"><button class="primary" onclick="window.print()">Print</button><button onclick="downloadExcel()">Excel</button><button onclick="window.close()">Close</button></div></div>` : ""}<div class="sheet"><div class="paper">
     <div class="logo"><div class="brand-wrap"><img src="${escapeHtml(logoUrl)}" alt="Bayanat Technology"><div class="brand">Bayanat Technology</div></div></div>
-    <div class="top"><div><div class="title">${escapeHtml(config.title)}</div><div class="sub">${escapeHtml(config.family)} | Company ${escapeHtml(companyCode)} | ${rows.length} record${rows.length === 1 ? "" : "s"}${totals.map((item) => ` | ${item.label}: ${formatAmount(item.value)}`).join("")}</div></div>
+    <div class="top"><div><div class="title">${escapeHtml(config.title)}</div><div class="sub">| Company ${escapeHtml(companyCode)} | ${rows.length} record${rows.length === 1 ? "" : "s"}${totals.map((item) => ` | ${item.label}: ${formatAmount(item.value)}`).join("")}</div></div>
     <div class="meta"><div><b>Date:</b> ${escapeHtml(generatedAt)}</div><div><b>User:</b> ${escapeHtml(userName)}</div><div><b>Report:</b> ${escapeHtml(config.title)}</div><div><b>Page:</b> 1 of 1</div></div></div>
     <div class="params"><div><b>Period:</b> ${escapeHtml(toDisplayDate(filters.from_date) || "Start")} - ${escapeHtml(toDisplayDate(filters.to_date) || "Today")}</div><div><b>Principal:</b> ${escapeHtml(principalText || "All")}</div><div><b>Movement:</b> ${escapeHtml(`${optionLabel(modeOptions, filters.transport_mode)} / ${optionLabel(jobTypeOptions, filters.job_type)}`)}</div><div><b>Status:</b> ${escapeHtml(optionLabel(statusOptions, filters.status))}</div></div>
     ${rows.length ? body : `<div class="empty">No report rows found for selected filters.</div>`}
