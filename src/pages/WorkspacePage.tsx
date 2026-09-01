@@ -39,7 +39,6 @@ import {
   Receipt,
   RefreshCw,
   Ruler,
-  Search,
   Settings,
   Ship,
   ShoppingCart,
@@ -169,8 +168,16 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
             <span className="sidebar-logo-wrap">
               <img src="/bayanat-logo.png" alt="Bayanat Technology" className="sidebar-logo" />
             </span>
-            {!displayCollapsed && <span className="sidebar-brand-copy"><strong>{companyName}</strong></span>}
+            <span className="sidebar-brand-copy"><strong>{companyName}</strong></span>
           </Link>
+        </div>
+
+        <div className={cn("sidebar-section-heading", displayCollapsed && "collapsed")}>
+          {!displayCollapsed && (
+            <p className="sidebar-label" title={activeApp ? getModuleMeta(activeApp, 0).fullForm : "Workspace"}>
+              {activeApp ? getModuleMeta(activeApp, 0).fullForm : "Workspace"}
+            </p>
+          )}
           <button
             className="icon-button sidebar-toggle"
             onClick={toggleSidebar}
@@ -180,12 +187,6 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
             {isMobile ? mobileMenuOpen ? <PanelLeftClose size={17} /> : <Menu size={17} /> : displayCollapsed ? <Menu size={17} /> : <PanelLeftClose size={17} />}
           </button>
         </div>
-
-         {!displayCollapsed && (
-            <p className="sidebar-label" title={activeApp ? getModuleMeta(activeApp, 0).fullForm : "Workspace"}>
-             {activeApp ? getModuleMeta(activeApp, 0).fullForm : "Workspace"}
-            </p>
-         )}
 
         <nav className="sidebar-nav">
           {(activeApp?.children || []).map((item, index) => (
@@ -231,10 +232,6 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
           </button>
         </div>
         <header className="workspace-header">
-          <div className="workspace-search">
-            <Search size={16} />
-            <input placeholder="Search menu, reports, forms..." />
-          </div>
           <div className="workspace-header-actions">
             <HeaderProfile
               user={user}
