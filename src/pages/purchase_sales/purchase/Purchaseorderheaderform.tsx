@@ -3,9 +3,10 @@ import { Input } from "../../../components/ui/Input";
 import { LookupField } from "../../../components/ui/LookupField";
 import { Select } from "../../../components/ui/Select";
 import { getDynamicLookup, getLookupValue } from "../../../api/lookups";
-import { EXPENSE_AC_OPTIONS, PODocType, PurchaseOrderForm } from "./Purchaseordertypes";
-import { numberOrZero, text } from "./Purchaseorderutils";
+import { EXPENSE_AC_OPTIONS, PODocType, PurchaseOrderForm, PurchaseOrderLineRow } from "./Purchaseordertypes";
+import { DiscAmountPercentage, numberOrZero, text } from "./Purchaseorderutils";
 import { SODocType } from "../sales/SalesOrdertypes";
+import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
 // Updated CompactSection to be more flexible for the two-column layout
 function CompactSection({ label, children, className, gridCols = "grid-cols-4" }: { label: string; children: ReactNode; className?: string; gridCols?: string }) {
@@ -53,7 +54,8 @@ export function PurchaseOrderHeaderForm({
   companyCode,
   loginid,
   docType,
-  setdetails
+  setdetails,
+  rows
 }: {
   form: PurchaseOrderForm;
   setForm: (updater: (current: PurchaseOrderForm) => PurchaseOrderForm) => void;
@@ -65,6 +67,7 @@ export function PurchaseOrderHeaderForm({
   loginid?: string;
   docType: PODocType | SODocType
   setdetails?: (details: any[]) => void;
+  rows?: PurchaseOrderLineRow[];
 }) {
   const loginIdOrAdmin = loginid || "ADMIN";
 
@@ -80,19 +83,118 @@ export function PurchaseOrderHeaderForm({
 
       {/* TWO COLUMN CONTENT AREA */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-0">
-        
+
         {/* LEFT COLUMN: PRIMARY INFO */}
         <div className="lg:col-span-8 border-r-2 border-gray-100 divide-y divide-gray-200">
-          
+
           {/* Document & Party Section */}
           <CompactSection label="Document & Party" gridCols="grid-cols-6">
             {editMode && <CField label="Doc No"><Input disabled value={form.doc_no || ""} /></CField>}
             <CField label="Doc Date *" required>
               <Input type="date" disabled={headerAndLineDisabled} value={form.doc_date} onChange={(e) => updateField("doc_date", e.target.value)} />
             </CField>
-            <CField label="Quotn No">
-              <Input className="text-right" type="text" disabled={headerAndLineDisabled} value={form.ref_no} onChange={(e) => updateField("ref_no", e.target.value)} />
-            </CField>
+               {(String(docType ?? "").trim().toUpperCase() === "LPO" &&
+                              <div>
+                                  <label>PO No</label>
+                                  <LookupField
+                                      label="PO No"
+                                      compact
+                                      placeholder="PO No"
+                                      value={String(form.po_doc_no ?? "")}
+                                      displayValue={String(form.po_doc_no ?? "")}
+                                      columns={[
+                                          { field: "po_doc_no", header: "GRN No" },
+                                          { field: "ac_code", header: "A/c Code" },
+                                      ]}
+                                      valueField="po_doc_no"
+                                      displayFields={["po_doc_no"]}
+                                      loadOptions={() =>
+                                          getDynamicLookup({
+                                              parameter: "PS_GRN_ENTRY_PO_NO_DETAIL",
+                                              code1: companyCode,
+                                              loginid: loginIdOrAdmin,
+                                              code2: form.div_code,
+                                              code4: form.ac_code
+                                          })
+                                      }
+                                      disabled={disabled}
+                                      onChange={async (value, row) => {
+                                          setForm((current) => ({
+                                              ...current,
+                                              po_doc_no: value,
+                                              ac_code: text(getLookupValue(row || {}, "ac_code")),
+                                             po_doc_date: toDateInputValue(getLookupValue(row || {}, "po_doc_date")),
+                                              po_payment_terms: text(getLookupValue(row || {}, "po_payment_terms")),
+                                              po_dlvr_term: text(getLookupValue(row || {}, "po_dlvr_term")),
+                                              total_po_amount:numberOrZero(getLookupValue(row || {},"total_po_amount")),        
+                                          }));
+                                          // Fetch and populate line details — same logic as the lines table
+                                          try {
+                                              const divCodeForFetch = text(getLookupValue(row || {}, "div_code")) || form.div_code;
+          
+                                              const details = await getDynamicLookup({
+                                                  parameter: "PS_GRN_ENTRY_PO_NO_DETAIL_DET",
+                                                  code1: companyCode,
+                                                  code2: divCodeForFetch,
+                                                  code3: value,
+                                              });
+          
+                                              const mappedDetails = (details || []).map((item: any, index: number) => ({
+                                                  id: `${value}-${index + 1}`,
+                                                  div_code: text(getLookupValue(item, "div_code")),
+                                                  prod_code: text(getLookupValue(item, "prod_code")),
+                                                  prod_name: text(getLookupValue(item, "prod_name")),
+                                                  p_uom: text(getLookupValue(item, "p_uom")),
+                                                  qty_puom: numberOrZero(getLookupValue(item, "qty_puom")),
+                                                  l_uom: text(getLookupValue(item, "l_uom")),
+                                                  qty_luom: numberOrZero(getLookupValue(item, "qty_luom")),
+                                                  unit_price: numberOrZero(getLookupValue(item, "unit_price")),
+                                                  po_div_code: text(getLookupValue(item, "po_div_code")),
+                                                  po_prod_code: text(getLookupValue(item, "po_prod_code")),
+                                                  po_prod_name: text(getLookupValue(item, "po_prod_name")),
+                                                  po_p_uom: text(getLookupValue(item, "po_p_uom")),
+                                                  po_qty_puom: numberOrZero(getLookupValue(item, "po_qty_puom")),
+                                                  po_l_uom: text(getLookupValue(item, "po_l_uom")),
+                                                  po_qty_luom: numberOrZero(getLookupValue(item, "po_qty_luom")),
+                                                  po_unit_price: numberOrZero(getLookupValue(item, "po_unit_price")),
+                                                  disc_hdr_percent: numberOrZero(getLookupValue(item, "disc_hdr_percent")),
+                                                  disc_percent: numberOrZero(getLookupValue(item, "disc_percent")),
+                                                  disc_price: numberOrZero(getLookupValue(item, "disc_price")),
+                                                  tax_pct: numberOrZero(getLookupValue(item, "tax_pct")),
+                                                  tax_amount: numberOrZero(getLookupValue(item, "tax_amount")),
+                                                  lcur_amount: numberOrZero(getLookupValue(item, "lcur_amount")),
+                                                  required_dt: text(getLookupValue(item, "required_dt")),
+                                                  line_remarks: text(getLookupValue(item, "remarks")),
+                                                  tax_cat: text(getLookupValue(item, "tx_cat_code")),
+                                                  tax_code: text(getLookupValue(item, "tx_compntcat_code_1")),
+                                                  tax_lcur_amount: numberOrZero(getLookupValue(item, "tx_compnt_lcuramt_1")),
+                                                  lcur_amount_disc: numberOrZero(getLookupValue(item, "lcur_amount_discounted")),
+                                                  zone_code: text(getLookupValue(item, "zone_code")),
+                                                  zone_name: text(getLookupValue(item, "zone_name")),
+                                                  uom_name: text(getLookupValue(item, "uom_name")),
+                                                  uom_code: text(getLookupValue(item, "uom_code")),
+                                                  job_no: text(getLookupValue(item, "job_no")),
+                                                  dept: text(getLookupValue(item, "dept_code")),
+                                                  sign_ind: numberOrZero(getLookupValue(item, "sign_ind")),
+                                                  uppp: numberOrZero(getLookupValue(item, "uppp")),
+                                                  quantity: numberOrZero(getLookupValue(item, "quantity")),
+                                                  po_quantity: numberOrZero(getLookupValue(item, "po_quantity")),
+                                                  ex_rate: numberOrZero(getLookupValue(item, "ex_rate")),
+                                                  ref_doc_dt: text(getLookupValue(row || {}, "ref_date")),
+                                                   po_zone_code: text(getLookupValue(item, "po_zone_code")),
+                                                  po_zone_name: text(getLookupValue(item, "po_zone_name")),
+                                                 serial_no: numberOrZero(getLookupValue(item, "serial_no")),
+                                              }));
+                                              console.log("Mapped length:", mappedDetails?.length);
+                                              setdetails?.(mappedDetails);
+                                          } catch (error) {
+                                              console.error("ERROR LOADING GRN DETAILS FROM HEADER:", error);
+                                              setdetails?.([]);
+                                          }
+                                      }}
+                                  />
+                              </div>
+                          )}
             <CField label="Quotn Date">
               <Input type="date" disabled={headerAndLineDisabled} value={form.ref_date} onChange={(e) => updateField("ref_date", e.target.value)} />
             </CField>
@@ -135,7 +237,7 @@ export function PurchaseOrderHeaderForm({
                 }))}
               />
             </div>
-              <div className="col-span-1">
+            <div className="col-span-1">
               <LookupField
                 label="Currency *"
                 value={form.curr_code}
@@ -153,7 +255,7 @@ export function PurchaseOrderHeaderForm({
                 }))}
               />
             </div>
-              <CField label="Ex Rate"><Input className="text-right" type="number" disabled={headerAndLineDisabled} step="0.000001" value={form.ex_rate} onChange={(e) => updateField("ex_rate", Number(e.target.value || 1))} /></CField>
+            <CField label="Ex Rate"><Input className="text-right" type="number" disabled={headerAndLineDisabled} step="0.000001" value={form.ex_rate} onChange={(e) => updateField("ex_rate", Number(e.target.value || 1))} /></CField>
 
             <CField label="Credit Period">
               <Input disabled={headerAndLineDisabled} className="text-right" type="number" value={form.credit_period} onChange={(e) => updateField("credit_period", Number(e.target.value || 0))} />
@@ -174,40 +276,48 @@ export function PurchaseOrderHeaderForm({
             <CField label="Tel"><Input className="text-right" disabled={headerAndLineDisabled} value={form.party_phone} onChange={(e) => updateField("party_phone", e.target.value)} /></CField>
             <CField label="Address" className="col-span-3"><Input disabled={headerAndLineDisabled} value={form.party_address} onChange={(e) => updateField("party_address", e.target.value)} /></CField>
             <CField label="Fax"><Input className="text-right" disabled={headerAndLineDisabled} value={form.party_fax} onChange={(e) => updateField("party_fax", e.target.value)} /></CField>
- {(String(docType ?? "").trim().toUpperCase() === "LPO" && (
+            {(String(docType ?? "").trim().toUpperCase() === "LPO" && (
               <>
                 <CField label="Buyer"><Input disabled={headerAndLineDisabled} value={form.buyer} onChange={(e) => updateField("buyer", e.target.value)} /></CField>
                 <CField label="WO No"><Input disabled={headerAndLineDisabled} value={form.wo_number} onChange={(e) => updateField("wo_number", e.target.value)} /></CField>
               </>
             ))}
 
-            
+
           </CompactSection>
 
           {/* Order, Currency & Tax (Core Fields) */}
           <CompactSection label="Order & Currency" gridCols="grid-cols-6">
-          
-          
+
+
             <CField label="Disc Amt"><Input className="text-right" type="number" step="0.01" disabled={headerAndLineDisabled} value={form.disc_hdr_price} onChange={(e) => updateField("disc_hdr_price", Number(e.target.value || 0))} /></CField>
-            <CField label="Disc %"><Input className="text-right" type="number" step="0.01" disabled={headerAndLineDisabled} value={form.disc_hdr_percent} onChange={(e) => updateField("disc_hdr_percent", Number(e.target.value || 0))} /></CField>
-            
+            <CField label="Disc %">
+              <Input
+                className="text-right"
+                type="number"
+                step="0.01"
+                disabled={headerAndLineDisabled}
+                value={numberOrZero(form.disc_hdr_price.toFixed(6)) > 0 ? DiscAmountPercentage(form, rows || []) : form.disc_hdr_percent.toFixed(6)}
+                onChange={(e) => updateField("disc_hdr_percent", Number(e.target.value || 0))}
+              />
+            </CField>
             <CField label="Pay Terms" className="col-span-2"><Input disabled={headerAndLineDisabled} value={form.payment_terms} onChange={(e) => updateField("payment_terms", e.target.value)} /></CField>
             <CField label="Remarks" className="col-span-2"><Input disabled={headerAndLineDisabled} value={form.remarks} onChange={(e) => updateField("remarks", e.target.value)} /></CField>
-   {(String(docType ?? "").trim().toUpperCase() === "LPO" && (
+            {(String(docType ?? "").trim().toUpperCase() === "LPO" && (
               <><CField label="Delivery Contact Person"><Input disabled={headerAndLineDisabled} value={form.dlvr_contact} onChange={(e) => updateField("dlvr_contact", e.target.value)} /></CField>
-            <CField label=" Delivery Telephone"><Input disabled={headerAndLineDisabled} value={form.dlvr_mobile} onChange={(e) => updateField("dlvr_mobile", e.target.value)} /></CField>
-            <CField label="Delivery Email Address"className="col-span-1"><Input type="email" disabled={headerAndLineDisabled} value={form.dlvr_email} onChange={(e) => updateField("dlvr_email", e.target.value)} /></CField>
-             <CField label="Delivery Term"><Input disabled={headerAndLineDisabled} value={form.dlvr_term} onChange={(e) => updateField("dlvr_term", e.target.value)} /></CField>
-                      </>
+                <CField label=" Delivery Telephone"><Input disabled={headerAndLineDisabled} value={form.dlvr_mobile} onChange={(e) => updateField("dlvr_mobile", e.target.value)} /></CField>
+                <CField label="Delivery Email Address" className="col-span-1"><Input type="email" disabled={headerAndLineDisabled} value={form.dlvr_email} onChange={(e) => updateField("dlvr_email", e.target.value)} /></CField>
+                <CField label="Delivery Term"><Input disabled={headerAndLineDisabled} value={form.dlvr_term} onChange={(e) => updateField("dlvr_term", e.target.value)} /></CField>
+              </>
             ))}
 
           </CompactSection>
-          
+
         </div>
 
         {/* RIGHT COLUMN: BOXED SECTIONS */}
         <div className="lg:col-span-4 p-2 flex flex-col gap-2">
-          
+
           {/* Tax Section */}
           <SideBox label="Tax Configuration">
             <CField label="Tax Type">
@@ -218,7 +328,7 @@ export function PurchaseOrderHeaderForm({
                 <option value="N">No Tax</option><option value="S">Std Tax</option><option value="Z">Zero</option><option value="E">Exempt</option>
               </Select>
             </CField>
-            
+
             <LookupField
               label="Tax Category"
               value={form.tx_cat_code || ""}
@@ -242,7 +352,7 @@ export function PurchaseOrderHeaderForm({
               disabled={headerAndLineDisabled}
               onChange={(value) => setForm((current) => ({ ...current, tx_compntcat_code_1: value }))}
             />
-            
+
             <CField label="Expense A/c Post">
               <Select disabled={headerAndLineDisabled} value={form.expense_ac_post} onChange={(e) => updateField("expense_ac_post", e.target.value)}>
                 {EXPENSE_AC_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
@@ -261,14 +371,14 @@ export function PurchaseOrderHeaderForm({
 
           {/* Delivery Section */}
           {(String(docType ?? "").trim().toUpperCase() === "SO" && (
-              <><SideBox label="Delivery Details">
+            <><SideBox label="Delivery Details">
               <CField label="Delivery Contact Person"><Input disabled={headerAndLineDisabled} value={form.dlvr_contact} onChange={(e) => updateField("dlvr_contact", e.target.value)} /></CField>
-            <CField label=" Delivery Telephone"><Input disabled={headerAndLineDisabled} value={form.dlvr_mobile} onChange={(e) => updateField("dlvr_mobile", e.target.value)} /></CField>
-            <CField label="Delivery Email Address"className="col-span-1"><Input type="email" disabled={headerAndLineDisabled} value={form.dlvr_email} onChange={(e) => updateField("dlvr_email", e.target.value)} /></CField>
-             <CField label="Delivery Term"><Input disabled={headerAndLineDisabled} value={form.dlvr_term} onChange={(e) => updateField("dlvr_term", e.target.value)} /></CField>
-          </SideBox>
-                   </>
-            ))}
+              <CField label=" Delivery Telephone"><Input disabled={headerAndLineDisabled} value={form.dlvr_mobile} onChange={(e) => updateField("dlvr_mobile", e.target.value)} /></CField>
+              <CField label="Delivery Email Address" className="col-span-1"><Input type="email" disabled={headerAndLineDisabled} value={form.dlvr_email} onChange={(e) => updateField("dlvr_email", e.target.value)} /></CField>
+              <CField label="Delivery Term"><Input disabled={headerAndLineDisabled} value={form.dlvr_term} onChange={(e) => updateField("dlvr_term", e.target.value)} /></CField>
+            </SideBox>
+            </>
+          ))}
 
 
         </div>

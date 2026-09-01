@@ -34,6 +34,8 @@ import {
   numberOrZero,
   runWorkflow,
   text,
+  DiscAmountPercentage,
+  TotalUnitPrice,
 } from "./Purchaseorderutils";
 import { PurchaseOrderHeaderForm } from "./Purchaseorderheaderform";
 import { PurchaseOrderLinesTable } from "./Purchaseorderlinestable";
@@ -205,7 +207,26 @@ export function PurchaseQuotationEditor({
   })();
 
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
-    setForm((current) => ({ ...current, [field]: value }));
+    setForm((current) => {
+      let updated = { ...current, [field]: value };
+      
+      // When discount amount is set, calculate the percentage
+      if (field === "disc_hdr_price" && Number(value) > 0) {
+        updated.disc_hdr_percent = DiscAmountPercentage(updated, rows);
+      }
+      
+      return updated;
+    });
+    
+    // When discount amount is set, update disc_price in all detail rows
+    if (field === "disc_hdr_price") {
+      setRows((current) => current.map((row) => ({ ...row, disc_price: Number(value) || 0 })));
+    }
+    
+    // When header discount percentage is set, clear all detail row discounts
+    if (field === "disc_hdr_percent" && Number(value) > 0) {
+      setRows((current) => current.map((row) => ({ ...row, disc_percent: 0 })));
+    }
   };
 
   const updateRow = (id: string, patch: Partial<PurchaseOrderLineRow>) => {

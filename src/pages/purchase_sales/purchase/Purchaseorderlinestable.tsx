@@ -18,6 +18,7 @@ import {
   isSameUom,
   taxLcurrAmount,
   LcurrDisAmount,
+  DiscPrice,
 } from "./Purchaseorderutils";
 import { SODocType } from "../sales/SalesOrdertypes";
 import { Select } from "../../../components/ui/Select";
@@ -125,7 +126,7 @@ export function PurchaseOrderLinesTable({
   const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
   const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
   const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
-  const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
+  const totalDiscPrice = rows.reduce((sum, row) => sum + DiscPrice(row), 0);
   const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
   const grandTotal = totalAmount - totalDiscPrice - discAmt;
   const finalTotal = grandTotal + totalTaxAmount;
@@ -134,7 +135,7 @@ export function PurchaseOrderLinesTable({
   // Quantity is always derived, never typed directly:
   // - same UOM: quantity mirrors qty_luom
   // - different UOM: quantity = (qty_puom * uppp) + qty_luom
-
+{console.log("LIVE ROW:", rows[0].id, rows[0].prod_code, rows[0].unit_price, rows[0].qty_luom, rows[0].qty_puom, computeQuantity(rows[0]))}
   return (
     <div className="commercial-lines-card rounded-md border bg-card">
       <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
@@ -745,7 +746,7 @@ export function PurchaseOrderLinesTable({
           <strong>{formatAmount(totalDiscPrice + discAmt)}</strong>
         </div>
         <div className="flex items-center justify-end gap-8">
-          <span className="text-muted-foreground">Total</span>
+          <span className="text-muted-foreground">Amount Before Tax</span>
           <strong>{formatAmount(grandTotal)}</strong>
         </div>
         <div className="flex items-center justify-end gap-8">
@@ -753,7 +754,7 @@ export function PurchaseOrderLinesTable({
           <strong>{formatAmount(totalTaxAmount)}</strong>
         </div>
         <div className="col-span-2 flex items-center justify-end gap-8 border-t pt-1 max-md:col-span-1">
-          <span className="font-semibold text-muted-foreground">Total</span>
+          <span className="font-semibold text-muted-foreground">Amount After Tax</span>
           <strong className="text-base text-emerald-600">{formatAmount(finalTotal)}</strong>
         </div>
       </div>

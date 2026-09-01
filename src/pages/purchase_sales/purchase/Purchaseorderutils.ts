@@ -229,11 +229,13 @@ export async function fetchPurchaseOrderDetail(
 }
 
 export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: PODocType) {
-  const refDocNo =
-    docType === "GRN"
-      ? form.po_doc_no
-      : docType === "PIN"
-        ? text(form.grn_doc_no)
+ const refDocNo =
+  docType === "GRN"
+    ? form.po_doc_no
+    : docType === "PIN"
+      ? text(form.grn_doc_no)
+      : docType === "LPO"
+        ? form.ref_no
         : undefined;
 
   console.log("REF DOC NO:", refDocNo);
@@ -375,6 +377,10 @@ export function lineDiscPrice(row: PurchaseOrderLineRow) {
   return row.unit_price *  (row.disc_percent / 100);
 }
 
+export function DiscPrice(row: PurchaseOrderLineRow) {
+  return computePQuantity(row) * lineDiscPrice(row);
+}
+
 export function lineDiscPoPrice(row: PurchaseOrderLineRow) {
   return (row.porder_unit_price ?? 0)  * ((row.porder_disc_percent ?? 0) / 100);
 }
@@ -437,6 +443,30 @@ export function LcurrDisAmount(row: PurchaseOrderLineRow, ex_rate?: number) {
   return lineLcurrAmount(row, ex_rate) + taxLcurrAmount(row, ex_rate);
 }
 
+export function Totalunitprice(row: PurchaseOrderLineRow) {
+  return row.unit_price *  computeQuantity(row);
+}
+
+export function TotalUnitPrice(rows: PurchaseOrderLineRow[]) {
+  return rows.reduce((total, row) => {
+    return total + Totalunitprice(row);
+  }, 0);
+}
+
+export function DiscAmountPercentage(
+  form: PurchaseOrderForm,
+  rows: PurchaseOrderLineRow[]
+) {
+  if (Number(form.disc_hdr_price) > 0) {
+    const total = TotalUnitPrice(rows);
+
+    if (total === 0) return 0;
+
+    return Number(((Number(form.disc_hdr_price) / total) * 100).toFixed(6));
+  }
+
+  return Number(form.disc_hdr_percent || 0);
+}
 
 // buildDetailsPayload — use computed values instead of stale row.qty / row.lcur_amount
 export function buildDetailsPayload(
