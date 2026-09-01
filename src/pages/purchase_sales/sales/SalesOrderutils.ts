@@ -56,6 +56,7 @@ export const emptyLineRow = (divCode: string): any => ({
   uppp: 0,
   quantity: 0,
   ex_rate: 1,
+  serial_no:0
 });
 
 export function emptyForm(editor: PurchaseOrderEditorState): PurchaseOrderForm {
@@ -235,12 +236,12 @@ export async function fetchSalesOrderDetail(
 export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: SODocType) {
   const refDocNo =
     docType === "SDN"
-      ? numberOrZero(form.so_doc_no)
+      ? form.so_doc_no
       : docType === "SIN"
         ? text(form.sdn_doc_no)
         : undefined;
   return {
-    doc_no: numberOrZero(form.doc_no) || undefined,
+    doc_no: form.doc_no || undefined,
     doc_type: docType,
     doc_date: form.doc_date,
     ref_no: form.ref_no,
@@ -416,8 +417,12 @@ export function linePOAmount(row: SalesOrderLineRow) {
 
 // Net = gross - discount (single subtraction, no double-counting)
 export function lineNetAmount(row: SalesOrderLineRow) {
-  return lineAmount(row) - lineDiscPrice(row);
+  return lineAmount(row);
 }
+
+// export function lineNetAmount(row: SalesOrderLineRow) {
+//   return lineAmount(row) - lineDiscPrice(row);
+// }
 
 export function lineNetPOAmount(row: SalesOrderLineRow) {
   return linePOAmount(row) - lineDiscPoPrice(row);
@@ -450,9 +455,8 @@ export function taxLcurrpoAmount(row: SalesOrderLineRow, ex_rate?: number) {
 
 }
 
-export function LcurrDisAmount(row: SalesOrderLineRow) {
-  return lineLcurrAmount(row) + taxLcurrAmount(row)
-
+export function LcurrDisAmount(row: SalesOrderLineRow, ex_rate?: number) {
+  return lineLcurrAmount(row, ex_rate) + taxLcurrAmount(row, ex_rate);
 }
 
 // buildDetailsPayload — uses computed values
@@ -496,7 +500,7 @@ export function buildDetailsPayload(rows: SalesOrderLineRow[], ex_rate?: number)
 
     tax_lcur_amount: taxLcurrAmount(row, ex_rate),
 
-    lcur_amount_disc: row.lcur_amount_disc,
+    lcur_amount_disc: LcurrDisAmount(row),
 
     tx_compnt_amt_1: lineTaxAmount(row),
     tx_compnt_perc_1: row.tx_compnt_perc_1,

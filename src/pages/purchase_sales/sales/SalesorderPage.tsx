@@ -1,7 +1,7 @@
 import { Download, Edit2, Plus, Printer, RefreshCw } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { useEffect, useMemo, useState } from "react";
-import { Division, getDivisions } from "../../../api/transactions";
+import { Division, getDivisions, getSoOrderReportExcel, getSOrderReportHtml } from "../../../api/transactions";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
@@ -85,6 +85,8 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
   const [cancelTarget, setCancelTarget] = useState<SalesOrderRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [printLoading, setPrintLoading] = useState(false);
+const [printReportHtml, setPrintReportHtml] = useState<string | null>(null);
 
   const loadLookups = async () => {
     const divisionData = await getDivisions();
@@ -116,6 +118,38 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
 
     return response as unknown as SalesOrderRow[];
   };
+
+
+
+
+  const handlePrintSalesOrder = async (row: SalesOrderRow) => {
+  setPrintLoading(true);
+  setPrintReportHtml(null);
+  try {
+    const html = await getSOrderReportHtml({
+      company_code: user?.company_code,
+      doc_type: row.doc_type,
+      doc_no: row.doc_no,
+    });
+    setPrintReportHtml(html);
+  } catch (error) {
+    setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to load report" });
+  } finally {
+    setPrintLoading(false);
+  }
+};
+
+const handleExportSalesOrder = async (row: SalesOrderRow) => {
+  try {
+    await getSoOrderReportExcel({
+      company_code: user?.company_code,
+      doc_type: row.doc_type,
+      doc_no: row.doc_no,
+    });
+  } catch (error) {
+    setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to export report" });
+  }
+};
 
   useEffect(() => {
   if (approvalLevel === 0 && !["PENDING", "CLOSED", "CANCELED"].includes(tab)) {
@@ -188,12 +222,12 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
           <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original as any })} title="Edit">
             <Edit2 size={15} />
           </Button>
-          <Button size="icon" variant="ghost" title="Print / PDF">
-            <Printer size={15} />
-          </Button>
-          <Button size="icon" variant="ghost" title="Excel">
-            <Download size={15} />
-          </Button>
+         <Button size="icon" variant="ghost" title="Print / PDF" onClick={() => void handlePrintSalesOrder(row.original)}>
+  <Printer size={15} />
+</Button>
+<Button size="icon" variant="ghost" title="Excel" onClick={() => void handleExportSalesOrder(row.original)}>
+  <Download size={15} />
+</Button>
         </div>
       ),
     },
@@ -321,6 +355,42 @@ export function SalesOrderPage({ onClose }: { onClose?: () => void } = {}) {
           ))}
         </div>
       </Dialog>
+
+
+
+          <Dialog
+  open={printLoading || !!printReportHtml}
+  title="Sales Order Print"
+  description="Preview and print the sales order document."
+  onClose={() => setPrintReportHtml(null)}
+  footer={
+    <>
+      <Button
+        variant="outline"
+        onClick={() => {
+          const iframe = document.getElementById("so-print-frame") as HTMLIFrameElement | null;
+          iframe?.contentWindow?.print();
+        }}
+        disabled={!printReportHtml}
+      >
+        Print
+      </Button>
+      <Button variant="outline" onClick={() => setPrintReportHtml(null)}>Close</Button>
+    </>
+  }
+>
+  {printLoading && <p className="p-4 text-sm text-muted-foreground">Loading report…</p>}
+  {printReportHtml && (
+    <iframe
+      id="so-print-frame"
+      title="Sales Order Report"
+      srcDoc={printReportHtml}
+      className="h-[70vh] w-full rounded-md border"
+    />
+  )}
+</Dialog>
+
+
     </section>
   );
 }
