@@ -16,6 +16,8 @@ import {
   ClipboardCheck,
   ClipboardList,
   FileBarChart,
+  FileCheck2,
+  FileQuestion,
   FileText,
   FolderCog,
   Globe2,
@@ -388,10 +390,15 @@ function MenuIcon({ item, level, siblingIndex, className }: { item: MenuNode; le
 
 function getMenuIcon(item: MenuNode): LucideIcon {
   const text = `${item.title || ""} ${item.url_path || ""}`.toLowerCase();
+  // Match specific freight operations before the generic "freight" rule so
+  // neighbouring menu entries do not all receive the same ship icon.
   if (text.includes("freight report")) return FileBarChart;
-  if (text.includes("freight air") || text.includes("airline") || text.includes("tariff")) return Plane;
-  if (text.includes("freight sea") || text.includes("vessel")) return Ship;
-  if (text.includes("freight road")) return Truck;
+  if (text.includes("request for quotation") || text.includes("request quotation") || text.includes("request_quote") || text.includes("rfq")) return FileQuestion;
+  if (text.includes("quotation")) return FileCheck2;
+  if (text.includes("enquiry") || text.includes("inquiry")) return ClipboardList;
+  if (text.includes("freight air") || text.includes("airline") || text.includes("tariff") || /^air\b/.test(text)) return Plane;
+  if (text.includes("freight sea") || text.includes("vessel") || /^sea\b/.test(text)) return Ship;
+  if (text.includes("freight road") || /^road\b/.test(text)) return Truck;
   if (text.includes("freight") || text.includes("rfq") || text.includes("quotation")) return Ship;
   if (text.includes("country")) return Globe2;
   if (text.includes("division")) return Building2;
