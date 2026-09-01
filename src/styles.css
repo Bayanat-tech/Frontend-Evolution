@@ -2676,6 +2676,300 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   gap: 5px;
 }
 
+/* Shared Freight report language: one consistent panel across every report. */
+.freight-report-screen {
+  width: 100%;
+  padding: 8px 10px 24px;
+  font-family: var(--app-font-family);
+}
+
+.freight-report-card {
+  overflow: hidden;
+  border: 1px solid #9aa9bb;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.12);
+}
+
+.freight-report-titlebar {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  border-bottom: 1px solid #aeb9c7;
+}
+
+.freight-report-titlebar h1 {
+  margin: 0;
+  color: #172033;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.freight-report-title-dot {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border-radius: 999px;
+  background: #00449b;
+}
+
+.freight-report-title-actions,
+.freight-report-summary {
+  display: none !important;
+}
+
+.freight-report-filter-heading {
+  min-height: 78px;
+  margin: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #cbd3dd;
+}
+
+.freight-report-filter-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #172033;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.freight-report-filter-title span {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #0754a6;
+  background: #eaf1fa;
+}
+
+.freight-report-filter-heading > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  padding: 6px;
+  color: #65758a;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.freight-report-fields {
+  padding: 24px !important;
+}
+
+.freight-report-card label {
+  color: #61748d;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.freight-report-card input,
+.freight-report-card select {
+  min-height: 38px;
+  border-color: #aebdce;
+  border-radius: 10px;
+  background: #f4f7fb;
+  color: #172033;
+  font-size: 13px;
+  box-shadow: none;
+}
+
+.freight-report-search,
+.freight-report-advanced {
+  margin: 0 24px;
+  padding: 18px 0 !important;
+  background: #fff !important;
+}
+
+.freight-report-actions {
+  min-height: 74px;
+  margin: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  border-top: 1px solid #cbd3dd;
+}
+
+.freight-report-actions button {
+  min-height: 42px;
+  border-radius: 12px;
+  padding-inline: 20px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.freight-report-actions button:first-child {
+  min-width: 168px;
+  background: #00449b;
+  box-shadow: 0 3px 6px rgba(0, 68, 155, 0.2);
+}
+
+@media (max-width: 768px) {
+  .freight-report-screen { padding: 6px; }
+  .freight-report-titlebar { padding-inline: 14px; }
+  .freight-report-filter-heading,
+  .freight-report-search,
+  .freight-report-advanced,
+  .freight-report-actions { margin-inline: 14px; }
+  .freight-report-fields { padding: 16px 14px !important; }
+  .freight-report-actions { flex-wrap: wrap; justify-content: stretch; padding-block: 12px; }
+  .freight-report-actions button { flex: 1 1 auto; }
+}
+
+/* Freight Enquiry pilot: transaction-style panels from the supplied reference. */
+.freight-enquiry-list-screen,
+.freight-enquiry-editor {
+  --enquiry-blue: #00449b;
+  --enquiry-border: #aab7c8;
+  --enquiry-field: #f4f7fb;
+  font-family: var(--app-font-family);
+}
+
+.freight-enquiry-list-screen > div:first-child,
+.freight-enquiry-editor > div:first-child,
+.freight-enquiry-editor .freight-form-card,
+.freight-enquiry-editor .freight-tabs-shell,
+.freight-enquiry-editor .freight-panel {
+  border-color: var(--enquiry-border) !important;
+  border-radius: 12px !important;
+  background: #fff;
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.09) !important;
+}
+
+.freight-enquiry-list-screen > div:first-child,
+.freight-enquiry-editor > div:first-child {
+  min-height: 48px;
+  padding: 7px 12px !important;
+}
+
+.freight-enquiry-list-screen h1,
+.freight-enquiry-editor h1 {
+  color: #111827 !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+}
+
+.freight-enquiry-editor .freight-form-card {
+  padding: 9px !important;
+}
+
+.freight-enquiry-editor .freight-tabs-list {
+  min-height: 38px;
+  gap: 0 !important;
+  padding: 0 10px !important;
+  border-radius: 12px 12px 0 0;
+}
+
+.freight-enquiry-editor .freight-tabs-list > button {
+  min-height: 38px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding-inline: 14px;
+  color: #60728a;
+  background: transparent;
+  box-shadow: none;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.freight-enquiry-editor .freight-tabs-list > button.ui-button-default {
+  border-bottom-color: var(--enquiry-blue);
+  color: var(--enquiry-blue);
+  background: #edf4fc;
+}
+
+.freight-enquiry-editor .freight-tabs-panel {
+  border-top-color: var(--enquiry-border) !important;
+  background: #fff;
+}
+
+.freight-enquiry-editor .freight-panel-title {
+  min-height: 38px;
+  padding: 6px 9px !important;
+  border-bottom-color: #c7d1de !important;
+  background: #f5f8fc !important;
+}
+
+.freight-enquiry-editor .freight-panel-title h3 {
+  color: #172033 !important;
+  font-size: 11px !important;
+  font-weight: 750 !important;
+}
+
+.freight-enquiry-editor .freight-panel-title > div > span {
+  color: #fff !important;
+  background: var(--enquiry-blue) !important;
+}
+
+.freight-enquiry-editor .freight-panel-body {
+  padding: 9px !important;
+}
+
+.freight-enquiry-editor :where(
+  input,
+  select,
+  textarea,
+  .ui-input,
+  .ui-select,
+  .ui-textarea,
+  .lookup-field-trigger,
+  button[role="combobox"]
+) {
+  border-color: #b5c2d2 !important;
+  border-radius: 8px !important;
+  background-color: var(--enquiry-field) !important;
+  color: #172033 !important;
+  box-shadow: none !important;
+}
+
+.freight-enquiry-editor :where(
+  input,
+  select,
+  textarea,
+  .ui-input,
+  .ui-select,
+  .ui-textarea,
+  .lookup-field-trigger,
+  button[role="combobox"]
+):focus {
+  border-color: var(--enquiry-blue) !important;
+  box-shadow: 0 0 0 2px rgba(0, 68, 155, 0.11) !important;
+}
+
+.freight-enquiry-editor table thead tr {
+  background: var(--enquiry-blue) !important;
+  color: #fff !important;
+}
+
+.freight-enquiry-editor table thead th {
+  border-color: rgba(255, 255, 255, 0.38) !important;
+  color: #fff !important;
+}
+
+.freight-enquiry-editor .ui-button-default,
+.freight-enquiry-list-screen .ui-button-default {
+  background: var(--enquiry-blue);
+  color: #fff;
+}
+
+.freight-enquiry-editor .ui-button-outline,
+.freight-enquiry-list-screen .ui-button-outline {
+  border-color: #aab7c8;
+  background: #fff;
+}
+
 .freight-ops-toolbar {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -9991,4 +10285,200 @@ table .lookup-field-trigger,
   min-height: 28px !important;
   height: 28px !important;
   border-radius: 6px !important;
+}
+
+/* Keep the Enquiry pilot theme authoritative over legacy Freight overrides. */
+.freight-enquiry-editor :where(input, select, textarea, .ui-input, .ui-select, .ui-textarea, .lookup-field-trigger, button[role="combobox"]) {
+  border-color: #b5c2d2 !important;
+  border-radius: 8px !important;
+  background-color: #f4f7fb !important;
+  color: #172033 !important;
+}
+
+.freight-enquiry-editor :where(input, select, textarea, .ui-input, .ui-select, .ui-textarea, .lookup-field-trigger, button[role="combobox"]):focus,
+.freight-enquiry-editor .lookup-field-trigger:focus-within {
+  border-color: #00449b !important;
+  background-color: #fff !important;
+  box-shadow: 0 0 0 2px rgba(0, 68, 155, 0.11) !important;
+}
+
+/* Unified Freight workspace theme — scoped so other application modules stay unchanged. */
+.freight-workspace-ui {
+  --freight-ui-blue: #00449b;
+  --freight-ui-blue-dark: #00377f;
+  --freight-ui-border: #aebaca;
+  --freight-ui-border-soft: #cbd5e1;
+  --freight-ui-field: #f4f7fb;
+  --freight-ui-text: #172033;
+  --freight-ui-muted: #64748b;
+  font-family: var(--app-font-family);
+}
+
+.freight-workspace-ui :where(.rounded-md.border.bg-card, .freight-form-card, .freight-tabs-shell, .freight-panel, .data-table-shell) {
+  border-color: var(--freight-ui-border) !important;
+  border-radius: 11px !important;
+  background: #fff;
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.08) !important;
+}
+
+.freight-workspace-ui :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea, .ui-input, .ui-select, .ui-textarea, .lookup-field-trigger, button[role="combobox"]) {
+  border-color: #b7c3d2 !important;
+  border-radius: 8px !important;
+  background-color: var(--freight-ui-field) !important;
+  color: var(--freight-ui-text) !important;
+  font-family: var(--app-font-family) !important;
+  font-size: 12px !important;
+  box-shadow: none !important;
+}
+
+.freight-workspace-ui :where(input:not([type="checkbox"]):not([type="radio"]), select, .ui-input, .ui-select, .lookup-field-trigger, button[role="combobox"]) {
+  min-height: 32px;
+}
+
+.freight-workspace-ui :where(input, select, textarea, .ui-input, .ui-select, .ui-textarea, .lookup-field-trigger, button[role="combobox"]):focus,
+.freight-workspace-ui .lookup-field-trigger:focus-within {
+  border-color: var(--freight-ui-blue) !important;
+  background-color: #fff !important;
+  box-shadow: 0 0 0 2px rgba(0, 68, 155, 0.12) !important;
+  outline: 0 !important;
+}
+
+.freight-workspace-ui :where(input[type="date"], input[type="datetime-local"], input[type="month"]) {
+  color-scheme: light;
+  padding-right: 8px;
+}
+
+.freight-workspace-ui :where(input[type="date"], input[type="datetime-local"], input[type="month"])::-webkit-calendar-picker-indicator {
+  width: 15px;
+  height: 15px;
+  padding: 3px;
+  border-radius: 5px;
+  cursor: pointer;
+  opacity: 0.62;
+}
+
+.freight-workspace-ui :where(label, .freight-field-label, .freight-compact-label) {
+  color: #53677f !important;
+  font-family: var(--app-font-family) !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+}
+
+.freight-workspace-ui :where(.ui-button, button.ui-button) {
+  border-radius: 9px;
+  font-family: var(--app-font-family);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.freight-workspace-ui :where(.ui-button-default, .ui-button-primary) {
+  border-color: var(--freight-ui-blue) !important;
+  color: #fff !important;
+  background: var(--freight-ui-blue) !important;
+  box-shadow: 0 2px 4px rgba(0, 68, 155, 0.18);
+}
+
+.freight-workspace-ui :where(.ui-button-default, .ui-button-primary):hover {
+  background: var(--freight-ui-blue-dark) !important;
+}
+
+.freight-workspace-ui .ui-button-outline {
+  border-color: var(--freight-ui-border) !important;
+  color: var(--freight-ui-text) !important;
+  background: #fff !important;
+}
+
+.freight-workspace-ui :where(.freight-tabs-list, [role="tablist"]) {
+  min-height: 38px;
+  gap: 0 !important;
+  padding: 0 10px !important;
+  background: #fff;
+}
+
+.freight-workspace-ui :where(.freight-tabs-list > button, [role="tab"]) {
+  min-height: 38px;
+  border: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  padding-inline: 13px;
+  color: #60728a !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.freight-workspace-ui :where(.freight-tabs-list > button.ui-button-default, [role="tab"][aria-selected="true"], [role="tab"].active) {
+  border-bottom-color: var(--freight-ui-blue) !important;
+  color: var(--freight-ui-blue) !important;
+  background: #edf4fc !important;
+}
+
+.freight-workspace-ui :where(.freight-panel-title, .freight-info-header, .card-header) {
+  min-height: 38px;
+  border-bottom-color: var(--freight-ui-border-soft) !important;
+  background: #f5f8fc !important;
+  color: var(--freight-ui-text) !important;
+}
+
+.freight-workspace-ui :where(table thead tr, .data-table-head-row) {
+  background: var(--freight-ui-blue) !important;
+  color: #fff !important;
+}
+
+.freight-workspace-ui :where(table thead th, .data-table-head-cell) {
+  border-color: rgba(255, 255, 255, 0.38) !important;
+  background: var(--freight-ui-blue) !important;
+  color: #fff !important;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.025em;
+}
+
+/* DataTable pins its first and last columns with bg-white. Header cells must
+   stay blue; only pinned body cells should remain white. */
+.freight-workspace-ui .data-table-scroll thead,
+.freight-workspace-ui .data-table-scroll thead tr,
+.freight-workspace-ui .data-table-scroll thead th,
+.freight-workspace-ui .data-table-scroll thead th.sticky,
+.freight-workspace-ui .data-table-scroll thead .bg-white {
+  background-color: var(--freight-ui-blue) !important;
+  color: #fff !important;
+}
+
+.freight-workspace-ui .data-table-scroll thead th:first-child {
+  border-top-left-radius: 0;
+}
+
+.freight-workspace-ui .data-table-scroll thead th:last-child {
+  border-top-right-radius: 0;
+}
+
+.freight-workspace-ui .data-table-scroll thead th :where(button, svg) {
+  color: #d8e6f7 !important;
+}
+
+.freight-workspace-ui :where(table tbody tr):hover {
+  background: #f1f6fc;
+}
+
+.freight-workspace-ui :where(input[type="checkbox"], input[type="radio"]) {
+  accent-color: var(--freight-ui-blue);
+}
+
+.freight-workspace-ui :where(.badge, [class*="status-badge"]) {
+  border-radius: 7px;
+  font-family: var(--app-font-family);
+}
+
+@media (max-width: 768px) {
+  .freight-workspace-ui :where(.freight-tabs-list, [role="tablist"]) {
+    overflow-x: auto;
+    padding-inline: 6px !important;
+  }
+
+  .freight-workspace-ui :where(.freight-tabs-list > button, [role="tab"]) {
+    flex: 0 0 auto;
+    padding-inline: 10px;
+  }
 }

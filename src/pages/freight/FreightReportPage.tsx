@@ -486,7 +486,6 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
   const userRecord = (user || {}) as Record<string, unknown>;
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
   const config = reportConfigs[reportKey];
-  const Icon = config.icon;
   const [filters, setFilters] = useState<ReportFilters>(emptyFilters);
   const [principalText, setPrincipalText] = useState("");
   const [principalFromText, setPrincipalFromText] = useState("");
@@ -549,19 +548,11 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
   }
 
   return (
-    <section className="freight-ui-standard grid gap-3">
-      <div className="rounded-md border bg-card shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-md bg-primary/10 text-primary">
-              <Icon size={20} />
-            </span>
-            <div className="min-w-0">
-              <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary"></p>
-              <h1 className="m-0 truncate text-xl font-semibold leading-tight text-foreground">{config.title}</h1>
-              <p className="m-0 text-xs text-muted-foreground">{config.subtitle}</p>
-            </div>
-          </div>
+    <section className="freight-ui-standard freight-report-screen">
+      <div className="freight-report-card">
+        <div className="freight-report-titlebar">
+          <h1>{config.title}</h1>
+          <span className="freight-report-title-dot" aria-hidden="true" />
           {/* <div className="flex flex-wrap items-center gap-2">
             <SummaryBadge label="Records" value={String(rows.length)} />
             {totals.map((item) => <SummaryBadge key={item.label} label={item.label} value={formatAmount(item.value)} strong />)}
@@ -606,7 +597,7 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
           )}
         </div> */}
  
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="freight-report-title-actions flex flex-wrap items-center gap-2">
             <SummaryBadge label="Records" value={String(rows.length)} />
             {totals.map((item) => <SummaryBadge key={item.label} label={item.label} value={formatAmount(item.value)} strong />)}
             <Button type="button" variant="outline" size="sm" onClick={printReport} disabled={!rows.length}>
@@ -624,14 +615,19 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 border-b bg-muted/10 p-3 md:grid-cols-4">
+        <div className="freight-report-filter-heading">
+          <div className="freight-report-filter-title"><span><Filter size={16} /></span>Report Filters</div>
+          <button type="button" onClick={resetFilters}><RefreshCw size={14} /> Clear All</button>
+        </div>
+
+        <div className="freight-report-summary grid grid-cols-2 gap-2 border-b bg-muted/10 p-3 md:grid-cols-4">
           <SummaryStripItem icon={CalendarDays} label="Period" value={`${toDisplayDate(filters.from_date) || "Start"} – ${toDisplayDate(filters.to_date) || "Today"}`} />
           <SummaryStripItem icon={UserRound} label="Principal" value={principalDisplayText || "All principals"} />
           <SummaryStripItem icon={Ship} label="Movement" value={`${optionLabel(modeOptions, filters.transport_mode)} / ${optionLabel(jobTypeOptions, filters.job_type)}`} />
           <SummaryStripItem icon={Filter} label="Status" value={visibleFilters.includes("status") ? optionLabel(statusOptions, filters.status) : "Not applicable"} />
         </div>
 
-        <div className="grid gap-2 p-3 xl:grid-cols-[1fr_1fr_1.35fr_0.9fr_0.8fr_0.8fr_0.85fr_auto]">
+        <div className="freight-report-fields grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-4">
           {visibleFilters.includes("date") && (
             <>
               <Field label="From"><DateField value={filters.from_date} onChange={(value) => setFilter(setFilters, "from_date", value)} /></Field>
@@ -659,18 +655,10 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
           {visibleFilters.includes("mode") && <Field label="Mode"><Select value={filters.transport_mode} options={modeOptions} onChange={(value) => setFilter(setFilters, "transport_mode", value)} /></Field>}
           {visibleFilters.includes("type") && <Field label="Type"><Select value={filters.job_type} options={jobTypeOptions} onChange={(value) => setFilter(setFilters, "job_type", value)} /></Field>}
           {visibleFilters.includes("status") && <Field label="Status"><Select value={filters.status} options={statusOptions} onChange={(value) => setFilter(setFilters, "status", value)} /></Field>}
-          <div className="flex items-end gap-2">
-            <Button type="button" size="sm" className="h-8" onClick={runReport} disabled={loading}>
-              {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} Run
-            </Button>
-            <Button type="button" variant="outline" size="icon" className="h-8 w-8" onClick={resetFilters} title="Reset">
-              <RefreshCw size={14} />
-            </Button>
-          </div>
         </div>
 
         {visibleFilters.includes("search") && (
-          <div className="border-t bg-muted/20 p-3">
+          <div className="freight-report-search border-t bg-muted/20 p-3">
             <Field label="Search">
               <Input className="h-8" value={filters.search} onChange={(event) => setFilter(setFilters, "search", event.target.value)} placeholder="Document, job, principal..." />
             </Field>
@@ -685,6 +673,24 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
             onPrincipalToSelect={(row) => setPrincipalToText(row ? lookupText(row, "PRIN_CODE") : "")}
    />
         )}
+
+        <div className="freight-report-actions">
+          <Button type="button" size="sm" onClick={runReport} disabled={loading}>
+            {loading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />} Generate Report
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={printReport} disabled={!rows.length}>
+            <Printer size={15} /> Print
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!rows.length}
+            onClick={() => exportReportExcel(config.title, reportHtml(config, companyCode, userName, filters, principalDisplayText, rows, totals, false))}
+          >
+            <Download size={15} /> Excel Format
+          </Button>
+        </div>
       </div>
 
       {/* <div className="grid gap-2 md:grid-cols-4">
@@ -731,7 +737,7 @@ function AdvancedReportFilters({
 }) {
   const items = config.advancedFilters || [];
   return (
-    <div className="border-t bg-background p-3">
+    <div className="freight-report-advanced border-t bg-background p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Advanced Filters</div>

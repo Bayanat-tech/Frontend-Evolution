@@ -1119,7 +1119,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
   if (view === "list") {
     return (
-      <section className="grid gap-2.5">
+      <section className="freight-enquiry-list-screen grid gap-2.5">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card px-4 py-3 shadow-sm">
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
@@ -1198,7 +1198,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
   return (
     <>
-    <form className="freight-dense-form freight-ui-standard" onSubmit={saveEnquiry}>
+    <form className="freight-dense-form freight-ui-standard freight-enquiry-editor" onSubmit={saveEnquiry}>
       <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
