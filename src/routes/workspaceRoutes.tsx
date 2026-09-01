@@ -202,7 +202,9 @@ import LeaveSlapPage from "../pages/hr/LeaveSlab";
 import TravelFare from "../pages/hr/TravelFare";
 import { HrEmpLanguagePage } from "../pages/hr/HrEmpLanguageSkill";
 import ConsolidatePayUnitPage from "../pages/hr/consolidate_pay_unit/ConsolidatePayUnitPage";
+import { EmployeeTransferPage } from "../pages/hr/Employeetransferpage";
 import PayrollProcessingPage from "../pages/hr/payroll_processing/PayrollProcessingPage";
+
 
  type WorkspaceRouteContext = {
   pathname: string;
@@ -381,6 +383,13 @@ export const workspaceRoutes: WorkspaceRoute[] = [
     match: ({pathname})=> pathname.toLocaleLowerCase().includes("/hcm/hr/employee/employee_master"),
     element: () => <EmployeeMasterPage />
   },
+
+  {
+  name: "Employee Transfer",
+  match: (context: WorkspaceRouteContext) => isHrEmployeeTransferRoute(context),
+  element: () => <EmployeeTransferPage />
+},
+
   {
     name: "HR Employee Profile",
     match: (context) => isHrRoute(context) && isHrEmployeeProfileRoute(context),
@@ -2665,6 +2674,12 @@ function isHrLeaveResumptionRoute(context: WorkspaceRouteContext) {
 function isHrEmployeeProfileRoute(context: WorkspaceRouteContext) {
   const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
   return compact.includes("employeeprofile") || compact.includes("employeemaster") || compact.includes("hremployeeprofile");
+}
+
+
+function isHrEmployeeTransferRoute(context: WorkspaceRouteContext) {
+  const compact = getHrMatchText(context).replace(/[^a-z0-9]/g, "");
+  return compact.includes("employeetransfer") || compact.includes("employeetransfers") || compact.includes("hremployeetransfer");
 }
 
 // function isHrPayrollAccountSetupRoute(context: WorkspaceRouteContext) {
