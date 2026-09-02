@@ -113,8 +113,10 @@ export function SalesInvoiceHeaderForm({
                                 label="DN No"
                                 compact
                                 placeholder="DN No"
-                                value={String(editMode ? form.doc_no ?? "" : form.sdn_doc_no ?? "")}
-                                displayValue={String(editMode ? form.doc_no ?? "" : form.sdn_doc_no ?? "")}
+                                // value={String(editMode ? form.doc_no ?? "" : form.sdn_doc_no ?? "")}
+                                // displayValue={String(editMode ? form.doc_no ?? "" : form.sdn_doc_no ?? "")}
+                                value={String(form.sdn_doc_no ?? "")}
+                                displayValue={String(form.sdn_doc_no ?? "")}
                                 columns={[
                                     { field: "doc_no", header: "SDN No" },
                                     { field: "ac_code", header: "A/c Code" },
@@ -135,9 +137,10 @@ export function SalesInvoiceHeaderForm({
                                     // Populate header fields immediately from the selected row
                                     setForm((current) => ({
                                         ...current,
-                                        ...(editMode
-                                            ? { doc_no: value }
-                                            : { sdn_doc_no: value }),
+                                        // ...(editMode
+                                        //     ? { doc_no: value }
+                                        //     : { sdn_doc_no: value }),
+                                        sdn_doc_no: value,
                                         doc_date: toDateInputValue(getLookupValue(row || {}, "doc_date")),
                                         so_doc_date: toDateInputValue(getLookupValue(row || {}, "so_doc_date")),
                                         so_doc_no: text(getLookupValue(row || {}, "so_doc_no")),
@@ -152,8 +155,8 @@ export function SalesInvoiceHeaderForm({
                                         curr_name: text(getLookupValue(row || {}, "curr_name")),
                                         ex_rate: numberOrZero(getLookupValue(row || {}, "ex_rate")),
                                         so_other_expense_cost: numberOrZero(getLookupValue(row || {}, "so_other_expense_cost")),
-                                        so_disc_hdr_percent: numberOrZero(getLookupValue(row || {}, "so_disc_hdr_percent")),
-                                        so_disc_hdr_price: numberOrZero(getLookupValue(row || {}, "so_disc_hdr_price")),
+                                        disc_hdr_percent: numberOrZero(getLookupValue(row || {}, "disc_hdr_percent")),
+                                        disc_hdr_price: numberOrZero(getLookupValue(row || {}, "disc_hdr_price")),
                                         so_payment_terms: text(getLookupValue(row || {}, "so_payment_terms")),
                                         so_credit_period: numberOrZero(getLookupValue(row || {}, "so_credit_period")),
                                         so_due_date: getLookupValue(row || {}, "so_due_date"),
@@ -178,8 +181,10 @@ export function SalesInvoiceHeaderForm({
                                         so_pr_no: text(getLookupValue(row || {}, "so_pr_no")),
                                         so_scope_of_work: text(getLookupValue(row || {}, "so_scope_of_work")),
                                         total_so_amount: numberOrZero(getLookupValue(row || {}, "total_so_amount")),
-                                        si_doc_no:text(getLookupValue(row || {}, "si_doc_no")),
-                                          si_doc_date: toDateInputValue(getLookupValue(row || {}, "si_doc_date")),
+                                        si_doc_no: text(getLookupValue(row || {}, "si_doc_no")),
+                                        si_doc_date: toDateInputValue(getLookupValue(row || {}, "si_doc_date")),
+                                        inv_no: text(getLookupValue(row || {}, "inv_no")),
+                                        inv_date: toDateInputValue(getLookupValue(row || {}, "inv_date")),
 
 
                                     }));
@@ -237,7 +242,7 @@ export function SalesInvoiceHeaderForm({
                                             sorder_required_dt: text(getLookupValue(item, "sorder_required_dt")),
                                             sorder_tx_compnt_1_expmt: text(getLookupValue(item, "sorder_tx_compnt_1_expmt")),
                                             sorder_remarks: text(getLookupValue(item, "sorder_remarks")),
-                                             serial_no: numberOrZero(getLookupValue(item, "serial_no")),
+                                            serial_no: numberOrZero(getLookupValue(item, "serial_no")),
 
                                         }));
                                         console.log("Mapped length:", mappedDetails?.length);

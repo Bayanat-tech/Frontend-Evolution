@@ -114,9 +114,10 @@ export function SalesInvoiceEditor({
 
         setForm((current) => ({
           ...current,
-          doc_no: numberOrZero(headerRaw.doc_no || docNo),
+         doc_no: text(headerRaw.si_doc_no || docNo),
           doc_date: toDateInputValue(headerRaw.doc_date) || current.doc_date,
           ref_no: text(headerRaw.quotn_no || current.ref_no),
+          sdn_doc_no: text(headerRaw.doc_no || current.doc_no),
           ref_date: toDateInputValue(headerRaw.quotn_date) || current.ref_date,
           div_code: text(headerRaw.div_code || current.div_code),
           div_name: text(headerRaw.div_name || current.div_name),
@@ -161,8 +162,8 @@ export function SalesInvoiceEditor({
           so_ref_date: text(headerRaw.so_ref_date),
           so_curr_code: text(headerRaw.so_curr_code),
           so_ex_rate: numberOrZero(headerRaw.so_ex_rate),
-          so_disc_hdr_percent: numberOrZero(headerRaw.so_disc_hdr_percent),
-          so_disc_hdr_price: numberOrZero(headerRaw.so_disc_hdr_price),
+          disc_hdr_percent: numberOrZero(headerRaw.disc_hdr_percent),
+          disc_hdr_price: numberOrZero(headerRaw.disc_hdr_price),
           so_payment_terms: text(headerRaw.so_payment_terms),
           so_credit_period: numberOrZero(headerRaw.so_credit_period),
           so_party_name: text(headerRaw.so_party_name),
@@ -182,6 +183,8 @@ export function SalesInvoiceEditor({
           so_buyer: text(headerRaw.so_buyer),
           total_so_amount: numberOrZero(headerRaw.total_so_amount),
           tx_compnt_1_expmt:text(headerRaw.tx_compnt_1_expmt),
+          inv_no: text(headerRaw.inv_no),
+          inv_date: toDateInputValue(headerRaw.inv_date),
 
           pi_doc_no: text(headerRaw.pi_doc_no),
           si_doc_date: toDateInputValue(headerRaw.si_doc_date),

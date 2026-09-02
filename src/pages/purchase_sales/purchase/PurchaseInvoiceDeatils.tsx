@@ -9,7 +9,7 @@ import {
   lineAmount,
   lineDiscPrice,
   lineNetAmount,
-  lineTaxAmount,
+
   numberOrZero,
   text,
   lineLcurrAmount,   // add
@@ -23,6 +23,7 @@ import {
   taxLcurrpoAmount,
   lineTaxpoAmount,
   LcurrDisAmount,
+  lineTaxAmount,
 } from "./Purchaseorderutils";
 import { SODocType } from "../sales/SalesOrdertypes";
 import { Select } from "../../../components/ui/Select";

@@ -149,8 +149,8 @@ export function PurchaseInvoiceHeaderForm({
                                         curr_name: text(getLookupValue(row || {}, "curr_name")),
                                         ex_rate: numberOrZero(getLookupValue(row || {}, "ex_rate")),
                                         po_other_expense_cost: numberOrZero(getLookupValue(row || {}, "po_other_expense_cost")),
-                                        po_disc_hdr_percent: numberOrZero(getLookupValue(row || {}, "po_disc_hdr_percent")),
-                                        po_disc_hdr_price: numberOrZero(getLookupValue(row || {}, "po_disc_hdr_price")),
+                                        disc_hdr_percent: numberOrZero(getLookupValue(row || {}, "disc_hdr_percent")),
+                                        disc_hdr_price: numberOrZero(getLookupValue(row || {}, "disc_hdr_price")),
                                         po_payment_terms: text(getLookupValue(row || {}, "po_payment_terms")),
                                         po_credit_period: numberOrZero(getLookupValue(row || {}, "po_credit_period")),
                                         po_due_date: getLookupValue(row || {}, "po_due_date"),
@@ -174,8 +174,9 @@ export function PurchaseInvoiceHeaderForm({
                                         po_project_name: text(getLookupValue(row || {}, "po_project_name")),
                                         po_pr_no: text(getLookupValue(row || {}, "po_pr_no")),
                                         po_scope_of_work: text(getLookupValue(row || {}, "po_scope_of_work")),
-                                        total_po_amount: numberOrZero(getLookupValue(row || {}, "total_po_amount"))
-
+                                        total_po_amount: numberOrZero(getLookupValue(row || {}, "total_po_amount")),
+                                         inv_no: text(getLookupValue(row || {}, "inv_no")),
+                                         inv_date:toDateInputValue(getLookupValue(row || {}, "inv_date")),
 
                                     }));
 

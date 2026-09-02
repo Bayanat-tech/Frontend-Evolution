@@ -115,9 +115,9 @@ export function SalesInvoiceLinesTable({
 }) {
   const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
   const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
-  const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
-  const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
-  const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
+  const totalAmount = rows.reduce((sum, row) => sum + linePOAmount(row), 0);
+  const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPoPrice(row), 0);
+  const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxpoAmount(row), 0);
   const grandTotal = totalAmount - totalDiscPrice - discAmt;
   const finalTotal = grandTotal + totalTaxAmount;
 
@@ -189,7 +189,6 @@ export function SalesInvoiceLinesTable({
               const quantity = computeQuantity(row);
               const lcurrAmountValue = lineLcurrAmount(row, ex_rate);
               const lcurrAmountPOValue = lineLcurrPOAmount(row, ex_rate);
-              const taxLcurrAmountValue = taxLcurrAmount(row, ex_rate);
               const taxLcurrAmountpoValue = taxLcurrpoAmount(row, ex_rate);
 
               return (
@@ -235,7 +234,7 @@ export function SalesInvoiceLinesTable({
                           p_uom: newPUom,
                           l_uom: newLUom,
                           uppp: newUppp,
-                          unit_price: numberOrZero(getLookupValue(selectedRow || {}, "unit_price")) || row.unit_price,
+                          sorder_unit_price: numberOrZero(getLookupValue(selectedRow || {}, "unit_price")) || row.sorder_unit_price,
                         };
                         const merged = { ...row, ...patch };
                         if (isSameUom(merged)) {
@@ -394,7 +393,7 @@ export function SalesInvoiceLinesTable({
                     />
                   </td>
                   <td className="finance-amount-cell w-28 px-2 py-1">
-                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.0001" value={row.unit_price} onChange={(event) => updateRow(row.id, { unit_price: Number(event.target.value || 0) })} />
+                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.0001" value={row.unit_price} onChange={(event) => updateRow(row.id, {unit_price: Number(event.target.value || 0) })} />
                   </td>
                   <td className="finance-amount-cell px-2 py-1 text-right">
                     {formatAmount(quantity)}
@@ -407,7 +406,7 @@ export function SalesInvoiceLinesTable({
                   <td className="finance-amount-cell px-2 py-1 text-right">{formatAmount(finalRate(row))}</td>
                   <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineAmount(row))}</td>
                   <td className="finance-amount-cell w-32 px-2 py-1 text-right">
-                    {formatAmount(lcurrAmountValue)}
+                    {formatAmount(lineLcurrAmount(row, ex_rate))}
                   </td>
                   <td className="w-40 px-2 py-1">
                     <Select
@@ -415,7 +414,7 @@ export function SalesInvoiceLinesTable({
                       onChange={(event) => {
                         const taxType = event.target.value;
                         const taxPerc = taxType === "S" ? 5 : 0;
-                        {/* FIX #1: call linePOAmount(row), not the bare function reference */ }
+                        {/* Tax should be calculated on the sales order amount (lineAmount), not regular amount */ }
                         const taxAmt = taxType === "S" ? (Number(lineAmount(row)) || 0) * (taxPerc / 100) : 0;
                         updateRow(row.id, {
                           sorder_tx_compnt_1_expmt: taxType,
@@ -434,7 +433,7 @@ export function SalesInvoiceLinesTable({
                     {/* FIX #2: write to sorder_tx_compnt_perc_1, matching the displayed value */}
                     <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.sorder_tx_compnt_perc_1} onChange={(event) => updateRow(row.id, { sorder_tx_compnt_perc_1: Number(event.target.value || 0) })} />
                   </td>
-                  <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineTaxAmount(row))}</td>
+                  <td className="finance-amount-cell w-28 px-2 py-1 text-right">{formatAmount(lineTaxpoAmount(row))}</td>
 
                   <td className="w-32 px-2 py-1">
                     <Input type="date" disabled={headerAndLineDisabled} value={row.sorder_required_dt} onChange={(event) => updateRow(row.id, { sorder_required_dt: event.target.value })} />
@@ -513,7 +512,7 @@ export function SalesInvoiceLinesTable({
                     />
                   </td>
                   <td className="finance-amount-cell w-32 px-2 py-1 text-right">
-                    {formatAmount(taxLcurrAmountValue)}
+                    {formatAmount(taxLcurrAmount(row, ex_rate))}
                   </td>
                   <td className="finance-amount-cell w-32 px-2 py-1 text-right">
                     {formatAmount(lineLcurrAmount(row, ex_rate) + taxLcurrAmount(row, ex_rate))}

@@ -395,7 +395,7 @@ export function lineDiscPrice(row: SalesOrderLineRow) {
 }
 
 export function lineDiscPoPrice(row: SalesOrderLineRow) {
-  return (row.sorder_unit_price ?? 0) * ((row.sorder_disc_percent ?? 0) / 100);
+  return (row.unit_price ?? 0) * ((row.disc_percent ?? 0) / 100);
 }
 
 export function finalRate(row: SalesOrderLineRow) {
@@ -403,7 +403,7 @@ export function finalRate(row: SalesOrderLineRow) {
 }
 
 export function finalPORate(row: SalesOrderLineRow) {
-  return Math.abs(lineDiscPoPrice(row) - (row.sorder_unit_price ?? 0));
+  return Math.abs(lineDiscPoPrice(row) - (row.unit_price ?? 0));
 }
 
 export function lineAmount(row: SalesOrderLineRow) {
@@ -446,7 +446,7 @@ export function lineLcurrPOAmount(row: SalesOrderLineRow, ex_rate?: number) {
 
 
 export function taxLcurrAmount(row: SalesOrderLineRow, ex_rate?: number) {
-  return lineTaxAmount(row) * (ex_rate || 1);
+  return lineTaxpoAmount(row) * (ex_rate || 1);
 
 }
 
