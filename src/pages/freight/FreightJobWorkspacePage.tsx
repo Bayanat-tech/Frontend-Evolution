@@ -1,7 +1,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { ArrowRight, Ban, Bell, BrainCircuit, CheckCircle2, ClipboardList, FileText, Info, PackageCheck, Plane, Plus, ReceiptText, RefreshCw, Search, Ship, Truck, WalletCards } from "lucide-react";
+import { ArrowRight, Ban, Bell,  CheckCircle2, ClipboardList, FileText, Info, PackageCheck, Plane, Plus, ReceiptText, RefreshCw, Search, Ship, Truck, WalletCards } from "lucide-react";
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
@@ -192,7 +192,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           <div>
             <p className="eyebrow">Freight Operations</p>
             <h1 className="m-0 text-xl font-semibold text-foreground">{title}</h1>
-            <p className="mt-0.5 max-w-3xl text-xs text-muted-foreground">Create jobs, complete shipment steps, and close billing follow-up from one compact workspace.</p>
+            {/* <p className="mt-0.5 max-w-3xl text-xs text-muted-foreground">Create jobs, complete shipment steps, and close billing follow-up from one compact workspace.</p> */}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}>
@@ -212,16 +212,17 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
               </Button>
             ))}
           </div>
-          <div className="flex min-w-[280px] flex-1 items-center justify-end gap-2">
-            <div className="freight-job-smart-note">
+          {/* <div className="flex min-w-[280px] flex-1 items-center justify-end gap-2">
+            {/* <div className="freight-job-smart-note">
               <BrainCircuit size={14} className="text-primary" />
               <span>{message || smartAdvice(health)}</span>
-            </div>
-            <div className="relative w-80 max-w-full">
+            </div> */}
+           
+            {/* <div className="relative w-80 max-w-full">
               <Search className="pointer-events-none absolute left-3 top-2.5 text-muted-foreground" size={15} />
               <Input className="h-8 pl-9 text-xs" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search job, principal, reference..." />
             </div>
-          </div>
+          </div>  */}
         </div>
 
         <DataTable
