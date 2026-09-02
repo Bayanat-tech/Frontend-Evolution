@@ -201,6 +201,7 @@ import LeaveSlapPage from "../pages/hr/LeaveSlab";
 import TravelFare from "../pages/hr/TravelFare";
 import { HrEmpLanguagePage } from "../pages/hr/HrEmpLanguageSkill";
 import ConsolidatePayUnitPage from "../pages/hr/consolidate_pay_unit/ConsolidatePayUnitPage";
+import PrRegisterOldPage from "../pages/purchase_sales/Reports/purchase_request_register(old)";
 
  type WorkspaceRouteContext = {
   pathname: string;
@@ -1372,8 +1373,14 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   name: "PO Order Register Report",
   match: ({ pathname }) => isPoOrderRegisterRoute(pathname),
   element: () => <PoOrderRegisterPage />,
-}
+},
 
+
+{
+  name: "Purchase Request Register(old) Report",
+  match: ({ pathname }) => isPurchaseRequestRegisterOldRoute(pathname),
+  element: () => <PrRegisterOldPage />,
+}
 
 
 ];
@@ -1449,6 +1456,13 @@ function isPoOrderRegisterRoute(pathname: string) {
   const normalized = pathname.toLowerCase();
   return normalized.includes(
     "/workspace/purchase_sales/purchase_sales/reports/po_order_register"
+  );
+}
+
+function isPurchaseRequestRegisterOldRoute(pathname: string) {
+  const normalized = pathname.toLowerCase();
+  return normalized.includes(
+    "/workspace/purchase_sales/purchase_sales/reports/purchase_request_register"
   );
 }
 

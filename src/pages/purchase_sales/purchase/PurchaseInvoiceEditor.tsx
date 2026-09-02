@@ -42,6 +42,7 @@ import { RejectDialog } from "./Rejectdialog";
 import { PurchaseInvoiceHeaderForm } from "./PurchaseInvoiceHeader";
 import { PurchaseInvoiceLinesTable } from "./PurchaseInvoiceDeatils";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
+import { PurchaseInvoicePrintDialog } from "./PurchaseInvoiceprintReports";
 
 
 export type { PurchaseOrderEditorState };
@@ -74,6 +75,7 @@ export function PurchaseInvoiceEditor({
   const [sendBackUser, setSendBackUser] = useState("");
   const [sendBackUserName, setSendBackUserName] = useState("");
     const [attachmentOpen, setAttachmentOpen] = useState(false);
+    const [printOpen, setPrintOpen] = useState(false);
   const [sendBackUserLevel, setSendBackUserLevel] = useState<number>(0);
   const [sendBackReason, setSendBackReason] = useState("");
   const [sendBackError, setSendBackError] = useState("");
@@ -385,11 +387,13 @@ export function PurchaseInvoiceEditor({
             <div className="flex items-center gap-2">
               {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
               {form.doc_no && (
-                <>
-                  <Button type="button" variant="secondary"><Printer size={15} /> Print</Button>
-                  <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
-                </>
-              )}
+  <>
+    <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
+      <Printer size={15} /> Print
+    </Button>
+    <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
+  </>
+)}
                 <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
                 <Paperclip size={15} /> Files
               </Button>
@@ -476,7 +480,10 @@ export function PurchaseInvoiceEditor({
               </Button>}
           </div>
           <div className="flex items-center gap-2">
-            <Button aria-label="Print" type="button" variant="outline" size="icon" disabled={actionDisabled}><Printer size={15} /></Button>
+           <Button aria-label="Print" type="button" variant="outline" size="icon"
+  disabled={actionDisabled} onClick={() => setPrintOpen(true)}>
+  <Printer size={15} />
+</Button>
             <Button aria-label="Attachment" type="button" variant="outline" size="icon" disabled={actionDisabled}><Paperclip size={15} /></Button>
             <Button aria-label="Download" type="button" variant="outline" size="icon" disabled={actionDisabled}><Download size={15} /></Button>
             <Button type="button" variant="outline" onClick={onClose}>Close</Button>
@@ -524,6 +531,15 @@ export function PurchaseInvoiceEditor({
         loginId={user?.loginid || ""}
         flowLevel={effectiveFlowLevel}
       />
+
+        <PurchaseInvoicePrintDialog
+        open={printOpen}
+        onClose={() => setPrintOpen(false)}
+        form={form}
+        rows={rows}
+      />
+
+
     </>
   );
 }
