@@ -15,7 +15,7 @@ import {
   Truck,
 } from "lucide-react";
 import { api } from "../../api/client";
-import { freightSelect } from "../../api/freight";
+import { freightSelect, freightTaxCategories } from "../../api/freight";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
@@ -523,10 +523,10 @@ export function FreightJobPage({
                   placeholder="Principal is not selected"
                  />
               <Lookup label="Department" value={job.dept_code} displayValue={job.dept_name} valueField="DEPT_CODE" displayFields={["DEPT_CODE", "DEPT_NAME"]} columns={[{ field: "DEPT_CODE", header: "Code" }, { field: "DEPT_NAME", header: "Department" }, { field: "DIV_CODE", header: "Div" }]} loadOptions={(search) => lookup("freight_department", companyCode, "NULL", "NULL", search)} onChange={(value, row) => setJob((current) => ({ ...current, dept_code: value, div_code: lookupText(row || undefined, "DIV_CODE") || current.div_code }))} required/>
-              <Lookup label="Division" value={job.div_code} displayValue={job.div_name} valueField="DIV_CODE" displayFields={["DIV_CODE", "DIV_NAME"]} columns={[{ field: "DIV_CODE", header: "Code" }, { field: "DIV_NAME", header: "Division" }]} loadOptions={(search) => lookup("freight_division", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "div_code", value)} required />
+              <Lookup label="Division" value={job.div_code} displayValue={job.div_name} valueField="DIV_CODE" displayFields={["DIV_CODE", "DIV_NAME"]} columns={[{ field: "DIV_CODE", header: "Code" }, { field: "DIV_NAME", header: "Division" }]} loadOptions={(search) => lookup("freight_division", companyCode, "NULL", "NULL", search)} onChange={(value) => setJob((current) => ({ ...current, div_code: value, tx_cat_code: current.div_code === value ? current.tx_cat_code : "", tx_cat_name: current.div_code === value ? current.tx_cat_name : "" }))} required />
               <Lookup label="Job Category" value={job.job_category} displayValue={job.job_category_name} valueField="JOB_CATEGORY" displayFields={["JOB_CATEGORY", "JOB_CATEGORY_NAME"]} columns={[{ field: "JOB_CATEGORY", header: "Code" }, { field: "JOB_CATEGORY_NAME", header: "Category" }]} loadOptions={(search) => lookup("freight_job_category", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "job_category", value)} required/>
               <Lookup label="Member Type" value={job.member_type} displayValue={job.member_type_name} valueField="MEMBER_TYPE" displayFields={["MEMBER_TYPE", "MEMBER_TYPE_NAME"]} columns={[{ field: "MEMBER_TYPE", header: "Code" }, { field: "MEMBER_TYPE_NAME", header: "Member Type" }]} loadOptions={(search) => lookup("freight_member_type", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "member_type", value)} />
-              <Lookup label="Tax Category" value={job.tx_cat_code} displayValue={job.tx_cat_name} valueField="TX_CAT_CODE" displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]} columns={[{ field: "TX_CAT_CODE", header: "Code" }, { field: "TX_CAT_NAME", header: "Tax Category" }]} loadOptions={(search) => lookup("freight_tax_category", companyCode, "NULL", "NULL", search)} onChange={(value) => setJobField(setJob, "tx_cat_code", value)} />
+              <Lookup label="Tax Category" value={job.tx_cat_code} displayValue={job.tx_cat_name} valueField="TX_CAT_CODE" displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]} columns={[{ field: "TX_CAT_CODE", header: "Code" }, { field: "TX_CAT_NAME", header: "Tax Category" }]} loadOptions={(search) => freightTaxCategories<LookupRow>(companyCode, job.div_code, search).then((rows) => rows.map(normalizeLookupRow))} onChange={(value, row) => setJob((current) => ({ ...current, tx_cat_code: value, tx_cat_name: lookupText(row || undefined, "TX_CAT_NAME") }))} disabled={!job.div_code} placeholder={job.div_code ? "Select tax category" : "Select division first"} />
               <Field label="Job Class" value={job.job_class} onChange={(value) => setJobField(setJob, "job_class", value)} />
             </div>
           </Panel>

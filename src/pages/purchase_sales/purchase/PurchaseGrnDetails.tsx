@@ -129,11 +129,11 @@ export function PurchaseGrnDetailsTable({
                     <p className="eyebrow m-0">Lines</p>
                     <h3 className="m-0 text-sm font-semibold leading-tight">Purchase Order Lines</h3>
                 </div>
-                <div className="flex items-center gap-2">
+                {/* <div className="flex items-center gap-2">
                     <Button disabled={headerAndLineDisabled} size="sm" type="button" variant="outline" onClick={addRow}>
                         <Plus size={14} /> Add Line
                     </Button>
-                </div>
+                </div> */}
             </div>
             <div className="commercial-lines-scroll max-h-[45vh] overflow-auto">
                 <table className="finance-lines-table w-full min-w-[2600px] text-sm">

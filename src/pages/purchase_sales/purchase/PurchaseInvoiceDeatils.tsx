@@ -22,6 +22,7 @@ import {
   lineNetPOAmount,
   taxLcurrpoAmount,
   lineTaxpoAmount,
+  LcurrDisAmount,
 } from "./Purchaseorderutils";
 import { SODocType } from "../sales/SalesOrdertypes";
 import { Select } from "../../../components/ui/Select";
@@ -131,9 +132,9 @@ export function PurchaseInvoiceLinesTable({
 }) {
   const totalQtyPuom = rows.reduce((sum, row) => sum + (Number(row.qty_puom) || 0), 0);
   const totalQtyLuom = rows.reduce((sum, row) => sum + (Number(row.qty_luom) || 0), 0);
-  const totalAmount = rows.reduce((sum, row) => sum + lineAmount(row), 0);
-  const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPrice(row), 0);
-  const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxAmount(row), 0);
+  const totalAmount = rows.reduce((sum, row) => sum + linePOAmount(row), 0);
+  const totalDiscPrice = rows.reduce((sum, row) => sum + lineDiscPoPrice(row), 0);
+  const totalTaxAmount = rows.reduce((sum, row) => sum + lineTaxpoAmount(row), 0);
   const grandTotal = totalAmount - totalDiscPrice - discAmt;
   const finalTotal = grandTotal + totalTaxAmount;
 
@@ -148,11 +149,11 @@ export function PurchaseInvoiceLinesTable({
           <p className="eyebrow m-0">Lines</p>
           <h3 className="m-0 text-sm font-semibold leading-tight">Purchase Order Lines</h3>
         </div>
-        <div className="flex items-center gap-2">
+        {/* <div className="flex items-center gap-2">
           <Button disabled={headerAndLineDisabled} size="sm" type="button" variant="outline" onClick={addRow}>
             <Plus size={14} /> Add Line
           </Button>
-        </div>
+        </div> */}
       </div>
       <div className="commercial-lines-scroll max-h-[45vh] overflow-auto">
         <table className="finance-lines-table w-full min-w-[2600px] text-sm">
@@ -179,7 +180,7 @@ export function PurchaseInvoiceLinesTable({
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Disc Price</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Unit price Net Amt</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Amount</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Lcurr Amount</th>
+              <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Lcurr Amount Before Tax</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax Type</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax %</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Tax Amount</th>
@@ -189,7 +190,7 @@ export function PurchaseInvoiceLinesTable({
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax Cat</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax code</th>
               <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Tax Lcurr amount</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Lcurr amount Discount</th>
+              <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Lcurr amount After Tax</th>
               <th className="px-2 py-2 text-left w-16" style={plainHeaderStyle}>Action</th>
             </tr>
           </thead>
@@ -531,8 +532,8 @@ export function PurchaseInvoiceLinesTable({
                   <td className="finance-amount-cell w-32 px-2 py-1 text-right">
                     {formatAmount(taxLcurrAmountpoValue)}
                   </td>
-                  <td className="finance-amount-cell w-32 px-2 py-1">
-                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.01" value={row.lcur_amount_disc} onChange={(event) => updateRow(row.id, { lcur_amount_disc: Number(event.target.value || 0) })} />
+                  <td className="finance-amount-cell w-32 px-2 py-1 text-right">
+                    {formatAmount(lineLcurrPOAmount(row, ex_rate) + taxLcurrpoAmount(row, ex_rate))}
                   </td>
                   <td className="px-2 py-1">
                     <Button disabled={headerAndLineDisabled} size="icon" type="button" variant="ghost" onClick={() => removeRow(row.id)}><X size={14} /></Button>

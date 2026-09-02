@@ -1,8 +1,8 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Calculator, CheckCircle2, Edit2, Plus, RefreshCw, Save, Trash2, TrendingUp } from "lucide-react";
+import { ArrowLeft, Calculator, CheckCircle2, Edit2, ListPlus, Plus, RefreshCw, Save, Trash2, TrendingUp } from "lucide-react";
 import { api } from "../../api/client";
-import { freightSelect } from "../../api/freight";
+import { freightSelect, freightTaxCategories, freightTaxComponents } from "../../api/freight";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
@@ -40,11 +40,13 @@ type ActivityLine = {
   tx_compnt_perc_1: string;
   tx_compnt_amt_1: string;
   tx_compnt_lcuramt_1: string;
+  tx_compnt_1_expmt: string;
   tx_cat_code_cost: string;
   tx_compntcat_code_1_cost: string;
   tx_compnt_perc_1_cost: string;
   tx_compnt_amt_1_cost: string;
   tx_compnt_lcuramt_1_cost: string;
+  tx_compnt_1_expmt_cost: string;
 };
 
 const modeMap = {
@@ -96,6 +98,8 @@ export function FreightJobActivitiesPage({
   const [lines, setLines] = useState<ActivityLine[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [populating, setPopulating] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
 
   const notify = useCallback((next: Exclude<Notice, null>) => {
@@ -178,8 +182,11 @@ export function FreightJobActivitiesPage({
         prin_code: lookupText(row, "prin_code"),
         job_no: lookupText(row, "job_no"),
       });
-      setHeader(normalizeLookupRow(response.data.data?.header || row));
+      const loadedHeader = normalizeLookupRow(response.data.data?.header || row);
+      const quotationRef = lookupText(loadedHeader, "quotation_ref") || lookupText(row, "quotation_ref");
+      setHeader({ ...loadedHeader, QUOTATION_REF: quotationRef });
       setLines((response.data.data?.lines || []).map(toLine));
+      setDirty(false);
       setView("editor");
     } catch (error: any) {
       notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to open job activities." });
@@ -205,11 +212,63 @@ export function FreightJobActivitiesPage({
         lines,
       });
       notify({ type: "success", text: "Job activities saved." });
+      setDirty(false);
       await loadRows();
     } catch (error: any) {
       notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to save job activities." });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function populateFromQuotation() {
+    if (!header) return;
+    if (isLineLocked) {
+      notify({ type: "error", text: "Confirmed, invoiced, or completed job is locked. Activities are view only." });
+      return;
+    }
+
+    const quotationRef = lookupText(header, "quotation_ref");
+    if (!quotationRef) {
+      notify({ type: "error", text: "This job is not linked to an approved quotation." });
+      return;
+    }
+
+    setPopulating(true);
+    setNotice(null);
+    try {
+      const response = await api.post<{ success?: boolean; message?: string; data?: { lines?: LookupRow[] } }>(
+        "/api/freight/job-activities/populate-from-quotation",
+        {
+          company_code: companyCode,
+          prin_code: lookupText(header, "prin_code"),
+          job_no: lookupText(header, "job_no"),
+        },
+      );
+      const incoming = (response.data.data?.lines || []).map(toLine).map((line) => ({
+        ...line,
+        div_code: line.div_code || lookupText(header, "div_code"),
+        tx_cat_code: line.tx_cat_code || lookupText(header, "tx_cat_code"),
+      }));
+      const existingCodes = new Set(lines.map((line) => line.act_code.trim().toUpperCase()).filter(Boolean));
+      const additions = incoming.filter((line) => {
+        const code = line.act_code.trim().toUpperCase();
+        if (!code || existingCodes.has(code)) return false;
+        existingCodes.add(code);
+        return true;
+      });
+      const addedCount = additions.length;
+      if (addedCount) setLines((current) => [...current, ...additions].map((line, index) => ({ ...line, srno: String(index + 1) })));
+      if (addedCount) {
+        setDirty(true);
+        notify({ type: "success", text: `${addedCount} activities loaded from quotation ${quotationRef}. Review and save them.` });
+      } else {
+        notify({ type: "success", text: response.data.message || `No new activities are available in quotation ${quotationRef}.` });
+      }
+    } catch (error: any) {
+      notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to populate quotation activities." });
+    } finally {
+      setPopulating(false);
     }
   }
 
@@ -252,7 +311,10 @@ export function FreightJobActivitiesPage({
         <Button type="button" size="sm" variant="outline" onClick={addLine} disabled={isLineLocked}>
           <Plus size={14} />Line
         </Button>
-        <Button type="button" size="sm" variant="outline" onClick={() => void confirmJob()} disabled={saving || isClosed || !lines.length || Boolean(lookupText(header, "confirm_date"))}>
+        <Button type="button" size="sm" variant="outline" onClick={() => void populateFromQuotation()} disabled={saving || populating || isLineLocked || !lookupText(header, "quotation_ref")} title={lookupText(header, "quotation_ref") ? `Load missing activities from ${lookupText(header, "quotation_ref")}` : "Job has no quotation reference"}>
+          <ListPlus size={14} />{populating ? "Loading..." : "Populate from Quotation"}
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={() => void confirmJob()} disabled={saving || populating || dirty || isClosed || !lines.length || Boolean(lookupText(header, "confirm_date"))} title={dirty ? "Save activity changes before confirmation" : undefined}>
           <CheckCircle2 size={14} />{lookupText(header, "confirm_date") ? "Confirmed" : "Confirm"}
         </Button>
         <Button type="button" size="sm" onClick={() => void saveLines()} disabled={saving || isLineLocked}>
@@ -262,7 +324,7 @@ export function FreightJobActivitiesPage({
       </div>
     );
     return () => onEmbeddedActionsChange(null);
-  }, [header, isClosed, isLineLocked, lines.length, notice, onEmbeddedActionsChange, onEmbeddedList, saving, view]);
+  }, [dirty, header, isClosed, isLineLocked, lines.length, notice, onEmbeddedActionsChange, onEmbeddedList, populating, saving, view]);
 
   if (view === "list") {
     return (
@@ -294,17 +356,27 @@ export function FreightJobActivitiesPage({
   }
 
   return (
-    <section className="freight-ui-standard grid gap-2 freight-job-ops-screen">
+    // <section className="freight-ui-standard grid gap-2 freight-job-ops-screen">
+    <section className="freight-ui-standard grid gap-2 freight-job-ops-screen min-w-0">
       {!embeddedInWorkspace && <Header eyebrow={copy.eyebrow} title={copy.title} subtitle={`${lookupText(header, "job_no")} / ${lookupText(header, "prin_name") || lookupText(header, "prin_code")}`}>
         {notice && <NoticeChip notice={notice} />}
         {!initialJob && <Button type="button" size="sm" variant="outline" onClick={() => setView("list")}><ArrowLeft size={14} />List</Button>}
         <Button type="button" size="sm" variant="outline" onClick={addLine} disabled={isLineLocked}><Plus size={14} />Line</Button>
-        {/* <Button type="button" size="sm" variant="outline" onClick={() => void confirmJob()} disabled={saving || !lines.length}><CheckCircle2 size={14} />Confirm</Button> */}
-       <Button type="button" size="sm" variant="outline" onClick={() => void confirmJob()} disabled={saving || isClosed || !lines.length || Boolean(lookupText(header, "confirm_date"))}>
+        <Button type="button" size="sm" variant="outline" onClick={() => void populateFromQuotation()} disabled={saving || populating || isLineLocked || !lookupText(header, "quotation_ref")} title={lookupText(header, "quotation_ref") ? `Load missing activities from ${lookupText(header, "quotation_ref")}` : "Job has no quotation reference"}>
+          <ListPlus size={14} />{populating ? "Loading..." : "Populate from Quotation"}
+        </Button>
+       <Button type="button" size="sm" variant="outline" onClick={() => void confirmJob()} disabled={saving || populating || dirty || isClosed || !lines.length || Boolean(lookupText(header, "confirm_date"))} title={dirty ? "Save activity changes before confirmation" : undefined}>
            <CheckCircle2 size={14} />{lookupText(header, "confirm_date") ? "Confirmed" : "Confirm"}
         </Button>
         <Button type="button" size="sm" onClick={() => void saveLines()} disabled={saving || isLineLocked}><Save size={14} />Save</Button>
       </Header>}
+
+      {/* <div className="flex min-h-9 flex-wrap items-center gap-x-5 gap-y-1 rounded-lg border border-border/80 bg-card px-3 py-1.5 text-xs">
+        <span className="text-muted-foreground">Job <strong className="ml-1 text-foreground">{lookupText(header, "job_no") || "-"}</strong></span>
+        <span className="text-muted-foreground">Principal <strong className="ml-1 text-foreground">{lookupText(header, "prin_name") || lookupText(header, "prin_code") || "-"}</strong></span>
+        <span className="text-muted-foreground">From Quotation <strong className="ml-1 text-primary">{lookupText(header, "quotation_ref") || "Not linked"}</strong></span>
+        {dirty && <span className="ml-auto rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-semibold text-amber-700">Unsaved changes</span>}
+      </div> */}
 
       <div className="grid gap-2 lg:grid-cols-4">
         <Metric label="Revenue" value={money(totals.revenue)} />
@@ -313,45 +385,84 @@ export function FreightJobActivitiesPage({
         <Metric label="Lines" value={String(lines.length)} />
       </div>
 
-      <div className="freight-job-table-shell">
+      {/* <div className="freight-job-table-shell">
         <div className="freight-job-table-head grid grid-cols-[42px_120px_minmax(190px,1fr)_76px_94px_105px_105px_90px_105px_90px_105px_50px] items-center gap-1 px-2 py-1">
           <span>No</span><span>Activity</span><span>Description</span><span>Qty</span><span>Rate</span><span>Revenue</span><span>Other Cost</span><span>Agent</span><span>Agent Cost</span><span>Transp.</span><span>Transp. Cost</span><span />
         </div>
-        <div className="max-h-[calc(100vh-330px)] overflow-auto">
+        <div className="max-h-[calc(100vh-330px)] overflow-auto"> */}
+
+  <div className="freight-job-table-shell overflow-x-auto min-w-0">
+  <div className="min-w-max">
+  <div className="freight-job-table-head grid grid-cols-[40px_120px_210px_70px_100px_100px_100px_90px_100px_90px_100px_120px_130px_60px_80px_90px_90px_90px_90px_80px_80px_100px_90px_50px] items-center gap-1 px-2 py-1">
+    <span>No</span><span>Activity</span><span>Description</span><span>Qty</span><span>Rate</span><span>Revenue</span><span>Other Cost</span><span>Agent</span><span>Agent Cost</span><span>Transp.</span><span>Transp. Cost</span><span>Tax Cat</span><span>Tax Code</span><span>Tax %</span><span>Treat</span><span>Tax Amt</span><span>Tax LC Amt</span><span>Cost Tax Cat</span><span>Cost Tax Code</span><span>Cost Tax %</span><span>Cost Treat</span><span>Cost Tax Amt</span><span>Cost Tax LC Amt</span><span />
+  </div>
+  <div className="max-h-[calc(100vh-330px)] overflow-y-auto">
           {lines.map((line, index) => (
-            <div key={`${line.srno}-${index}`} className="freight-job-table-row">
-              <div className="grid grid-cols-[42px_120px_minmax(190px,1fr)_76px_94px_105px_105px_90px_105px_90px_105px_50px] items-center gap-1 px-2 py-1">
-                <span className="text-xs font-semibold text-muted-foreground">{index + 1}</span>
-                <ActivityLookup value={line.act_code} companyCode={companyCode} disabled={isLineLocked} onChange={(value, row) => updateLine(index, { act_code: value, activity: lookupText(row || undefined, "activity"), other_services: lookupText(row || undefined, "activity") || line.other_services, bill_rate: lookupText(row || undefined, "bill") || line.bill_rate, actual_cost: lookupText(row || undefined, "cost") || line.actual_cost })} />
-                <Input className="h-7 text-xs" value={line.other_services} disabled={isLineLocked} onChange={(event) => updateLine(index, { other_services: event.target.value })} />
-                <MoneyInput value={line.quantity} disabled={isLineLocked}onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))} />
-                <MoneyInput value={line.bill_rate} disabled={isLineLocked} onChange={(value) => updateLine(index, recalc({ ...line, bill_rate: value }))} />
-                <MoneyInput value={line.bill} disabled={isLineLocked} onChange={(value) => updateLine(index, { bill: value })} />
-                <MoneyInput value={line.actual_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, { actual_cost: value })} />
-                <Input className="h-7 text-xs" value={line.broker_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { broker_code: event.target.value })} />
-                <MoneyInput value={line.partners_price} disabled={isLineLocked} onChange={(value) => updateLine(index, { partners_price: value })} />
-                <Input className="h-7 text-xs" value={line.transporter_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { transporter_code: event.target.value })} />
-                <MoneyInput value={line.transport_price} disabled={isLineLocked} onChange={(value) => updateLine(index, { transport_price: value })} />
-                <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={isLineLocked} onClick={() => removeLine(index)}><Trash2 size={14} /></Button>
-              </div>
-              <div className="freight-job-table-subrow grid grid-cols-[42px_repeat(10,minmax(88px,1fr))] gap-1 px-2 pb-1">
-                <span className="self-center text-[10px] font-semibold uppercase text-muted-foreground">Tax</span>
-                <TaxCategoryLookup companyCode={companyCode} value={line.tx_cat_code} disabled={isLineLocked} placeholder="Sale Cat" onChange={(value) => updateLine(index, { tx_cat_code: value })} />
-                <TaxCodeLookup companyCode={companyCode} value={line.tx_compntcat_code_1} disabled={isLineLocked} placeholder="Sale Code" onChange={(value, row) => updateLine(index, { tx_compntcat_code_1: value, tx_cat_code: lookupText(row, "tx_cat_code") || line.tx_cat_code, tx_compnt_perc_1: lookupText(row, "tx_percnt") || line.tx_compnt_perc_1 })} />
-                <MoneyInput value={line.tx_compnt_perc_1} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_perc_1: value })} />
-                <MoneyInput value={line.tx_compnt_amt_1} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_amt_1: value })} />
-                <MoneyInput value={line.tx_compnt_lcuramt_1} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_lcuramt_1: value })} />
-                <TaxCategoryLookup companyCode={companyCode} value={line.tx_cat_code_cost} disabled={isLineLocked} placeholder="Cost Cat" onChange={(value) => updateLine(index, { tx_cat_code_cost: value })} />
-                <TaxCodeLookup companyCode={companyCode} value={line.tx_compntcat_code_1_cost} disabled={isLineLocked} placeholder="Cost Code" onChange={(value, row) => updateLine(index, { tx_compntcat_code_1_cost: value, tx_cat_code_cost: lookupText(row, "tx_cat_code") || line.tx_cat_code_cost, tx_compnt_perc_1_cost: lookupText(row, "tx_percnt") || line.tx_compnt_perc_1_cost })} />
-                <MoneyInput value={line.tx_compnt_perc_1_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_perc_1_cost: value })} />
-                <MoneyInput value={line.tx_compnt_amt_1_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_amt_1_cost: value })} />
-                <MoneyInput value={line.tx_compnt_lcuramt_1_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, { tx_compnt_lcuramt_1_cost: value })} />
-              </div>
-            </div>
+            // <div key={`${line.srno}-${index}`} className="freight-job-table-row">
+            //   <div className="grid grid-cols-[42px_120px_minmax(190px,1fr)_76px_94px_105px_105px_90px_105px_90px_105px_50px] items-center gap-1 px-2 py-1">
+            //     <span className="text-xs font-semibold text-muted-foreground">{index + 1}</span>
+            //     <ActivityLookup value={line.act_code} companyCode={companyCode} disabled={isLineLocked} onChange={(value, row) => updateLine(index, recalc({ ...line, act_code: value, activity: lookupText(row || undefined, "activity"), other_services: lookupText(row || undefined, "activity") || line.other_services, bill_rate: lookupText(row || undefined, "bill") || line.bill_rate, actual_cost: lookupText(row || undefined, "cost") || line.actual_cost, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code: line.tx_cat_code || lookupText(header, "tx_cat_code") }))} />
+            //     <Input className="h-7 text-xs" value={line.other_services} disabled={isLineLocked} onChange={(event) => updateLine(index, { other_services: event.target.value })} />
+            //     <MoneyInput value={line.quantity} disabled={isLineLocked}onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))} />
+            //     <MoneyInput value={line.bill_rate} disabled={isLineLocked} onChange={(value) => updateLine(index, recalc({ ...line, bill_rate: value }))} />
+            //     <MoneyInput value={line.bill} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, bill: value }))} />
+            //     <MoneyInput value={line.actual_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, actual_cost: value }))} />
+            //     <Input className="h-7 text-xs" value={line.broker_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { broker_code: event.target.value })} />
+            //     <MoneyInput value={line.partners_price} disabled={isLineLocked} onChange={(value) => updateLine(index, { partners_price: value })} />
+            //     <Input className="h-7 text-xs" value={line.transporter_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { transporter_code: event.target.value })} />
+            //     <MoneyInput value={line.transport_price} disabled={isLineLocked} onChange={(value) => updateLine(index, { transport_price: value })} />
+            //     <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={isLineLocked} onClick={() => removeLine(index)}><Trash2 size={14} /></Button>
+            //   </div>
+            //   <div className="freight-job-table-subrow grid grid-cols-[42px_repeat(12,minmax(82px,1fr))] gap-1 px-2 pb-1">
+            //     <span className="self-center text-[10px] font-semibold uppercase text-muted-foreground">Tax</span>
+            //     <TaxCategoryLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} value={line.tx_cat_code} disabled={isLineLocked} placeholder="Sale Cat" onChange={(value) => updateLine(index, recalcSalesTax({ ...line, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code: value, tx_compntcat_code_1: "", tx_compnt_perc_1: "0", tx_compnt_1_expmt: "N" }))} />
+            //     <TaxCodeLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} taxCategory={line.tx_cat_code} activityCode={line.act_code} value={line.tx_compntcat_code_1} disabled={isLineLocked} placeholder="Sale Code" onChange={(value, row) => { const percent = lookupText(row, "tx_percnt") || "0"; updateLine(index, recalcSalesTax({ ...line, tx_compntcat_code_1: value, tx_cat_code: lookupText(row, "tx_cat_code") || line.tx_cat_code, tx_compnt_perc_1: percent, tx_compnt_1_expmt: numberValue(percent) > 0 ? "S" : "N" })); }} />
+            //     <MoneyInput value={line.tx_compnt_perc_1} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, tx_compnt_perc_1: value }))} />
+            //     <TaxTreatmentSelect value={line.tx_compnt_1_expmt} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, tx_compnt_1_expmt: value, tx_compnt_perc_1: value === "S" ? line.tx_compnt_perc_1 : "0" }))} />
+            //     <MoneyInput value={line.tx_compnt_amt_1} disabled onChange={() => undefined} />
+            //     <MoneyInput value={line.tx_compnt_lcuramt_1} disabled onChange={() => undefined} />
+            //     <TaxCategoryLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} value={line.tx_cat_code_cost} disabled={isLineLocked} placeholder="Cost Cat" onChange={(value) => updateLine(index, recalcCostTax({ ...line, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code_cost: value, tx_compntcat_code_1_cost: "", tx_compnt_perc_1_cost: "0", tx_compnt_1_expmt_cost: "N" }))} />
+            //     <TaxCodeLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} taxCategory={line.tx_cat_code_cost} activityCode={line.act_code} value={line.tx_compntcat_code_1_cost} disabled={isLineLocked} placeholder="Cost Code" onChange={(value, row) => { const percent = lookupText(row, "tx_percnt") || "0"; updateLine(index, recalcCostTax({ ...line, tx_compntcat_code_1_cost: value, tx_cat_code_cost: lookupText(row, "tx_cat_code") || line.tx_cat_code_cost, tx_compnt_perc_1_cost: percent, tx_compnt_1_expmt_cost: numberValue(percent) > 0 ? "S" : "N" })); }} />
+            //     <MoneyInput value={line.tx_compnt_perc_1_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, tx_compnt_perc_1_cost: value }))} />
+            //     <TaxTreatmentSelect value={line.tx_compnt_1_expmt_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, tx_compnt_1_expmt_cost: value, tx_compnt_perc_1_cost: value === "S" ? line.tx_compnt_perc_1_cost : "0" }))} />
+            //     <MoneyInput value={line.tx_compnt_amt_1_cost} disabled onChange={() => undefined} />
+            //     <MoneyInput value={line.tx_compnt_lcuramt_1_cost} disabled onChange={() => undefined} />
+            //   </div>
+            // </div>
+
+            // after
+<div key={`${line.srno}-${index}`} className="freight-job-table-row grid grid-cols-[40px_120px_210px_70px_100px_100px_100px_90px_100px_90px_100px_120px_130px_60px_80px_90px_90px_90px_90px_80px_80px_100px_90px_50px] items-center gap-1 px-2 py-1">
+  <span className="text-xs font-semibold text-muted-foreground">{index + 1}</span>
+  <ActivityLookup value={line.act_code} companyCode={companyCode} disabled={isLineLocked} onChange={(value, row) => updateLine(index, recalc({ ...line, act_code: value, activity: lookupText(row || undefined, "activity"), other_services: lookupText(row || undefined, "activity") || line.other_services, bill_rate: lookupText(row || undefined, "bill") || line.bill_rate, actual_cost: lookupText(row || undefined, "cost") || line.actual_cost, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code: line.tx_cat_code || lookupText(header, "tx_cat_code") }))} />
+  <Input className="h-7 text-xs" value={line.other_services} disabled={isLineLocked} onChange={(event) => updateLine(index, { other_services: event.target.value })} />
+  <MoneyInput value={line.quantity} disabled={isLineLocked} onChange={(value) => updateLine(index, recalc({ ...line, quantity: value }))} />
+  <MoneyInput value={line.bill_rate} disabled={isLineLocked} onChange={(value) => updateLine(index, recalc({ ...line, bill_rate: value }))} />
+  <MoneyInput value={line.bill} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, bill: value }))} />
+  <MoneyInput value={line.actual_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, actual_cost: value }))} />
+  <Input className="h-7 text-xs" value={line.broker_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { broker_code: event.target.value })} />
+  <MoneyInput value={line.partners_price} disabled={isLineLocked} onChange={(value) => updateLine(index, { partners_price: value })} />
+  <Input className="h-7 text-xs" value={line.transporter_code} disabled={isLineLocked} onChange={(event) => updateLine(index, { transporter_code: event.target.value })} />
+  <MoneyInput value={line.transport_price} disabled={isLineLocked} onChange={(value) => updateLine(index, { transport_price: value })} />
+  <TaxCategoryLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} value={line.tx_cat_code} disabled={isLineLocked} placeholder="Sale Cat" onChange={(value) => updateLine(index, recalcSalesTax({ ...line, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code: value, tx_compntcat_code_1: "", tx_compnt_perc_1: "0", tx_compnt_1_expmt: "N" }))} />
+  <TaxCodeLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} taxCategory={line.tx_cat_code} activityCode={line.act_code} value={line.tx_compntcat_code_1} disabled={isLineLocked} placeholder="Sale Code" onChange={(value, row) => { const percent = lookupText(row, "tx_percnt") || "0"; updateLine(index, recalcSalesTax({ ...line, tx_compntcat_code_1: value, tx_cat_code: lookupText(row, "tx_cat_code") || line.tx_cat_code, tx_compnt_perc_1: percent, tx_compnt_1_expmt: numberValue(percent) > 0 ? "S" : "N" })); }} />
+  <MoneyInput value={line.tx_compnt_perc_1} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, tx_compnt_perc_1: value }))} />
+  <TaxTreatmentSelect value={line.tx_compnt_1_expmt} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcSalesTax({ ...line, tx_compnt_1_expmt: value, tx_compnt_perc_1: value === "S" ? line.tx_compnt_perc_1 : "0" }))} />
+  <MoneyInput value={line.tx_compnt_amt_1} disabled onChange={() => undefined} />
+  <MoneyInput value={line.tx_compnt_lcuramt_1} disabled onChange={() => undefined} />
+  <TaxCategoryLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} value={line.tx_cat_code_cost} disabled={isLineLocked} placeholder="Cost Cat" onChange={(value) => updateLine(index, recalcCostTax({ ...line, div_code: line.div_code || lookupText(header, "div_code"), tx_cat_code_cost: value, tx_compntcat_code_1_cost: "", tx_compnt_perc_1_cost: "0", tx_compnt_1_expmt_cost: "N" }))} />
+  <TaxCodeLookup companyCode={companyCode} divisionCode={line.div_code || lookupText(header, "div_code")} taxCategory={line.tx_cat_code_cost} activityCode={line.act_code} value={line.tx_compntcat_code_1_cost} disabled={isLineLocked} placeholder="Cost Code" onChange={(value, row) => { const percent = lookupText(row, "tx_percnt") || "0"; updateLine(index, recalcCostTax({ ...line, tx_compntcat_code_1_cost: value, tx_cat_code_cost: lookupText(row, "tx_cat_code") || line.tx_cat_code_cost, tx_compnt_perc_1_cost: percent, tx_compnt_1_expmt_cost: numberValue(percent) > 0 ? "S" : "N" })); }} />
+  <MoneyInput value={line.tx_compnt_perc_1_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, tx_compnt_perc_1_cost: value }))} />
+  <TaxTreatmentSelect value={line.tx_compnt_1_expmt_cost} disabled={isLineLocked} onChange={(value) => updateLine(index, recalcCostTax({ ...line, tx_compnt_1_expmt_cost: value, tx_compnt_perc_1_cost: value === "S" ? line.tx_compnt_perc_1_cost : "0" }))} />
+  <MoneyInput value={line.tx_compnt_amt_1_cost} disabled onChange={() => undefined} />
+  <MoneyInput value={line.tx_compnt_lcuramt_1_cost} disabled onChange={() => undefined} />
+  <Button type="button" size="icon" variant="ghost" title="Remove line" disabled={isLineLocked} onClick={() => removeLine(index)}><Trash2 size={14} /></Button>
+</div>
           ))}
           {!lines.length && <div className="px-3 py-8 text-center text-sm text-muted-foreground">No activity lines yet.</div>}
         </div>
       </div>
+      </div>
+      
     </section>
   );
 
@@ -360,17 +471,24 @@ export function FreightJobActivitiesPage({
       notify({ type: "error", text: "Confirmed, invoiced, or completed job is locked. Activities are view only." });
       return;
     }
-    setLines((current) => [...current, emptyLine(current.length + 1)]);
+    setLines((current) => [...current, {
+      ...emptyLine(current.length + 1),
+      div_code: lookupText(header, "div_code"),
+      tx_cat_code: lookupText(header, "tx_cat_code"),
+    }]);
+    setDirty(true);
   }
 
   function removeLine(index: number) {
     if (isLineLocked) return;
     setLines((current) => current.filter((_, rowIndex) => rowIndex !== index).map((line, rowIndex) => ({ ...line, srno: String(rowIndex + 1) })));
+    setDirty(true);
   }
 
   function updateLine(index: number, patch: Partial<ActivityLine>) {
     if (isLineLocked) return;
     setLines((current) => current.map((line, rowIndex) => rowIndex === index ? { ...line, ...patch, srno: String(index + 1) } : line));
+    setDirty(true);
   }
 }
 
@@ -410,7 +528,7 @@ function ActivityLookup({ companyCode, value, onChange, disabled }: { companyCod
   );
 }
 
-function TaxCategoryLookup({ companyCode, value, onChange, disabled, placeholder }: { companyCode: string; value: string; onChange: (value: string, row: LookupRow | null) => void; disabled?: boolean; placeholder: string }) {
+function TaxCategoryLookup({ companyCode, divisionCode, value, onChange, disabled, placeholder }: { companyCode: string; divisionCode: string; value: string; onChange: (value: string, row: LookupRow | null) => void; disabled?: boolean; placeholder: string }) {
   return (
     <LookupField
       value={value}
@@ -419,14 +537,14 @@ function TaxCategoryLookup({ companyCode, value, onChange, disabled, placeholder
       valueField="TX_CAT_CODE"
       displayFields={["TX_CAT_CODE", "TX_CAT_NAME"]}
       columns={[{ field: "TX_CAT_CODE", header: "Code" }, { field: "TX_CAT_NAME", header: "Tax Category" }]}
-      loadOptions={(query) => loadFreightLookup("freight_tax_category", companyCode, query)}
+      loadOptions={(query) => freightTaxCategories<LookupRow>(companyCode, divisionCode, query).then((rows) => rows.map(normalizeLookupRow))}
       onChange={onChange}
-      disabled={disabled}
+      disabled={disabled || !divisionCode}
     />
   );
 }
 
-function TaxCodeLookup({ companyCode, value, onChange, disabled, placeholder }: { companyCode: string; value: string; onChange: (value: string, row: LookupRow | null) => void; disabled?: boolean; placeholder: string }) {
+function TaxCodeLookup({ companyCode, divisionCode, taxCategory, activityCode, value, onChange, disabled, placeholder }: { companyCode: string; divisionCode: string; taxCategory: string; activityCode: string; value: string; onChange: (value: string, row: LookupRow | null) => void; disabled?: boolean; placeholder: string }) {
   return (
     <LookupField
       value={value}
@@ -435,9 +553,9 @@ function TaxCodeLookup({ companyCode, value, onChange, disabled, placeholder }: 
       valueField="TX_COMPNTCAT_CODE"
       displayFields={["TX_COMPNTCAT_CODE", "TX_COMPNTCAT_NAME"]}
       columns={[{ field: "TX_COMPNTCAT_CODE", header: "Code" }, { field: "TX_COMPNTCAT_NAME", header: "Tax Code" }, { field: "TX_CAT_CODE", header: "Tax Category" }, { field: "TX_PERCNT", header: "Tax %" }]}
-      loadOptions={(query) => loadFreightLookup("freight_tax_code", companyCode, query)}
+      loadOptions={(query) => freightTaxComponents<LookupRow>(companyCode, divisionCode, taxCategory, query, activityCode).then((rows) => rows.map(normalizeLookupRow))}
       onChange={onChange}
-      disabled={disabled}
+      disabled={disabled || !divisionCode || !taxCategory}
     />
   );
 }
@@ -451,7 +569,7 @@ function NoticeChip({ notice }: { notice: Exclude<Notice, null> }) {
 }
 
 function emptyLine(srno: number): ActivityLine {
-  return { srno: String(srno), act_code: "", activity: "", other_services: "", quantity: "1", bill_rate: "0", bill: "0", actual_cost: "0", broker_code: "", partners_price: "0", transporter_code: "", vehicle_no: "", transport_price: "0", confirmed: "Y", print_flag: "Y", payment_mode: "", div_code: "", remarks: "", tx_cat_code: "", tx_compntcat_code_1: "", tx_compnt_perc_1: "", tx_compnt_amt_1: "", tx_compnt_lcuramt_1: "", tx_cat_code_cost: "", tx_compntcat_code_1_cost: "", tx_compnt_perc_1_cost: "", tx_compnt_amt_1_cost: "", tx_compnt_lcuramt_1_cost: "" };
+  return { srno: String(srno), act_code: "", activity: "", other_services: "", quantity: "1", bill_rate: "0", bill: "0", actual_cost: "0", broker_code: "", partners_price: "0", transporter_code: "", vehicle_no: "", transport_price: "0", confirmed: "Y", print_flag: "Y", payment_mode: "", div_code: "", remarks: "", tx_cat_code: "", tx_compntcat_code_1: "", tx_compnt_perc_1: "", tx_compnt_amt_1: "", tx_compnt_lcuramt_1: "", tx_compnt_1_expmt: "N", tx_cat_code_cost: "", tx_compntcat_code_1_cost: "", tx_compnt_perc_1_cost: "", tx_compnt_amt_1_cost: "", tx_compnt_lcuramt_1_cost: "", tx_compnt_1_expmt_cost: "N" };
 }
 
 function toLine(row: LookupRow, index: number): ActivityLine {
@@ -460,7 +578,28 @@ function toLine(row: LookupRow, index: number): ActivityLine {
 }
 
 function recalc(line: ActivityLine) {
-  return { ...line, bill: String(numberValue(line.quantity) * numberValue(line.bill_rate)) };
+  return recalcSalesTax({ ...line, bill: String(numberValue(line.quantity) * numberValue(line.bill_rate)) });
+}
+
+function TaxTreatmentSelect({ value, onChange, disabled }: { value: string; onChange: (value: string) => void; disabled?: boolean }) {
+  return (
+    <select className="h-7 min-w-0 rounded-md border border-input bg-background px-1 text-xs" value={value || "N"} disabled={disabled} onChange={(event) => onChange(event.target.value)} title="Tax treatment">
+      <option value="S">Standard</option>
+      <option value="Z">Zero</option>
+      <option value="E">Exempt</option>
+      <option value="N">No Tax</option>
+    </select>
+  );
+}
+
+function recalcSalesTax(line: ActivityLine) {
+  const amount = line.tx_compnt_1_expmt === "S" ? numberValue(line.bill) * numberValue(line.tx_compnt_perc_1) / 100 : 0;
+  return { ...line, tx_compnt_amt_1: String(amount), tx_compnt_lcuramt_1: String(amount) };
+}
+
+function recalcCostTax(line: ActivityLine) {
+  const amount = line.tx_compnt_1_expmt_cost === "S" ? numberValue(line.actual_cost) * numberValue(line.tx_compnt_perc_1_cost) / 100 : 0;
+  return { ...line, tx_compnt_amt_1_cost: String(amount), tx_compnt_lcuramt_1_cost: String(amount) };
 }
 
 function calculateTotals(lines: ActivityLine[]) {

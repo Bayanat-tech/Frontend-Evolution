@@ -31,10 +31,10 @@ import { PurchaseOrderHeaderForm } from "../../purchase_sales/purchase/Purchaseo
 import { PurchaseOrderLinesTable } from "../../purchase_sales/purchase/Purchaseorderlinestable";
 import { SendBackDialog } from "../../purchase_sales/purchase/Sendbackdialog";
 import { RejectDialog } from "../../purchase_sales/purchase/Rejectdialog";
-import { PROCESSSO, SalesConfig, SO_DOC_TYPE } from "./SalesOrdertypes";
+import { PROCESSSO, SalesConfig, SO_DOC_TYPE  } from "./SalesOrdertypes";
 import { emptyForm, emptyLineRow, fetchSalesOrderDetail, fetchSalesOrderHeader, runWorkflow } from "./SalesOrderutils";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
-import { getSoOrderReportHtml } from "../../../api/transactions";
+import { getSOrderReportHtml } from "../../../api/transactions";
 
 
 export type { PurchaseOrderEditorState };
@@ -54,7 +54,8 @@ export function SalesOrderEditor({
 }) {
   const { user } = useAuth();
   const editMode = editor?.mode === "edit";
-  const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
+  // const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor));
+  const [form, setForm] = useState<PurchaseOrderForm>(() => emptyForm(editor) as unknown as PurchaseOrderForm);
   const [rows, setRows] = useState<PurchaseOrderLineRow[]>(() => (editMode ? [] : [emptyLineRow(form.div_code)]));
   const [loading, setLoading] = useState(Boolean(editMode));
   const [saving, setSaving] = useState(false);
@@ -80,8 +81,10 @@ export function SalesOrderEditor({
 
   useEffect(() => {
     if (!editor) return;
-    const initialForm = emptyForm(editor);
-    setForm(initialForm);
+    // const initialForm = emptyForm(editor);
+    // setForm(initialForm);
+    const initialForm = emptyForm(editor) as unknown as PurchaseOrderForm;
+setForm(initialForm);
     setRows(editor.mode === "edit" ? [] : [emptyLineRow(initialForm.div_code)]);
     setError("");
     setLoading(editor.mode === "edit");
@@ -252,10 +255,11 @@ export function SalesOrderEditor({
     }
     printWindow.document.write("<p style='font-family:sans-serif;padding:20px;'>Loading report…</p>");
 
-    getSoOrderReportHtml({
-      prin_code: user?.company_code,
-      order_no: form.doc_no,
-    })
+    getSOrderReportHtml({
+  company_code: user?.company_code,
+  doc_type: SO_DOC_TYPE.SO,
+  doc_no: form.doc_no,
+})
       .then((html) => {
         printWindow.document.open();
         printWindow.document.write(html);
