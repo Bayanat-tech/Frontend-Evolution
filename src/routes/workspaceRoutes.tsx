@@ -204,6 +204,7 @@ import { HrEmpLanguagePage } from "../pages/hr/HrEmpLanguageSkill";
 import ConsolidatePayUnitPage from "../pages/hr/consolidate_pay_unit/ConsolidatePayUnitPage";
 import { EmployeeTransferPage } from "../pages/hr/Employeetransferpage";
 import PayrollProcessingPage from "../pages/hr/payroll_processing/PayrollProcessingPage";
+import { HrEmpDependantsPage } from "../pages/hr/Hrempdependantspage";
 
 
  type WorkspaceRouteContext = {
@@ -1324,6 +1325,11 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   match: ({pathname}) => isHrEmpLanguageSkillRoute(pathname),
   element: () => <HrEmpLanguagePage/>
 },
+{
+    name : "Employee Dependants",
+    match: ({pathname}) => isHrEmpDependantsRoute(pathname),
+    element: () => <HrEmpDependantsPage/>
+  },
   
   {
     name: "HR Master",
@@ -1359,6 +1365,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   },
   
 
+  
   {
     name : "Purchase Sale Setup",
     match: ({pathname}) => isPurchaseSaleSetupRoute(pathname),
@@ -1412,6 +1419,19 @@ function isHrEmpLanguageSkillRoute(pathname: string) {
     normalized.includes("/hcm/hcm/employee/language%20skills")
   );
 }
+
+
+function isHrEmpDependantsRoute(pathname: string) {
+  const normalized = decodeRouteText(pathname).toLowerCase();
+  return (
+    normalized.includes("/hcm/hcm/employee/employee_dependants") ||
+    normalized.includes("/hcm/hcm/employee/employee%20dependants")
+  );
+}
+
+
+
+
 
 function isHrHolidayCalendarRoute(pathname: string) {
   const normalized = decodeRouteText(pathname).toLowerCase();
