@@ -85,6 +85,8 @@ export interface TPRHeader {
   DIV_NAME?: string;
   DEPT_CODE_FLOW?: string;
   DEPT_NAME?: string;
+  TX_COMPNTCAT_NAME?:  string;
+
 }
 
 export type TPRItem = {
@@ -127,6 +129,8 @@ export type TPRItem = {
   USER_DT: string | null;
   USER_ID: string;
   REMARKS?: string;
+  LCURR_AFTER_DISCOUNT?: number;
+  CASH_IND?: string;
 };
 
 export type TPRterm = {
