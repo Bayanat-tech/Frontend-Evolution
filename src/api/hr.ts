@@ -1,3 +1,4 @@
+import { TEmployeeDetailsUpdatePayload } from "../pages/hr/Employee Details/EmployeeDetails.types";
 import { TEmployeeHr } from "../pages/hr/Employee Master/employee-hr.types";
 import { IHrEmployee, IValidateLeaveResponse } from "../pages/hr/leave/leave-approval-types";
 import { api } from "./client";
@@ -331,6 +332,16 @@ export async function saveHrPayCompDepend(payload: { header: Record<string, unkn
 export async function insUpdHrEmployee(employee: TEmployeeHr): Promise<boolean> {
     try {
       const response = await api.post('/api/finance/insUpdHrEmployee',{ employee });  
+      return response.data?.success === true;
+    } catch (err) {
+      console.error('Failed to save employee:', err);
+      return false;
+    }
+  };
+
+  export async function UpdHrEmployee(employee: TEmployeeDetailsUpdatePayload): Promise<boolean> {
+    try {
+      const response = await api.post('/api/finance/UpdHrEmployeeDetail',{ employee });  
       return response.data?.success === true;
     } catch (err) {
       console.error('Failed to save employee:', err);
