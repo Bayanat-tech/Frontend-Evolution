@@ -1119,7 +1119,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
   if (view === "list") {
     return (
-      <section className="grid gap-2.5">
+      <section className="freight-enquiry-list-screen grid gap-2.5">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card px-4 py-3 shadow-sm">
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
@@ -1198,7 +1198,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
   return (
     <>
-    <form className="freight-dense-form freight-ui-standard" onSubmit={saveEnquiry}>
+    <form className="freight-dense-form freight-ui-standard freight-enquiry-editor" onSubmit={saveEnquiry}>
       <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
@@ -1353,7 +1353,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
         <div className="freight-tabs-panel border-t">
           {activeTab === "cargo" && (
             <section>
-              <SectionHeading title="Cargo And Parties" description="Commodity, measurement, shipper and consignee details" />
+              {/* <SectionHeading title="Cargo And Parties" description="Commodity, measurement, shipper and consignee details" /> */}
               <div className="grid gap-1.5 xl:grid-cols-12">
                 <SectionPanel className="xl:col-span-12" icon={PackageCheck} title="Cargo Profile" meta={`${header.commodity || "Commodity pending"} / ${header.gross_wt || header.weight || "0"} kgs`}>
                   <div className="grid gap-1 sm:grid-cols-3 xl:grid-cols-7">
@@ -1388,7 +1388,9 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                   </div>
                 </SectionPanel> */}
 
-                <SectionPanel className="xl:col-span-12" icon={MapPinned} title="Parties" meta={`${header.shipper_name || "Shipper pending"} / ${header.consignee_name || "Consignee pending"}`}>
+                <SectionPanel className="xl:col-span-12" icon={MapPinned} title="Parties" 
+                // meta={`${header.shipper_name || "Shipper pending"} / ${header.consignee_name || "Consignee pending"}`}
+          >
                   <div className="grid gap-1 sm:grid-cols-4">
                     <FormTextarea label="Shipper" value={header.shipper_name} onChange={(value) => setHeaderField("shipper_name", value)} compact />
                     <FormTextarea label="Shipper Address" value={header.shipper_address} onChange={(value) => setHeaderField("shipper_address", value)} compact />
@@ -1397,7 +1399,9 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                   </div>
                 </SectionPanel>
 
-                <SectionPanel className="xl:col-span-12" icon={CreditCard} title="Cargo Notes" meta={header.remarks ? "Remarks added" : "No remarks"}>
+                <SectionPanel className="xl:col-span-12" icon={CreditCard} title="Cargo Notes" 
+                // meta={header.remarks ? "Remarks added" : "No remarks"}
+                >
                   <div className="grid grid-cols-1">
                     <FormTextarea label="Remarks" value={header.remarks} onChange={(value) => setHeaderField("remarks", value)} compact />
                   </div>
@@ -1408,7 +1412,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
           )}
           {activeTab === "journey" && (
             <section>
-              <SectionHeading title="Journey & Carrier Details" description="Port routing, Carrier details, and shipment reference" />
+              {/* <SectionHeading title="Journey & Carrier Details" description="Port routing, Carrier details, and shipment reference" /> */}
               <div className="grid gap-2.5 lg:grid-cols-12">
                 <SectionPanel className="lg:col-span-7" icon={MapPinned} title="Routing" meta={`${header.origin_port || "Origin"} -> ${header.destination_port || "Destination"}`}>
                   <div className="grid gap-1 sm:grid-cols-2">
@@ -1493,7 +1497,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
           {activeTab === "payment" && (
             <section>
-              <SectionHeading title="Payment Terms" description="Commercial terms, currency, references, and instructions" />
+              <SectionHeading title="Payment Terms" description="" />
               <div className="grid gap-2.5 lg:grid-cols-12">
                 <SectionPanel className="lg:col-span-6" icon={CreditCard} title="Terms And Currency" meta={`${header.payment_terms || "Terms"} / ${header.curr_code || "Currency"}`}>
                   <div className="grid gap-2 sm:grid-cols-2">
@@ -1524,7 +1528,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div className="grid gap-1">
                   <h2 className="m-0 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Activities</h2>
-                  <p className="m-0 text-[11px] text-slate-500">Service activities with quantity, rates, and cost breakdown</p>
+                  {/* <p className="m-0 text-[11px] text-slate-500">Service activities with quantity, rates, and cost breakdown</p> */}
                 </div>
                 <Button type="button" size="sm" variant="outline" onClick={addDetail} disabled={isReadOnly}>
                   <Plus size={14} />

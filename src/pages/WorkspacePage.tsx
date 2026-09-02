@@ -16,6 +16,8 @@ import {
   ClipboardCheck,
   ClipboardList,
   FileBarChart,
+  FileCheck2,
+  FileQuestion,
   FileText,
   FolderCog,
   Globe2,
@@ -37,7 +39,6 @@ import {
   Receipt,
   RefreshCw,
   Ruler,
-  Search,
   Settings,
   Ship,
   ShoppingCart,
@@ -114,10 +115,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   const displayCollapsed = isMobile ? false : collapsed;
   const userDisplayName = user?.username || user?.loginid || "User";
   const companyName = user?.company_name || user?.company_code || "Company";
-  const isFreightLandingRoute = useMemo(() => {
-    const normalizedPath = location.pathname.toLowerCase().replace(/\/+$/, "");
-    return (appCode || "").toLowerCase() === "fms" && (normalizedPath === "/workspace/fms" || normalizedPath === "/workspace/fms/fms");
-  }, [appCode, location.pathname]);
+  const isFreightModule = (appCode || "").toLowerCase() === "fms";
 
   // useEffect(() => {
   //   setExpanded(collectExpandedPath(activeMenuPath));
@@ -131,10 +129,10 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   }, [activeApp?.id, activeApp?.title, location.pathname]);
 
   useEffect(() => {
-    if (!isMobile && isFreightLandingRoute) {
-      setCollapsed(true);
+    if (!isMobile && isFreightModule) {
+      setCollapsed(false);
     }
-  }, [isFreightLandingRoute, isMobile]);
+  }, [isFreightModule, isMobile]);
 
   const toggleSidebar = () => {
     if (isMobile) {
@@ -159,24 +157,27 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
       setMobileMenuOpen(false);
       return;
     }
-    setCollapsed(true);
+    if (!isFreightModule) setCollapsed(true);
   };
 
   return (
     <div className="workspace">
       <aside className={cn("sidebar", displayCollapsed && "collapsed", isMobile && "mobile-sidebar", mobileMenuOpen && "mobile-open")}>
         <div className="sidebar-top">
-          <Link to="/apps" className={displayCollapsed ? "sidebar-brand logo-only" : "sidebar-brand"} title="Bayanat Technology">
+          <Link to="/apps" className={displayCollapsed ? "sidebar-brand logo-only" : "sidebar-brand"} title={companyName}>
             <span className="sidebar-logo-wrap">
               <img src="/bayanat-logo.png" alt="Bayanat Technology" className="sidebar-logo" />
             </span>
-            {!displayCollapsed && (
-              <span className="sidebar-brand-copy">
-                <strong>Bayanat</strong>
-                <small>Technology</small>
-              </span>
-            )}
+            <span className="sidebar-brand-copy"><strong>{companyName}</strong></span>
           </Link>
+        </div>
+
+        <div className={cn("sidebar-section-heading", displayCollapsed && "collapsed")}>
+          {!displayCollapsed && (
+            <p className="sidebar-label" title={activeApp ? getModuleMeta(activeApp, 0).fullForm : "Workspace"}>
+              {activeApp ? getModuleMeta(activeApp, 0).fullForm : "Workspace"}
+            </p>
+          )}
           <button
             className="icon-button sidebar-toggle"
             onClick={toggleSidebar}
@@ -187,14 +188,8 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
           </button>
         </div>
 
-         {!displayCollapsed && (
-            <p className="sidebar-label" title={activeApp ? getModuleMeta(activeApp, 0).fullForm : "Workspace"}>
-             {activeApp ? getModuleMeta(activeApp, 0).fullForm : "Workspace"}
-            </p>
-         )}
-
         <nav className="sidebar-nav">
-          {(activeApp?.children || []).map((item) => (
+          {(activeApp?.children || []).map((item, index) => (
             <MenuItem
               key={item.id || item.title}
               item={item}
@@ -204,6 +199,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
               appCode={appCode || ""}
               pathname={location.pathname}
               level={1}
+              siblingIndex={index + 1}
               onNavigate={handleMenuNavigate}
             />
           ))}
@@ -212,7 +208,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
         <div className={cn("sidebar-footer", displayCollapsed && "collapsed")}>
           {!displayCollapsed && (
             <div className="sidebar-company-card">
-              <span>Company</span>
+              <span><Building2 size={13} /> Company</span>
               <strong>{companyName}</strong>
             </div>
           )}
@@ -236,10 +232,6 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
           </button>
         </div>
         <header className="workspace-header">
-          <div className="workspace-search">
-            <Search size={16} />
-            <input placeholder="Search menu, reports, forms..." />
-          </div>
           <div className="workspace-header-actions">
             <HeaderProfile
               user={user}
@@ -250,7 +242,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
           </div>
         </header>
 
-        <main className="workspace-content">
+        <main className={cn("workspace-content", isFreightModule && "freight-workspace-ui")}>
           <nav className="breadcrumb">
             <Link to="/apps">
               <Home size={14} /> Home
@@ -317,6 +309,7 @@ function MenuItem({
   appCode,
   pathname,
   level,
+  siblingIndex,
   onNavigate,
 }: {
   item: MenuNode;
@@ -326,6 +319,7 @@ function MenuItem({
   appCode: string;
   pathname: string;
   level: number;
+  siblingIndex?: number;
   onNavigate: () => void;
 }) {
   const key = item.id || item.title;
@@ -333,7 +327,8 @@ function MenuItem({
   const hasChildren = children.length > 0;
   const path = cleanPath(item.url_path);
   const to = path ? `/workspace/${appCode}/${path}` : "#";
-  const active = isMenuNodeActive(item, pathname);
+  const directActive = isPathActive(path, pathname);
+  const branchActive = !directActive && Boolean(children.some((child) => isMenuNodeActive(child, pathname)));
   const shouldRenderChildren = !collapsed && expanded[key];
   const displayTitle = titleCase(item.title);
 
@@ -341,20 +336,20 @@ function MenuItem({
     return (
       <div className={cn("nav-group", collapsed && "collapsed", `nav-level-${level}`)}>
         <button
-          className={cn("nav-item", active && "active", collapsed && "icon-only", `nav-level-${level}`)}
+          className={cn("nav-item", directActive && "active", branchActive && "branch-active", collapsed && "icon-only", `nav-level-${level}`)}
           onClick={() => setExpanded((prev) => ({ ...prev, [key]: !prev[key] }))}
           title={displayTitle}
           aria-label={displayTitle}
         >
           <span className="nav-link-copy">
-            <MenuIcon item={item} level={level} className="nav-leading-icon" />
+            <MenuIcon item={item} level={level} siblingIndex={siblingIndex} className="nav-leading-icon" />
             {!collapsed && <span title={displayTitle}>{displayTitle}</span>}
           </span>
           {!collapsed && (expanded[key] ? <ChevronDown size={15} /> : <ChevronRight size={15} />)}
         </button>
         {shouldRenderChildren && (
           <div className={cn("nav-children", collapsed && "collapsed")}>
-            {children.map((child) => (
+            {children.map((child, index) => (
               <MenuItem
                 key={child.id || child.title}
                 item={child}
@@ -364,6 +359,7 @@ function MenuItem({
                 appCode={appCode}
                 pathname={pathname}
                 level={level + 1}
+                siblingIndex={index + 1}
                 onNavigate={onNavigate}
               />
             ))}
@@ -374,27 +370,32 @@ function MenuItem({
   }
 
   return (
-    <Link className={cn("nav-item", active && "active", collapsed && "icon-only", `nav-level-${level}`)} to={to} title={displayTitle} aria-label={displayTitle} onClick={onNavigate}>
+    <Link className={cn("nav-item", directActive && "active", collapsed && "icon-only", `nav-level-${level}`)} to={to} title={displayTitle} aria-label={displayTitle} onClick={onNavigate}>
       <span className="nav-link-copy">
-        <MenuIcon item={item} level={level} className="nav-leading-icon" />
+        <MenuIcon item={item} level={level} siblingIndex={siblingIndex} className="nav-leading-icon" />
         {!collapsed && <span title={displayTitle}>{displayTitle}</span>}
       </span>
     </Link>
   );
 }
 
-function MenuIcon({ item, level, className }: { item: MenuNode; level: number; className?: string }) {
-  if (level >= 3) return <span className={cn("nav-dot", className)} aria-hidden="true" />;
+function MenuIcon({ item, level, siblingIndex, className }: { item: MenuNode; level: number; siblingIndex?: number; className?: string }) {
+  if (level >= 2) return <span className={cn("nav-index", className)} aria-hidden="true">{siblingIndex}</span>;
   const Icon = getMenuIcon(item);
   return <Icon className={className} size={level === 1 ? 15 : 13} aria-hidden="true" />;
 }
 
 function getMenuIcon(item: MenuNode): LucideIcon {
   const text = `${item.title || ""} ${item.url_path || ""}`.toLowerCase();
+  // Match specific freight operations before the generic "freight" rule so
+  // neighbouring menu entries do not all receive the same ship icon.
   if (text.includes("freight report")) return FileBarChart;
-  if (text.includes("freight air") || text.includes("airline") || text.includes("tariff")) return Plane;
-  if (text.includes("freight sea") || text.includes("vessel")) return Ship;
-  if (text.includes("freight road")) return Truck;
+  if (text.includes("request for quotation") || text.includes("request quotation") || text.includes("request_quote") || text.includes("rfq")) return FileQuestion;
+  if (text.includes("quotation")) return FileCheck2;
+  if (text.includes("enquiry") || text.includes("inquiry")) return ClipboardList;
+  if (text.includes("freight air") || text.includes("airline") || text.includes("tariff") || /^air\b/.test(text)) return Plane;
+  if (text.includes("freight sea") || text.includes("vessel") || /^sea\b/.test(text)) return Ship;
+  if (text.includes("freight road") || /^road\b/.test(text)) return Truck;
   if (text.includes("freight") || text.includes("rfq") || text.includes("quotation")) return Ship;
   if (text.includes("country")) return Globe2;
   if (text.includes("division")) return Building2;
@@ -477,7 +478,22 @@ function isPathActive(menuPath: string, pathname: string): boolean {
   if (!menuPath) return false;
   const path = normalizeRoutePath(menuPath);
   const current = normalizeRoutePath(pathname);
-  return current === path || current.endsWith(`/${path}`);
+  if (current === path || current.endsWith(`/${path}`)) return true;
+
+  // Backend menu paths and React routes sometimes use different separators
+  // (for example import_for_reexport vs import-for-reexport). Compare the
+  // canonical path segments as a fallback while retaining the mode/section
+  // segments, so identical leaf names under Air, Sea and Road do not collide.
+  const canonicalSegments = (value: string) => value
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => decodeURIComponent(segment).replace(/[^a-z0-9]/gi, "").toLowerCase());
+  const menuSegments = canonicalSegments(path);
+  const currentSegments = canonicalSegments(current);
+  if (!menuSegments.length || currentSegments.length < menuSegments.length) return false;
+  return menuSegments.every(
+    (segment, index) => segment === currentSegments[currentSegments.length - menuSegments.length + index],
+  );
 }
 
 function normalizeRoutePath(path: string) {
