@@ -2094,6 +2094,11 @@ function getFreightReportKey(context: WorkspaceRouteContext): FreightReportKey |
   if (compact.includes("freightrevenue") || compact.includes("revenue")) return "freight_revenue";
   if (compact.includes("freightbrokerage") || compact.includes("brokerage")) return "freight_brokerage";
   if (compact.includes("queryreport") || compact.includes("packquery")) return "query_report";
+  if (compact.includes("freighttracking") || compact.includes("trackingreport")) return "freight_tracking";
+  if (compact.includes("dailyactivityreport") || compact.includes("dailyactivity")) return "daily_activity_report";
+  if (compact.includes("etdreport")) return "etd_report";
+  if (compact.includes("etareport")) return "eta_report";
+  if (compact.includes("pettycashreport") || compact.includes("pettycashexpense")) return "petty_cash_report";
   if (compact.includes("freightsummaryreport") || compact.includes("summaryreport") || compact.includes("modewisesummary")) return "freight_summary";
   if (compact.includes("containerdeposit") || compact.includes("contrdeposit")) return "container_deposit";
   if (compact.includes("deposits") || compact.includes("deposit")) return "deposits";

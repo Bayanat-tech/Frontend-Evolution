@@ -21,14 +21,19 @@ export type FreightReportKey =
   | "query_report"
   | "deposits"
   | "container_deposit"
-  | "freight_summary";
+  | "freight_summary"
+  | "freight_tracking"
+  | "daily_activity_report"
+  | "etd_report"
+  | "eta_report"
+  | "petty_cash_report";
 
 type ReportColumn = { key: string; label: string; kind?: "date" | "amount" | "status" | "mode" | "type" };
 type FilterKey = "date" | "principal" | "job" | "mode" | "type" | "status" | "search";
 type AdvancedFilterKey =
   | "principalRange" | "documentRange" | "jobRange" | "confirmDate" | "scheduleDate" | "collectionDate" | "depositDate" | "expiryDate" | "etaDate" | "ataDate"
   | "division" | "departmentRange" | "portRange" | "brokerRange" | "periodMode" | "variant" | "invoice" | "vessel" | "voyage" | "container" | "bl" | "be"
-  | "claimExit" | "cleared" | "docRef" | "po" | "summaryParties" | "classification";
+  | "claimExit" | "cleared" | "docRef" | "po" | "summaryParties" | "classification" | "cashier" | "pettyDocumentRange";
 type ReportConfig = {
   title: string;
   subtitle: string;
@@ -97,6 +102,7 @@ type ReportFilters = {
   forwarder_code: string;
   doc_ref: string;
   po_no: string;
+  cashier_id: string;
   search: string;
 };
 
@@ -196,7 +202,7 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     subtitle: "Job profitability with revenue, expense, and margin control.",
     // family: "Finance Control",
     icon: BarChart3,
-    amountFields: ["REVENUE", "EXPENSE", "PROFIT"],
+    amountFields: ["REVENUE", "EXPENSE", "PARTNERS_SHARE", "TRANSPORT_PRICE", "PROFIT"],
     filters: ["date", "search"],
     advancedFilters: ["principalRange", "division", "periodMode", "variant"],
     primaryMetric: "Profit",
@@ -355,14 +361,104 @@ const reportConfigs: Record<FreightReportKey, ReportConfig> = {
     advancedFilters: ["principalRange", "division", "summaryParties", "classification", "periodMode", "variant"],
     primaryMetric: "Rows",
     columns: [
+      { key: "TRANS_MONTH", label: "Month" },
+      { key: "TRANS_YEAR", label: "Year" },
       { key: "TRANSPORT_MODE", label: "Mode", kind: "mode" },
-      { key: "JOB_TYPE", label: "Type", kind: "type" },
       { key: "PRIN_CODE", label: "Principal" },
-      { key: "PRIN_NAME", label: "Principal Name" },
-      { key: "JOB_NO", label: "Job No" },
+      { key: "GROSS_WT", label: "Gross Weight", kind: "amount" },
+      { key: "VOLUME", label: "Volume", kind: "amount" },
+      { key: "TEUS", label: "TEUs", kind: "amount" },
+      { key: "FEUS", label: "FEUs", kind: "amount" },
       { key: "REVENUE", label: "Revenue", kind: "amount" },
       { key: "EXPENSE", label: "Expense", kind: "amount" },
+      { key: "PARTNERS_SHARE", label: "Partner Share", kind: "amount" },
+      { key: "TRANSPORT_PRICE", label: "Transport", kind: "amount" },
       { key: "PROFIT", label: "Profit", kind: "amount" },
+    ],
+  },
+  freight_tracking: {
+    title: "Freight Tracking",
+    subtitle: "PowerBuilder shipment tracking details by principal and freight job.",
+    icon: Ship,
+    amountFields: [],
+    filters: ["search"],
+    advancedFilters: ["principalRange", "jobRange"],
+    primaryMetric: "Shipments",
+    columns: [
+      { key: "JOB_NO", label: "Job No" }, { key: "PRIN_CODE", label: "Principal" },
+      { key: "DOC_REF", label: "Document Ref" }, { key: "JOB_TYPE", label: "Type", kind: "type" },
+      { key: "TRANSPORT_MODE", label: "Mode", kind: "mode" }, { key: "SHIPPER_NAME", label: "Shipper" },
+      { key: "CONSIGNEE_NAME", label: "Consignee" }, { key: "CONTAINER_NO", label: "Container No" },
+      { key: "VESSEL_NAME", label: "Vessel" }, { key: "PORT_CODE", label: "Origin" },
+      { key: "DESTINATION_PORT", label: "Destination" }, { key: "ETA", label: "ETA", kind: "date" },
+      { key: "ETD", label: "ETD", kind: "date" }, { key: "GROSS_WT", label: "Gross Weight", kind: "amount" },
+    ],
+  },
+  daily_activity_report: {
+    title: "Daily Activity Report",
+    subtitle: "Confirmed freight jobs and daily container/document activity.",
+    icon: CalendarDays,
+    amountFields: [],
+    filters: ["date", "search"],
+    advancedFilters: ["principalRange", "jobRange"],
+    primaryMetric: "Jobs",
+    columns: [
+      { key: "JOB_NO", label: "Job No" }, { key: "CONFIRM_DATE", label: "Confirm Date", kind: "date" },
+      { key: "PRIN_CODE", label: "Principal" }, { key: "PRIN_NAME", label: "Principal Name" },
+      { key: "DOC_REF", label: "Document Ref" }, { key: "JOB_TYPE", label: "Type", kind: "type" },
+      { key: "CONTAINER_SIZE", label: "Container Size" }, { key: "NO_OF_CONTAINERS", label: "Containers" },
+      { key: "NO_OF_DOCUMENTS", label: "Documents" }, { key: "REMARKS", label: "Remarks" },
+    ],
+  },
+  etd_report: {
+    title: "ETD Report",
+    subtitle: "PowerBuilder expected-time-of-departure report for export shipments.",
+    icon: Ship,
+    amountFields: [],
+    filters: ["date", "status", "search"],
+    advancedFilters: ["principalRange", "jobRange", "portRange"],
+    primaryMetric: "Shipments",
+    columns: [
+      { key: "JOB_NO", label: "Job No" }, { key: "ORDER_NO", label: "Order No" },
+      { key: "MOVEMENT", label: "Movement" }, { key: "LOADING_PORT", label: "Loading Port" },
+      { key: "DISCHARGE_PORT", label: "Discharge Port" }, { key: "CONTAINER_NO", label: "Container No" },
+      { key: "BL_NO", label: "BL No" }, { key: "ETD", label: "ETD", kind: "date" },
+      { key: "ETA", label: "ETA", kind: "date" }, { key: "ATA", label: "ATA", kind: "date" },
+      { key: "TRANSIT_TIME", label: "Transit Time" }, { key: "DOC_RCVD", label: "Documents Received" },
+    ],
+  },
+  eta_report: {
+    title: "ETA Report",
+    subtitle: "PowerBuilder expected-time-of-arrival report for sea-import shipments.",
+    icon: Ship,
+    amountFields: [],
+    filters: ["date", "status", "search"],
+    advancedFilters: ["principalRange", "jobRange", "portRange"],
+    primaryMetric: "Shipments",
+    columns: [
+      { key: "JOB_NO", label: "Job No" }, { key: "PO_NO", label: "PO No" },
+      { key: "CONTAINER_NO", label: "Container No" }, { key: "DOC_REF", label: "Document Ref" },
+      { key: "COUNTRY_ORIGIN", label: "Country Origin" }, { key: "PORT_CODE", label: "Origin Port" },
+      { key: "DESTINATION_PORT", label: "Destination Port" }, { key: "ETD", label: "ETD", kind: "date" },
+      { key: "ETA", label: "ETA", kind: "date" }, { key: "ATA", label: "ATA", kind: "date" },
+      { key: "HEALTH_STATUS", label: "Health Status", kind: "status" }, { key: "REMARKS", label: "Remarks" },
+    ],
+  },
+  petty_cash_report: {
+    title: "Petty Cash Report",
+    subtitle: "PowerBuilder representative-wise petty cash statement and running balance.",
+    icon: WalletCards,
+    amountFields: ["CREDIT", "DEBIT", "BALANCE"],
+    filters: ["date", "search"],
+    advancedFilters: ["principalRange", "jobRange", "pettyDocumentRange", "cashier"],
+    primaryMetric: "Balance",
+    columns: [
+      { key: "CASHIER_ID", label: "Representative" }, { key: "DOC_NO", label: "Document No" },
+      { key: "CONFIRM_DATE", label: "Document Date", kind: "date" }, { key: "HAWB", label: "Receipt / Ref No" },
+      { key: "OTHER_SERVICES", label: "Description" }, { key: "JOB_NO", label: "Job No" },
+      { key: "REMARKS", label: "Remarks" }, { key: "PRIN_CODE", label: "Principal / Customer" },
+      { key: "CREDIT", label: "Credit", kind: "amount" }, { key: "DEBIT", label: "Debit", kind: "amount" },
+      { key: "BALANCE", label: "Balance", kind: "amount" },
     ],
   },
 };
@@ -388,6 +484,12 @@ const statusOptions = [
   { label: "Cancelled", value: "C" },
   { label: "Open", value: "O" },
   { label: "Closed", value: "Y" },
+];
+
+const shipmentHealthStatusOptions = [
+  { label: "All", value: "" },
+  { label: "Cleared For Export", value: "CL" },
+  { label: "Under Process", value: "UP" },
 ];
 
 const periodOptions = [
@@ -478,6 +580,7 @@ const emptyFilters: ReportFilters = {
   forwarder_code: "",
   doc_ref: "",
   po_no: "",
+  cashier_id: "",
   search: "",
 };
 
@@ -654,7 +757,7 @@ export function FreightReportPage({ reportKey }: { reportKey: FreightReportKey }
           {visibleFilters.includes("job") && <Field label="Job No"><Input className="h-8" value={filters.job_no} onChange={(event) => setFilter(setFilters, "job_no", event.target.value)} /></Field>}
           {visibleFilters.includes("mode") && <Field label="Mode"><Select value={filters.transport_mode} options={modeOptions} onChange={(value) => setFilter(setFilters, "transport_mode", value)} /></Field>}
           {visibleFilters.includes("type") && <Field label="Type"><Select value={filters.job_type} options={jobTypeOptions} onChange={(value) => setFilter(setFilters, "job_type", value)} /></Field>}
-          {visibleFilters.includes("status") && <Field label="Status"><Select value={filters.status} options={statusOptions} onChange={(value) => setFilter(setFilters, "status", value)} /></Field>}
+          {visibleFilters.includes("status") && <Field label="Status"><Select value={filters.status} options={reportKey === "eta_report" || reportKey === "etd_report" ? shipmentHealthStatusOptions : statusOptions} onChange={(value) => setFilter(setFilters, "status", value)} /></Field>}
         </div>
 
         {visibleFilters.includes("search") && (
@@ -878,6 +981,8 @@ function AdvancedReportFilters({
             <Field label="INCO Terms"><Input className="h-8" value={filters.inco_terms} onChange={(event) => setFilter(setFilters, "inco_terms", event.target.value)} /></Field>
           </>
         )}
+        {items.includes("cashier") && <TextFilter label="Representative / Cashier" fieldKey="cashier_id" filters={filters} setFilters={setFilters} />}
+        {items.includes("pettyDocumentRange") && <RangeText label="Document No" fromKey="doc_no_from" toKey="doc_no_to" filters={filters} setFilters={setFilters} />}
       </div>
     </div>
   );
