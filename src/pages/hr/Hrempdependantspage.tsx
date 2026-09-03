@@ -557,7 +557,7 @@ export function HrEmpDependantsPage() {
             {
                 accessorKey: "dep_name",
                 header: "Dependant Name *",
-                size: 200,
+                size: 400,
                 cell: ({ row }) => (
                     <EditableTextCell
                         initialValue={row.original.dep_name}
