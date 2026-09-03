@@ -460,7 +460,9 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
           >
             ←
           </button>
-          <h1 className="text-[17px] font-semibold text-slate-900">
+                      <span className="h-7 w-1 rounded-full bg-primary" />
+
+          <h1 className="m-0 text-[11px] font-bold  tracking-[0.18em] text-primary">
             {isNew ? "Create invoice" : viewMode ? "View invoice" : "Edit invoice"}
           </h1>
         </div>
