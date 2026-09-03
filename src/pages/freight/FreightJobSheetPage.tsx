@@ -239,10 +239,6 @@ async function saveHeader() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className="relative w-72 max-w-full">
-              <Search className="pointer-events-none absolute left-3 top-2.5 text-muted-foreground" size={15} />
-              <Input className="h-8 pl-9 text-xs" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search job..." />
-            </div>
             <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={listLoading}><RefreshCw size={14} /> Refresh</Button>
           </div>
         </div>

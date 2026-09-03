@@ -1072,7 +1072,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
             )}
             <FormSelect label="Job Type" value={header.job_type} onChange={(value) => setHeaderField("job_type", value)} options={jobTypes} />
             <FormSelect label="Mode" value={header.transport_mode} onChange={(value) => setHeaderField("transport_mode", value)} options={transportModes} />
-            <StatusField status={header.indstatus} action={header.last_action} finalApproved={header.final_approved} />
+            {/* <StatusField status={header.indstatus} action={header.last_action} finalApproved={header.final_approved} /> */}
             <ReadOnlyField label="Approval Level" value={workflowLevelText(header)} />
             <FormInput label="Offer Validity" type="date" value={header.offer_validity} onChange={(value) => setHeaderField("offer_validity", value)} />
             <FormSelect label="Member Type" value={header.member_type} onChange={(value) => setHeaderField("member_type", value)} options={memberTypes.map((value) => ({ value, label: value || "Blank" }))} />
