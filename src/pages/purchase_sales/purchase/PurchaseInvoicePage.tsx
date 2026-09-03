@@ -348,13 +348,14 @@ export function PurchaseInvoicePage({ onClose }: { onClose?: () => void } = {}) 
       </Dialog>
 
       {printTarget && (
-        <PurchaseInvoicePrintDialog
-          open={!!printTarget}
-          onClose={() => setPrintTarget(null)}
-          form={printTarget as any}
-          rows={[]}
-        />
-      )}
+  <PurchaseInvoicePrintDialog
+    open={!!printTarget}
+    onClose={() => setPrintTarget(null)}
+    form={printTarget as any}
+    companyCode={user?.company_code || ""}
+    docType="PIN"
+  />
+)}
     </section>
   );
 }

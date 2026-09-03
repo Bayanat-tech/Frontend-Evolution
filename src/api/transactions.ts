@@ -963,6 +963,90 @@ export async function getBalanceSheetReportExcelDownload(params: ReportParams): 
 
 
 
+// ─── Purchase Invoice ────────────────────────────────────────────────────
+
+export async function getPurchaseInvoiceReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PurchaseInvoice/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getPurchaseInvoiceReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PurchaseInvoice/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "Purchase_Invoice.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+// ─── Purchase Invoice Tax ────────────────────────────────────────────────
+
+export async function getPurchaseInvoiceTaxReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PurchaseInvoiceTax/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getPurchaseInvoiceTaxReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PurchaseInvoiceTax/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "Purchase_Invoice_Tax.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+// ─── Purchase Invoice - Account Details ─────────────────────────────────
+
+export async function getPurchaseInvoiceAccountDetailsReportHtml(params: Record<string, any>): Promise<string> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PurchaseInvoiceAccountDetails/html`,
+    params,
+    { responseType: "text" }
+  );
+  return response.data as string;
+}
+
+export async function getPurchaseInvoiceAccountDetailsReportExcel(params: Record<string, any>): Promise<void> {
+  const response = await api.post(
+    `/api/finance/transactions/reports/PurchaseInvoiceAccountDetails/excel`,
+    params,
+    { responseType: "blob" }
+  );
+  const blob = response.data as Blob;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "Purchase_Invoice_Account_Details.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 
 
 export async function getPoOrderRegisterReportHtml(params: Record<string, any>): Promise<string> {

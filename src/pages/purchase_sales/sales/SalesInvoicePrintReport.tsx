@@ -2,23 +2,23 @@
 
 import React, { useState } from "react";
 import { Download, FileText, Loader2, Printer, X } from "lucide-react";
-import { PurchaseOrderForm, PurchaseOrderLineRow } from "./Purchaseordertypes";
+import { PurchaseOrderForm } from "../../purchase_sales/purchase/Purchaseordertypes";
 import {
-  getPurchaseInvoiceReportHtml,
-  getPurchaseInvoiceReportExcel,
-  getPurchaseInvoiceTaxReportHtml,
-  getPurchaseInvoiceTaxReportExcel,
-  getPurchaseInvoiceAccountDetailsReportHtml,
-  getPurchaseInvoiceAccountDetailsReportExcel,
+  getSalesInvoiceReportHtml,
+  getSalesInvoiceReportExcel,
+  getSalesInvoiceTaxReportHtml,
+  getSalesInvoiceTaxReportExcel,
+  getSalesAccountDetailsReportHtml,
+  getSalesAccountDetailsReportExcel,
 } from "../../../api/transactions";
 
-// The 3 report types available in the dropdown.
-type PrintReportType = "PI" | "PI_TAX" | "ACCOUNT";
+// The 3 report types available in the dropdown/radio group.
+type SalesPrintReportType = "SI" | "SI_TAX" | "ACCOUNT";
 
-const REPORT_OPTIONS: { displayValue: string; dataValue: PrintReportType }[] = [
-  { displayValue: "Purchase Invoice", dataValue: "PI" },
-  { displayValue: "Purchase Invoice Tax", dataValue: "PI_TAX" },
-  { displayValue: "Account Details", dataValue: "ACCOUNT" },
+const REPORT_OPTIONS: { displayValue: string; dataValue: SalesPrintReportType }[] = [
+  { displayValue: "Sales Invoice", dataValue: "SI" },
+  { displayValue: "Sales Invoice Tax", dataValue: "SI_TAX" },
+  { displayValue: "Sales Account Details", dataValue: "ACCOUNT" },
 ];
 
 function formatDate(value: unknown) {
@@ -28,7 +28,7 @@ function formatDate(value: unknown) {
   return date.toISOString().slice(0, 10);
 }
 
-// ─── Shared styles — same design system as PrRegisterOldPage ───────────────
+// ─── Shared styles — same design system as PurchaseInvoicePrintDialog ─────
 
 const BG = "#EEF5FD";
 
@@ -83,7 +83,7 @@ const RadioGroup: React.FC<{
       >
         <input
           type="radio"
-          name="pi-print-type"
+          name="si-print-type"
           value={opt.dataValue}
           checked={value === opt.dataValue}
           onChange={() => onChange(opt.dataValue)}
@@ -95,29 +95,28 @@ const RadioGroup: React.FC<{
   </div>
 );
 
-export function PurchaseInvoicePrintDialog({
+export function SalesInvoicePrintDialog({
   open,
   onClose,
   form,
   companyCode,
   docType,
-  defaultReportType = "PI",
+  defaultReportType = "SI",
 }: {
   open: boolean;
   onClose: () => void;
   form: PurchaseOrderForm;
-  rows?: PurchaseOrderLineRow[];
   companyCode: string;
   docType: string;
-  defaultReportType?: PrintReportType;
+  defaultReportType?: SalesPrintReportType;
 }) {
-  const [reportType, setReportType] = useState<PrintReportType>(defaultReportType);
+  const [reportType, setReportType] = useState<SalesPrintReportType>(defaultReportType);
   const [loadingAction, setLoadingAction] = useState<"print" | "excel" | null>(null);
   const [reportError, setReportError] = useState("");
 
   if (!open) return null;
 
-  const docNo = form.doc_no || form.pi_doc_no || "";
+  const docNo = String(form.doc_no || (form as any).si_doc_no || "");
 
   const buildApiParams = () => ({
     company_code: companyCode,
@@ -126,14 +125,14 @@ export function PurchaseInvoicePrintDialog({
   });
 
   const getHtmlFn = () =>
-    reportType === "PI_TAX" ? getPurchaseInvoiceTaxReportHtml :
-    reportType === "ACCOUNT" ? getPurchaseInvoiceAccountDetailsReportHtml :
-    getPurchaseInvoiceReportHtml;
+    reportType === "SI_TAX" ? getSalesInvoiceTaxReportHtml :
+    reportType === "ACCOUNT" ? getSalesAccountDetailsReportHtml :
+    getSalesInvoiceReportHtml;
 
   const getExcelFn = () =>
-    reportType === "PI_TAX" ? getPurchaseInvoiceTaxReportExcel :
-    reportType === "ACCOUNT" ? getPurchaseInvoiceAccountDetailsReportExcel :
-    getPurchaseInvoiceReportExcel;
+    reportType === "SI_TAX" ? getSalesInvoiceTaxReportExcel :
+    reportType === "ACCOUNT" ? getSalesAccountDetailsReportExcel :
+    getSalesInvoiceReportExcel;
 
   const handlePrint = async () => {
     if (!docNo) {
@@ -149,7 +148,7 @@ export function PurchaseInvoicePrintDialog({
       setReportError("Your browser blocked the new tab. Please allow pop-ups for this site and try again.");
       return;
     }
-    newTab.document.write("<title>Purchase Invoice</title><body style='font-family:sans-serif;padding:40px;color:#6b7280;'>Loading report…</body>");
+    newTab.document.write("<title>Sales Invoice</title><body style='font-family:sans-serif;padding:40px;color:#6b7280;'>Loading report…</body>");
 
     try {
       const html = await getHtmlFn()(buildApiParams());
@@ -158,7 +157,7 @@ export function PurchaseInvoicePrintDialog({
       newTab.document.close();
     } catch (err: any) {
       newTab.document.open();
-      newTab.document.write("<title>Purchase Invoice</title><body style='font-family:sans-serif;padding:40px;color:#dc2626;'>Failed to load report. Please close this tab and try again.</body>");
+      newTab.document.write("<title>Sales Invoice</title><body style='font-family:sans-serif;padding:40px;color:#dc2626;'>Failed to load report. Please close this tab and try again.</body>");
       newTab.document.close();
       setReportError(err?.message || "Failed to load report.");
     } finally {
@@ -189,15 +188,8 @@ export function PurchaseInvoicePrintDialog({
       fontFamily: "system-ui, sans-serif",
     }}>
       <style>{`
-        .pi-print-select:hover { border-color: #185FA5 !important; }
-        .pi-print-btn-primary:hover { background: #12457f !important; }
-        .pi-print-btn-outline:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
-        @media print {
-          body * { visibility: hidden; }
-          #pi-print-area, #pi-print-area * { visibility: visible; }
-          #pi-print-area { position: absolute; inset: 0; width: 100%; }
-          .pi-print-no-print { display: none !important; }
-        }
+        .si-print-btn-primary:hover { background: #12457f !important; }
+        .si-print-btn-outline:hover { background: #EBF4FF !important; border-color: #185FA5 !important; color: #185FA5 !important; }
       `}</style>
 
       <div style={{
@@ -206,14 +198,11 @@ export function PurchaseInvoicePrintDialog({
         boxShadow: "0 20px 40px rgba(0,0,0,0.2)",
       }}>
         {/* Card header */}
-        <div className="pi-print-no-print" style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "10px 16px 0",
-        }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px 0" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <FileText size={17} color="#185FA5" />
             <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>
-              Print Preview {form.doc_no ? `— ${form.doc_no}` : ""}
+              Print Preview {docNo ? `— ${docNo}` : ""}
             </span>
           </div>
           <button onClick={onClose} aria-label="Close" style={{
@@ -226,72 +215,66 @@ export function PurchaseInvoicePrintDialog({
 
         {/* Scrollable content */}
         <div style={{ overflow: "auto", padding: "10px 16px 16px" }}>
-          <div id="pi-print-area">
-
-            {/* Field-row: header details, same look as PrRegisterOldPage filter row */}
-            <div style={{ background: BG, borderRadius: 8, padding: "10px 12px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <div style={{ minWidth: 0 }}>
-                  <FloatLabel label="Doc No" bgColor={BG}>
-                    <div style={readOnlyBoxStyle}>{form.doc_no || form.pi_doc_no || "—"}</div>
-                  </FloatLabel>
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <FloatLabel label="Date" bgColor={BG}>
-                    <div style={readOnlyBoxStyle}>{formatDate(form.doc_date || form.pi_doc_date) || "—"}</div>
-                  </FloatLabel>
-                </div>
-              </div>
-
-              <div style={{ marginTop: 12 }}>
-                <FloatLabel label="Party" bgColor={BG}>
-                  <div style={readOnlyBoxStyle}>
-                    {form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code || "—"}
-                  </div>
+          {/* Field-row: header details, same look as PurchaseInvoicePrintDialog */}
+          <div style={{ background: BG, borderRadius: 8, padding: "10px 12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div style={{ minWidth: 0 }}>
+                <FloatLabel label="Doc No" bgColor={BG}>
+                  <div style={readOnlyBoxStyle}>{docNo || "—"}</div>
                 </FloatLabel>
               </div>
-
-              <div style={{ marginTop: 12 }} className="pi-print-no-print">
-                <FloatLabel label="Print Type" bgColor={BG}>
-                  <div style={{ border: "1px solid #d1d5db", borderRadius: 7, background: "#fff", boxSizing: "border-box" }}>
-                    <RadioGroup value={reportType} onChange={(v) => setReportType(v as PrintReportType)} options={REPORT_OPTIONS} />
-                  </div>
+              <div style={{ minWidth: 0 }}>
+                <FloatLabel label="Date" bgColor={BG}>
+                  <div style={readOnlyBoxStyle}>{formatDate(form.doc_date) || "—"}</div>
                 </FloatLabel>
               </div>
             </div>
 
-            {/* Info line — the real report data now comes from the server on Print/Excel click */}
-            <div style={{ background: BG, borderRadius: 8, padding: "10px 12px", marginTop: 12 }}>
-              <FloatLabel label="Selected Report" bgColor={BG}>
-                <div style={{ ...inputStyle, minHeight: 40, display: "flex", alignItems: "center" }}>
-                  <span style={{ fontWeight: 600 }}>
-                    {REPORT_OPTIONS.find((o) => o.dataValue === reportType)?.displayValue}
-                  </span>
+            <div style={{ marginTop: 12 }}>
+              <FloatLabel label="Party" bgColor={BG}>
+                <div style={readOnlyBoxStyle}>
+                  {form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code || "—"}
                 </div>
               </FloatLabel>
             </div>
 
-            {reportError && (
-              <div style={{
-                marginTop: 10, padding: "8px 12px", background: "#fef2f2", border: "1px solid #fecaca",
-                borderRadius: 6, color: "#dc2626", fontSize: 12,
-              }}>
-                {reportError}
-              </div>
-            )}
-
-            <div className="pi-print-no-print" style={{ fontSize: 10, color: "#9ca3af", marginTop: 6, marginLeft: 4 }}>
-              Choose a "Print Type" above, then use Print or Excel below to fetch the live report for Doc No {docNo || "—"}.
+            <div style={{ marginTop: 12 }}>
+              <FloatLabel label="Print Type" bgColor={BG}>
+                <div style={{ border: "1px solid #d1d5db", borderRadius: 7, background: "#fff", boxSizing: "border-box" }}>
+                  <RadioGroup value={reportType} onChange={(v) => setReportType(v as SalesPrintReportType)} options={REPORT_OPTIONS} />
+                </div>
+              </FloatLabel>
             </div>
+          </div>
+
+          {/* Info line — the real report data comes from the server on Print/Excel click */}
+          <div style={{ background: BG, borderRadius: 8, padding: "10px 12px", marginTop: 12 }}>
+            <FloatLabel label="Selected Report" bgColor={BG}>
+              <div style={{ ...inputStyle, minHeight: 40, display: "flex", alignItems: "center" }}>
+                <span style={{ fontWeight: 600 }}>
+                  {REPORT_OPTIONS.find((o) => o.dataValue === reportType)?.displayValue}
+                </span>
+              </div>
+            </FloatLabel>
+          </div>
+
+          {reportError && (
+            <div style={{
+              marginTop: 10, padding: "8px 12px", background: "#fef2f2", border: "1px solid #fecaca",
+              borderRadius: 6, color: "#dc2626", fontSize: 12,
+            }}>
+              {reportError}
+            </div>
+          )}
+
+          <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 6, marginLeft: 4 }}>
+            Choose a "Print Type" above, then use Print or Excel below to fetch the live report for Doc No {docNo || "—"}.
           </div>
         </div>
 
         {/* Action bar */}
-        <div className="pi-print-no-print" style={{
-          display: "flex", justifyContent: "flex-end", gap: 8, padding: "10px 16px",
-          borderTop: "0.5px solid #e5e7eb",
-        }}>
-          <button onClick={onClose} className="pi-print-btn-outline" style={{
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "10px 16px", borderTop: "0.5px solid #e5e7eb" }}>
+          <button onClick={onClose} className="si-print-btn-outline" style={{
             padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff", cursor: "pointer",
             display: "flex", alignItems: "center", gap: 6, fontSize: 12, borderRadius: 6, color: "#374151",
           }}>
@@ -300,7 +283,7 @@ export function PurchaseInvoicePrintDialog({
           <button
             onClick={handleExcel}
             disabled={loadingAction !== null}
-            className="pi-print-btn-outline"
+            className="si-print-btn-outline"
             style={{
               padding: "7px 16px", border: "0.5px solid #d1d5db", background: "#fff",
               cursor: loadingAction !== null ? "not-allowed" : "pointer", opacity: loadingAction !== null ? 0.6 : 1,
@@ -313,7 +296,7 @@ export function PurchaseInvoicePrintDialog({
           <button
             onClick={handlePrint}
             disabled={loadingAction !== null}
-            className="pi-print-btn-primary"
+            className="si-print-btn-primary"
             style={{
               padding: "7px 16px", border: "0.5px solid #185FA5", background: "#185FA5",
               cursor: loadingAction !== null ? "not-allowed" : "pointer", opacity: loadingAction !== null ? 0.8 : 1,

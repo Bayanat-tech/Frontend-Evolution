@@ -533,11 +533,12 @@ export function PurchaseInvoiceEditor({
       />
 
         <PurchaseInvoicePrintDialog
-        open={printOpen}
-        onClose={() => setPrintOpen(false)}
-        form={form}
-        rows={rows}
-      />
+  open={printOpen}
+  onClose={() => setPrintOpen(false)}
+  form={form}
+  companyCode={user?.company_code || ""}
+  docType={PO_DOC_TYPE.PIN}
+/>
 
 
     </>
