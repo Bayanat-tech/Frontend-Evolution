@@ -2110,3 +2110,13 @@ function renderPrintWindow(header: QuotationHeader, details: QuotationDetail[]) 
   if (frameWindow) {
     frameWindow.onafterprint = cleanup;
   }
+  iframe.onload = () => {
+    frameWindow?.focus();
+    frameWindow?.print();
+    setTimeout(cleanup, 60_000);
+  };
+}
+
+function escapeHtml(value: string) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
