@@ -328,7 +328,7 @@ export function FreightJobActivitiesPage({
 
   if (view === "list") {
     return (
-      <section className="grid gap-3">
+    <section className="freight-list-screen grid gap-3">
         <Header eyebrow={copy.eyebrow} title={`${mode.label} ${direction.label} ${copy.title}`} subtitle={copy.subtitle}>
           {notice && <NoticeChip notice={notice} />}
           <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}><RefreshCw size={14} />Refresh</Button>

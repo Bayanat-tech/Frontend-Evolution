@@ -933,7 +933,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
 
   if (view === "list") {
     return (
-      <section className="grid gap-2.5">
+    <section className="freight-list-screen grid gap-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-card px-3 py-2 shadow-sm">
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={17} /></div>
@@ -999,14 +999,14 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
   return (
     <>
       <form ref={formRef} className="freight-dense-form freight-ui-standard freight-quotation-form" onSubmit={saveQuotation}>
-        <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+        <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><FileText size={15} /></div>
             <div className="min-w-0">
               <p className="eyebrow mb-0.5">Freight Quotation</p>
                {/* <h1 className="m-0 text-xl font-semibold leading-tight text-foreground">Quotation</h1> */}
               <div className="flex flex-wrap items-center gap-1.5">
-                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{header.quotation_nr}</h1>
+                <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{header.quotation_nr || "New Freight Quotation"}</h1>
                 {/* <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">Quotation</h1> */}
                 {/* <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">{header.quotation_nr || "New quotation"}</span> */}
                 <span className={statusBadgeClass(header.indstatus, header.last_action, header.final_approved)}>{statusLabel(header.indstatus, header.last_action, header.final_approved)}</span>

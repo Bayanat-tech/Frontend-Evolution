@@ -74,6 +74,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
   const [activeTab, setActiveTab] = useState<JobTab>(initialTab);
   const [mode, setMode] = useState<WorkspaceMode>(initialTab === "job" ? "list" : "steps");
+  const returnToList = useCallback(() => setMode("list"), []);
   const [rows, setRows] = useState<LookupRow[]>([]);
   const [query, setQuery] = useState("");
   const [selectedJob, setSelectedJob] = useState<LookupRow | null>(null);
@@ -187,7 +188,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
 
   if (mode === "list") {
     return (
-      <section className="grid gap-2">
+      <section className="freight-list-screen grid gap-2">
         <div className="freight-job-list-hero">
           <div>
             <p className="eyebrow">Freight Operations</p>
@@ -296,7 +297,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           initialJob={selectedJob}
           startMode="editor"
           onEmbeddedActionsChange={setWorkspaceActions}
-          onEmbeddedList={() => setMode("list")}
+          onEmbeddedList={returnToList}
         />
       )}
       {activeTab === "packlist" && (
@@ -307,7 +308,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           screen="packlist"
           readOnly={selectedJobReadOnly}
           onEmbeddedActionsChange={setWorkspaceActions}
-          onEmbeddedList={() => setMode("list")}
+          onEmbeddedList={returnToList}
         />
       )}
       {activeTab === "jobsheet" && (
@@ -316,14 +317,14 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           initialJob={selectedJob}
           readOnly={selectedJobReadOnly}
           onEmbeddedActionsChange={setWorkspaceActions}
-          onEmbeddedList={() => setMode("list")}
+          onEmbeddedList={returnToList}
         />
       )}
-      {activeTab === "alerts" && <FreightJobFollowupTab target={target} kind="alerts" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
-      {activeTab === "instructions" && <FreightJobFollowupTab target={target} kind="instructions" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
-      {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
-      {activeTab === "deposits" && <FreightJobFollowupTab target={target} kind="deposits" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
-      {activeTab === "activities" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="activities" readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
+      {activeTab === "alerts" && <FreightJobFollowupTab target={target} kind="alerts" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={returnToList} />}
+      {activeTab === "instructions" && <FreightJobFollowupTab target={target} kind="instructions" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={returnToList} />}
+      {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={returnToList} />}
+      {activeTab === "deposits" && <FreightJobFollowupTab target={target} kind="deposits" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={returnToList} />}
+      {activeTab === "activities" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="activities" readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={returnToList} />}
 
     </section>
   );

@@ -415,7 +415,7 @@ export function FreightJobPage({
 
   if (view === "list") {
     return (
-      <section className="grid gap-3">
+    <section className="freight-list-screen grid gap-3">
         <Header title={`${mode.label} ${direction.label} Jobs`} subtitle="Freight operations job listing" icon={Icon}>
           {notice && <NoticeChip notice={notice} />}
           <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}><RefreshCw size={14} />Refresh</Button>

@@ -1226,7 +1226,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
   return (
     <>
     <form className="freight-dense-form freight-ui-standard freight-enquiry-editor" onSubmit={saveEnquiry}>
-      <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+      <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
             <ShipWheel size={15} />
@@ -1236,7 +1236,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
               {/* {isRfq ? "Freight RFQ" : "Freight Enquiry"} */}
               </p>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{header.enquiry_nr}
+              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{header.enquiry_nr || (isRfq ? "New Request For Quote" : "New Freight Enquiry")}
                 {/* {isRfq ? "Request For Quote" : "Freight Enquiry"} */}
                 </h1>
               {/* <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">
