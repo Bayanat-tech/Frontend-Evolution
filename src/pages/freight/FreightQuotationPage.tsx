@@ -20,7 +20,8 @@ import {
   Sparkles,
   Trash2,
   CreditCard,
-  X
+  X,
+  Printer
 } from "lucide-react";
 import { api } from "../../api/client";
 import { freightSelect } from "../../api/freight";
@@ -374,6 +375,15 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
             <Button type="button" size="icon" variant="ghost" title="Open quotation" onClick={() => openQuotation(row.original)}>
               <Eye size={14} />
             </Button>
+             <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        title="Print quotation"
+        onClick={(event) => { event.stopPropagation(); void printQuotation(row.original); }}
+      >
+        <Printer size={14} />
+      </Button>
             <Button
               type="button"
               size="icon"
@@ -598,6 +608,28 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
       setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to open quotation" });
     } finally {
       setLoading(false);
+    }
+  };
+
+    const printQuotation = async (row: LookupRow) => {
+    const companyCode = lookupText(row, "company_code") || header.company_code;
+    const prinCode = lookupText(row, "prin_code");
+    const quotationNr = lookupText(row, "quotation_nr");
+    if (!companyCode || !prinCode || !quotationNr) return;
+    try {
+      const response = await api.post<{ success?: boolean; data?: { header?: LookupRow; details?: LookupRow[] }; message?: string }>(
+        "/api/freight/quotation/get",
+        { company_code: companyCode, prin_code: prinCode, quotation_nr: quotationNr },
+      );
+      if (response.data?.success === false) throw new Error(response.data.message || "Unable to load quotation");
+      const loadedRow = normalizeLookupRow(response.data?.data?.header || row);
+      const printHeader = toHeaderFromRow(loadedRow, userInfo, target);
+      const printDetails = (response.data?.data?.details || [])
+        .map((detail) => normalizeLookupRow(detail))
+        .map((detail, index) => toDetailFromRow(detail, printHeader, index + 1));
+      renderPrintWindow(printHeader, printDetails);
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Unable to print quotation" });
     }
   };
 
@@ -1711,8 +1743,7 @@ function FormInput({ label, value, onChange, type = "text", required, placeholde
   );
 }
 
-// function FormLookup({ label, value, valueField, displayFields, columns, loadOptions, onChange, required, className = "" }: { label: string; value: string; valueField: string; displayFields: string[]; columns: { field: string; header: string }[]; loadOptions: () => Promise<LookupRow[]>; onChange: (value: string, row: LookupRow | null) => void; required?: boolean; className?: string }) {
-  function FormLookup({ label, value, displayValue, valueField, displayFields, columns, loadOptions, onChange, required, className = "" }: {
+function FormLookup({ label, value, displayValue, valueField, displayFields, columns, loadOptions, onChange, required, className = "" }: {
   label: string; value: string; displayValue?: string; valueField: string; displayFields: string[];
   columns: { field: string; header: string }[]; loadOptions: () => Promise<LookupRow[]>;
   onChange: (value: string, row: LookupRow | null) => void; required?: boolean; className?: string;
@@ -1784,3 +1815,298 @@ function modeLabel(mode: string) { return mode === "S" ? "Sea" : mode === "R" ? 
 function jobTypeLabel(jobType: string) { return jobType === "IMP" ? "Import" : "Export"; }
 function round3(value: number) { return Number.isFinite(value) ? value.toFixed(3) : "0.000"; }
 function formatAmount(value: number) { return value.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 }); }
+
+// function renderPrintWindow(header: QuotationHeader, details: QuotationDetail[]) {
+//   const activeDetails = details.filter((row) => row.act_code.trim() || row.activity.trim());
+//   const rows = activeDetails.length
+//     ? activeDetails
+//         .map(
+//           (row) => `
+//       <tr>
+//         <td>${escapeHtml(row.activity || row.act_code)}</td>
+//         <td>${escapeHtml(row.uom)}</td>
+//         <td class="num">${escapeHtml(row.quantity)}</td>
+//         <td class="num">${escapeHtml(row.fc_billrate)}</td>
+//       </tr>`,
+//         )
+//         .join("")
+//     : `<tr><td colspan="4" class="empty">No activity lines</td></tr>`;
+
+//   const html = `
+//   <html>
+//     <head>
+//       <title>Quotation ${header.quotation_nr}</title>
+//       <style>
+//         @page { margin: 14mm; }
+//         * { box-sizing: border-box; }
+//         body { font-family: Arial, sans-serif; font-size: 12px; color: #1f2937; padding: 0; }
+//         .frame { padding: 0 4px; }
+
+//         .doc-header {
+//           display: flex; justify-content: space-between; align-items: flex-end;
+//           border-bottom: 2.5px solid #1e3a8a; padding-bottom: 12px; margin-bottom: 18px;
+//         }
+//         .doc-header h1 { margin: 0; font-size: 14px; letter-spacing: 0.5px; color: #1e3a8a; }
+//         .doc-header .doc-meta { text-align: right; font-size: 11px; color: #374151; }
+//         .doc-header .doc-meta .qtn-no { font-size: 13px; font-weight: bold; color: #111827; }
+
+//         .top-row { display: flex; justify-content: space-between; margin-bottom: 16px; font-size: 11px; }
+//         .top-row .label { font-weight: bold; color: #6b7280; margin-right: 4px; }
+
+//         .party-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 18px; }
+//         .party-block { border: 1px solid #e5e7eb; border-radius: 4px; padding: 10px 12px; background: #fafbfc; }
+//         .party-block .label { display: block; font-weight: bold; font-size: 10px; text-transform: uppercase; color: #6b7280; margin-bottom: 4px; }
+//         .party-block .value { white-space: pre-line; color: #9ca3af; font-style: italic; }
+
+//         .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 18px; }
+//         .info-grid .field { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dotted #e5e7eb; }
+//         .info-grid .field .label { font-weight: bold; color: #374151; }
+
+//         table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+//         thead th { background: #1e3a8a; color: #fff; border: 1px solid #1e3a8a; padding: 8px; text-align: left; font-size: 10px; text-transform: uppercase; }
+//         td { border: 1px solid #e5e7eb; padding: 8px; }
+//         tr:nth-child(even) td { background: #f8fafc; }
+//         .num { text-align: right; font-variant-numeric: tabular-nums; }
+//         .empty { text-align: center; color: #9ca3af; font-style: italic; }
+
+//         .doc-footer {
+//           margin-top: 36px; display: flex; justify-content: space-between; align-items: flex-end;
+//           font-size: 10px; color: #6b7280;
+//         }
+//         .doc-footer .signature { border-top: 1px solid #9ca3af; padding-top: 4px; width: 200px; text-align: center; }
+
+//         .print-toolbar {
+//           position: sticky; top: 0; z-index: 10;
+//           display: flex; justify-content: flex-end; gap: 8px;
+//           padding: 10px 20px; background: #f8fafc; border-bottom: 1px solid #e5e7eb;
+//           margin: 0 0 20px 0;
+//         }
+//         .print-toolbar button {
+//           font-family: Arial, sans-serif; font-size: 12px; font-weight: 600;
+//           padding: 6px 14px; border-radius: 6px; cursor: pointer; border: 1px solid #cbd5e1;
+//         }
+//         .print-toolbar .btn-print { background: #1e3a8a; color: #fff; border-color: #1e3a8a; }
+//         .print-toolbar .btn-close { background: #fff; color: #374151; }
+//         @media print { .print-toolbar { display: none; } }
+//       </style>
+//     </head>
+//     <body>
+//       <div class="print-toolbar">
+//         <button class="btn-print" onclick="window.print()">Print</button>
+//         <button class="btn-close" onclick="window.close()">Close</button>
+//       </div>
+//       <div class="frame">
+//         <div class="doc-header">
+//           <h1>REQUEST FOR QUOTATION</h1>
+//           <div class="doc-meta">
+//             <div class="qtn-no">${escapeHtml(header.quotation_nr) || "-"}</div>
+//             <div>Date: ${escapeHtml(formatDisplayDate(header.quotation_date))}</div>
+//           </div>
+//         </div>
+
+//         <div class="top-row">
+//           <div><span class="label">Enquiry No.</span>${escapeHtml(header.enquiry_no) || "-"}</div>
+//           <div><span class="label">Offer Validity</span>${escapeHtml(formatDisplayDate(header.offer_validity)) || "-"}</div>
+//         </div>
+
+//         <div class="party-grid">
+//           <div class="party-block">
+//             <span class="label">Shipper</span>
+//             <span class="value">Not specified</span>
+//           </div>
+//           <div class="party-block">
+//             <span class="label">Consignee</span>
+//             <span class="value">Not specified</span>
+//           </div>
+//         </div>
+
+//         <div class="info-grid">
+//           <div>
+//             <div class="field"><span class="label">Commodity</span><span>${escapeHtml(header.commodity) || "-"}</span></div>
+//             <div class="field"><span class="label">Remarks</span><span>${escapeHtml(header.remarks) || "-"}</span></div>
+//             <div class="field"><span class="label">Volume (c.b.m)</span><span>${escapeHtml(header.volume) || "0"}</span></div>
+//             <div class="field"><span class="label">Weight (kgs)</span><span>${escapeHtml(header.weight) || "0"}</span></div>
+//           </div>
+//           <div>
+//             <div class="field"><span class="label">Port of Loading</span><span>${escapeHtml(header.origin_port) || "-"}</span></div>
+//             <div class="field"><span class="label">Port of Destination</span><span>${escapeHtml(header.destination_port) || "-"}</span></div>
+//             <div class="field"><span class="label">Transit Time</span><span>${escapeHtml(header.transit_time) || "-"}</span></div>
+//             <div class="field"><span class="label">Mode</span><span>${modeLabel(header.transport_mode)}</span></div>
+//           </div>
+//         </div>
+
+//         <table>
+//           <thead><tr><th>Description</th><th>Unit</th><th>Quantity</th><th>Rate</th></tr></thead>
+//           <tbody>${rows}</tbody>
+//         </table>
+
+//         <div class="doc-footer">
+//           <div>Generated on ${escapeHtml(new Date().toLocaleString())}</div>
+//           <div class="signature">Authorized Signatory</div>
+//         </div>
+//       </div>
+//     </body>
+//   </html>
+// `;
+
+//   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+//   const url = window.URL.createObjectURL(blob);
+
+//   const width = 960;
+//   const height = 760;
+//   const left = Math.max(0, (window.screen.width - width) / 2);
+//   const top = Math.max(0, (window.screen.height - height) / 2);
+//   const features = `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes`;
+
+//   const printWindow = window.open(url, "_blank", features);
+//   if (!printWindow) {
+//     window.URL.revokeObjectURL(url);
+//     alert("Please allow popups for this site to view the print preview.");
+//     return;
+//   }
+//   window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+// }
+
+function renderPrintWindow(header: QuotationHeader, details: QuotationDetail[]) {
+  const activeDetails = details.filter((row) => row.act_code.trim() || row.activity.trim());
+  const billTotal = activeDetails.reduce((sum, row) => sum + (Number(row.bill) || 0), 0);
+  const rows = activeDetails.length
+    ? activeDetails
+        .map(
+          (row) => `
+      <tr>
+        <td>${escapeHtml(row.activity || row.act_code)}</td>
+        <td>${escapeHtml(row.uom)}</td>
+        <td class="num">${escapeHtml(row.quantity)}</td>
+        <td class="num">${escapeHtml(row.fc_billrate)}</td>
+      </tr>`,
+        )
+        .join("")
+    : `<tr><td colspan="4" class="empty">No activity lines</td></tr>`;
+
+  const html = `
+    <html>
+      <head>
+        <title>Quotation ${escapeHtml(header.quotation_nr)}</title>
+        <style>
+          @page { margin: 14mm; }
+          * { box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; font-size: 11px; color: #1f2937; margin: 0; }
+
+          .doc-header {
+            display: flex; justify-content: space-between; align-items: flex-end;
+            border-bottom: 2.5px solid #1e3a8a; padding-bottom: 10px; margin-bottom: 16px;
+          }
+          .doc-header h1 { margin: 0; font-size: 17px; letter-spacing: 0.5px; color: #1e3a8a; }
+          .doc-header .doc-meta { text-align: right; font-size: 10px; color: #374151; }
+          .doc-header .doc-meta .qtn-no { font-size: 14px; font-weight: bold; color: #111827; }
+
+          .top-row { display: flex; justify-content: space-between; margin-bottom: 14px; font-size: 10.5px; }
+          .top-row .label { font-weight: bold; color: #6b7280; margin-right: 4px; }
+
+          .party-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 14px; }
+          .party-block { border: 1px solid #e5e7eb; border-radius: 4px; padding: 8px 10px; background: #fafbfc; }
+          .party-block .label { display: block; font-weight: bold; font-size: 9px; text-transform: uppercase; color: #6b7280; margin-bottom: 3px; }
+          .party-block .value { color: #9ca3af; font-style: italic; font-size: 10.5px; }
+
+          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 14px; }
+          .info-grid .field { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dotted #e5e7eb; font-size: 10.5px; }
+          .info-grid .field .label { font-weight: bold; color: #374151; }
+
+          table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 4px; font-size: 10.5px; }
+          thead th { background: #1e3a8a; color: #fff; border: 1px solid #1e3a8a; padding: 5px 8px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 0.3px; }
+          td { border: 1px solid #e5e7eb; padding: 5px 8px; line-height: 1.3; }
+          tr:nth-child(even) td { background: #f8fafc; }
+          .num { text-align: right; font-variant-numeric: tabular-nums; }
+          .empty { text-align: center; color: #9ca3af; font-style: italic; }
+          tfoot td { border-top: 1.5px solid #1e3a8a; font-weight: bold; background: #fff; }
+
+          .doc-footer {
+            margin-top: 28px; display: flex; justify-content: space-between; align-items: flex-end;
+            font-size: 9px; color: #6b7280;
+          }
+          .doc-footer .signature { border-top: 1px solid #9ca3af; padding-top: 4px; width: 180px; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <div class="doc-header">
+          <h1>REQUEST FOR QUOTATION</h1>
+          <div class="doc-meta">
+            <div class="qtn-no">${escapeHtml(header.quotation_nr) || "-"}</div>
+            <div>Date: ${escapeHtml(formatDisplayDate(header.quotation_date))}</div>
+          </div>
+        </div>
+
+        <div class="top-row">
+          <div><span class="label">Enquiry No.</span>${escapeHtml(header.enquiry_no) || "-"}</div>
+          <div><span class="label">Offer Validity</span>${escapeHtml(formatDisplayDate(header.offer_validity)) || "-"}</div>
+        </div>
+
+        <div class="party-grid">
+          <div class="party-block">
+            <span class="label">Shipper</span>
+            <span class="value">Not specified</span>
+          </div>
+          <div class="party-block">
+            <span class="label">Consignee</span>
+            <span class="value">Not specified</span>
+          </div>
+        </div>
+
+        <div class="info-grid">
+          <div>
+            <div class="field"><span class="label">Commodity</span><span>${escapeHtml(header.commodity) || "-"}</span></div>
+            <div class="field"><span class="label">Remarks</span><span>${escapeHtml(header.remarks) || "-"}</span></div>
+            <div class="field"><span class="label">Volume (c.b.m)</span><span>${escapeHtml(header.volume) || "0"}</span></div>
+            <div class="field"><span class="label">Weight (kgs)</span><span>${escapeHtml(header.weight) || "0"}</span></div>
+          </div>
+          <div>
+            <div class="field"><span class="label">Port of Loading</span><span>${escapeHtml(header.origin_port) || "-"}</span></div>
+            <div class="field"><span class="label">Port of Destination</span><span>${escapeHtml(header.destination_port) || "-"}</span></div>
+            <div class="field"><span class="label">Transit Time</span><span>${escapeHtml(header.transit_time) || "-"}</span></div>
+            <div class="field"><span class="label">Mode</span><span>${modeLabel(header.transport_mode)}</span></div>
+          </div>
+        </div>
+
+        <table>
+          <colgroup>
+            <col style="width:46%"><col style="width:18%"><col style="width:18%"><col style="width:18%">
+          </colgroup>
+          <thead><tr><th>Description</th><th>Unit</th><th>Quantity</th><th>Rate</th></tr></thead>
+          <tbody>${rows}</tbody>
+          ${activeDetails.length ? `<tfoot><tr><td colspan="3" class="num">Total</td><td class="num">${formatAmount(billTotal)}</td></tr></tfoot>` : ""}
+        </table>
+
+        <div class="doc-footer">
+          <div>Generated on ${escapeHtml(new Date().toLocaleString())}</div>
+          <div class="signature">Authorized Signatory</div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const existing = document.getElementById("freight-print-frame");
+  existing?.remove();
+
+  const iframe = document.createElement("iframe");
+  iframe.id = "freight-print-frame";
+  iframe.style.position = "fixed";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.style.visibility = "hidden";
+  document.body.appendChild(iframe);
+
+  const frameWindow = iframe.contentWindow;
+  const doc = frameWindow?.document;
+  if (!doc) { iframe.remove(); return; }
+
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  const cleanup = () => setTimeout(() => iframe.remove(), 500);
+
+  if (frameWindow) {
+    frameWindow.onafterprint = cleanup;
+  }

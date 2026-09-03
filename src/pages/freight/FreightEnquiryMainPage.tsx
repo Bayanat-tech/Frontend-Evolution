@@ -1,7 +1,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { FormEvent, useEffect, useMemo, useState, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { Activity, AlertTriangle, ArrowLeft, Ban, CreditCard, Eye, MapPinned, PackageCheck, Paperclip, Plus, RefreshCw, RotateCcw, Save, ShieldCheck, ShipWheel, Sparkles, Trash2, X } from "lucide-react";
+import { Activity, AlertTriangle, ArrowLeft, Ban, CreditCard, Eye, MapPinned, PackageCheck, Paperclip, Plus, Printer, RefreshCw, RotateCcw, Save, ShieldCheck, ShipWheel, Sparkles, Trash2, X } from "lucide-react";
 import { api } from "../../api/client";
 import { freightSelect } from "../../api/freight";
 import { getLookupValue, type LookupRow } from "../../api/lookups";
@@ -364,6 +364,10 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
             <div className="flex items-center justify-end gap-1">
               <Button type="button" size="icon" variant="ghost" title={`Open ${enquiryLabel}`} onClick={() => openEnquiry(row.original)}>
                 <Eye size={14} />
+              </Button>
+              <Button type="button" size="icon" variant="ghost" title={`Print ${enquiryLabel}`}
+                     onClick={(event) => { event.stopPropagation(); void printEnquiry(row.original); }}>
+                     <Printer size={14} />
               </Button>
               <Button
                 type="button"
@@ -978,6 +982,29 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
     }
   };
 
+  const printEnquiry = async (row: EnquiryListRow) => {
+  const companyCode = lookupText(row, "company_code") || header.company_code;
+  const enquiryNr = lookupText(row, "enquiry_nr");
+  const enquiryType = lookupText(row, "enquiry_type") || (screenType === "rfq" ? "RFQ" : "EQI");
+  if (!companyCode || !enquiryNr) return;
+  try {
+    const response = await api.post<{ success?: boolean; data?: { header?: LookupRow | null; details?: LookupRow[] }; message?: string }>(
+      isRfq ? "/api/freight/rfq/get" : "/api/freight/enquiry/get",
+      { company_code: companyCode, enquiry_type: enquiryType, enquiry_nr: enquiryNr },
+    );
+    if (response.data?.success === false) throw new Error(response.data.message || `Unable to load ${enquiryLabel}`);
+    const headerRow = normalizeLookupRow(response.data?.data?.header || row);
+    const mergedRow = { ...normalizeLookupRow(row), ...headerRow };
+    const printHeader = toHeaderFromRow(mergedRow, userInfo, target, screenType);
+    const printDetails = (response.data?.data?.details || [])
+      .map((detail) => normalizeLookupRow(detail))
+      .map((detail, index) => toDetailFromRow(detail, printHeader, index + 1));
+    renderPrintWindow(printHeader, printDetails, enquiryLabel);
+  } catch (error) {
+    setNotice({ type: "error", text: error instanceof Error ? error.message : `Unable to print ${enquiryLabel}` });
+  }
+};
+
   useEffect(() => {
     if (!openRecordNo || deepOpenDone === openRecordNo) return;
     const recordType = lookupText(freightSearchRecord || {}, "record_type").toUpperCase();
@@ -1316,10 +1343,12 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
           <FormLookup label="Principal" value={header.prin_code} displayValue={headerNames.prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required className="sm:col-span-2 xl:col-span-1.5" />
           <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayValue={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }, { field: "prin_telno1", header: "Phone" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} className="sm:col-span-2 xl:col-span-1.5" />
           <FormLookup label="Salesman" value={header.salesman_code} displayValue={headerNames.salesman_name} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Salesman" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} className="sm:col-span-2 xl:col-span-1.5" />
-          <StatusField status={header.indstatus} action={header.last_action} finalApproved={header.final_approved} />
-          <TypeField label="Approval Level" value={workflowLevelText(header)} />
+          {/* <StatusField status={header.indstatus} action={header.last_action} finalApproved={header.final_approved} />
+          <TypeField label="Approval Level" value={workflowLevelText(header)} /> */}
           <FormInput label="Offer Validity" type="date" value={header.offer_validity} onChange={(value) => setHeaderField("offer_validity", value)} />
           <TypeField label="Type" value={header.enquiry_type} />
+          <StatusField status={header.indstatus} action={header.last_action} finalApproved={header.final_approved} />
+          <TypeField label="Approval Level" value={workflowLevelText(header)} />
           {isRfq && !header.enquiry_nr && (
             <FormLookup
               label="Source Enquiry"
@@ -2480,6 +2509,316 @@ function formatDisplayDate(input: string) {
   const parsed = new Date(input);
   if (Number.isNaN(parsed.getTime())) return input;
   return parsed.toLocaleDateString("en-GB");
+}
+
+// function renderPrintWindow(header: EnquiryHeader, details: EnquiryDetail[], label: string) {
+//   const win = window.open("", "_blank", "width=900,height=1000");
+//   if (!win) return;
+
+//   const activeDetails = details.filter((row) => row.act_code.trim() || row.activity.trim());
+//   const rows = activeDetails.length
+//     ? activeDetails
+//         .map(
+//           (row) => `
+//       <tr>
+//         <td>${escapeHtml(row.activity || row.act_code)}</td>
+//         <td>${escapeHtml(row.uom)}</td>
+//         <td class="num">${escapeHtml(row.quantity)}</td>
+//         <td class="num">${escapeHtml(row.bill_rate)}</td>
+//       </tr>`,
+//         )
+//         .join("")
+//     : `<tr><td colspan="4" class="empty">No activity lines</td></tr>`;
+
+//   win.document.write(`
+//     <html>
+//       <head>
+//         <title>${label} ${header.enquiry_nr}</title>
+//         <style>
+//           @page { margin: 14mm; }
+//           * { box-sizing: border-box; }
+//           body { font-family: Arial, sans-serif; font-size: 12px; color: #1f2937; padding: 20px; }
+//           .frame { border: 1.5px solid #1e3a8a; border-radius: 4px; padding: 28px 32px; }
+//           h1 { text-align: center; font-size: 20px; letter-spacing: 3px; margin: 0 0 24px; color: #111827; }
+//           .top-row { display: flex; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb; margin-bottom: 16px; }
+//           .party-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 16px; }
+//           .party-block { border: 1px solid #e5e7eb; border-radius: 4px; padding: 10px 12px; }
+//           .party-block .label { display: block; font-weight: bold; font-size: 10px; text-transform: uppercase; color: #6b7280; margin-bottom: 4px; }
+//           .party-block .value { white-space: pre-line; }
+//           .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 18px; }
+//           .info-grid .field { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dotted #e5e7eb; }
+//           .info-grid .field .label { font-weight: bold; color: #374151; }
+//           table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+//           th { background: #f3f4f6; border: 1px solid #d1d5db; padding: 7px 8px; text-align: left; font-size: 10px; text-transform: uppercase; color: #374151; }
+//           td { border: 1px solid #e5e7eb; padding: 7px 8px; }
+//           tr:nth-child(even) td { background: #fafafa; }
+//           .num { text-align: right; font-variant-numeric: tabular-nums; }
+//           .empty { text-align: center; color: #9ca3af; font-style: italic; }
+//         </style>
+//       </head>
+//       <body>
+//         <div class="frame">
+//           <h1>REQUEST</h1>
+
+//           <div class="top-row">
+//             <div><span class="label">Date: </span>${escapeHtml(formatDisplayDate(header.enquiry_date))}</div>
+//             <div><span class="label">Enquiry No.: </span><strong>${escapeHtml(header.enquiry_nr)}</strong></div>
+//           </div>
+
+//           <div class="party-grid">
+//             <div class="party-block">
+//               <span class="label">Shipper</span>
+//               <span class="value">${escapeHtml(header.shipper_name) || "-"}${header.shipper_address ? "\n" + escapeHtml(header.shipper_address) : ""}</span>
+//             </div>
+//             <div class="party-block">
+//               <span class="label">Consignee</span>
+//               <span class="value">${escapeHtml(header.consignee_name) || "-"}${header.consignee_address ? "\n" + escapeHtml(header.consignee_address) : ""}</span>
+//             </div>
+//           </div>
+
+//           <div class="info-grid">
+//             <div>
+//               <div class="field"><span class="label">Commodity</span><span>${escapeHtml(header.commodity) || "-"}</span></div>
+//               <div class="field"><span class="label">Remarks</span><span>${escapeHtml(header.remarks) || "-"}</span></div>
+//               <div class="field"><span class="label">Volume (c.b.m)</span><span>${escapeHtml(header.volume) || "0"}</span></div>
+//               <div class="field"><span class="label">Weight (kgs)</span><span>${escapeHtml(header.weight) || "0"}</span></div>
+//             </div>
+//             <div>
+//               <div class="field"><span class="label">Port of Loading</span><span>${escapeHtml(header.origin_port) || "-"}</span></div>
+//               <div class="field"><span class="label">Port of Destination</span><span>${escapeHtml(header.destination_port) || "-"}</span></div>
+//               <div class="field"><span class="label">Transit Time</span><span>${escapeHtml(header.transit_time) || "-"}</span></div>
+//               <div class="field"><span class="label">Offer Validity</span><span>${escapeHtml(formatDisplayDate(header.offer_validity)) || "-"}</span></div>
+//             </div>
+//           </div>
+
+//           <table>
+//             <thead><tr><th>Description</th><th>Unit</th><th>Quantity</th><th>Rate</th></tr></thead>
+//             <tbody>${rows}</tbody>
+//           </table>
+//         </div>
+//       </body>
+//     </html>
+//   `);
+//   win.document.close();
+//   win.focus();
+//   win.print();
+// }
+
+// function renderPrintWindow(header: EnquiryHeader, details: EnquiryDetail[], label: string) {
+//   const activeDetails = details.filter((row) => row.act_code.trim() || row.activity.trim());
+//   const rows = activeDetails.length
+//     ? activeDetails
+//         .map(
+//           (row) => `
+//       <tr>
+//         <td>${escapeHtml(row.activity || row.act_code)}</td>
+//         <td>${escapeHtml(row.uom)}</td>
+//         <td class="num">${escapeHtml(row.quantity)}</td>
+//         <td class="num">${escapeHtml(row.bill_rate)}</td>
+//       </tr>`,
+//         )
+//         .join("")
+//     : `<tr><td colspan="4" class="empty">No activity lines</td></tr>`;
+
+//   const html = `
+//     <html>
+//       <head>
+//         <title>${label} ${header.enquiry_nr}</title>
+//         <style>
+//           @page { margin: 14mm; }
+//           * { box-sizing: border-box; }
+//           body { font-family: Arial, sans-serif; font-size: 12px; color: #1f2937; padding: 20px; }
+//           .frame { border: 1.5px solid #1e3a8a; border-radius: 4px; padding: 28px 32px; }
+//           h1 { text-align: center; font-size: 20px; letter-spacing: 3px; margin: 0 0 24px; color: #111827; }
+//           .top-row { display: flex; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb; margin-bottom: 16px; }
+//           .party-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 16px; }
+//           .party-block { border: 1px solid #e5e7eb; border-radius: 4px; padding: 10px 12px; }
+//           .party-block .label { display: block; font-weight: bold; font-size: 10px; text-transform: uppercase; color: #6b7280; margin-bottom: 4px; }
+//           .party-block .value { white-space: pre-line; }
+//           .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 18px; }
+//           .info-grid .field { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dotted #e5e7eb; }
+//           .info-grid .field .label { font-weight: bold; color: #374151; }
+//           table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+//           th { background: #f3f4f6; border: 1px solid #d1d5db; padding: 7px 8px; text-align: left; font-size: 10px; text-transform: uppercase; color: #374151; }
+//           td { border: 1px solid #e5e7eb; padding: 7px 8px; }
+//           tr:nth-child(even) td { background: #fafafa; }
+//           .num { text-align: right; font-variant-numeric: tabular-nums; }
+//           .empty { text-align: center; color: #9ca3af; font-style: italic; }
+//         </style>
+//       </head>
+//       <body>
+//         <div class="frame">
+//           <h1>REQUEST</h1>
+
+//           <div class="top-row">
+//             <div><span class="label">Date: </span>${escapeHtml(formatDisplayDate(header.enquiry_date))}</div>
+//             <div><span class="label">Enquiry No.: </span><strong>${escapeHtml(header.enquiry_nr)}</strong></div>
+//           </div>
+
+//           <div class="party-grid">
+//             <div class="party-block">
+//               <span class="label">Shipper</span>
+//               <span class="value">${escapeHtml(header.shipper_name) || "-"}${header.shipper_address ? "\n" + escapeHtml(header.shipper_address) : ""}</span>
+//             </div>
+//             <div class="party-block">
+//               <span class="label">Consignee</span>
+//               <span class="value">${escapeHtml(header.consignee_name) || "-"}${header.consignee_address ? "\n" + escapeHtml(header.consignee_address) : ""}</span>
+//             </div>
+//           </div>
+
+//           <div class="info-grid">
+//             <div>
+//               <div class="field"><span class="label">Commodity</span><span>${escapeHtml(header.commodity) || "-"}</span></div>
+//               <div class="field"><span class="label">Remarks</span><span>${escapeHtml(header.remarks) || "-"}</span></div>
+//               <div class="field"><span class="label">Volume (c.b.m)</span><span>${escapeHtml(header.volume) || "0"}</span></div>
+//               <div class="field"><span class="label">Weight (kgs)</span><span>${escapeHtml(header.weight) || "0"}</span></div>
+//             </div>
+//             <div>
+//               <div class="field"><span class="label">Port of Loading</span><span>${escapeHtml(header.origin_port) || "-"}</span></div>
+//               <div class="field"><span class="label">Port of Destination</span><span>${escapeHtml(header.destination_port) || "-"}</span></div>
+//               <div class="field"><span class="label">Transit Time</span><span>${escapeHtml(header.transit_time) || "-"}</span></div>
+//               <div class="field"><span class="label">Offer Validity</span><span>${escapeHtml(formatDisplayDate(header.offer_validity)) || "-"}</span></div>
+//             </div>
+//           </div>
+
+//           <table>
+//             <thead><tr><th>Description</th><th>Unit</th><th>Quantity</th><th>Rate</th></tr></thead>
+//             <tbody>${rows}</tbody>
+//           </table>
+//         </div>
+//       </body>
+//     </html>
+//   `;
+
+//   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+//   const url = window.URL.createObjectURL(blob);
+//   window.open(url, "_blank", "noopener,noreferrer");
+//   window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+// }
+
+function renderPrintWindow(header: EnquiryHeader, details: EnquiryDetail[], label: string) {
+  const activeDetails = details.filter((row) => row.act_code.trim() || row.activity.trim());
+  const rows = activeDetails.length
+    ? activeDetails
+        .map(
+          (row) => `
+      <tr>
+        <td>${escapeHtml(row.activity || row.act_code)}</td>
+        <td>${escapeHtml(row.uom)}</td>
+        <td class="num">${escapeHtml(row.quantity)}</td>
+        <td class="num">${escapeHtml(row.bill_rate)}</td>
+      </tr>`,
+        )
+        .join("")
+    : `<tr><td colspan="4" class="empty">No activity lines</td></tr>`;
+
+  const html = `
+    <html>
+      <head>
+        <title>${label} ${header.enquiry_nr}</title>
+        <style>
+          @page { margin: 14mm; }
+          * { box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; font-size: 12px; color: #1f2937; padding: 20px; }
+          .frame { border: 1.5px solid #1e3a8a; border-radius: 4px; padding: 28px 32px; }
+          h1 { text-align: center; font-size: 20px; letter-spacing: 3px; margin: 0 0 24px; color: #111827; }
+          .top-row { display: flex; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb; margin-bottom: 16px; }
+          .party-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 16px; }
+          .party-block { border: 1px solid #e5e7eb; border-radius: 4px; padding: 10px 12px; }
+          .party-block .label { display: block; font-weight: bold; font-size: 10px; text-transform: uppercase; color: #6b7280; margin-bottom: 4px; }
+          .party-block .value { white-space: pre-line; }
+          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 18px; }
+          .info-grid .field { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dotted #e5e7eb; }
+          .info-grid .field .label { font-weight: bold; color: #374151; }
+          table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+          th { background: #f3f4f6; border: 1px solid #d1d5db; padding: 7px 8px; text-align: left; font-size: 10px; text-transform: uppercase; color: #374151; }
+          td { border: 1px solid #e5e7eb; padding: 7px 8px; }
+          tr:nth-child(even) td { background: #fafafa; }
+          .num { text-align: right; font-variant-numeric: tabular-nums; }
+          .empty { text-align: center; color: #9ca3af; font-style: italic; }
+          .print-toolbar {
+            position: sticky; top: 0; z-index: 10;
+            display: flex; justify-content: flex-end; gap: 8px;
+            padding: 10px 20px; background: #f8fafc; border-bottom: 1px solid #e5e7eb;
+            margin: -20px -20px 20px -20px;
+          }
+          .print-toolbar button {
+            font-family: Arial, sans-serif; font-size: 12px; font-weight: 600;
+            padding: 6px 14px; border-radius: 6px; cursor: pointer; border: 1px solid #cbd5e1;
+          }
+          .print-toolbar .btn-print { background: #1e3a8a; color: #fff; border-color: #1e3a8a; }
+          .print-toolbar .btn-close { background: #fff; color: #374151; }
+          @media print { .print-toolbar { display: none; } }
+        </style>
+      </head>
+      <body>
+        <div class="print-toolbar">
+          <button class="btn-print" onclick="window.print()">Print</button>
+          <button class="btn-close" onclick="window.close()">Close</button>
+        </div>
+        <div class="frame">
+          <h1>REQUEST</h1>
+
+          <div class="top-row">
+            <div><span class="label">Date: </span>${escapeHtml(formatDisplayDate(header.enquiry_date))}</div>
+            <div><span class="label">Enquiry No.: </span><strong>${escapeHtml(header.enquiry_nr)}</strong></div>
+          </div>
+
+          <div class="party-grid">
+            <div class="party-block">
+              <span class="label">Shipper</span>
+              <span class="value">${escapeHtml(header.shipper_name) || "-"}${header.shipper_address ? "\n" + escapeHtml(header.shipper_address) : ""}</span>
+            </div>
+            <div class="party-block">
+              <span class="label">Consignee</span>
+              <span class="value">${escapeHtml(header.consignee_name) || "-"}${header.consignee_address ? "\n" + escapeHtml(header.consignee_address) : ""}</span>
+            </div>
+          </div>
+
+          <div class="info-grid">
+            <div>
+              <div class="field"><span class="label">Commodity</span><span>${escapeHtml(header.commodity) || "-"}</span></div>
+              <div class="field"><span class="label">Remarks</span><span>${escapeHtml(header.remarks) || "-"}</span></div>
+              <div class="field"><span class="label">Volume (c.b.m)</span><span>${escapeHtml(header.volume) || "0"}</span></div>
+              <div class="field"><span class="label">Weight (kgs)</span><span>${escapeHtml(header.weight) || "0"}</span></div>
+            </div>
+            <div>
+              <div class="field"><span class="label">Port of Loading</span><span>${escapeHtml(header.origin_port) || "-"}</span></div>
+              <div class="field"><span class="label">Port of Destination</span><span>${escapeHtml(header.destination_port) || "-"}</span></div>
+              <div class="field"><span class="label">Transit Time</span><span>${escapeHtml(header.transit_time) || "-"}</span></div>
+              <div class="field"><span class="label">Offer Validity</span><span>${escapeHtml(formatDisplayDate(header.offer_validity)) || "-"}</span></div>
+            </div>
+          </div>
+
+          <table>
+            <thead><tr><th>Description</th><th>Unit</th><th>Quantity</th><th>Rate</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = window.URL.createObjectURL(blob);
+
+  const width = 960;
+  const height = 760;
+  const left = Math.max(0, (window.screen.width - width) / 2);
+  const top = Math.max(0, (window.screen.height - height) / 2);
+  const features = `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes`;
+
+  const printWindow = window.open(url, "_blank", features);
+  if (!printWindow) {
+    window.URL.revokeObjectURL(url);
+    alert("Please allow popups for this site to view the print preview.");
+    return;
+  }
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+}
+
+function escapeHtml(value: string) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 const fieldClassName =

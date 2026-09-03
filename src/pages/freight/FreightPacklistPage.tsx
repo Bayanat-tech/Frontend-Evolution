@@ -540,10 +540,10 @@ export function FreightPacklistPage({
         <Panel className="lg:col-span-12" icon={UserRound} title="Parties" meta="Shipper / Consignee / Notify">
           <div className="freight-job-field-grid freight-job-field-grid-3">
             <Textarea label="Shipper" value={pack.shipper_name} onChange={(value) => setPackField(setPack, "shipper_name", value)} />
-            <Textarea label="Consignee" value={pack.consignee_name} onChange={(value) => setPackField(setPack, "consignee_name", value)} />
-            <Textarea label="Notify" value={pack.notify_name} onChange={(value) => setPackField(setPack, "notify_name", value)} />
             <Textarea label="Shipper Address" value={pack.shipper_address} onChange={(value) => setPackField(setPack, "shipper_address", value)} />
-            <Textarea label="Consignee Address" value={pack.consignee_address} onChange={(value) => setPackField(setPack, "consignee_address", value)} />
+            <Textarea label="Consignee" value={pack.consignee_name} onChange={(value) => setPackField(setPack, "consignee_name", value)} />
+            <Textarea label="Consignee Address" value={pack.consignee_address} onChange={(value) => setPackField(setPack, "consignee_address", value)} /> 
+            <Textarea label="Notify" value={pack.notify_name} onChange={(value) => setPackField(setPack, "notify_name", value)} />
             <Textarea label="Notify Address" value={pack.notify_address} onChange={(value) => setPackField(setPack, "notify_address", value)} />
           </div>
         </Panel>

@@ -3715,6 +3715,14 @@ body.mobile-menu-lock .sidebar.mobile-sidebar {
   background: #f8fafc;
 } */
 
+.freight-quotation-header-grid > * {
+  min-width: 0;
+}
+
+.freight-quotation-header-grid input[type="date"] {
+  width: 100%;
+  min-width: 0;
+}
 
 .freight-job-table-scroll {
   max-height: calc(100vh - 330px);
