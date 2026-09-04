@@ -89,6 +89,41 @@ function recalcItem<T extends Partial<TPRItem>>(item: T, exRate: number, userLev
   return item;
 }
 
+// ─── Discount Distribution Helpers ─────────────────────────────────────────
+function calculateTotalUnitPrice(items: TPRItem[], userLevel: number): number {
+  return items.reduce((total, item) => {
+    const qty = itemQty(item, userLevel);
+    const rate = num(item.ITEM_RATE);
+    return total + (rate * qty);
+  }, 0);
+}
+
+function distributeDiscountToItems(
+  items: TPRItem[], 
+  discPercent: number, 
+  userLevel: number
+): TPRItem[] {
+  const totalUnitPrice = calculateTotalUnitPrice(items, userLevel);
+  if (totalUnitPrice === 0 || discPercent === 0) {
+    return items.map(item => {
+      const updated = { ...item, DISCOUNT_AMOUNT: 0 };
+      const exRate = num(updated.CURRENCY_RATE) || 1;
+      return recalcItem(updated, exRate, userLevel);
+    });
+  }
+
+  return items.map(item => {
+    const itemQtyVal = itemQty(item, userLevel);
+    const unitPrice = num(item.ITEM_RATE);
+    const itemTotal = unitPrice * itemQtyVal;
+    const itemDiscPercent = (itemTotal / totalUnitPrice) * discPercent;
+    
+    const updated = { ...item, DISCOUNT_AMOUNT: itemDiscPercent };
+    const exRate = num(updated.CURRENCY_RATE) || 1;
+    return recalcItem(updated, exRate, userLevel);
+  });
+}
+
 function cleanNumericData(data: any): any {
   const numericFields = [
     'AMOUNT', 'CURRENCY_RATE', 'ITEM_RATE', 'ITEM_QTY',
@@ -242,6 +277,16 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
   const isInitialized = useRef(false);
   const disabled = isViewMode || saving;
 
+  // ─── Set Flow Code for New Document ─────────────────────────────
+  useEffect(() => {
+    if (isEditMode || isViewMode) return;
+    if (!flowCode) return;
+
+    setHdr("FLOW_CODE", flowCode);
+    if (flowDescription) {
+      setHdr("FLOW_DESCRIPTION", flowDescription);
+    }
+  }, [flowCode, flowDescription, isEditMode, isViewMode]);
 
   useEffect(() => {
     if (isInitialized.current) return;
@@ -288,6 +333,12 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
 
   // ─── Fetch user's approval level based on flow ──────────────
   useEffect(() => {
+    // New document → creator hamesha Level 1, API call ki zaroorat nahi
+    if (!isEditMode && !isViewMode) {
+      setUserApprovalLevel(1);
+      return;
+    }
+
     const fetchUserLevel = async () => {
       if (!user?.loginid || !companyCode || !header.FLOW_CODE) return;
 
@@ -316,7 +367,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     };
 
     fetchUserLevel();
-  }, [user, companyCode, header.FLOW_CODE, header.FLOW_LEVEL_RUNNING]);
+  }, [user, companyCode, header.FLOW_CODE, header.FLOW_LEVEL_RUNNING, isEditMode, isViewMode]);
 
   const shouldShowSupplier = (): boolean => {
     return userApprovalLevel >= 6;
@@ -327,7 +378,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
   };
 
   const shouldShowTermsTab = (): boolean => {
-    return userApprovalLevel >= 6;
+    return userApprovalLevel >= 6 || (header as any).FINAL_APPROVED === "Y";
   };
 
   // ─── Lookup Queries ──────────────────────────────────────────────
@@ -498,6 +549,13 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
   // ─── Set Header Data ─────────────────────────────────────────────
   useEffect(() => {
     if (!isEditMode && !isViewMode) {
+      // Set flow code from props for new document
+      if (flowCode) {
+        setHdr("FLOW_CODE", flowCode);
+        if (flowDescription) {
+          setHdr("FLOW_DESCRIPTION", flowDescription);
+        }
+      }
       setLoading(false);
       return;
     }
@@ -510,25 +568,54 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
         DIV_NAME: (headerData as any).DIV_NAME || "",
         DEPT_CODE_FLOW: (headerData as any).DEPT_CODE_FLOW || "",
         DEPT_NAME: (headerData as any).DEPT_NAME || "",
-        FLOW_CODE: (headerData as any).FLOW_CODE || headerData.FLOW_CODE || "",
-        FLOW_DESCRIPTION: (headerData as any).FLOW_DESCRIPTION || headerData.FLOW_DESCRIPTION || "",
+        FLOW_CODE: (headerData as any).FLOW_CODE || flowCode || headerData.FLOW_CODE || "",
+        FLOW_DESCRIPTION: (headerData as any).FLOW_DESCRIPTION || flowDescription || headerData.FLOW_DESCRIPTION || "",
+        CURR_NAME: (headerData as any).CURR_NAME || "",
+        TX_CAT_NAME: (headerData as any).TX_CAT_NAME || "",
+        TX_COMPNTCAT_NAME: (headerData as any).TX_COMPNTCAT_NAME || "",
       });
       setLoading(false);
     } else if (!loading) {
       setLoading(false);
     }
-  }, [hdrList, isEditMode, isViewMode, requestNumber]);
+  }, [hdrList, isEditMode, isViewMode, requestNumber, flowCode, flowDescription]);
 
-  // ─── Set Flow Code for New Document ─────────────────────────────
+  // ─── Enrich Header Names from Lookups (fallback if API didn't return names) ───
   useEffect(() => {
-    if (isEditMode || isViewMode) return;
-    if (!flowCode && !flowDescription) return;
-    setHeader((prev) => ({
-      ...prev,
-      FLOW_CODE: flowCode || (prev as any).FLOW_CODE,
-      FLOW_DESCRIPTION: flowDescription || (prev as any).FLOW_DESCRIPTION,
-    }));
-  }, [isEditMode, isViewMode, flowCode, flowDescription]);
+    if (!isEditMode && !isViewMode) return;
+    if (!header.CURR_CODE && !header.TX_CAT_CODE && !header.TX_COMPNTCAT_CODE_1) return;
+
+    setHeader((prev) => {
+      const updates: Partial<TPRHeader> & { TX_COMPNTCAT_NAME?: string } = {};
+
+      if (prev.CURR_CODE && !prev.CURR_NAME && currencyList.length > 0) {
+        const curr = currencyList.find((c: any) => c.CURR_CODE === prev.CURR_CODE);
+        if (curr) updates.CURR_NAME = curr.CURR_NAME || "";
+      }
+
+      if (prev.TX_CAT_CODE && !prev.TX_CAT_NAME && taxCodes.length > 0) {
+        const tax = taxCodes.find((t: any) => t.TX_CAT_CODE === prev.TX_CAT_CODE);
+        if (tax) updates.TX_CAT_NAME = tax.TX_CAT_NAME || "";
+      }
+
+      if (prev.TX_COMPNTCAT_CODE_1 && !(prev as any).TX_COMPNTCAT_NAME && taxComponentList.length > 0) {
+        const comp = taxComponentList.find((t: any) => t.TX_COMPNTCAT_CODE === prev.TX_COMPNTCAT_CODE_1);
+        if (comp) updates.TX_COMPNTCAT_NAME = comp.TX_COMPNTCAT_NAME || "";
+      }
+
+      if (Object.keys(updates).length === 0) return prev;
+      return { ...prev, ...updates };
+    });
+  }, [
+    header.CURR_CODE,
+    header.TX_CAT_CODE,
+    header.TX_COMPNTCAT_CODE_1,
+    currencyList,
+    taxCodes,
+    taxComponentList,
+    isEditMode,
+    isViewMode,
+  ]);
 
   // ─── Set Items Data ──────────────────────────────────────────────
   useEffect(() => {
@@ -547,6 +634,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
         COST_NAME: row.COST_NAME || costCodes.find((c) => c.COST_CODE === row.COST_CODE)?.COST_NAME || "",
         SUPPLIER_NAME: (row as any).SUPPLIER_NAME || supplierList.find((s) => s.SUPPLIER_CODE === row.SUPPLIER)?.SUPPLIER_NAME || "",
         TX_CAT_NAME: (row as any).TX_CAT_NAME || taxCodes.find((t) => t.TX_CAT_CODE === row.TX_CAT_CODE)?.TX_CAT_NAME || "",
+        TX_COMPNTCAT_NAME: (row as any).TX_COMPNTCAT_NAME || taxComponentList.find((t) => t.TX_COMPNTCAT_CODE === row.TX_COMPNTCAT_CODE_1)?.TX_COMPNTCAT_NAME || "",
         CURR_NAME: (row as any).CURR_NAME || currencyList.find((c) => c.CURR_CODE === row.CURR_CODE)?.CURR_NAME || "",
         CAPEX_OPEX_NON_OPEX: (row as any).CAPEX || (row as any).CAPEX_OPEX_NON_OPEX || "",
         LCURR_AFTER_DISCOUNT: 0,
@@ -701,6 +789,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
       DIV_NAME: header.DIV_NAME || "",
       DEPT_CODE_FLOW: header.DEPT_CODE_FLOW || "",
       DEPT_NAME: header.DEPT_NAME || "",
+      DISC_AMOUNT: header.DISC_AMOUNT || 0,
       ...overrides,
     };
 
@@ -1130,7 +1219,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
     { field: "TX_TYPE_NAME", header: "Name" },
     { field: "TX_TYPE_DESC", header: "Description" },
   ];
-  const capexOptions = ["CAPEX", "OPEX", "NON-OPEX"];
+  const capexOptions = ["YES", "NO",];
   const cashIndOptions = [
     { value: "Y", label: "Cash" },
     { value: "N", label: "Credit" }
@@ -1138,6 +1227,30 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
 
   return (
     <div className="fixed inset-0 z-50 bg-background">
+      <style>{`
+        .commercial-lines-scroll {
+          scrollbar-width: auto;
+          scrollbar-color: #94a3b8 #e2e8f0;
+        }
+        .commercial-lines-scroll::-webkit-scrollbar {
+          height: 16px;
+          width: 16px;
+        }
+        .commercial-lines-scroll::-webkit-scrollbar-track {
+          background: #e2e8f0;
+        }
+        .commercial-lines-scroll::-webkit-scrollbar-thumb {
+          background-color: #94a3b8;
+          border-radius: 8px;
+          border: 3px solid #e2e8f0;
+        }
+        .commercial-lines-scroll::-webkit-scrollbar-thumb:hover {
+          background-color: #64748b;
+        }
+        .commercial-lines-scroll::-webkit-scrollbar-corner {
+          background: #e2e8f0;
+        }
+      `}</style>
       <section className="payment-workbench commercial-editor grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]">
         <CardHeader className="commercial-command-header border-b bg-primary px-4 py-1.5 text-primary-foreground shadow-sm">
           <div className="flex min-h-10 items-center justify-between gap-3">
@@ -1166,10 +1279,6 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Total</span>
                 <strong className="block text-sm leading-tight text-emerald-300">{fmt3(totalAmount)}</strong>
               </div>
-              <div className="commercial-summary-chip rounded-md border border-emerald-300/40 bg-emerald-400/10 px-2.5 py-0.5">
-                <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Net Amount</span>
-                <strong className="block text-sm leading-tight text-emerald-300">{fmt3(totalFinalAmount)}</strong>
-              </div>
               {(header as any).purch_status && (
                 <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
                   <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Status</span>
@@ -1178,17 +1287,16 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
               )}
             </div>
             <div className="flex items-center gap-2">
-              {isEditMode && <Button type="button" variant="secondary" onClick={() => setLogOpen(true)}><FileText size={15} /> Log</Button>}
               <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={() => onClose()}><X size={16} /></Button>
             </div>
           </div>
         </CardHeader>
 
-        <div className="min-h-0 flex flex-1 flex-col overflow-hidden p-3">
+        <div className="min-h-0 min-w-0 flex flex-1 flex-col overflow-hidden p-3">
           {loading ? (
             <div className="grid min-h-[420px] place-items-center text-sm text-muted-foreground">Loading document...</div>
           ) : (
-            <div className="flex min-h-0 flex-1 flex-col gap-3">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
               <AutoDismissAlert notice={notice} onClose={() => setNotice(null)} />
 
               {/* ─── Header Section ─── */}
@@ -1210,85 +1318,190 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                 {headerExpanded ? (
                   <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 p-3 items-start">
                     {/* ── DOCUMENT box ── */}
-                    <div className="rounded-md border">
-                      <div className="border-b bg-muted/40 px-3 py-1.5">
-                        <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Document</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 p-3">
-                        <div className="col-span-1">
-                          <label className="field">
-                            <span>Doc No</span>
-                            <Input disabled value={requestNumber || "New"} className="bg-muted/30 w-full" />
-                          </label>
+                    <div className="space-y-3">
+                      {/* Document Section */}
+                      <div className="rounded-md border">
+                        <div className="border-b bg-muted/40 px-3 py-0.5">
+                          <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Document</p>
                         </div>
-                        <div className="col-span-1">
-                          <label className="field">
-                            <span>POD Type *</span>
-                            <Select
-                              disabled={disabled}
-                              value={header.PDO_TYPE || "N"}
-                              onChange={(e) => setHdr("PDO_TYPE", e.target.value)}
-                              className="w-full"
-                            >
-                              <option value="P">PDO-OTO</option>
-                              <option value="Q">PDO-NON-OTO</option>
-                              <option value="N">NON-PDO</option>
-                            </Select>
-                          </label>
-                        </div>
-                        <div className="col-span-1">
-                          <label className="field">
-                            <span>Request Date</span>
-                            <Input
-                              disabled
-                              type="text"
-                              placeholder="dd/mm/yyyy"
-                              value={displayDate}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                setDisplayDate(value);
-
-                                const parts = value.split('/');
-                                if (parts.length === 3) {
-                                  const day = parseInt(parts[0]);
-                                  const month = parseInt(parts[1]) - 1;
-                                  const year = parseInt(parts[2]);
-                                  const date = new Date(year, month, day);
-                                  if (!isNaN(date.getTime())) {
-                                    const yyyy = date.getFullYear();
-                                    const mm = String(date.getMonth() + 1).padStart(2, '0');
-                                    const dd = String(date.getDate()).padStart(2, '0');
-                                    setHdr("REQUEST_DATE", `${yyyy}-${mm}-${dd}`);
-                                  }
-                                }
-                              }}
-                              className="w-full"
-                            />
-                          </label>
-                        </div>
-                        <div className="col-span-1">
-                          <label className="field">
-                            <span>Flow Code</span>
-                            <Input
-                              disabled
-                              value={String(header.FLOW_CODE || "")}
-                              placeholder="Flow Code"
-                              className="w-full bg-muted/50"
-                            />
-                          </label>
-                        </div>
-                        <div className="col-span-2 grid grid-cols-3 gap-3">
-                          <div className="col-span-2">
+                        <div className="grid grid-cols-3 gap-3 p-3">
+                          <div className="col-span-1">
                             <label className="field">
-                              <span>Division</span>
+                              <span>Doc No</span>
+                              <Input disabled value={requestNumber || "New"} className="bg-muted/30 w-full" />
+                            </label>
+                          </div>
+                          <div className="col-span-1">
+                            <label className="field">
+                              <span>POD Type *</span>
+                              <Select
+                                disabled={disabled}
+                                value={header.PDO_TYPE || "N"}
+                                onChange={(e) => setHdr("PDO_TYPE", e.target.value)}
+                                className="w-full"
+                              >
+                                <option value="P">PDO-OTO</option>
+                                <option value="Q">PDO-NON-OTO</option>
+                                <option value="N">NON-PDO</option>
+                              </Select>
+                            </label>
+                          </div>
+                          <div className="col-span-1">
+                            <label className="field">
+                              <span>Request Date</span>
                               <Input
                                 disabled
-                                value={
-                                  header.DIV_CODE && header.DIV_NAME
-                                    ? `${header.DIV_CODE} - ${header.DIV_NAME}`
-                                    : header.DIV_CODE || "—"
+                                type="text"
+                                placeholder="dd/mm/yyyy"
+                                value={displayDate}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  setDisplayDate(value);
+
+                                  const parts = value.split('/');
+                                  if (parts.length === 3) {
+                                    const day = parseInt(parts[0]);
+                                    const month = parseInt(parts[1]) - 1;
+                                    const year = parseInt(parts[2]);
+                                    const date = new Date(year, month, day);
+                                    if (!isNaN(date.getTime())) {
+                                      const yyyy = date.getFullYear();
+                                      const mm = String(date.getMonth() + 1).padStart(2, '0');
+                                      const dd = String(date.getDate()).padStart(2, '0');
+                                      setHdr("REQUEST_DATE", `${yyyy}-${mm}-${dd}`);
+                                    }
+                                  }
+                                }}
+                                className="w-full"
+                              />
+                            </label>
+                          </div>
+                          <div className="col-span-1">
+                            <label className="field">
+                              <span>Flow Code</span>
+                              <Input
+                                disabled
+                                value={String(header.FLOW_CODE || "")}
+                                placeholder="Flow Code"
+                                className="w-full bg-muted/50"
+                              />
+                            </label>
+                          </div>
+                          <div className="col-span-2 grid grid-cols-3 gap-3">
+                            <div className="col-span-3">
+                              <label className="field">
+                                <span>Division</span>
+                                <Input
+                                  disabled
+                                  value={
+                                    header.DIV_CODE && header.DIV_NAME
+                                      ? `${header.DIV_CODE} - ${header.DIV_NAME}`
+                                      : header.DIV_CODE || "—"
+                                  }
+                                  className="w-full bg-muted/50 text-blue-700 font-medium"
+                                />
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Discount Section - Appears below Document */}
+                      <div className="rounded-md border">
+                        <div className="border-b bg-muted/40 px-3 py-0.5">
+                          <p className="m-0 text-[11px] font-bold uppercase tracking-wide text-blue-700">Discount</p>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3 p-2">
+                          <div className="col-span-1">
+                            <label className="field">
+                              <span>Disc Amt</span>
+                              <Input
+                                disabled={
+                                  disabled ||
+                                  items.length === 0 ||
+                                  Boolean(header.DISCOUNT_AMOUNT && header.DISCOUNT_AMOUNT > 0)
                                 }
-                                className="w-full bg-muted/50 text-blue-700 font-medium"
+                                type="number"
+                                step="0.01"
+                                value={header.DISC_AMOUNT ?? ""}
+                                onChange={(e) => {
+                                  const discAmount = Number(e.target.value) || 0;
+                                  setHdr("DISC_AMOUNT", discAmount);
+                                  // Clear discount percentage when amount is entered
+                                  if (discAmount > 0) {
+                                    setHdr("DISCOUNT_AMOUNT", 0);
+                                  }
+                                  
+                                  // Distribute discount to all items
+                                  const totalUnitPrice = calculateTotalUnitPrice(items, userApprovalLevel);
+                                  if (totalUnitPrice > 0 && discAmount > 0 && items.length > 0) {
+                                    setItems(prev => {
+                                      const totalUnitPriceVal = calculateTotalUnitPrice(prev, userApprovalLevel);
+                                      return prev.map(item => {
+                                        const itemQtyVal = itemQty(item, userApprovalLevel);
+                                        const unitPrice = num(item.ITEM_RATE);
+                                        const itemTotal = unitPrice * itemQtyVal;
+                                        const itemDiscAmount = (itemTotal / totalUnitPriceVal) * discAmount;
+                                        const itemDiscPercent = (itemDiscAmount / itemTotal) * 100;
+                                        
+                                        const updated = { ...item, DISCOUNT_AMOUNT: itemDiscPercent };
+                                        const exRate = num(updated.CURRENCY_RATE) || 1;
+                                        return recalcItem(updated, exRate, userApprovalLevel);
+                                      });
+                                    });
+                                  } else if (discAmount === 0) {
+                                    // Reset all item discounts
+                                    setItems(prev => prev.map(item => {
+                                      const updated = { ...item, DISCOUNT_AMOUNT: 0 };
+                                      const exRate = num(updated.CURRENCY_RATE) || 1;
+                                      return recalcItem(updated, exRate, userApprovalLevel);
+                                    }));
+                                  }
+                                }}
+                                className="w-full"
+                                placeholder={items.length === 0 ? "Add items first" : ""}
+                              />
+                            </label>
+                          </div>
+                          <div className="col-span-1">
+                            <label className="field">
+                              <span>Disc %</span>
+                              <Input
+                                disabled={
+                                  disabled ||
+                                  items.length === 0 ||
+                                  Boolean(header.DISC_AMOUNT && header.DISC_AMOUNT > 0)
+                                }
+                                type="number"
+                                step="0.01"
+                                value={header.DISCOUNT_AMOUNT ?? ""}
+                                onChange={(e) => {
+                                  const discPercent = Number(e.target.value) || 0;
+                                  setHdr("DISCOUNT_AMOUNT", discPercent);
+                                  // Clear discount amount when percentage is entered
+                                  if (discPercent > 0) {
+                                    setHdr("DISC_AMOUNT", 0);
+                                  }
+                                  
+                                  // Distribute discount to all items
+                                  if (items.length > 0) {
+                                    const updatedItems = distributeDiscountToItems(
+                                      items, 
+                                      discPercent, 
+                                      userApprovalLevel
+                                    );
+                                    setItems(updatedItems);
+                                  } else if (discPercent === 0) {
+                                    // Reset all item discounts
+                                    setItems(prev => prev.map(item => {
+                                      const updated = { ...item, DISCOUNT_AMOUNT: 0 };
+                                      const exRate = num(updated.CURRENCY_RATE) || 1;
+                                      return recalcItem(updated, exRate, userApprovalLevel);
+                                    }));
+                                  }
+                                }}
+                                className="w-full"
+                                placeholder={items.length === 0 ? "Add items first" : ""}
                               />
                             </label>
                           </div>
@@ -1571,7 +1784,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
               </div>
 
               {/* ─── Tabs Container ─── */}
-              <div className="flex min-h-0 flex-1 flex-col rounded-md border bg-card overflow-hidden">
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col rounded-md border bg-card overflow-hidden">
                 <div className="flex flex-none items-center border-b bg-secondary/40">
                   <button
                     onClick={() => setActiveTab("items")}
@@ -1611,11 +1824,17 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
 
                 {/* ─── Items Tab Content ─── */}
                 {activeTab === "items" && (
-                  <div className="flex min-h-0 flex-1 flex-col">
+                  <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                     <div
                       ref={tableContainerRef}
-                      className="commercial-lines-scroll min-h-0 flex-1 overflow-x-auto overflow-y-auto"
-                      style={{ overscrollBehavior: 'contain' }}
+                      className="commercial-lines-scroll min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto"
+                      style={{ 
+                        overscrollBehavior: 'contain',
+                        overflowX: 'auto',
+                        overflowY: 'auto',
+                        scrollbarWidth: 'auto',
+                        scrollbarGutter: 'stable',
+                      }}
                     >
                       <table className="finance-lines-table w-full min-w-[3500px] text-[12px] border-separate border-spacing-0">
                         <thead className="sticky top-0 z-30 bg-primary text-xs text-primary-foreground">
@@ -1750,7 +1969,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                     step="0.001"
                                     value={item.REQUEST_QUANTITY || ""}
                                     onChange={(e) => updateItemField(itemId, "REQUEST_QUANTITY", Number(e.target.value) || 0)}
-                                    disabled={disabled}
+                                    disabled={disabled || userApprovalLevel >= 2}
                                     className="h-9 text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     placeholder="0"
                                   />
@@ -1991,7 +2210,7 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                                     onChange={(e) => updateItemField(itemId, "CAPEX_OPEX_NON_OPEX" as any, e.target.value)}
                                     disabled={disabled}
                                   >
-                                    <option value="">—</option>
+                                    <option value=""></option>
                                     {capexOptions.map((opt) => (
                                       <option key={opt} value={opt}>{opt}</option>
                                     ))}
@@ -2028,10 +2247,10 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                           })}
                         </tbody>
                       </table>
-                    </div>
+                     </div>
 
-                    {/* ─── Summary Footer ─── */}
-                    <div className="flex-none border-t bg-gradient-to-r from-gray-50/80 to-white/80 backdrop-blur-sm shadow-[0_-2px_8px_rgba(0,0,0,0.04)]">
+                    {/* ─── Summary Footer - Made sticky ─── */}
+                    <div className="sticky bottom-0 flex-none border-t bg-gradient-to-r from-gray-50/80 to-white/80 backdrop-blur-sm shadow-[0_-2px_8px_rgba(0,0,0,0.04)] z-10">
                       <div className="flex items-center justify-end px-2 py-1">
                         <div className="flex items-center gap-6">
                           <div className="text-right">
@@ -2051,11 +2270,12 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
                       </div>
                     </div>
                   </div>
+                 
                 )}
 
                 {/* ─── Terms Tab Content ─── */}
                 {activeTab === "terms" && shouldShowTermsTab() && (
-                  <div className="commercial-lines-scroll min-h-0 flex-1 overflow-x-auto overflow-y-auto">
+                  <div className="commercial-lines-scroll min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto">
                     <div className="relative">
                       <table className="finance-lines-table w-full min-w-[1200px] text-[12px] border-separate border-spacing-0">
                         <thead className="sticky top-0 z-10 bg-primary text-xs text-primary-foreground">
@@ -2171,26 +2391,64 @@ const AddPRRequestPage = ({ isEditMode, isViewMode = false, existingData, flowCo
 
         {/* ─── Footer ─── */}
         <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-1">
-          {!isViewMode && !(docType !== "PR") && (
+          {!isViewMode && !(docType !== "PR") && (header as any).FINAL_APPROVED !== "Y" && (
             <div className="flex items-center gap-2">
-              <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-slate-600 hover:bg-slate-700" onClick={handleSaveDraft}> <Save size={15} /> {savingAction === "SAVEASDRAFT" ? "Saving..." : "Save Draft"}</Button>
-              <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-blue-600 hover:bg-blue-700" onClick={handleSubmit}>  <Send size={15} /> {savingAction === "SUBMITTED" ? "Submitting..." : "Submit"}</Button>
-              <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-emerald-600 hover:bg-emerald-700" onClick={handleApprove}>  <CheckCircle size={15} /> {savingAction === "APPROVED" ? "Approving..." : "Approve"}</Button>
-              <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-purple-600 hover:bg-purple-700" onClick={() => { setRemarkText(""); setSendBackOpen(true); }}><ChevronLeft size={15} /> Send Back</Button>
-              <Button
-                disabled={saving}
-                type="button"
-                variant="default"
-                className="min-w-[110px] justify-center bg-destructive hover:bg-destructive/90"
-                onClick={() => {
-                  setRemarkText("");
-                  setRejectOpen(true);
-                }}
-              >
-                <X size={15} /> {savingAction === "REJECTED" ? "Rejecting..." : "Reject"}
-              </Button>
+              {userApprovalLevel <= 1 && (
+                <>
+                  <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-slate-600 hover:bg-blue-700" onClick={handleSaveDraft}>
+                    <Save size={15} /> {savingAction === "SAVEASDRAFT" ? "Saving..." : "Save Draft"}
+                  </Button>
+                  <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-blue-600 hover:bg-blue-700" onClick={handleSubmit}>
+                    <Send size={15} /> {savingAction === "SUBMITTED" ? "Submitting..." : "Submit"}
+                  </Button>
+                </>
+              )}
+
+              {userApprovalLevel >= 2 && userApprovalLevel <= 6 && (
+                <>
+                  <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-slate-600 hover:bg-blue-700" onClick={handleSaveDraft}>
+                    <Save size={15} /> {savingAction === "SAVEASDRAFT" ? "Saving..." : "Save Draft"}
+                  </Button>
+                  <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-blue-600 hover:bg-blue-700" onClick={handleSubmit}>
+                    <Send size={15} /> {savingAction === "SUBMITTED" ? "Submitting..." : "Submit"}
+                  </Button>
+                  <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-purple-600 hover:bg-blue-700" onClick={() => { setRemarkText(""); setSendBackOpen(true); }}>
+                    <ChevronLeft size={15} /> Send Back
+                  </Button>
+                  <Button
+                    disabled={saving}
+                    type="button"
+                    variant="default"
+                    className="min-w-[110px] justify-center bg-destructive hover:bg-blue-700"
+                    onClick={() => { setRemarkText(""); setRejectOpen(true); }}
+                  >
+                    <X size={15} /> {savingAction === "REJECTED" ? "Rejecting..." : "Reject"}
+                  </Button>
+                </>
+              )}
+
+              {userApprovalLevel === 7 && (
+                <>
+                  <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-emerald-600 hover:bg-blue-700" onClick={handleApprove}>
+                    <CheckCircle size={15} /> {savingAction === "APPROVED" ? "Approving..." : "Approve"}
+                  </Button>
+                  <Button disabled={saving} type="button" variant="default" className="min-w-[110px] justify-center bg-purple-600 hover:bg-blue-700" onClick={() => { setRemarkText(""); setSendBackOpen(true); }}>
+                    <ChevronLeft size={15} /> Send Back
+                  </Button>
+                  <Button
+                    disabled={saving}
+                    type="button"
+                    variant="default"
+                    className="min-w-[110px] justify-center bg-destructive hover:bg-blue-700"
+                    onClick={() => { setRemarkText(""); setRejectOpen(true); }}
+                  >
+                    <X size={15} /> {savingAction === "REJECTED" ? "Rejecting..." : "Reject"}
+                  </Button>
+                </>
+              )}
             </div>
           )}
+
           <div className="flex items-center gap-2">
             <Button disabled={saving} type="button" variant="default" className="min-w-[100px] justify-center bg-gray-600 hover:bg-gray-700" onClick={handlePrint}>
               <Printer size={15} /> Print

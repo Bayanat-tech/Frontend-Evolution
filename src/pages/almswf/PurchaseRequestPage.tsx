@@ -423,19 +423,19 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
         header: "PR Description",
         cell: ({ row }) => row.original.PR_DESCRIPTION || "—",
       },
-      {
-        accessorKey: "TOTAL_ITEMS",
-        header: "Items",
-        cell: ({ row }) => row.original.TOTAL_ITEMS || 0,
-      },
-      {
-        accessorKey: "PO_TOTAL_AMOUNT",
-        header: "PO Amount",
-        cell: ({ row }) => {
-          const amt = row.original.PO_TOTAL_AMOUNT || 0;
-          return <span className="font-semibold">{Number(amt).toLocaleString()}</span>;
-        },
-      },
+      // {
+      //   accessorKey: "TOTAL_ITEMS",
+      //   header: "Items",
+      //   cell: ({ row }) => row.original.TOTAL_ITEMS || 0,
+      // },
+      // {
+      //   accessorKey: "PO_TOTAL_AMOUNT",
+      //   header: "PO Amount",
+      //   cell: ({ row }) => {
+      //     const amt = row.original.PO_TOTAL_AMOUNT || 0;
+      //     return <span className="font-semibold">{Number(amt).toLocaleString()}</span>;
+      //   },
+      // },
       // {
       //   id: "actions",
       //   header: "Action",
