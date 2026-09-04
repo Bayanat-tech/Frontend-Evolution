@@ -23,15 +23,6 @@ import {
 import { SODocType } from "../sales/SalesOrdertypes";
 import { Select } from "../../../components/ui/Select";
 
-const STICKY_COLS = {
-    sno: { width: 50, left: 0 },
-    div: { width: 90, left: 50 },
-    product: {
-        width: 260,
-        left: 140,
-    },
-} as const;
-
 
 
 function hasExtraStickyColumn(docType?: string | null): boolean {
@@ -39,28 +30,15 @@ function hasExtraStickyColumn(docType?: string | null): boolean {
     return code === "PIN" || code === "GRN" || code === "SIN";
 }
 
-function stickyStyle(col: keyof typeof STICKY_COLS, docType?: string | null): React.CSSProperties {
-    const showExtraCol = hasExtraStickyColumn(docType);
 
-    const { width, left } =
-        col === "product"
-            ? { width: STICKY_COLS.product.width, left: showExtraCol ? 140 : STICKY_COLS.product.left }
-            : STICKY_COLS[col];
-
-    return { position: "sticky", left, width, minWidth: width, maxWidth: width, zIndex: 2, backgroundColor: "var(--card, #fff)" };
-}
-
-function stickyHeaderStyle(col: keyof typeof STICKY_COLS, docType?: string | null): React.CSSProperties {
-    const showExtraCol = hasExtraStickyColumn(docType);
-
-    const { width, left } =
-        col === "product"
-            ? { width: STICKY_COLS.product.width, left: showExtraCol ? 140 : STICKY_COLS.product.left }
-            : STICKY_COLS[col];
-
-    return { position: "sticky", top: 0, left, width, minWidth: width, maxWidth: width, zIndex: 3, backgroundColor: "var(--primary, #1d4ed8)" };
-}
-const plainHeaderStyle: React.CSSProperties = { position: "sticky", top: 0, zIndex: 1, backgroundColor: "var(--primary, #1d4ed8)", width: "100%" };
+const plainHeaderStyle = (width?: number): React.CSSProperties => ({
+    position: "sticky",
+    top: 0,
+    zIndex: 1,
+    backgroundColor: "var(--primary, #1d4ed8)",
+    width,
+    minWidth: width,
+});
 
 const TABLE_COLUMN_COUNT = 24;
 
@@ -136,26 +114,26 @@ export function PurchaseGrnDetailsTable({
                 </div> */}
             </div>
             <div className="commercial-lines-scroll max-h-[45vh] overflow-auto">
-                <table className="finance-lines-table w-full min-w-[2600px] text-sm">
+                <table className="finance-lines-table w-full min-w-[1500px] text-sm" style={{ tableLayout: "fixed" }}>
                     <thead className="text-xs text-primary-foreground">
                         <tr>
-                            <th className="finance-sticky-col px-2 py-2 text-left" style={stickyHeaderStyle("sno")}>SNo</th>
-                            <th className="finance-sticky-col px-2 py-2 text-left" style={stickyHeaderStyle("div")}>Div</th>
-                            <th className="finance-sticky-col px-2 py-2 text-left" style={stickyHeaderStyle("product", docType)}>Product Code</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-64" style={plainHeaderStyle}>P Uom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Qty Puom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>L Uom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-20" style={plainHeaderStyle}>Qty Luom</th>
-                            <th className="px-2 py-2 text-left w-24 sticky top-0 z-[3] bg-primary">Uppp</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Unit Price</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Quantity</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-64" style={plainHeaderStyle}>Recevied P Uom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Recevied Qty Puom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Recevied L Uom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-20" style={plainHeaderStyle}>Recevied Qty Luom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Recevied Quantity</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-40" style={plainHeaderStyle}>Remarks</th>
-                            <th className="px-2 py-2 text-left w-16" style={plainHeaderStyle}>Action</th>
+                            <th className="finance-sticky-col px-1 py-1 text-left" style={plainHeaderStyle(0.5)}>SNo</th>
+                            <th className="finance-sticky-col px-1 py-1 text-left" style={plainHeaderStyle(1)}>Div</th>
+                            <th className="finance-sticky-col px-2 py-2 text-left" style={plainHeaderStyle(50)}>Product Code</th>
+                            <th className="finance-amount-cell px-2 py-2 text-left w-64" style={plainHeaderStyle(5)}>P Uom</th>
+                            <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle(10)}>Qty Puom</th>
+                            <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle(10)}>L Uom</th>
+                            <th className="finance-amount-cell px-2 py-2 text-left w-20" style={plainHeaderStyle(10)}>Qty Luom</th>
+                            <th className="px-2 py-2 text-left w-24 sticky top-0 z-[3] bg-primary" style={plainHeaderStyle(10)}>Uppp</th>
+                            <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle(10)}>Unit Price</th>
+                            <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle(20)}>Quantity</th>
+                            <th className="finance-amount-cell px-2 py-2 text-left w-64" style={plainHeaderStyle(10)}>Recevied P Uom</th>
+                            <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle(10)}>Recevied Qty Puom</th>
+                            <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle(10)}>Recevied L Uom</th>
+                            <th className="finance-amount-cell px-2 py-2 text-left w-20" style={plainHeaderStyle(10)}>Recevied Qty Luom</th>
+                            <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle(10)}>Recevied Quantity</th>
+                            <th className="finance-amount-cell px-2 py-2 text-left w-40" style={plainHeaderStyle(40)}>Remarks</th>
+                            <th className="px-2 py-2 text-left w-16" style={plainHeaderStyle(10)}>Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -176,13 +154,13 @@ export function PurchaseGrnDetailsTable({
 
                             return (
                                 <tr className="border-t odd:bg-muted/20" key={row.id}>
-                                    <td className="finance-sticky-col bg-card px-2 py-1 text-xs" style={stickyStyle("sno")}>{index + 1}</td>
-                                    <td className="finance-sticky-col bg-card px-2 py-1 text-xs" style={stickyStyle("div")}>
+                                    <td className="finance-sticky-col bg-card px-2 py-1 text-xs" >{index + 1}</td>
+                                    <td className="finance-sticky-col bg-card px-2 py-1 text-xs" >
                                         <Input disabled={headerAndLineDisabled} value={row.po_div_code} onChange={(event) => updateRow(row.id, { po_div_code: event.target.value })} />
                                     </td>
 
 
-                                    <td className="finance-sticky-col finance-account-cell bg-card px-2 py-1" style={stickyStyle("product", docType)}>
+                                    <td className="finance-sticky-col finance-account-cell bg-card px-2 py-1" >
                                         <LookupField
                                             label=""
                                             value={row.prod_code || ""}
@@ -214,49 +192,12 @@ export function PurchaseGrnDetailsTable({
                                         />
                                     </td>
 
-                                    <td className="w-64 px-2 py-1">
-                                        <LookupField
-                                            label=""
+                                    <td className="px-2 py-1">
+                                        <Input
+                                            className="finance-money-input w-full"
+                                            disabled
                                             value={row.po_p_uom || ""}
-                                            displayValue={
-                                                row.po_p_uom
-                                            }
-                                            columns={[
-                                                { field: "uom_code", header: "Code" },
-                                                { field: "uom_name", header: "Name" },
-                                                { field: "unit_price", header: "Unit Price" },
-                                            ]}
-                                            valueField="uom_code"
-                                            displayFields={["uom_code", "uom_name"]}
-                                            loadOptions={() =>
-                                                getDynamicLookup({
-                                                    parameter: "PS_POORDER_ENTRY_UOM_LIST",
-                                                    code1: companyCode,
-                                                    loginid: loginid || "ADMIN",
-                                                })
-                                            }
-                                            disabled={headerAndLineDisabled}
-                                            onChange={(value, selectedRow) => {
-                                                const patch: Partial<PurchaseOrderLineRow> = {
-                                                    po_p_uom: value,
-                                                    uom_name:
-                                                        text(getLookupValue(selectedRow || {}, "uom_name")) ||
-                                                        row.uom_name,
-                                                };
-
-                                                const merged = { ...row, ...patch };
-
-                                                if (isSamePoUom(merged)) {
-                                                    patch.po_qty_puom = 0;
-                                                }
-
-                                                patch.quantity = computePoQuantity({
-                                                    ...row,
-                                                    ...patch,
-                                                });
-
-                                                updateRow(row.id, patch);
-                                            }}
+                                            readOnly
                                         />
                                     </td>
                                     <td className="finance-amount-cell px-2 py-1">
@@ -283,40 +224,12 @@ export function PurchaseGrnDetailsTable({
                                             }}
                                         />
                                     </td>
-                                    <td className="w-64 px-2 py-1">
-                                        <LookupField
-                                            label=""
+                                    <td className="px-2 py-1">
+                                        <Input
+                                            className="finance-money-input w-full"
+                                            disabled
                                             value={row.po_l_uom || ""}
-                                            displayValue={
-                                                row.po_l_uom
-                                            }
-                                            columns={[
-                                                { field: "uom_code", header: "Code" },
-                                                { field: "uom_name", header: "Name" },
-                                                { field: "unit_price", header: "Unit Price" },
-                                            ]}
-                                            valueField="uom_code"
-                                            displayFields={["uom_code", "uom_name"]}
-                                            loadOptions={() =>
-                                                getDynamicLookup({
-                                                    parameter: "PS_POORDER_ENTRY_UOM_LIST",
-                                                    code1: companyCode,
-                                                    loginid: loginid || "ADMIN",
-                                                })
-                                            }
-                                            disabled={headerAndLineDisabled}
-                                            onChange={(value, selectedRow) => {
-                                                const patch: Partial<PurchaseOrderLineRow> = {
-                                                    po_l_uom: value,
-                                                    uom_name: text(getLookupValue(selectedRow || {}, "uom_name")) || row.uom_name,
-                                                };
-                                                const merged = { ...row, ...patch };
-                                                if (isSamePoUom(merged)) {
-                                                    patch.po_qty_luom = qtyPoLuomNum;
-                                                }
-                                                patch.po_quantity = computePoQuantity({ ...row, ...patch });
-                                                updateRow(row.id, patch);
-                                            }}
+                                            readOnly
                                         />
                                     </td>
                                     <td className="finance-amount-cell w-24 px-2 py-1">
@@ -367,49 +280,12 @@ export function PurchaseGrnDetailsTable({
                                         {formatAmount(po_quantity)}
                                     </td>
 
-                                    <td className="w-64 px-2 py-1">
-                                        <LookupField
-                                            label=""
+                                    <td className="px-2 py-1">
+                                        <Input
+                                            className="finance-money-input w-full"
+                                            disabled
                                             value={row.po_p_uom || ""}
-                                            displayValue={
-                                                row.po_p_uom
-                                            }
-                                            columns={[
-                                                { field: "uom_code", header: "Code" },
-                                                { field: "uom_name", header: "Name" },
-                                                { field: "unit_price", header: "Unit Price" },
-                                            ]}
-                                            valueField="uom_code"
-                                            displayFields={["uom_code", "uom_name"]}
-                                            loadOptions={() =>
-                                                getDynamicLookup({
-                                                    parameter: "PS_POORDER_ENTRY_UOM_LIST",
-                                                    code1: companyCode,
-                                                    loginid: loginid || "ADMIN",
-                                                })
-                                            }
-                                            disabled={headerAndLineDisabled}
-                                            onChange={(value, selectedRow) => {
-                                                const patch: Partial<PurchaseOrderLineRow> = {
-                                                    po_p_uom: value,
-                                                    uom_name:
-                                                        text(getLookupValue(selectedRow || {}, "uom_name")) ||
-                                                        row.uom_name,
-                                                };
-
-                                                const merged = { ...row, ...patch };
-
-                                                if (isSameUom(merged)) {
-                                                    patch.qty_puom = 0;
-                                                }
-
-                                                patch.quantity = computeQuantity({
-                                                    ...row,
-                                                    ...patch,
-                                                });
-
-                                                updateRow(row.id, patch);
-                                            }}
+                                            readOnly
                                         />
                                     </td>
                                     <td className="finance-amount-cell px-2 py-1">
@@ -436,40 +312,12 @@ export function PurchaseGrnDetailsTable({
                                             }}
                                         />
                                     </td>
-                                    <td className="w-64 px-2 py-1">
-                                        <LookupField
-                                            label=""
+                                    <td className="px-2 py-1">
+                                        <Input
+                                            className="finance-money-input w-full"
+                                            disabled
                                             value={row.po_l_uom || ""}
-                                            displayValue={
-                                                row.po_l_uom
-                                            }
-                                            columns={[
-                                                { field: "uom_code", header: "Code" },
-                                                { field: "uom_name", header: "Name" },
-                                                { field: "unit_price", header: "Unit Price" },
-                                            ]}
-                                            valueField="uom_code"
-                                            displayFields={["uom_code", "uom_name"]}
-                                            loadOptions={() =>
-                                                getDynamicLookup({
-                                                    parameter: "PS_POORDER_ENTRY_UOM_LIST",
-                                                    code1: companyCode,
-                                                    loginid: loginid || "ADMIN",
-                                                })
-                                            }
-                                            disabled={headerAndLineDisabled}
-                                            onChange={(value, selectedRow) => {
-                                                const patch: Partial<PurchaseOrderLineRow> = {
-                                                    po_l_uom: value,
-                                                    uom_name: text(getLookupValue(selectedRow || {}, "uom_name")) || row.uom_name,
-                                                };
-                                                const merged = { ...row, ...patch };
-                                                if (isSameUom(merged)) {
-                                                    patch.qty_luom = qtyLuomNum;
-                                                }
-                                                patch.quantity = computeQuantity({ ...row, ...patch });
-                                                updateRow(row.id, patch);
-                                            }}
+                                            readOnly
                                         />
                                     </td>
                                     <td className="finance-amount-cell w-24 px-2 py-1">

@@ -9,15 +9,15 @@ import { PurchaseOrderForm, SalesOrderLineRow, SODocType } from "../sales/SalesO
 import { Select } from "../../../components/ui/Select";
 import { computeQuantity, formatAmount, isSameUom, LcurrDisAmount, lineAmount, lineDiscPoPrice, lineDiscPrice, lineLcurrAmount, lineLcurrPOAmount, linePOAmount, lineTaxAmount, lineTaxpoAmount, numberOrZero, taxLcurrAmount, taxLcurrpoAmount, text } from "./SalesOrderutils";
 import { PODocType } from "../purchase/Purchaseordertypes";
+import { amountBeforeDiscPrice } from "../purchase/Purchaseorderutils";
 
 const STICKY_COLS = {
   sno: { width: 50, left: 0 },
-  div: { width: 90, left: 50 },
-  zone: { width: 180, left: 140 },
-  PO: { width: 180, left: 320 },
+  div: { width: 50, left: 50 },
+  zone: { width: 160, left: 100 },
   product: {
     width: 260,
-    left: 320,
+    left: 260,
   },
 } as const;
 
@@ -40,7 +40,7 @@ function stickyStyle(col: keyof typeof STICKY_COLS, docType?: string | null): Re
 
   const { width, left } =
     col === "product"
-      ? { width: STICKY_COLS.product.width, left: showExtraCol ? 320 : STICKY_COLS.product.left }
+      ? { width: STICKY_COLS.product.width, left: showExtraCol ? 260 : STICKY_COLS.product.left }
       : STICKY_COLS[col];
 
   return { position: "sticky", left, width, minWidth: width, maxWidth: width, zIndex: 2, backgroundColor: "var(--card, #fff)" };
@@ -51,13 +51,19 @@ function stickyHeaderStyle(col: keyof typeof STICKY_COLS, docType?: string | nul
 
   const { width, left } =
     col === "product"
-      ? { width: STICKY_COLS.product.width, left: showExtraCol ? 320 : STICKY_COLS.product.left }
+      ? { width: STICKY_COLS.product.width, left: showExtraCol ? 260 : STICKY_COLS.product.left }
       : STICKY_COLS[col];
 
   return { position: "sticky", top: 0, left, width, minWidth: width, maxWidth: width, zIndex: 3, backgroundColor: "var(--primary, #1d4ed8)" };
 }
-const plainHeaderStyle: React.CSSProperties = { position: "sticky", top: 0, zIndex: 1, backgroundColor: "var(--primary, #1d4ed8)", width: "100%" };
-
+const plainHeaderStyle = (width?: number): React.CSSProperties => ({
+  position: "sticky",
+  top: 0,
+  zIndex: 1,
+  backgroundColor: "var(--primary, #1d4ed8)",
+  width,
+  minWidth: width,
+});
 const TABLE_COLUMN_COUNT = 24;
 
 // Final Rate = Unit Price - (Unit Price * Disc % / 100)  [matches lineNetAmount / "Final Rate" in the sheet]
@@ -139,7 +145,7 @@ export function SalesInvoiceLinesTable({
         </div> */}
       </div>
       <div className="commercial-lines-scroll max-h-[45vh] overflow-auto">
-        <table className="finance-lines-table w-full min-w-[2600px] text-sm">
+        <table className="finance-lines-table w-full min-w-[2600px] text-sm" style={{ tableLayout: "fixed" }}>
           <thead className="text-xs text-primary-foreground">
             <tr>
               <th className="finance-sticky-col px-2 py-2 text-left" style={stickyHeaderStyle("sno")}>SNo</th>
@@ -148,33 +154,30 @@ export function SalesInvoiceLinesTable({
               {/* {hasGrnColumn(docType) && (
                 <th className="finance-sticky-col px-2 py-2 text-left w-32" style={stickyHeaderStyle("GRN")}>GRN</th>
               )} */}
-              {hasPoColumn(docType) && (
-                <th className="finance-sticky-col px-2 py-2 text-left w-32" style={stickyHeaderStyle("PO")}>PO</th>
-              )}
               <th className="finance-sticky-col px-2 py-2 text-left" style={stickyHeaderStyle("product", docType)}>Product Code</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-64" style={plainHeaderStyle}>P Uom</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Qty Puom</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>L Uom</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-20" style={plainHeaderStyle}>Qty Luom</th>
-              <th className="px-2 py-2 text-left w-24 sticky top-0 z-[3] bg-primary">Uppp</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Unit Price</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Quantity</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Disc %</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Disc Price</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Unit price Net Amt</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Amount</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Lcurr Amount Before Tax</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax Type</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax %</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Tax Amount</th>
-              <th className="px-2 py-2 text-left w-32" style={plainHeaderStyle}>Req Date</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-40" style={plainHeaderStyle}>Remarks</th>
-
-              <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax Cat</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle}>Tax code</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle}>Tax Lcurr amount</th>
-              <th className="finance-amount-cell px-2 py-2 text-left w-32" style={plainHeaderStyle}>Lcurr amount After Tax</th>
-              <th className="px-2 py-2 text-left w-16" style={plainHeaderStyle}>Action</th>
+              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(80)}>P Uom</th>
+              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(80)}>Qty Puom</th>
+              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(80)}>L Uom</th>
+              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(80)}>Qty Luom</th>
+              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(80)}>Uppp</th>
+              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(100)}>Unit Price</th>
+              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(100)}>Quantity</th>
+              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(110)}>Amount Before Disc</th>
+              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(96)}>Disc %</th>
+              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(90)}>Disc Price(Per Unit)</th>
+              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(90)}>Unit price Net Amt</th>
+              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(100)}>Amount</th>
+              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(120)}>Lcurr Amount Before Tax</th>
+              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(100)}>Tax Type</th>
+              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(60)}>Tax %</th>
+              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(110)}>Tax Amount</th>
+              <th className="px-2 py-2 text-left" style={plainHeaderStyle(120)}>Req Date</th>
+              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(160)}>Remarks</th>
+              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(120)}>Tax Cat</th>
+              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(96)}>Tax code</th>
+              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(112)}>Tax Lcurr amount</th>
+              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(128)}>Lcurr amount After Tax</th>
+              <th className="px-2 py-2 text-left" style={plainHeaderStyle(64)}>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -246,49 +249,12 @@ export function SalesInvoiceLinesTable({
                     />
                   </td>
 
-                  <td className="w-64 px-2 py-1">
-                    <LookupField
-                      label=""
+                  <td className="px-2 py-1">
+                    <Input
+                      className="finance-money-input w-full"
+                      disabled
                       value={row.p_uom || ""}
-                      displayValue={
-                        row.p_uom
-                      }
-                      columns={[
-                        { field: "uom_code", header: "Code" },
-                        { field: "uom_name", header: "Name" },
-                        { field: "unit_price", header: "Unit Price" },
-                      ]}
-                      valueField="uom_code"
-                      displayFields={["uom_code", "uom_name"]}
-                      loadOptions={() =>
-                        getDynamicLookup({
-                          parameter: "PS_POORDER_ENTRY_UOM_LIST",
-                          code1: companyCode,
-                          loginid: loginid || "ADMIN",
-                        })
-                      }
-                      disabled={headerAndLineDisabled}
-                      onChange={(value, selectedRow) => {
-                        const patch: Partial<SalesOrderLineRow> = {
-                          p_uom: value,
-                          uom_name:
-                            text(getLookupValue(selectedRow || {}, "uom_name")) ||
-                            row.uom_name,
-                        };
-
-                        const merged = { ...row, ...patch };
-
-                        if (isSameUom(merged)) {
-                          patch.qty_puom = 0;
-                        }
-
-                        patch.quantity = computeQuantity({
-                          ...row,
-                          ...patch,
-                        });
-
-                        updateRow(row.id, patch);
-                      }}
+                      readOnly
                     />
                   </td>
                   <td className="finance-amount-cell px-2 py-1">
@@ -315,40 +281,12 @@ export function SalesInvoiceLinesTable({
                       }}
                     />
                   </td>
-                  <td className="w-64 px-2 py-1">
-                    <LookupField
-                      label=""
+                  <td className="px-2 py-1">
+                    <Input
+                      className="finance-money-input w-full"
+                      disabled
                       value={row.l_uom || ""}
-                      displayValue={
-                        row.l_uom
-                      }
-                      columns={[
-                        { field: "uom_code", header: "Code" },
-                        { field: "uom_name", header: "Name" },
-                        { field: "unit_price", header: "Unit Price" },
-                      ]}
-                      valueField="uom_code"
-                      displayFields={["uom_code", "uom_name"]}
-                      loadOptions={() =>
-                        getDynamicLookup({
-                          parameter: "PS_POORDER_ENTRY_UOM_LIST",
-                          code1: companyCode,
-                          loginid: loginid || "ADMIN",
-                        })
-                      }
-                      disabled={headerAndLineDisabled}
-                      onChange={(value, selectedRow) => {
-                        const patch: Partial<SalesOrderLineRow> = {
-                          l_uom: value,
-                          uom_name: text(getLookupValue(selectedRow || {}, "uom_name")) || row.uom_name,
-                        };
-                        const merged = { ...row, ...patch };
-                        if (isSameUom(merged)) {
-                          patch.qty_luom = qtyLuomNum;
-                        }
-                        patch.quantity = computeQuantity({ ...row, ...patch });
-                        updateRow(row.id, patch);
-                      }}
+                      readOnly
                     />
                   </td>
                   <td className="finance-amount-cell w-24 px-2 py-1">
@@ -393,10 +331,14 @@ export function SalesInvoiceLinesTable({
                     />
                   </td>
                   <td className="finance-amount-cell w-28 px-2 py-1">
-                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.0001" value={row.unit_price} onChange={(event) => updateRow(row.id, {unit_price: Number(event.target.value || 0) })} />
+                    <Input className="finance-money-input" disabled={headerAndLineDisabled} type="number" style={{ textAlign: "right" }} step="0.0001" value={row.unit_price} onChange={(event) => updateRow(row.id, { unit_price: Number(event.target.value || 0) })} />
                   </td>
                   <td className="finance-amount-cell px-2 py-1 text-right">
                     {formatAmount(quantity)}
+                  </td>
+
+                  <td className="finance-amount-cell px-2 py-1 text-right">
+                    {formatAmount(amountBeforeDiscPrice(row))}
                   </td>
 
                   <td className="finance-amount-cell w-24 px-2 py-1">

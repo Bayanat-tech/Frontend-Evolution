@@ -36,6 +36,7 @@ import {
   text,
   DiscAmountPercentage,
   TotalUnitPrice,
+  Totalunitprice,
 } from "./Purchaseorderutils";
 import { PurchaseOrderHeaderForm } from "./Purchaseorderheaderform";
 import { PurchaseOrderLinesTable } from "./Purchaseorderlinestable";
@@ -84,7 +85,23 @@ export function PurchaseQuotationEditor({
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
     const [attachmentOpen, setAttachmentOpen] = useState(false);
-
+    const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
+ useEffect(() => {
+    if (!form.tx_compntcat_code_1 && !form.tx_cat_code && !form.disc_hdr_percent && !form.disc_hdr_price) return;
+    const pct = numberOrZero(form.disc_hdr_price) > 0 ? DiscAmountPercentage(form, rows) : form.disc_hdr_percent;
+    const taxPerc = form.tx_compnt_1_expmt === "S" ? 5 : 0;
+    setRows((current) =>
+      current.map((row) => ({
+        ...row,
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        tx_cat_code: `${form.tx_cat_code || ""}`,
+        disc_price: row.disc_price || form.disc_hdr_price,
+        disc_percent: pct > 0 ? pct : row.disc_percent,
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+        tx_compnt_perc_1: taxPerc,
+      }))
+    );
+  }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price, form.tx_compnt_1_expmt, totalUnitPrice]);
   useEffect(() => {
     if (!editor) return;
     const initialForm = emptyForm(editor);
@@ -209,23 +226,25 @@ export function PurchaseQuotationEditor({
   const updateField = (field: keyof PurchaseOrderForm, value: string | number) => {
     setForm((current) => {
       let updated = { ...current, [field]: value };
-      
-      // When discount amount is set, calculate the percentage
-      if (field === "disc_hdr_price" && Number(value) > 0) {
-        updated.disc_hdr_percent = DiscAmountPercentage(updated, rows);
+
+      if (field === "disc_hdr_price") {
+        updated.disc_hdr_percent = Number(value) > 0 ? DiscAmountPercentage(updated, rows) : 0;
       }
-      
+
       return updated;
     });
-    
-    // When discount amount is set, update disc_price in all detail rows
+
     if (field === "disc_hdr_price") {
-      setRows((current) => current.map((row) => ({ ...row, disc_price: Number(value) || 0 })));
+      const pct = Number(value) > 0 ? DiscAmountPercentage({ ...form, disc_hdr_price: Number(value) }, rows) : 0;
+      setRows((current) => current.map((row) => ({
+        ...row,
+        disc_price: Number(value) || 0,
+        disc_percent: pct
+      })));
     }
-    
-    // When header discount percentage is set, clear all detail row discounts
-    if (field === "disc_hdr_percent" && Number(value) > 0) {
-      setRows((current) => current.map((row) => ({ ...row, disc_percent: 0 })));
+
+    if (field === "disc_hdr_percent") {
+      setRows((current) => current.map((row) => ({ ...row, disc_percent: Number(value) || 0 })));
     }
   };
 
@@ -233,7 +252,19 @@ export function PurchaseQuotationEditor({
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
 
-  const addRow = () => setRows((current) => [...current, emptyLineRow(form.div_code)]);
+ 
+  const addRow = () =>
+    setRows((current) => [
+      ...current,
+      {
+        ...emptyLineRow(form.div_code),
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        tx_cat_code: `${form.tx_cat_code || ""}`,
+        disc_price: form.disc_hdr_price,
+        disc_percent: form.disc_hdr_percent,
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
+      },
+    ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
 
   const runAction = async (key: ActionKey, action: () => Promise<void> | void, successMessage?: string) => {
@@ -425,6 +456,7 @@ export function PurchaseQuotationEditor({
                 editMode={editMode}
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
+                rows={rows}
               />
 
               <PurchaseOrderLinesTable

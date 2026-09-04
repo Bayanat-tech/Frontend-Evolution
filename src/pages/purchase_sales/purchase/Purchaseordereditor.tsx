@@ -87,7 +87,7 @@ export function PurchaseOrderEditor({
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
   const [attachmentOpen, setAttachmentOpen] = useState(false);
-const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
+  const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
   useEffect(() => {
     if (!editor) return;
     const initialForm = emptyForm(editor);
@@ -99,6 +99,7 @@ const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
   useEffect(() => {
     if (!form.tx_compntcat_code_1 && !form.tx_cat_code && !form.disc_hdr_percent && !form.disc_hdr_price) return;
     const pct = numberOrZero(form.disc_hdr_price) > 0 ? DiscAmountPercentage(form, rows) : form.disc_hdr_percent;
+    const taxPerc = form.tx_compnt_1_expmt === "S" ? 5 : 0;
     setRows((current) =>
       current.map((row) => ({
         ...row,
@@ -106,7 +107,8 @@ const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
         tx_cat_code: `${form.tx_cat_code || ""}`,
         disc_price: row.disc_price || form.disc_hdr_price,
         disc_percent: pct > 0 ? pct : row.disc_percent,
-        tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+        tx_compnt_perc_1: taxPerc,
       }))
     );
   }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price, form.tx_compnt_1_expmt, totalUnitPrice]);
@@ -150,7 +152,7 @@ const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
           dlvr_mobile: text(headerRaw.delivery_tel || current.dlvr_mobile),
           dlvr_email: text(headerRaw.delivery_email || current.dlvr_email),
           remarks: text(headerRaw.remarks || current.remarks),
-             disc_hdr_percent: numberOrZero(headerRaw.disc_hdr_percent),
+          disc_hdr_percent: numberOrZero(headerRaw.disc_hdr_percent),
           disc_hdr_price: numberOrZero(headerRaw.disc_hdr_price),
           tx_cat_code: text(headerRaw.tx_cat_code || current.tx_cat_code),
           tx_compntcat_code_1: text(headerRaw.tx_compntcat_code_1 || current.tx_compntcat_code_1),
@@ -258,7 +260,8 @@ const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
         tx_cat_code: `${form.tx_cat_code || ""}`,
         disc_price: form.disc_hdr_price,
         disc_percent: form.disc_hdr_percent,
-        tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+        tx_compnt_perc_1: form.tx_compnt_perc_1 || 0,
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
@@ -498,6 +501,7 @@ const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
                 companyCode={user?.company_code}
                 loginid={user?.loginid || user?.username}
                 rows={rows}
+                setdetails={setRows}
               />
 
               <PurchaseOrderLinesTable

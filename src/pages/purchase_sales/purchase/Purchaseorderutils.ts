@@ -69,7 +69,7 @@ export const emptyLineRow = (divCode: string): PurchaseOrderLineRow => ({
   po_l_uom: "",
   po_qty_luom: 0,
   po_quantity: 0,
-  serial_no:0
+  serial_no: 0
 
 });
 
@@ -222,21 +222,21 @@ export async function fetchPurchaseOrderDetail(
       porder_tx_compnt_perc_1: numberOrZero(row.porder_tx_compnt_perc_1),
       porder_tx_compnt_amt_1: numberOrZero(row.porder_tx_compnt_amt_1),
       porder_tx_compnt_1_expmt: text(row.porder_tx_compnt_1_expmt),
-      porder_remarks : text(row.porder_remarks),
+      porder_remarks: text(row.porder_remarks),
       serial_no: numberOrZero(row.serial_no),
     } satisfies PurchaseOrderLineRow;
   });
 }
 
-export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: PODocType) {
- const refDocNo =
-  docType === "GRN"
-    ? form.po_doc_no
-    : docType === "PIN"
-      ? text(form.grn_doc_no)
-      : docType === "LPO"
-        ? form.ref_no
-        : undefined;
+export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string, loginid?: string, docType?: PODocType, rows?: PurchaseOrderLineRow[]) {
+  const refDocNo =
+    docType === "GRN"
+      ? form.po_doc_no
+      : docType === "PIN"
+        ? text(form.grn_doc_no)
+        : docType === "LPO"
+          ? form.ref_no
+          : undefined;
 
   console.log("REF DOC NO:", refDocNo);
   return {
@@ -259,9 +259,9 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     party_fax: form.party_fax,
     buyer: form.buyer,
     wo_number: form.wo_number,
-
-    curr_code:  form.curr_code,
-    curr_name:  form.curr_name,
+    tx_compnt_1_expmt: form.tx_compnt_1_expmt,
+    curr_code: form.curr_code,
+    curr_name: form.curr_name,
     ex_rate: form.ex_rate,
     payment_terms: form.payment_terms,
     dlvr_term: form.dlvr_term,
@@ -270,7 +270,9 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     dlvr_email: form.dlvr_email,
     remarks: form.remarks,
     disc_hdr_price: form.disc_hdr_price,
-    disc_hdr_percent: form.disc_hdr_percent,
+    disc_hdr_percent: Number(form.disc_hdr_price) > 0
+      ? DiscAmountPercentage(form, rows || [])
+      : Number(form.disc_hdr_percent || 0),
     tx_cat_code: form.tx_cat_code,
     tx_compntcat_code_1: form.tx_compntcat_code_1,
     purchase_actype: form.expense_ac_post,
@@ -374,7 +376,11 @@ export function computePQuantity(row: PurchaseOrderLineRow): number {
 
 // Total discount for the whole line (was missing * quantity before)
 export function lineDiscPrice(row: PurchaseOrderLineRow) {
-  return row.unit_price *  (row.disc_percent / 100);
+  return row.unit_price * (row.disc_percent / 100);
+}
+
+export function amountBeforeDiscPrice(row: PurchaseOrderLineRow) {
+  return row.unit_price * computeQuantity(row);
 }
 
 export function DiscPrice(row: PurchaseOrderLineRow) {
@@ -382,7 +388,7 @@ export function DiscPrice(row: PurchaseOrderLineRow) {
 }
 
 export function lineDiscPoPrice(row: PurchaseOrderLineRow) {
-  return (row.porder_unit_price ?? 0)  * ((row.porder_disc_percent ?? 0) / 100);
+  return (row.porder_unit_price ?? 0) * ((row.porder_disc_percent ?? 0) / 100);
 }
 
 export function finalRate(row: PurchaseOrderLineRow) {
@@ -396,7 +402,7 @@ export function finalPORate(row: PurchaseOrderLineRow) {
 }
 
 export function lineAmount(row: PurchaseOrderLineRow) {
-  return finalRate(row)* computeQuantity(row);
+  return finalRate(row) * computeQuantity(row);
 }
 
 export function linePOAmount(row: PurchaseOrderLineRow) {
@@ -414,10 +420,10 @@ export function lineNetPOAmount(row: PurchaseOrderLineRow) {
 }
 
 export function lineTaxAmount(row: PurchaseOrderLineRow) {
-  return lineNetAmount(row) * (row.tx_compnt_perc_1 / 100);
+  return lineNetAmount(row) * ((row.tx_compnt_perc_1 ?? 0) / 100);
 }
 export function lineTaxpoAmount(row: PurchaseOrderLineRow) {
-  return lineNetPOAmount(row) * ((row.porder_tx_compnt_perc_1 ?? 0) / 100);
+  return lineNetAmount(row) * ((row.porder_tx_compnt_perc_1 ?? 0) / 100);
 }
 
 // Lcurr = net amount converted at ex_rate (was net * finalRate * ex_rate — double rate applied)
@@ -444,7 +450,7 @@ export function LcurrDisAmount(row: PurchaseOrderLineRow, ex_rate?: number) {
 }
 
 export function Totalunitprice(row: PurchaseOrderLineRow) {
-  return row.unit_price *  computeQuantity(row);
+  return row.unit_price * computeQuantity(row);
 }
 
 export function TotalUnitPrice(rows: PurchaseOrderLineRow[]) {
@@ -462,10 +468,22 @@ export function DiscAmountPercentage(
 
     if (total === 0) return 0;
 
-    return Number(((Number(form.disc_hdr_price) / total) * 100).toFixed(6));
+    return Number(((Number(form.disc_hdr_price) / total) * 100).toFixed(3));
   }
 
   return Number(form.disc_hdr_percent || 0);
+}
+
+export function DiscAmount(row: PurchaseOrderLineRow) {
+  return row.disc_percent * computeQuantity(row);
+}
+
+export function TotalDiscAmount(rows: PurchaseOrderLineRow[]): number {
+  const total = rows.reduce((total, row) => {
+    return total + DiscAmount(row);
+  }, 0);
+
+  return Math.round(total * 1000) / 1000;
 }
 
 // buildDetailsPayload — use computed values instead of stale row.qty / row.lcur_amount
@@ -484,7 +502,7 @@ export function buildDetailsPayload(
     qty_puom: row.qty_puom,
     l_uom: row.l_uom,
     qty_luom: row.qty_luom,
-    serial_no:row.serial_no,
+    serial_no: row.serial_no,
     unit_price: row.unit_price,
     unit_price_net: finalRate(row),
     amount: lineAmount(row),
@@ -543,7 +561,7 @@ export async function runWorkflow(
 ) {
   return upsertBulkPurchaseEntryApi(
     {
-      header: buildHeaderPayload(form, companyCode, loginid, docType),
+      header: buildHeaderPayload(form, companyCode, loginid, docType, rows),
       details: buildDetailsPayload(rows, form.ex_rate),
 
       company_code: companyCode || "",

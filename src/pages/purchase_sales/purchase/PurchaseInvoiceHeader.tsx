@@ -204,6 +204,7 @@ export function PurchaseInvoiceHeaderForm({
                                             unit_price: numberOrZero(getLookupValue(item, "unit_price")),
                                             porder_unit_price: numberOrZero(getLookupValue(item, "porder_unit_price")),
                                             disc_hdr_percent: numberOrZero(getLookupValue(item, "disc_hdr_percent")),
+                                              disc_hdr_price: numberOrZero(getLookupValue(item, "disc_hdr_price")),
                                             disc_percent: numberOrZero(getLookupValue(item, "disc_percent")),
                                             porder_disc_percent: numberOrZero(getLookupValue(item, "porder_disc_percent")),
                                             disc_price: numberOrZero(getLookupValue(item, "disc_price")),
@@ -427,10 +428,10 @@ export function PurchaseInvoiceHeaderForm({
                         type="number"
                         step="0.01"
                         disabled={headerAndLineDisabled}
-                        value={form.po_disc_hdr_price}
+                        value={form.disc_hdr_price}
                         onChange={(event) =>
                             updateField(
-                                "po_disc_hdr_price",
+                                "disc_hdr_price",
                                 Number(event.target.value || 0)
                             )
                         }
@@ -443,10 +444,10 @@ export function PurchaseInvoiceHeaderForm({
                         type="number"
                         step="0.01"
                         disabled={headerAndLineDisabled}
-                        value={form.po_disc_hdr_percent}
+                        value={form.disc_hdr_percent}
                         onChange={(event) =>
                             updateField(
-                                "po_disc_hdr_percent",
+                                "disc_hdr_percent",
                                 Number(event.target.value || 0)
                             )
                         }
@@ -467,7 +468,7 @@ export function PurchaseInvoiceHeaderForm({
                                 : form.po_tx_cat_code
                         }
                         columns={[
-                            { field: "tx_cat_code_1", header: "Code" },
+                            { field: "tx_cat_code", header: "Code" },
                             { field: "tx_cat_name", header: "Name" }
                         ]}
                         valueField="tx_cat_code"
