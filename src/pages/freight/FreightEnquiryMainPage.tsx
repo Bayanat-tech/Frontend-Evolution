@@ -308,7 +308,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
         size: 165,
         cell: ({ row }) => (
           <button
-            className="font-semibold text-primary hover:underline text-left"
+            className="freight-table-link font-semibold text-primary hover:underline text-left"
             type="button"
             onClick={() => openEnquiry(row.original)}
           >

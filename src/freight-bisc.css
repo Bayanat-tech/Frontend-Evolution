@@ -798,6 +798,17 @@ input[tabindex="-1"].opacity-0,
   text-align: left !important;
 }
 
+/* Record-number links are text controls, not square action-icon buttons. */
+.freight-workspace-ui .data-table-scroll td button.freight-table-link {
+  width: auto !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  justify-content: flex-start !important;
+  white-space: nowrap !important;
+}
+
 @media (max-width: 900px) {
   .freight-job-progress-rail-list {
     grid-template-columns: 1fr !important;
