@@ -990,7 +990,7 @@ function DimensionGrid({ rows, setRows }: { rows: DimensionLine[]; setRows: Disp
   const columns: Array<keyof DimensionLine> = ["sr_no", "length", "breadth", "height", "qty", "gross_wt", "chargeable_wt", "volume", "total_qty", "cargo_details", "prod_description"];
   const numeric = new Set<keyof DimensionLine>(["length", "breadth", "height", "qty", "gross_wt", "chargeable_wt", "volume", "total_qty"]);
   return (
-    <div className="overflow-hidden rounded-md border bg-background">
+    <div className="freight-dimension-grid overflow-hidden rounded-md border bg-background">
       <div className="flex items-center justify-between border-b bg-muted/35 px-2 py-1.5">
         <span className="text-xs font-semibold text-foreground">Air cargo dimensions</span>
         {editable && <Button type="button" size="sm" variant="outline" onClick={() => setRows((current) => [...current, emptyDimension(current.length + 1)])}><Plus size={14} />Line</Button>}

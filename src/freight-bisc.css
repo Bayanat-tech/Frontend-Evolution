@@ -160,6 +160,35 @@
   transition: all 140ms ease !important;
 }
 
+.freight-workspace-ui :where(.ui-button-icon, button.ui-button-icon),
+.freight-workspace-ui .data-table-scroll td .ui-button,
+.freight-workspace-ui .data-table-scroll td button,
+.freight-workspace-ui .data-table-pagination .ui-button-icon,
+.freight-workspace-ui .data-table-pager button {
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+  padding: 0 !important;
+  padding-inline: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 6px !important;
+}
+
+.freight-workspace-ui :where(.ui-button-icon, button.ui-button-icon) svg,
+.freight-workspace-ui .data-table-scroll td .ui-button svg,
+.freight-workspace-ui .data-table-scroll td button svg,
+.freight-workspace-ui .data-table-pagination .ui-button-icon svg,
+.freight-workspace-ui .data-table-pager button svg {
+  width: 15px !important;
+  height: 15px !important;
+  min-width: 15px !important;
+  min-height: 15px !important;
+  flex-shrink: 0 !important;
+}
+
 .freight-workspace-ui :where(.ui-button-default, .ui-button-primary) {
   border: 1px solid var(--freight-bisc-blue) !important;
   background: var(--freight-bisc-blue) !important;
@@ -493,9 +522,10 @@
 }
 
 /* --------------------------------------------------------------------------
-   8. Data Tables & Grids (BISC High-contrast Blue Headers)
+   8. Data Tables & Listing Screens (BISC Clean White Listing Headers)
    -------------------------------------------------------------------------- */
-.freight-workspace-ui .data-table-shell {
+.freight-workspace-ui .data-table-shell,
+.freight-list-screen .data-table-shell {
   overflow: hidden;
   border: 1px solid var(--freight-bisc-border) !important;
   border-radius: 12px !important;
@@ -503,58 +533,216 @@
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
 }
 
+/* Listing table thead: clean white header with muted slate text (NOT blue) */
 .freight-workspace-ui .data-table-scroll thead,
 .freight-workspace-ui .data-table-scroll thead tr,
 .freight-workspace-ui .data-table-scroll thead th,
 .freight-workspace-ui .data-table-scroll thead th.sticky,
-.freight-workspace-ui .data-table-scroll thead .bg-white,
-.freight-workspace-ui :where(.freight-document-form, .freight-enquiry-editor, .freight-quotation-form) table:not(.data-table-scroll table) thead tr,
-.freight-workspace-ui :where(.freight-document-form, .freight-enquiry-editor, .freight-quotation-form) table:not(.data-table-scroll table) thead th {
+.freight-workspace-ui .data-table-scroll thead .bg-white {
+  background-color: #ffffff !important;
+  color: #64748b !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+  height: 38px !important;
+  border-bottom: 1px solid var(--freight-bisc-border) !important;
+  border-right: 1px solid var(--freight-bisc-border-soft) !important;
+}
+
+.freight-workspace-ui .data-table-scroll thead th:last-child {
+  border-right: 0 !important;
+}
+
+.freight-workspace-ui .data-table-scroll thead th :where(button, svg) {
+  color: #94a3b8 !important;
+}
+
+.freight-workspace-ui .data-table-scroll thead th :where(button:hover, svg:hover) {
+  color: var(--freight-bisc-blue) !important;
+}
+
+.freight-workspace-ui .data-table-scroll tbody tr {
+  border-bottom: 1px solid var(--freight-bisc-border-soft) !important;
+  background: #ffffff;
+}
+
+.freight-workspace-ui .data-table-scroll tbody tr:hover {
+  background-color: #f8fafc !important;
+}
+
+.freight-workspace-ui .data-table-search {
+  height: 36px !important;
+  border: 1px solid var(--freight-bisc-border) !important;
+  border-radius: 9999px !important;
+  background: #ffffff !important;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+.freight-workspace-ui .data-table-header {
+  min-height: 48px;
+  padding: 8px 12px !important;
+  border-bottom: 1px solid var(--freight-bisc-border-soft) !important;
+  background: #ffffff !important;
+}
+
+.freight-workspace-ui .data-table-pagination {
+  border-top: 1px solid var(--freight-bisc-border-soft) !important;
+  background: #ffffff !important;
+  padding: 8px 14px !important;
+  font-size: 12px !important;
+  color: #64748b !important;
+}
+
+/* --------------------------------------------------------------------------
+   9. Dropdown Lookups & In-Document Transaction Grids (BISC Solid Blue Headers)
+   -------------------------------------------------------------------------- */
+/* Dropdown Lookup Popovers: solid dark blue header with crisp white text */
+.lookup-popover {
+  border: 1px solid var(--freight-bisc-border) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18) !important;
+  background: #ffffff !important;
+  overflow: hidden !important;
+}
+
+.lookup-popover .lookup-popover-head,
+.lookup-popover table thead,
+.lookup-popover table thead tr,
+.lookup-popover table thead th {
   background-color: var(--freight-bisc-blue) !important;
   color: #ffffff !important;
   font-size: 10.5px !important;
   font-weight: 700 !important;
   letter-spacing: 0.04em !important;
   text-transform: uppercase !important;
-  height: 36px !important;
-  border-color: rgba(255, 255, 255, 0.25) !important;
+  height: 34px !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
 }
 
-.freight-workspace-ui .data-table-scroll thead th :where(button, svg) {
-  color: #ffffff !important;
-}
-
-.freight-workspace-ui .data-table-scroll tbody tr:hover {
+.lookup-popover table tbody tr:hover {
   background-color: #f1f5f9 !important;
 }
 
-.freight-workspace-ui .data-table-search {
-  height: 36px !important;
-  border-color: var(--freight-bisc-border) !important;
-  border-radius: 9999px !important;
-  background: #f8fafc !important;
-}
-
-.freight-workspace-ui .data-table-pagination {
-  border-top-color: var(--freight-bisc-border-soft) !important;
+/* In-document transaction tables (Container grid, dimension grid, activities lines, invoice lines) */
+.freight-container-grid,
+.freight-dimension-grid,
+.freight-job-table-shell,
+.freight-document-form table:not(.data-table-scroll table),
+.freight-enquiry-editor table:not(.data-table-scroll table),
+.freight-quotation-form table:not(.data-table-scroll table) {
+  border: 1px solid var(--freight-bisc-border) !important;
+  border-radius: 10px !important;
+  overflow: hidden !important;
   background: #ffffff !important;
 }
 
-/* --------------------------------------------------------------------------
-   9. Lookup Modals & Dialogs
-   -------------------------------------------------------------------------- */
-.lookup-popover {
-  border: 1px solid var(--freight-bisc-border) !important;
-  border-radius: 12px !important;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16) !important;
-}
-
-.lookup-popover .lookup-popover-head,
-.lookup-popover table th {
-  background: var(--freight-bisc-blue) !important;
+.freight-container-grid table thead,
+.freight-container-grid table thead tr,
+.freight-container-grid table thead th,
+.freight-dimension-grid table thead,
+.freight-dimension-grid table thead tr,
+.freight-dimension-grid table thead th,
+.freight-job-table-shell table thead,
+.freight-job-table-shell table thead tr,
+.freight-job-table-shell table thead th,
+.freight-job-table-shell .freight-job-table-head,
+.freight-container-grid > div > .grid:first-child,
+.freight-dimension-grid > div > .grid:first-child,
+.freight-container-grid [class*="bg-muted/20"],
+.freight-dimension-grid [class*="bg-muted/20"],
+.freight-document-form table:not(.data-table-scroll table) thead,
+.freight-document-form table:not(.data-table-scroll table) thead tr,
+.freight-document-form table:not(.data-table-scroll table) thead th,
+.freight-enquiry-editor table:not(.data-table-scroll table) thead tr,
+.freight-enquiry-editor table:not(.data-table-scroll table) thead th,
+.freight-quotation-form table:not(.data-table-scroll table) thead tr,
+.freight-quotation-form table:not(.data-table-scroll table) thead th {
+  background-color: var(--freight-bisc-blue) !important;
   color: #ffffff !important;
   font-size: 10.5px !important;
   font-weight: 700 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  min-height: 34px !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+.freight-job-table-shell .freight-job-table-head span,
+.freight-container-grid > div > .grid:first-child span,
+.freight-dimension-grid > div > .grid:first-child span,
+.freight-container-grid [class*="bg-muted/20"] span,
+.freight-dimension-grid [class*="bg-muted/20"] span {
+  color: #ffffff !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+.freight-job-table-row {
+  border-bottom: 1px solid var(--freight-bisc-border-soft) !important;
+  background: #ffffff !important;
+  transition: background-color 120ms ease !important;
+}
+
+.freight-job-table-row:hover {
+  background-color: #f8fafc !important;
+}
+
+/* --------------------------------------------------------------------------
+   10. Transaction Summary & Totals Badges (Matching BISC solid blue pills)
+   -------------------------------------------------------------------------- */
+.freight-summary-badge,
+.freight-total-badge,
+.freight-balance-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 4px 10px !important;
+  border-radius: 6px !important;
+  background-color: var(--freight-bisc-blue) !important;
+  color: #ffffff !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+/* --------------------------------------------------------------------------
+   11. Read-Only / Approved State Rules (Zero overlap, crisp BISC styling)
+   -------------------------------------------------------------------------- */
+fieldset:disabled .lookup-field-trigger,
+.freight-workspace-ui fieldset:disabled .lookup-field-trigger,
+.freight-workspace-ui .lookup-field-trigger:has(input:disabled),
+.freight-workspace-ui .lookup-field-trigger:has(button:disabled) {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  cursor: not-allowed !important;
+}
+
+fieldset:disabled .lookup-field-trigger button,
+.freight-workspace-ui fieldset:disabled .lookup-field-trigger button {
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+
+fieldset:disabled .lookup-field-trigger button[aria-label="Clear lookup"],
+.freight-workspace-ui fieldset:disabled .lookup-field-trigger button[aria-label="Clear lookup"] {
+  display: none !important;
+}
+
+fieldset:disabled input,
+fieldset:disabled select,
+fieldset:disabled textarea,
+.freight-workspace-ui fieldset:disabled input,
+.freight-workspace-ui fieldset:disabled select,
+.freight-workspace-ui fieldset:disabled textarea,
+.freight-workspace-ui input:disabled,
+.freight-workspace-ui select:disabled,
+.freight-workspace-ui textarea:disabled {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #334155 !important;
+  cursor: not-allowed !important;
 }
 
 @media (max-width: 900px) {
@@ -562,4 +750,3 @@
     grid-template-columns: 1fr !important;
   }
 }
-

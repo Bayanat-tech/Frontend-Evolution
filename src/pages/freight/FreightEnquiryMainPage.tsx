@@ -349,40 +349,53 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
       //   ),
       // },
         
-           {
+      {
         id: "actions",
-        header: "Actions",
+        header: "ACTIONS",
         size: 110,
         enableColumnFilter: false,
         cell: ({ row }) => {
           const status = lookupText(row.original, "indstatus");
           const action = lookupText(row.original, "last_action");
           const finalApproved = lookupText(row.original, "final_approved");
-          // const cancelDisabled = status === "A" || finalApproved === "Y" || status === "C" || status === "R" || action === "REJECTED";
           const cancelDisabled = status === "A" || finalApproved === "Y" || status === "R" || action === "REJECTED";
           return (
-            <div className="flex items-center justify-end gap-1">
-              <Button type="button" size="icon" variant="ghost" title={`Open ${enquiryLabel}`} onClick={() => openEnquiry(row.original)}>
-                <Eye size={14} />
-              </Button>
-              <Button type="button" size="icon" variant="ghost" title={`Print ${enquiryLabel}`}
-                     onClick={(event) => { event.stopPropagation(); void printEnquiry(row.original); }}>
-                     <Printer size={14} />
-              </Button>
-              <Button
+            <div className="flex items-center justify-center gap-1">
+              <button
                 type="button"
-                size="icon"
-                variant="ghost"
-                title={cancelDisabled ? `${statusLabel(status, action, finalApproved)} ${enquiryLabel.toLowerCase()} cannot be cancelled` : `Cancel ${enquiryLabel}`}
-                className="text-red-600 hover:text-red-700"
+                className="h-7 w-7 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                title={`Open ${enquiryLabel}`}
+                onClick={() => openEnquiry(row.original)}
+              >
+                <Eye size={15} />
+              </button>
+              <button
+                type="button"
+                className="h-7 w-7 grid place-items-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                title={`Print ${enquiryLabel}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void printEnquiry(row.original);
+                }}
+              >
+                <Printer size={15} />
+              </button>
+              <button
+                type="button"
+                className="h-7 w-7 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer"
+                title={
+                  cancelDisabled
+                    ? `${statusLabel(status, action, finalApproved)} ${enquiryLabel.toLowerCase()} cannot be cancelled`
+                    : `Cancel ${enquiryLabel}`
+                }
                 disabled={cancelDisabled}
                 onClick={(event) => {
                   event.stopPropagation();
                   requestCancelRow(row.original);
                 }}
               >
-                <X size={14} />
-              </Button>
+                <X size={15} />
+              </button>
             </div>
           );
         },
@@ -1352,9 +1365,9 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
           {/* <FormLookup label="Department" value={header.dept_code} displayValue={headerNames.dept_name} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} className="sm:col-span-2 xl:col-span-1.5" /> */}
           <FormSelect label="Job Type" value={header.job_type} onChange={(value) => setHeaderField("job_type", value)} options={jobTypes} required/>
           <FormSelect label="Mode" value={header.transport_mode} onChange={(value) => setHeaderField("transport_mode", value)} options={transportModes}  required />
-          <FormLookup label="Department" value={header.dept_code} displayValue={headerNames.dept_name} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} required className="sm:col-span-2 xl:col-span-1.5" />
-          <FormLookup label="Principal" value={header.prin_code} displayValue={headerNames.prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required className="sm:col-span-2 xl:col-span-1.5" />
-          <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayValue={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }, { field: "prin_telno1", header: "Phone" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} className="sm:col-span-2 xl:col-span-1.5" />
+          <FormLookup label="Department" value={header.dept_code} displayValue={headerNames.dept_name} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} required disabled={isReadOnly} className="sm:col-span-2 xl:col-span-1.5" />
+          <FormLookup label="Principal" value={header.prin_code} displayValue={headerNames.prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required disabled={isReadOnly} className="sm:col-span-2 xl:col-span-1.5" />
+          <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayValue={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }, { field: "prin_telno1", header: "Phone" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} disabled={isReadOnly} className="sm:col-span-2 xl:col-span-1.5" />
           {/* <FormLookup label="Salesman" value={header.salesman_code} displayValue={headerNames.salesman_name} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Salesman" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} className="sm:col-span-2 xl:col-span-1.5" /> */}
           {/* <StatusField status={header.indstatus} action={header.last_action} finalApproved={header.final_approved} />
           <TypeField label="Approval Level" value={workflowLevelText(header)} /> */}
@@ -2207,6 +2220,7 @@ function FormLookup({
   loadOptions,
   onChange,
   required,
+  disabled,
   className = "",
 }: {
   label: string;
@@ -2218,14 +2232,14 @@ function FormLookup({
   loadOptions: () => Promise<LookupRow[]>;
   onChange: (value: string, row: LookupRow | null) => void;
   required?: boolean;
+  disabled?: boolean;
   className?: string;
 }) {
   return (
-    // <div className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
-    <div className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground freight-field-label ${className}`}>
-    <span>
-       {label} {required && <span style={{ color: "#E24B4A" }}>*</span>}
-     </span>
+    <div className={`grid gap-0.5 text-[11.5px] font-semibold text-slate-700 freight-field-label ${className}`}>
+      <span>
+        {label} {required && <span style={{ color: "#E24B4A" }}>*</span>}
+      </span>
       <LookupField
         compact
         label={label}
@@ -2237,6 +2251,7 @@ function FormLookup({
         loadOptions={loadOptions}
         onChange={onChange}
         required={required}
+        disabled={disabled}
         enforceRequired={required}
         placeholder={`Select ${label}`}
       />

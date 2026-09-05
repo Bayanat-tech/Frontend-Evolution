@@ -1743,10 +1743,10 @@ function FormInput({ label, value, onChange, type = "text", required, placeholde
   );
 }
 
-function FormLookup({ label, value, displayValue, valueField, displayFields, columns, loadOptions, onChange, required, className = "" }: {
+function FormLookup({ label, value, displayValue, valueField, displayFields, columns, loadOptions, onChange, required, disabled, className = "" }: {
   label: string; value: string; displayValue?: string; valueField: string; displayFields: string[];
   columns: { field: string; header: string }[]; loadOptions: () => Promise<LookupRow[]>;
-  onChange: (value: string, row: LookupRow | null) => void; required?: boolean; className?: string;
+  onChange: (value: string, row: LookupRow | null) => void; required?: boolean; disabled?: boolean; className?: string;
   }) {
   return (
     <label className={`grid gap-0.5 text-[10px] font-semibold uppercase text-slate-800 freight-field-label ${className}`}>
@@ -1760,6 +1760,7 @@ function FormLookup({ label, value, displayValue, valueField, displayFields, col
         loadOptions={loadOptions}
         onChange={onChange}
         required={required}
+        disabled={disabled}
         enforceRequired={required}
         compact
       />
