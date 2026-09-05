@@ -319,9 +319,9 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
     {
       accessorKey: "quotation_nr",
       header: "Quotation No",
-      size: 160,
+      size: 165,
       cell: ({ row }) => (
-        <button className="font-semibold text-primary hover:underline" type="button" onClick={() => openQuotation(row.original)}>
+        <button className="font-semibold text-primary hover:underline text-left" type="button" onClick={() => openQuotation(row.original)}>
           {lookupText(row.original, "quotation_nr")}
         </button>
       ),
@@ -982,7 +982,6 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
           searchPlaceholder="Search quotation, principal, port..."
           loading={loading}
           height="calc(100vh - 240px)"
-          minWidth={1380}
           density="grid"
           enablePagination
           pageSize={50}

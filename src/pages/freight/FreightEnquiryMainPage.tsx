@@ -305,10 +305,10 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
       {
         accessorKey: "enquiry_nr",
         header: `${enquiryLabel} No`,
-        size: 140,
+        size: 165,
         cell: ({ row }) => (
           <button
-            className="font-semibold text-primary hover:underline"
+            className="font-semibold text-primary hover:underline text-left"
             type="button"
             onClick={() => openEnquiry(row.original)}
           >
@@ -1235,7 +1235,6 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
           searchPlaceholder={`Search ${enquiryLabel.toLowerCase()}, principal, port, job...`}
           loading={loadingList}
           height="calc(100vh - 240px)"
-          minWidth={1380}
           density="grid"
           enablePagination
           pageSize={50}

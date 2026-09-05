@@ -232,12 +232,13 @@ export function LookupField({
               : "border-[#d5dbe3] bg-white focus-within:border-[#00378C] focus-within:ring-1 focus-within:ring-[#00378C]/20"
           } ${dense ? "h-7" : compact ? "h-7" : "h-8"}`}
         >
-          {enforceRequired && (
+          {enforceRequired && !disabled && (
             <input
               ref={validityRef}
               tabIndex={-1}
               aria-hidden="true"
-              className="pointer-events-none absolute inset-0 -z-10 h-full w-full border-0 bg-transparent p-0 text-transparent opacity-0"
+              className="pointer-events-none absolute inset-0 -z-10 h-0 w-0 border-0 bg-transparent p-0 text-transparent opacity-0"
+              style={{ opacity: 0, color: "transparent", width: 0, height: 0, pointerEvents: "none" }}
               value={value}
               required
               onChange={() => {}}
