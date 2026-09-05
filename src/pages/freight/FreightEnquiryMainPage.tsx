@@ -396,7 +396,20 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   }, [screenType, userInfo?.company_code, userInfo?.COMPANY_CODE]);
 
 const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
-  setHeader((current) => ({ ...current, [field]: value }));
+  setHeader((current) => {
+    const next = { ...current, [field]: value };
+    if (field === "l" || field === "b" || field === "h") {
+      const length = Number(next.l) || 0;
+      const breadth = Number(next.b) || 0;
+      const height = Number(next.h) || 0;
+      const volume = (length * breadth * height) / 1_000_000;
+      const volumeWeight = (length * breadth * height) / 6000;
+      next.volume = volume > 0 ? volume.toFixed(3) : "0";
+      next.weight = volumeWeight > 0 ? volumeWeight.toFixed(3) : "0";
+      next.dimension = length && breadth && height ? `${length} x ${breadth} x ${height} cm` : "";
+    }
+    return next;
+  });
   if (field === "transport_mode") {
     setDetails((current) => current.map((row) => ({ ...row, transport_mode: value })));
   }
@@ -1389,11 +1402,11 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                     <FormLookup label="Commodity" value={header.commodity} valueField="prodtype_desc" displayFields={["prodtype_desc", "prodtype_code"]} columns={[{ field: "prodtype_desc", header: "Commodity" }, { field: "prodtype_code", header: "Code" }]} loadOptions={() => loadCommodityLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("commodity", value, row)} className="xl:col-span-2" />
                     <FormInput label="Weight(kgs)" type="number" value={header.weight} onChange={(value) => setHeaderField("weight", value)} />
                     <FormInput label="Gross Weight(kgs)" type="number" value={header.gross_wt} onChange={(value) => setHeaderField("gross_wt", value)} />
-                    <FormInput label="Volume" type="number" value={header.volume} onChange={(value) => setHeaderField("volume", value)} />
                     <FormInput label="Length(cm)" type="number" value={header.l} onChange={(value) => setHeaderField("l", value)} />
                     <FormInput label="Breadth(cm)" type="number" value={header.b} onChange={(value) => setHeaderField("b", value)} />
                     <FormInput label="Height(cm)" type="number" value={header.h} onChange={(value) => setHeaderField("h", value)} />
-                    <FormInput label="Dimension" value={header.dimension} onChange={(value) => setHeaderField("dimension", value)} />
+                    <FormInput label="Volume (c.b.m)" type="number" value={header.volume} onChange={(value) => setHeaderField("volume", value)} disabled />
+                    <FormInput label="Dimension" value={header.dimension} onChange={(value) => setHeaderField("dimension", value)} disabled />
                     {header.transport_mode === "S" && (
                     <>
                     <FormInput label="Container Type" value={header.container_type} onChange={(value) => setHeaderField("container_type", value)} />
@@ -1457,6 +1470,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                     <FormInput label="Via" value={header.via} onChange={(value) => setHeaderField("via", value)} />
                     <FormInput label="Job No" value={header.job_number} onChange={(value) => setHeaderField("job_number", value)} />
                     <FormInput label="Ready Date" type="date" value={header.schedule_date} onChange={(value) => setHeaderField("schedule_date", value)} />
+                    <FormInput label="Transit Time" value={header.transit_time} onChange={(value) => setHeaderField("transit_time", value)} placeholder="e.g. 2 days / 48 hours" />
                     {header.transport_mode === "S" && (
                     <>
                     <FormInput label="Shipment Status" value={header.shipment_status} onChange={(value) => setHeaderField("shipment_status", value)} />
@@ -1476,13 +1490,6 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
                 <SectionPanel className="lg:col-span-6" icon={Activity} title="Schedule And Sales" meta={header.salesman_code || "Sales executive pending"}>
                   <div className="grid gap-1 sm:grid-cols-3">
-                    <FormInput
-                      label="Transit Time"
-                      type="datetime-local"
-                      value={toInputDateTime(header.transit_time)}
-                      onChange={(value) => setHeaderField("transit_time", fromInputDateTime(value))}
-                      inputClassName="font-semibold"
-                    />
                     <FormInput label="Frequency" value={header.frequency} onChange={(value) => setHeaderField("frequency", value)} />
                     <FormLookup label="Sales Executive" value={header.salesman_code} displayValue={headerNames.salesman_name} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Sales Executive" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} />
                    </div>

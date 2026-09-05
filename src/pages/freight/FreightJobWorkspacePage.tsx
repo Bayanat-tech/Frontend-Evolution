@@ -271,7 +271,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           </div>
           <div className="freight-workspace-command-slot">{workspaceActions}</div>
           <div className="freight-workspace-tabs">
-            {tabs.map((tab) => {
+            {tabs.map((tab, idx) => {
               const Icon = tab.icon;
               const active = activeTab === tab.key;
               return (
@@ -281,9 +281,17 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
                   className={`freight-workspace-tab ${active ? "active" : ""}`}
                   onClick={() => setActiveTab(tab.key)}
                 >
-                  <Icon size={14} />
-                  {tab.label}
-                  {!tab.ready && <span className={`rounded px-1 text-[9px] ${active ? "bg-primary-foreground/20" : "bg-muted"}`}>Next</span>}
+                  <Icon size={14} className={active ? "text-primary" : "text-muted-foreground"} />
+                  <span>{tab.label}</span>
+                  <span
+                    className={`ml-1 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${
+                      active
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {idx + 1}
+                  </span>
                 </button>
               );
             })}
