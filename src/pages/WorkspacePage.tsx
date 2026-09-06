@@ -162,7 +162,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
 
   return (
     <div className="workspace">
-      <aside className={cn("sidebar", displayCollapsed && "collapsed", isMobile && "mobile-sidebar", mobileMenuOpen && "mobile-open")}>
+      <aside className={cn("sidebar", isFreightModule && "freight-sidebar", displayCollapsed && "collapsed", isMobile && "mobile-sidebar", mobileMenuOpen && "mobile-open")}>
         <div className="sidebar-top">
           <Link to="/apps" className={displayCollapsed ? "sidebar-brand logo-only" : "sidebar-brand"} title={companyName}>
             <span className="sidebar-logo-wrap">

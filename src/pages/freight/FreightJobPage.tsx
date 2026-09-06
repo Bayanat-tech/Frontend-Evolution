@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Ban,
   BriefcaseBusiness,
+  Check,
   Edit2,
   FileText,
   MapPinned,
@@ -415,7 +416,7 @@ export function FreightJobPage({
 
   if (view === "list") {
     return (
-      <section className="grid gap-3">
+    <section className="freight-list-screen grid gap-3">
         <Header title={`${mode.label} ${direction.label} Jobs`} subtitle="Freight operations job listing" icon={Icon}>
           {notice && <NoticeChip notice={notice} />}
           <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}><RefreshCw size={14} />Refresh</Button>
@@ -660,14 +661,18 @@ function JobProgressRail({ job }: { job: JobForm }) {
   return (
     <aside className="freight-job-progress-rail" aria-label="Job status">
       <div className="freight-job-progress-rail-title">
-        <span>Job Status</span>
-        <strong>{activeStep?.label || "Completed"}</strong>
+        <span>Workflow Progress</span>
+        <strong>Current Status: {activeStep?.label || "Completed"}</strong>
       </div>
       <div className="freight-job-progress-rail-list">
-        {steps.map((step) => (
+        {steps.map((step, idx) => (
           <div key={step.label} className={`freight-job-progress-rail-step ${step.className || "pending"}`}>
+            <span className="freight-job-progress-rail-marker">
+              {step.done ? <Check size={14} /> : idx + 1}
+            </span>
             <span className="freight-job-progress-rail-copy">
               <strong>{step.label}</strong>
+              <small>{step.detail || (step.done ? "Done" : "Pending")}</small>
             </span>
           </div>
         ))}
@@ -678,13 +683,13 @@ function JobProgressRail({ job }: { job: JobForm }) {
 
 function Header({ title, subtitle, icon: Icon, children }: { title: string; subtitle: string; icon: typeof Plane; children: React.ReactNode }) {
   return (
-    <div className="freight-form-header">
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary"><Icon size={18} /></span>
+    <div className="freight-form-header flex items-center justify-between mb-2 p-2 rounded-xl border border-border bg-card shadow-sm">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary/10 text-primary"><Icon size={18} /></span>
         <div>
-          <p className="eyebrow mb-0.5">Freight Job</p>
-          <h1 className="m-0 text-lg font-semibold text-foreground">{title}</h1>
-          <p className="m-0 text-xs font-semibold text-slate-700">{subtitle}</p>
+          <p className="eyebrow mb-0 text-[10px] font-bold uppercase tracking-wider text-primary">Freight Job</p>
+          <h1 className="m-0 text-base font-bold text-foreground">{title}</h1>
+          <p className="m-0 text-xs text-muted-foreground">{subtitle}</p>
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-1.5">{children}</div>
@@ -697,10 +702,10 @@ function Panel({ title, meta, icon: Icon, children, className = "" }: { title: s
     <section className={`freight-info-section ${className}`}>
       <div className="freight-info-title">
         <div className="flex min-w-0 items-center gap-2">
-          <Icon size={15} />
+          <Icon size={15} className="text-primary" />
           <h2>{title}</h2>
         </div>
-        <span>{meta}</span>
+        <span className="text-[11px] text-muted-foreground font-medium">{meta}</span>
       </div>
       <div className="freight-info-body">{children}</div>
     </section>
@@ -711,8 +716,20 @@ function Field({ label, value, onChange, type = "text", className = "", required
   const editable = useContext(JobEditContext);
   if (!editable) return <DisplayField className={className} label={label} value={type === "date" ? toDisplayDate(value) : value} />;
   const safeValue = type === "date" ? dateInputValue(value) : value;
-  return <label className={`freight-compact-label ${className}`}><span>{label} {required && <span style={{ color: "#E24B4A" }}>*</span>}</span><Input className="h-7 text-xs font-semibold" type={type} value={safeValue} required={required} onChange={(event) => onChange(event.target.value)} onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
-        onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")} /></label>;
+  return (
+    <label className={`freight-compact-label ${className}`}>
+      <span>{label} {required && <span className="text-destructive font-bold">*</span>}</span>
+      <Input
+        className="h-8 text-xs font-normal"
+        type={type}
+        value={safeValue}
+        required={required}
+        onChange={(event) => onChange(event.target.value)}
+        onInvalid={(event) => (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)}
+        onInput={(event) => (event.target as HTMLInputElement).setCustomValidity("")}
+      />
+    </label>
+  );
 }
 
 function SelectField({ label, value, options, onChange, required }: { label: string; value: string; options: Array<string | [string, string]>; onChange: (value: string) => void; required?: boolean }) {
@@ -724,8 +741,8 @@ function SelectField({ label, value, options, onChange, required }: { label: str
   }
   return (
     <label className="freight-compact-label">
-      <span>{label} {required && <span style={{ color: "#E24B4A" }}>*</span>}</span>
-      <select className="h-7 rounded-md border bg-background px-2 text-xs font-semibold" value={value} onChange={(event) => onChange(event.target.value)}>
+      <span>{label} {required && <span className="text-destructive font-bold">*</span>}</span>
+      <select className="h-8 rounded-lg border border-input bg-background px-2.5 text-xs text-foreground" value={value} onChange={(event) => onChange(event.target.value)}>
         <option value="">Blank</option>
         {options.map((option) => {
           const [code, labelText] = Array.isArray(option) ? option : [option, option];
@@ -759,11 +776,11 @@ function DateField({
     <label className="freight-compact-label">
       <span>
         {label}
-        {required && <span style={{ color: "#E24B4A" }}> *</span>}
+        {required && <span className="text-destructive font-bold"> *</span>}
       </span>
 
       <Input
-        className="h-7 text-xs font-semibold"
+        className="h-8 text-xs font-normal"
         type="date"
         value={inputValue}
         required={required}
@@ -802,14 +819,13 @@ function DateTimeField({
     <label className="freight-compact-label">
       <span>
         {label}
-        {required && <span style={{ color: "#E24B4A" }}> *</span>}
+        {required && <span className="text-destructive font-bold"> *</span>}
       </span>
       <Input
-        className="h-7 text-xs font-semibold"
+        className="h-8 text-xs font-normal"
         type="datetime-local"
         value={dateTimeInputValue(value)}
         required={required}
-        // onChange={(event) => onChange(event.target.value)}
         onChange={(event) => onChange(localInputToUtcIso(event.target.value))}
         onInvalid={(event) =>
           (event.target as HTMLInputElement).setCustomValidity(`${label} is required`)
@@ -823,27 +839,41 @@ function DateTimeField({
 function Textarea({ label, value, onChange, className = "" }: { label: string; value: string; onChange: (value: string) => void; className?: string }) {
   const editable = useContext(JobEditContext);
   if (!editable) return <DisplayField className={className} label={label} value={value} multiline />;
-  return <label className={`freight-compact-label ${className}`}>{label}<textarea className="min-h-8 rounded-md border border-input bg-background px-2 py-1 text-xs font-semibold text-foreground shadow-sm" value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+  return (
+    <label className={`freight-compact-label ${className}`}>
+      <span>{label}</span>
+      <textarea className="min-h-[52px] rounded-lg border border-input bg-background px-2.5 py-1.5 text-xs text-foreground shadow-none" value={value} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
 }
 
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
   const editable = useContext(JobEditContext);
   if (!editable) return <DisplayField label={label} value={value} strong />;
-  return <div className="freight-compact-label">{label}<div className="flex h-7 items-center rounded-md border bg-muted/40 px-2 text-xs font-semibold normal-case text-foreground">{value}</div></div>;
+  return (
+    <div className="freight-compact-label">
+      <span>{label}</span>
+      <div className="flex h-8 items-center rounded-lg border border-border bg-muted/40 px-2.5 text-xs font-medium normal-case text-foreground">{value}</div>
+    </div>
+  );
 }
 
 function Lookup({ label, value, displayValue, valueField, displayFields, columns, loadOptions, onChange, required, disabled, placeholder }: { label: string; value: string; displayValue?: string; valueField: string; displayFields: string[]; columns: { field: string; header: string }[]; loadOptions: (query?: string) => Promise<LookupRow[]>; onChange: (value: string, row: LookupRow | null) => void; required?: boolean; disabled?: boolean; placeholder?: string }) {
   const editable = useContext(JobEditContext);
-  // if (!editable) return <DisplayField label={label} value={value} />;
   if (!editable) return <DisplayField label={label} value={displayValue || value} />;
-  return <label className="freight-compact-label"><span>{label} {required && <span style={{ color: "#E24B4A" }}>*</span>}</span><LookupField value={value} displayValue={displayValue} compact valueField={valueField} displayFields={displayFields} columns={columns} loadOptions={loadOptions} onChange={onChange} required={required} enforceRequired={required} disabled={disabled} placeholder={placeholder} /></label>;
+  return (
+    <label className="freight-compact-label">
+      <span>{label} {required && <span className="text-destructive font-bold">*</span>}</span>
+      <LookupField value={value} displayValue={displayValue} compact valueField={valueField} displayFields={displayFields} columns={columns} loadOptions={loadOptions} onChange={onChange} required={required} enforceRequired={required} disabled={disabled} placeholder={placeholder} />
+    </label>
+  );
 }
 
 function DisplayField({ label, value, strong, multiline, className = "" }: { label: string; value: string; strong?: boolean; multiline?: boolean; className?: string }) {
   return (
     <div className={`freight-read-field ${multiline ? "multiline" : ""} ${className}`}>
-      <span>{label}</span>
-      <strong className={strong ? "is-strong" : ""}>{value || "-"}</strong>
+      <span className="text-[11px] text-muted-foreground font-medium">{label}</span>
+      <strong className={`text-xs ${strong ? "font-bold text-primary" : "font-medium text-foreground"}`}>{value || "-"}</strong>
     </div>
   );
 }

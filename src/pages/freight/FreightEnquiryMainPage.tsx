@@ -1,7 +1,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { FormEvent, useEffect, useMemo, useState, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { Activity, AlertTriangle, ArrowLeft, Ban, CreditCard, Eye, MapPinned, PackageCheck, Paperclip, Plus, RefreshCw, RotateCcw, Save, ShieldCheck, ShipWheel, Sparkles, Trash2, X } from "lucide-react";
+import { Activity, AlertTriangle, ArrowLeft, Ban, CreditCard, Eye, MapPinned, PackageCheck, Paperclip, Plus, Printer, RefreshCw, RotateCcw, Save, ShieldCheck, ShipWheel, Sparkles, Trash2, X } from "lucide-react";
 import { api } from "../../api/client";
 import { freightSelect } from "../../api/freight";
 import { getLookupValue, type LookupRow } from "../../api/lookups";
@@ -305,10 +305,10 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
       {
         accessorKey: "enquiry_nr",
         header: `${enquiryLabel} No`,
-        size: 140,
+        size: 165,
         cell: ({ row }) => (
           <button
-            className="font-semibold text-primary hover:underline"
+            className="freight-table-link font-semibold text-primary hover:underline text-left"
             type="button"
             onClick={() => openEnquiry(row.original)}
           >
@@ -349,36 +349,53 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
       //   ),
       // },
         
-           {
+      {
         id: "actions",
-        header: "Actions",
+        header: "ACTIONS",
         size: 110,
         enableColumnFilter: false,
         cell: ({ row }) => {
           const status = lookupText(row.original, "indstatus");
           const action = lookupText(row.original, "last_action");
           const finalApproved = lookupText(row.original, "final_approved");
-          // const cancelDisabled = status === "A" || finalApproved === "Y" || status === "C" || status === "R" || action === "REJECTED";
           const cancelDisabled = status === "A" || finalApproved === "Y" || status === "R" || action === "REJECTED";
           return (
-            <div className="flex items-center justify-end gap-1">
-              <Button type="button" size="icon" variant="ghost" title={`Open ${enquiryLabel}`} onClick={() => openEnquiry(row.original)}>
-                <Eye size={14} />
-              </Button>
-              <Button
+            <div className="flex items-center justify-center gap-1">
+              <button
                 type="button"
-                size="icon"
-                variant="ghost"
-                title={cancelDisabled ? `${statusLabel(status, action, finalApproved)} ${enquiryLabel.toLowerCase()} cannot be cancelled` : `Cancel ${enquiryLabel}`}
-                className="text-red-600 hover:text-red-700"
+                className="h-7 w-7 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                title={`Open ${enquiryLabel}`}
+                onClick={() => openEnquiry(row.original)}
+              >
+                <Eye size={15} />
+              </button>
+              <button
+                type="button"
+                className="h-7 w-7 grid place-items-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                title={`Print ${enquiryLabel}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void printEnquiry(row.original);
+                }}
+              >
+                <Printer size={15} />
+              </button>
+              <button
+                type="button"
+                className="h-7 w-7 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer"
+                title={
+                  cancelDisabled
+                    ? `${statusLabel(status, action, finalApproved)} ${enquiryLabel.toLowerCase()} cannot be cancelled`
+                    : `Cancel ${enquiryLabel}`
+                }
                 disabled={cancelDisabled}
                 onClick={(event) => {
                   event.stopPropagation();
                   requestCancelRow(row.original);
                 }}
               >
-                <X size={14} />
-              </Button>
+                <X size={15} />
+              </button>
             </div>
           );
         },
@@ -392,7 +409,20 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
   }, [screenType, userInfo?.company_code, userInfo?.COMPANY_CODE]);
 
 const setHeaderField = (field: keyof EnquiryHeader, value: string) => {
-  setHeader((current) => ({ ...current, [field]: value }));
+  setHeader((current) => {
+    const next = { ...current, [field]: value };
+    if (field === "l" || field === "b" || field === "h") {
+      const length = Number(next.l) || 0;
+      const breadth = Number(next.b) || 0;
+      const height = Number(next.h) || 0;
+      const volume = (length * breadth * height) / 1_000_000;
+      const volumeWeight = (length * breadth * height) / 6000;
+      next.volume = volume > 0 ? volume.toFixed(3) : "0";
+      next.weight = volumeWeight > 0 ? volumeWeight.toFixed(3) : "0";
+      next.dimension = length && breadth && height ? `${length} x ${breadth} x ${height} cm` : "";
+    }
+    return next;
+  });
   if (field === "transport_mode") {
     setDetails((current) => current.map((row) => ({ ...row, transport_mode: value })));
   }
@@ -978,6 +1008,29 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
     }
   };
 
+  const printEnquiry = async (row: EnquiryListRow) => {
+  const companyCode = lookupText(row, "company_code") || header.company_code;
+  const enquiryNr = lookupText(row, "enquiry_nr");
+  const enquiryType = lookupText(row, "enquiry_type") || (screenType === "rfq" ? "RFQ" : "EQI");
+  if (!companyCode || !enquiryNr) return;
+  try {
+    const response = await api.post<{ success?: boolean; data?: { header?: LookupRow | null; details?: LookupRow[] }; message?: string }>(
+      isRfq ? "/api/freight/rfq/get" : "/api/freight/enquiry/get",
+      { company_code: companyCode, enquiry_type: enquiryType, enquiry_nr: enquiryNr },
+    );
+    if (response.data?.success === false) throw new Error(response.data.message || `Unable to load ${enquiryLabel}`);
+    const headerRow = normalizeLookupRow(response.data?.data?.header || row);
+    const mergedRow = { ...normalizeLookupRow(row), ...headerRow };
+    const printHeader = toHeaderFromRow(mergedRow, userInfo, target, screenType);
+    const printDetails = (response.data?.data?.details || [])
+      .map((detail) => normalizeLookupRow(detail))
+      .map((detail, index) => toDetailFromRow(detail, printHeader, index + 1));
+    renderPrintWindow(printHeader, printDetails, enquiryLabel);
+  } catch (error) {
+    setNotice({ type: "error", text: error instanceof Error ? error.message : `Unable to print ${enquiryLabel}` });
+  }
+};
+
   useEffect(() => {
     if (!openRecordNo || deepOpenDone === openRecordNo) return;
     const recordType = lookupText(freightSearchRecord || {}, "record_type").toUpperCase();
@@ -1182,7 +1235,6 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
           searchPlaceholder={`Search ${enquiryLabel.toLowerCase()}, principal, port, job...`}
           loading={loadingList}
           height="calc(100vh - 240px)"
-          minWidth={1380}
           density="grid"
           enablePagination
           pageSize={50}
@@ -1199,7 +1251,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
   return (
     <>
     <form className="freight-dense-form freight-ui-standard freight-enquiry-editor" onSubmit={saveEnquiry}>
-      <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+      <div className="freight-transaction-header flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
             <ShipWheel size={15} />
@@ -1209,7 +1261,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
               {/* {isRfq ? "Freight RFQ" : "Freight Enquiry"} */}
               </p>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{header.enquiry_nr}
+              <h1 className="m-0 text-lg font-semibold leading-tight text-foreground">{header.enquiry_nr || (isRfq ? "New Request For Quote" : "New Freight Enquiry")}
                 {/* {isRfq ? "Request For Quote" : "Freight Enquiry"} */}
                 </h1>
               {/* <span className="rounded-md border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground">
@@ -1312,14 +1364,16 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
           {/* <FormLookup label="Department" value={header.dept_code} displayValue={headerNames.dept_name} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} className="sm:col-span-2 xl:col-span-1.5" /> */}
           <FormSelect label="Job Type" value={header.job_type} onChange={(value) => setHeaderField("job_type", value)} options={jobTypes} required/>
           <FormSelect label="Mode" value={header.transport_mode} onChange={(value) => setHeaderField("transport_mode", value)} options={transportModes}  required />
-          <FormLookup label="Department" value={header.dept_code} displayValue={headerNames.dept_name} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} required className="sm:col-span-2 xl:col-span-1.5" />
-          <FormLookup label="Principal" value={header.prin_code} displayValue={headerNames.prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required className="sm:col-span-2 xl:col-span-1.5" />
-          <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayValue={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }, { field: "prin_telno1", header: "Phone" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} className="sm:col-span-2 xl:col-span-1.5" />
-          <FormLookup label="Salesman" value={header.salesman_code} displayValue={headerNames.salesman_name} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Salesman" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} className="sm:col-span-2 xl:col-span-1.5" />
-          <StatusField status={header.indstatus} action={header.last_action} finalApproved={header.final_approved} />
-          <TypeField label="Approval Level" value={workflowLevelText(header)} />
+          <FormLookup label="Department" value={header.dept_code} displayValue={headerNames.dept_name} valueField="dept_code" displayFields={["dept_code", "dept_name"]} columns={[{ field: "dept_code", header: "Code" }, { field: "dept_name", header: "Department" }]} loadOptions={() => loadDepartmentLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("dept_code", value, row)} required disabled={isReadOnly} className="sm:col-span-2 xl:col-span-1.5" />
+          <FormLookup label="Principal" value={header.prin_code} displayValue={headerNames.prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]} loadOptions={() => loadPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("prin_code", value, row)} required disabled={isReadOnly} className="sm:col-span-2 xl:col-span-1.5" />
+          <FormLookup label="Walk-in Principal" value={header.walkin_prin_code} displayValue={headerNames.walkin_prin_name} valueField="prin_code" displayFields={["prin_code", "prin_name"]} columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Name" }, { field: "prin_telno1", header: "Phone" }]} loadOptions={() => loadWalkinPrincipalLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("walkin_prin_code", value, row)} disabled={isReadOnly} className="sm:col-span-2 xl:col-span-1.5" />
+          {/* <FormLookup label="Salesman" value={header.salesman_code} displayValue={headerNames.salesman_name} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Salesman" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} className="sm:col-span-2 xl:col-span-1.5" /> */}
+          {/* <StatusField status={header.indstatus} action={header.last_action} finalApproved={header.final_approved} />
+          <TypeField label="Approval Level" value={workflowLevelText(header)} /> */}
           <FormInput label="Offer Validity" type="date" value={header.offer_validity} onChange={(value) => setHeaderField("offer_validity", value)} />
           <TypeField label="Type" value={header.enquiry_type} />
+          {/* <StatusField status={header.indstatus} action={header.last_action} finalApproved={header.final_approved} /> */}
+          <TypeField label="Approval Level" value={workflowLevelText(header)} />
           {isRfq && !header.enquiry_nr && (
             <FormLookup
               label="Source Enquiry"
@@ -1360,11 +1414,11 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                     <FormLookup label="Commodity" value={header.commodity} valueField="prodtype_desc" displayFields={["prodtype_desc", "prodtype_code"]} columns={[{ field: "prodtype_desc", header: "Commodity" }, { field: "prodtype_code", header: "Code" }]} loadOptions={() => loadCommodityLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("commodity", value, row)} className="xl:col-span-2" />
                     <FormInput label="Weight(kgs)" type="number" value={header.weight} onChange={(value) => setHeaderField("weight", value)} />
                     <FormInput label="Gross Weight(kgs)" type="number" value={header.gross_wt} onChange={(value) => setHeaderField("gross_wt", value)} />
-                    <FormInput label="Volume" type="number" value={header.volume} onChange={(value) => setHeaderField("volume", value)} />
                     <FormInput label="Length(cm)" type="number" value={header.l} onChange={(value) => setHeaderField("l", value)} />
                     <FormInput label="Breadth(cm)" type="number" value={header.b} onChange={(value) => setHeaderField("b", value)} />
                     <FormInput label="Height(cm)" type="number" value={header.h} onChange={(value) => setHeaderField("h", value)} />
-                    <FormInput label="Dimension" value={header.dimension} onChange={(value) => setHeaderField("dimension", value)} />
+                    <FormInput label="Volume (c.b.m)" type="number" value={header.volume} onChange={(value) => setHeaderField("volume", value)} disabled />
+                    <FormInput label="Dimension" value={header.dimension} onChange={(value) => setHeaderField("dimension", value)} disabled />
                     {header.transport_mode === "S" && (
                     <>
                     <FormInput label="Container Type" value={header.container_type} onChange={(value) => setHeaderField("container_type", value)} />
@@ -1415,7 +1469,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
               {/* <SectionHeading title="Journey & Carrier Details" description="Port routing, Carrier details, and shipment reference" /> */}
               <div className="grid gap-2.5 lg:grid-cols-12">
                 <SectionPanel className="lg:col-span-7" icon={MapPinned} title="Routing" meta={`${header.origin_port || "Origin"} -> ${header.destination_port || "Destination"}`}>
-                  <div className="grid gap-1 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     <FormLookup label="Port of Loading" value={header.origin_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("origin_port", value, row)} required />
                     <FormLookup label="Port of Destination" value={header.destination_port} valueField="port_code" displayFields={["port_code", "port_name"]} columns={portColumns} loadOptions={() => loadPortLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("destination_port", value, row)} />
                     <FormInput label="Country Origin" value={header.country_origin} onChange={(value) => setHeaderField("country_origin", value)} />
@@ -1424,10 +1478,11 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </SectionPanel>
 
                 <SectionPanel className="lg:col-span-5" icon={ShipWheel} title="Shipment Reference" meta={header.job_number || "Job pending"}>
-                  <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-3">
                     <FormInput label="Via" value={header.via} onChange={(value) => setHeaderField("via", value)} />
                     <FormInput label="Job No" value={header.job_number} onChange={(value) => setHeaderField("job_number", value)} />
                     <FormInput label="Ready Date" type="date" value={header.schedule_date} onChange={(value) => setHeaderField("schedule_date", value)} />
+                    <FormInput label="Transit Time" value={header.transit_time} onChange={(value) => setHeaderField("transit_time", value)} placeholder="e.g. 2 days / 48 hours" />
                     {header.transport_mode === "S" && (
                     <>
                     <FormInput label="Shipment Status" value={header.shipment_status} onChange={(value) => setHeaderField("shipment_status", value)} />
@@ -1439,31 +1494,21 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
               {/* <SectionHeading title="Carrier Details" description="Carrier, forwarder, transit schedule, and sales owner" /> */}
               <div className="mt-3 grid gap-2.5 lg:grid-cols-12">
                 <SectionPanel className="lg:col-span-6" icon={ShipWheel} title="Carrier And Forwarder" meta={`${modeLabel(header.transport_mode)} / ${header.carrier || "Carrier pending"}`}>
-                  <div className="grid gap-1 sm:grid-cols-2">
+                  <div className="grid gap-2.5 sm:grid-cols-2">
                     <FormLookup key={`carrier-${header.transport_mode}`} label="Carrier" value={header.carrier} {...carrierLookupProps(header.transport_mode, header.company_code)} onChange={(value, row) => applyHeaderLookup("carrier", value, row)} />
                     <FormLookup label="Forwarder" value={header.forwarder_code} valueField="forwarder_code" displayFields={["forwarder_code", "forwarder_name"]} columns={[{ field: "forwarder_code", header: "Code" }, { field: "forwarder_name", header: "Forwarder" }]} loadOptions={() => loadForwarderLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("forwarder_code", value, row)} />
                   </div>
                 </SectionPanel>
 
                 <SectionPanel className="lg:col-span-6" icon={Activity} title="Schedule And Sales" meta={header.salesman_code || "Sales executive pending"}>
-                  <div className="grid gap-1 sm:grid-cols-2">
-                    <FormInput
-                      label="Transit Time"
-                      type="datetime-local"
-                      value={toInputDateTime(header.transit_time)}
-                      onChange={(value) => setHeaderField("transit_time", fromInputDateTime(value))}
-                      inputClassName="font-semibold"
-                    />
+                  <div className="grid gap-1 sm:grid-cols-3">
                     <FormInput label="Frequency" value={header.frequency} onChange={(value) => setHeaderField("frequency", value)} />
                     <FormLookup label="Sales Executive" value={header.salesman_code} displayValue={headerNames.salesman_name} valueField="salesman_code" displayFields={["salesman_code", "salesman_name"]} columns={[{ field: "salesman_code", header: "Code" }, { field: "salesman_name", header: "Sales Executive" }]} loadOptions={() => loadSalesmanLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("salesman_code", value, row)} />
-                    <FormInput label="Ready Date" type="date" value={header.schedule_date} onChange={(value) => setHeaderField("schedule_date", value)} />
-                  </div>
+                   </div>
                 </SectionPanel>
               </div>
             
             </section>
-
-            
           )}
 
           {/* {activeTab === "carrier" && (
@@ -1500,7 +1545,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
               <SectionHeading title="Payment Terms" description="" />
               <div className="grid gap-2.5 lg:grid-cols-12">
                 <SectionPanel className="lg:col-span-6" icon={CreditCard} title="Terms And Currency" meta={`${header.payment_terms || "Terms"} / ${header.curr_code || "Currency"}`}>
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-1.5 sm:grid-cols-4">
                     <FormSelect label="INCO Terms" value={header.payment_terms} onChange={(value) => setHeaderField("payment_terms", value)} options={paymentTerms.map((value) => ({ value, label: value }))} />
                     <FormSelect label="Freight Payable At" value={header.tos} onChange={(value) => setHeaderField("tos", value)} options={tosOptions.map((value) => ({ value, label: value }))} />
                     <FormLookup label="Currency" value={header.curr_code} valueField="curr_code" displayFields={["curr_code", "curr_name"]} columns={[{ field: "curr_code", header: "Code" }, { field: "curr_name", header: "Currency" }, { field: "ex_rate", header: "Rate" }]} loadOptions={() => loadCurrencyLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("curr_code", value, row)} required />
@@ -1509,7 +1554,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 </SectionPanel>
 
                 <SectionPanel className="lg:col-span-6" icon={PackageCheck} title="Classification" meta={`${header.sale_type || "Sale"} / ${header.job_category || "Category"}`}>
-                  <div className="grid gap-1.5 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:grid-cols-3">
                     <FormSelect label="Member Type" value={header.member_type} onChange={(value) => setHeaderField("member_type", value)} options={memberTypes.map((value) => ({ value, label: value || "Blank" }))} />
                     <FormSelect label="Sale Type" value={header.sale_type} onChange={(value) => setHeaderField("sale_type", value)} options={saleTypes.map((value) => ({ value, label: value }))} />
                     <FormSelect label="Job Category" value={header.job_category} onChange={(value) => setHeaderField("job_category", value)} options={jobCategories.map((value) => ({ value, label: value }))} />
@@ -2174,6 +2219,7 @@ function FormLookup({
   loadOptions,
   onChange,
   required,
+  disabled,
   className = "",
 }: {
   label: string;
@@ -2185,14 +2231,14 @@ function FormLookup({
   loadOptions: () => Promise<LookupRow[]>;
   onChange: (value: string, row: LookupRow | null) => void;
   required?: boolean;
+  disabled?: boolean;
   className?: string;
 }) {
   return (
-    // <div className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground ${className}`}>
-    <div className={`grid gap-0.5 text-[11px] font-semibold uppercase text-muted-foreground freight-field-label ${className}`}>
-    <span>
-       {label} {required && <span style={{ color: "#E24B4A" }}>*</span>}
-     </span>
+    <div className={`grid gap-0.5 text-[11.5px] font-semibold text-slate-700 freight-field-label ${className}`}>
+      <span>
+        {label} {required && <span style={{ color: "#E24B4A" }}>*</span>}
+      </span>
       <LookupField
         compact
         label={label}
@@ -2204,6 +2250,7 @@ function FormLookup({
         loadOptions={loadOptions}
         onChange={onChange}
         required={required}
+        disabled={disabled}
         enforceRequired={required}
         placeholder={`Select ${label}`}
       />
@@ -2480,6 +2527,316 @@ function formatDisplayDate(input: string) {
   const parsed = new Date(input);
   if (Number.isNaN(parsed.getTime())) return input;
   return parsed.toLocaleDateString("en-GB");
+}
+
+// function renderPrintWindow(header: EnquiryHeader, details: EnquiryDetail[], label: string) {
+//   const win = window.open("", "_blank", "width=900,height=1000");
+//   if (!win) return;
+
+//   const activeDetails = details.filter((row) => row.act_code.trim() || row.activity.trim());
+//   const rows = activeDetails.length
+//     ? activeDetails
+//         .map(
+//           (row) => `
+//       <tr>
+//         <td>${escapeHtml(row.activity || row.act_code)}</td>
+//         <td>${escapeHtml(row.uom)}</td>
+//         <td class="num">${escapeHtml(row.quantity)}</td>
+//         <td class="num">${escapeHtml(row.bill_rate)}</td>
+//       </tr>`,
+//         )
+//         .join("")
+//     : `<tr><td colspan="4" class="empty">No activity lines</td></tr>`;
+
+//   win.document.write(`
+//     <html>
+//       <head>
+//         <title>${label} ${header.enquiry_nr}</title>
+//         <style>
+//           @page { margin: 14mm; }
+//           * { box-sizing: border-box; }
+//           body { font-family: Arial, sans-serif; font-size: 12px; color: #1f2937; padding: 20px; }
+//           .frame { border: 1.5px solid #1e3a8a; border-radius: 4px; padding: 28px 32px; }
+//           h1 { text-align: center; font-size: 20px; letter-spacing: 3px; margin: 0 0 24px; color: #111827; }
+//           .top-row { display: flex; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb; margin-bottom: 16px; }
+//           .party-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 16px; }
+//           .party-block { border: 1px solid #e5e7eb; border-radius: 4px; padding: 10px 12px; }
+//           .party-block .label { display: block; font-weight: bold; font-size: 10px; text-transform: uppercase; color: #6b7280; margin-bottom: 4px; }
+//           .party-block .value { white-space: pre-line; }
+//           .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 18px; }
+//           .info-grid .field { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dotted #e5e7eb; }
+//           .info-grid .field .label { font-weight: bold; color: #374151; }
+//           table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+//           th { background: #f3f4f6; border: 1px solid #d1d5db; padding: 7px 8px; text-align: left; font-size: 10px; text-transform: uppercase; color: #374151; }
+//           td { border: 1px solid #e5e7eb; padding: 7px 8px; }
+//           tr:nth-child(even) td { background: #fafafa; }
+//           .num { text-align: right; font-variant-numeric: tabular-nums; }
+//           .empty { text-align: center; color: #9ca3af; font-style: italic; }
+//         </style>
+//       </head>
+//       <body>
+//         <div class="frame">
+//           <h1>REQUEST</h1>
+
+//           <div class="top-row">
+//             <div><span class="label">Date: </span>${escapeHtml(formatDisplayDate(header.enquiry_date))}</div>
+//             <div><span class="label">Enquiry No.: </span><strong>${escapeHtml(header.enquiry_nr)}</strong></div>
+//           </div>
+
+//           <div class="party-grid">
+//             <div class="party-block">
+//               <span class="label">Shipper</span>
+//               <span class="value">${escapeHtml(header.shipper_name) || "-"}${header.shipper_address ? "\n" + escapeHtml(header.shipper_address) : ""}</span>
+//             </div>
+//             <div class="party-block">
+//               <span class="label">Consignee</span>
+//               <span class="value">${escapeHtml(header.consignee_name) || "-"}${header.consignee_address ? "\n" + escapeHtml(header.consignee_address) : ""}</span>
+//             </div>
+//           </div>
+
+//           <div class="info-grid">
+//             <div>
+//               <div class="field"><span class="label">Commodity</span><span>${escapeHtml(header.commodity) || "-"}</span></div>
+//               <div class="field"><span class="label">Remarks</span><span>${escapeHtml(header.remarks) || "-"}</span></div>
+//               <div class="field"><span class="label">Volume (c.b.m)</span><span>${escapeHtml(header.volume) || "0"}</span></div>
+//               <div class="field"><span class="label">Weight (kgs)</span><span>${escapeHtml(header.weight) || "0"}</span></div>
+//             </div>
+//             <div>
+//               <div class="field"><span class="label">Port of Loading</span><span>${escapeHtml(header.origin_port) || "-"}</span></div>
+//               <div class="field"><span class="label">Port of Destination</span><span>${escapeHtml(header.destination_port) || "-"}</span></div>
+//               <div class="field"><span class="label">Transit Time</span><span>${escapeHtml(header.transit_time) || "-"}</span></div>
+//               <div class="field"><span class="label">Offer Validity</span><span>${escapeHtml(formatDisplayDate(header.offer_validity)) || "-"}</span></div>
+//             </div>
+//           </div>
+
+//           <table>
+//             <thead><tr><th>Description</th><th>Unit</th><th>Quantity</th><th>Rate</th></tr></thead>
+//             <tbody>${rows}</tbody>
+//           </table>
+//         </div>
+//       </body>
+//     </html>
+//   `);
+//   win.document.close();
+//   win.focus();
+//   win.print();
+// }
+
+// function renderPrintWindow(header: EnquiryHeader, details: EnquiryDetail[], label: string) {
+//   const activeDetails = details.filter((row) => row.act_code.trim() || row.activity.trim());
+//   const rows = activeDetails.length
+//     ? activeDetails
+//         .map(
+//           (row) => `
+//       <tr>
+//         <td>${escapeHtml(row.activity || row.act_code)}</td>
+//         <td>${escapeHtml(row.uom)}</td>
+//         <td class="num">${escapeHtml(row.quantity)}</td>
+//         <td class="num">${escapeHtml(row.bill_rate)}</td>
+//       </tr>`,
+//         )
+//         .join("")
+//     : `<tr><td colspan="4" class="empty">No activity lines</td></tr>`;
+
+//   const html = `
+//     <html>
+//       <head>
+//         <title>${label} ${header.enquiry_nr}</title>
+//         <style>
+//           @page { margin: 14mm; }
+//           * { box-sizing: border-box; }
+//           body { font-family: Arial, sans-serif; font-size: 12px; color: #1f2937; padding: 20px; }
+//           .frame { border: 1.5px solid #1e3a8a; border-radius: 4px; padding: 28px 32px; }
+//           h1 { text-align: center; font-size: 20px; letter-spacing: 3px; margin: 0 0 24px; color: #111827; }
+//           .top-row { display: flex; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb; margin-bottom: 16px; }
+//           .party-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 16px; }
+//           .party-block { border: 1px solid #e5e7eb; border-radius: 4px; padding: 10px 12px; }
+//           .party-block .label { display: block; font-weight: bold; font-size: 10px; text-transform: uppercase; color: #6b7280; margin-bottom: 4px; }
+//           .party-block .value { white-space: pre-line; }
+//           .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 18px; }
+//           .info-grid .field { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dotted #e5e7eb; }
+//           .info-grid .field .label { font-weight: bold; color: #374151; }
+//           table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+//           th { background: #f3f4f6; border: 1px solid #d1d5db; padding: 7px 8px; text-align: left; font-size: 10px; text-transform: uppercase; color: #374151; }
+//           td { border: 1px solid #e5e7eb; padding: 7px 8px; }
+//           tr:nth-child(even) td { background: #fafafa; }
+//           .num { text-align: right; font-variant-numeric: tabular-nums; }
+//           .empty { text-align: center; color: #9ca3af; font-style: italic; }
+//         </style>
+//       </head>
+//       <body>
+//         <div class="frame">
+//           <h1>REQUEST</h1>
+
+//           <div class="top-row">
+//             <div><span class="label">Date: </span>${escapeHtml(formatDisplayDate(header.enquiry_date))}</div>
+//             <div><span class="label">Enquiry No.: </span><strong>${escapeHtml(header.enquiry_nr)}</strong></div>
+//           </div>
+
+//           <div class="party-grid">
+//             <div class="party-block">
+//               <span class="label">Shipper</span>
+//               <span class="value">${escapeHtml(header.shipper_name) || "-"}${header.shipper_address ? "\n" + escapeHtml(header.shipper_address) : ""}</span>
+//             </div>
+//             <div class="party-block">
+//               <span class="label">Consignee</span>
+//               <span class="value">${escapeHtml(header.consignee_name) || "-"}${header.consignee_address ? "\n" + escapeHtml(header.consignee_address) : ""}</span>
+//             </div>
+//           </div>
+
+//           <div class="info-grid">
+//             <div>
+//               <div class="field"><span class="label">Commodity</span><span>${escapeHtml(header.commodity) || "-"}</span></div>
+//               <div class="field"><span class="label">Remarks</span><span>${escapeHtml(header.remarks) || "-"}</span></div>
+//               <div class="field"><span class="label">Volume (c.b.m)</span><span>${escapeHtml(header.volume) || "0"}</span></div>
+//               <div class="field"><span class="label">Weight (kgs)</span><span>${escapeHtml(header.weight) || "0"}</span></div>
+//             </div>
+//             <div>
+//               <div class="field"><span class="label">Port of Loading</span><span>${escapeHtml(header.origin_port) || "-"}</span></div>
+//               <div class="field"><span class="label">Port of Destination</span><span>${escapeHtml(header.destination_port) || "-"}</span></div>
+//               <div class="field"><span class="label">Transit Time</span><span>${escapeHtml(header.transit_time) || "-"}</span></div>
+//               <div class="field"><span class="label">Offer Validity</span><span>${escapeHtml(formatDisplayDate(header.offer_validity)) || "-"}</span></div>
+//             </div>
+//           </div>
+
+//           <table>
+//             <thead><tr><th>Description</th><th>Unit</th><th>Quantity</th><th>Rate</th></tr></thead>
+//             <tbody>${rows}</tbody>
+//           </table>
+//         </div>
+//       </body>
+//     </html>
+//   `;
+
+//   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+//   const url = window.URL.createObjectURL(blob);
+//   window.open(url, "_blank", "noopener,noreferrer");
+//   window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+// }
+
+function renderPrintWindow(header: EnquiryHeader, details: EnquiryDetail[], label: string) {
+  const activeDetails = details.filter((row) => row.act_code.trim() || row.activity.trim());
+  const rows = activeDetails.length
+    ? activeDetails
+        .map(
+          (row) => `
+      <tr>
+        <td>${escapeHtml(row.activity || row.act_code)}</td>
+        <td>${escapeHtml(row.uom)}</td>
+        <td class="num">${escapeHtml(row.quantity)}</td>
+        <td class="num">${escapeHtml(row.bill_rate)}</td>
+      </tr>`,
+        )
+        .join("")
+    : `<tr><td colspan="4" class="empty">No activity lines</td></tr>`;
+
+  const html = `
+    <html>
+      <head>
+        <title>${label} ${header.enquiry_nr}</title>
+        <style>
+          @page { margin: 14mm; }
+          * { box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; font-size: 12px; color: #1f2937; padding: 20px; }
+          .frame { border: 1.5px solid #1e3a8a; border-radius: 4px; padding: 28px 32px; }
+          h1 { text-align: center; font-size: 20px; letter-spacing: 3px; margin: 0 0 24px; color: #111827; }
+          .top-row { display: flex; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb; margin-bottom: 16px; }
+          .party-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 16px; }
+          .party-block { border: 1px solid #e5e7eb; border-radius: 4px; padding: 10px 12px; }
+          .party-block .label { display: block; font-weight: bold; font-size: 10px; text-transform: uppercase; color: #6b7280; margin-bottom: 4px; }
+          .party-block .value { white-space: pre-line; }
+          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 18px; }
+          .info-grid .field { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dotted #e5e7eb; }
+          .info-grid .field .label { font-weight: bold; color: #374151; }
+          table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+          th { background: #f3f4f6; border: 1px solid #d1d5db; padding: 7px 8px; text-align: left; font-size: 10px; text-transform: uppercase; color: #374151; }
+          td { border: 1px solid #e5e7eb; padding: 7px 8px; }
+          tr:nth-child(even) td { background: #fafafa; }
+          .num { text-align: right; font-variant-numeric: tabular-nums; }
+          .empty { text-align: center; color: #9ca3af; font-style: italic; }
+          .print-toolbar {
+            position: sticky; top: 0; z-index: 10;
+            display: flex; justify-content: flex-end; gap: 8px;
+            padding: 10px 20px; background: #f8fafc; border-bottom: 1px solid #e5e7eb;
+            margin: -20px -20px 20px -20px;
+          }
+          .print-toolbar button {
+            font-family: Arial, sans-serif; font-size: 12px; font-weight: 600;
+            padding: 6px 14px; border-radius: 6px; cursor: pointer; border: 1px solid #cbd5e1;
+          }
+          .print-toolbar .btn-print { background: #1e3a8a; color: #fff; border-color: #1e3a8a; }
+          .print-toolbar .btn-close { background: #fff; color: #374151; }
+          @media print { .print-toolbar { display: none; } }
+        </style>
+      </head>
+      <body>
+        <div class="print-toolbar">
+          <button class="btn-print" onclick="window.print()">Print</button>
+          <button class="btn-close" onclick="window.close()">Close</button>
+        </div>
+        <div class="frame">
+          <h1>REQUEST</h1>
+
+          <div class="top-row">
+            <div><span class="label">Date: </span>${escapeHtml(formatDisplayDate(header.enquiry_date))}</div>
+            <div><span class="label">Enquiry No.: </span><strong>${escapeHtml(header.enquiry_nr)}</strong></div>
+          </div>
+
+          <div class="party-grid">
+            <div class="party-block">
+              <span class="label">Shipper</span>
+              <span class="value">${escapeHtml(header.shipper_name) || "-"}${header.shipper_address ? "\n" + escapeHtml(header.shipper_address) : ""}</span>
+            </div>
+            <div class="party-block">
+              <span class="label">Consignee</span>
+              <span class="value">${escapeHtml(header.consignee_name) || "-"}${header.consignee_address ? "\n" + escapeHtml(header.consignee_address) : ""}</span>
+            </div>
+          </div>
+
+          <div class="info-grid">
+            <div>
+              <div class="field"><span class="label">Commodity</span><span>${escapeHtml(header.commodity) || "-"}</span></div>
+              <div class="field"><span class="label">Remarks</span><span>${escapeHtml(header.remarks) || "-"}</span></div>
+              <div class="field"><span class="label">Volume (c.b.m)</span><span>${escapeHtml(header.volume) || "0"}</span></div>
+              <div class="field"><span class="label">Weight (kgs)</span><span>${escapeHtml(header.weight) || "0"}</span></div>
+            </div>
+            <div>
+              <div class="field"><span class="label">Port of Loading</span><span>${escapeHtml(header.origin_port) || "-"}</span></div>
+              <div class="field"><span class="label">Port of Destination</span><span>${escapeHtml(header.destination_port) || "-"}</span></div>
+              <div class="field"><span class="label">Transit Time</span><span>${escapeHtml(header.transit_time) || "-"}</span></div>
+              <div class="field"><span class="label">Offer Validity</span><span>${escapeHtml(formatDisplayDate(header.offer_validity)) || "-"}</span></div>
+            </div>
+          </div>
+
+          <table>
+            <thead><tr><th>Description</th><th>Unit</th><th>Quantity</th><th>Rate</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = window.URL.createObjectURL(blob);
+
+  const width = 960;
+  const height = 760;
+  const left = Math.max(0, (window.screen.width - width) / 2);
+  const top = Math.max(0, (window.screen.height - height) / 2);
+  const features = `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes`;
+
+  const printWindow = window.open(url, "_blank", features);
+  if (!printWindow) {
+    window.URL.revokeObjectURL(url);
+    alert("Please allow popups for this site to view the print preview.");
+    return;
+  }
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+}
+
+function escapeHtml(value: string) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 const fieldClassName =
