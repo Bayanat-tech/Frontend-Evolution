@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { Download, FileText, Loader2, Printer, X } from "lucide-react";
-import { PurchaseOrderForm } from "../../purchase_sales/purchase/Purchaseordertypes";
+// import { PurchaseOrderForm } from "../../purchase_sales/purchase/Purchaseordertypes";
 import {
   getSalesInvoiceReportHtml,
   getSalesInvoiceReportExcel,
@@ -11,6 +11,7 @@ import {
   getSalesAccountDetailsReportHtml,
   getSalesAccountDetailsReportExcel,
 } from "../../../api/transactions";
+import { PurchaseOrderForm } from "./SalesOrdertypes";
 
 // The 3 report types available in the dropdown/radio group.
 type SalesPrintReportType = "SI" | "SI_TAX" | "ACCOUNT";

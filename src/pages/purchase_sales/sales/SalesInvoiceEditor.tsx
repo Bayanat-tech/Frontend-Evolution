@@ -4,7 +4,6 @@ import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { CardContent, CardHeader } from "../../../components/ui/Card";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
-import ReportDialogPage from "../../../components/ReportDialogPage";
 import { getDynamicLookup } from "../../../api/lookups";
 import { useAuth } from "../../../state/AuthContext";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
@@ -12,7 +11,7 @@ import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 import {
   ActionKey,
   PurchaseOrderEditorState,
-  
+
 
   SendBackUserOption,
 } from "../../purchase_sales/purchase/Purchaseordertypes";
@@ -37,11 +36,12 @@ import {
   fetchSalesOrderHeader,
   runWorkflow,
 } from "./SalesOrderutils";
-import { SalesInvoiceReport } from "./SalesInvoiceReport";
+// import { SalesInvoiceReport } from "./SalesInvoiceReport";
 import { downloadSalesInvoiceExcel } from "./SalesInvoiceReport";
 import { SalesInvoiceHeaderForm } from "./salesInvoiceHeader";
 import { SalesInvoiceLinesTable } from "./SalesInvoiceDetails";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
+import { SalesInvoicePrintDialog } from "./SalesInvoicePrintReport";
 
 export type { PurchaseOrderEditorState };
 
@@ -79,7 +79,7 @@ export function SalesInvoiceEditor({
   const [sendBackError, setSendBackError] = useState("");
   const [sendBackUsers, setSendBackUsers] = useState<SendBackUserOption[]>([]);
   const [sendBackUsersLoading, setSendBackUsersLoading] = useState(false);
-    const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [attachmentOpen, setAttachmentOpen] = useState(false);
 
   // Reject
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -87,7 +87,8 @@ export function SalesInvoiceEditor({
   const [rejectError, setRejectError] = useState("");
 
   // Print
-  const [reportOpen, setReportOpen] = useState(false);
+  // const [reportOpen, setReportOpen] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
 
   useEffect(() => {
     if (!editor) return;
@@ -150,8 +151,8 @@ export function SalesInvoiceEditor({
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
 
-            so_doc_no: text(headerRaw.so_doc_no),
-             si_doc_no: text(headerRaw.si_doc_no),
+          so_doc_no: text(headerRaw.so_doc_no),
+          si_doc_no: text(headerRaw.si_doc_no),
           so_doc_date: toDateInputValue(headerRaw.so_doc_date),
           so_ac_code: text(headerRaw.so_ac_code),
           so_ac_name: text(headerRaw.so_party_name),
@@ -429,10 +430,7 @@ export function SalesInvoiceEditor({
     );
   };
 
-  const openPrint = () => {
-    if (!form.doc_no) return;
-    setReportOpen(true);
-  };
+
 
   const handleExcel = async () => {
     if (!form.doc_no) return;
@@ -451,11 +449,10 @@ export function SalesInvoiceEditor({
   return (
     <>
       <form
-        className={`payment-workbench commercial-editor grid h-screen ${
-          isCancelled
+        className={`payment-workbench commercial-editor grid h-screen ${isCancelled
             ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] is-cancelled"
             : "grid-rows-[auto_minmax(0,1fr)_auto]"
-        }`}
+          }`}
         onSubmit={(event) => {
           event.preventDefault();
           void handleSubmit();
@@ -507,7 +504,7 @@ export function SalesInvoiceEditor({
               )}
               {form.doc_no ? (
                 <>
-                  <Button type="button" variant="secondary" onClick={openPrint}>
+                  <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
                     <Printer size={15} /> Print
                   </Button>
                   <Button
@@ -655,8 +652,8 @@ export function SalesInvoiceEditor({
               type="button"
               variant="outline"
               size="icon"
-              disabled={!form.doc_no || loading}
-              onClick={openPrint}
+              disabled={actionDisabled}
+              onClick={() => setPrintOpen(true)}
             >
               <Printer size={15} />
             </Button>
@@ -710,22 +707,16 @@ export function SalesInvoiceEditor({
         onConfirm={confirmReject}
       />
 
-      {reportOpen && form.doc_no ? (
-        <ReportDialogPage
-          title={`Sales Invoice - ${form.doc_no}`}
-          Report={SalesInvoiceReport}
-          required_values={{
-            doc_no: String(form.doc_no),
-            company_code: user?.company_code,
-            doc_type: "SINVOICE",
-          }}
-          onClose={() => setReportOpen(false)}
-          excel={() => void handleExcel()}
-        />
-      ) : null}
+      <SalesInvoicePrintDialog
+        open={printOpen}
+        onClose={() => setPrintOpen(false)}
+        form={form}
+        companyCode={user?.company_code || ""}
+        docType={config.docType}
+      />
 
-      
-       <AttachmentDialog
+
+      <AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
         requestNumber={form.doc_no ? String(form.doc_no) : ""}
