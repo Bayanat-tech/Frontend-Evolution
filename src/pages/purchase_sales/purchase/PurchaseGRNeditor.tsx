@@ -230,18 +230,24 @@ export function PurchaseGRNEditor({
     }
   };
 
-  const handleSaveAsDraft = () =>
-    runAction("draft", async () => {
-      await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, "Purchase GRN saved as draft");
+  const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
 
-  const handleSubmit = () => {
-    if (!form.div_code) return setError("Division is required");
-    if (!form.ac_code) return setError("A/c Code is required");
-    return runAction("submit", async () => {
-      await runWorkflow("SUBMITTED", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, editMode ? "Purchase GRN updated successfully" : "Purchase GRN created successfully");
-  };
+const handleSaveAsDraft = () => {
+  if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+  return runAction("draft", async () => {
+    await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
+  }, "Purchase Quotation saved as draft");
+};
+
+const handleSubmit = () => {
+  if (!form.div_code) return setError("Division is required");
+  if (!form.ac_code) return setError("A/c Code is required");
+
+  if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+  return runAction("submit", async () => {
+    await runWorkflow("SUBMITTED", PO_DOC_TYPE.GRN, form, rows, user?.company_code, user?.loginid || user?.username);
+  }, editMode ? "Purchase Quotation updated successfully" : "Purchase Quotation created successfully");
+};
 
   const handleCancel = () =>
     runAction("cancel", async () => {

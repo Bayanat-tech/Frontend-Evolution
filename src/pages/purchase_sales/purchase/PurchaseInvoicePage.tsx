@@ -14,6 +14,7 @@ import { TabStrip } from "../../vendor/components";
 import { PurchaseOrderEditor, PurchaseOrderEditorState } from "./Purchaseordereditor";
 import { LPO_CONFIG, PIN_CONFIG } from "./Purchaseordertypes";
 import { PurchaseInvoiceEditor } from "./PurchaseInvoiceEditor";
+import { PurchaseInvoicePrintDialog } from "./PurchaseInvoiceprintReports";
 
 // TODO: replace with the real purchase-order row shape once the backend contract is confirmed.
 export interface PurchaseOrderRow {
@@ -105,6 +106,7 @@ export function PurchaseInvoicePage({ onClose }: { onClose?: () => void } = {}) 
   const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [editor, setEditor] = useState<PurchaseOrderEditorState>(null);
   const [cancelTarget, setCancelTarget] = useState<PurchaseOrderRow | null>(null);
+  const [printTarget, setPrintTarget] = useState<PurchaseOrderRow | null>(null);
   const [divisionPicker, setDivisionPicker] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
@@ -211,9 +213,9 @@ export function PurchaseInvoicePage({ onClose }: { onClose?: () => void } = {}) 
           <Button size="icon" variant="ghost" onClick={() => setEditor({ mode: "edit", row: row.original })} title="Edit">
             <Edit2 size={15} />
           </Button>
-          <Button size="icon" variant="ghost" title="Print / PDF">
-            <Printer size={15} />
-          </Button>
+          <Button size="icon" variant="ghost" title="Print / PDF" onClick={() => setPrintTarget(row.original)}>
+  <Printer size={15} />
+</Button>
           <Button size="icon" variant="ghost" title="Excel">
             <Download size={15} />
           </Button>
@@ -344,6 +346,16 @@ export function PurchaseInvoicePage({ onClose }: { onClose?: () => void } = {}) 
           ))}
         </div>
       </Dialog>
+
+      {printTarget && (
+  <PurchaseInvoicePrintDialog
+    open={!!printTarget}
+    onClose={() => setPrintTarget(null)}
+    form={printTarget as any}
+    companyCode={user?.company_code || ""}
+    docType="PIN"
+  />
+)}
     </section>
   );
 }

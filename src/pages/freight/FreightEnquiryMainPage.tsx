@@ -305,10 +305,10 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
       {
         accessorKey: "enquiry_nr",
         header: `${enquiryLabel} No`,
-        size: 165,
+        size: 140,
         cell: ({ row }) => (
           <button
-            className="freight-table-link font-semibold text-primary hover:underline text-left"
+            className="freight-table-link font-mono font-semibold text-foreground hover:text-[#00378C] hover:underline text-left text-[13px] cursor-pointer"
             type="button"
             onClick={() => openEnquiry(row.original)}
           >
@@ -316,18 +316,27 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
           </button>
         ),
       },
-      { accessorKey: "enquiry_date", header: "Date", size: 120, cell: ({ row }) => formatDisplayDate(lookupText(row.original, "enquiry_date")) },
-      { accessorKey: "prin_code", header: "Principal", size: 130, cell: ({ row }) => lookupText(row.original, "prin_code") },
-      { accessorKey: "prin_name", header: "Principal Name", size: 260, cell: ({ row }) => lookupText(row.original, "prin_name") },
-      { accessorKey: "job_type", header: "Job Type", size: 110, cell: ({ row }) => jobTypeLabel(lookupText(row.original, "job_type")) },
-      { accessorKey: "transport_mode", header: "Mode", size: 100, cell: ({ row }) => modeLabel(lookupText(row.original, "transport_mode")) },
-      { accessorKey: "origin_port", header: "Origin", size: 110, cell: ({ row }) => lookupText(row.original, "origin_port") },
-      { accessorKey: "destination_port", header: "Destination", size: 120, cell: ({ row }) => lookupText(row.original, "destination_port") },
-      { accessorKey: "curr_code", header: "Currency", size: 100, cell: ({ row }) => lookupText(row.original, "curr_code") },
+      { accessorKey: "enquiry_date", header: "Date", size: 100, cell: ({ row }) => <span className="text-[13px] text-foreground">{formatDisplayDate(lookupText(row.original, "enquiry_date"))}</span> },
+      { accessorKey: "prin_code", header: "Principal", size: 110, cell: ({ row }) => <span className="font-mono text-[13px] text-foreground">{lookupText(row.original, "prin_code")}</span> },
+      {
+        accessorKey: "prin_name",
+        header: "Principal Name",
+        minSize: 220,
+        cell: ({ row }) => (
+          <div className="truncate" title={lookupText(row.original, "prin_name")}>
+            <span className="text-[12px] text-foreground">{lookupText(row.original, "prin_name")}</span>
+          </div>
+        ),
+      },
+      { accessorKey: "job_type", header: "Job Type", size: 100, cell: ({ row }) => <span className="text-[12px] text-foreground">{jobTypeLabel(lookupText(row.original, "job_type"))}</span> },
+      { accessorKey: "transport_mode", header: "Mode", size: 90, cell: ({ row }) => <span className="text-[12px] text-foreground">{modeLabel(lookupText(row.original, "transport_mode"))}</span> },
+      { accessorKey: "origin_port", header: "Origin", size: 100, cell: ({ row }) => <span className="font-mono text-[13px] text-foreground">{lookupText(row.original, "origin_port")}</span> },
+      { accessorKey: "destination_port", header: "Destination", size: 110, cell: ({ row }) => <span className="font-mono text-[13px] text-foreground">{lookupText(row.original, "destination_port")}</span> },
+      { accessorKey: "curr_code", header: "Currency", size: 90, cell: ({ row }) => <span className="font-mono text-[13px] text-foreground">{lookupText(row.original, "curr_code")}</span> },
       {
         accessorKey: "indstatus",
         header: "Status",
-        size: 130,
+        size: 110,
         cell: ({ row }) => {
           const status = lookupText(row.original, "indstatus");
           return (
@@ -337,22 +346,10 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
           );
         },
       },
-      // {
-      //   id: "actions",
-      //   header: "Actions",
-      //   size: 90,
-      //   enableColumnFilter: false,
-      //   cell: ({ row }) => (
-      //     <Button type="button" size="icon" variant="ghost" title={`Open ${enquiryLabel}`} onClick={() => openEnquiry(row.original)}>
-      //       <Eye size={14} />
-      //     </Button>
-      //   ),
-      // },
-        
       {
         id: "actions",
         header: "ACTIONS",
-        size: 110,
+        size: 100,
         enableColumnFilter: false,
         cell: ({ row }) => {
           const status = lookupText(row.original, "indstatus");
@@ -1172,18 +1169,21 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
 
   if (view === "list") {
     return (
-      <section className="freight-enquiry-list-screen grid gap-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card px-4 py-3 shadow-sm">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-              <ShipWheel size={17} />
-            </div>
-            <div className="min-w-0">
-              {/* <p className="eyebrow mb-0.5">{isRfq ? "Freight RFQ" : "Freight Enquiry"}</p> */}
-              <h1 className="m-0 text-xl font-semibold leading-tight text-foreground"> {isRfq ? "Freight RFQ" : "Freight Enquiry"}
-                {/* {enquiryLabel} Listing */}
-                </h1>
-            </div>
+      <section className="freight-enquiry-list-screen grid gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+          <div className="flex items-center gap-2.5">
+            <h2
+              className="text-foreground m-0"
+              style={{ fontSize: "20px", letterSpacing: "-0.02em", fontWeight: 600 }}
+            >
+              {isRfq ? "Freight RFQ" : "Freight Enquiry"}
+            </h2>
+            <span
+              className="px-2 py-0.5 rounded-full bg-primary/10 text-primary"
+              style={{ fontSize: "10px", letterSpacing: "0.03em", fontWeight: 700 }}
+            >
+              {isRfq ? "RFQ" : "ENQUIRY"}
+            </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {notice && (
@@ -1191,36 +1191,49 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
                 {notice.text}
               </span>
             )}
-            <HeaderChip label="Records" value={String(listRows.length)} />
-            <Button type="button" size="sm" variant="outline" onClick={loadEnquiries} disabled={loadingList}>
-              <RefreshCw size={14} />
+            <span className="px-2.5 py-1 rounded-xl border border-border bg-card text-muted-foreground text-xs font-semibold">
+              Records: {listRows.length}
+            </span>
+            <button
+              type="button"
+              onClick={loadEnquiries}
+              disabled={loadingList}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-foreground hover:bg-secondary transition-colors text-xs font-medium cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw size={13} className={loadingList ? "animate-spin" : ""} />
               {loadingList ? "Loading" : "Refresh"}
-            </Button>
-            <Button type="button" size="sm" onClick={startNew}>
+            </button>
+            <button
+              type="button"
+              onClick={startNew}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all text-xs font-medium shadow-sm cursor-pointer"
+            >
               <Plus size={14} />
               Add {enquiryLabel}
-            </Button>
+            </button>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card p-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-1.5 pb-1">
           {visibleListStatusTabs.map((tab) => {
             const count = listRows.filter((row) => matchesListStatusTab(row, tab.key)).length;
             const active = activeListTab === tab.key;
             return (
-              <Button
+              <button
                 key={tab.key}
                 type="button"
-                size="sm"
-                variant={active ? "default" : "outline"}
                 onClick={() => setActiveListTab(tab.key)}
-                className={active ? "" : "bg-background"}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                  active
+                    ? "bg-[#00378C] text-white shadow-sm font-semibold"
+                    : "border border-border bg-card text-foreground hover:bg-secondary"
+                }`}
               >
-                {tab.label}
-                <span className={`ml-1 rounded px-1.5 text-[10px] font-bold ${active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                <span>{tab.label}</span>
+                <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
                   {count}
                 </span>
-              </Button>
+              </button>
             );
           })}
         </div>

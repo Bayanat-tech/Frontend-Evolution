@@ -23,7 +23,12 @@
   --freight-bisc-muted: #64748b;
   --freight-bisc-card: #ffffff;
   --freight-bisc-ring: rgba(0, 55, 140, 0.16);
-  font-family: var(--app-font-family, 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif) !important;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  font-feature-settings: normal !important;
+  font-variation-settings: normal !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  text-rendering: optimizeLegibility !important;
   color: var(--freight-bisc-ink);
 }
 
@@ -562,26 +567,87 @@
   color: var(--freight-bisc-blue) !important;
 }
 
-.freight-workspace-ui .data-table-scroll tbody tr {
+.freight-workspace-ui .data-table-scroll tbody tr,
+.freight-list-screen .data-table-scroll tbody tr,
+.freight-enquiry-list-screen .data-table-scroll tbody tr,
+.freight-ui-standard .data-table-scroll tbody tr {
   border-bottom: 1px solid var(--freight-bisc-border-soft) !important;
   background: #ffffff;
+  transition: background-color 120ms ease;
 }
 
-.freight-workspace-ui .data-table-scroll tbody tr:hover {
+.freight-workspace-ui .data-table-scroll tbody tr:nth-child(even),
+.freight-list-screen .data-table-scroll tbody tr:nth-child(even),
+.freight-enquiry-list-screen .data-table-scroll tbody tr:nth-child(even),
+.freight-ui-standard .data-table-scroll tbody tr:nth-child(even) {
   background-color: #f8fafc !important;
+}
+
+.freight-workspace-ui .data-table-scroll tbody tr:hover,
+.freight-list-screen .data-table-scroll tbody tr:hover,
+.freight-enquiry-list-screen .data-table-scroll tbody tr:hover,
+.freight-ui-standard .data-table-scroll tbody tr:hover {
+  background-color: #f1f5f9 !important;
+}
+
+/* Completely hide duplicate top scrollbar */
+.data-table-x-scrollbar,
+.freight-workspace-ui .data-table-x-scrollbar,
+.freight-list-screen .data-table-x-scrollbar,
+.freight-enquiry-list-screen .data-table-x-scrollbar,
+.freight-ui-standard .data-table-x-scrollbar {
+  display: none !important;
+  height: 0 !important;
+  max-height: 0 !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Subtle, clean scrollbar on table */
+.freight-workspace-ui .data-table-scroll,
+.freight-list-screen .data-table-scroll,
+.freight-enquiry-list-screen .data-table-scroll,
+.freight-ui-standard .data-table-scroll {
+  scrollbar-width: thin !important;
+  scrollbar-color: #cbd5e1 transparent !important;
+  scrollbar-gutter: auto !important;
+}
+
+.freight-workspace-ui .data-table-scroll::-webkit-scrollbar,
+.freight-list-screen .data-table-scroll::-webkit-scrollbar,
+.freight-enquiry-list-screen .data-table-scroll::-webkit-scrollbar,
+.freight-ui-standard .data-table-scroll::-webkit-scrollbar {
+  height: 6px !important;
+  width: 6px !important;
+}
+
+.freight-workspace-ui .data-table-scroll::-webkit-scrollbar-track,
+.freight-list-screen .data-table-scroll::-webkit-scrollbar-track,
+.freight-enquiry-list-screen .data-table-scroll::-webkit-scrollbar-track,
+.freight-ui-standard .data-table-scroll::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.freight-workspace-ui .data-table-scroll::-webkit-scrollbar-thumb,
+.freight-list-screen .data-table-scroll::-webkit-scrollbar-thumb,
+.freight-enquiry-list-screen .data-table-scroll::-webkit-scrollbar-thumb,
+.freight-ui-standard .data-table-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1 !important;
+  border-radius: 999px !important;
 }
 
 .freight-workspace-ui .data-table-search {
   height: 36px !important;
   border: 1px solid var(--freight-bisc-border) !important;
-  border-radius: 9999px !important;
+  border-radius: 12px !important;
   background: #ffffff !important;
   box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04) !important;
 }
 
 .freight-workspace-ui .data-table-header {
   min-height: 48px;
-  padding: 8px 12px !important;
+  padding: 8px 14px !important;
   border-bottom: 1px solid var(--freight-bisc-border-soft) !important;
   background: #ffffff !important;
 }
@@ -756,20 +822,26 @@ input[tabindex="-1"].opacity-0,
 /* --------------------------------------------------------------------------
    12. BISC Transaction Listing Table Polish
    -------------------------------------------------------------------------- */
-.freight-workspace-ui .data-table-shell {
-  border-radius: 12px !important;
+.freight-workspace-ui .data-table-shell,
+.freight-list-screen .data-table-shell,
+.freight-ui-standard .data-table-shell {
+  border-radius: 16px !important;
   border: 1px solid var(--freight-bisc-border) !important;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05) !important;
   background: #ffffff !important;
   overflow: hidden !important;
 }
 
-.freight-workspace-ui .data-table-scroll table {
+.freight-workspace-ui .data-table-scroll table,
+.freight-list-screen .data-table-scroll table,
+.freight-ui-standard .data-table-scroll table {
   width: 100% !important;
   border-collapse: collapse !important;
 }
 
-.freight-workspace-ui .data-table-scroll th {
+.freight-workspace-ui .data-table-scroll th,
+.freight-list-screen .data-table-scroll th,
+.freight-ui-standard .data-table-scroll th {
   padding: 10px 12px !important;
   border-right: 1px solid var(--freight-bisc-border-soft) !important;
   font-size: 11px !important;
@@ -779,27 +851,37 @@ input[tabindex="-1"].opacity-0,
   background-color: #ffffff !important;
 }
 
-.freight-workspace-ui .data-table-scroll td {
-  padding: 8px 12px !important;
-  border-right: 1px solid var(--freight-bisc-border-soft) !important;
-  font-size: 12.5px !important;
-  color: #1e293b !important;
+.freight-workspace-ui .data-table-scroll td,
+.freight-list-screen .data-table-scroll td,
+.freight-ui-standard .data-table-scroll td {
+  padding: 9px 12px !important;
+  font-size: 13px !important;
+  line-height: 1.45 !important;
+  color: #1a1a2e !important;
   vertical-align: middle !important;
 }
 
 .freight-workspace-ui .data-table-scroll th:last-child,
-.freight-workspace-ui .data-table-scroll td:last-child {
+.freight-workspace-ui .data-table-scroll td:last-child,
+.freight-list-screen .data-table-scroll th:last-child,
+.freight-list-screen .data-table-scroll td:last-child,
+.freight-ui-standard .data-table-scroll th:last-child,
+.freight-ui-standard .data-table-scroll td:last-child {
   border-right: 0 !important;
 }
 
-.freight-workspace-ui .data-table-scroll td button.text-primary {
+.freight-workspace-ui .data-table-scroll td button.text-primary,
+.freight-list-screen .data-table-scroll td button.text-primary,
+.freight-ui-standard .data-table-scroll td button.text-primary {
   font-weight: 600 !important;
   font-size: 12.5px !important;
   text-align: left !important;
 }
 
-/* Record-number links are text controls, not square action-icon buttons. */
-.freight-workspace-ui .data-table-scroll td button.freight-table-link {
+/* Record-number links are monospace, dark charcoal, and turn blue on hover */
+.freight-workspace-ui .data-table-scroll td button.freight-table-link,
+.freight-list-screen .data-table-scroll td button.freight-table-link,
+.freight-ui-standard .data-table-scroll td button.freight-table-link {
   width: auto !important;
   min-width: 0 !important;
   height: auto !important;
@@ -807,6 +889,48 @@ input[tabindex="-1"].opacity-0,
   padding: 0 !important;
   justify-content: flex-start !important;
   white-space: nowrap !important;
+  color: #1a1a2e !important;
+  font-family: monospace !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  text-decoration: none !important;
+  cursor: pointer !important;
+}
+
+.freight-workspace-ui .data-table-scroll td button.freight-table-link:hover,
+.freight-list-screen .data-table-scroll td button.freight-table-link:hover,
+.freight-ui-standard .data-table-scroll td button.freight-table-link:hover {
+  color: var(--freight-bisc-blue, #00378C) !important;
+  text-decoration: underline !important;
+}
+
+/* Workspace background and breadcrumb for Freight */
+.workspace-content.freight-workspace-ui {
+  background-color: #f8f9fb !important;
+  padding: 12px 18px 24px !important;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
+
+.workspace-content.freight-workspace-ui .breadcrumb {
+  border-bottom: 1px solid #e2e8f0 !important;
+  padding-bottom: 8px !important;
+  margin-bottom: 12px !important;
+  font-size: 13px !important;
+}
+
+.workspace-content.freight-workspace-ui .breadcrumb a {
+  color: #64748b !important;
+  font-weight: 500 !important;
+  font-size: 13px !important;
+}
+
+.workspace-content.freight-workspace-ui .breadcrumb a:hover {
+  color: var(--freight-bisc-blue, #00378C) !important;
+}
+
+.workspace-content.freight-workspace-ui .breadcrumb-current {
+  color: #1a1a2e !important;
+  font-weight: 600 !important;
 }
 
 @media (max-width: 900px) {
@@ -814,3 +938,124 @@ input[tabindex="-1"].opacity-0,
     grid-template-columns: 1fr !important;
   }
 }
+
+/* Sidebar Submenu Dot Indicator */
+.nav-dot-wrap {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.nav-dot-wrap .nav-bullet {
+  display: inline-block !important;
+  width: 5px !important;
+  height: 5px !important;
+  border-radius: 50% !important;
+  background-color: #94a3b8 !important;
+  transition: all 140ms ease !important;
+}
+
+.nav-item:hover .nav-dot-wrap .nav-bullet {
+  background-color: var(--freight-bisc-blue, #00378C) !important;
+  transform: scale(1.3) !important;
+}
+
+.nav-item.active .nav-dot-wrap .nav-bullet {
+  background-color: var(--freight-bisc-blue, #00378C) !important;
+  transform: scale(1.4) !important;
+  box-shadow: 0 0 0 2px rgba(0, 55, 140, 0.25) !important;
+}
+
+/* Search input fix: Prevent blanket padding-inline 9px from overriding search icon offset */
+.data-table-search-input,
+.freight-workspace-ui input.data-table-search-input,
+.freight-ui-standard input.data-table-search-input,
+.freight-document-form input.data-table-search-input {
+  padding-left: 36px !important;
+  padding-right: 32px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  border-radius: 12px !important;
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  font-size: 13px !important;
+}
+
+/* Filter Popover and BiscDatePicker styling */
+.data-table-filter-popover {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 55, 140, 0.12), 0 8px 10px -6px rgba(0, 55, 140, 0.08) !important;
+}
+
+.data-table-filter-popover select {
+  height: 28px !important;
+  min-height: 28px !important;
+  padding-inline: 8px !important;
+  font-size: 12px !important;
+}
+
+/* Full-width table card matching BISC */
+.freight-workspace-ui .data-table-shell {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 16px !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04) !important;
+}
+
+.freight-workspace-ui .data-table-shell table {
+  width: 100% !important;
+  table-layout: auto !important;
+}
+
+.freight-workspace-ui .data-table-shell th {
+  border-right: 1px solid #e2e8f0 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  color: #6b7a8d !important;
+  font-size: 11px !important;
+  letter-spacing: 0.05em !important;
+  font-weight: 600 !important;
+  background-color: #ffffff !important;
+  padding: 8px 10px !important;
+}
+
+.freight-workspace-ui .data-table-shell th:last-child {
+  border-right: none !important;
+}
+
+.freight-workspace-ui .data-table-shell td {
+  border-bottom: 1px solid #f1f5f9 !important;
+  border-right: none !important;
+  font-size: 12px !important;
+}
+
+.freight-workspace-ui .data-table-shell tr:hover td {
+  background-color: #f8fafc !important;
+}
+
+/* Standalone search bar card matching BISC */
+.freight-workspace-ui .data-table-header {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 16px !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Portaled BiscDatePicker calendar popover */
+.bisc-date-picker-portal {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 16px !important;
+  box-shadow: 0 20px 50px rgba(0, 55, 140, 0.18), 0 10px 20px rgba(0, 0, 0, 0.08) !important;
+}
+
+.bisc-date-picker-portal select {
+  height: 28px !important;
+  min-height: 28px !important;
+  padding-inline: 8px !important;
+  font-size: 12px !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 6px !important;
+}
+
+

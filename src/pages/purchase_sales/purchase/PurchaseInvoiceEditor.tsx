@@ -19,6 +19,7 @@ import {
   SendBackUserOption,
 } from "./Purchaseordertypes";
 import {
+  DiscAmountPercentage,
   emptyForm,
   emptyLineRow,
   fetchPurchaseOrderDetail,
@@ -36,6 +37,7 @@ import {
   numberOrZero,
   runWorkflow,
   text,
+  Totalunitprice,
 
 } from "./Purchaseorderutils";
 import { PurchaseOrderHeaderForm } from "./Purchaseorderheaderform";
@@ -45,6 +47,7 @@ import { RejectDialog } from "./Rejectdialog";
 import { PurchaseInvoiceHeaderForm } from "./PurchaseInvoiceHeader";
 import { PurchaseInvoiceLinesTable } from "./PurchaseInvoiceDeatils";
 import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
+import { PurchaseInvoicePrintDialog } from "./PurchaseInvoiceprintReports";
 
 
 export type { PurchaseOrderEditorState };
@@ -77,6 +80,8 @@ export function PurchaseInvoiceEditor({
   const [sendBackUser, setSendBackUser] = useState("");
   const [sendBackUserName, setSendBackUserName] = useState("");
     const [attachmentOpen, setAttachmentOpen] = useState(false);
+    const [printOpen, setPrintOpen] = useState(false);
+  // const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [sendBackUserLevel, setSendBackUserLevel] = useState<number>(0);
   const [sendBackReason, setSendBackReason] = useState("");
   const [sendBackError, setSendBackError] = useState("");
@@ -87,7 +92,7 @@ export function PurchaseInvoiceEditor({
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
-
+  const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
   useEffect(() => {
     if (!editor) return;
     const initialForm = emptyForm(editor);
@@ -97,18 +102,27 @@ export function PurchaseInvoiceEditor({
     setLoading(editor.mode === "edit");
   }, [editor]);
 
+  // FIX: previously this effect stamped every row's tx_compnt_1_expmt / tx_compnt_perc_1
+  // from the header form, clobbering the per-line values already loaded from the
+  // GRN detail lookup (e.g. porder_tx_compnt_1_expmt / tx_compnt_perc_1 from the API).
+  // Now a row keeps its own tax values if it already has an tx_compnt_1_expmt set,
+  // and only falls back to the header-derived value when the row has none.
   useEffect(() => {
     if (!form.tx_compntcat_code_1 && !form.tx_cat_code && !form.disc_hdr_percent && !form.disc_hdr_price) return;
+    const pct = numberOrZero(form.disc_hdr_price) > 0 ? DiscAmountPercentage(form, rows) : form.disc_hdr_percent;
+    const taxPerc = form.tx_compnt_1_expmt === "S" ? 5 : 0;
     setRows((current) =>
       current.map((row) => ({
         ...row,
-        tax_code: form.tx_compntcat_code_1,
-        tax_cat: form.tx_cat_code,
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        tx_cat_code: `${form.tx_cat_code || ""}`,
         disc_price: row.disc_price || form.disc_hdr_price,
-        disc_percent: row.disc_percent || form.disc_hdr_percent,
+        disc_percent: pct > 0 ? pct : row.disc_percent,
+        tx_compnt_1_expmt: row.tx_compnt_1_expmt || form.tx_compnt_1_expmt || "",
+        tx_compnt_perc_1: row.tx_compnt_1_expmt ? row.tx_compnt_perc_1 : taxPerc,
       }))
     );
-  }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price]);
+  }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price, form.tx_compnt_1_expmt, totalUnitPrice]);
 
   useEffect(() => {
     let mounted = true;
@@ -137,16 +151,15 @@ export function PurchaseInvoiceEditor({
 
           po_doc_no: text(headerRaw.po_doc_no),
           po_doc_date: toDateInputValue(headerRaw.po_doc_date),
-          po_ac_code: text(headerRaw.po_ac_code),
-          po_ac_name: text(headerRaw.po_party_name),
+          ac_name: text(headerRaw.ac_name),
           po_dept_code: text(headerRaw.po_dept_code),
           po_remarks: text(headerRaw.po_remarks),
           po_ref_no: text(headerRaw.po_ref_no),
           po_ref_date: text(headerRaw.po_ref_date),
           po_curr_code: text(headerRaw.po_curr_code),
           po_ex_rate: numberOrZero(headerRaw.po_ex_rate),
-          po_disc_hdr_percent: numberOrZero(headerRaw.po_disc_hdr_percent),
-          po_disc_hdr_price: numberOrZero(headerRaw.po_disc_hdr_price),
+          disc_hdr_percent: numberOrZero(headerRaw.disc_hdr_percent),
+          disc_hdr_price: numberOrZero(headerRaw.disc_hdr_price),
           po_payment_terms: text(headerRaw.po_payment_terms),
           po_credit_period: numberOrZero(headerRaw.po_credit_period),
           po_party_name: text(headerRaw.po_party_name),
@@ -165,9 +178,11 @@ export function PurchaseInvoiceEditor({
           po_scope_of_work: text(headerRaw.po_scope_of_work),
           po_buyer: text(headerRaw.po_buyer),
           total_po_amount: numberOrZero(headerRaw.total_po_amount),
-
+          inv_no: text(headerRaw.inv_no),
+          inv_date: toDateInputValue(headerRaw.inv_date),
           pi_doc_no: text(headerRaw.pi_doc_no),
           pi_doc_date: toDateInputValue(headerRaw.pi_doc_date),
+          tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt),
         }));
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
@@ -231,10 +246,12 @@ export function PurchaseInvoiceEditor({
       ...current,
       {
         ...emptyLineRow(form.div_code),
-        tax_code: form.tx_compntcat_code_1,
-        tax_cat: form.tx_cat_name,
+        tx_compntcat_code_1: `${form.tx_compntcat_code_1 || ""}`,
+        tx_cat_code: `${form.tx_cat_code || ""}`,
         disc_price: form.disc_hdr_price,
         disc_percent: form.disc_hdr_percent,
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+        tx_compnt_perc_1: form.tx_compnt_perc_1 || 0
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
@@ -254,17 +271,23 @@ export function PurchaseInvoiceEditor({
     }
   };
 
-  const handleSaveAsDraft = () =>
-    runAction("draft", async () => {
+  const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
+
+  const handleSaveAsDraft = () => {
+    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+    return runAction("draft", async () => {
       await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.PIN, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, "Sales Order saved as draft");
+    }, "Purchase Quotation saved as draft");
+  };
+
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
+    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", PO_DOC_TYPE.PIN, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, editMode ? "Purchase Invoice updated successfully" : "Purchase Invoice created successfully");
+    }, editMode ? "Purchase Quotation updated successfully" : "Purchase Quotation created successfully");
   };
 
   const handleCancel = () =>
@@ -384,15 +407,23 @@ export function PurchaseInvoiceEditor({
                   <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.ac_name ? `${form.ac_code} - ${form.ac_name}` : form.ac_code}</strong>
                 </div>
               )}
+              {form.div_code && (
+                <div className="commercial-summary-chip rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-0.5">
+                  <span className="block text-[10px] font-semibold uppercase tracking-wide text-primary-foreground/65">Division Code</span>
+                  <strong className="block truncate text-sm leading-tight text-primary-foreground">{form.div_name ? `${form.div_code} - ${form.div_name}` : form.div_code}</strong>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {form.canceled === "Y" && <Badge variant="outline" className="border-primary-foreground/40 text-primary-foreground">Cancelled</Badge>}
               {form.doc_no && (
-                <>
-                  <Button type="button" variant="secondary"><Printer size={15} /> Print</Button>
-                  <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
-                </>
-              )}
+  <>
+    <Button type="button" variant="secondary" onClick={() => setPrintOpen(true)}>
+      <Printer size={15} /> Print
+    </Button>
+    <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
+  </>
+)}
                 <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
                 <Paperclip size={15} /> Files
               </Button>
@@ -479,7 +510,10 @@ export function PurchaseInvoiceEditor({
               </Button>}
           </div>
           <div className="flex items-center gap-2">
-            <Button aria-label="Print" type="button" variant="outline" size="icon" disabled={actionDisabled}><Printer size={15} /></Button>
+           <Button aria-label="Print" type="button" variant="outline" size="icon"
+  disabled={actionDisabled} onClick={() => setPrintOpen(true)}>
+  <Printer size={15} />
+</Button>
             <Button aria-label="Attachment" type="button" variant="outline" size="icon" disabled={actionDisabled}><Paperclip size={15} /></Button>
             <Button aria-label="Download" type="button" variant="outline" size="icon" disabled={actionDisabled}><Download size={15} /></Button>
             <Button type="button" variant="outline" onClick={onClose}>Close</Button>
@@ -516,7 +550,7 @@ export function PurchaseInvoiceEditor({
         onClose={closeRejectDialog}
         onConfirm={confirmReject}
       />
-       <AttachmentDialog
+      <AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
         requestNumber={form.doc_no ? String(form.doc_no) : ""}
@@ -527,6 +561,16 @@ export function PurchaseInvoiceEditor({
         loginId={user?.loginid || ""}
         flowLevel={effectiveFlowLevel}
       />
+
+        <PurchaseInvoicePrintDialog
+  open={printOpen}
+  onClose={() => setPrintOpen(false)}
+  form={form}
+  companyCode={user?.company_code || ""}
+  docType={PO_DOC_TYPE.PIN}
+/>
+
+
     </>
   );
 }

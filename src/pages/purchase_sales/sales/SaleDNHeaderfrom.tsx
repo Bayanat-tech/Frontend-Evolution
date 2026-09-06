@@ -70,7 +70,7 @@ export function SalesDNHeaderForm({
             <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1">
                 <div>
                     <p className="eyebrow m-0 text-[10px] leading-tight">Header</p>
-                    <h3 className="m-0 text-xs font-semibold leading-tight">Purchase Order Information</h3>
+                    <h3 className="m-0 text-xs font-semibold leading-tight"></h3>
                 </div>
             </div>
 
@@ -133,6 +133,7 @@ export function SalesDNHeaderForm({
                                 ...current,
                                 so_doc_no: soDocNo,
                                 ac_code: text(lookupValue(selectedRow, "ac_code", "ac_code")),
+                                   ac_name: text(lookupValue(selectedRow, "ac_name", "ac_name")),
                                 so_doc_date: toDateInputValue(
                                     lookupValue(selectedRow, "so_doc_date", "doc_date")
                                 ),
@@ -230,7 +231,7 @@ export function SalesDNHeaderForm({
                 </CField>
 
 
-                <div className="col-span-2">
+                {/* <div className="col-span-2">
                     <LookupField
                         label="Division *"
                         value={form.div_code}
@@ -246,7 +247,7 @@ export function SalesDNHeaderForm({
                             div_name: text(getLookupValue(row || {}, "div_name")),
                         }))}
                     />
-                </div>
+                </div> */}
 
 
 
