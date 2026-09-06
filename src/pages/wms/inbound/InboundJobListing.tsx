@@ -172,7 +172,7 @@ export function InboundJobListing() {
         bcf_code: "", request_category: "", load_point: "",
         updated_by:   user?.loginid || "Admin",
         created_by:   user?.loginid || "Admin",
-        created_at:   now,
+        created_at:   String(form.schedule_date || today),
         prin_code:    String(form.prin_code || ""),
         schedule_date: String(form.schedule_date || today),
       });

@@ -44,6 +44,21 @@ const toDateInputValue = (value: unknown): string => {
   return parsed.toISOString().slice(0, 10);
 };
 
+// Currency master options for the Currency Code lookup — cached at module
+// level since MS_CURRENCY is a slow-changing table and this dropdown may be
+// opened often within a session. EX_RATE comes back on each row so the
+// LookupField's onChange can fill invoice.ex_rate directly on selection.
+let currencyOptionsCache: any[] | null = null;
+
+async function loadCurrencyOptions() {
+  if (currencyOptionsCache) return currencyOptionsCache;
+  const rows = await executeWmsInboundSql(
+    `SELECT CURR_CODE, CURR_NAME, EX_RATE FROM MS_CURRENCY ORDER BY CURR_CODE`,
+  );
+  currencyOptionsCache = Array.isArray(rows) ? rows : [];
+  return currencyOptionsCache;
+}
+
 // NOTE: `required` is a rendering flag only (shows the asterisk). It does not
 // enforce validation on its own — wire real required-checks in handleSave
 // once business rules for each field are confirmed. Only Principal Code is
@@ -81,8 +96,9 @@ const DESCRIPTION_FIELDS: FieldDef[] = [
   { label: "Invoice Description 2", key: "inv_desc2" },
 ];
 
+// Currency Code is now a LookupField (see sec-currency below) — only
+// Exchange Rate stays here as a plain, always-disabled auto-filled field.
 const CURRENCY_FIELDS: FieldDef[] = [
-  { label: "Currency Code", key: "curr_code", disabled: true },
   { label: "Exchange Rate", key: "ex_rate", disabled: true },
 ];
 
@@ -235,7 +251,7 @@ function FieldGrid({ fields, invoice, onChange, disabled, hint }: {
               type={type === "date" ? "date" : "text"}
               value={type === "date" ? toDateInputValue(getValue(invoice, key)) : getValue(invoice, key) ?? ""}
               onChange={(e) => onChange(key, e.target.value)}
-              disabled={disabled || fieldDisabled}
+              // disabled={disabled || fieldDisabled}
             />
           </label>
         ))}
@@ -728,13 +744,39 @@ export function InvoiceForm({ existingData, viewMode, onClose }: InvoiceFormProp
               </FormSection>
 
               <FormSection id="sec-currency" icon={Receipt} title="Currency" subtitle="Currency Code & Exchange Rate">
-                <FieldGrid
-                  fields={CURRENCY_FIELDS}
-                  invoice={invoice}
-                  onChange={setField}
-                  disabled={viewMode}
-                  hint="Auto-filled from the selected Principal — not editable here."
-                />
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="field">
+                    <FieldLabel label="Currency Code" />
+                    <LookupField
+                      compact
+                      showLabelInCompact={false}
+                      label="Currency Code"
+                      value={currCode}
+                      columns={[
+                        { field: "curr_code", header: "Code" },
+                        { field: "curr_name", header: "Name" },
+                        { field: "ex_rate", header: "Ex Rate" },
+                      ]}
+                      valueField="curr_code"
+                      displayFields={["curr_code", "curr_name"]}
+                      loadOptions={loadCurrencyOptions}
+                      onChange={(value, row) =>
+                        setInvoice((prev: any) => ({
+                          ...prev,
+                          curr_code: value,
+                          // Filled straight from the picked row — no need to wait on
+                          // the separate SQL round-trip below for the common case
+                          // (user picks a currency). That effect still runs as a
+                          // fallback for cases like curr_code being set indirectly
+                          // (e.g. from Principal).
+                          ex_rate: row ? String(getValue(row, "ex_rate") ?? "") : prev.ex_rate,
+                        }))
+                      }
+                      disabled={viewMode}
+                    />
+                  </label>
+                  <FieldGrid fields={CURRENCY_FIELDS} invoice={invoice} onChange={setField} disabled={viewMode} />
+                </div>
               </FormSection>
             </div>
           </div>
