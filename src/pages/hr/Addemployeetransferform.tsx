@@ -61,7 +61,7 @@ type Props = {
 // as the applicant form.
 const EMPTY: TEmployeeTransfer = {
   doc_no: null,
-  doc_type: "TRF",
+  doc_type: "ETR",
   company_code: "",
   div_code: "",
   div_name: "",
@@ -223,10 +223,9 @@ export function AddEmployeeTransferForm({ mode, existingData, onClose }: Props) 
   );
 
   useEffect(() => {
+    if (!employee?.employee_id){
     if (isEdit || readonly) return; // edit/view already has everything from existingData
-
-    if (!employee?.employee_id) {
-      // Employee cleared — go back to filter mode, blank the snapshot.
+    // Employee cleared — go back to filter mode, blank the snapshot.
       set("div_code", "");
       set("div_name", "");
       set("dept_code", "");
@@ -234,6 +233,7 @@ export function AddEmployeeTransferForm({ mode, existingData, onClose }: Props) 
       set("section_code", "");
       set("section_name", "");
       set("desg_code", "");
+      set("employee_name","");
       set("desg_name", "");
       return;
     }
@@ -245,16 +245,31 @@ export function AddEmployeeTransferForm({ mode, existingData, onClose }: Props) 
       .then((res) => {
         if (cancelled) return;
         const row = (Array.isArray(res) ? res[0] : null) as Record<string, unknown> | null;
-        if (row) {
-          set("div_code", String(row.div_code ?? ""));
-          set("div_name", String(row.div_name ?? ""));
-          set("dept_code", String(row.dept_code ?? ""));
-          set("dept_name", String(row.dept_name ?? ""));
-          set("section_code", String(row.section_code ?? ""));
-          set("section_name", String(row.section_name ?? ""));
-          set("desg_code", String(row.desg_code ?? ""));
-          set("desg_name", String(row.desg_name ?? ""));
-        }
+
+if (row) {
+  const employeeName = String(
+    row.employee_name ??
+    row.rpt_name ??
+    employee.employee_name ??
+    ""
+  );
+
+  setEmployee({
+    employee_id: employee.employee_id,
+    employee_name: employeeName,
+  });
+
+  set("employee_name", employeeName);
+
+  set("div_code", String(row.div_code ?? ""));
+  set("div_name", String(row.div_name ?? ""));
+  set("dept_code", String(row.dept_code ?? ""));
+  set("dept_name", String(row.dept_name ?? ""));
+  set("section_code", String(row.section_code ?? ""));
+  set("section_name", String(row.section_name ?? ""));
+  set("desg_code", String(row.desg_code ?? ""));
+  set("desg_name", String(row.desg_name ?? ""));
+}
       })
       .finally(() => {
         if (!cancelled) setLoadingEmpDetail(false);
@@ -264,7 +279,7 @@ export function AddEmployeeTransferForm({ mode, existingData, onClose }: Props) 
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [employee?.employee_id, isEdit, readonly]);
+  }, [employee?.employee_id, loadEmployeeDetail]);
 
   // ── To-side cascading resets — unchanged ────────────────────────────────
   useEffect(() => {
@@ -429,7 +444,7 @@ export function AddEmployeeTransferForm({ mode, existingData, onClose }: Props) 
         parameter: "MST_HR_EMP_TRANSFER",
         loginid,
         val1s1: companyCode,
-        val1s2: form.doc_type ?? "TRF",
+        val1s2: form.doc_type ?? "ETR",
         val1n1: docNo,
         val1s3: form.div_code || "",
         val1s4: form.dept_code || "",
