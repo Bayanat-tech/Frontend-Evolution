@@ -38,6 +38,21 @@ function text(val: unknown): string {
   return String(val);
 }
 
+function calcFinalRatingDisplay(
+  taskTotal: number,
+  characterTotal: number,
+  weightageConfig?: WeightageConfig
+): number {
+  const t = Number(taskTotal || 0);
+  const c = Number(characterTotal || 0);
+  if (weightageConfig?.isHrDefined) {
+    const tw = (t * weightageConfig.taskPct) / 100;
+    const cw = (c * weightageConfig.charPct) / 100;
+    return Math.round(tw + cw);
+  }
+  return Math.round((t + c) / 2);
+}
+
 const S = {
   scoreRow: { display: "flex" as const, gap: "12px", marginBottom: "16px" },
   scoreBox: (accent: string): React.CSSProperties => ({
@@ -107,20 +122,16 @@ const AppraiserCommentsTab: React.FC<Props> = ({
   const appraiserReadOnly = isEmployee || isFinal || !isCurrentActionUser;
   const appraiseeReadOnly = !isEmployee || isFinal;
 
-  const effectiveLevel = showAllComments 
-    ? 0
-    : (userFlowLevel === 0 ? flowLevel : userFlowLevel);
+  // "myLevel" identifies / saves the CURRENT logged-in user's own appraiser
+  // comment. Must NEVER be hardcoded to 0 -- that previously caused every
+  // approver's comment to be saved under FLOW_LEVEL = 0, so the next
+  // approver's box got pre-filled with the previous approver's text.
+  const myLevel = userFlowLevel === 0 ? flowLevel : userFlowLevel;
 
-  const { finalRating } = useMemo(() => {
-    const t = Number(taskTotal || 0);
-    const c = Number(characterTotal || 0);
-    if (weightageConfig?.isHrDefined) {
-      const tw = (t * weightageConfig.taskPct) / 100;
-      const cw = (c * weightageConfig.charPct) / 100;
-      return { finalRating: Math.round(tw + cw) };
-    }
-    return { finalRating: Math.round((t + c) / 2) };
-  }, [taskTotal, characterTotal, weightageConfig]);
+  // effectiveLevel is used ONLY for the single-level "show previous level"
+  // block below (showPrevLevel), which is skipped entirely when
+  // showAllComments is true.
+  const effectiveLevel = showAllComments ? 0 : myLevel;
 
   useEffect(() => {
     if (!docNo) return;
@@ -129,7 +140,7 @@ const AppraiserCommentsTab: React.FC<Props> = ({
       .then((rows) => {
         setCommentLog(rows || []);
 
-        const lvl = String(effectiveLevel);
+        const lvl = String(myLevel);
         const myAppraiserRow = rows.find(
           (r) => String(r.FLOW_LEVEL) === lvl && r.COMMENT_TYPE === "APPRAISER"
         );
@@ -142,7 +153,7 @@ const AppraiserCommentsTab: React.FC<Props> = ({
 
         setAppraiserComment(ac);
         setAppraiseeComment(apc);
-        onAppraiserCommentChange?.(ac, effectiveLevel);
+        onAppraiserCommentChange?.(ac, myLevel);
         onAppraiseeCommentChange?.(apc, 0);
 
         pamsSelect({ parameter: "appraisal_comments", loginid, code1: docNo })
@@ -151,6 +162,9 @@ const AppraiserCommentsTab: React.FC<Props> = ({
               const row = res[0] as Row;
               setEmployeeName(text(row.EMPLOYEE_NAME));
               if (flowLevel === 0) {
+                // Level 0 = nobody has appraised yet. Show the name of
+                // whoever will act next (immediate supervisor / level-1
+                // approver) as a preview.
                 setCurrentActorName(
                   text(row.APPRAISER_NAME1) ||
                   text(row.IMMEDIATE_SUPERVISOR_NAME) ||
@@ -174,7 +188,7 @@ const AppraiserCommentsTab: React.FC<Props> = ({
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [docNo, loginid, flowLevel, userFlowLevel, effectiveLevel]);
+  }, [docNo, loginid, flowLevel, userFlowLevel, myLevel]);
 
   const prevLevelNum = effectiveLevel - 1;
   const prevLevelRow = commentLog.find(
@@ -185,7 +199,7 @@ const AppraiserCommentsTab: React.FC<Props> = ({
   const prevLevelName = text(prevLevelRow?.COMMENT_BY_NAME) || `Level ${prevLevelNum}`;
 
   const myAppraiserRow = commentLog.find(
-    (r) => String(r.FLOW_LEVEL) === String(effectiveLevel) && r.COMMENT_TYPE === "APPRAISER"
+    (r) => String(r.FLOW_LEVEL) === String(myLevel) && r.COMMENT_TYPE === "APPRAISER"
   );
   const appraiseeRow = commentLog.find(
     (r) => String(r.FLOW_LEVEL) === "0" && r.COMMENT_TYPE === "APPRAISEE"
@@ -194,6 +208,15 @@ const AppraiserCommentsTab: React.FC<Props> = ({
   const allAppraiserComments = commentLog
     .filter(r => r.COMMENT_TYPE === "APPRAISER")
     .sort((a, b) => Number(a.FLOW_LEVEL) - Number(b.FLOW_LEVEL));
+
+  // At flow level 0 (employee self-rating stage), no appraiser has acted
+  // yet. Show the upcoming reviewer's name with an empty, disabled box
+  // instead of showing nothing at all.
+  const showNextReviewerPreview =
+    flowLevel === 0 &&
+    !myAppraiserRow &&
+    allAppraiserComments.length === 0 &&
+    !!currentActorName;
 
   if (loading) return <div style={S.spinner}>Loading comments...</div>;
 
@@ -210,7 +233,9 @@ const AppraiserCommentsTab: React.FC<Props> = ({
         </div>
         <div style={S.scoreBox("#2e7d32")}>
           <div style={S.scoreLabel}>Final Rating</div>
-          <div style={S.scoreValue("#2e7d32")}>{finalRating}</div>
+          <div style={S.scoreValue("#2e7d32")}>
+            {calcFinalRatingDisplay(taskTotal, characterTotal, weightageConfig)}
+          </div>
         </div>
       </div>
 
@@ -243,8 +268,24 @@ const AppraiserCommentsTab: React.FC<Props> = ({
       ))}
     </>
   )}
-              
-              {/* ✅ CURRENT USER KA TEXTAREA — Show always if not readonly */}
+
+              {/* Level 0 preview -- next reviewer's name, empty & non-editable */}
+              {showNextReviewerPreview && (
+                <>
+                  <div style={{ ...S.nameBox, marginTop: allAppraiserComments.length > 0 ? "12px" : 0 }}>
+                    {currentActorName}
+                  </div>
+                  <textarea
+                    style={S.textarea(true)}
+                    value=""
+                    readOnly
+                    placeholder="next reviewer will comment here"
+                  />
+                  <div style={S.readOnlyTag}>View only</div>
+                </>
+              )}
+
+              {/* CURRENT USER KA TEXTAREA -- Show always if not readonly */}
               {!appraiserReadOnly && (
                 <>
                   <div style={{ ...S.nameBox, marginTop: "12px" }}>
@@ -258,7 +299,7 @@ const AppraiserCommentsTab: React.FC<Props> = ({
                     onChange={(e) => {
                       if (appraiserReadOnly) return;
                       setAppraiserComment(e.target.value);
-                      onAppraiserCommentChange?.(e.target.value, effectiveLevel);
+                      onAppraiserCommentChange?.(e.target.value, myLevel);
                     }}
                   />
                   {myAppraiserRow?.COMMENT_DATE && (
@@ -278,7 +319,7 @@ const AppraiserCommentsTab: React.FC<Props> = ({
                 onChange={(e) => {
                   if (appraiserReadOnly) return;
                   setAppraiserComment(e.target.value);
-                  onAppraiserCommentChange?.(e.target.value, effectiveLevel);
+                  onAppraiserCommentChange?.(e.target.value, myLevel);
                 }}
               />
               {myAppraiserRow?.COMMENT_DATE && (
