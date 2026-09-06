@@ -99,7 +99,12 @@ export function PurchaseInvoiceEditor({
     setLoading(editor.mode === "edit");
   }, [editor]);
 
- useEffect(() => {
+  // FIX: previously this effect stamped every row's tx_compnt_1_expmt / tx_compnt_perc_1
+  // from the header form, clobbering the per-line values already loaded from the
+  // GRN detail lookup (e.g. porder_tx_compnt_1_expmt / tx_compnt_perc_1 from the API).
+  // Now a row keeps its own tax values if it already has an tx_compnt_1_expmt set,
+  // and only falls back to the header-derived value when the row has none.
+  useEffect(() => {
     if (!form.tx_compntcat_code_1 && !form.tx_cat_code && !form.disc_hdr_percent && !form.disc_hdr_price) return;
     const pct = numberOrZero(form.disc_hdr_price) > 0 ? DiscAmountPercentage(form, rows) : form.disc_hdr_percent;
     const taxPerc = form.tx_compnt_1_expmt === "S" ? 5 : 0;
@@ -110,8 +115,8 @@ export function PurchaseInvoiceEditor({
         tx_cat_code: `${form.tx_cat_code || ""}`,
         disc_price: row.disc_price || form.disc_hdr_price,
         disc_percent: pct > 0 ? pct : row.disc_percent,
-        tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
-        tx_compnt_perc_1: taxPerc,
+        tx_compnt_1_expmt: row.tx_compnt_1_expmt || form.tx_compnt_1_expmt || "",
+        tx_compnt_perc_1: row.tx_compnt_1_expmt ? row.tx_compnt_perc_1 : taxPerc,
       }))
     );
   }, [form.tx_compntcat_code_1, form.tx_cat_code, form.disc_hdr_percent, form.disc_hdr_price, form.tx_compnt_1_expmt, totalUnitPrice]);
@@ -170,7 +175,7 @@ export function PurchaseInvoiceEditor({
           po_scope_of_work: text(headerRaw.po_scope_of_work),
           po_buyer: text(headerRaw.po_buyer),
           total_po_amount: numberOrZero(headerRaw.total_po_amount),
-  inv_no: text(headerRaw.inv_no),
+          inv_no: text(headerRaw.inv_no),
           inv_date: toDateInputValue(headerRaw.inv_date),
           pi_doc_no: text(headerRaw.pi_doc_no),
           pi_doc_date: toDateInputValue(headerRaw.pi_doc_date),
@@ -242,7 +247,8 @@ export function PurchaseInvoiceEditor({
         tx_cat_code: `${form.tx_cat_code || ""}`,
         disc_price: form.disc_hdr_price,
         disc_percent: form.disc_hdr_percent,
-        tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+        tx_compnt_perc_1: form.tx_compnt_perc_1 || 0
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
@@ -262,19 +268,23 @@ export function PurchaseInvoiceEditor({
     }
   };
 
-  const handleSaveAsDraft = () =>
-    runAction("draft", async () => {
+  const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
+
+  const handleSaveAsDraft = () => {
+    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+    return runAction("draft", async () => {
       await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.PIN, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, "Sales Order saved as draft");
+    }, "Purchase Quotation saved as draft");
+  };
+
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
-    if (!form.inv_no) return setError("Invoice Number  is required");
-    if (!form.inv_date) return setError("Invoice Date is required");
+    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
     return runAction("submit", async () => {
       await runWorkflow("SUBMITTED", PO_DOC_TYPE.PIN, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, editMode ? "Purchase Invoice updated successfully" : "Purchase Invoice created successfully");
+    }, editMode ? "Purchase Quotation updated successfully" : "Purchase Quotation created successfully");
   };
 
   const handleCancel = () =>

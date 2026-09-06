@@ -136,7 +136,7 @@ export function SalesInvoiceLinesTable({
       <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
         <div>
           <p className="eyebrow m-0">Lines</p>
-          <h3 className="m-0 text-sm font-semibold leading-tight">Purchase Order Lines</h3>
+          <h3 className="m-0 text-sm font-semibold leading-tight"></h3>
         </div>
         {/* <div className="flex items-center gap-2">
           <Button disabled={headerAndLineDisabled} size="sm" type="button" variant="outline" onClick={addRow}>
@@ -148,36 +148,36 @@ export function SalesInvoiceLinesTable({
         <table className="finance-lines-table w-full min-w-[2600px] text-sm" style={{ tableLayout: "fixed" }}>
           <thead className="text-xs text-primary-foreground">
             <tr>
-              <th className="finance-sticky-col px-2 py-2 text-left" style={stickyHeaderStyle("sno")}>SNo</th>
-              <th className="finance-sticky-col px-2 py-2 text-left" style={stickyHeaderStyle("div")}>Div</th>
-              <th className="finance-sticky-col px-2 py-2 text-left w-32" style={stickyHeaderStyle("zone")}>Zone</th>
+              <th className="finance-sticky-col px-2 py-2 text-center" style={stickyHeaderStyle("sno")}>SNo</th>
+              <th className="finance-sticky-col px-2 py-2 text-center" style={stickyHeaderStyle("div")}>Div</th>
+              <th className="finance-sticky-col px-2 py-2 text-center w-32" style={stickyHeaderStyle("zone")}>Zone</th>
               {/* {hasGrnColumn(docType) && (
-                <th className="finance-sticky-col px-2 py-2 text-left w-32" style={stickyHeaderStyle("GRN")}>GRN</th>
+                <th className="finance-sticky-col px-2 py-2 text-center w-32" style={stickyHeaderStyle("GRN")}>GRN</th>
               )} */}
-              <th className="finance-sticky-col px-2 py-2 text-left" style={stickyHeaderStyle("product", docType)}>Product Code</th>
-              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(80)}>P Uom</th>
-              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(80)}>Qty Puom</th>
-              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(80)}>L Uom</th>
-              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(80)}>Qty Luom</th>
-              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(80)}>Uppp</th>
-              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(100)}>Unit Price</th>
-              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(100)}>Quantity</th>
-              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(110)}>Amount Before Disc</th>
-              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(96)}>Disc %</th>
-              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(90)}>Disc Price(Per Unit)</th>
-              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(90)}>Unit price Net Amt</th>
-              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(100)}>Amount</th>
-              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(120)}>Lcurr Amount Before Tax</th>
-              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(100)}>Tax Type</th>
-              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(60)}>Tax %</th>
-              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(110)}>Tax Amount</th>
-              <th className="px-2 py-2 text-left" style={plainHeaderStyle(120)}>Req Date</th>
-              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(160)}>Remarks</th>
-              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(120)}>Tax Cat</th>
-              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(96)}>Tax code</th>
-              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(112)}>Tax Lcurr amount</th>
-              <th className="finance-amount-cell px-2 py-2 text-left" style={plainHeaderStyle(128)}>Lcurr amount After Tax</th>
-              <th className="px-2 py-2 text-left" style={plainHeaderStyle(64)}>Action</th>
+              <th className="finance-sticky-col px-2 py-2 text-center" style={stickyHeaderStyle("product", docType)}>Product Code</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(80)}>P Uom</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(80)}>Qty Puom</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(80)}>L Uom</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(80)}>Qty Luom</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(80)}>Uppp</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(100)}>Unit Price</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(100)}>Quantity</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(110)}>Amount Before Disc</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(96)}>Disc %</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90)}>Disc Price(Per Unit)</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(90)}>Unit price Net Amt</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(100)}>Amount</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(120)}>Lcurr Amount Before Tax</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(100)}>Tax Type</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(60)}>Tax %</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(110)}>Tax Amount</th>
+              <th className="px-2 py-2 text-center" style={plainHeaderStyle(120)}>Req Date</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(160)}>Remarks</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(120)}>Tax Cat</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(96)}>Tax code</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(112)}>Tax Lcurr amount</th>
+              <th className="finance-amount-cell px-2 py-2 text-center" style={plainHeaderStyle(128)}>Lcurr amount After Tax</th>
+              <th className="px-2 py-2 text-center" style={plainHeaderStyle(64)}>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -260,11 +260,12 @@ export function SalesInvoiceLinesTable({
                   <td className="finance-amount-cell px-2 py-1">
                     <Input
                       className="finance-money-input"
-                      disabled={headerAndLineDisabled || sameUom}
+                      disabled={headerAndLineDisabled }
                       type="number"
                       style={{ textAlign: "right" }}
                       step="0.001"
-                      value={sameUom ? 0 : row.qty_puom}
+                       value={row.qty_puom}
+           
                       onChange={(event) => {
                         const newQtyPuom = Number(event.target.value || 0);
 
@@ -292,11 +293,11 @@ export function SalesInvoiceLinesTable({
                   <td className="finance-amount-cell w-24 px-2 py-1">
                     <Input
                       className="finance-money-input"
-                      disabled={headerAndLineDisabled}
+                      disabled={headerAndLineDisabled || sameUom}
                       type="number"
                       style={{ textAlign: "right" }}
                       step="0.001"
-                      value={row.qty_luom}
+                                 value={sameUom ? 0 : row.qty_luom}
                       onChange={(event) => {
                         const newQtyLuom = Number(event.target.value || 0);
 

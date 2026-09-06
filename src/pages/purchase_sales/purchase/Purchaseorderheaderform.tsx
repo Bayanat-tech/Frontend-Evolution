@@ -156,12 +156,16 @@ export function PurchaseOrderHeaderForm({
                       salesman_code: text(getLookupValue(row || {}, "salesman_code")),
                       zone_code: text(getLookupValue(row || {}, "zone_code")),
                       tx_compntcat_code_1: text(getLookupValue(row || {}, "tx_compntcat_code_1")),
-                      tx_cat_code: `${text(getLookupValue(row || {}, "tx_cat_code"))} - ${text(
-                        getLookupValue(row || {}, "tx_cat_name")
-                      )}`,
+                      // tx_cat_code: `${text(getLookupValue(row || {}, "tx_cat_code"))} - ${text(
+                      //   getLookupValue(row || {}, "tx_cat_name")
+                      // )}`,
+                      tx_cat_code: text(getLookupValue(row || {}, "tx_cat_code")),
+                      tx_cat_name: text(getLookupValue(row || {}, "tx_cat_name")),
                       project_name: text(getLookupValue(row || {}, "project_name")),
                       pr_no: text(getLookupValue(row || {}, "pr_no")),
                       scope_of_work: text(getLookupValue(row || {}, "scope_of_work")),
+
+                      tx_compnt_1_expmt: text(getLookupValue(row || {}, "tx_compnt_1_expmt")),
 
 
                     }));
@@ -369,11 +373,12 @@ export function PurchaseOrderHeaderForm({
 
             <LookupField
               label="Tax Category"
-              value={
-                form.tx_cat_name
-                  ? `${form.tx_cat_code} - ${form.tx_cat_name}`
-                  : form.tx_cat_code
-              }
+              // value={
+              //   form.tx_cat_name
+              //     ? `${form.tx_cat_code} - ${form.tx_cat_name}`
+              //     : form.tx_cat_code
+              // }
+              value={form.tx_cat_code || ""}
               displayValue={
                 form.tx_cat_name
                   ? `${form.tx_cat_code} - ${form.tx_cat_name}`
@@ -396,8 +401,8 @@ export function PurchaseOrderHeaderForm({
               onChange={(value, row) =>
                 setForm((current) => ({
                   ...current,
-                  tx_cat_code: text(value),
-                 tx_cat_name: text(getLookupValue(row || {}, "tx_cat_name")),
+                  tx_cat_code: text(value).split(" - ")[0].trim(),
+                  
                 }))
               }
             />

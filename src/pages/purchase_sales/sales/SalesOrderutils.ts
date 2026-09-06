@@ -297,7 +297,7 @@ export function buildHeaderPayload(form: PurchaseOrderForm, companyCode?: string
     flow_level_running: form.flow_level_running || 0,
 
     ref_doc_no: refDocNo,
-
+    tx_compnt_1_expmt: form.tx_compnt_1_expmt,
     // SDN
     sdn_doc_no: numberOrZero(form.doc_no) || undefined,
 
@@ -366,21 +366,21 @@ export function computeQuantity(row: SalesOrderLineRow): number {
   const qtyPuom = numberOrZero(row.qty_puom);
   const qtyLuom = numberOrZero(row.qty_luom);
   const uppp = numberOrZero(row.uppp);
-  return isSameUom(row) ? qtyLuom : qtyPuom * uppp + qtyLuom;
+  return isSameUom(row) ? qtyPuom : qtyPuom * uppp + qtyLuom;
 }
 
 export function computePoQuantity(row: SalesOrderLineRow): number {
   const qtyPuom = numberOrZero(row.so_qty_puom);
   const qtyLuom = numberOrZero(row.so_qty_luom);
   const uppp = numberOrZero(row.uppp);
-  return isSamePoUom(row) ? qtyLuom : qtyPuom * uppp + qtyLuom;
+  return isSamePoUom(row) ? qtyPuom : qtyPuom * uppp + qtyLuom;
 }
 
 export function computePQuantity(row: SalesOrderLineRow): number {
   const qtyPuom = numberOrZero(row.qty_puom);
   const qtyLuom = numberOrZero(row.qty_luom);
   const uppp = numberOrZero(row.uppp);
-  return isSamePoUom(row) ? qtyLuom : qtyPuom * uppp + qtyLuom;
+  return isSamePoUom(row) ? qtyPuom : qtyPuom * uppp + qtyLuom;
 }
 
 

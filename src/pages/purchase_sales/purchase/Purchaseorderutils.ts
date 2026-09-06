@@ -352,21 +352,21 @@ export function computeQuantity(row: PurchaseOrderLineRow): number {
   const qtyPuom = numberOrZero(row.qty_puom);
   const qtyLuom = numberOrZero(row.qty_luom);
   const uppp = numberOrZero(row.uppp);
-  return isSameUom(row) ? qtyLuom : qtyPuom * uppp + qtyLuom;
+  return isSameUom(row) ? qtyPuom : qtyPuom * uppp + qtyLuom;
 }
 
 export function computePoQuantity(row: PurchaseOrderLineRow): number {
   const qtyPuom = numberOrZero(row.po_qty_puom);
   const qtyLuom = numberOrZero(row.po_qty_luom);
   const uppp = numberOrZero(row.uppp);
-  return isSamePoUom(row) ? qtyLuom : qtyPuom * uppp + qtyLuom;
+  return isSamePoUom(row) ? qtyPuom : qtyPuom * uppp + qtyLuom;
 }
 
 export function computePQuantity(row: PurchaseOrderLineRow): number {
   const qtyPuom = numberOrZero(row.qty_puom);
   const qtyLuom = numberOrZero(row.qty_luom);
   const uppp = numberOrZero(row.uppp);
-  return isSamePoUom(row) ? qtyLuom : qtyPuom * uppp + qtyLuom;
+  return isSamePoUom(row) ? qtyPuom : qtyPuom * uppp + qtyLuom;
 }
 
 
@@ -423,7 +423,7 @@ export function lineTaxAmount(row: PurchaseOrderLineRow) {
   return lineNetAmount(row) * ((row.tx_compnt_perc_1 ?? 0) / 100);
 }
 export function lineTaxpoAmount(row: PurchaseOrderLineRow) {
-  return lineNetAmount(row) * ((row.porder_tx_compnt_perc_1 ?? 0) / 100);
+  return lineNetAmount(row) * ((row.tx_compnt_perc_1 ?? 0) / 100);
 }
 
 // Lcurr = net amount converted at ex_rate (was net * finalRate * ex_rate — double rate applied)

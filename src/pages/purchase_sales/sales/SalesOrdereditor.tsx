@@ -92,8 +92,9 @@ export function SalesOrderEditor({
     setError("");
     setLoading(editor.mode === "edit");
   }, [editor]);
-  useEffect(() => {
-    if (!form.tx_compntcat_code_1 && !form.tx_cat_code && !form.disc_hdr_percent && !form.disc_hdr_price) return;
+ useEffect(() => {
+
+    if (!form.tx_compntcat_code_1 && !form.tx_cat_code && !form.disc_hdr_percent && !form.disc_hdr_price && !form.tx_compnt_1_expmt) return;
     const pct = numberOrZero(form.disc_hdr_price) > 0 ? DiscAmountPercentage(form, rows) : form.disc_hdr_percent;
     const taxPerc = form.tx_compnt_1_expmt === "S" ? 5 : 0;
     setRows((current) =>
@@ -300,18 +301,23 @@ export function SalesOrderEditor({
       });
   };
 
-  const handleSaveAsDraft = () =>
-    runAction("draft", async () => {
+   const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
+  
+  const handleSaveAsDraft = () => {
+    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+    return runAction("draft", async () => {
       await runWorkflow("SAVEASDRAFT", SO_DOC_TYPE.SO, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, "Sales Order saved as draft");
-
+    }, "Purchase Quotation saved as draft");
+  };
+  
   const handleSubmit = () => {
     if (!form.div_code) return setError("Division is required");
     if (!form.ac_code) return setError("A/c Code is required");
     if (!form.curr_code) return setError("Currency is required");
+    if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
     return runAction("submit", async () => {
-      await runWorkflow("SUBMITTED", SO_DOC_TYPE.SO, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, editMode ? "Sales Order updated successfully" : "Sales Order created successfully");
+      await runWorkflow("SUBMITTED",SO_DOC_TYPE.SO, form, rows, user?.company_code, user?.loginid || user?.username);
+    }, editMode ? "Purchase Quotation updated successfully" : "Purchase Quotation created successfully");
   };
 
   const handleCancel = () =>

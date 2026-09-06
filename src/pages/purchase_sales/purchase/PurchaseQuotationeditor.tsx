@@ -48,7 +48,7 @@ import { AttachmentDialog } from "../../../components/ui/AttachmentDialog";
 export type { PurchaseOrderEditorState };
 
 export function PurchaseQuotationEditor({
-   config,
+  config,
   editor,
   isPendingTab,
   onClose,
@@ -84,10 +84,11 @@ export function PurchaseQuotationEditor({
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
-    const [attachmentOpen, setAttachmentOpen] = useState(false);
-    const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
- useEffect(() => {
-    if (!form.tx_compntcat_code_1 && !form.tx_cat_code && !form.disc_hdr_percent && !form.disc_hdr_price) return;
+  const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const totalUnitPrice = rows.reduce((sum, row) => sum + Totalunitprice(row), 0);
+  useEffect(() => {
+
+    if (!form.tx_compntcat_code_1 && !form.tx_cat_code && !form.disc_hdr_percent && !form.disc_hdr_price && !form.tx_compnt_1_expmt) return;
     const pct = numberOrZero(form.disc_hdr_price) > 0 ? DiscAmountPercentage(form, rows) : form.disc_hdr_percent;
     const taxPerc = form.tx_compnt_1_expmt === "S" ? 5 : 0;
     setRows((current) =>
@@ -173,6 +174,9 @@ export function PurchaseQuotationEditor({
           scope_of_work: text(headerRaw.scope_of_work || current.scope_of_work),
           flow_level_running: flowLevelRunning,
           canceled: text(headerRaw.canceled || current.canceled || "N"),
+          tx_compnt_1_expmt: text(headerRaw.tx_compnt_1_expmt || current.tx_compnt_1_expmt),
+          tx_cat_code: text(headerRaw.tx_cat_code || current.tx_cat_code),
+          tx_compntcat_code_1: text(headerRaw.tx_compntcat_code_1 || current.tx_compntcat_code_1),
         }));
         setRows(detailRows.length ? detailRows : [emptyLineRow(text(headerRaw.div_code) || "")]);
       } catch (loadError) {
@@ -252,7 +256,7 @@ export function PurchaseQuotationEditor({
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
 
- 
+
   const addRow = () =>
     setRows((current) => [
       ...current,
@@ -262,7 +266,8 @@ export function PurchaseQuotationEditor({
         tx_cat_code: `${form.tx_cat_code || ""}`,
         disc_price: form.disc_hdr_price,
         disc_percent: form.disc_hdr_percent,
-        tx_compnt_1_expmt: form.tx_compnt_1_expmt || ""
+        tx_compnt_1_expmt: form.tx_compnt_1_expmt || "",
+        tx_compnt_perc_1: form.tx_compnt_perc_1 || 0,
       },
     ]);
   const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
@@ -282,20 +287,24 @@ export function PurchaseQuotationEditor({
     }
   };
 
-  const handleSaveAsDraft = () =>
-    runAction("draft", async () => {
-      await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.PQA, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, "Purchase Quotation saved as draft");
+  const hasValidLines = rows.some((row) => text(row.prod_code).trim().length > 0);
 
-  const handleSubmit = () => {
-    if (!form.div_code) return setError("Division is required");
-    if (!form.ac_code) return setError("A/c Code is required");
-    if (!form.curr_code) return setError("Currency is required");
-    return runAction("submit", async () => {
-      await runWorkflow("SUBMITTED", PO_DOC_TYPE.PQA, form, rows, user?.company_code, user?.loginid || user?.username);
-    }, editMode ? "Purchase Quotation updated successfully" : "Purchase Quotation created successfully");
-  };
+const handleSaveAsDraft = () => {
+  if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before saving as draft");
+  return runAction("draft", async () => {
+    await runWorkflow("SAVEASDRAFT", PO_DOC_TYPE.PQA, form, rows, user?.company_code, user?.loginid || user?.username);
+  }, "Purchase Quotation saved as draft");
+};
 
+const handleSubmit = () => {
+  if (!form.div_code) return setError("Division is required");
+  if (!form.ac_code) return setError("A/c Code is required");
+  if (!form.curr_code) return setError("Currency is required");
+  if (rows.length === 0 || !hasValidLines) return setError("Add at least one line item before submitting");
+  return runAction("submit", async () => {
+    await runWorkflow("SUBMITTED", PO_DOC_TYPE.PQA, form, rows, user?.company_code, user?.loginid || user?.username);
+  }, editMode ? "Purchase Quotation updated successfully" : "Purchase Quotation created successfully");
+};
   const handleCancel = () =>
     runAction("cancel", async () => {
       await runWorkflow("CANCELED", PO_DOC_TYPE.PQA, form, rows, user?.company_code, user?.loginid || user?.username);
@@ -421,7 +430,7 @@ export function PurchaseQuotationEditor({
                   <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
                 </>
               )}
-                <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
+              <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
                 <Paperclip size={15} /> Files
               </Button>
               <Button aria-label="Close" type="button" variant="secondary" size="icon" onClick={onClose}><X size={16} /></Button>
@@ -477,16 +486,16 @@ export function PurchaseQuotationEditor({
           )}
         </CardContent>
 
-       
+
         <div className="flex items-center justify-between gap-3 border-t bg-secondary/60 px-4 py-2">
           <div className="flex flex-wrap gap-3 rounded-2xl bg-gray-50 p-5 shadow-inner">
-           { isPendingTab && (
-             <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
+            {isPendingTab && (
+              <Button type="button" onClick={handleSaveAsDraft} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-blue-600 hover:bg-blue-700 shadow-md disabled:opacity-60">
                 {actionLoading === "draft" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                 {actionLoading === "draft" ? "Saving..." : "Save Draft"}
               </Button>
             )}
-          { isPendingTab && <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
+            {isPendingTab && <Button type="button" onClick={handleSubmit} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-green-600 hover:bg-green-700 shadow-md disabled:opacity-60">
               {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
               {actionLoading === "submit" ? "Submitting..." : "Submit"}
             </Button>}
@@ -502,10 +511,10 @@ export function PurchaseQuotationEditor({
                 {actionLoading === "reject" ? "Rejecting..." : "Reject"}
               </Button>
             )}
-{isPendingTab &&
-            <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
-              {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
-            </Button>}
+            {isPendingTab &&
+              <Button type="button" onClick={handleCancel} disabled={actionDisabled || actionBarBusy} className="rounded-full bg-orange-500 hover:bg-orange-600 shadow-md disabled:opacity-60">
+                {actionLoading === "cancel" ? "Cancelling..." : "Cancel"}
+              </Button>}
           </div>
           <div className="flex items-center gap-2">
             <Button aria-label="Print" type="button" variant="outline" size="icon" disabled={actionDisabled}><Printer size={15} /></Button>
@@ -546,7 +555,7 @@ export function PurchaseQuotationEditor({
         onConfirm={confirmReject}
       />
 
-       <AttachmentDialog
+      <AttachmentDialog
         open={attachmentOpen}
         onClose={() => setAttachmentOpen(false)}
         requestNumber={form.doc_no ? String(form.doc_no) : ""}

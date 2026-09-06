@@ -105,7 +105,7 @@ export function PurchaseGrnDetailsTable({
             <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
                 <div>
                     <p className="eyebrow m-0">Lines</p>
-                    <h3 className="m-0 text-sm font-semibold leading-tight">Purchase Order Lines</h3>
+                    <h3 className="m-0 text-sm font-semibold leading-tight"></h3>
                 </div>
                 {/* <div className="flex items-center gap-2">
                     <Button disabled={headerAndLineDisabled} size="sm" type="button" variant="outline" onClick={addRow}>
@@ -117,23 +117,23 @@ export function PurchaseGrnDetailsTable({
                 <table className="finance-lines-table w-full min-w-[1500px] text-sm" style={{ tableLayout: "fixed" }}>
                     <thead className="text-xs text-primary-foreground">
                         <tr>
-                            <th className="finance-sticky-col px-1 py-1 text-left" style={plainHeaderStyle(0.5)}>SNo</th>
-                            <th className="finance-sticky-col px-1 py-1 text-left" style={plainHeaderStyle(1)}>Div</th>
-                            <th className="finance-sticky-col px-2 py-2 text-left" style={plainHeaderStyle(50)}>Product Code</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-64" style={plainHeaderStyle(5)}>P Uom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle(10)}>Qty Puom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle(10)}>L Uom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-20" style={plainHeaderStyle(10)}>Qty Luom</th>
-                            <th className="px-2 py-2 text-left w-24 sticky top-0 z-[3] bg-primary" style={plainHeaderStyle(10)}>Uppp</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle(10)}>Unit Price</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle(20)}>Quantity</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-64" style={plainHeaderStyle(10)}>Recevied P Uom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle(10)}>Recevied Qty Puom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-24" style={plainHeaderStyle(10)}>Recevied L Uom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-20" style={plainHeaderStyle(10)}>Recevied Qty Luom</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-28" style={plainHeaderStyle(10)}>Recevied Quantity</th>
-                            <th className="finance-amount-cell px-2 py-2 text-left w-40" style={plainHeaderStyle(40)}>Remarks</th>
-                            <th className="px-2 py-2 text-left w-16" style={plainHeaderStyle(10)}>Action</th>
+                            <th className="finance-sticky-col px-1 py-1 text-center" style={plainHeaderStyle(0.5)}>SNo</th>
+                            <th className="finance-sticky-col px-1 py-1 text-center" style={plainHeaderStyle(1)}>Div</th>
+                            <th className="finance-sticky-col px-2 py-2 text-center" style={plainHeaderStyle(50)}>Product Code</th>
+                            <th className="finance-amount-cell px-2 py-2 text-center w-64" style={plainHeaderStyle(5)}>P Uom</th>
+                            <th className="finance-amount-cell px-2 py-2 text-center w-24" style={plainHeaderStyle(10)}>Qty Puom</th>
+                            <th className="finance-amount-cell px-2 py-2 text-center w-24" style={plainHeaderStyle(10)}>L Uom</th>
+                            <th className="finance-amount-cell px-2 py-2 text-center w-20" style={plainHeaderStyle(10)}>Qty Luom</th>
+                            <th className="px-2 py-2 text-center w-24 sticky top-0 z-[3] bg-primary" style={plainHeaderStyle(10)}>Uppp</th>
+                            <th className="finance-amount-cell px-2 py-2 text-center w-28" style={plainHeaderStyle(10)}>Unit Price</th>
+                            <th className="finance-amount-cell px-2 py-2 text-center w-28" style={plainHeaderStyle(20)}>Quantity</th>
+                            <th className="finance-amount-cell px-2 py-2 text-center w-64" style={plainHeaderStyle(10)}>Recevied P Uom</th>
+                            <th className="finance-amount-cell px-2 py-2 text-center w-24" style={plainHeaderStyle(10)}>Recevied Qty Puom</th>
+                            <th className="finance-amount-cell px-2 py-2 text-center w-24" style={plainHeaderStyle(10)}>Recevied L Uom</th>
+                            <th className="finance-amount-cell px-2 py-2 text-center w-20" style={plainHeaderStyle(10)}>Recevied Qty Luom</th>
+                            <th className="finance-amount-cell px-2 py-2 text-center w-28" style={plainHeaderStyle(10)}>Recevied Quantity</th>
+                            <th className="finance-amount-cell px-2 py-2 text-center w-40" style={plainHeaderStyle(40)}>Remarks</th>
+                            <th className="px-2 py-2 text-center w-16" style={plainHeaderStyle(10)}>Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -203,11 +203,12 @@ export function PurchaseGrnDetailsTable({
                                     <td className="finance-amount-cell px-2 py-1">
                                         <Input
                                             className="finance-money-input"
-                                            disabled={headerAndLineDisabled || sameUom}
+                                            disabled={headerAndLineDisabled}
                                             type="number"
                                             style={{ textAlign: "right" }}
                                             step="0.001"
-                                            value={sameUom ? 0 : row.po_qty_puom}
+                                            value={row.po_qty_puom}
+
                                             onChange={(event) => {
                                                 const newQtyPuom = Number(event.target.value || 0);
 
@@ -235,11 +236,11 @@ export function PurchaseGrnDetailsTable({
                                     <td className="finance-amount-cell w-24 px-2 py-1">
                                         <Input
                                             className="finance-money-input"
-                                            disabled={headerAndLineDisabled}
+                                            disabled={headerAndLineDisabled || sameUom}
                                             type="number"
                                             style={{ textAlign: "right" }}
                                             step="0.001"
-                                            value={row.po_qty_luom}
+                                            value={sameUom ? 0 : row.po_qty_luom}
                                             onChange={(event) => {
                                                 const newQtyLuom = Number(event.target.value || 0);
 
@@ -291,11 +292,12 @@ export function PurchaseGrnDetailsTable({
                                     <td className="finance-amount-cell px-2 py-1">
                                         <Input
                                             className="finance-money-input"
-                                            disabled={headerAndLineDisabled || sameUom}
+                                            disabled={headerAndLineDisabled}
                                             type="number"
                                             style={{ textAlign: "right" }}
                                             step="0.001"
-                                            value={sameUom ? 0 : row.qty_puom}
+                                            value={row.qty_puom}
+
                                             onChange={(event) => {
                                                 const newQtyPuom = Number(event.target.value || 0);
 
@@ -323,11 +325,11 @@ export function PurchaseGrnDetailsTable({
                                     <td className="finance-amount-cell w-24 px-2 py-1">
                                         <Input
                                             className="finance-money-input"
-                                            disabled={headerAndLineDisabled}
+                                            disabled={headerAndLineDisabled || sameUom}
                                             type="number"
                                             style={{ textAlign: "right" }}
                                             step="0.001"
-                                            value={row.qty_luom}
+                                            value={sameUom ? 0 : row.qty_luom}
                                             onChange={(event) => {
                                                 const newQtyLuom = Number(event.target.value || 0);
 
@@ -359,7 +361,7 @@ export function PurchaseGrnDetailsTable({
                     </tbody>
                 </table>
             </div>
-            <div className="grid grid-cols-2 gap-x-8 gap-y-1 border-t px-3 py-2 text-sm max-md:grid-cols-1">
+            {/* <div className="grid grid-cols-2 gap-x-8 gap-y-1 border-t px-3 py-2 text-sm max-md:grid-cols-1">
                 <div className="flex items-center justify-end gap-8">
                     <span className="text-muted-foreground">Total Qty (Puom)</span>
                     <strong>{totalQtyPuom.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</strong>
@@ -388,7 +390,7 @@ export function PurchaseGrnDetailsTable({
                     <span className="font-semibold text-muted-foreground">Total</span>
                     <strong className="text-base text-emerald-600">{formatAmount(finalTotal)}</strong>
                 </div>
-            </div>
+            </div> */}
         </div>
     );
 }

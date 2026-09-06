@@ -61,7 +61,7 @@ export function PurchaseInvoiceHeaderForm({
             <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1">
                 <div>
                     <p className="eyebrow m-0 text-[10px] leading-tight">Header</p>
-                    <h3 className="m-0 text-xs font-semibold leading-tight">Purchase Order Information</h3>
+                    <h3 className="m-0 text-xs font-semibold leading-tight"></h3>
                 </div>
             </div>
 
@@ -228,11 +228,11 @@ export function PurchaseInvoiceHeaderForm({
                                             quantity: numberOrZero(getLookupValue(item, "quantity")),
                                             ex_rate: numberOrZero(getLookupValue(item, "ex_rate")),
                                             porder_tx_compnt_amt_1: text(getLookupValue(item, "porder_tx_compnt_amt_1")),
-                                            porder_tx_compnt_perc_1:text(getLookupValue(item, "porder_tx_compnt_perc_1")),
+                                           tx_compnt_perc_1: numberOrZero(getLookupValue(item, "tx_compnt_perc_1")),
                                             porder_tx_cat_code: text(getLookupValue(item, "porder_tx_cat_code")),
                                             porder_tx_compntcat_code_1: text(getLookupValue(item, "porder_tx_compntcat_code_1")),
                                              porder_required_dt: text(getLookupValue(item, "porder_required_dt")),
-                                             porder_tx_compnt_1_expmt:text(getLookupValue(item, "porder_tx_compnt_1_expmt")),
+                                            tx_compnt_1_expmt:text(getLookupValue(item, "tx_compnt_1_expmt")),
                                              porder_remarks:text(getLookupValue(item, "porder_remarks")),
                                              serial_no: numberOrZero(getLookupValue(item, "serial_no")),
                                             
