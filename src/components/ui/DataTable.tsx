@@ -21,6 +21,7 @@ import { ExportCSVButton } from "./ExportCSVButton";
 import { Input } from "./Input";
 import { Skeleton } from "./Skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./Table";
+import { BiscDatePicker } from "./BiscDatePicker";
 
 export type DataTableDensity = "grid" | "compact" | "comfortable" | "large";
 
@@ -241,7 +242,7 @@ export function DataTable<TData, TValue>({
   const showExport = enableExport ?? Boolean(onSearchChange || enablePagination || manualPagination);
   const skeletonRows = useMemo(() => Array.from({ length: Math.min(pageSize, 100) }), [pageSize]);
   const heightValue = typeof height === "number" ? `${height}px` : height;
-  const responsiveMinWidth = minWidth ?? Math.max(760, enhancedColumns.length * 140);
+  const responsiveMinWidth = minWidth ?? (enhancedColumns.length > 14 ? Math.max(760, enhancedColumns.length * 110) : "100%");
   const minWidthValue = typeof responsiveMinWidth === "number" ? `${responsiveMinWidth}px` : responsiveMinWidth;
   const pageCount = manualPagination ? Math.max(1, Math.ceil((totalRows ?? data.length) / Math.max(pageSize, 1))) : table.getPageCount() || 1;
   const currentPageIndex = manualPagination ? pageIndex : table.getState().pagination.pageIndex;
@@ -250,6 +251,20 @@ export function DataTable<TData, TValue>({
   const lastVisibleRow = Math.min(effectiveTotalRows, currentPageIndex * pageSize + visibleRows.length);
   const canPreviousPage = currentPageIndex > 0;
   const canNextPage = currentPageIndex < pageCount - 1;
+  const totalPages = Math.max(pageCount, 1);
+  const pageNumbers = useMemo(() => {
+    const pages: number[] = [];
+    if (totalPages <= 5) {
+      for (let i = 0; i < totalPages; i += 1) pages.push(i);
+    } else if (currentPageIndex <= 2) {
+      pages.push(0, 1, 2, -1, totalPages - 1);
+    } else if (currentPageIndex >= totalPages - 3) {
+      pages.push(0, -1, totalPages - 3, totalPages - 2, totalPages - 1);
+    } else {
+      pages.push(0, -1, currentPageIndex - 1, currentPageIndex, currentPageIndex + 1, -1, totalPages - 1);
+    }
+    return pages;
+  }, [currentPageIndex, totalPages]);
   const goToPage = (nextPageIndex: number) => {
     const boundedPageIndex = Math.min(Math.max(nextPageIndex, 0), Math.max(pageCount - 1, 0));
     if (manualPagination) {
@@ -320,21 +335,31 @@ export function DataTable<TData, TValue>({
   };
 
   return (
-    <div className="data-table-wrap grid w-full min-w-0 max-w-full gap-2">
-      <div className="data-table-shell w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-[#aebbd0] bg-card shadow-[0_8px_22px_rgba(15,23,42,0.07)]">
+    <div className="data-table-wrap grid w-full min-w-0 max-w-full gap-2 font-sans">
       {(onSearchChange || toolbar || enableColumnVisibility || showExport) && (
-        <div className="data-table-header grid gap-2 border-b border-[#c7d2e3] bg-white px-3 py-2">
-          <div className="data-table-actions flex w-full flex-wrap items-center justify-between gap-2">
+        <div className="data-table-header flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card p-2 px-3 shadow-sm">
+          <div className="data-table-actions flex w-full flex-wrap items-center justify-between gap-3">
             {onSearchChange && (
-              <label className="data-table-search flex h-10 w-full min-w-[260px] max-w-[520px] items-center gap-2 rounded-full border border-[#aebbd0] bg-[#fbfdff] px-3 text-muted-foreground shadow-inner">
-                <Search size={16} />
-                <Input
-                  className="h-8 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                <input
+                  type="text"
                   value={globalFilter ?? ""}
                   onChange={(event) => table.setGlobalFilter(event.target.value)}
-                  placeholder={searchPlaceholder}
+                  placeholder={searchPlaceholder || "Search...."}
+                  className="data-table-search-input w-full h-9 pl-9 pr-8 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary text-[13px] transition-all"
                 />
-              </label>
+                {globalFilter ? (
+                  <button
+                    onClick={() => table.setGlobalFilter("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer text-xs leading-none"
+                    type="button"
+                    aria-label="Clear search"
+                  >
+                    ✕
+                  </button>
+                ) : null}
+              </div>
             )}
             {enableColumnVisibility && (
               <details className="relative">
@@ -368,9 +393,11 @@ export function DataTable<TData, TValue>({
               />
             )}
             {!onSearchChange && !toolbar && !showExport && <span className="min-h-1 flex-1" />}
-            </div>
+          </div>
         </div>
       )}
+
+      <div className="data-table-shell w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
 
       <div
         ref={topScrollRef}
@@ -412,7 +439,7 @@ export function DataTable<TData, TValue>({
           style={{ maxHeight: heightValue, overflowX: "auto" }}
           onScroll={syncTopScroll}
         >
-          <Table style={{ minWidth: minWidthValue, width: `max(100%, ${minWidthValue})` }}>
+          <Table style={{ minWidth: minWidthValue === "100%" ? undefined : minWidthValue, width: "100%" }}>
             {/* STANDARD WIDE-TABLE PATTERN — sticky header stays visible on
                 vertical scroll. z-20 so it sits above sticky body columns
                 (z-10) at the header/body seam. */}
@@ -429,7 +456,8 @@ export function DataTable<TData, TValue>({
                       <TableHead
                         key={header.id}
                         style={{
-                          width: header.getSize() || undefined,
+                          width: header.column.columnDef.size ? `${header.column.columnDef.size}px` : undefined,
+                          minWidth: header.column.columnDef.minSize ? `${header.column.columnDef.minSize}px` : undefined,
                           boxShadow: stickLeft ? STICKY_LEFT_SHADOW : stickRight ? STICKY_RIGHT_SHADOW : undefined,
                         }}
                         className={cn(
@@ -534,31 +562,79 @@ export function DataTable<TData, TValue>({
       </div>
 
       {enablePagination && (
-        <div className="data-table-pagination flex flex-wrap items-center justify-between gap-3 border-t border-[#c7d2e3] bg-white px-3 py-2 text-sm text-muted-foreground">
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="data-table-pagination flex flex-wrap items-center justify-between gap-3 border-t border-[#e2e8f0] bg-white px-4 py-2.5 text-xs text-muted-foreground font-sans">
+          <div className="flex flex-wrap items-center gap-1.5">
             <span>
-              Showing <strong className="text-foreground">{firstVisibleRow}-{lastVisibleRow}</strong> of <strong className="text-foreground">{effectiveTotalRows.toLocaleString()}</strong>
+              {effectiveTotalRows === 0 ? (
+                <span>Showing 0 records</span>
+              ) : (
+                <span>
+                  Showing <span className="font-semibold text-foreground">{firstVisibleRow}</span>–
+                  <span className="font-semibold text-foreground">{lastVisibleRow}</span> of{" "}
+                  <span className="font-semibold text-foreground">{effectiveTotalRows.toLocaleString()}</span> {effectiveTotalRows === 1 ? "record" : "records"}
+                </span>
+              )}
             </span>
           </div>
           <div className="data-table-pager flex items-center gap-2">
-            <label className="flex items-center gap-2 text-xs">
-              Show
+            <ul className="flex items-center gap-1 m-0 p-0 list-none">
+              <li>
+                <button
+                  type="button"
+                  className="px-2 py-1 text-xs rounded-md border border-[#cbd5e1] text-[#64748b] hover:bg-[#f1f5f9] transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  disabled={!canPreviousPage}
+                  onClick={() => goToPage(currentPageIndex - 1)}
+                  title="Previous Page"
+                >
+                  {"<"}
+                </button>
+              </li>
+
+              {pageNumbers.map((page, idx) => (
+                <li key={`${page}-${idx}`}>
+                  {page === -1 ? (
+                    <span className="px-2 py-1 text-xs text-[#94a3b8]">...</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className={cn(
+                        "px-2.5 py-1 text-xs rounded-md border font-medium transition-colors cursor-pointer min-w-[28px]",
+                        currentPageIndex === page
+                          ? "bg-[#00378C] text-white border-[#00378C] shadow-sm font-semibold"
+                          : "border-[#cbd5e1] text-[#64748b] hover:bg-[#f1f5f9]",
+                      )}
+                      onClick={() => goToPage(page)}
+                    >
+                      {page + 1}
+                    </button>
+                  )}
+                </li>
+              ))}
+
+              <li>
+                <button
+                  type="button"
+                  className="px-2 py-1 text-xs rounded-md border border-[#cbd5e1] text-[#64748b] hover:bg-[#f1f5f9] transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  disabled={!canNextPage}
+                  onClick={() => goToPage(currentPageIndex + 1)}
+                  title="Next Page"
+                >
+                  {">"}
+                </button>
+              </li>
+            </ul>
+
+            <label className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
               <select
-                className="h-8 rounded-md border border-[#aebbd0] bg-background px-2 text-xs font-medium text-foreground"
+                className="h-7 rounded-md border border-[#cbd5e1] bg-white px-2 text-xs font-medium text-[#1e293b] focus:outline-none focus:ring-1 focus:ring-[#00378C] cursor-pointer"
                 value={pageSize}
                 onChange={(event) => changePageSize(Number(event.target.value))}
               >
-                {[50, 100, 250, 500].map((size) => (
-                  <option value={size} key={size}>{size}</option>
+                {[10, 20, 30, 50, 100].map((size) => (
+                  <option value={size} key={size}>Show {size}</option>
                 ))}
               </select>
             </label>
-            <div className="flex items-center gap-1">
-              <Button size="icon" variant="outline" disabled={!canPreviousPage} onClick={() => goToPage(0)}><ChevronsLeft size={15} /></Button>
-              <Button size="icon" variant="outline" disabled={!canPreviousPage} onClick={() => goToPage(currentPageIndex - 1)}><ChevronLeft size={15} /></Button>
-              <Button size="icon" variant="outline" disabled={!canNextPage} onClick={() => goToPage(currentPageIndex + 1)}><ChevronRight size={15} /></Button>
-              <Button size="icon" variant="outline" disabled={!canNextPage} onClick={() => goToPage(pageCount - 1)}><ChevronsRight size={15} /></Button>
-            </div>
           </div>
         </div>
       )}
@@ -592,12 +668,12 @@ function ColumnFilterButton<TData, TValue>({
     if (!rect) return;
     const workspaceRect = document.querySelector(".workspace-main")?.getBoundingClientRect();
     const contentLeft = (workspaceRect?.left ?? 0) + 12;
-    const popupWidth = 196;
-    const popupHeight = 118;
-    const preferredLeft = rect.left;
-    const maxLeft = window.innerWidth - popupWidth - 12;
+    const popupWidth = 260;
+    const popupHeight = 220;
+    const preferredLeft = rect.left - 20;
+    const maxLeft = window.innerWidth - popupWidth - 16;
     const left = Math.min(maxLeft, Math.max(contentLeft, preferredLeft));
-    const top = Math.min(window.innerHeight - popupHeight - 12, Math.max(12, rect.bottom + 8));
+    const top = Math.min(window.innerHeight - popupHeight - 12, Math.max(12, rect.bottom + 6));
     setPosition({ left, top });
   };
 
@@ -658,67 +734,131 @@ function ColumnFilterPopup({
   onChange: (value: unknown) => void;
   onClose: () => void;
 }) {
+  const popoverRef = useRef<HTMLDivElement | null>(null);
   const textValue = typeof value === "string" ? value : "";
   const dateValue = (typeof value === "object" && value ? value : {}) as { from?: string; to?: string };
+  const [tempText, setTempText] = useState(textValue);
+  const [tempFrom, setTempFrom] = useState(dateValue.from || "");
+  const [tempTo, setTempTo] = useState(dateValue.to || "");
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (popoverRef.current && !popoverRef.current.contains(target)) {
+        if (target.closest?.(".bisc-date-picker-portal") || target.closest?.("[data-bisc-calendar]")) {
+          return;
+        }
+        onClose();
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [onClose]);
+
   return (
     <div
-      className="data-table-filter-popover fixed z-[90] grid w-[228px] gap-2 rounded-lg border border-[#9fb0c8] bg-white p-3 text-xs normal-case text-foreground shadow-[0_18px_42px_rgba(15,23,42,0.22)] ring-1 ring-slate-900/5"
+      ref={popoverRef}
+      className="data-table-filter-popover fixed z-[90] w-[260px] p-3.5 space-y-2.5 rounded-2xl border border-border bg-card text-xs normal-case text-foreground shadow-xl shadow-primary/10 font-sans"
       style={{ left: position.left, top: position.top }}
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
         if (event.key === "Escape") onClose();
       }}
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-semibold leading-none text-foreground">{isDate ? "Date filter" : "Column filter"}</span>
-        <button type="button" className="grid h-5 w-5 place-items-center rounded hover:bg-accent" onClick={onClose} aria-label="Close filter">
-          <X size={12} />
-        </button>
-      </div>
       {isDate ? (
-        <div className="grid gap-2">
-          <label className="grid gap-1 text-[11px] font-medium text-muted-foreground">
-            From
-            <span className="flex h-8 items-center gap-2 rounded-md border border-[#b6c3d6] bg-[#fbfdff] px-2">
-              <CalendarDays size={13} />
-              <Input
-                autoFocus
-                type="date"
-                className="h-7 border-0 bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
-                value={dateValue.from || ""}
-                onChange={(event) => onChange({ ...dateValue, from: event.target.value })}
-              />
-            </span>
-          </label>
-          <label className="grid gap-1 text-[11px] font-medium text-muted-foreground">
-            To
-            <span className="flex h-8 items-center gap-2 rounded-md border border-[#b6c3d6] bg-[#fbfdff] px-2">
-              <CalendarDays size={13} />
-              <Input
-                type="date"
-                className="h-7 border-0 bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
-                value={dateValue.to || ""}
-                onChange={(event) => onChange({ ...dateValue, to: event.target.value })}
-              />
-            </span>
-          </label>
+        <div className="space-y-2.5">
+          <div className="space-y-1">
+            <label className="text-[12px] font-medium text-slate-500">
+              From
+            </label>
+            <BiscDatePicker
+              value={tempFrom}
+              onChange={setTempFrom}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[12px] font-medium text-slate-500">
+              To
+            </label>
+            <BiscDatePicker
+              value={tempTo}
+              onChange={setTempTo}
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
+            <button
+              type="button"
+              className="px-3 py-1.5 rounded-sm border border-border bg-card text-foreground hover:bg-secondary transition-colors font-medium cursor-pointer text-xs"
+              onClick={() => {
+                setTempFrom("");
+                setTempTo("");
+                onChange(undefined);
+                onClose();
+              }}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              className="px-3.5 py-1.5 rounded-sm bg-[#00378C] text-white transition-all hover:opacity-90 shadow-md shadow-[#00378C]/20 font-medium cursor-pointer text-xs"
+              onClick={() => {
+                let nextValue: { from?: string; to?: string } | undefined;
+                if (tempFrom && tempTo) {
+                  nextValue = { from: tempFrom, to: tempTo };
+                } else if (tempFrom) {
+                  nextValue = { from: tempFrom };
+                } else if (tempTo) {
+                  nextValue = { to: tempTo };
+                }
+                onChange(nextValue);
+                onClose();
+              }}
+            >
+              Apply Range
+            </button>
+          </div>
         </div>
       ) : (
-        <label className="flex h-8 items-center gap-1 rounded-md border border-[#b6c3d6] bg-[#fbfdff] px-2 text-muted-foreground">
-          <Search size={13} />
-          <Input
-            autoFocus
-            className="h-7 border-0 bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
-            value={textValue}
-            onChange={(event) => onChange(event.target.value)}
-            placeholder="Contains..."
-          />
-        </label>
+        <div className="space-y-2.5">
+          <div className="space-y-1">
+            <label className="text-[12px] font-medium text-slate-500">
+              Search
+            </label>
+            <Input
+              autoFocus
+              className="w-full h-8 px-2.5 rounded-lg border border-border bg-slate-100 text-foreground text-xs shadow-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:border-primary transition-all"
+              value={tempText}
+              onChange={(e) => setTempText(e.target.value)}
+              placeholder="Enter value..."
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
+            <button
+              type="button"
+              className="px-3 py-1.5 rounded-sm border border-border bg-card text-foreground hover:bg-secondary transition-colors font-medium cursor-pointer text-xs"
+              onClick={() => {
+                setTempText("");
+                onChange("");
+                onClose();
+              }}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              className="px-3.5 py-1.5 rounded-sm bg-[#00378C] text-white transition-all hover:opacity-90 shadow-md shadow-[#00378C]/20 font-medium cursor-pointer text-xs"
+              onClick={() => {
+                onChange(tempText || undefined);
+                onClose();
+              }}
+            >
+              Apply Filter
+            </button>
+          </div>
+        </div>
       )}
-      <div className="flex justify-end gap-1">
-        <Button size="sm" variant="ghost" type="button" onClick={() => onChange(isDate ? undefined : "")}>Clear</Button>
-        <Button size="sm" type="button" onClick={onClose}>Done</Button>
-      </div>
     </div>
   );
 }
