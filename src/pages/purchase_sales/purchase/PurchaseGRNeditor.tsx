@@ -5,7 +5,7 @@ import { Button } from "../../../components/ui/Button";
 import { CardContent, CardHeader } from "../../../components/ui/Card";
 import { AutoDismissAlert } from "../../../components/ui/AutoDismissAlert";
 import { getDynamicLookup } from "../../../api/lookups";
-import { openGrnPrintReport } from "../../../api/transactions";
+import { exportGrnPrintReportExcel, openGrnPrintReport,  } from "../../../api/transactions";
 import { useAuth } from "../../../state/AuthContext";
 import { toDateInputValue } from "../../hr/leaveEncashmentHelpers";
 
@@ -70,6 +70,7 @@ export function PurchaseGRNEditor({
   const [actionLoading, setActionLoading] = useState<ActionKey | null>(null);
 
   const [printing, setPrinting] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
 
   const [sendBackDialogOpen, setSendBackDialogOpen] = useState(false);
   const [sendBackUser, setSendBackUser] = useState("");
@@ -269,6 +270,28 @@ export function PurchaseGRNEditor({
     }
   };
 
+  const handleExportGrnExcel = async () => {
+    if (!form.doc_no) {
+      setError("Save the GRN before exporting to Excel");
+      return;
+    }
+    setExportingExcel(true);
+    setError("");
+    try {
+      await exportGrnPrintReportExcel({
+        parameter: "GRN_Print",
+        loginid: user?.loginid || user?.username || "ADMIN",
+        company_code: user?.company_code,
+        doc_type: PO_DOC_TYPE.GRN,
+        doc_no: form.doc_no,
+      } as any);
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : "Error while exporting to Excel");
+    } finally {
+      setExportingExcel(false);
+    }
+  };
+
   const openRejectDialog = () => {
     setRejectError("");
     setRejectReason("");
@@ -386,7 +409,17 @@ export function PurchaseGRNEditor({
                   <Button type="button" variant="secondary" onClick={handlePrintGrn} disabled={printing}>
                     {printing ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />} Print
                   </Button>
-                  <Button aria-label="Excel" type="button" variant="secondary" size="icon"><Download size={15} /></Button>
+                  <Button
+                    aria-label="Excel"
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    onClick={handleExportGrnExcel}
+                    disabled={exportingExcel}
+                    title="Download Excel"
+                  >
+                    {exportingExcel ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+                  </Button>
                 </>
               )}
               <Button type="button" variant="secondary" onClick={() => setAttachmentOpen(true)}>
@@ -480,7 +513,17 @@ export function PurchaseGRNEditor({
               {printing ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />}
             </Button>
             <Button aria-label="Attachment" type="button" variant="outline" size="icon" disabled={actionDisabled}><Paperclip size={15} /></Button>
-            <Button aria-label="Download" type="button" variant="outline" size="icon" disabled={actionDisabled}><Download size={15} /></Button>
+            <Button
+              aria-label="Download"
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={handleExportGrnExcel}
+              disabled={actionDisabled || exportingExcel}
+              title="Download Excel"
+            >
+              {exportingExcel ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+            </Button>
             <Button type="button" variant="outline" onClick={onClose}>Close</Button>
           </div>
         </div>

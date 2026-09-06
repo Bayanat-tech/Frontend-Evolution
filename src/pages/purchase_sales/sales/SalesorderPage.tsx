@@ -1,7 +1,7 @@
 import { Download, Edit2, Plus, Printer, RefreshCw } from "lucide-react";
 import type { ColumnDef, ColumnFiltersState } from "@tanstack/react-table";
 import { useEffect, useMemo, useState } from "react";
-import { Division, getDivisions, getSoOrderReportExcel, getSoOrderReportHtml } from "../../../api/transactions";
+import { Division, getDivisions, getSoOrderReportExcel, getSOrderReportHtml } from "../../../api/transactions";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
 import { DataTable } from "../../../components/ui/DataTable";
@@ -126,9 +126,10 @@ const [printReportHtml, setPrintReportHtml] = useState<string | null>(null);
   setPrintLoading(true);
   setPrintReportHtml(null);
   try {
-    const html = await getSoOrderReportHtml({
-      prin_code: user?.company_code,
-      order_no: row.doc_no,
+    const html = await getSOrderReportHtml({
+      company_code: user?.company_code,
+      doc_type: row.doc_type,
+      doc_no: row.doc_no,
     });
     setPrintReportHtml(html);
   } catch (error) {
@@ -141,8 +142,9 @@ const [printReportHtml, setPrintReportHtml] = useState<string | null>(null);
 const handleExportSalesOrder = async (row: SalesOrderRow) => {
   try {
     await getSoOrderReportExcel({
-      prin_code: user?.company_code,
-      order_no: row.doc_no,
+      company_code: user?.company_code,
+      doc_type: row.doc_type,
+      doc_no: row.doc_no,
     });
   } catch (error) {
     setNotice({ type: "error", message: error instanceof Error ? error.message : "Unable to export report" });

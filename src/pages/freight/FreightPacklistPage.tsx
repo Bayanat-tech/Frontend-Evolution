@@ -132,6 +132,21 @@ type DimensionLine = {
   prod_description: string;
 };
 
+type ContainerLine = {
+  srno: string;
+  container_no: string;
+  container_type: string;
+  t_f: string;
+  seal_no: string;
+  volume: string;
+  gross_weight: string;
+  no_of_pkgs: string;
+  puom: string;
+  contn_desc: string;
+  contn_pick_date: string;
+  bl_no: string;
+};
+
 const modeMap = {
   air: { code: "A", label: "Air", icon: Plane },
   sea: { code: "S", label: "Sea", icon: Ship },
@@ -181,6 +196,7 @@ export function FreightPacklistPage({
   const [query, setQuery] = useState("");
   const [pack, setPack] = useState<PackForm>(() => emptyPack(companyCode, userId, mode.code, direction.code));
   const [dimensions, setDimensions] = useState<DimensionLine[]>([]);
+  const [containers, setContainers] = useState<ContainerLine[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
@@ -226,6 +242,7 @@ export function FreightPacklistPage({
   useEffect(() => {
     setPack(emptyPack(companyCode, userId, mode.code, direction.code));
     setDimensions([]);
+    setContainers([]);
     setView(startMode);
     setEditing(!readOnly && startMode === "editor");
   }, [companyCode, direction.code, mode.code, readOnly, startMode, userId]);
@@ -262,6 +279,7 @@ export function FreightPacklistPage({
     }
     setPack(emptyPack(companyCode, userId, mode.code, direction.code));
     setDimensions([]);
+    setContainers([]);
     setNotice(null);
     setEditing(true);
     setView("editor");
@@ -291,6 +309,7 @@ export function FreightPacklistPage({
       };
     });
     setDimensions([]);
+    setContainers([]);
     setNotice(null);
     setEditing(true);
   }, [companyCode, direction.code, mode.code, notify, readOnly, userId]);
@@ -328,6 +347,7 @@ export function FreightPacklistPage({
       }
 
       setPack(toPackDraftFromJob(normalized, companyCode, userId, mode.code, direction.code));
+      setContainers([]);
       if (mode.code === "A") await loadDimensions(normalized);
       else setDimensions([]);
       setEditing(!readOnly);
@@ -335,6 +355,7 @@ export function FreightPacklistPage({
     } catch (error: any) {
       setPack(toPackDraftFromJob(normalized, companyCode, userId, mode.code, direction.code));
       setDimensions([]);
+      setContainers([]);
       setEditing(!readOnly);
       setView("editor");
       notify({ type: "error", text: error?.response?.data?.details || error?.response?.data?.message || "Unable to check existing pack list; opened new draft." });
@@ -353,7 +374,10 @@ export function FreightPacklistPage({
         job_no: lookupText(row, "job_no"),
         packlist_no: lookupText(row, "packlist_no"),
       });
-      setPack(toPackForm(normalizeLookupRow(response.data.data || row), companyCode, userId, mode.code, direction.code));
+      const packRow = normalizeLookupRow(response.data.data || row);
+      setPack(toPackForm(packRow, companyCode, userId, mode.code, direction.code));
+      const containerRows = ((response.data.data as Record<string, unknown> | undefined)?.CONTAINERS || []) as LookupRow[];
+      setContainers(containerRows.map(toContainerLine));
       if (mode.code === "A") await loadDimensions(row);
       else setDimensions([]);
       setEditing(false);
@@ -397,26 +421,24 @@ export function FreightPacklistPage({
     setSaving(true);
     setNotice(null);
     try {
+      const containerSummary = containers.map((row) => row.container_no.trim()).filter(Boolean).join(",\r\n");
       const payload = {
         ...pack,
+        container_no: mode.code === "S" ? containerSummary : pack.container_no,
         packlist_no: pack.is_new_packlist ? null : pack.packlist_no,
         seq_number: pack.is_new_packlist ? null : pack.seq_number,
       };
-      const response = await api.post<{ success?: boolean; data?: { packlist_no?: string | number; seq_number?: string }; message?: string }>("/api/freight/packlist/save", { packlist: payload });
-      if (isAir && pack.job_no && pack.prin_code) {
-        await api.post("/api/freight/packlist/dimensions/save", {
-          company_code: companyCode,
-          prin_code: pack.prin_code,
-          job_no: pack.job_no,
-          user_id: userId,
-          lines: dimensions,
-        });
-      }
+      const response = await api.post<{ success?: boolean; data?: { packlist_no?: string | number; seq_number?: string }; message?: string }>("/api/freight/packlist/save", {
+        packlist: payload,
+        ...(mode.code === "S" ? { containers } : {}),
+        ...(isAir ? { dimensions } : {}),
+      });
       notify({ type: "success", text: response.data.message || "Pack list saved." });
       setPack((current) => ({
         ...current,
         packlist_no: String(response.data.data?.packlist_no || current.packlist_no),
         seq_number: response.data.data?.seq_number || current.seq_number,
+        container_no: mode.code === "S" ? containerSummary : current.container_no,
         is_new_packlist: false,
       }));
       await loadRows();
@@ -465,7 +487,7 @@ export function FreightPacklistPage({
 
   if (view === "list") {
     return (
-      <section className="grid gap-3">
+    <section className="freight-list-screen grid gap-3">
         <Header title={`${mode.label} ${direction.label} ${screenTitle}`} subtitle={screenSubtitle} icon={Icon} screenTitle={screenTitle}>
           {notice && <NoticeChip notice={notice} />}
           <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}><RefreshCw size={14} />Refresh</Button>
@@ -524,7 +546,7 @@ export function FreightPacklistPage({
         <div className="freight-job-section-grid">
         <Panel className="lg:col-span-12" icon={FileSignature} title="Document Reference" meta={`Pack ${pack.packlist_no || "Auto"} / ${pack.job_no || "Select job"}`}>
           <div className="freight-job-field-grid freight-job-field-grid-8">
-            <Lookup label="Freight Job" value={pack.job_no} valueField="JOB_NO" displayFields={["JOB_NO", "PRIN_CODE", "PRIN_NAME"]} columns={jobColumns} loadOptions={() => lookupJobs(companyCode, mode.code, direction.code, pack.job_no)} onChange={(value, row) => selectJob(value, row, setPack, companyCode, userId, mode.code, direction.code)} />
+            <Lookup label="Freight Job" value={pack.job_no} valueField="JOB_NO" displayFields={["JOB_NO", "PRIN_CODE", "PRIN_NAME"]} columns={jobColumns} loadOptions={() => lookupJobs(companyCode, mode.code, direction.code, pack.job_no)} onChange={(value, row) => { selectJob(value, row, setPack, companyCode, userId, mode.code, direction.code); setContainers([]); }} />
             <ReadOnlyField label="Pack No" value={pack.packlist_no || "Auto"} />
             <ReadOnlyField label="Seq No" value={pack.seq_number || "Auto"} />
             <ReadOnlyField label="Principal" value={pack.prin_code || "-"} />
@@ -539,12 +561,12 @@ export function FreightPacklistPage({
 
         <Panel className="lg:col-span-12" icon={UserRound} title="Parties" meta="Shipper / Consignee / Notify">
           <div className="freight-job-field-grid freight-job-field-grid-3">
-            <Textarea label="Shipper" value={pack.shipper_name} onChange={(value) => setPackField(setPack, "shipper_name", value)} />
-            <Textarea label="Consignee" value={pack.consignee_name} onChange={(value) => setPackField(setPack, "consignee_name", value)} />
-            <Textarea label="Notify" value={pack.notify_name} onChange={(value) => setPackField(setPack, "notify_name", value)} />
-            <Textarea label="Shipper Address" value={pack.shipper_address} onChange={(value) => setPackField(setPack, "shipper_address", value)} />
-            <Textarea label="Consignee Address" value={pack.consignee_address} onChange={(value) => setPackField(setPack, "consignee_address", value)} />
-            <Textarea label="Notify Address" value={pack.notify_address} onChange={(value) => setPackField(setPack, "notify_address", value)} />
+            <Textarea rows={2} label="Shipper Name" value={pack.shipper_name} onChange={(value) => setPackField(setPack, "shipper_name", value)} />
+            <Textarea rows={3} label="Shipper Address" value={pack.shipper_address} onChange={(value) => setPackField(setPack, "shipper_address", value)} />
+            <Textarea rows={2} label="Consignee Name" value={pack.consignee_name} onChange={(value) => setPackField(setPack, "consignee_name", value)} />
+            <Textarea rows={3} label="Consignee Address" value={pack.consignee_address} onChange={(value) => setPackField(setPack, "consignee_address", value)} />
+            <Textarea rows={2} label="Notify Name" value={pack.notify_name} onChange={(value) => setPackField(setPack, "notify_name", value)} />
+            <Textarea rows={3} label="Notify Address" value={pack.notify_address} onChange={(value) => setPackField(setPack, "notify_address", value)} />
           </div>
         </Panel>
 
@@ -558,16 +580,16 @@ export function FreightPacklistPage({
             <Field label="Net Wt" type="number" value={pack.net_wt} onChange={(value) => setPackField(setPack, "net_wt", value)} />
             <Field label="Gross Wt" type="number" value={pack.gross_wt} onChange={(value) => setPackField(setPack, "gross_wt", value)} />
             <Field label="Charge Wt" type="number" value={pack.charge_wt} onChange={(value) => setPackField(setPack, "charge_wt", value)} />
-            <Field label="FEU" type="number" value={pack.feus} onChange={(value) => setPackField(setPack, "feus", value)} />
-            <Field label="TEU" type="number" value={pack.teus} onChange={(value) => setPackField(setPack, "teus", value)} />
+            {mode.code === "S" && <Field label="FEU" type="number" value={pack.feus} onChange={(value) => setPackField(setPack, "feus", value)} />}
+            {mode.code === "S" && <Field label="TEU" type="number" value={pack.teus} onChange={(value) => setPackField(setPack, "teus", value)} />}
             <SelectField label="BL Mode" value={pack.bl_mode} options={["FCL", "LCL", "NONE"]} onChange={(value) => setPackField(setPack, "bl_mode", value)} />
             <Field label="Rate" type="number" value={pack.rate} onChange={(value) => setPackField(setPack, "rate", value)} />
-            <Field label="Amount" type="number" value={pack.amount} onChange={(value) => setPackField(setPack, "amount", value)} />
+            <Field label="Amount" type="number" value={pack.amount} onChange={(value) => setPackField(setPack, "amount", value)} readOnly />
           </div>
         </Panel>
 
         <Panel className="lg:col-span-6" icon={FileText} title="Description And Marks" meta={pack.prod_description || "Cargo description pending"}>
-          <div className="freight-job-field-grid freight-job-field-grid-2">
+          <div className="freight-job-field-grid freight-job-field-grid-2 grid gap-2.5 sm:grid-cols-2">
             <Textarea label="Marks & Nos" value={pack.marksnos} onChange={(value) => setPackField(setPack, "marksnos", value)} />
             <Textarea label="Product Description" value={pack.prod_description} onChange={(value) => setPackField(setPack, "prod_description", value)} />
             <Textarea label="Cargo Details" value={pack.cargo_details} onChange={(value) => setPackField(setPack, "cargo_details", value)} />
@@ -593,7 +615,7 @@ export function FreightPacklistPage({
               <>
                 <Field label="Vessel / Vehicle" value={pack.vessel_name} onChange={(value) => setPackField(setPack, "vessel_name", value)} />
                 <Field label="Voyage / Trip" value={pack.voyage_no} onChange={(value) => setPackField(setPack, "voyage_no", value)} />
-                <Field label="Container No" value={pack.container_no} onChange={(value) => setPackField(setPack, "container_no", value)} />
+                <Textarea rows={2} label={mode.code === "S" ? "Container Summary" : "Truck No"} value={pack.container_no} onChange={(value) => setPackField(setPack, "container_no", value)} />
                 <Field label="Size" value={pack.container_size} onChange={(value) => setPackField(setPack, "container_size", value)} />
                 <Field label="Type" value={pack.container_type} onChange={(value) => setPackField(setPack, "container_type", value)} />
                 <Field label="Import BL" value={pack.import_blno} onChange={(value) => setPackField(setPack, "import_blno", value)} />
@@ -601,6 +623,12 @@ export function FreightPacklistPage({
             )}
           </div>
         </Panel>
+
+        {mode.code === "S" && (
+          <Panel className="lg:col-span-12" icon={Ship} title="Container Details" meta={`${containers.length} container${containers.length === 1 ? "" : "s"}`}>
+            <ContainerGrid rows={containers} setRows={setContainers} />
+          </Panel>
+        )}
 
         <Panel className="lg:col-span-12" icon={FileSignature} title="Terms And Handling" meta={pack.terms_of_delivery || "Delivery terms pending"}>
           <div className="freight-job-field-grid freight-job-field-grid-4">
@@ -709,11 +737,11 @@ function Panel({ title, meta, icon: Icon, children, className = "" }: { title: s
   );
 }
 
-function Field({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
+function Field({ label, value, onChange, type = "text", readOnly = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; readOnly?: boolean }) {
   const editable = useContext(PackEditContext);
   if (!editable) return <DisplayField label={label} value={type === "date" ? formatDate(value) : value} />;
   const safeValue = type === "date" ? normalizeDateInput(value) : value;
-  return <label className="freight-compact-label">{label}<Input className="h-7 text-xs font-semibold" type={type} value={safeValue} onChange={(event) => onChange(event.target.value)} /></label>;
+  return <label className="freight-compact-label">{label}<Input className="h-7 text-xs font-semibold" type={type} value={safeValue} readOnly={readOnly} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
 function SelectField({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
@@ -722,10 +750,10 @@ function SelectField({ label, value, options, onChange }: { label: string; value
   return <label className="freight-compact-label">{label}<select className="h-7 rounded-md border bg-background px-2 text-xs font-semibold" value={value} onChange={(event) => onChange(event.target.value)}><option value="">Blank</option>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>;
 }
 
-function Textarea({ label, value, onChange, className = "" }: { label: string; value: string; onChange: (value: string) => void; className?: string }) {
+function Textarea({ label, value, onChange, className = "", rows = 2 }: { label: string; value: string; onChange: (value: string) => void; className?: string; rows?: number }) {
   const editable = useContext(PackEditContext);
   if (!editable) return <DisplayField className={className} label={label} value={value} multiline />;
-  return <label className={`freight-compact-label ${className}`}>{label}<textarea className="min-h-8 rounded-md border border-input bg-background px-2 py-1 text-xs font-semibold text-foreground shadow-sm" value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+  return <label className={`freight-compact-label ${className}`}>{label}<textarea rows={rows} className="min-h-8 rounded-md border border-input bg-background px-2 py-1 text-xs font-semibold text-foreground shadow-sm" value={value} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
 // function ReadOnlyField({ label, value }: { label: string; value: string }) {
@@ -880,12 +908,89 @@ function toDimensionLine(row: LookupRow, index: number): DimensionLine {
   return Object.fromEntries(Object.keys(base).map((key) => [key, lookupText(row, key) || (base as any)[key]])) as DimensionLine;
 }
 
+function emptyContainer(srNo: number): ContainerLine {
+  return {
+    srno: String(srNo),
+    container_no: "",
+    container_type: "STANDARD",
+    t_f: "T",
+    seal_no: "",
+    volume: "0",
+    gross_weight: "0",
+    no_of_pkgs: "",
+    puom: "",
+    contn_desc: "",
+    contn_pick_date: "",
+    bl_no: "",
+  };
+}
+
+function toContainerLine(row: LookupRow, index: number): ContainerLine {
+  const base = emptyContainer(index + 1);
+  return {
+    ...(Object.fromEntries(Object.keys(base).map((key) => [key, lookupText(row, key) || (base as any)[key]])) as ContainerLine),
+    srno: String(index + 1),
+    contn_pick_date: normalizeDateInput(lookupText(row, "contn_pick_date")),
+  };
+}
+
+const containerTypes = ["STANDARD", "HIGHCUBE", "REFER", "HIGH CUBE REFER", "OPEN TOP", "FLAT RACK", "MAIN DECK PALLET", "LOWER DECK PALLET", "LD-2", "LD-3", "LD-4", "LD-7", "LD-11", "TANK", "BULK", "OPEN SIDE", "PLAT FORM", "VENTILATED"];
+
+function ContainerGrid({ rows, setRows }: { rows: ContainerLine[]; setRows: Dispatch<SetStateAction<ContainerLine[]>> }) {
+  const editable = useContext(PackEditContext);
+  const update = (rowIndex: number, field: keyof ContainerLine, value: string) => {
+    setRows((current) => current.map((row, index) => index === rowIndex ? { ...row, [field]: value } : row));
+  };
+  const totals = rows.reduce((result, row) => ({
+    volume: result.volume + (Number(row.volume) || 0),
+    gross: result.gross + (Number(row.gross_weight) || 0),
+    packages: result.packages + (Number(row.no_of_pkgs) || 0),
+  }), { volume: 0, gross: 0, packages: 0 });
+
+  return (
+    <div className="freight-container-grid overflow-hidden rounded-md border bg-background">
+      <div className="flex items-center justify-between border-b bg-muted/35 px-2 py-1.5">
+        <span className="text-xs font-semibold text-foreground">PowerBuilder container details</span>
+        {editable && <Button type="button" size="sm" variant="outline" onClick={() => setRows((current) => [...current, emptyContainer(current.length + 1)])}><Plus size={14} />Container</Button>}
+      </div>
+      <div className="overflow-auto">
+        <div className="grid min-w-[1540px] grid-cols-[45px_180px_150px_90px_130px_105px_120px_85px_100px_220px_135px_130px_44px] gap-1 border-b bg-muted/20 px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">
+          <span>Sr</span><span>Container No</span><span>Container Type</span><span>TEU / FEU</span><span>Seal No</span><span>Cube (m3)</span><span>Gross Wt (kg)</span><span>Nos</span><span>UOM</span><span>Description</span><span>Pickup Date</span><span>BL No</span><span />
+        </div>
+        {rows.map((row, rowIndex) => (
+          <div key={`${row.srno}-${rowIndex}`} className="grid min-w-[1540px] grid-cols-[45px_180px_150px_90px_130px_105px_120px_85px_100px_220px_135px_130px_44px] gap-1 border-b px-2 py-1">
+            {editable ? <>
+              <Input className="h-7 text-center text-xs" value={row.srno} readOnly />
+              <Input className="h-7 uppercase text-xs" value={row.container_no} onChange={(event) => update(rowIndex, "container_no", event.target.value.toUpperCase())} />
+              <select className="h-7 rounded-md border bg-background px-1 text-xs" value={row.container_type} onChange={(event) => update(rowIndex, "container_type", event.target.value)}>{containerTypes.map((option) => <option key={option}>{option}</option>)}</select>
+              <select className="h-7 rounded-md border bg-background px-1 text-xs" value={row.t_f} onChange={(event) => update(rowIndex, "t_f", event.target.value)}><option value="T">TEU</option><option value="F">FEU</option><option value="V">45FT</option><option value="E">48FT</option></select>
+              <Input className="h-7 text-xs" value={row.seal_no} onChange={(event) => update(rowIndex, "seal_no", event.target.value)} />
+              <Input className="h-7 text-right text-xs" type="number" step="0.001" value={row.volume} onChange={(event) => update(rowIndex, "volume", event.target.value)} />
+              <Input className="h-7 text-right text-xs" type="number" step="0.01" value={row.gross_weight} onChange={(event) => update(rowIndex, "gross_weight", event.target.value)} />
+              <Input className="h-7 text-right text-xs" type="number" value={row.no_of_pkgs} onChange={(event) => update(rowIndex, "no_of_pkgs", event.target.value)} />
+              <Input className="h-7 text-xs" value={row.puom} onChange={(event) => update(rowIndex, "puom", event.target.value)} />
+              <Input className="h-7 text-xs" value={row.contn_desc} onChange={(event) => update(rowIndex, "contn_desc", event.target.value)} />
+              <Input className="h-7 text-xs" type="date" value={row.contn_pick_date} onChange={(event) => update(rowIndex, "contn_pick_date", event.target.value)} />
+              <Input className="h-7 text-xs" value={row.bl_no} onChange={(event) => update(rowIndex, "bl_no", event.target.value)} />
+              <Button type="button" size="icon" variant="ghost" title="Remove container" onClick={() => setRows((current) => current.filter((_, index) => index !== rowIndex).map((item, index) => ({ ...item, srno: String(index + 1) })))}><Trash2 size={14} /></Button>
+            </> : <>
+              {[row.srno, row.container_no, row.container_type, row.t_f, row.seal_no, row.volume, row.gross_weight, row.no_of_pkgs, row.puom, row.contn_desc, formatDate(row.contn_pick_date), row.bl_no].map((value, index) => <span key={index} title={value} className="min-h-7 truncate px-1 py-1 text-xs font-semibold text-foreground">{value || "-"}</span>)}<span />
+            </>}
+          </div>
+        ))}
+        {!rows.length && <div className="px-3 py-6 text-center text-sm text-muted-foreground">No container details. Add every Sea container used for this job.</div>}
+        {!!rows.length && <div className="grid min-w-[1540px] grid-cols-[45px_180px_150px_90px_130px_105px_120px_85px_100px_220px_135px_130px_44px] gap-1 bg-muted/25 px-2 py-1.5 text-xs font-semibold"><span className="col-span-5 text-right">Totals</span><span className="text-right">{totals.volume.toFixed(3)}</span><span className="text-right">{totals.gross.toFixed(2)}</span><span className="text-right">{totals.packages}</span></div>}
+      </div>
+    </div>
+  );
+}
+
 function DimensionGrid({ rows, setRows }: { rows: DimensionLine[]; setRows: Dispatch<SetStateAction<DimensionLine[]>> }) {
   const editable = useContext(PackEditContext);
   const columns: Array<keyof DimensionLine> = ["sr_no", "length", "breadth", "height", "qty", "gross_wt", "chargeable_wt", "volume", "total_qty", "cargo_details", "prod_description"];
   const numeric = new Set<keyof DimensionLine>(["length", "breadth", "height", "qty", "gross_wt", "chargeable_wt", "volume", "total_qty"]);
   return (
-    <div className="overflow-hidden rounded-md border bg-background">
+    <div className="freight-dimension-grid overflow-hidden rounded-md border bg-background">
       <div className="flex items-center justify-between border-b bg-muted/35 px-2 py-1.5">
         <span className="text-xs font-semibold text-foreground">Air cargo dimensions</span>
         {editable && <Button type="button" size="sm" variant="outline" onClick={() => setRows((current) => [...current, emptyDimension(current.length + 1)])}><Plus size={14} />Line</Button>}
@@ -964,7 +1069,14 @@ function toPackDraftFromJob(row: LookupRow, companyCode: string, userId: string,
 }
 
 function setPackField(setPack: (updater: (current: PackForm) => PackForm) => void, field: keyof PackForm, value: string) {
-  setPack((current) => ({ ...current, [field]: value }));
+  setPack((current) => {
+    const next = { ...current, [field]: value };
+    if (field === "charge_wt" || field === "rate") {
+      const amount = (Number(next.charge_wt) || 0) * (Number(next.rate) || 0);
+      next.amount = amount ? amount.toFixed(3) : "0";
+    }
+    return next;
+  });
 }
 
 async function lookupJobs(companyCode: string, mode: string, jobType: string, search: string) {

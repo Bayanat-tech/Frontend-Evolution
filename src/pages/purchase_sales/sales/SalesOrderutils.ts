@@ -500,7 +500,7 @@ export function buildDetailsPayload(rows: SalesOrderLineRow[], ex_rate?: number)
 
     tax_lcur_amount: taxLcurrAmount(row, ex_rate),
 
-    lcur_amount_disc: row.lcur_amount_disc,
+    lcur_amount_disc: LcurrDisAmount(row),
 
     tx_compnt_amt_1: lineTaxAmount(row),
     tx_compnt_perc_1: row.tx_compnt_perc_1,
