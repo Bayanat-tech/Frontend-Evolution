@@ -76,7 +76,7 @@ export function ExportCSVButton<T>({ data, columns, filename = "export.csv" }: E
   };
 
   return (
-    <Button className="rounded-full px-3" size="sm" variant="outline" onClick={onClick} title="Export CSV" aria-label="Export CSV">
+    <Button className="rounded-xl px-3 border border-border bg-card hover:bg-secondary text-foreground text-xs" size="sm" variant="outline" onClick={onClick} title="Export CSV" aria-label="Export CSV">
       <Download size={13} />
       Export
     </Button>

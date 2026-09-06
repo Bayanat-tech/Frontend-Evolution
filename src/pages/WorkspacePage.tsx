@@ -161,7 +161,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   };
 
   return (
-    <div className="workspace">
+    <div className="workspace" style={{ fontFamily: "Inter, sans-serif" }}>
       <aside className={cn("sidebar", isFreightModule && "freight-sidebar", displayCollapsed && "collapsed", isMobile && "mobile-sidebar", mobileMenuOpen && "mobile-open")}>
         <div className="sidebar-top">
           <Link to="/apps" className={displayCollapsed ? "sidebar-brand logo-only" : "sidebar-brand"} title={companyName}>
@@ -220,7 +220,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
       </aside>
       {isMobile && mobileMenuOpen && <button className="sidebar-backdrop" type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)} />}
 
-      <section className="workspace-main">
+      <section className={cn("workspace-main", isFreightModule && "bg-[#f8f9fb]")} style={{ fontFamily: "Inter, sans-serif" }}>
         <div className="mobile-appbar">
           <Link to="/apps" className="mobile-brand" aria-label="Bayanat Technology">
             <span className="sidebar-logo-wrap">
@@ -242,7 +242,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
           </div>
         </header>
 
-        <main className={cn("workspace-content", isFreightModule && "freight-workspace-ui")}>
+        <main className={cn("workspace-content", isFreightModule && "freight-workspace-ui bg-[#f8f9fb]")} style={{ fontFamily: "Inter, sans-serif" }}>
           <nav className="breadcrumb">
             <Link to="/apps">
               <Home size={14} /> Home

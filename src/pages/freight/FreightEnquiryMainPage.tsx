@@ -308,7 +308,7 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
         size: 140,
         cell: ({ row }) => (
           <button
-            className="freight-table-link font-mono font-semibold text-foreground hover:text-[#00378C] hover:underline text-left text-[13px] cursor-pointer"
+            className="freight-table-link font-semibold text-[#00378C] hover:underline text-left text-[11.5px] cursor-pointer"
             type="button"
             onClick={() => openEnquiry(row.original)}
           >
@@ -316,27 +316,27 @@ export function FreightEnquiryMainPage({ target, screenType = "enquiry" }: Freig
           </button>
         ),
       },
-      { accessorKey: "enquiry_date", header: "Date", size: 100, cell: ({ row }) => <span className="text-[13px] text-foreground">{formatDisplayDate(lookupText(row.original, "enquiry_date"))}</span> },
-      { accessorKey: "prin_code", header: "Principal", size: 110, cell: ({ row }) => <span className="font-mono text-[13px] text-foreground">{lookupText(row.original, "prin_code")}</span> },
+      { accessorKey: "enquiry_date", header: "Date", size: 100, cell: ({ row }) => <span className="text-[11.5px] text-foreground">{formatDisplayDate(lookupText(row.original, "enquiry_date"))}</span> },
+      { accessorKey: "prin_code", header: "Principal", size: 100, cell: ({ row }) => <span className="text-[11.5px] text-foreground font-medium">{lookupText(row.original, "prin_code")}</span> },
       {
         accessorKey: "prin_name",
         header: "Principal Name",
         minSize: 220,
         cell: ({ row }) => (
           <div className="truncate" title={lookupText(row.original, "prin_name")}>
-            <span className="text-[12px] text-foreground">{lookupText(row.original, "prin_name")}</span>
+            <span className="text-[11.5px] text-foreground">{lookupText(row.original, "prin_name")}</span>
           </div>
         ),
       },
-      { accessorKey: "job_type", header: "Job Type", size: 100, cell: ({ row }) => <span className="text-[12px] text-foreground">{jobTypeLabel(lookupText(row.original, "job_type"))}</span> },
-      { accessorKey: "transport_mode", header: "Mode", size: 90, cell: ({ row }) => <span className="text-[12px] text-foreground">{modeLabel(lookupText(row.original, "transport_mode"))}</span> },
-      { accessorKey: "origin_port", header: "Origin", size: 100, cell: ({ row }) => <span className="font-mono text-[13px] text-foreground">{lookupText(row.original, "origin_port")}</span> },
-      { accessorKey: "destination_port", header: "Destination", size: 110, cell: ({ row }) => <span className="font-mono text-[13px] text-foreground">{lookupText(row.original, "destination_port")}</span> },
-      { accessorKey: "curr_code", header: "Currency", size: 90, cell: ({ row }) => <span className="font-mono text-[13px] text-foreground">{lookupText(row.original, "curr_code")}</span> },
+      { accessorKey: "job_type", header: "Job Type", size: 95, cell: ({ row }) => <span className="text-[11.5px] text-foreground">{jobTypeLabel(lookupText(row.original, "job_type"))}</span> },
+      { accessorKey: "transport_mode", header: "Mode", size: 85, cell: ({ row }) => <span className="text-[11.5px] text-foreground">{modeLabel(lookupText(row.original, "transport_mode"))}</span> },
+      { accessorKey: "origin_port", header: "Origin", size: 95, cell: ({ row }) => <span className="text-[11.5px] text-foreground font-medium">{lookupText(row.original, "origin_port")}</span> },
+      { accessorKey: "destination_port", header: "Destination", size: 105, cell: ({ row }) => <span className="text-[11.5px] text-foreground font-medium">{lookupText(row.original, "destination_port")}</span> },
+      { accessorKey: "curr_code", header: "Currency", size: 85, cell: ({ row }) => <span className="text-[11.5px] text-foreground font-medium">{lookupText(row.original, "curr_code")}</span> },
       {
         accessorKey: "indstatus",
         header: "Status",
-        size: 110,
+        size: 100,
         cell: ({ row }) => {
           const status = lookupText(row.original, "indstatus");
           return (
@@ -1174,7 +1174,7 @@ const applyDetailActivityLookup = (index: number, value: string, row: LookupRow 
           <div className="flex items-center gap-2.5">
             <h2
               className="text-foreground m-0"
-              style={{ fontSize: "20px", letterSpacing: "-0.02em", fontWeight: 600 }}
+              style={{ fontSize: "18px", letterSpacing: "-0.01em", fontWeight: 600 }}
             >
               {isRfq ? "Freight RFQ" : "Freight Enquiry"}
             </h2>
