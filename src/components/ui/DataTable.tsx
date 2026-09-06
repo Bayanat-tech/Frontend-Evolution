@@ -380,19 +380,26 @@ export function DataTable<TData, TValue>({
                 </div>
               </details>
             )}
-            {toolbar && (
-              <div className="data-table-toolbar flex flex-wrap items-center justify-end gap-2">
-                {toolbar}
-              </div>
-            )}
-            {showExport && (
-              <ExportCSVButton
-                columns={enhancedColumns}
-                data={exportRows}
-                filename={exportFilename ?? `${slugifyFilename(_title || "table")}.csv`}
-              />
-            )}
-            {!onSearchChange && !toolbar && !showExport && <span className="min-h-1 flex-1" />}
+            <div className="flex items-center gap-2">
+              {toolbar && (
+                <div className="data-table-toolbar flex flex-wrap items-center justify-end gap-2">
+                  {toolbar}
+                </div>
+              )}
+              {showExport && (
+                <ExportCSVButton
+                  columns={enhancedColumns}
+                  data={exportRows}
+                  filename={exportFilename ?? `${slugifyFilename(_title || "table")}.csv`}
+                />
+              )}
+              {Boolean(_subtitle || (_title && !_title.includes("Records") && !_title.includes("Loading"))) && (
+                <div className="hidden sm:inline-flex items-center gap-2 px-3.5 py-1 rounded-lg border border-[#00378C] text-white bg-[#00378C] shadow-sm select-none shrink-0 font-medium text-[13px]">
+                  <span>{_subtitle || _title}</span>
+                </div>
+              )}
+            </div>
+            {!onSearchChange && !toolbar && !showExport && !(_subtitle || _title) && <span className="min-h-1 flex-1" />}
             {table.getState().columnFilters.filter((f) => hasFilterValue(f.value)).length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5 w-full pt-2 border-t border-border/50 text-xs">
                 <span className="text-[#64748b] font-semibold text-[11px] uppercase tracking-wide">
@@ -486,7 +493,7 @@ export function DataTable<TData, TValue>({
                 (z-10) at the header/body seam. */}
             <TableHeader className="sticky top-0 z-20 bg-white">
               {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
+                <TableRow key={headerGroup.id} className="border-b border-[#8e97a8]">
                   {headerGroup.headers.map((header, colIndex) => {
                     const isFirst = colIndex === 0;
                     const isLast = colIndex === headerGroup.headers.length - 1;
@@ -504,7 +511,7 @@ export function DataTable<TData, TValue>({
                           boxShadow: stickLeft ? STICKY_LEFT_SHADOW : stickRight ? STICKY_RIGHT_SHADOW : undefined,
                         }}
                         className={cn(
-                          "relative transition-colors",
+                          "relative transition-colors border-r border-[#8e97a8] last:border-r-0",
                           isFilterActive && "bg-[#00378C]/[0.06] border-b-2 border-b-[#00378C]",
                           header.column.getCanSort() ? "cursor-pointer select-none" : undefined,
                           (stickLeft || stickRight) && `sticky z-10 ${STICKY_CELL_BG}`,
@@ -515,8 +522,8 @@ export function DataTable<TData, TValue>({
                       >
                         <div className="flex min-h-7 items-center justify-between gap-1">
                           <span className={cn(
-                            "flex min-w-0 items-center gap-1 truncate transition-colors",
-                            isFilterActive ? "text-[#00378C] font-bold" : "text-muted-foreground"
+                            "flex min-w-0 items-center gap-1 truncate transition-colors text-[11px] uppercase tracking-wider font-semibold",
+                            isFilterActive ? "text-[#00378C] font-bold" : "text-[#64748b]"
                           )}>
                             {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                             {header.column.getCanSort() && (
@@ -609,7 +616,7 @@ export function DataTable<TData, TValue>({
       </div>
 
       {enablePagination && (
-        <div className="data-table-pagination flex flex-wrap items-center justify-between gap-3 border-t border-[#e2e8f0] bg-white px-4 py-2.5 text-xs text-muted-foreground font-sans">
+        <div className="data-table-pagination flex flex-wrap items-center justify-between gap-3 border-t border-[#8e97a8] bg-white px-4 py-2.5 text-xs text-muted-foreground font-sans">
           <div className="flex flex-wrap items-center gap-1.5">
             <span>
               {effectiveTotalRows === 0 ? (
