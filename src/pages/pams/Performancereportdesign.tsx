@@ -55,6 +55,15 @@ export interface AppraisalCharacteristic {
     RATING?: string | number;
 }
 
+export interface AppraisalCommentLogRow {
+    FLOW_LEVEL: number | string;
+    COMMENT_TYPE: string;
+    COMMENT_TEXT: string;
+    COMMENT_BY: string;
+    COMMENT_BY_NAME: string;
+    COMMENT_DATE: string;
+}
+
 export interface AppraisalSection5 {
     APPRAISER_COMMENTS: string;
     APPRAISEE_COMMENTS: string;
@@ -62,11 +71,7 @@ export interface AppraisalSection5 {
     LAST_ACTION_BY_NAME: string;
     COMMENTS_DATE: string;
     APPRAISEE_COMMENTS_DATE: string;
-    APPRAISER_COMMENTS1?: string;
-    APPRAISER_COMMENTS2?: string;
-    APPRAISER_COMMENTS3?: string;
-    APPRAISER_COMMENTS4?: string;
-    APPRAISER_COMMENTS5?: string;
+    // APPRAISER_COMMENTS1..5 removed - now using commentLog instead
 }
 
 interface Props {
@@ -98,6 +103,7 @@ interface ReportContentProps {
     charTotal: string;
     section5: AppraisalSection5;
     flowHistory: AppraisalFlowHistory[];
+    commentLog: AppraisalCommentLogRow[];
 }
 
 function fmtDateTime(val: string): string {
@@ -147,6 +153,11 @@ function fmtDate(val: string): string {
     return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
+function commentForLevel(log: AppraisalCommentLogRow[], level: number, type: "APPRAISER" | "APPRAISEE"): string {
+    const row = log.find(r => String(r.FLOW_LEVEL) === String(level) && r.COMMENT_TYPE === type);
+    return row?.COMMENT_TEXT ?? "";
+}
+
 const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
     (
         {
@@ -159,22 +170,12 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
             charTotal,
             section5,
             flowHistory,
+            commentLog,
         }: ReportContentProps,
         ref: React.Ref<HTMLDivElement>
     ) => {
         const leftRatings = ratings.slice(0, 3);
         const rightRatings = ratings.slice(3);
-
-        // Index 0 here is reused only as a fallback; Level 0 (employee's own
-        // self-rating comment) is NOT stored in APPRAISER_COMMENTS1-5 -- it
-        // lives in APPRAISEE_COMMENTS, handled separately below.
-        const commentsByLevel = [
-            section5.APPRAISER_COMMENTS1 ?? "",
-            section5.APPRAISER_COMMENTS2 ?? "",
-            section5.APPRAISER_COMMENTS3 ?? "",
-            section5.APPRAISER_COMMENTS4 ?? "",
-            section5.APPRAISER_COMMENTS5 ?? "",
-        ];
 
         return (
             <div
@@ -483,14 +484,11 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
                             ) : (
                                 flowHistory.map((f: AppraisalFlowHistory, idx: number) => {
                                     const level = Number(f.FLOW_LEVEL);
-                                    // Level 0 = employee's own self-rating draft submission.
-                                    // Its remark lives in APPRAISEE_COMMENTS (not APPRAISER_COMMENTS1-5),
-                                    // so it's picked up in the Appraisee Comments cell below, not here.
-                                    const comment = level >= 1 && level <= 5
-                                        ? commentsByLevel[level - 1]
-                                        : "";
-                                    const isEmployeeSelfRow =
-                                        level === 0 && f.ACTION_BY === appraisal.EMPLOYEE_CODE;
+                                    // Get appraiser comment for this level from commentLog
+                                    const comment = commentForLevel(commentLog, level, "APPRAISER");
+                                    // Get appraisee comment (level 0) from commentLog
+                                    const appraiseeComment = commentForLevel(commentLog, 0, "APPRAISEE");
+                                    const isEmployeeSelfRow = level === 0 && f.ACTION_BY === appraisal.EMPLOYEE_CODE;
 
                                     return (
                                         <tr key={f.HISTORY_ID ?? idx}>
@@ -520,7 +518,6 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
                                             <td style={{ verticalAlign: "top", padding: "5px 6px", height: "40px" }}>
                                                 {f.ACTION_DATE ? (
                                                     <div>
-
                                                         <div style={{ fontSize: "8px", fontWeight: 600, color: "#000" }}>
                                                             {fmtDateTime(f.ACTION_DATE).split(" ")[0]}
                                                         </div>
@@ -534,14 +531,12 @@ const ReportContent = React.forwardRef<HTMLDivElement, ReportContentProps>(
                                             </td>
 
                                             <td style={{ verticalAlign: "top", padding: "5px 6px", height: "40px" }}>
-                                                {comment
-                                                    ? <span className="c-comment-text">{comment}</span>
-                                                    : <span>&nbsp;</span>}
+                                                {comment ? <span className="c-comment-text">{comment}</span> : <span>&nbsp;</span>}
                                             </td>
 
                                             <td style={{ verticalAlign: "top", padding: "5px 6px", height: "40px" }}>
-                                                {(isEmployeeSelfRow || f.ACTION_BY === appraisal.EMPLOYEE_CODE) && section5.APPRAISEE_COMMENTS
-                                                    ? <span className="c-comment-text">{section5.APPRAISEE_COMMENTS}</span>
+                                                {(isEmployeeSelfRow || f.ACTION_BY === appraisal.EMPLOYEE_CODE) && appraiseeComment
+                                                    ? <span className="c-comment-text">{appraiseeComment}</span>
                                                     : <span>&nbsp;</span>}
                                             </td>
 
@@ -606,6 +601,7 @@ const PerformanceReportDesign: React.FC<Props> = ({ required_values, printRef, o
     const [taskData, setTaskData] = useState<AppraisalTaskDtl[]>([]);
     const [characteristicsData, setCharacteristics] = useState<AppraisalCharacteristic[]>([]);
     const [headerData, setHeaderData] = useState<Record<string, unknown> | null>(null);
+    const [commentLog, setCommentLog] = useState<AppraisalCommentLogRow[]>([]);
 
     const [section5Data, setSection5Data] = useState<AppraisalSection5>({
         APPRAISER_COMMENTS: "",
@@ -614,11 +610,6 @@ const PerformanceReportDesign: React.FC<Props> = ({ required_values, printRef, o
         LAST_ACTION_BY_NAME: "",
         COMMENTS_DATE: "",
         APPRAISEE_COMMENTS_DATE: "",
-        APPRAISER_COMMENTS1: "",
-        APPRAISER_COMMENTS2: "",
-        APPRAISER_COMMENTS3: "",
-        APPRAISER_COMMENTS4: "",
-        APPRAISER_COMMENTS5: "",
     });
 
     const [isFetching, setIsFetching] = useState(true);
@@ -628,6 +619,7 @@ const PerformanceReportDesign: React.FC<Props> = ({ required_values, printRef, o
 
         setIsFetching(true);
 
+        // Remove the redundant appraisal_comments calls and add get_appraisal_comments_log
         Promise.all([
             pamsCommonSelect({
                 parameter: "PERFORMANCE_REPORT_EMP_APPRAISAL_PART1_SELECT_BY_DOC_EMP",
@@ -654,37 +646,41 @@ const PerformanceReportDesign: React.FC<Props> = ({ required_values, printRef, o
                 code2: doc_no,
                 code3: employee_code,
             }),
-            pamsSelect<Record<string, unknown>>({
-                parameter: "appraisal_comments",
-                loginid,
-                code1: doc_no,
-            }),
             pamsSelect<AppraisalFlowHistory>({
                 parameter: "get_appraisal_flow_with_name",
                 loginid,
                 code1: doc_no,
             }),
+            // New: get_appraisal_comments_log instead of two appraisal_comments calls
+            pamsSelect<AppraisalCommentLogRow>({
+                parameter: "get_appraisal_comments_log",
+                loginid,
+                code1: doc_no,
+            }),
+            // Keep one appraisal_comments for section5 data (APPRAISER_COMMENTS, APPRAISEE_COMMENTS, etc.)
             pamsSelect<Record<string, unknown>>({
                 parameter: "appraisal_comments",
                 loginid,
                 code1: doc_no,
             }),
         ])
-            .then(async ([appraisal, ratings, tasks, chars, comments, flowHist, hdrComments]) => {
+            .then(async ([appraisal, ratings, tasks, chars, flowHist, commentLogRows, hdrComments]) => {
                 setAppraisalData(appraisal as Record<string, unknown>[]);
                 setRatingsData(ratings as Record<string, unknown>[]);
+                
                 const seen = new Set<number>();
                 const uniqueFlow = (flowHist as AppraisalFlowHistory[])
                     .filter(f => {
                         const level = Number(f.FLOW_LEVEL);
-                        // Level 0 (self-rating employee's own draft submission)
-                        // is now INCLUDED so it shows up as a row in the report.
                         if (level < 0 || level > 5) return false;
                         if (seen.has(level)) return false;
                         seen.add(level);
                         return true;
                     });
                 setFlowHistory(uniqueFlow);
+                
+                // Set comment log from the new API call
+                setCommentLog(commentLogRows as AppraisalCommentLogRow[]);
 
                 const sortedTasks = [...(tasks as AppraisalTaskDtl[])].sort(
                     (a, b) => Number(a.KPI_CODE) - Number(b.KPI_CODE)
@@ -696,36 +692,17 @@ const PerformanceReportDesign: React.FC<Props> = ({ required_values, printRef, o
                 );
                 setCharacteristics(sortedChars);
 
-                const commentsArr = comments as Record<string, unknown>[];
-                const commentsRow = commentsArr[0] ?? {};
-
-                const appraiserComments = String(
-                    commentsRow["APPRAISER_COMMENTS"] ?? commentsRow["appraiser_comments"] ?? ""
-                );
-                const appraiseeComments = String(
-                    commentsRow["APPRAISEE_COMMENTS"] ?? commentsRow["appraisee_comments"] ?? ""
-                );
-                const commentsDate = String(
-                    commentsRow["COMMENTS_DATE"] ?? commentsRow["comments_date"] ?? ""
-                );
-                const appraiseeCmtDate = String(
-                    commentsRow["APPRAISEE_COMMENTS_DATE"] ?? commentsRow["appraisee_comments_date"] ?? ""
-                );
                 const hdrRow = (hdrComments as Record<string, unknown>[])?.[0] ?? {};
                 setHeaderData(hdrRow);
 
+                // Section5 data from appraisal_comments (no APPRAISER_COMMENTS1..5 here)
                 setSection5Data({
-                    APPRAISER_COMMENTS: appraiserComments,
-                    APPRAISEE_COMMENTS: appraiseeComments,
+                    APPRAISER_COMMENTS: String(hdrRow["APPRAISER_COMMENTS"] ?? hdrRow["appraiser_comments"] ?? ""),
+                    APPRAISEE_COMMENTS: String(hdrRow["APPRAISEE_COMMENTS"] ?? hdrRow["appraisee_comments"] ?? ""),
                     LAST_ACTION_BY: String(hdrRow["LAST_ACTION_BY"] ?? ""),
                     LAST_ACTION_BY_NAME: String(hdrRow["LAST_ACTION_BY_NAME"] ?? ""),
-                    COMMENTS_DATE: commentsDate,
-                    APPRAISEE_COMMENTS_DATE: appraiseeCmtDate,
-                    APPRAISER_COMMENTS1: String(hdrRow["APPRAISER_COMMENTS1"] ?? ""),
-                    APPRAISER_COMMENTS2: String(hdrRow["APPRAISER_COMMENTS2"] ?? ""),
-                    APPRAISER_COMMENTS3: String(hdrRow["APPRAISER_COMMENTS3"] ?? ""),
-                    APPRAISER_COMMENTS4: String(hdrRow["APPRAISER_COMMENTS4"] ?? ""),
-                    APPRAISER_COMMENTS5: String(hdrRow["APPRAISER_COMMENTS5"] ?? ""),
+                    COMMENTS_DATE: String(hdrRow["COMMENTS_DATE"] ?? hdrRow["comments_date"] ?? ""),
+                    APPRAISEE_COMMENTS_DATE: String(hdrRow["APPRAISEE_COMMENTS_DATE"] ?? hdrRow["appraisee_comments_date"] ?? ""),
                 });
             })
             .catch(() => {
@@ -797,15 +774,14 @@ const PerformanceReportDesign: React.FC<Props> = ({ required_values, printRef, o
             characteristicsData.length
             : 0;
     const charTotal = charTotalNum > 0 ? charTotalNum.toFixed(2) : "";
+    
     useEffect(() => {
-    if (!isFetching && appraisal) {
-        // Ek frame wait karo taaki ReportContent DOM mein fully paint ho chuke
-        const id = requestAnimationFrame(() => onReady?.(true));
-        return () => cancelAnimationFrame(id);
-    }
-    // Loading shuru hote hi parent ko "not ready" bata do
-    onReady?.(false);
-}, [isFetching, appraisal, onReady]);
+        if (!isFetching && appraisal) {
+            const id = requestAnimationFrame(() => onReady?.(true));
+            return () => cancelAnimationFrame(id);
+        }
+        onReady?.(false);
+    }, [isFetching, appraisal, onReady]);
 
     if (isFetching) return <div style={{ padding: 24 }}>Loading...</div>;
     if (!appraisal) return <div style={{ padding: 24 }}>No Data</div>;
@@ -822,6 +798,7 @@ const PerformanceReportDesign: React.FC<Props> = ({ required_values, printRef, o
             charTotal={charTotal}
             section5={section5Data}
             flowHistory={flowHistory}
+            commentLog={commentLog}
         />
     );
 };
