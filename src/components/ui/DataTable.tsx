@@ -393,6 +393,47 @@ export function DataTable<TData, TValue>({
               />
             )}
             {!onSearchChange && !toolbar && !showExport && <span className="min-h-1 flex-1" />}
+            {table.getState().columnFilters.filter((f) => hasFilterValue(f.value)).length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 w-full pt-2 border-t border-border/50 text-xs">
+                <span className="text-[#64748b] font-semibold text-[11px] uppercase tracking-wide">
+                  Filtered by:
+                </span>
+                {table.getState().columnFilters
+                  .filter((f) => hasFilterValue(f.value))
+                  .map((f) => {
+                    const col = table.getColumn(f.id);
+                    const headerTitle = typeof col?.columnDef.header === "string" ? col.columnDef.header : f.id;
+                    const val = f.value as any;
+                    const displayVal = typeof val === "object" && val
+                      ? `${val.from || "Any"} → ${val.to || "Any"}`
+                      : String(val);
+                    return (
+                      <span
+                        key={f.id}
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#00378C]/10 text-[#00378C] font-semibold text-xs border border-[#00378C]/20 shadow-sm"
+                      >
+                        <span>{headerTitle}:</span>
+                        <span className="font-normal text-foreground">{displayVal}</span>
+                        <button
+                          type="button"
+                          onClick={() => col?.setFilterValue(undefined)}
+                          className="hover:bg-[#00378C]/20 rounded-full p-0.5 cursor-pointer text-[#00378C] ml-0.5 transition-colors"
+                          title={`Clear ${headerTitle} filter`}
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    );
+                  })}
+                <button
+                  type="button"
+                  onClick={() => table.resetColumnFilters()}
+                  className="text-xs font-semibold text-[#00378C] hover:underline cursor-pointer ml-1"
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -452,6 +493,8 @@ export function DataTable<TData, TValue>({
                     const stickLeft = stickyFirstColumn && isFirst;
                     // Guard against a 1-column table trying to stick both sides at once.
                     const stickRight = stickyLastColumn && isLast && headerGroup.headers.length > 1;
+                    const isFilterActive = hasFilterValue(header.column.getFilterValue());
+
                     return (
                       <TableHead
                         key={header.id}
@@ -461,7 +504,8 @@ export function DataTable<TData, TValue>({
                           boxShadow: stickLeft ? STICKY_LEFT_SHADOW : stickRight ? STICKY_RIGHT_SHADOW : undefined,
                         }}
                         className={cn(
-                          "relative",
+                          "relative transition-colors",
+                          isFilterActive && "bg-[#00378C]/[0.06] border-b-2 border-b-[#00378C]",
                           header.column.getCanSort() ? "cursor-pointer select-none" : undefined,
                           (stickLeft || stickRight) && `sticky z-10 ${STICKY_CELL_BG}`,
                           stickLeft && "left-0",
@@ -470,7 +514,10 @@ export function DataTable<TData, TValue>({
                         onClick={header.column.getToggleSortingHandler()}
                       >
                         <div className="flex min-h-7 items-center justify-between gap-1">
-                          <span className="flex min-w-0 items-center gap-1 truncate">
+                          <span className={cn(
+                            "flex min-w-0 items-center gap-1 truncate transition-colors",
+                            isFilterActive ? "text-[#00378C] font-bold" : "text-muted-foreground"
+                          )}>
                             {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                             {header.column.getCanSort() && (
                               <SortIcon sorted={header.column.getIsSorted()} />
@@ -689,24 +736,34 @@ function ColumnFilterButton<TData, TValue>({
     };
   }, [open]);
 
+  const isActive = hasFilterValue(rawValue);
+
   return (
     <span className="flex shrink-0 items-center">
       <button
         ref={buttonRef}
         type="button"
         className={cn(
-          "grid h-5 w-5 place-items-center rounded text-muted-foreground hover:bg-background hover:text-primary",
-          hasFilterValue(rawValue) && "bg-primary/10 text-primary",
+          "relative grid h-5 w-5 place-items-center rounded transition-all cursor-pointer",
+          isActive
+            ? "bg-[#00378C] text-white shadow-sm ring-2 ring-[#00378C]/25"
+            : "text-muted-foreground hover:bg-slate-100 hover:text-[#00378C]"
         )}
         onClick={(event) => {
           event.stopPropagation();
           updatePosition();
           onOpenChange(!open);
         }}
-        title="Column filter"
+        title={isActive ? "Filter is active (click to modify or clear)" : "Column filter"}
         aria-label="Column filter"
       >
-        <Filter size={12} />
+        <Filter size={11} strokeWidth={isActive ? 2.8 : 2} className={isActive ? "text-white" : "text-muted-foreground"} />
+        {isActive && (
+          <span className="absolute -top-1 -right-1 flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00378C] opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00378C] border border-white"></span>
+          </span>
+        )}
       </button>
       {open && (
         <ColumnFilterPopup
@@ -873,10 +930,15 @@ function isDateColumn(columnId: string) {
   return /(^|_)(date|dt)(_|$)/i.test(columnId);
 }
 
-function hasFilterValue(value: unknown) {
+function hasFilterValue(value: unknown): boolean {
+  if (value === undefined || value === null || value === "") return false;
   if (typeof value === "string") return value.trim().length > 0;
-  if (value && typeof value === "object") return Boolean((value as { from?: string; to?: string }).from || (value as { from?: string; to?: string }).to);
-  return false;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    return Object.values(obj).some((v) => v !== undefined && v !== null && String(v).trim().length > 0);
+  }
+  return Boolean(value);
 }
 
 function toDateOnly(value: unknown) {
