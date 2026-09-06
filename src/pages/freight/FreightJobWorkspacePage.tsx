@@ -1,7 +1,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { ArrowRight, Ban, Bell, BrainCircuit, CheckCircle2, ClipboardList, FileText, Info, PackageCheck, Plane, Plus, ReceiptText, RefreshCw, Search, Ship, Truck, WalletCards } from "lucide-react";
+import { ArrowRight, Ban, Bell,  CheckCircle2, ClipboardList, FileText, Info, PackageCheck, Plane, Plus, ReceiptText, RefreshCw, Search, Ship, Truck, WalletCards } from "lucide-react";
 import { api } from "../../api/client";
 import type { LookupRow } from "../../api/lookups";
 import { Button } from "../../components/ui/Button";
@@ -74,6 +74,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
   const companyCode = String(userRecord.company_code || userRecord.COMPANY_CODE || "BSG");
   const [activeTab, setActiveTab] = useState<JobTab>(initialTab);
   const [mode, setMode] = useState<WorkspaceMode>(initialTab === "job" ? "list" : "steps");
+  const returnToList = useCallback(() => setMode("list"), []);
   const [rows, setRows] = useState<LookupRow[]>([]);
   const [query, setQuery] = useState("");
   const [selectedJob, setSelectedJob] = useState<LookupRow | null>(null);
@@ -187,12 +188,12 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
 
   if (mode === "list") {
     return (
-      <section className="grid gap-2">
+      <section className="freight-list-screen grid gap-2">
         <div className="freight-job-list-hero">
           <div>
             <p className="eyebrow">Freight Operations</p>
             <h1 className="m-0 text-xl font-semibold text-foreground">{title}</h1>
-            <p className="mt-0.5 max-w-3xl text-xs text-muted-foreground">Create jobs, complete shipment steps, and close billing follow-up from one compact workspace.</p>
+            {/* <p className="mt-0.5 max-w-3xl text-xs text-muted-foreground">Create jobs, complete shipment steps, and close billing follow-up from one compact workspace.</p> */}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" size="sm" variant="outline" onClick={() => void loadRows()} disabled={loading}>
@@ -212,16 +213,17 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
               </Button>
             ))}
           </div>
-          <div className="flex min-w-[280px] flex-1 items-center justify-end gap-2">
-            <div className="freight-job-smart-note">
+          {/* <div className="flex min-w-[280px] flex-1 items-center justify-end gap-2">
+            {/* <div className="freight-job-smart-note">
               <BrainCircuit size={14} className="text-primary" />
               <span>{message || smartAdvice(health)}</span>
-            </div>
-            <div className="relative w-80 max-w-full">
+            </div> */}
+           
+            {/* <div className="relative w-80 max-w-full">
               <Search className="pointer-events-none absolute left-3 top-2.5 text-muted-foreground" size={15} />
               <Input className="h-8 pl-9 text-xs" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search job, principal, reference..." />
             </div>
-          </div>
+          </div>  */}
         </div>
 
         <DataTable
@@ -269,7 +271,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           </div>
           <div className="freight-workspace-command-slot">{workspaceActions}</div>
           <div className="freight-workspace-tabs">
-            {tabs.map((tab) => {
+            {tabs.map((tab, idx) => {
               const Icon = tab.icon;
               const active = activeTab === tab.key;
               return (
@@ -279,9 +281,17 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
                   className={`freight-workspace-tab ${active ? "active" : ""}`}
                   onClick={() => setActiveTab(tab.key)}
                 >
-                  <Icon size={14} />
-                  {tab.label}
-                  {!tab.ready && <span className={`rounded px-1 text-[9px] ${active ? "bg-primary-foreground/20" : "bg-muted"}`}>Next</span>}
+                  <Icon size={14} className={active ? "text-primary" : "text-muted-foreground"} />
+                  <span>{tab.label}</span>
+                  <span
+                    className={`ml-1 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${
+                      active
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {idx + 1}
+                  </span>
                 </button>
               );
             })}
@@ -295,7 +305,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           initialJob={selectedJob}
           startMode="editor"
           onEmbeddedActionsChange={setWorkspaceActions}
-          onEmbeddedList={() => setMode("list")}
+          onEmbeddedList={returnToList}
         />
       )}
       {activeTab === "packlist" && (
@@ -306,7 +316,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           screen="packlist"
           readOnly={selectedJobReadOnly}
           onEmbeddedActionsChange={setWorkspaceActions}
-          onEmbeddedList={() => setMode("list")}
+          onEmbeddedList={returnToList}
         />
       )}
       {activeTab === "jobsheet" && (
@@ -315,14 +325,14 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           initialJob={selectedJob}
           readOnly={selectedJobReadOnly}
           onEmbeddedActionsChange={setWorkspaceActions}
-          onEmbeddedList={() => setMode("list")}
+          onEmbeddedList={returnToList}
         />
       )}
-      {activeTab === "alerts" && <FreightJobFollowupTab target={target} kind="alerts" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
-      {activeTab === "instructions" && <FreightJobFollowupTab target={target} kind="instructions" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
-      {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
-      {activeTab === "deposits" && <FreightJobFollowupTab target={target} kind="deposits" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
-      {activeTab === "activities" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="activities" readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={() => setMode("list")} />}
+      {activeTab === "alerts" && <FreightJobFollowupTab target={target} kind="alerts" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={returnToList} />}
+      {activeTab === "instructions" && <FreightJobFollowupTab target={target} kind="instructions" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={returnToList} />}
+      {activeTab === "documents" && <FreightJobFollowupTab target={target} kind="documents" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={returnToList} />}
+      {activeTab === "deposits" && <FreightJobFollowupTab target={target} kind="deposits" initialJob={selectedJob} readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={returnToList} />}
+      {activeTab === "activities" && <FreightJobActivitiesPage target={target} initialJob={selectedJob} startMode={selectedJob ? "editor" : "list"} screen="activities" readOnly={selectedJobReadOnly} onEmbeddedActionsChange={setWorkspaceActions} onEmbeddedList={returnToList} />}
 
     </section>
   );

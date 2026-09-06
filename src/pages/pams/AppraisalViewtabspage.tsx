@@ -386,6 +386,12 @@ const AppraisalViewTabsPage: React.FC = () => {
   const [finalApproved,  setFinalApproved]  = useState<string>(
     prefetchedRow ? (text(prefetchedRow.FINAL_APPROVED) || "NO") : "NO"
   );
+  // NEW: doc's creator — used to detect the "employee is their own HOD"
+  // self-rating case (CREATED_BY === EMPLOYEE_CODE). Backend's
+  // 'get_appraisal_flow_level' select must return CREATED_BY for this to work.
+  const [createdBy,      setCreatedBy]      = useState<string>(
+    prefetchedRow ? text(prefetchedRow.CREATED_BY) : ""
+  );
   const [taskTotal,      setTaskTotal]      = useState<number>(0);
   const [characterTotal, setCharacterTotal] = useState<number>(0);
   const [sentBackPopup,  setSentBackPopup]  = useState(false);
@@ -412,14 +418,27 @@ const AppraisalViewTabsPage: React.FC = () => {
   const charRowsRef         = useRef<Row[]>([]);
   const goalRowsRef         = useRef<Row[]>([]);
   const skillRowsRef        = useRef<Row[]>([]);
-  const appraiserCommentRef = useRef<string>("");
-  const appraiseeCommentRef = useRef<string>("");
+  const appraiserCommentRef = useRef<{ text: string; level: number }>({ text: "", level: 0 });
+  const appraiseeCommentRef = useRef<{ text: string; level: number }>({ text: "", level: 0 });
   const reportPrintRef      = useRef<HTMLDivElement>(null);
 
   // ── Derived ────────────────────────────────────────────────────────────────
-  const isFinalized              = finalApproved === "YES";
-  const showSaveSubmitButtons    = !isFinalized && flowLevel >= 0 && flowLevel <= 2;
-  const showApproveRejectButtons = !isFinalized && flowLevel >= 3 && flowLevel <= 7;
+  const isFinalized = finalApproved === "YES";
+
+  // Employee is their own creator/HOD -> only Level 0 (their own self-rating
+  // fill) is a Draft/Submit step. From Level 1 onward (COO, CEO, HR) it's
+  // pure Approve/Sent Back/Reject, because Level 1's approver there is the
+  // COO, not a second rating step.
+  // Normal employee -> Level 0 (employee) and Level 1 (supervisor) are both
+  // Draft/Submit steps; Level 2 onward is Approve/Sent Back/Reject.
+  const employeeIsHOD =
+    !!createdBy && createdBy.trim().toUpperCase() === employeeCode.trim().toUpperCase();
+
+  const showSaveSubmitButtons =
+  !isFinalized && (employeeIsHOD ? flowLevel === 0 : flowLevel <= 2);
+const showApproveRejectButtons =
+  !isFinalized && (employeeIsHOD ? flowLevel >= 1 : flowLevel >= 3) && flowLevel <= 7;
+
   const finalRating              = calcFinalRating(taskTotal, characterTotal, weightageConfig);
   const showFinalRating          = taskTotal > 0 && characterTotal > 0;
   const [reportReady, setReportReady] = useState(false);
@@ -454,6 +473,7 @@ const AppraisalViewTabsPage: React.FC = () => {
           nextActionBy     = text(flowRes[0].NEXT_ACTION_BY).trim().toUpperCase();
           setFlowLevel(currentFlowLevel);
           setFinalApproved(text(flowRes[0].FINAL_APPROVED) || "NO");
+          setCreatedBy(text(flowRes[0].CREATED_BY));
         }
 
         if (weightageRes.length > 0) {
@@ -483,10 +503,10 @@ const AppraisalViewTabsPage: React.FC = () => {
           setSentBackLevel(text(levelRes[0].FLOW_RUNNING_LEVEL) || "1");
 
         if (commentRes.length > 0) {
-          appraiserCommentRef.current = text(commentRes[0].APPRAISER_COMMENTS);
-          appraiseeCommentRef.current = text(commentRes[0].APPRAISEE_COMMENTS);
+          appraiserCommentRef.current = { text: text(commentRes[0].APPRAISER_COMMENTS), level: num(commentRes[0].APPRAISER_COMMENT_LEVEL) };
+          appraiseeCommentRef.current = { text: text(commentRes[0].APPRAISEE_COMMENTS), level: num(commentRes[0].APPRAISEE_COMMENT_LEVEL) };
         }
-
+        
       } catch {
         // silent
       } finally {
@@ -500,60 +520,101 @@ const AppraisalViewTabsPage: React.FC = () => {
 
   // ── Validation ─────────────────────────────────────────────────────────────
   const validateBeforeSubmit = (): string[] => {
-    const missing: string[] = [];
-    const emptyTask  = taskRowsRef.current.filter((r) => !r.RATING || Number(r.RATING) === 0);
-    if (emptyTask.length)  missing.push(`Task Details — Rating missing for ${emptyTask.length} KPI(s)`);
-    const emptyChar  = charRowsRef.current.filter((r) => !r.RATING || Number(r.RATING) === 0);
-    if (emptyChar.length)  missing.push(`Characteristics — Rating missing for ${emptyChar.length} KPI(s)`);
-    const emptyGoal  = goalRowsRef.current.filter((r) => !r.RATING || Number(r.RATING) === 0);
-    if (emptyGoal.length)  missing.push(`Goals — Rating missing for ${emptyGoal.length} KPI(s)`);
-    const emptySkill = skillRowsRef.current.filter((r) => !r.RATING || Number(r.RATING) === 0);
-    if (emptySkill.length) missing.push(`Skill — Rating missing for ${emptySkill.length} KPI(s)`);
-    const isEmployee = loginid.trim() === employeeCode.trim();
-    if (!isEmployee && !appraiserCommentRef.current.trim()) missing.push("Comments — Appraiser comment is empty");
-    if (isEmployee  && !appraiseeCommentRef.current.trim()) missing.push("Comments — Appraisee comment is empty");
-    return missing;
-  };
+  const missing: string[] = [];
+  
+  // 🔹 RATING VALIDATIONS
+  const emptyTask = taskRowsRef.current.filter((r) => !r.RATING || Number(r.RATING) === 0);
+  if (emptyTask.length) missing.push(`Task Details — Rating missing for ${emptyTask.length} KPI(s)`);
+  
+  const emptyChar = charRowsRef.current.filter((r) => !r.RATING || Number(r.RATING) === 0);
+  if (emptyChar.length) missing.push(`Characteristics — Rating missing for ${emptyChar.length} KPI(s)`);
+  
+  const emptyGoal = goalRowsRef.current.filter((r) => !r.RATING || Number(r.RATING) === 0);
+  if (emptyGoal.length) missing.push(`Goals — Rating missing for ${emptyGoal.length} KPI(s)`);
+  
+  const emptySkill = skillRowsRef.current.filter((r) => !r.RATING || Number(r.RATING) === 0);
+  if (emptySkill.length) missing.push(`Skill — Rating missing for ${emptySkill.length} KPI(s)`);
+
+  // 🔹 COMMENT VALIDATION
+  const isEmployee = loginid.trim().toUpperCase() === employeeCode.trim().toUpperCase();
+  
+  if (isEmployee) {
+    // Self-rating: Appraisee comment required
+    if (!appraiseeCommentRef.current.text || !appraiseeCommentRef.current.text.trim()) {
+      missing.push("Comments — Appraisee comment is required");
+    }
+  } else {
+    // Appraiser: Appraiser comment required
+    if (!appraiserCommentRef.current.text || !appraiserCommentRef.current.text.trim()) {
+      missing.push("Comments — Appraiser comment is required");
+    }
+  }
+  
+  return missing;
+};
 
   // ── Action ─────────────────────────────────────────────────────────────────
   const handleAction = async (action: "D" | "S" | "A" | "R") => {
-    setNotice(null);
-    try {
-      if (action === "D" || action === "S" || action === "A") {
-        const allRows = [
-          ...taskRowsRef.current,
-          ...charRowsRef.current,
-          ...goalRowsRef.current,
-          ...skillRowsRef.current,
-        ];
-        if (allRows.length > 0) await pamsUpdateRatings(allRows as Record<string, unknown>[]);
-        if (appraiserCommentRef.current.trim())
-          await pamsSelect({ parameter: "update_appraiser_comments", loginid, code1: docNo, code2: employeeCode, code3: appraiserCommentRef.current.trim() });
-        if (appraiseeCommentRef.current.trim())
-          await pamsSelect({ parameter: "update_appraisee_comments", loginid, code1: docNo, code2: employeeCode, code3: appraiseeCommentRef.current.trim() });
-      }
-      const ratingToSend = (action === "S" || action === "A" || action === "D") ? finalRating : 0;
+  setNotice(null);
+  try {
+    if (action === "D" || action === "S" || action === "A") {
+      const allRows = [
+        ...taskRowsRef.current,
+        ...charRowsRef.current,
+        ...goalRowsRef.current,
+        ...skillRowsRef.current,
+      ];
+      if (allRows.length > 0) await pamsUpdateRatings(allRows as Record<string, unknown>[]);
 
-      await pamsSelect({
-        parameter: "update_appraisal_status",
-        loginid,
-        code1: docNo,
-        code2: employeeCode,
-        code3: action,
-        code4: "",
-        number1: ratingToSend,   // <-- yeh naya param add hua
-      });
-      const msg =
-        action === "D" ? "Saved as draft" :
-        action === "S" ? "Submitted successfully" :
-        action === "A" ? "Approved successfully" :
-                         "Rejected successfully";
-      setNotice({ type: "success", message: msg });
-      setTimeout(() => navigate(-1), 900);
-    } catch (err: unknown) {
-      setNotice({ type: "error", message: err instanceof Error ? err.message : "Something went wrong" });
+      // Comments ab bilkul alag, independent table mein save hote hain —
+      // status/flow update se koi relation nahi
+      if (appraiserCommentRef.current.text.trim()) {
+        await pamsSelect({
+          parameter: "save_appraisal_comment",
+          loginid,
+          code1: docNo,
+          code2: employeeCode,
+          code3: String(appraiserCommentRef.current.level),
+          code4: "APPRAISER",
+          code5: appraiserCommentRef.current.text.trim(),
+        });
+      }
+      if (appraiseeCommentRef.current.text.trim()) {
+        await pamsSelect({
+          parameter: "save_appraisal_comment",
+          loginid,
+          code1: docNo,
+          code2: employeeCode,
+          code3: "0",
+          code4: "APPRAISEE",
+          code5: appraiseeCommentRef.current.text.trim(),
+        });
+      }
     }
-  };
+
+    const ratingToSend = (action === "S" || action === "A" || action === "D") ? finalRating : 0;
+
+    await pamsSelect({
+      parameter: "update_appraisal_status",
+      loginid,
+      code1: docNo,
+      code2: employeeCode,
+      code3: action,
+      code4: "",
+      number1: ratingToSend,
+    });
+
+    const msg =
+      action === "D" ? "Saved as draft" :
+      action === "S" ? "Submitted successfully" :
+      action === "A" ? "Approved successfully" :
+                       "Rejected successfully";
+    setNotice({ type: "success", message: msg });
+    setTimeout(() => navigate(-1), 900);
+  } catch (err: unknown) {
+    setNotice({ type: "error", message: err instanceof Error ? err.message : "Something went wrong" });
+  }
+};
 
   // ── Sent Back ──────────────────────────────────────────────────────────────
   const handleSentBack = async () => {
@@ -713,17 +774,18 @@ const AppraisalViewTabsPage: React.FC = () => {
         </div>
         <div style={{ display: selectedTab === "comments"        ? "block" : "none" }}>
           <AppraiserCommentsTab
-            docNo={docNo}
-            employeeCode={employeeCode}
-            isVisible={selectedTab === "comments"}
-            taskTotal={taskTotal}
-            characterTotal={characterTotal}
-            flowLevel={flowLevel}
-            userFlowLevel={userFlowLevel}
-            weightageConfig={weightageConfig}
-            onAppraiserCommentChange={(val) => { appraiserCommentRef.current = val; }}
-            onAppraiseeCommentChange={(val)  => { appraiseeCommentRef.current = val; }}
-          />
+  docNo={docNo}
+  employeeCode={employeeCode}
+  isVisible={selectedTab === "comments"}
+  taskTotal={taskTotal}
+  characterTotal={characterTotal}
+  flowLevel={flowLevel}
+  userFlowLevel={userFlowLevel}
+  weightageConfig={weightageConfig}
+  showAllComments={true} 
+  onAppraiserCommentChange={(val, level) => { appraiserCommentRef.current = { text: val, level }; }}
+  onAppraiseeCommentChange={(val, level) => { appraiseeCommentRef.current = { text: val, level }; }}
+/>
         </div>
       </div>
 

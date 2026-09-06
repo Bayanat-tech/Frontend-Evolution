@@ -345,7 +345,7 @@ function PaymentDocumentEditor({
       try {
         if (editMode && editor?.mode === "edit") {
           const [headerRaw, detailRaw, childrenRaw] = await Promise.all([
-            getTransactionHeader(editor.row.doc_no, docType),
+            getTransactionHeader(editor.row.doc_no, docType, editor.row.div_code),
             getTransactionDetail(editor.row.doc_no, editor.row.div_code, docType),
             getTransactionChildren(editor.row.doc_no, editor.row.div_code, docType),
           ]);
@@ -1653,6 +1653,7 @@ function mapExistingDocument(
   childrenRaw: { invoice?: Record<string, unknown>[]; job?: Record<string, unknown>[]; expense?: Record<string, unknown>[] } = {},
 ): TransactionHeader {
   const header = lowerRecord(headerRaw);
+  const fallbackDetail = detailRaw[0] ? lowerRecord(detailRaw[0]) : {};
   const detail = detailRaw.map((raw, index) => {
     const row = lowerRecord(raw);
     const serialNo = Number(row.serial_no || index + 1);
@@ -1666,10 +1667,10 @@ function mapExistingDocument(
       serial_no: serialNo,
       doc_date: dateInput(row.doc_date),
       ac_code: text(row.ac_code),
-      ac_name: text(nested(raw, ["Account", "ac_name"]) ?? row.ac_name),
+      ac_name: text(fallbackNested(raw, ["Account", "ac_name"]) ?? fallbackNested(raw, ["account", "ac_name"]) ?? row.ac_name ?? fallbackDetail.ac_name),
       remarks: text(row.remarks),
       curr_code: text(row.curr_code),
-      curr_name: text(nested(raw, ["Currency", "curr_name"]) ?? row.curr_name),
+      curr_name: text(fallbackNested(raw, ["Currency", "curr_name"]) ?? fallbackNested(raw, ["currency", "curr_name"]) ?? row.curr_name ?? fallbackDetail.curr_name),
       ex_rate: Number(row.ex_rate || 1),
       amount: Math.abs(Number(row.amount || 0)),
       sign_ind: Number(row.sign_ind || (docType === "BP" || docType === "CP" ? 1 : -1)) as 1 | -1,
@@ -1682,7 +1683,7 @@ function mapExistingDocument(
       tx_compnt_amt_1: numberOrNull(row.tx_compnt_amt_1),
       job_no: text(row.job_no),
       dept_code: text(row.dept_code),
-      dept_name: text(nested(raw, ["Department", "dept_name"]) ?? row.dept_name),
+      dept_name: text(fallbackNested(raw, ["Department", "dept_name"]) ?? fallbackNested(raw, ["department", "dept_name"]) ?? row.dept_name ?? fallbackDetail.dept_name),
       lcur_amount: Number(row.lcur_amount || 0),
       child_table: table,
       child_code: "",
@@ -1696,38 +1697,38 @@ function mapExistingDocument(
           .filter((child) => Number(lowerRecord(child).serial_no) === line.serial_no)
           .map((child, index) => mapChildRow(child, line, {
             doc_type: docType,
-            doc_no: text(header.doc_no),
-            doc_date: dateInput(header.doc_date),
-            ac_code: text(header.ac_code),
-            curr_code: text(header.curr_code),
-            ex_rate: Number(header.ex_rate || 1),
-            div_code: text(header.div_code),
+            doc_no: text(header.doc_no || fallbackDetail.doc_no),
+            doc_date: dateInput(header.doc_date || fallbackDetail.doc_date),
+            ac_code: text(header.ac_code || fallbackDetail.ac_code),
+            curr_code: text(header.curr_code || fallbackDetail.curr_code),
+            ex_rate: Number(header.ex_rate || fallbackDetail.ex_rate || 1),
+            div_code: text(header.div_code || fallbackDetail.div_code),
             detail: [],
             children: {},
-          } as TransactionHeader, docType, text(header.company_code), index + 1)))
+          } as TransactionHeader, docType, text(header.company_code || fallbackDetail.company_code), index + 1)))
         : [],
     ]),
   );
 
   return {
     doc_type: docType,
-    doc_no: text(header.doc_no),
-    doc_date: dateInput(header.doc_date),
-    ac_code: text(header.ac_code),
-    ac_name: text(nested(headerRaw, ["Account", "ac_name"]) ?? header.ac_name),
-    bank_ac_code: text(header.bank_ac_code),
-    bank_ac_name: text(nested(headerRaw, ["MS_AC_BANKCODE", "Account", "ac_name"]) ?? header.bank_ac_name),
-    curr_code: text(header.curr_code),
-    curr_name: text(nested(headerRaw, ["Currency", "curr_name"]) ?? header.curr_name),
-    ex_rate: Number(header.ex_rate || 1),
-    div_code: text(header.div_code),
-    div_name: text(nested(headerRaw, ["Division", "div_name"]) ?? header.div_name),
-    remarks: text(header.remarks),
-    cheque_no: text(header.cheque_no),
-    cheque_date: dateInput(header.cheque_date),
-    cheque_bank: text(header.cheque_bank),
-    ac_payee: text(header.ac_payee),
-    canceled: text(header.canceled),
+    doc_no: text(header.doc_no || fallbackDetail.doc_no),
+    doc_date: dateInput(header.doc_date || fallbackDetail.doc_date),
+    ac_code: text(header.ac_code || fallbackDetail.ac_code),
+    ac_name: text(fallbackNested(headerRaw, ["Account", "ac_name"]) ?? fallbackNested(headerRaw, ["account", "ac_name"]) ?? header.ac_name ?? fallbackDetail.ac_name),
+    bank_ac_code: text(header.bank_ac_code || fallbackDetail.bank_ac_code),
+    bank_ac_name: text(fallbackNested(headerRaw, ["MS_AC_BANKCODE", "Account", "ac_name"]) ?? fallbackNested(headerRaw, ["ms_ac_bankcode", "account", "ac_name"]) ?? header.bank_ac_name ?? fallbackDetail.bank_ac_name),
+    curr_code: text(header.curr_code || fallbackDetail.curr_code),
+    curr_name: text(fallbackNested(headerRaw, ["Currency", "curr_name"]) ?? fallbackNested(headerRaw, ["currency", "curr_name"]) ?? header.curr_name ?? fallbackDetail.curr_name),
+    ex_rate: Number(header.ex_rate || fallbackDetail.ex_rate || 1),
+    div_code: text(header.div_code || fallbackDetail.div_code),
+    div_name: text(fallbackNested(headerRaw, ["Division", "div_name"]) ?? fallbackNested(headerRaw, ["division", "div_name"]) ?? header.div_name ?? fallbackDetail.div_name),
+    remarks: text(header.remarks || fallbackDetail.remarks),
+    cheque_no: text(header.cheque_no || fallbackDetail.cheque_no),
+    cheque_date: dateInput(header.cheque_date || fallbackDetail.cheque_date),
+    cheque_bank: text(header.cheque_bank || fallbackDetail.cheque_bank),
+    ac_payee: text(header.ac_payee || fallbackDetail.ac_payee),
+    canceled: text(header.canceled || fallbackDetail.canceled),
     detail,
     children,
   };
@@ -1819,13 +1820,22 @@ function buildBulkAccountEntryPayload(originalForm: TransactionHeader, docType: 
     div_code: row.div_code || originalForm.div_code,
   }));
 
+  const uniqueDetails = details.map((row, index) => {
+    const seen = new Set<number>();
+    const raw = Number(row.serial_no ?? index + 1);
+    let next = Number.isFinite(raw) && raw > 0 && !seen.has(raw) ? raw : index + 1;
+    while (seen.has(next)) next = index + 1 + seen.size;
+    seen.add(next);
+    return { ...row, serial_no: next };
+  });
+
   const children = groupChildren(originalForm);
   return {
     header,
-    details,
-    invoiceDetails: children.invoice,
-    expenseDetails: children.expense,
-    jobDetails: children.job,
+    details: uniqueDetails,
+    invoiceDetails: children.invoice.map((row, index) => ({ ...row, serial_no: Number(row.serial_no) || index + 1, dtl_sr_no: Number(row.dtl_sr_no) || index + 1 })),
+    expenseDetails: children.expense.map((row, index) => ({ ...row, serial_no: Number(row.serial_no) || index + 1, dtl_sr_no: Number(row.dtl_sr_no) || index + 1 })),
+    jobDetails: children.job.map((row, index) => ({ ...row, serial_no: Number(row.serial_no) || index + 1, dtl_sr_no: Number(row.dtl_sr_no) || index + 1 })),
     loginid,
   };
 }
@@ -1895,6 +1905,13 @@ function nested(source: Record<string, unknown>, path: string[]) {
     if (!current || typeof current !== "object") return undefined;
     return (current as Record<string, unknown>)[key];
   }, source);
+}
+
+function fallbackNested(source: Record<string, unknown>, path: string[]) {
+  const direct = nested(source, path);
+  if (direct !== undefined && direct !== null && direct !== "") return direct;
+  const lowerPath = path.map((segment) => segment.toLowerCase());
+  return nested(lowerRecord(source), lowerPath);
 }
 
 function text(value: unknown) {
