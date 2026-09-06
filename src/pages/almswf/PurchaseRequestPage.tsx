@@ -436,21 +436,21 @@ const Purchase_Request_page = ({ initialTab = 0 }: PurchaseRequestPageProps) => 
           return <span className="font-semibold">{Number(amt).toLocaleString()}</span>;
         },
       },
-      {
-        id: "actions",
-        header: "Action",
-        enableSorting: false,
-        cell: ({ row }) => (
-          <Button
-            size="icon"
-            variant="ghost"
-            title="View PO"
-            onClick={() => handlePoView(row.original)}
-          >
-            <Eye size={15} />
-          </Button>
-        ),
-      },
+      // {
+      //   id: "actions",
+      //   header: "Action",
+      //   enableSorting: false,
+      //   cell: ({ row }) => (
+      //     <Button
+      //       size="icon"
+      //       variant="ghost"
+      //       title="View PO"
+      //       onClick={() => handlePoView(row.original)}
+      //     >
+      //       <Eye size={15} />
+      //     </Button>
+      //   ),
+      // },
     ],
     []
   );

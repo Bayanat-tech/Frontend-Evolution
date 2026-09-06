@@ -357,7 +357,7 @@ export function FreightAirlineTariffPage({ mode = "entry" }: { mode?: AirlineTar
   ], [isReport, saving, deleteTariffRow]);
 
    return (
-     <section className="freight-ui-standard grid gap-3">
+    <section className="freight-ui-standard freight-list-screen grid gap-3">
        <div className={`rounded-md border shadow-sm ${isReport ? "overflow-hidden bg-card" : "bg-card"}`}>
         <div className={`flex flex-wrap items-center justify-between gap-3  px-4 py-3 ${isReport ? "bg-[#185FA5] text-white" : ""}`}>
           <div className="flex min-w-0 items-center gap-3">

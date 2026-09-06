@@ -308,7 +308,7 @@ export function FreightInvoicePage() {
   }
 
   return (
-    <section className="grid gap-4">
+    <section className="freight-list-screen grid gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="m-0 text-2xl font-semibold text-foreground">Freight Invoice Listing</h1>
@@ -357,7 +357,7 @@ export function FreightInvoicePage() {
         }
       >
         <div className="grid gap-3">
-          <div className="grid gap-2 md:grid-cols-5">
+          <div className="grid gap-2 md:grid-cols-6">
             <MetricCard label="Selected Jobs" value={String(unique(selectedRows.map((row) => text(row.job_no))).length)} />
             <MetricCard label="Activity Lines" value={String(selectedRows.length)} />
             <MetricCard label="Before Tax" value={`${selectedBase.toFixed(3)} ${form.curr_code || "OMR"}`} />

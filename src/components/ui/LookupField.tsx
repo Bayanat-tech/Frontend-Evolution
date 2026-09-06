@@ -2,8 +2,6 @@ import { ChevronDown, Search, X } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { formatLookupDisplayValue, getLookupText, getLookupValue, LookupRow } from "../../api/lookups";
-import { Input } from "./Input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./Table";
 
 type LookupColumn = {
   field: string;
@@ -22,7 +20,7 @@ type LookupFieldProps = {
   disabled?: boolean;
   enforceRequired?: boolean;
   compact?: boolean;
-  dense?: boolean; // trims height further than `compact`, opt-in only
+  dense?: boolean;
   placeholder?: string;
   required?: boolean;
   multiSelect?: boolean;
@@ -76,19 +74,31 @@ export function LookupField({
       const rect = trigger.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
+
+      // Adapt width to the field: match trigger width or min needed for columns
+      const minIdealWidth = columns.length >= 3 ? 340 : 280;
       const width = Math.min(
-        Math.max(rect.width, compact ? 360 : 460),
-        Math.min(720, viewportWidth - 24),
+        Math.max(rect.width, minIdealWidth),
+        Math.min(600, viewportWidth - 24),
       );
+
       const belowSpace = viewportHeight - rect.bottom - 10;
       const aboveSpace = rect.top - 10;
-      const preferredSpace = belowSpace >= 180 ? belowSpace : Math.max(belowSpace, aboveSpace);
-      const maxHeight = Math.max(220, Math.min(380, preferredSpace));
-      const opensAbove = belowSpace < 180 && aboveSpace > belowSpace;
-      const left = Math.min(Math.max(12, rect.left), viewportWidth - width - 12);
+      const preferredSpace = belowSpace >= 200 ? belowSpace : Math.max(belowSpace, aboveSpace);
+      const maxHeight = Math.max(240, Math.min(380, preferredSpace));
+      const opensAbove = belowSpace < 200 && aboveSpace > belowSpace;
+
+      // Horizontal alignment: if trigger is on right side of screen or overflows, align flush with trigger's right edge
+      let left = rect.left;
+      if (left + width > viewportWidth - 12) {
+        left = Math.max(12, rect.right - width);
+      } else {
+        left = Math.max(12, left);
+      }
+
       const top = opensAbove
-        ? Math.max(10, rect.top - maxHeight - 8)
-        : Math.min(rect.bottom + 6, viewportHeight - maxHeight - 10);
+        ? Math.max(10, rect.top - maxHeight - 6)
+        : Math.min(rect.bottom + 4, viewportHeight - maxHeight - 10);
 
       setPopoverStyle({ left, top, width, maxHeight });
     };
@@ -121,7 +131,7 @@ export function LookupField({
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [compact, open]);
+  }, [columns.length, compact, open]);
 
   const selectedValues = useMemo(() => {
     if (!multiSelect) return value ? [value] : [];
@@ -196,7 +206,7 @@ export function LookupField({
       ? rows
         .filter((row) => selectedValues.includes(String(getLookupValue(row, valueField) ?? "")))
         .map((row) => getLookupText(row, displayFields.length ? displayFields : [valueField]))
-        .join(", ") || value || " "
+        .join(", ") || value || ""
       : value
         ? getLookupText(
           rows.find((row) => String(getLookupValue(row, valueField) ?? "") === String(value)) || {
@@ -204,28 +214,31 @@ export function LookupField({
           },
           displayFields.length ? displayFields : [valueField],
         ) || String(value)
-        : " ");
+        : "");
 
   return (
     <>
       <label className={compact ? "block w-full min-w-0" : "field"}>
-      {(!compact || showLabelInCompact) && (
+        {(!compact || showLabelInCompact) && (
           <span>
             {label} {required && <span style={{ color: "#E24B4A", marginLeft: 2 }}>*</span>}
           </span>
-      )}
+        )}
         <div
           ref={triggerRef}
-          className={`lookup-field-trigger relative flex w-full min-w-0 overflow-hidden rounded-md border border-[#d5dbe3] bg-white ${
-            dense ? "h-7" : compact ? "h-7" : "h-9"
-          }`}
+          className={`lookup-field-trigger relative flex w-full min-w-0 items-center overflow-hidden rounded-md border transition-all ${
+            disabled
+              ? "bg-slate-100/90 border-slate-200 cursor-not-allowed"
+              : "border-[#d5dbe3] bg-white focus-within:border-[#00378C] focus-within:ring-1 focus-within:ring-[#00378C]/20"
+          } ${dense ? "h-7" : compact ? "h-7" : "h-8"}`}
         >
-          {enforceRequired && (
+          {enforceRequired && !disabled && (
             <input
               ref={validityRef}
               tabIndex={-1}
               aria-hidden="true"
-              className="pointer-events-none absolute inset-0 -z-10 h-full w-full border-0 bg-transparent p-0 text-transparent opacity-0"
+              className="pointer-events-none absolute inset-0 -z-10 h-0 w-0 border-0 bg-transparent p-0 text-transparent opacity-0"
+              style={{ opacity: 0, color: "transparent", width: 0, height: 0, pointerEvents: "none" }}
               value={value}
               required
               onChange={() => {}}
@@ -233,9 +246,11 @@ export function LookupField({
             />
           )}
           <button
-            className={`min-w-0 flex-1 border-0 bg-transparent text-left disabled:opacity-60 ${
-              dense || compact ? "px-2 text-xs" : "px-3 text-sm"
-            } ${currentText ? "font-semibold text-[#1d4ed8]" : "text-muted-foreground"}`}
+            className={`min-w-0 flex-1 border-0 bg-transparent text-left truncate ${
+              disabled ? "cursor-not-allowed text-slate-700 font-medium" : "cursor-pointer"
+            } ${
+              dense || compact ? "px-2 text-xs" : "px-2.5 text-xs"
+            } ${!disabled && currentText ? "text-slate-800 font-medium" : !disabled ? "text-slate-400" : ""}`}
             type="button"
             onClick={openLookup}
             disabled={disabled}
@@ -246,22 +261,27 @@ export function LookupField({
           </button>
           {value && !disabled && (
             <button
-              className={`${dense || compact ? "w-6" : "w-7"} grid place-items-center text-muted-foreground hover:bg-accent`}
+              className={`${dense || compact ? "w-6" : "w-6.5"} shrink-0 grid place-items-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer`}
               type="button"
               aria-label="Clear lookup"
-              onClick={() => onChange("", null)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange("", null);
+              }}
             >
-              <X size={dense ? 12 : 14} />
+              <X size={dense ? 11 : 13} />
             </button>
           )}
           <button
-            className={`${dense || compact ? "w-7" : "w-8"} grid place-items-center text-slate-400 hover:bg-accent`}
+            className={`${dense || compact ? "w-6" : "w-7"} shrink-0 grid place-items-center ${
+              disabled ? "text-slate-300 pointer-events-none" : "text-slate-400 hover:bg-slate-100 cursor-pointer"
+            }`}
             type="button"
             onClick={openLookup}
             disabled={disabled}
             aria-label="Open lookup"
           >
-            <ChevronDown size={dense ? 14 : 16} />
+            <ChevronDown size={dense ? 13 : 15} />
           </button>
         </div>
       </label>
@@ -270,53 +290,64 @@ export function LookupField({
         createPortal(
           <div
             ref={popoverRef}
-            className="lookup-popover fixed z-[9999] flex flex-col overflow-hidden rounded-md border border-[#d5dbe3] bg-white shadow-2xl"
+            className="lookup-popover fixed z-[9999] flex flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-2xl"
             style={popoverStyle}
           >
-            <div className="flex-none px-2.5 pt-2.5 pb-2">
-              <label className="flex h-8 items-center gap-2 rounded-full border border-[#d5dbe3] bg-white px-3 text-slate-400">
-                <Search size={14} />
-                <Input
+            {/* Search header */}
+            <div className="flex-none p-2 border-b border-slate-200 bg-slate-50/80">
+              <div className="relative flex items-center">
+                <Search size={14} className="absolute left-2.5 text-slate-400 pointer-events-none" />
+                <input
                   autoFocus
-                  className="h-7 border-0 bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
+                  className="w-full h-7.5 pl-8 pr-7 rounded-lg border border-slate-300 focus:border-[#00378C] focus:ring-2 focus:ring-[#00378C]/20 bg-white text-slate-800 text-[11.5px] placeholder:text-slate-400 focus:outline-none transition-all shadow-xs"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search code or description..."
                 />
-              </label>
+                {query && (
+                  <button
+                    type="button"
+                    className="absolute right-2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                    onClick={() => setQuery("")}
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
             </div>
 
-            {error && <div className="m-2 alert error">{error}</div>}
+            {error && <div className="m-2 p-2 bg-red-50 text-red-700 text-xs rounded border border-red-200">{error}</div>}
 
+            {/* Table */}
             <div className="min-h-0 flex-1 overflow-auto">
-              <Table className="lookup-results-table table-fixed">
-                <TableHeader className="lookup-popover-head sticky top-0 z-10">
-                  <TableRow>
+              <table className="lookup-results-table w-full border-collapse text-left">
+                <thead className="sticky top-0 z-10 bg-[#00378C] text-white">
+                  <tr className="h-7.5 bg-[#00378C]">
                     {columns.map((column, columnIndex) => (
-                      <TableHead
-                        className="lookup-popover-th truncate whitespace-nowrap"
+                      <th
+                        className="px-2.5 py-1.5 text-[10.5px] font-bold uppercase tracking-wider text-white select-none whitespace-nowrap"
                         key={column.field}
-                        style={columnIndex === 0 ? { width: columns.length > 2 ? "18%" : "28%" } : undefined}
+                        style={columnIndex === 0 ? { width: columns.length > 2 ? "25%" : "35%" } : undefined}
                         title={column.header}
                       >
                         {column.header}
-                      </TableHead>
+                      </th>
                     ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
                   {loading ? (
-                    <TableRow>
-                      <TableCell className="px-3 py-8 text-center text-muted-foreground" colSpan={columns.length}>
+                    <tr>
+                      <td className="px-3 py-6 text-center text-xs text-slate-500" colSpan={columns.length}>
                         Loading...
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                    </tr>
                   ) : pagedRows.length === 0 ? (
-                    <TableRow>
-                      <TableCell className="px-3 py-8 text-center text-muted-foreground" colSpan={columns.length}>
+                    <tr>
+                      <td className="px-3 py-6 text-center text-xs text-slate-500" colSpan={columns.length}>
                         No records found
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                    </tr>
                   ) : (
                     pagedRows.map((row, index) => {
                       const rowValue = String(getLookupValue(row, valueField) ?? "");
@@ -324,42 +355,47 @@ export function LookupField({
                         ? selectedValues.includes(rowValue)
                         : rowValue === value;
                       return (
-                        <TableRow
-                          className={selected
-                            ? "cursor-pointer bg-primary/10"
-                            : "cursor-pointer hover:bg-slate-50"
-                          }
+                        <tr
                           key={`${rowValue || index}`}
                           onClick={() => selectRow(row)}
-                          aria-selected={selected}
+                          className={`h-7.5 cursor-pointer transition-colors ${
+                            selected
+                              ? "bg-[#E8F0FE] text-[#00378C] font-semibold"
+                              : "hover:bg-[#E8F0FE]/60 text-slate-800"
+                          }`}
                         >
                           {columns.map((column, columnIndex) => {
                             const cellText = formatLookupDisplayValue(column.field, getLookupValue(row, column.field));
                             return (
-                              <TableCell
-                                className={`max-w-0 truncate whitespace-nowrap px-3 py-1.5 text-xs ${columnIndex === 0 ? "lookup-popover-code" : "text-slate-800"}`}
+                              <td
+                                className={`px-2.5 py-1 text-xs truncate whitespace-nowrap max-w-[220px] ${
+                                  columnIndex === 0 ? "font-semibold text-[#00378C] font-mono text-[11px]" : "text-slate-700"
+                                }`}
                                 key={column.field}
                                 title={cellText}
                               >
                                 {cellText}
-                              </TableCell>
+                              </td>
                             );
                           })}
-                        </TableRow>
+                        </tr>
                       );
                     })
                   )}
-                </TableBody>
-              </Table>
+                </tbody>
+              </table>
             </div>
 
-            <div className="lookup-footer flex flex-none items-center justify-between border-t border-[#e5e7eb] bg-white px-3 py-2 text-xs text-slate-500">
-              <span>{filteredRows.length} item{filteredRows.length === 1 ? "" : "s"}</span>
-              <div className="lookup-pager flex items-center gap-1.5">
+            {/* Footer */}
+            <div className="lookup-footer flex-none px-2.5 py-1.5 border-t border-slate-200 bg-slate-50/90 flex items-center justify-between text-xs text-slate-600">
+              <span className="text-[11px] font-medium text-slate-500">
+                {filteredRows.length} item{filteredRows.length === 1 ? "" : "s"}
+              </span>
+              <div className="flex items-center gap-1.5">
                 {filteredRows.length > 10 && (
                   <>
                     <select
-                      className="rounded border border-[#d7e1f1] bg-white px-1.5 py-0.5 text-xs text-[#17345f] focus:outline-none"
+                      className="h-6 px-1.5 rounded border border-slate-300 bg-white text-[10.5px] font-semibold text-slate-700 focus:outline-none focus:border-[#00378C]"
                       value={rowsPerPage}
                       onChange={(event) => {
                         setRowsPerPage(Number(event.target.value));
@@ -368,21 +404,34 @@ export function LookupField({
                     >
                       {[10, 25, 50, 100].map((size) => (
                         <option key={size} value={size}>
-                          {size}
+                          {size} / page
                         </option>
                       ))}
                     </select>
-                    <button type="button" className="lookup-page-button" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>
+                    <button
+                      type="button"
+                      className="h-6 px-2 rounded border border-slate-300 bg-white text-[10.5px] font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                      disabled={page === 1}
+                      onClick={() => setPage((current) => Math.max(1, current - 1))}
+                    >
                       Prev
                     </button>
-                    <button type="button" className="lookup-page-button" disabled={page === totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>
+                    <span className="text-[10.5px] font-semibold text-slate-600 px-0.5">
+                      {page} / {totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      className="h-6 px-2 rounded border border-slate-300 bg-white text-[10.5px] font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                      disabled={page === totalPages}
+                      onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                    >
                       Next
                     </button>
                   </>
                 )}
                 <button
                   type="button"
-                  className="font-semibold text-slate-600 hover:text-slate-900"
+                  className="h-6 px-2 rounded bg-slate-200 text-slate-700 hover:bg-slate-300 text-[10.5px] font-semibold transition-colors cursor-pointer"
                   onClick={() => {
                     setOpen(false);
                     setQuery("");

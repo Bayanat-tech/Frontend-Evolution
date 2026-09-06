@@ -61,7 +61,7 @@ export function PurchaseInvoiceHeaderForm({
             <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1">
                 <div>
                     <p className="eyebrow m-0 text-[10px] leading-tight">Header</p>
-                    <h3 className="m-0 text-xs font-semibold leading-tight">Purchase Order Information</h3>
+                    <h3 className="m-0 text-xs font-semibold leading-tight"></h3>
                 </div>
             </div>
 
@@ -74,7 +74,7 @@ export function PurchaseInvoiceHeaderForm({
                         columns={[{ field: "ac_code", header: "Code" }, { field: "ac_name", header: "Name" }, { field: "address", header: "Address" }, { field: "tel", header: "Tel" }, { field: "fax", header: "Fax" }]}
                         valueField="ac_code"
                         displayFields={["ac_code", "ac_name"]}
-                        loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_HDR", code1: companyCode, loginid: loginIdOrAdmin })}
+                        loadOptions={() => getDynamicLookup({ parameter: "Account_AC_CODE_Serach_For_suppier_customer", code1: companyCode, loginid: loginIdOrAdmin })}
                         disabled={headerAndLineDisabled}
                         onChange={(value, row) => setForm((current) => ({
                             ...current,
@@ -86,7 +86,7 @@ export function PurchaseInvoiceHeaderForm({
                         }))}
                     />
                 </div>
-                   <div className="col-span-2">
+                   {/* <div className="col-span-2">
                     <LookupField
                         label="Division *"
                         value={form.div_code}
@@ -102,7 +102,7 @@ export function PurchaseInvoiceHeaderForm({
                             div_name: text(getLookupValue(row || {}, "div_name")),
                         }))}
                     />
-                </div>
+                </div> */}
 
                 {(String(docType ?? "").trim().toUpperCase() === "PIN" ||
                     String(docType ?? "").trim().toUpperCase() === "SIN") && (
@@ -138,8 +138,8 @@ export function PurchaseInvoiceHeaderForm({
                                         doc_date: toDateInputValue(getLookupValue(row || {}, "doc_date")),
                                         po_doc_date: toDateInputValue(getLookupValue(row || {}, "po_doc_date")),
                                         po_doc_no: text(getLookupValue(row || {}, "po_doc_no")),
-                                        po_ac_code: text(getLookupValue(row || {}, "po_ac_code")),
-                                        po_ac_name: text(getLookupValue(row || {}, "po_ac_name")),
+                                        ac_code: text(getLookupValue(row || {}, "ac_code")),
+                                        ac_name: text(getLookupValue(row || {}, "ac_name")),
                                         po_dept_code: text(getLookupValue(row || {}, "po_dept_code")),
                                         remarks: text(getLookupValue(row || {}, "remarks")),
                                         po_remarks: text(getLookupValue(row || {}, "po_remarks")),
@@ -149,8 +149,8 @@ export function PurchaseInvoiceHeaderForm({
                                         curr_name: text(getLookupValue(row || {}, "curr_name")),
                                         ex_rate: numberOrZero(getLookupValue(row || {}, "ex_rate")),
                                         po_other_expense_cost: numberOrZero(getLookupValue(row || {}, "po_other_expense_cost")),
-                                        po_disc_hdr_percent: numberOrZero(getLookupValue(row || {}, "po_disc_hdr_percent")),
-                                        po_disc_hdr_price: numberOrZero(getLookupValue(row || {}, "po_disc_hdr_price")),
+                                        disc_hdr_percent: numberOrZero(getLookupValue(row || {}, "disc_hdr_percent")),
+                                        disc_hdr_price: numberOrZero(getLookupValue(row || {}, "disc_hdr_price")),
                                         po_payment_terms: text(getLookupValue(row || {}, "po_payment_terms")),
                                         po_credit_period: numberOrZero(getLookupValue(row || {}, "po_credit_period")),
                                         po_due_date: getLookupValue(row || {}, "po_due_date"),
@@ -174,8 +174,9 @@ export function PurchaseInvoiceHeaderForm({
                                         po_project_name: text(getLookupValue(row || {}, "po_project_name")),
                                         po_pr_no: text(getLookupValue(row || {}, "po_pr_no")),
                                         po_scope_of_work: text(getLookupValue(row || {}, "po_scope_of_work")),
-                                        total_po_amount: numberOrZero(getLookupValue(row || {}, "total_po_amount"))
-
+                                        total_po_amount: numberOrZero(getLookupValue(row || {}, "total_po_amount")),
+                                         inv_no: text(getLookupValue(row || {}, "inv_no")),
+                                         inv_date:toDateInputValue(getLookupValue(row || {}, "inv_date")),
 
                                     }));
 
@@ -203,6 +204,7 @@ export function PurchaseInvoiceHeaderForm({
                                             unit_price: numberOrZero(getLookupValue(item, "unit_price")),
                                             porder_unit_price: numberOrZero(getLookupValue(item, "porder_unit_price")),
                                             disc_hdr_percent: numberOrZero(getLookupValue(item, "disc_hdr_percent")),
+                                              disc_hdr_price: numberOrZero(getLookupValue(item, "disc_hdr_price")),
                                             disc_percent: numberOrZero(getLookupValue(item, "disc_percent")),
                                             porder_disc_percent: numberOrZero(getLookupValue(item, "porder_disc_percent")),
                                             disc_price: numberOrZero(getLookupValue(item, "disc_price")),
@@ -226,11 +228,11 @@ export function PurchaseInvoiceHeaderForm({
                                             quantity: numberOrZero(getLookupValue(item, "quantity")),
                                             ex_rate: numberOrZero(getLookupValue(item, "ex_rate")),
                                             porder_tx_compnt_amt_1: text(getLookupValue(item, "porder_tx_compnt_amt_1")),
-                                            porder_tx_compnt_perc_1:text(getLookupValue(item, "porder_tx_compnt_perc_1")),
+                                           tx_compnt_perc_1: numberOrZero(getLookupValue(item, "tx_compnt_perc_1")),
                                             porder_tx_cat_code: text(getLookupValue(item, "porder_tx_cat_code")),
                                             porder_tx_compntcat_code_1: text(getLookupValue(item, "porder_tx_compntcat_code_1")),
                                              porder_required_dt: text(getLookupValue(item, "porder_required_dt")),
-                                             porder_tx_compnt_1_expmt:text(getLookupValue(item, "porder_tx_compnt_1_expmt")),
+                                            tx_compnt_1_expmt:text(getLookupValue(item, "tx_compnt_1_expmt")),
                                              porder_remarks:text(getLookupValue(item, "porder_remarks")),
                                              serial_no: numberOrZero(getLookupValue(item, "serial_no")),
                                             
@@ -268,10 +270,6 @@ export function PurchaseInvoiceHeaderForm({
                     <Input type="date" disabled={headerAndLineDisabled} required value={form.pi_doc_date} onChange={(event) => updateField("pi_doc_date", event.target.value)} />
                 </CField>
 
-                <CField label="Pay Terms" className="col-span-2">
-                    <Input disabled={headerAndLineDisabled} value={form.po_payment_terms} onChange={(event) => updateField("po_payment_terms", event.target.value)} />
-                </CField>
-
                 <CField label="GRN Remarks" className="col-span-2">
                     <Input disabled={headerAndLineDisabled} value={form.remarks} onChange={(event) => updateField("remarks", event.target.value)} />
                 </CField>
@@ -290,7 +288,7 @@ export function PurchaseInvoiceHeaderForm({
                 <CField label="Credit Period">
                     <Input disabled={headerAndLineDisabled} className="text-right" type="number" step="1" value={form.po_credit_period} onChange={(event) => updateField("po_credit_period", Number(event.target.value || 0))} />
                 </CField>
-                <div className="col-span-2">
+                <div className="col-span-1">
                     <LookupField
                         label="Department"
                         value={form.po_dept_code || ""}
@@ -367,7 +365,7 @@ export function PurchaseInvoiceHeaderForm({
                     />
                 </CField>
 
-                <div className="col-span-2">
+                <div className="col-span-1">
                     <LookupField
                         label="Currency *"
                         value={form.curr_code || ""}
@@ -430,10 +428,10 @@ export function PurchaseInvoiceHeaderForm({
                         type="number"
                         step="0.01"
                         disabled={headerAndLineDisabled}
-                        value={form.po_disc_hdr_price}
+                        value={form.disc_hdr_price}
                         onChange={(event) =>
                             updateField(
-                                "po_disc_hdr_price",
+                                "disc_hdr_price",
                                 Number(event.target.value || 0)
                             )
                         }
@@ -446,10 +444,10 @@ export function PurchaseInvoiceHeaderForm({
                         type="number"
                         step="0.01"
                         disabled={headerAndLineDisabled}
-                        value={form.po_disc_hdr_percent}
+                        value={form.disc_hdr_percent}
                         onChange={(event) =>
                             updateField(
-                                "po_disc_hdr_percent",
+                                "disc_hdr_percent",
                                 Number(event.target.value || 0)
                             )
                         }
@@ -470,7 +468,7 @@ export function PurchaseInvoiceHeaderForm({
                                 : form.po_tx_cat_code
                         }
                         columns={[
-                            { field: "tx_cat_code_1", header: "Code" },
+                            { field: "tx_cat_code", header: "Code" },
                             { field: "tx_cat_name", header: "Name" }
                         ]}
                         valueField="tx_cat_code"

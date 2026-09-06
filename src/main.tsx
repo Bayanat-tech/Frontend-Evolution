@@ -9,6 +9,7 @@ import "@fontsource/inter/latin-800.css";
 import { App } from "./App";
 import { AuthProvider } from "./state/AuthContext";
 import "./styles.css";
+import "./freight-bisc.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const queryClient = new QueryClient({

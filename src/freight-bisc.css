@@ -1,0 +1,816 @@
+/* ==========================================================================
+   Freight Management System (FMS) - BISC Design System Implementation
+   Matches BISC Accounts Frontend typography, form controls, cards, tabs, and tables.
+   ========================================================================== */
+
+.freight-workspace-ui,
+.freight-document-form,
+.freight-list-screen,
+.freight-control-center,
+.freight-module-surface,
+.freight-dense-form,
+.freight-ui-standard {
+  --freight-bisc-blue: #00378C;
+  --freight-bisc-blue-hover: #002d72;
+  --freight-bisc-blue-light: #eff6ff;
+  --freight-bisc-blue-border: #7caaf0;
+  --freight-bisc-border: #cbd5e1;
+  --freight-bisc-border-soft: #e2e8f0;
+  --freight-bisc-border-input: #b8c4d4;
+  --freight-bisc-field: #f8f9fb;
+  --freight-bisc-ink: #1a1a2e;
+  --freight-bisc-label: #374151;
+  --freight-bisc-muted: #64748b;
+  --freight-bisc-card: #ffffff;
+  --freight-bisc-ring: rgba(0, 55, 140, 0.16);
+  font-family: var(--app-font-family, 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif) !important;
+  color: var(--freight-bisc-ink);
+}
+
+/* --------------------------------------------------------------------------
+   1. Typography & Form Labels (Matching BISC labelCls)
+   -------------------------------------------------------------------------- */
+.freight-workspace-ui :where(label, .freight-compact-label, .freight-field-label),
+.freight-document-form :where(label, .freight-compact-label, .freight-field-label),
+.freight-dense-form :where(label, .freight-compact-label, .freight-field-label),
+.freight-ui-standard :where(label, .freight-compact-label, .freight-field-label) {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 3px !important;
+  color: var(--freight-bisc-label) !important;
+  font-family: var(--app-font-family) !important;
+  font-size: 11.5px !important;
+  font-weight: 550 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  line-height: 1.25 !important;
+}
+
+.freight-workspace-ui :where(label, .freight-compact-label, .freight-field-label) > span:first-child,
+.freight-document-form :where(label, .freight-compact-label, .freight-field-label) > span:first-child,
+.freight-dense-form :where(label, .freight-compact-label, .freight-field-label) > span:first-child,
+.freight-ui-standard :where(label, .freight-compact-label, .freight-field-label) > span:first-child {
+  color: var(--freight-bisc-label) !important;
+  font-family: var(--app-font-family) !important;
+  font-size: 11.5px !important;
+  font-weight: 550 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   2. Input Controls, Selects, Lookups & Dates (Matching BISC inputCls)
+   -------------------------------------------------------------------------- */
+.freight-workspace-ui :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]),
+  select,
+  .ui-input,
+  .ui-select,
+  .lookup-field-trigger,
+  button[role="combobox"]
+),
+.freight-document-form :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]),
+  select,
+  .ui-input,
+  .ui-select,
+  .lookup-field-trigger,
+  button[role="combobox"]
+),
+.freight-ui-standard :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]),
+  select,
+  .ui-input,
+  .ui-select,
+  .lookup-field-trigger,
+  button[role="combobox"]
+) {
+  min-height: 32px !important;
+  height: 32px !important;
+  border: 1px solid var(--freight-bisc-border-input) !important;
+  border-radius: 8px !important;
+  background-color: var(--freight-bisc-field) !important;
+  color: var(--freight-bisc-ink) !important;
+  font-family: var(--app-font-family) !important;
+  font-size: 12px !important;
+  font-weight: 450 !important;
+  padding-inline: 9px !important;
+  box-shadow: none !important;
+  outline: none !important;
+  transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease !important;
+}
+
+.freight-workspace-ui :where(input, select, textarea, .ui-input, .ui-select, .ui-textarea, .lookup-field-trigger, button[role="combobox"]):focus,
+.freight-workspace-ui :where(input, select, textarea, .ui-input, .ui-select, .ui-textarea, .lookup-field-trigger, button[role="combobox"]):focus-within,
+.freight-document-form :where(input, select, textarea, .ui-input, .ui-select, .ui-textarea, .lookup-field-trigger, button[role="combobox"]):focus,
+.freight-document-form :where(input, select, textarea, .ui-input, .ui-select, .ui-textarea, .lookup-field-trigger, button[role="combobox"]):focus-within {
+  border-color: var(--freight-bisc-blue) !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 0 0 2px var(--freight-bisc-ring) !important;
+  outline: 0 !important;
+}
+
+.freight-workspace-ui :where(textarea, .ui-textarea),
+.freight-document-form :where(textarea, .ui-textarea),
+.freight-ui-standard :where(textarea, .ui-textarea) {
+  min-height: 52px !important;
+  border: 1px solid var(--freight-bisc-border-input) !important;
+  border-radius: 8px !important;
+  background-color: var(--freight-bisc-field) !important;
+  color: var(--freight-bisc-ink) !important;
+  font-family: var(--app-font-family) !important;
+  font-size: 12px !important;
+  font-weight: 450 !important;
+  padding: 6px 9px !important;
+  box-shadow: none !important;
+  resize: vertical;
+}
+
+.freight-workspace-ui :where(input, select, textarea):disabled,
+.freight-workspace-ui .lookup-field-trigger:has(button:disabled) {
+  border-color: #e2e8f0 !important;
+  background-color: #f1f5f9 !important;
+  color: #64748b !important;
+  cursor: not-allowed !important;
+  opacity: 0.8 !important;
+}
+
+/* Date picker controls */
+.freight-workspace-ui :where(input[type="date"], input[type="datetime-local"]) {
+  color-scheme: light;
+}
+
+.freight-workspace-ui :where(input[type="date"], input[type="datetime-local"])::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.65;
+}
+
+/* --------------------------------------------------------------------------
+   3. Buttons & Action Bars
+   -------------------------------------------------------------------------- */
+.freight-workspace-ui :where(.ui-button, button.ui-button) {
+  min-height: 32px;
+  height: 32px;
+  border-radius: 8px !important;
+  padding-inline: 12px;
+  font-family: var(--app-font-family) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  transition: all 140ms ease !important;
+}
+
+.freight-workspace-ui :where(.ui-button-icon, button.ui-button-icon),
+.freight-workspace-ui .data-table-scroll td .ui-button,
+.freight-workspace-ui .data-table-scroll td button,
+.freight-workspace-ui .data-table-pagination .ui-button-icon,
+.freight-workspace-ui .data-table-pager button {
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+  padding: 0 !important;
+  padding-inline: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 6px !important;
+}
+
+.freight-workspace-ui :where(.ui-button-icon, button.ui-button-icon) svg,
+.freight-workspace-ui .data-table-scroll td .ui-button svg,
+.freight-workspace-ui .data-table-scroll td button svg,
+.freight-workspace-ui .data-table-pagination .ui-button-icon svg,
+.freight-workspace-ui .data-table-pager button svg {
+  width: 15px !important;
+  height: 15px !important;
+  min-width: 15px !important;
+  min-height: 15px !important;
+  flex-shrink: 0 !important;
+}
+
+.freight-workspace-ui :where(.ui-button-default, .ui-button-primary) {
+  border: 1px solid var(--freight-bisc-blue) !important;
+  background: var(--freight-bisc-blue) !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 2px rgba(0, 55, 140, 0.2) !important;
+}
+
+.freight-workspace-ui :where(.ui-button-default, .ui-button-primary):hover {
+  background: var(--freight-bisc-blue-hover) !important;
+  border-color: var(--freight-bisc-blue-hover) !important;
+}
+
+.freight-workspace-ui .ui-button-outline {
+  border: 1px solid var(--freight-bisc-border) !important;
+  background: #ffffff !important;
+  color: var(--freight-bisc-ink) !important;
+}
+
+.freight-workspace-ui .ui-button-outline:hover {
+  background: #f8fafc !important;
+  border-color: #94a3b8 !important;
+}
+
+/* --------------------------------------------------------------------------
+   4. Cards, Sections & Panels (Matching BISC Card System)
+   -------------------------------------------------------------------------- */
+.freight-workspace-ui :where(.freight-form-card, .freight-panel, .freight-info-section, .freight-document-paper, .freight-report-card),
+.freight-document-form :where(.freight-form-card, .freight-panel, .freight-info-section, .freight-document-paper, .freight-report-card),
+.freight-ui-standard :where(.freight-form-card, .freight-panel, .freight-info-section, .freight-document-paper, .freight-report-card) {
+  border: 1px solid var(--freight-bisc-border) !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
+  overflow: hidden !important;
+}
+
+.freight-workspace-ui :where(.freight-panel-title, .freight-info-title, .freight-report-filter-heading),
+.freight-document-form :where(.freight-panel-title, .freight-info-title, .freight-report-filter-heading) {
+  min-height: 36px !important;
+  padding: 7px 12px !important;
+  border-bottom: 1px solid var(--freight-bisc-border-soft) !important;
+  background: #f8f9fb !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+.freight-workspace-ui :where(.freight-panel-title, .freight-info-title) h2,
+.freight-workspace-ui :where(.freight-panel-title, .freight-info-title) h3,
+.freight-document-form :where(.freight-panel-title, .freight-info-title) h2,
+.freight-document-form :where(.freight-panel-title, .freight-info-title) h3 {
+  font-size: 12px !important;
+  font-weight: 650 !important;
+  color: #0f172a !important;
+  margin: 0 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+
+.freight-workspace-ui :where(.freight-panel-body, .freight-info-body),
+.freight-document-form :where(.freight-panel-body, .freight-info-body) {
+  padding: 10px 12px !important;
+  background: #ffffff !important;
+}
+
+/* --------------------------------------------------------------------------
+   5. Job Editor & Clean Horizontal Workflow Stepper (Fixing vertical rail)
+   -------------------------------------------------------------------------- */
+.freight-job-editor-shell {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  width: 100% !important;
+}
+
+.freight-job-editor-shell .freight-document-paper {
+  width: 100% !important;
+  max-width: 100% !important;
+  padding: 10px 12px !important;
+}
+
+/* Horizontal Job Progress Rail at bottom of form */
+.freight-job-progress-rail {
+  position: static !important;
+  width: 100% !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  padding: 10px 14px !important;
+  border: 1px solid var(--freight-bisc-border) !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+}
+
+.freight-job-progress-rail-title {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 0 2px 8px !important;
+  margin-bottom: 8px !important;
+  border-bottom: 1px solid var(--freight-bisc-border-soft) !important;
+}
+
+.freight-job-progress-rail-title span {
+  color: var(--freight-bisc-muted) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  writing-mode: horizontal-tb !important;
+}
+
+.freight-job-progress-rail-title strong {
+  color: var(--freight-bisc-blue) !important;
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+  writing-mode: horizontal-tb !important;
+}
+
+.freight-job-progress-rail-list {
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+  width: 100% !important;
+  height: auto !important;
+  overflow: visible !important;
+  padding: 0 !important;
+}
+
+.freight-job-progress-rail-list::before {
+  display: none !important;
+}
+
+.freight-job-progress-rail-step {
+  position: relative !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  min-height: 44px !important;
+  padding: 6px 10px !important;
+  border: 1px solid var(--freight-bisc-border) !important;
+  border-radius: 8px !important;
+  background: #f8fafc !important;
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+  box-shadow: none !important;
+  transform: none !important;
+  transition: all 140ms ease !important;
+}
+
+.freight-job-progress-rail-step::before,
+.freight-job-progress-rail-step::after {
+  display: none !important;
+}
+
+.freight-job-progress-rail-step.done {
+  border-color: #a7f3d0 !important;
+  background: #ecfdf5 !important;
+  color: #065f46 !important;
+}
+
+.freight-job-progress-rail-step.current {
+  border-color: var(--freight-bisc-blue) !important;
+  background: #eff6ff !important;
+  color: var(--freight-bisc-blue) !important;
+  box-shadow: 0 0 0 1px var(--freight-bisc-blue) !important;
+}
+
+.freight-job-progress-rail-step.pending {
+  border-color: #e2e8f0 !important;
+  background: #f8fafc !important;
+  color: #94a3b8 !important;
+}
+
+.freight-job-progress-rail-marker {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 9999px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  flex-shrink: 0 !important;
+}
+
+.freight-job-progress-rail-step.done .freight-job-progress-rail-marker {
+  background: #10b981 !important;
+  color: #ffffff !important;
+}
+
+.freight-job-progress-rail-step.current .freight-job-progress-rail-marker {
+  background: var(--freight-bisc-blue) !important;
+  color: #ffffff !important;
+}
+
+.freight-job-progress-rail-step.pending .freight-job-progress-rail-marker {
+  background: #e2e8f0 !important;
+  color: #64748b !important;
+}
+
+.freight-job-progress-rail-copy {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1px !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  writing-mode: horizontal-tb !important;
+}
+
+.freight-job-progress-rail-copy strong,
+.freight-job-progress-rail-copy small {
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.freight-job-progress-rail-copy strong {
+  font-size: 11.5px !important;
+  font-weight: 650 !important;
+  color: inherit !important;
+}
+
+.freight-job-progress-rail-copy small {
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  color: var(--freight-bisc-muted) !important;
+}
+
+/* --------------------------------------------------------------------------
+   6. BISC Workspace Navigation Tabs (Matching Tabs.tsx)
+   -------------------------------------------------------------------------- */
+.freight-workspace-tabs,
+.freight-tabs-list {
+  display: flex !important;
+  align-items: center !important;
+  gap: 2px !important;
+  padding: 0 8px !important;
+  border-bottom: 1px solid var(--freight-bisc-border) !important;
+  background: #ffffff !important;
+  min-height: 40px !important;
+  overflow-x: auto !important;
+}
+
+.freight-workspace-tab,
+.freight-tabs-list > button,
+[role="tablist"] > [role="tab"] {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 7px 12px !important;
+  border-radius: 8px 8px 0 0 !important;
+  border: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  background: transparent !important;
+  color: var(--freight-bisc-muted) !important;
+  font-family: var(--app-font-family) !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  transition: all 140ms ease !important;
+  cursor: pointer !important;
+  box-shadow: none !important;
+  min-height: 38px !important;
+  white-space: nowrap !important;
+}
+
+.freight-workspace-tab:hover,
+.freight-tabs-list > button:hover,
+[role="tablist"] > [role="tab"]:hover {
+  color: var(--freight-bisc-ink) !important;
+  background: #f1f5f9 !important;
+}
+
+.freight-workspace-tab.active,
+.freight-tabs-list > button.active,
+.freight-tabs-list > button[aria-selected="true"],
+.freight-tabs-list > button.ui-button-default,
+[role="tablist"] > [role="tab"][aria-selected="true"] {
+  color: var(--freight-bisc-blue) !important;
+  border-bottom-color: var(--freight-bisc-blue) !important;
+  background: var(--freight-bisc-blue-light) !important;
+}
+
+/* --------------------------------------------------------------------------
+   7. Hero Header & Quick Facts
+   -------------------------------------------------------------------------- */
+.freight-shipment-hero {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  padding: 8px 12px !important;
+  border: 1px solid var(--freight-bisc-border) !important;
+  border-radius: 10px !important;
+  background: #f8fafc !important;
+  box-shadow: none !important;
+}
+
+.freight-shipment-hero-item {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+}
+
+.freight-shipment-hero-item span {
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+  color: var(--freight-bisc-muted) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+}
+
+.freight-shipment-hero-item strong {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: var(--freight-bisc-blue) !important;
+}
+
+.freight-shipment-quickfacts {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)) !important;
+  gap: 8px 12px !important;
+  padding: 8px 4px 10px !important;
+}
+
+/* --------------------------------------------------------------------------
+   8. Data Tables & Listing Screens (BISC Clean White Listing Headers)
+   -------------------------------------------------------------------------- */
+.freight-workspace-ui .data-table-shell,
+.freight-list-screen .data-table-shell {
+  overflow: hidden;
+  border: 1px solid var(--freight-bisc-border) !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
+}
+
+/* Listing table thead: clean white header with muted slate text (NOT blue) */
+.freight-workspace-ui .data-table-scroll thead,
+.freight-workspace-ui .data-table-scroll thead tr,
+.freight-workspace-ui .data-table-scroll thead th,
+.freight-workspace-ui .data-table-scroll thead th.sticky,
+.freight-workspace-ui .data-table-scroll thead .bg-white {
+  background-color: #ffffff !important;
+  color: #64748b !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+  height: 38px !important;
+  border-bottom: 1px solid var(--freight-bisc-border) !important;
+  border-right: 1px solid var(--freight-bisc-border-soft) !important;
+}
+
+.freight-workspace-ui .data-table-scroll thead th:last-child {
+  border-right: 0 !important;
+}
+
+.freight-workspace-ui .data-table-scroll thead th :where(button, svg) {
+  color: #94a3b8 !important;
+}
+
+.freight-workspace-ui .data-table-scroll thead th :where(button:hover, svg:hover) {
+  color: var(--freight-bisc-blue) !important;
+}
+
+.freight-workspace-ui .data-table-scroll tbody tr {
+  border-bottom: 1px solid var(--freight-bisc-border-soft) !important;
+  background: #ffffff;
+}
+
+.freight-workspace-ui .data-table-scroll tbody tr:hover {
+  background-color: #f8fafc !important;
+}
+
+.freight-workspace-ui .data-table-search {
+  height: 36px !important;
+  border: 1px solid var(--freight-bisc-border) !important;
+  border-radius: 9999px !important;
+  background: #ffffff !important;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+.freight-workspace-ui .data-table-header {
+  min-height: 48px;
+  padding: 8px 12px !important;
+  border-bottom: 1px solid var(--freight-bisc-border-soft) !important;
+  background: #ffffff !important;
+}
+
+.freight-workspace-ui .data-table-pagination {
+  border-top: 1px solid var(--freight-bisc-border-soft) !important;
+  background: #ffffff !important;
+  padding: 8px 14px !important;
+  font-size: 12px !important;
+  color: #64748b !important;
+}
+
+/* --------------------------------------------------------------------------
+   9. Dropdown Lookups & In-Document Transaction Grids (BISC Solid Blue Headers)
+   -------------------------------------------------------------------------- */
+/* Dropdown Lookup Popovers: solid dark blue header with crisp white text */
+.lookup-popover {
+  border: 1px solid var(--freight-bisc-border) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18) !important;
+  background: #ffffff !important;
+  overflow: hidden !important;
+}
+
+.lookup-popover .lookup-popover-head,
+.lookup-popover table thead,
+.lookup-popover table thead tr,
+.lookup-popover table thead th {
+  background-color: var(--freight-bisc-blue) !important;
+  color: #ffffff !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  height: 34px !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+}
+
+.lookup-popover table tbody tr:hover {
+  background-color: #f1f5f9 !important;
+}
+
+/* In-document transaction tables (Container grid, dimension grid, activities lines, invoice lines) */
+.freight-container-grid,
+.freight-dimension-grid,
+.freight-job-table-shell,
+.freight-document-form table:not(.data-table-scroll table),
+.freight-enquiry-editor table:not(.data-table-scroll table),
+.freight-quotation-form table:not(.data-table-scroll table) {
+  border: 1px solid var(--freight-bisc-border) !important;
+  border-radius: 10px !important;
+  overflow: hidden !important;
+  background: #ffffff !important;
+}
+
+.freight-container-grid table thead,
+.freight-container-grid table thead tr,
+.freight-container-grid table thead th,
+.freight-dimension-grid table thead,
+.freight-dimension-grid table thead tr,
+.freight-dimension-grid table thead th,
+.freight-job-table-shell table thead,
+.freight-job-table-shell table thead tr,
+.freight-job-table-shell table thead th,
+.freight-job-table-shell .freight-job-table-head,
+.freight-container-grid > div > .grid:first-child,
+.freight-dimension-grid > div > .grid:first-child,
+.freight-container-grid [class*="bg-muted/20"],
+.freight-dimension-grid [class*="bg-muted/20"],
+.freight-document-form table:not(.data-table-scroll table) thead,
+.freight-document-form table:not(.data-table-scroll table) thead tr,
+.freight-document-form table:not(.data-table-scroll table) thead th,
+.freight-enquiry-editor table:not(.data-table-scroll table) thead tr,
+.freight-enquiry-editor table:not(.data-table-scroll table) thead th,
+.freight-quotation-form table:not(.data-table-scroll table) thead tr,
+.freight-quotation-form table:not(.data-table-scroll table) thead th {
+  background-color: var(--freight-bisc-blue) !important;
+  color: #ffffff !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  min-height: 34px !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+.freight-job-table-shell .freight-job-table-head span,
+.freight-container-grid > div > .grid:first-child span,
+.freight-dimension-grid > div > .grid:first-child span,
+.freight-container-grid [class*="bg-muted/20"] span,
+.freight-dimension-grid [class*="bg-muted/20"] span {
+  color: #ffffff !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+.freight-job-table-row {
+  border-bottom: 1px solid var(--freight-bisc-border-soft) !important;
+  background: #ffffff !important;
+  transition: background-color 120ms ease !important;
+}
+
+.freight-job-table-row:hover {
+  background-color: #f8fafc !important;
+}
+
+/* --------------------------------------------------------------------------
+   10. Transaction Summary & Totals Badges (Matching BISC solid blue pills)
+   -------------------------------------------------------------------------- */
+.freight-summary-badge,
+.freight-total-badge,
+.freight-balance-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 4px 10px !important;
+  border-radius: 6px !important;
+  background-color: var(--freight-bisc-blue) !important;
+  color: #ffffff !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+/* --------------------------------------------------------------------------
+   11. Read-Only / Approved State Rules (Zero overlap, crisp BISC styling)
+   -------------------------------------------------------------------------- */
+fieldset:disabled .lookup-field-trigger,
+.freight-workspace-ui fieldset:disabled .lookup-field-trigger,
+.freight-workspace-ui .lookup-field-trigger:has(input:disabled),
+.freight-workspace-ui .lookup-field-trigger:has(button:disabled) {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  cursor: not-allowed !important;
+}
+
+fieldset:disabled .lookup-field-trigger button,
+.freight-workspace-ui fieldset:disabled .lookup-field-trigger button {
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+
+fieldset:disabled .lookup-field-trigger button[aria-label="Clear lookup"],
+.freight-workspace-ui fieldset:disabled .lookup-field-trigger button[aria-label="Clear lookup"] {
+  display: none !important;
+}
+
+fieldset:disabled input:not([type="hidden"]):not([aria-hidden="true"]):not([tabindex="-1"]):not(.opacity-0),
+fieldset:disabled select,
+fieldset:disabled textarea,
+.freight-workspace-ui fieldset:disabled input:not([type="hidden"]):not([aria-hidden="true"]):not([tabindex="-1"]):not(.opacity-0),
+.freight-workspace-ui fieldset:disabled select,
+.freight-workspace-ui fieldset:disabled textarea,
+.freight-workspace-ui input:disabled:not([type="hidden"]):not([aria-hidden="true"]):not([tabindex="-1"]):not(.opacity-0),
+.freight-workspace-ui select:disabled,
+.freight-workspace-ui textarea:disabled {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #334155 !important;
+  cursor: not-allowed !important;
+}
+
+/* Ensure hidden and zero-size inputs stay completely invisible */
+input[aria-hidden="true"],
+input[tabindex="-1"].opacity-0,
+.lookup-field-trigger input {
+  opacity: 0 !important;
+  color: transparent !important;
+}
+
+/* --------------------------------------------------------------------------
+   12. BISC Transaction Listing Table Polish
+   -------------------------------------------------------------------------- */
+.freight-workspace-ui .data-table-shell {
+  border-radius: 12px !important;
+  border: 1px solid var(--freight-bisc-border) !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05) !important;
+  background: #ffffff !important;
+  overflow: hidden !important;
+}
+
+.freight-workspace-ui .data-table-scroll table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+}
+
+.freight-workspace-ui .data-table-scroll th {
+  padding: 10px 12px !important;
+  border-right: 1px solid var(--freight-bisc-border-soft) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.05em !important;
+  color: #64748b !important;
+  background-color: #ffffff !important;
+}
+
+.freight-workspace-ui .data-table-scroll td {
+  padding: 8px 12px !important;
+  border-right: 1px solid var(--freight-bisc-border-soft) !important;
+  font-size: 12.5px !important;
+  color: #1e293b !important;
+  vertical-align: middle !important;
+}
+
+.freight-workspace-ui .data-table-scroll th:last-child,
+.freight-workspace-ui .data-table-scroll td:last-child {
+  border-right: 0 !important;
+}
+
+.freight-workspace-ui .data-table-scroll td button.text-primary {
+  font-weight: 600 !important;
+  font-size: 12.5px !important;
+  text-align: left !important;
+}
+
+/* Record-number links are text controls, not square action-icon buttons. */
+.freight-workspace-ui .data-table-scroll td button.freight-table-link {
+  width: auto !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  justify-content: flex-start !important;
+  white-space: nowrap !important;
+}
+
+@media (max-width: 900px) {
+  .freight-job-progress-rail-list {
+    grid-template-columns: 1fr !important;
+  }
+}
