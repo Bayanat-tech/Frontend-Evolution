@@ -649,7 +649,7 @@ export default function InvoiceForm({ existingData, viewMode, onClose }: Invoice
               />
             </FieldLabel>
             <FieldLabel label="Exchange rate">
-              <Input className="h-8 text-sm" value={getValue(invoice, "ex_rate") ?? ""} disabled placeholder="Auto" />
+              <Input className="h-8 text-sm" value={getValue(invoice, "ex_rate") ?? ""} placeholder="Auto" />
             </FieldLabel>
           </div>
         </section>

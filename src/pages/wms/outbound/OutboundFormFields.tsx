@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { Save, X } from "lucide-react";
+import { ArrowLeft, Save, X } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import type { WmsRow } from "./Outboundtypes";
@@ -21,38 +21,38 @@ export function OutboundFormFrame({
 }) {
   if (!open) return null;
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-[1px]"
-      onMouseDown={onClose}
-    >
-      <div
-        className="outbound-form-compact grid max-h-[92vh] w-[min(96vw,1280px)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-md border bg-card text-card-foreground shadow-2xl"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b bg-card px-5 py-3.5">
-          <div className="flex items-center gap-3">
-            <span className="h-7 w-1 rounded-full bg-primary" />
-            <div>
-              <p className="m-0 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">
+    // Fixed + full-viewport so it visually covers the listing underneath (no
+    // conditional render needed in the screen file) — but no backdrop dim, no
+    // blur, no centered card: it fills the screen like an actual page.
+    <div className="outbound-form-compact absolute inset-0 z-50 overflow-y-auto bg-background">
+      <div className="mx-auto grid max-w-[1400px] gap-2.5 p-3 md:p-4">
+        {/* Header bar */}
+        <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <button
+              aria-label="Back"
+              type="button"
+              onClick={onClose}
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground"
+            >
+              <ArrowLeft size={15} />
+            </button>
+            <span className="h-7 w-1 shrink-0 rounded-full bg-primary" />
+            <div className="min-w-0 leading-tight">
+              <p className="m-0 mb-0.5 text-[11px] font-bold uppercase leading-none tracking-[0.18em] text-primary">
                 Outbound Job
               </p>
-              <h2 className="m-0 text-lg font-bold text-foreground">{title}</h2>
+              <h1 className="m-0 truncate text-lg font-semibold leading-tight text-foreground">{title}</h1>
             </div>
           </div>
-          <button
-            aria-label="Close"
-            className="grid h-8 w-8 place-items-center rounded-md border bg-background text-muted-foreground transition hover:bg-accent hover:text-foreground"
-            type="button"
-            onClick={onClose}
-          >
-            <X size={16} />
-          </button>
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            {footer}
+          </div>
         </div>
-        <div className="min-h-0 overflow-y-auto overflow-x-hidden bg-muted/20 p-3 text-sm">
+
+        {/* Body */}
+        <div className="min-h-0 text-sm">
           {children}
-        </div>
-        <div className="flex items-center justify-end gap-2 border-t bg-card px-5 py-3">
-          {footer}
         </div>
       </div>
     </div>
@@ -292,12 +292,6 @@ export function ConfirmToolbar({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {/* <Input
-        className="h-8 w-36 text-xs"
-        type="date"
-        value={options.confirm_date}
-        onChange={(event) => setOptions({ ...options, confirm_date: event.target.value })}
-      /> */}
       <Button size="sm" variant="outline" disabled={disabled} onClick={onConfirm}>
         Confirm Selected
       </Button>
