@@ -170,7 +170,7 @@ export function FreightJobActivitiesPage({
     { accessorKey: "expense", header: "Expense", size: 110, cell: ({ row }) => money(lookupText(row.original, "expense")) },
     { accessorKey: "profit", header: "Profit", size: 110, cell: ({ row }) => <span className={numberValue(lookupText(row.original, "profit")) < 0 ? "font-semibold text-red-600" : "font-semibold text-emerald-700"}>{money(lookupText(row.original, "profit"))}</span> },
     { accessorKey: "confirm_date", header: "Confirm", size: 110, cell: ({ row }) => formatDate(lookupText(row.original, "confirm_date")) || "-" },
-    { id: "actions", header: "Actions", size: 70, cell: ({ row }) => <Button type="button" size="icon" variant="ghost" title="Open activities" onClick={() => openJob(row.original)}><Edit2 size={14} /></Button> },
+    { id: "actions", header: "Actions", size: 70, cell: ({ row }) => <Button type="button" size="icon" variant="ghost" className="h-6 w-6" title="Open activities" onClick={() => openJob(row.original)}><Edit2 size={13} /></Button> },
   ], []);
 
   async function openJob(row: LookupRow) {
@@ -346,7 +346,7 @@ export function FreightJobActivitiesPage({
           minWidth={1100}
           density="grid"
           enablePagination
-          pageSize={50}
+          pageSize={25}
           enableExport
           exportFilename={`freight-${mode.code}-${direction.code}-job-activities.csv`}
           onRowClick={openJob}

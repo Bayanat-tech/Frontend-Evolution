@@ -370,26 +370,26 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
             <div className="flex items-center justify-center gap-1">
               <button
                 type="button"
-                className="h-7 w-7 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                className="h-6 w-6 grid place-items-center text-slate-500 hover:text-[#00378C] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                 title="Open quotation"
                 onClick={() => openQuotation(row.original)}
               >
-                <Eye size={15} />
+                <Eye size={13} />
               </button>
               <button
                 type="button"
-                className="h-7 w-7 grid place-items-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                className="h-6 w-6 grid place-items-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                 title="Print quotation"
                 onClick={(event) => {
                   event.stopPropagation();
                   void printQuotation(row.original);
                 }}
               >
-                <Printer size={15} />
+                <Printer size={13} />
               </button>
               <button
                 type="button"
-                className="h-7 w-7 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer"
+                className="h-6 w-6 grid place-items-center text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer"
                 title={
                   cancelDisabled
                     ? `${statusLabel(status, action, finalApproved)} quotation cannot be cancelled`
@@ -401,7 +401,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
                   requestCancelRow(row.original);
                 }}
               >
-                <X size={15} />
+                <X size={13} />
               </button>
             </div>
           );
@@ -1014,7 +1014,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
           height="calc(100vh - 240px)"
           density="grid"
           enablePagination
-          pageSize={50}
+          pageSize={25}
           enableExport
           exportFilename="freight-quotation-list.csv"
           getRowId={(row, index) => `${lookupText(row, "company_code")}-${lookupText(row, "quotation_nr") || index}`}
@@ -1436,21 +1436,21 @@ function HeaderChip({ label, value }: { label: string; value: string }) {
 
 function statusBadgeClass(status: string, action = "", finalApproved = "") {
   if (status === "A" || finalApproved === "Y") {
-    return "inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700";
+    return "inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-emerald-700";
   }
   if (status === "C") {
-    return "inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-700";
+    return "inline-flex items-center rounded border border-red-200 bg-red-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-red-700";
   }
   if (status === "R" || action === "REJECTED") {
-    return "inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-700";
+    return "inline-flex items-center rounded border border-red-200 bg-red-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-red-700";
   }
   if (action === "SENTBACK") {
-    return "inline-flex items-center rounded-md border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-[11px] font-semibold text-orange-700";
+    return "inline-flex items-center rounded border border-orange-200 bg-orange-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-orange-700";
   }
   if (action === "SUBMITTED" || action === "APPROVED") {
-    return "inline-flex items-center rounded-md border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-[11px] font-semibold text-sky-700";
+    return "inline-flex items-center rounded border border-sky-200 bg-sky-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-sky-700";
   }
-  return "inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700";
+  return "inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-amber-700";
 }
 
 function statusLabel(status: string, action = "", finalApproved = "") {

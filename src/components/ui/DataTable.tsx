@@ -85,9 +85,9 @@ export type DataTableProps<TData, TValue> = {
 };
 
 const densityClasses: Record<DataTableDensity, { row: string; cell: string }> = {
-  grid: { row: "h-7", cell: "px-2 py-0.5 text-[11px] leading-tight" },
-  compact: { row: "h-8", cell: "px-2 py-1 text-xs leading-tight" },
-  comfortable: { row: "h-12", cell: "py-3" },
+  grid: { row: "h-[27px]", cell: "px-2 py-0 text-[11.5px] leading-tight" },
+  compact: { row: "h-7", cell: "px-2 py-0.5 text-[11.5px] leading-tight" },
+  comfortable: { row: "h-9", cell: "px-2 py-1 text-xs leading-tight" },
   large: { row: "h-14", cell: "py-3.5" },
 };
 
@@ -143,7 +143,7 @@ export function DataTable<TData, TValue>({
   height = 590,
   minWidth,
   density = "comfortable",
-  pageSize = 500,
+  pageSize = 25,
   enablePagination = false,
   manualPagination = false,
   pageIndex = 0,
@@ -246,9 +246,10 @@ export function DataTable<TData, TValue>({
   const minWidthValue = typeof responsiveMinWidth === "number" ? `${responsiveMinWidth}px` : responsiveMinWidth;
   const pageCount = manualPagination ? Math.max(1, Math.ceil((totalRows ?? data.length) / Math.max(pageSize, 1))) : table.getPageCount() || 1;
   const currentPageIndex = manualPagination ? pageIndex : table.getState().pagination.pageIndex;
+  const currentPageSize = manualPagination ? pageSize : table.getState().pagination.pageSize;
   const effectiveTotalRows = totalRows ?? (manualPagination ? data.length : table.getFilteredRowModel().rows.length);
-  const firstVisibleRow = effectiveTotalRows === 0 ? 0 : currentPageIndex * pageSize + 1;
-  const lastVisibleRow = Math.min(effectiveTotalRows, currentPageIndex * pageSize + visibleRows.length);
+  const firstVisibleRow = effectiveTotalRows === 0 ? 0 : currentPageIndex * currentPageSize + 1;
+  const lastVisibleRow = Math.min(effectiveTotalRows, currentPageIndex * currentPageSize + visibleRows.length);
   const canPreviousPage = currentPageIndex > 0;
   const canNextPage = currentPageIndex < pageCount - 1;
   const totalPages = Math.max(pageCount, 1);
@@ -681,10 +682,10 @@ export function DataTable<TData, TValue>({
             <label className="flex items-center gap-1 text-xs text-muted-foreground ml-2">
               <select
                 className="h-7 rounded-md border border-[#cbd5e1] bg-white px-2 text-xs font-medium text-[#1e293b] focus:outline-none focus:ring-1 focus:ring-[#00378C] cursor-pointer"
-                value={pageSize}
+                value={currentPageSize}
                 onChange={(event) => changePageSize(Number(event.target.value))}
               >
-                {[10, 20, 30, 50, 100].map((size) => (
+                {[10, 20, 25, 30, 50, 100].map((size) => (
                   <option value={size} key={size}>Show {size}</option>
                 ))}
               </select>

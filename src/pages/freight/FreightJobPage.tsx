@@ -264,8 +264,8 @@ export function FreightJobPage({
     { accessorKey: "port_code", header: "Origin", size: 90 },
     { accessorKey: "destination_port", header: "Destination", size: 120 },
     { accessorKey: "vessel_name", header: mode.code === "R" ? "Transporter" : mode.code === "A" ? "Airline" : "Vessel", size: 150 },
-    { accessorKey: "canceled", header: "Status", size: 90, cell: ({ row }) => lookupText(row.original, "canceled") === "Y" ? <span className="rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">Cancelled</span> : <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">Open</span> },
-    { id: "actions", header: "Actions", size: 70, cell: ({ row }) => <Button type="button" size="icon" variant="ghost" title="Edit job" onClick={() => openJob(row.original)}><Edit2 size={14} /></Button> },
+    { accessorKey: "canceled", header: "Status", size: 90, cell: ({ row }) => lookupText(row.original, "canceled") === "Y" ? <span className="rounded border border-red-200 bg-red-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-red-700">Cancelled</span> : <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0 text-[10.5px] leading-tight font-medium text-emerald-700">Open</span> },
+    { id: "actions", header: "Actions", size: 70, cell: ({ row }) => <Button type="button" size="icon" variant="ghost" className="h-6 w-6" title="Edit job" onClick={() => openJob(row.original)}><Edit2 size={13} /></Button> },
   ], [mode.code]);
 
   const openAdd = () => {
@@ -449,7 +449,7 @@ export function FreightJobPage({
           minWidth={1280}
           density="grid"
           enablePagination
-          pageSize={50}
+          pageSize={25}
           enableExport
           exportFilename={`freight-${modeKey}-${directionKey}-jobs.csv`}
           onRowClick={openJob}

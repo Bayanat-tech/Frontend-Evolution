@@ -255,7 +255,7 @@ async function saveHeader() {
           minWidth={1160}
           density="grid"
           enablePagination
-          pageSize={50}
+          pageSize={25}
           onRowClick={(row) => setSelectedJob(normalizeRow(row))}
         />
       </section>

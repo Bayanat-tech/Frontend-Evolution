@@ -269,7 +269,7 @@ export function FreightPacklistPage({
     { accessorKey: "VOLUME", header: "Volume", size: 90 },
     { accessorKey: "QUANTITY", header: "Qty", size: 80 },
     { accessorKey: "SHIPMENT_STATUS", header: "Shipment Status", size: 140 },
-    { id: "actions", header: "Actions", size: 90, cell: ({ row }) => <div className="flex gap-1"><Button type="button" size="icon" variant="ghost" title="View" onClick={() => openPack(row.original)}><Eye size={14} /></Button><Button type="button" size="icon" variant="ghost" title="Delete" disabled={readOnly} onClick={(event) => { event.stopPropagation(); void deletePack(row.original); }}><Trash2 size={14} /></Button></div> },
+    { id: "actions", header: "Actions", size: 90, cell: ({ row }) => <div className="flex gap-1"><Button type="button" size="icon" variant="ghost" className="h-6 w-6" title="View" onClick={() => openPack(row.original)}><Eye size={13} /></Button><Button type="button" size="icon" variant="ghost" className="h-6 w-6" title="Delete" disabled={readOnly} onClick={(event) => { event.stopPropagation(); void deletePack(row.original); }}><Trash2 size={13} /></Button></div> },
   ], [isAir, readOnly]);
 
   const openAdd = () => {
@@ -506,7 +506,7 @@ export function FreightPacklistPage({
           minWidth={1680}
           density="grid"
           enablePagination
-          pageSize={50}
+          pageSize={25}
           enableExport
           exportFilename={`freight-${modeKey}-${directionKey}-packlist.csv`}
           onRowClick={openPack}

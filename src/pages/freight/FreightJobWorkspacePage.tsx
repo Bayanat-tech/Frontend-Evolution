@@ -165,7 +165,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
       size: 90,
       enableColumnFilter: false,
       cell: ({ row }) => (
-        <Button type="button" size="sm" variant="ghost" onClick={() => openSteps(row.original, "job")}>
+        <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => openSteps(row.original, "job")}>
           Steps <ArrowRight size={13} />
         </Button>
       ),
@@ -239,7 +239,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           minWidth={1320}
           density="grid"
           enablePagination
-          pageSize={50}
+          pageSize={25}
           enableExport
           exportFilename={`freight-${targetMode}-${targetDirection}-jobs.csv`}
           onRowClick={(row) => openSteps(row, "job")}
@@ -344,7 +344,7 @@ function StatusChip({ tone, label }: { tone: "green" | "red" | "slate"; label: s
     : tone === "red"
       ? "border-red-200 bg-red-50 text-red-700"
       : "border-slate-200 bg-slate-50 text-slate-700";
-  return <span className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${cls}`}>{label}</span>;
+  return <span className={`rounded border px-2 py-0 text-[10.5px] leading-tight font-medium ${cls}`}>{label}</span>;
 }
 
 function filterJobByStatus(row: LookupRow, tab: string) {
