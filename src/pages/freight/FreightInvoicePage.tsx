@@ -384,7 +384,7 @@ export function FreightInvoicePage() {
                 displayValue={principalText(form)}
                 valueField="prin_code"
                 displayFields={["prin_code", "prin_name"]}
-                columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }, { field: "curr_code", header: "Currency" }]}
+                columns={[{ field: "prin_code", header: "Code" }, { field: "prin_name", header: "Principal" }]}
                 loadOptions={(search) => loadFreightLookup("freight_principal", companyCode, search)}
                 onChange={(value, row) => {
                   setForm((prev) => ({ ...prev, prin_code: value, prin_name: text(row?.prin_name ?? row?.PRIN_NAME), curr_code: text(row?.curr_code ?? row?.CURR_CODE) || prev.curr_code }));
