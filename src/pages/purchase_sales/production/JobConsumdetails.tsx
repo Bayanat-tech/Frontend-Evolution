@@ -52,7 +52,7 @@ export function JobconsumLinesTable({
             <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1.5">
                 <div>
                     <p className="eyebrow m-0">Lines</p>
-                    <h3 className="m-0 text-sm font-semibold leading-tight">Purchase Order Lines</h3>
+                    <h3 className="m-0 text-sm font-semibold leading-tight"></h3>
                 </div>
                 <div className="flex items-center gap-2">
                     <Button disabled={headerAndLineDisabled} size="sm" type="button" variant="outline" onClick={addRow}>

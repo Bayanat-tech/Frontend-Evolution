@@ -62,7 +62,7 @@ export function SalesInvoiceHeaderForm({
             <div className="flex items-center justify-between border-b bg-secondary/40 px-3 py-1">
                 <div>
                     <p className="eyebrow m-0 text-[10px] leading-tight">Header</p>
-                    <h3 className="m-0 text-xs font-semibold leading-tight">Purchase Order Information</h3>
+                    <h3 className="m-0 text-xs font-semibold leading-tight"></h3>
                 </div>
             </div>
 
@@ -87,7 +87,7 @@ export function SalesInvoiceHeaderForm({
                         }))}
                     />
                 </div>
-                <div className="col-span-2">
+                {/* <div className="col-span-2">
                     <LookupField
                         label="Division *"
                         value={form.div_code}
@@ -103,7 +103,7 @@ export function SalesInvoiceHeaderForm({
                             div_name: text(getLookupValue(row || {}, "div_name")),
                         }))}
                     />
-                </div>
+                </div> */}
 
                 {(String(docType ?? "").trim().toUpperCase() === "PIN" ||
                     String(docType ?? "").trim().toUpperCase() === "SIN") && (
@@ -113,8 +113,10 @@ export function SalesInvoiceHeaderForm({
                                 label="DN No"
                                 compact
                                 placeholder="DN No"
-                                value={String(editMode ? form.doc_no ?? "" : form.sdn_doc_no ?? "")}
-                                displayValue={String(editMode ? form.doc_no ?? "" : form.sdn_doc_no ?? "")}
+                                // value={String(editMode ? form.doc_no ?? "" : form.sdn_doc_no ?? "")}
+                                // displayValue={String(editMode ? form.doc_no ?? "" : form.sdn_doc_no ?? "")}
+                                value={String(form.sdn_doc_no ?? "")}
+                                displayValue={String(form.sdn_doc_no ?? "")}
                                 columns={[
                                     { field: "doc_no", header: "SDN No" },
                                     { field: "ac_code", header: "A/c Code" },
@@ -135,14 +137,15 @@ export function SalesInvoiceHeaderForm({
                                     // Populate header fields immediately from the selected row
                                     setForm((current) => ({
                                         ...current,
-                                        ...(editMode
-                                            ? { doc_no: value }
-                                            : { sdn_doc_no: value }),
+                                        // ...(editMode
+                                        //     ? { doc_no: value }
+                                        //     : { sdn_doc_no: value }),
+                                        sdn_doc_no: value,
                                         doc_date: toDateInputValue(getLookupValue(row || {}, "doc_date")),
                                         so_doc_date: toDateInputValue(getLookupValue(row || {}, "so_doc_date")),
                                         so_doc_no: text(getLookupValue(row || {}, "so_doc_no")),
-                                        so_ac_code: text(getLookupValue(row || {}, "so_ac_code")),
-                                        so_ac_name: text(getLookupValue(row || {}, "so_ac_name")),
+                                        ac_code: text(getLookupValue(row || {}, "ac_code")),
+                                        ac_name: text(getLookupValue(row || {}, "ac_name")),
                                         so_dept_code: text(getLookupValue(row || {}, "so_dept_code")),
                                         remarks: text(getLookupValue(row || {}, "remarks")),
                                         so_remarks: text(getLookupValue(row || {}, "so_remarks")),
@@ -152,8 +155,8 @@ export function SalesInvoiceHeaderForm({
                                         curr_name: text(getLookupValue(row || {}, "curr_name")),
                                         ex_rate: numberOrZero(getLookupValue(row || {}, "ex_rate")),
                                         so_other_expense_cost: numberOrZero(getLookupValue(row || {}, "so_other_expense_cost")),
-                                        so_disc_hdr_percent: numberOrZero(getLookupValue(row || {}, "so_disc_hdr_percent")),
-                                        so_disc_hdr_price: numberOrZero(getLookupValue(row || {}, "so_disc_hdr_price")),
+                                        disc_hdr_percent: numberOrZero(getLookupValue(row || {}, "disc_hdr_percent")),
+                                        disc_hdr_price: numberOrZero(getLookupValue(row || {}, "disc_hdr_price")),
                                         so_payment_terms: text(getLookupValue(row || {}, "so_payment_terms")),
                                         so_credit_period: numberOrZero(getLookupValue(row || {}, "so_credit_period")),
                                         so_due_date: getLookupValue(row || {}, "so_due_date"),
@@ -178,8 +181,10 @@ export function SalesInvoiceHeaderForm({
                                         so_pr_no: text(getLookupValue(row || {}, "so_pr_no")),
                                         so_scope_of_work: text(getLookupValue(row || {}, "so_scope_of_work")),
                                         total_so_amount: numberOrZero(getLookupValue(row || {}, "total_so_amount")),
-                                        si_doc_no:text(getLookupValue(row || {}, "si_doc_no")),
-                                          si_doc_date: toDateInputValue(getLookupValue(row || {}, "si_doc_date")),
+                                        si_doc_no: text(getLookupValue(row || {}, "si_doc_no")),
+                                        si_doc_date: toDateInputValue(getLookupValue(row || {}, "si_doc_date")),
+                                        inv_no: text(getLookupValue(row || {}, "inv_no")),
+                                        inv_date: toDateInputValue(getLookupValue(row || {}, "inv_date")),
 
 
                                     }));
@@ -237,7 +242,7 @@ export function SalesInvoiceHeaderForm({
                                             sorder_required_dt: text(getLookupValue(item, "sorder_required_dt")),
                                             sorder_tx_compnt_1_expmt: text(getLookupValue(item, "sorder_tx_compnt_1_expmt")),
                                             sorder_remarks: text(getLookupValue(item, "sorder_remarks")),
-                                             serial_no: numberOrZero(getLookupValue(item, "serial_no")),
+                                            serial_no: numberOrZero(getLookupValue(item, "serial_no")),
 
                                         }));
                                         console.log("Mapped length:", mappedDetails?.length);
@@ -353,7 +358,7 @@ export function SalesInvoiceHeaderForm({
 
             <CompactSection label="Order, Currency & Tax">
 
-                <div className="col-span-2">
+                <div className="col-span-1">
                     <LookupField
                         label="Currency *"
                         value={form.curr_code || ""}
@@ -566,13 +571,6 @@ export function SalesInvoiceHeaderForm({
                         ))}
                     </Select>
                 </CField>
-            </CompactSection>
-
-
-            <CompactSection
-                label="Delivery"
-                className="border-b-0"
-            >
                 <CField label="Delivery Contact">
                     <Input
                         disabled={headerAndLineDisabled}
@@ -593,7 +591,7 @@ export function SalesInvoiceHeaderForm({
                     />
                 </CField>
 
-                <CField label="Delivery Email" className="col-span-1">
+                <CField label="Delivery Email" className="col-span-2">
                     <Input
                         disabled={headerAndLineDisabled}
                         type="email"
@@ -604,6 +602,14 @@ export function SalesInvoiceHeaderForm({
                     />
                 </CField>
             </CompactSection>
+
+
+            {/* <CompactSection
+                label="Delivery"
+                className="border-b-0"
+            >
+                
+            </CompactSection> */}
         </div>
     );
 }

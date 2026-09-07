@@ -162,34 +162,6 @@ export async function almsSave(params: AlmsProcedureParams) {
   };
 }
 
-export async function almsGeneratePOFromPR(params: {
-  companyCode: string;
-  requestNumber: string;
-  docType?: string;
-}): Promise<{ success: boolean; message?: string }> {
-  try {
-    const response = await api.post<ApiResponse<unknown>>(
-      "/api/ALMS/gm/generatePOFromPR",
-      {
-        companyCode: params.companyCode,
-        requestNumber: params.requestNumber,
-        docType: params.docType || "LPO",
-      }
-    );
-    if (!response.data.success) {
-      return {
-        success: false,
-        message: response.data.message || "Failed to generate PO from PR.",
-      };
-    }
-    return { success: true, message: response.data.message };
-  } catch (error: unknown) {
-    return {
-      success: false,
-      message: (error as { message?: string })?.message || "Failed to generate PO from PR.",
-    };
-  }
-}
 
 export async function almsDelete(params: AlmsProcedureParams) {
   const response = await api.post<ApiResponse<unknown>>(
