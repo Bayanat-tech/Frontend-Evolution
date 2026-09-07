@@ -52,7 +52,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import type { CSSProperties, Dispatch, SetStateAction } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../state/AuthContext";
 import { HeaderProfile } from "../components/HeaderProfile";
@@ -115,6 +115,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
   const displayCollapsed = isMobile ? false : collapsed;
   const companyName = user?.company_name || user?.COMPANY_NAME || user?.company_code || user?.COMPANY_CODE || "Company";
   const isFreightModule = (appCode || "").toLowerCase() === "fms";
+  const moduleMeta = activeApp ? getModuleMeta(activeApp, 0) : null;
 
   // useEffect(() => {
   //   setExpanded(collectExpandedPath(activeMenuPath));
@@ -122,7 +123,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
 
   useEffect(() => {
     setExpanded({
-      ...(isFreightModule ? {} : collectDefaultExpanded(activeApp?.children || [], 1)),
+      ...collectDefaultExpanded(activeApp?.children || [], 1),
       ...collectExpandedPath(activeMenuPath),
     });
   }, [activeApp?.id, activeApp?.title, location.pathname]);
@@ -143,7 +144,7 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
       if (!nextCollapsed) {
         // setExpanded(collectExpandedPath(activeMenuPath));
          setExpanded({
-          ...(isFreightModule ? {} : collectDefaultExpanded(activeApp?.children || [], 1)),
+          ...collectDefaultExpanded(activeApp?.children || [], 1),
           ...collectExpandedPath(activeMenuPath),
         });
       }
@@ -165,9 +166,16 @@ export function WorkspacePage({ dark, onToggleTheme }: { dark: boolean; onToggle
 
         <div className={cn("sidebar-section-heading", displayCollapsed && "collapsed")}>
           {!displayCollapsed && (
-            <p className="sidebar-label" title={activeApp ? getModuleMeta(activeApp, 0).fullForm : "Workspace"}>
-              {activeApp ? getModuleMeta(activeApp, 0).fullForm : "Workspace"}
-            </p>
+            <div
+              className="sidebar-module-heading"
+              style={{
+                "--module-accent": moduleMeta?.accent.icon || "#00378c",
+                "--module-accent-light": moduleMeta?.accent.light || "#eff6ff",
+              } as CSSProperties}
+              title={moduleMeta?.fullForm || "Workspace"}
+            >
+              <span className="sidebar-module-name">{moduleMeta?.fullForm || "Workspace"}</span>
+            </div>
           )}
           <button
             className="icon-button sidebar-toggle"

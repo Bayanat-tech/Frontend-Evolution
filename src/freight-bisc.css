@@ -599,6 +599,36 @@
   background-color: #f1f5f9 !important;
 }
 
+/* Full-row status tint for fast, calm scanning in Freight listings. */
+:is(.freight-workspace-ui, .freight-list-screen, .freight-enquiry-list-screen, .freight-ui-standard) .data-table-scroll tbody tr.freight-status-row.freight-status-approved {
+  background-color: #ecfdf5 !important;
+  box-shadow: inset 3px 0 0 #10b981;
+}
+
+:is(.freight-workspace-ui, .freight-list-screen, .freight-enquiry-list-screen, .freight-ui-standard) .data-table-scroll tbody tr.freight-status-row.freight-status-danger {
+  background-color: #fff1f2 !important;
+  box-shadow: inset 3px 0 0 #ef4444;
+}
+
+:is(.freight-workspace-ui, .freight-list-screen, .freight-enquiry-list-screen, .freight-ui-standard) .data-table-scroll tbody tr.freight-status-row.freight-status-sentback {
+  background-color: #fff7ed !important;
+  box-shadow: inset 3px 0 0 #f97316;
+}
+
+:is(.freight-workspace-ui, .freight-list-screen, .freight-enquiry-list-screen, .freight-ui-standard) .data-table-scroll tbody tr.freight-status-row.freight-status-progress {
+  background-color: #eff6ff !important;
+  box-shadow: inset 3px 0 0 #3b82f6;
+}
+
+:is(.freight-workspace-ui, .freight-list-screen, .freight-enquiry-list-screen, .freight-ui-standard) .data-table-scroll tbody tr.freight-status-row.freight-status-draft {
+  background-color: #fffbeb !important;
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+
+:is(.freight-workspace-ui, .freight-list-screen, .freight-enquiry-list-screen, .freight-ui-standard) .data-table-scroll tbody tr.freight-status-row:hover {
+  background-color: #eaf2fb !important;
+}
+
 /* Freight listing table cells: crisp BISC Inter typography, compact 27px row height */
 .freight-workspace-ui .data-table-scroll tbody td,
 .freight-list-screen .data-table-scroll tbody td,

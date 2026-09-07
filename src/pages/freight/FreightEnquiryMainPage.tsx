@@ -1870,11 +1870,12 @@ function matchesListStatusTab(row: EnquiryListRow, tab: ListStatusTab) {
 function statusRowClassName(row: EnquiryListRow) {
   const status = lookupText(row, "indstatus");
   const action = lookupText(row, "last_action");
-  if (status === "A") return "bg-emerald-50/60";
-  if (status === "C" || status === "R") return "bg-red-50/50";
-  if (action === "SENTBACK") return "bg-orange-50/50";
-  if (action === "SUBMITTED" || action === "APPROVED") return "bg-sky-50/50";
-  return "bg-amber-50/50";
+  const finalApproved = lookupText(row, "final_approved");
+  if (status === "A" || finalApproved === "Y") return "freight-status-row freight-status-approved";
+  if (status === "C" || status === "R") return "freight-status-row freight-status-danger";
+  if (action === "SENTBACK") return "freight-status-row freight-status-sentback";
+  if (action === "SUBMITTED" || action === "APPROVED") return "freight-status-row freight-status-progress";
+  return "freight-status-row freight-status-draft";
 }
 
 function workflowLevelText(header: EnquiryHeader) {

@@ -52,13 +52,13 @@ export function HeaderProfile({
         <div className="avatar">{displayName.slice(0, 2).toUpperCase()}</div>
         <div className="header-user-copy">
           <strong>{displayName}</strong>
-          {variant === "sidebar" && <small>View profile</small>}
+            {variant === "sidebar" && <small>Profile</small>}
         </div>
         {variant === "sidebar" && <ChevronUp className="account-chevron" size={15} />}
       </button>
       <button type="button" className="icon-button account-logout" onClick={onLogout} title="Logout" aria-label="Logout">
         <LogOut size={18} />
-        {variant === "sidebar" && <span>Log out</span>}
+        {variant === "sidebar" && <span>Logout</span>}
       </button>
       {open && (
         <div className="header-profile-card">
