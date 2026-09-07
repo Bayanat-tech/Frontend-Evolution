@@ -86,6 +86,10 @@ export interface TPRHeader {
   DEPT_CODE_FLOW?: string;
   DEPT_NAME?: string;
   TX_COMPNTCAT_NAME?:  string;
+  DISCOUNT_AMOUNT?: number;
+  DISC_AMOUNT?: number;
+
+
 
 }
 
