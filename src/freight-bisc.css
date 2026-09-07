@@ -174,7 +174,7 @@
 
 .freight-workspace-ui :where(.ui-button-icon, button.ui-button-icon),
 .freight-workspace-ui .data-table-scroll td .ui-button,
-.freight-workspace-ui .data-table-scroll td button,
+.freight-workspace-ui .data-table-scroll td button:has(svg):not(:has(span)):not(.freight-table-text-action):not(.freight-table-link),
 .freight-workspace-ui .data-table-pagination .ui-button-icon,
 .freight-workspace-ui .data-table-pager button {
   width: 30px !important;
@@ -1124,3 +1124,30 @@ input[tabindex="-1"].opacity-0,
 
 
 
+
+/* Shared freight forms: compact headers, consistent tabs and clear actions. */
+.freight-workspace-ui .enquiry-header-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+@media (min-width: 1100px) {
+  .freight-workspace-ui .enquiry-header-fields { grid-template-columns: minmax(180px, 1.5fr) minmax(160px, 1.2fr) 110px 100px; }
+}
+@media (min-width: 1500px) {
+  .freight-workspace-ui .enquiry-header-fields { grid-template-columns: minmax(180px, 1.5fr) minmax(150px, 1.2fr) 100px 90px minmax(180px, 1.4fr) 140px 140px; }
+}
+@media (max-width: 639px) {
+  .freight-workspace-ui .enquiry-header-fields { grid-template-columns: minmax(0, 1fr); }
+}
+.lookup-popover input.lookup-search-input { height: 36px !important; min-height: 36px !important; padding-block: 6px !important; line-height: 22px !important; font-size: 13px !important; }
+.freight-workspace-ui :is(.freight-tabs-list, .freight-workspace-tabs) { align-items: stretch !important; gap: 6px !important; padding: 6px 8px 0 !important; background: var(--panel-soft) !important; min-height: 44px !important; }
+.freight-workspace-ui :is(.freight-tabs-list > button, .freight-workspace-tab) { flex: 0 0 auto !important; width: auto !important; min-width: max-content !important; height: 38px !important; margin: 0 !important; transform: none !important; border: 0 !important; border-bottom: 2px solid transparent !important; border-radius: 6px 6px 0 0 !important; padding: 8px 14px !important; background: transparent !important; color: var(--muted) !important; box-shadow: none !important; }
+.freight-workspace-ui :is(.freight-tabs-list > button, .freight-workspace-tab):hover { background: #edf4ff !important; color: #00378c !important; }
+.freight-workspace-ui :is(.freight-tabs-list > button, .freight-workspace-tab).active { background: #eaf2ff !important; color: #00378c !important; border-bottom-color: #00378c !important; }
+.freight-workspace-ui .freight-tabs-panel { background: var(--panel) !important; }
+.freight-workspace-ui .freight-section-icon { display: inline-grid; place-items: center; width: 24px; height: 24px; flex-shrink: 0; border-radius: 50%; background: #00378c !important; color: white !important; }
+.freight-workspace-ui .freight-section-icon svg { color: white !important; }
+.freight-workspace-ui .data-table-scroll td button.freight-table-text-action { width: auto !important; min-width: max-content !important; padding: 0 8px !important; white-space: nowrap; }
+.freight-workspace-ui .freight-transaction-header .ui-button { background: #00378c !important; border-color: #00378c !important; color: white !important; }
+.freight-workspace-ui .freight-transaction-header .ui-button:hover:not(:disabled) { background: #002b70 !important; }
+.freight-workspace-ui .freight-job-progress-rail-step { border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: var(--panel-soft); }
+.freight-workspace-ui .freight-job-progress-rail-step.current { background: #eaf2ff; border-color: #8eadd8; }
+.freight-workspace-ui .freight-job-progress-rail-step.done { background: #edf4ff; }
+.app.dark .freight-workspace-ui :is(.freight-workspace-tab.active, .freight-job-progress-rail-step.current, .freight-job-progress-rail-step.done) { background: #173356 !important; color: #bfdbfe !important; }

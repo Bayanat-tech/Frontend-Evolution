@@ -11,11 +11,10 @@ import { useAuth } from "../../state/AuthContext";
 import type { FreightWorkspaceTarget } from "./FreightWorkspacePage";
 import { FreightJobPage } from "./FreightJobPage";
 import { FreightPacklistPage } from "./FreightPacklistPage";
-import { FreightJobSheetPage } from "./FreightJobSheetPage";
 import { FreightJobActivitiesPage } from "./FreightJobActivitiesPage";
 import { FreightJobFollowupTab } from "./FreightJobFollowupTabs";
 
-type JobTab = "job" | "packlist" | "jobsheet" | "alerts" | "instructions" | "documents" | "deposits" | "activities";
+type JobTab = "job" | "packlist" | "alerts" | "instructions" | "documents" | "deposits" | "activities";
 type WorkspaceMode = "list" | "steps";
 
 const modeLabel = {
@@ -51,7 +50,6 @@ const modeIcon = {
 const tabs: { key: JobTab; label: string; icon: typeof ClipboardList; ready: boolean }[] = [
   { key: "job", label: "Job / File", icon: ClipboardList, ready: true },
   { key: "packlist", label: "Pack List", icon: PackageCheck, ready: true },
-  { key: "jobsheet", label: "JOB Sheet", icon: FileText, ready: true },
   { key: "alerts", label: "Alerts", icon: Bell, ready: true },
   { key: "instructions", label: "Instructions", icon: Info, ready: true },
   { key: "documents", label: "Documents", icon: FileText, ready: true },
@@ -145,7 +143,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
       header: "Job No",
       size: 130,
       cell: ({ row }) => (
-        <button type="button" className="font-semibold text-primary hover:underline" onClick={() => openSteps(row.original, "job")}>
+        <button type="button" className="freight-table-link font-semibold text-primary hover:underline" onClick={() => openSteps(row.original, "job")}>
           {text(row.original, "job_no")}
         </button>
       ),
@@ -165,7 +163,7 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
       size: 90,
       enableColumnFilter: false,
       cell: ({ row }) => (
-        <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => openSteps(row.original, "job")}>
+        <Button type="button" size="sm" variant="ghost" className="freight-table-text-action h-6 px-2 text-xs" onClick={() => openSteps(row.original, "job")}>
           Steps <ArrowRight size={13} />
         </Button>
       ),
@@ -271,19 +269,12 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
                   key={tab.key}
                   type="button"
                   className={`freight-workspace-tab ${active ? "active" : ""}`}
+                  aria-pressed={active}
                   onClick={() => setActiveTab(tab.key)}
                 >
                   <Icon size={14} className={active ? "text-primary" : "text-muted-foreground"} />
                   <span>{tab.label}</span>
-                  <span
-                    className={`ml-1 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${
-                      active
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {idx + 1}
-                  </span>
+
                 </button>
               );
             })}
@@ -306,15 +297,6 @@ export function FreightJobWorkspacePage({ target, initialTab = "job" }: { target
           initialJob={selectedJob}
           startMode={selectedJob ? "editor" : "list"}
           screen="packlist"
-          readOnly={selectedJobReadOnly}
-          onEmbeddedActionsChange={setWorkspaceActions}
-          onEmbeddedList={returnToList}
-        />
-      )}
-      {activeTab === "jobsheet" && (
-        <FreightJobSheetPage
-          target={target}
-          initialJob={selectedJob}
           readOnly={selectedJobReadOnly}
           onEmbeddedActionsChange={setWorkspaceActions}
           onEmbeddedList={returnToList}

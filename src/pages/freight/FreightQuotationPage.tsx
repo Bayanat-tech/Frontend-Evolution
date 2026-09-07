@@ -1083,7 +1083,6 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
             <FormSelect label="Job Type" value={header.job_type} onChange={(value) => setHeaderField("job_type", value)} options={jobTypes} />
             <FormSelect label="Mode" value={header.transport_mode} onChange={(value) => setHeaderField("transport_mode", value)} options={transportModes} />
             {/* <StatusField status={header.indstatus} action={header.last_action} finalApproved={header.final_approved} /> */}
-            <ReadOnlyField label="Approval Level" value={workflowLevelText(header)} />
             <FormInput label="Offer Validity" type="date" value={header.offer_validity} onChange={(value) => setHeaderField("offer_validity", value)} />
             <FormSelect label="Member Type" value={header.member_type} onChange={(value) => setHeaderField("member_type", value)} options={memberTypes.map((value) => ({ value, label: value || "Blank" }))} />
             <FormSelect label="Sale Type" value={header.sale_type} onChange={(value) => setHeaderField("sale_type", value)} options={saleTypes.map((value) => ({ value, label: value }))} />
@@ -1103,7 +1102,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
             {activeTab === "cargo" && (
                <section className="grid gap-1.5 xl:grid-cols-12">
           
-                <SectionPanel className="xl:col-span-6" icon={PackageCheck} title="Cargo" meta={`${header.commodity || "Commodity pending"} / ${header.gross_wt || header.weight || "0"} kgs`}>
+                <SectionPanel className="xl:col-span-6" icon={PackageCheck} title="Cargo">
                   <div className="grid gap-1 sm:grid-cols-2 xl:grid-cols-4">
                     <FormLookup label="Commodity" value={header.commodity} valueField="prodtype_desc" displayFields={["prodtype_desc", "prodtype_code"]} columns={[{ field: "prodtype_desc", header: "Commodity" }, { field: "prodtype_code", header: "Code" }]} loadOptions={() => loadCommodityLookup(header.company_code)} onChange={(value, row) => applyHeaderLookup("commodity", value, row)} className="xl:col-span-2" />
                     <FormInput label="Length(cm)" type="number" value={header.l} onChange={(value) => setHeaderField("l", value)} />
@@ -1372,7 +1371,7 @@ export function FreightQuotationPage({ target, initialTab = "cargo" }: { target?
 
 function TabButton({ tab, active, onClick }: { tab: { key: FreightQuotationInitialTab; label: string; icon: typeof PackageCheck }; active: boolean; onClick: () => void }) {
   const Icon = tab.icon;
-  return <button type="button" onClick={onClick} className={`ui-button ui-button-sm whitespace-nowrap ${active ? "ui-button-default" : "ui-button-outline"}`}><Icon size={14} />{tab.label}</button>;
+  return <button type="button" onClick={onClick} aria-pressed={active} className={`freight-workspace-tab ${active ? "active" : ""}`}><Icon size={14} />{tab.label}</button>;
 }
 
 function FreightAssistPanel({ checks }: { checks: SmartCheck[] }) {
@@ -1398,8 +1397,8 @@ function SectionPanel({ title, meta, icon: Icon, children, className = "" }: { t
     <section className={`freight-panel overflow-hidden rounded-md border bg-background shadow-sm ${className}`}>
       <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><Icon size={12} /></span>
-          <div className="min-w-0"><h3 className="m-0 truncate text-[11px] font-semibold uppercase text-foreground">{title}</h3>{meta && <p className="m-0 truncate text-[10px] text-muted-foreground">{meta}</p>}</div>
+          <span className="freight-section-icon"><Icon size={12} /></span>
+          <div className="min-w-0"><h3 className="m-0 truncate text-[11px] font-semibold uppercase text-foreground">{title}</h3></div>
         </div>
       </div>
       <div className="freight-panel-body">{children}</div>
@@ -1475,18 +1474,6 @@ function StatusField({ status, action = "", finalApproved = "" }: { status: stri
       </div>
     </div>
   );
-}
-
-function workflowLevelText(header: QuotationHeader) {
-  if (header.indstatus === "C") return "Cancelled";
-  if (header.indstatus === "R" || header.last_action === "REJECTED") return "Rejected";
-  if (header.indstatus === "A" || header.final_approved === "Y") return "Final approved";
-  if (header.last_action === "SENTBACK") return header.next_action_by ? `Sent back to ${header.next_action_by}` : "Sent back";
-  if (header.last_action === "SUBMITTED" || header.last_action === "APPROVED") {
-    const level = header.flow_level_running || "";
-    return header.next_action_by ? `Level ${level} - ${header.next_action_by}` : `Level ${level || "-"} pending`;
-  }
-  return "Draft";
 }
 
 function ReadOnlyField({ label, value }: { label: string; value: string }) {

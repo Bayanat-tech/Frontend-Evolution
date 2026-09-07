@@ -779,7 +779,7 @@ export const workspaceRoutes: WorkspaceRoute[] = [
   {
     name: "Freight Job Sheet",
     match: (context) => isFreightJobSheetRoute(context),
-    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="jobsheet" />,
+    element: (context) => <FreightJobWorkspacePage target={getFreightWorkspaceTarget(context)} initialTab="job" />,
   },
   {
     name: "Freight Pack List",

@@ -852,10 +852,10 @@ function Panel({ title, meta, icon: Icon, children, className = "" }: { title: s
     <section className={`freight-info-section ${className}`}>
       <div className="freight-info-title">
         <div className="flex min-w-0 items-center gap-2">
-          <Icon size={15} />
+          <span className="freight-section-icon"><Icon size={15} /></span>
           <h2>{title}</h2>
         </div>
-        <span>{meta}</span>
+        
       </div>
       <div className="freight-info-body">{children}</div>
     </section>

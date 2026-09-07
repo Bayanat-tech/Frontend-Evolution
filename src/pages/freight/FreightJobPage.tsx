@@ -283,7 +283,7 @@ export function FreightJobPage({
   }, [companyCode, direction.code, mode.code, startMode, userId]);
 
   const columns = useMemo<ColumnDef<LookupRow>[]>(() => [
-    { accessorKey: "job_no", header: "Job No", size: 120, cell: ({ row }) => <button type="button" className="font-semibold text-primary hover:underline" onClick={() => openJob(row.original)}>{lookupText(row.original, "job_no")}</button> },
+    { accessorKey: "job_no", header: "Job No", size: 120, cell: ({ row }) => <button type="button" className="freight-table-link font-semibold text-primary hover:underline" onClick={() => openJob(row.original)}>{lookupText(row.original, "job_no")}</button> },
     { accessorKey: "job_date", header: "Date", size: 110, cell: ({ row }) => formatDate(lookupText(row.original, "job_date")) },
     { accessorKey: "prin_code", header: "Principal", size: 100 },
     { accessorKey: "prin_name", header: "Principal Name", size: 230, cell: ({ row }) => lookupText(row.original, "prin_name") },
@@ -1056,12 +1056,12 @@ function SectionPanel({
     <section className={`freight-panel overflow-hidden rounded-md border bg-background shadow-sm ${className}`}>
       <div className="freight-panel-title flex items-center justify-between gap-2 border-b bg-muted/35 px-2.5 py-1.5">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+          <span className="freight-section-icon">
             <Icon size={12} />
           </span>
           <div className="min-w-0">
             <h3 className="m-0 truncate text-[11px] font-bold uppercase tracking-wider text-foreground">{title}</h3>
-            {meta && <p className="m-0 truncate text-[11px] text-muted-foreground">{meta}</p>}
+            
           </div>
         </div>
       </div>
